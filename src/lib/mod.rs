@@ -120,18 +120,27 @@ impl YaccParser {
         let name = try!(self.parse_name());
         self.parse_ws();
         try!(self.parse_string(":"));
+        let mut empty = true;
         loop {
             self.parse_ws();
             if self.lookahead_is("|") {
                 self.pos += 1;
+                if empty {
+                    self.grammar.add_rule(name.clone(), vec!{Symbol{name: String::new(), typ: SymbolType::Epsilon}});
+                }
+                empty = true;
             }
             else if self.lookahead_is(";") {
                 self.pos += 1;
+                if empty {
+                    self.grammar.add_rule(name.clone(), vec!{Symbol{name: String::new(), typ: SymbolType::Epsilon}});
+                }
                 break;
             }
             else {
                 let symbols = try!(self.parse_symbols());
                 self.grammar.add_rule(name.clone(), symbols);
+                empty = false;
             }
         }
         return Ok(());

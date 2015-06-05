@@ -9,6 +9,10 @@ macro_rules! nonterminal {
     ($x:expr) => (Symbol::new($x.to_string(), SymbolType::Nonterminal));
 }
 
+macro_rules! epsilon {
+    () => (Symbol::new("".to_string(), SymbolType::Epsilon));
+}
+
 #[test]
 fn test_macro() {
     assert_eq!(Symbol::new("A".to_string(), SymbolType::Terminal), terminal!("A"));
@@ -56,6 +60,26 @@ fn test_rule_alternative_simple(){
     assert_eq!(*grm.get_rule("A").unwrap(), rule1);
     let mut rule2 = Rule::new("B".to_string()); rule2.add_symbols(vec![terminal!("a")]);
     assert!(*grm.get_rule("A").unwrap() != rule2);
+}
+
+#[test]
+fn test_rule_empty(){
+    let src = "
+        %%
+        A : ;
+        B : 'b' | ;
+        C : | 'c';
+    ".to_string();
+    let mut grm = parse_yacc(&src);
+
+    let mut rule1 = Rule::new("A".to_string()); rule1.add_symbols(vec![epsilon!()]);
+    assert_eq!(*grm.get_rule("A").unwrap(), rule1);
+
+    let mut rule2 = Rule::new("B".to_string()); rule2.add_symbols(vec![terminal!("b")]); rule2.add_symbols(vec![epsilon!()]);
+    assert_eq!(*grm.get_rule("B").unwrap(), rule2);
+
+    let mut rule3 = Rule::new("C".to_string()); rule3.add_symbols(vec![epsilon!()]); rule3.add_symbols(vec![terminal!("c")]);
+    assert_eq!(*grm.get_rule("C").unwrap(), rule3);
 }
 
 #[test]
