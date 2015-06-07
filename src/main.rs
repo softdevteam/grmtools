@@ -18,7 +18,11 @@ fn usage(prog: String, msg: &str) {
         Some(m) => m.to_str().unwrap(),
         None => "lrpar"
     };
-    writeln!(&mut stderr(), "Usage: {} <filename>", leaf).ok();
+    if msg.len() > 0 {
+        writeln!(&mut stderr(), "{}\nUsage: {} <filename>", msg, leaf).ok();
+    } else {
+        writeln!(&mut stderr(), "Usage: {} <filename>", leaf).ok();
+    }
     env::set_exit_status(1);
 }
 
