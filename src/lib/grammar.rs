@@ -12,7 +12,7 @@ impl Grammar {
         let s = String::new();
         let hm = HashMap::new();
         let t = HashSet::new();
-        return Grammar {start: s, rules: hm, tokens: t};
+        Grammar {start: s, rules: hm, tokens: t}
     }
 
     pub fn add_rule(&mut self, key: String, value: Vec<Symbol>) {
@@ -21,15 +21,15 @@ impl Grammar {
     }
 
     pub fn get_rule(&mut self, key: &str) -> Option<&Rule>{
-        return self.rules.get(key);
+        self.rules.get(key)
     }
 
     pub fn get_start(&mut self) -> &str {
-        return &self.start;
+        &self.start
     }
 
     pub fn has_token(&mut self, s: &str) -> bool{
-        return self.tokens.contains(s);
+        self.tokens.contains(s)
     }
 }
 
@@ -53,7 +53,7 @@ pub struct Rule {
 
 impl Rule {
     pub fn new(name: String) -> Rule{
-        return Rule {name: name, symbols: vec![]}
+        Rule {name: name, symbols: vec![]}
     }
 
     pub fn add_symbols(&mut self, v: Vec<Symbol>) {
@@ -81,7 +81,7 @@ impl fmt::Debug for Rule {
 
 impl PartialEq for Rule {
     fn eq(&self, other: &Rule) -> bool {
-        return self.name == other.name && self.symbols == other.symbols;
+        self.name == other.name && self.symbols == other.symbols
     }
 }
 
@@ -100,13 +100,13 @@ pub struct Symbol {
 
 impl Symbol {
     pub fn new(s: String, t: SymbolType) -> Symbol {
-        return Symbol {name: s, typ: t};
+        Symbol {name: s, typ: t}
     }
 }
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Symbol) -> bool {
-        return self.name == other.name && self.typ == other.typ;
+        self.name == other.name && self.typ == other.typ
     }
 }
 

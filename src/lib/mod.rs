@@ -7,7 +7,7 @@ use regex::Regex;
 pub fn parse_yacc<'a>(s:&'a String) -> Grammar {
     let mut yp = YaccParser::new(s.to_string());
     yp.parse();
-    return yp.grammar;
+    yp.grammar
 }
 
 struct YaccParser {
@@ -18,7 +18,7 @@ struct YaccParser {
 
 impl YaccParser {
     fn new(src: String) -> YaccParser {
-        return YaccParser {
+        YaccParser {
             src: src,
             pos: 0,
             grammar: Grammar::new()
@@ -26,7 +26,7 @@ impl YaccParser {
     }
 
     fn remaining_src(&self) -> &str{
-        return &self.src[self.pos..self.src.len()];
+        &self.src[self.pos..self.src.len()]
     }
 
     fn parse(&mut self){
@@ -61,17 +61,17 @@ impl YaccParser {
                 let name = try!(self.parse_name());
                 self.grammar.tokens.insert(name);
             }
-            return Ok(());
+            Ok(())
         }
         else if self.lookahead_is("%start") {
             self.pos += 6;
             self.parse_ws();
             let name = try!(self.parse_name());
             self.grammar.start = name;
-            return Ok(());
+            Ok(())
         }
         else {
-            return Err("Couldn't parse declaration!".to_string());
+            Err("Couldn't parse declaration!".to_string())
         }
     }
 
@@ -98,7 +98,7 @@ impl YaccParser {
 
         let name = &self.src[self.pos+x1..self.pos+x2];
         self.pos += name.len();
-        return Ok(name.to_string());
+        Ok(name.to_string())
     }
 
     fn parse_rules(&mut self) {
@@ -143,7 +143,7 @@ impl YaccParser {
                 empty = false;
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     fn parse_symbols(&mut self) -> Result<(Vec<Symbol>), String> {
@@ -157,7 +157,7 @@ impl YaccParser {
             let symbol = try!(self.parse_symbol());
             v.push(symbol);
         }
-        return Ok(v);
+        Ok(v)
     }
 
     fn parse_symbol(&mut self) -> Result<Symbol, String> {
@@ -194,15 +194,12 @@ impl YaccParser {
             return Err(format!("Failed parsing string '{}'", s));
         }
         self.pos += s.len();
-        return Ok(());
+        Ok(())
     }
 
     fn lookahead_is(&mut self, s: &str) -> bool {
         let slice = &self.src[self.pos..self.pos + s.len()];
-        if slice != s {
-            return false;
-        }
-        return true;
+        slice == s
     }
 
 }
