@@ -1,0 +1,2 @@
+language: rust
+rust: nightly # once we get to 1.2beta use that
