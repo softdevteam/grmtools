@@ -64,18 +64,18 @@ impl Rule {
 impl fmt::Display for Rule {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Rule")
-            .field("name", &self.name)
-            .field("symbols", &self.symbols)
-            .finish()
+           .field("name", &self.name)
+           .field("symbols", &self.symbols)
+           .finish()
     }
 }
 
 impl fmt::Debug for Rule {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Rule")
-            .field("name", &self.name)
-            .field("symbols", &self.symbols)
-            .finish()
+           .field("name", &self.name)
+           .field("symbols", &self.symbols)
+           .finish()
     }
 }
 
