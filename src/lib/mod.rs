@@ -162,8 +162,8 @@ impl YaccParser {
 
     fn parse_symbol(&mut self) -> Result<Symbol, String> {
         // try token
-        let mut name;
-        let mut typ;
+        let name;
+        let typ;
         if self.lookahead_is("'") {
             try!(self.parse_string("'"));
             name = try!(self.parse_name());
