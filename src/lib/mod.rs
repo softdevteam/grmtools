@@ -107,7 +107,10 @@ impl YaccParser {
             if self.pos >= self.src.len() {
                 break;
             }
-            if self.lookahead_is("%%") { self.pos += 2; break; }
+            if self.lookahead_is("%%") {
+                self.pos += 2;
+                break;
+            }
             match self.parse_rule() {
                 Ok(()) => (),
                 Err(msg) => panic!("{}", msg)
