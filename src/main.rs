@@ -1,11 +1,10 @@
-#![feature(exit_status)]
 #![feature(convert)]
 
 extern crate getopts;
 extern crate lrpar;
 
 use getopts::Options;
-use std::env;
+use std::{env, process};
 use std::fs::File;
 use std::io::{Read, stderr, Write};
 use std::path::Path;
@@ -23,7 +22,7 @@ fn usage(prog: String, msg: &str) {
     } else {
         writeln!(&mut stderr(), "Usage: {} <filename>", leaf).ok();
     }
-    env::set_exit_status(1);
+    process::exit(1);
 }
 
 fn main() {
@@ -46,8 +45,7 @@ fn main() {
         Ok(r) => r,
         Err(e) => {
             writeln!(&mut stderr(), "Can't open file {}: {}", &p, e).ok();
-            env::set_exit_status(1);
-            return;
+            process::exit(1);
         }
     };
     let mut s = String::new();
