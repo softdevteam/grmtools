@@ -206,5 +206,4 @@ impl YaccParser {
         let slice = &self.src[self.pos..self.pos + s.len()];
         slice == s
     }
-
 }
