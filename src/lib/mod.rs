@@ -36,8 +36,8 @@ impl YaccParser {
     }
 
     fn parse_declarations(&mut self) {
-        self.parse_ws();
         loop {
+            self.parse_ws();
             if self.lookahead_is("%%") {
                 self.pos += 2;
                 break;
@@ -46,11 +46,10 @@ impl YaccParser {
                 Ok(()) => (),
                 Err(err) => panic!("{}", err)
             }
-            self.parse_ws();
         }
     }
 
-    fn parse_declaration(&mut self) -> Result<(), String>{
+    fn parse_declaration(&mut self) -> Result<(), String> {
         if self.lookahead_is("%token") {
             self.pos += 6;
             loop {
@@ -189,15 +188,18 @@ impl YaccParser {
     }
 
     fn parse_string(&mut self, s: &str) -> Result<(), String> {
-        let slice = &self.src[self.pos..self.pos + s.len()];
-        if slice != s {
-            return Err(format!("Failed parsing string '{}'", s));
+        if self.pos + s.len() <= self.src.len() {
+            let slice = &self.src[self.pos..self.pos + s.len()];
+            if slice == s {
+                self.pos += s.len();
+                return Ok(());
+            }
         }
-        self.pos += s.len();
-        Ok(())
+        return Err(format!("Failed parsing string '{}'", s));
     }
 
     fn lookahead_is(&mut self, s: &str) -> bool {
+        if self.pos + s.len() > self.src.len() { return false; }
         let slice = &self.src[self.pos..self.pos + s.len()];
         slice == s
     }

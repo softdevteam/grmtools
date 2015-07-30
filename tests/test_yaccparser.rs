@@ -146,3 +146,17 @@ fn test_simple_decl_fail(){
     let src = "%fail x\n%%\nA : a".to_string();
     parse_yacc(&src);
 }
+
+#[test]
+#[should_panic]
+fn test_empty(){
+    let src = "".to_string();
+    parse_yacc(&src);
+}
+
+#[test]
+#[should_panic]
+fn test_incomplete_rule(){
+    let src = "%token   a\n%%\nA".to_string();
+    parse_yacc(&src);
+}
