@@ -6,11 +6,11 @@ use grammar::{Grammar, Symbol, SymbolType};
 pub struct YaccParser {
     src: String,
     pos: usize,
-    pub grammar: Grammar
+    grammar: Grammar
 }
 
 impl YaccParser {
-    pub fn new(src: String) -> YaccParser {
+    fn new(src: String) -> YaccParser {
         YaccParser {
             src: src,
             pos: 0,
@@ -22,7 +22,7 @@ impl YaccParser {
         &self.src[self.pos..self.src.len()]
     }
 
-    pub fn parse(&mut self){
+    fn parse(&mut self){
         self.parse_declarations();  // optional
         self.parse_rules();         // including %%
         self.parse_programs();      // optional
@@ -201,4 +201,11 @@ impl YaccParser {
         let slice = &self.src[self.pos..self.pos + s.len()];
         slice == s
     }
+}
+
+
+pub fn parse(s:String) -> Grammar {
+    let mut yp = YaccParser::new(s);
+    yp.parse();
+    yp.grammar
 }
