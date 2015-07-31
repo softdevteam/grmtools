@@ -64,18 +64,18 @@ impl Rule {
 impl fmt::Display for Rule {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Rule")
-            .field("name", &self.name)
-            .field("symbols", &self.symbols)
-            .finish()
+           .field("name", &self.name)
+           .field("symbols", &self.symbols)
+           .finish()
     }
 }
 
 impl fmt::Debug for Rule {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Rule")
-            .field("name", &self.name)
-            .field("symbols", &self.symbols)
-            .finish()
+           .field("name", &self.name)
+           .field("symbols", &self.symbols)
+           .finish()
     }
 }
 
@@ -112,14 +112,14 @@ impl PartialEq for Symbol {
 
 impl fmt::Debug for Symbol {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-            let mut classname = String::new();
-            match self.typ {
-                SymbolType::Nonterminal => classname.push_str("Nonterminal"),
-                SymbolType::Terminal => classname.push_str("Terminal"),
-                SymbolType::Epsilon => classname.push_str("Epislon")
-            }
-            fmt.debug_struct(&classname)
-                .field("name", &self.name)
-                .finish()
+        let mut classname = String::new();
+        match self.typ {
+            SymbolType::Nonterminal => classname.push_str("Nonterminal"),
+            SymbolType::Terminal => classname.push_str("Terminal"),
+            SymbolType::Epsilon => classname.push_str("Epislon")
+        }
+        fmt.debug_struct(&classname)
+           .field("name", &self.name)
+           .finish()
     }
 }

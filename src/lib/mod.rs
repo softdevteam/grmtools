@@ -107,7 +107,10 @@ impl YaccParser {
             if self.pos >= self.src.len() {
                 break;
             }
-            if self.lookahead_is("%%") { self.pos += 2; break; }
+            if self.lookahead_is("%%") {
+                self.pos += 2;
+                break;
+            }
             match self.parse_rule() {
                 Ok(()) => (),
                 Err(msg) => panic!("{}", msg)
@@ -126,14 +129,16 @@ impl YaccParser {
             if self.lookahead_is("|") {
                 self.pos += 1;
                 if empty {
-                    self.grammar.add_rule(name.clone(), vec!{Symbol{name: String::new(), typ: SymbolType::Epsilon}});
+                    self.grammar.add_rule(name.clone(),
+                      vec!{Symbol{name: String::new(), typ: SymbolType::Epsilon}});
                 }
                 empty = true;
             }
             else if self.lookahead_is(";") {
                 self.pos += 1;
                 if empty {
-                    self.grammar.add_rule(name.clone(), vec!{Symbol{name: String::new(), typ: SymbolType::Epsilon}});
+                    self.grammar.add_rule(name.clone(), 
+                      vec!{Symbol{name: String::new(), typ: SymbolType::Epsilon}});
                 }
                 break;
             }
@@ -201,5 +206,4 @@ impl YaccParser {
         let slice = &self.src[self.pos..self.pos + s.len()];
         slice == s
     }
-
 }
