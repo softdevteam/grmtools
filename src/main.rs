@@ -51,6 +51,11 @@ fn main() {
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
 
-    let ast = parse_yacc(&s);
-    println!("{:?}", ast);
+    match parse_yacc(&s) {
+        Ok(ast) => println!("{:?}", ast),
+        Err(s) => {
+            println!("Error: {}", &s);
+            process::exit(1);
+        }
+    }
 }
