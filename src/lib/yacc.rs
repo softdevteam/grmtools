@@ -1,211 +1,198 @@
+use std::fmt;
+
 extern crate regex;
 use self::regex::Regex;
+
+type YaccResult<T> = Result<T, YaccError>;
 
 use grammar::{Grammar, Symbol, SymbolType};
 
 pub struct YaccParser {
     src: String,
-    pos: usize,
     grammar: Grammar
 }
 
+/// The various different possible Yacc parser errors.
+#[derive(Debug)]
+pub enum YaccErrorKind {
+    IllegalName,
+    IllegalString,
+    IncompleteRule,
+    MissingColon,
+    PrematureEnd,
+    ProgramsNotSupported,
+    UnknownDeclaration
+}
+
+/// Any error from the Yacc parser returns an instance of this struct.
+#[derive(Debug)]
+pub struct YaccError {
+    pub kind: YaccErrorKind,
+    off:  usize
+}
+
+impl fmt::Display for YaccError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s;
+        match self.kind {
+            YaccErrorKind::IllegalName          => s = "Illegal name",
+            YaccErrorKind::IllegalString        => s = "Illegal string",
+            YaccErrorKind::IncompleteRule       => s = "Incomplete rule",
+            YaccErrorKind::MissingColon         => s = "Missing colon",
+            YaccErrorKind::PrematureEnd         => s = "File ends prematurely",
+            YaccErrorKind::ProgramsNotSupported => s = "Programs not currently supported",
+            YaccErrorKind::UnknownDeclaration   => s = "Unknown declaration"
+        }
+        write!(f, "{} at position {}", s, self.off)
+    }
+}
+
+/// The actual parser is intended to be entirely opaque from outside users.
 impl YaccParser {
     fn new(src: String) -> YaccParser {
         YaccParser {
             src: src,
-            pos: 0,
             grammar: Grammar::new()
         }
     }
 
-    fn remaining_src(&self) -> &str{
-        &self.src[self.pos..self.src.len()]
-    }
-
-    fn parse(&mut self){
-        self.parse_declarations();  // optional
-        self.parse_rules();         // including %%
-        self.parse_programs();      // optional
-    }
-
-    fn parse_declarations(&mut self) {
-        loop {
-            self.parse_ws();
-            if self.lookahead_is("%%") {
-                self.pos += 2;
-                break;
+    fn parse(&mut self) -> YaccResult<usize> {
+        let mut i: usize = 0;
+        i = try!(self.parse_declarations(i));
+        i = try!(self.parse_rules(i));
+        // We don't currently support the programs part of a specification. One day we might...
+        match self.lookahead_is("%%", i) {
+            Some(j) => {
+                if try!(self.parse_ws(j)) == self.src.len() { Ok(i) }
+                else { Err(YaccError{kind: YaccErrorKind::ProgramsNotSupported, off: i}) }
             }
-            match self.parse_declaration() {
-                Ok(()) => (),
-                Err(err) => panic!("{}", err)
-            }
+            None    => Ok(i)
         }
     }
 
-    fn parse_declaration(&mut self) -> Result<(), String> {
-        if self.lookahead_is("%token") {
-            self.pos += 6;
-            loop {
-                self.parse_ws();
-                if self.lookahead_is("%"){
-                    break;
+    fn parse_declarations(&mut self, mut i: usize) -> YaccResult<usize> {
+        i = try!(self.parse_ws(i));
+        while i < self.src.len() {
+            if self.lookahead_is("%%", i).is_some() { return Ok(i); }
+            if let Some(j) = self.lookahead_is("%token", i) {
+                i = try!(self.parse_ws(j));
+                while i < self.src.len() {
+                    if self.lookahead_is("%", i).is_some() { break; }
+                    let (j, n) = try!(self.parse_name(i));
+                    self.grammar.tokens.insert(n);
+                    i = try!(self.parse_ws(j));
                 }
-                let name = try!(self.parse_name());
-                self.grammar.tokens.insert(name);
             }
-            Ok(())
+            else if let Some(j) = self.lookahead_is("%start", i) {
+                i = try!(self.parse_ws(j));
+                let (j, n) = try!(self.parse_name(i));
+                self.grammar.start = n;
+                i = try!(self.parse_ws(j));
+            }
+            else {
+                return Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, off: i});
+            }
         }
-        else if self.lookahead_is("%start") {
-            self.pos += 6;
-            self.parse_ws();
-            let name = try!(self.parse_name());
-            self.grammar.start = name;
-            Ok(())
+        Err(YaccError{kind: YaccErrorKind::PrematureEnd, off: i})
+    }
+
+    fn parse_rules(&mut self, mut i: usize) -> YaccResult<usize> {
+        // self.parse_declarations should have left the input at '%%'
+        match self.lookahead_is("%%", i) {
+            Some(j) => i = j,
+            None    => panic!("Internal error.")
         }
-        else {
-            Err("Couldn't parse declaration!".to_string())
+        i = try!(self.parse_ws(i));
+        while i < self.src.len() {
+            if self.lookahead_is("%%", i).is_some() { break; }
+            i = try!(self.parse_rule(i));
+            i = try!(self.parse_ws(i));
+        }
+        Ok(i)
+    }
+
+    fn parse_rule(&mut self, mut i: usize) -> YaccResult<usize> {
+        let (j, rn) = try!(self.parse_name(i));
+        i = try!(self.parse_ws(j));
+        match self.lookahead_is(":", i) {
+            Some(j) => i = j,
+            None    => return Err(YaccError{kind: YaccErrorKind::MissingColon, off: i})
+        }
+        let mut syms = Vec::new();
+        i = try!(self.parse_ws(i));
+        while i < self.src.len() {
+            if let Some(j) = self.lookahead_is("|", i) {
+                self.grammar.add_rule(rn.clone(), syms);
+                syms = Vec::new();
+                i = try!(self.parse_ws(j));
+                continue;
+            }
+            else if let Some(j) = self.lookahead_is(";", i) {
+                self.grammar.add_rule(rn.clone(), syms);
+                return Ok(j);
+            }
+
+            if self.lookahead_is("\"", i).is_some()
+              || self.lookahead_is("'", i).is_some() {
+                let (j, sym) = try!(self.parse_terminal(i));
+                i = try!(self.parse_ws(j));
+                syms.push(Symbol::new(sym, SymbolType::Terminal));
+            }
+            else {
+                let (j, sym) = try!(self.parse_name(i));
+                i = j;
+                syms.push(Symbol::new(sym, SymbolType::Nonterminal));
+            }
+            i = try!(self.parse_ws(i));
+        }
+        Err(YaccError{kind: YaccErrorKind::IncompleteRule, off: i})
+    }
+
+    fn parse_name(&self, i: usize) -> YaccResult<(usize, String)> {
+        let re = Regex::new("^[a-zA-Z_][a-zA-Z0-9_]*").unwrap();
+        match re.find(&self.src[i..]) {
+            Some((s, e)) => {
+                assert!(s == 0);
+                Ok((i + e, self.src[i..i + e].to_string()))
+            },
+            None         => Err(YaccError{kind: YaccErrorKind::IllegalName, off: i})
         }
     }
 
-    fn parse_programs(&mut self) {
+    fn parse_terminal(&self, i: usize) -> YaccResult<(usize, String)> {
+        let re = Regex::new("^(\"[a-zA-Z_][a-zA-Z0-9_]*\")|('[a-zA-Z_][a-zA-Z0-9_]*')").unwrap();
+        match re.find(&self.src[i..]) {
+            Some((s, e)) => {
+                assert!(s == 0);
+                Ok((i + e, self.src[i + 1..i + e - 1].to_string()))
+            },
+            None => Err(YaccError{kind: YaccErrorKind::IllegalString, off: i})
+        }
     }
 
-    fn parse_ws(&mut self) {
+    fn parse_ws(&self, i: usize) -> YaccResult<usize> {
         let re = Regex::new(r"^\s+").unwrap();
-        let result = re.find(self.remaining_src());
-        let (_, x2) = match result {
-            Some(_) => result.unwrap(),
-            None => return
-        };
-        self.pos += x2;
-    }
-
-    fn parse_name(&mut self) -> Result<String, String> {
-        let re = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*").unwrap();
-        let result = re.find(self.remaining_src());
-        let (x1, x2) = match result {
-            Some(_) => result.unwrap(),
-            None => return Err("Couldn't parse name!".to_string())
-        };
-
-        let name = &self.src[self.pos+x1..self.pos+x2];
-        self.pos += name.len();
-        Ok(name.to_string())
-    }
-
-    fn parse_rules(&mut self) {
-        self.parse_ws();
-        loop {
-            if self.pos >= self.src.len() {
-                break;
+        match re.find(&self.src[i..]) {
+            Some((s, e)) => {
+                assert!(s == 0);
+                Ok(i + e)
             }
-            if self.lookahead_is("%%") {
-                self.pos += 2;
-                break;
-            }
-            match self.parse_rule() {
-                Ok(()) => (),
-                Err(msg) => panic!("{}", msg)
-            }
-            self.parse_ws();
+            None => Ok(i)
         }
     }
 
-    fn parse_rule(&mut self) -> Result<(), String> {
-        let name = try!(self.parse_name());
-        self.parse_ws();
-        try!(self.parse_string(":"));
-        let mut empty = true;
-        loop {
-            self.parse_ws();
-            if self.lookahead_is("|") {
-                self.pos += 1;
-                if empty {
-                    self.grammar.add_rule(name.clone(),
-                      vec!{Symbol{name: String::new(), typ: SymbolType::Epsilon}});
-                }
-                empty = true;
-            }
-            else if self.lookahead_is(";") {
-                self.pos += 1;
-                if empty {
-                    self.grammar.add_rule(name.clone(), 
-                      vec!{Symbol{name: String::new(), typ: SymbolType::Epsilon}});
-                }
-                break;
-            }
-            else {
-                let symbols = try!(self.parse_symbols());
-                self.grammar.add_rule(name.clone(), symbols);
-                empty = false;
-            }
+    fn lookahead_is(&self, s: &'static str, i: usize) -> Option<usize> {
+        if i + s.len() <= self.src.len() && &self.src[i..i + s.len()] == s {
+            return Some(i + s.len());
         }
-        Ok(())
-    }
-
-    fn parse_symbols(&mut self) -> Result<(Vec<Symbol>), String> {
-        let mut v = Vec::new();
-        loop {
-            self.parse_ws();
-            if self.lookahead_is(";") || self.lookahead_is("|") { // replace with lookahead
-                break;
-            }
-            self.parse_ws();
-            let symbol = try!(self.parse_symbol());
-            v.push(symbol);
-        }
-        Ok(v)
-    }
-
-    fn parse_symbol(&mut self) -> Result<Symbol, String> {
-        // try token
-        let name;
-        let typ;
-        if self.lookahead_is("'") {
-            try!(self.parse_string("'"));
-            name = try!(self.parse_name());
-            typ = SymbolType::Terminal;
-            try!(self.parse_string("'"));
-        }
-        else if self.lookahead_is("\"") {
-            try!(self.parse_string("\""));
-            name = try!(self.parse_name());
-            typ = SymbolType::Terminal;
-            try!(self.parse_string("\""));
-        }
-        else {
-            name = try!(self.parse_name());
-            if self.grammar.has_token(&name) {
-                typ = SymbolType::Terminal;
-            }
-            else {
-                typ = SymbolType::Nonterminal;
-            }
-        }
-        Ok(Symbol{name: name, typ: typ})
-    }
-
-    fn parse_string(&mut self, s: &str) -> Result<(), String> {
-        if self.pos + s.len() <= self.src.len() {
-            let slice = &self.src[self.pos..self.pos + s.len()];
-            if slice == s {
-                self.pos += s.len();
-                return Ok(());
-            }
-        }
-        return Err(format!("Failed parsing string '{}'", s));
-    }
-
-    fn lookahead_is(&mut self, s: &str) -> bool {
-        if self.pos + s.len() > self.src.len() { return false; }
-        let slice = &self.src[self.pos..self.pos + s.len()];
-        slice == s
+        None
     }
 }
 
-
-pub fn parse(s:String) -> Grammar {
-    let mut yp = YaccParser::new(s);
-    yp.parse();
-    yp.grammar
+pub fn parse_yacc(s:&String) -> Result<Grammar, YaccError> {
+    let mut yp = YaccParser::new(s.to_string());
+    match yp.parse() {
+        Ok(_) => Ok(yp.grammar),
+        Err(e) => Err(e)
+    }
 }

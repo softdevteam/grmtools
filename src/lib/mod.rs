@@ -1,9 +1,6 @@
 pub mod grammar;
 mod yacc;
 
-use grammar::Grammar;
-
-pub fn parse_yacc<'a>(s:&'a String) -> Grammar {
-    yacc::parse(s.to_string())
-}
+pub use grammar::Grammar;
+pub use self::yacc::{YaccError, YaccErrorKind, parse_yacc};
 
