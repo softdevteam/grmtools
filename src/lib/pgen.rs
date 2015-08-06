@@ -1,65 +1,54 @@
 use grammar::{Grammar, Symbol, SymbolType};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 struct ParserGenerator;
 
-pub struct First {
-    pub grm: Grammar
-}
+pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<String>> {
+    // This function gradually builds up a FIRST hashmap in stages.
+    let mut firsts: HashMap<String, HashSet<String>> = HashMap::new();
 
-impl First {
-
-    pub fn first(&self, s: &Symbol) -> HashSet<Symbol> {
-        let mut f:HashSet<Symbol> = HashSet::new();
-        match s.typ {
-            SymbolType::Terminal => { f.insert(s.clone()); },
-            SymbolType::Nonterminal => {
-                // if epsilon => add epsilon to first(X)
-                // if nonterm => add first(production)
-                match self.grm.get_rule(&s.name) {
-                    Some(rule) => {
-                        for a in rule.alternatives.iter(){
-                            let r = &mut self.first_vec(a);
-                            for e in r.iter() {
-                                f.insert(e.clone());
-                            }
-                        }
-                    },
-                    None => { f.insert(s.clone()); },
-                }
-            },
-            SymbolType::Epsilon => { f.insert(s.clone()); }
+    // First do the easy bit, which is every terminal at the start of an alternative.
+    for rul in grm.rules.values() {
+        let mut f = HashSet::new();
+        for alt in rul.alternatives.iter() {
+            if alt.len() == 0 { continue; }
+            let ref sym = alt[0];
+            if sym.typ == SymbolType::Terminal {
+                f.insert(sym.name.clone());
+            }
         }
-        f
+        firsts.insert(rul.name.clone(), f);
     }
 
-    pub fn first_vec(&self, v: &Vec<Symbol>) -> HashSet<Symbol> {
-        // while first contains epsilon, add next first
-        let mut result: HashSet<Symbol> = HashSet::new();
-        for s in v.iter() {
-            let first = &mut self.first(s);
-            println!("{:?}", first);
-            if first.contains(&Symbol::new("".to_string(), SymbolType::Epsilon)) {
-                // element has epsilon -> add without epsilon and continue
-                for e in first.iter() {
-                    if e.typ != SymbolType::Epsilon || v.last() == Some(s) {
-                        result.insert(e.clone());
+    // Now we do the slow, iterative part, where we loop until we reach a fixed point. In essence,
+    // we look at each rule E, and see if any of the nonterminals at the start of its alternatives
+    // have new elements in since we last looked. If they do, we'll have to do another round.
+    let mut changed;
+    loop {
+        changed = false;
+        for rul in grm.rules.values() {
+            // For each rule E...
+            for alt in rul.alternatives.iter() {
+                // ...and each alternative A
+                for sym in alt.iter() {
+                    if sym.typ == SymbolType::Terminal { break; }
+                    assert!(sym.typ == SymbolType::Nonterminal);
+                    // ...and for each nonterminal X at the beginning of A, see if each terminal T
+                    // in FIRSTS(X) is in FIRSTS(E). If not, add T to FIRSTS(E) and set the changed
+                    // flag, as we need to do another loop.
+                    let of = firsts.get(&sym.name).unwrap().clone();
+                    let mut f = firsts.get_mut(&rul.name).unwrap();
+                    for n in of.iter() {
+                        if !f.contains(n) {
+                            f.insert(n.clone());
+                            changed = true;
+                        }
                     }
                 }
             }
-            else {
-                // element has not epsilon -> add and stop
-                println!("first {:?}", first);
-                for e in first.iter() {
-                    result.insert(e.clone()); // union is not inplace
-                }
-                println!("result {:?}", result);
-                break
-            }
         }
-        result
+        if !changed {
+            return firsts;
+        }
     }
-}
-
-impl ParserGenerator {
 }
