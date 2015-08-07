@@ -93,7 +93,7 @@ pub enum SymbolType {
     Epsilon
 }
 
-#[derive(Hash, Eq)]
+#[derive(Clone, Hash, Eq)]
 pub struct Symbol {
     pub name: String,
     pub typ: SymbolType
@@ -102,10 +102,6 @@ pub struct Symbol {
 impl Symbol {
     pub fn new(s: String, t: SymbolType) -> Symbol {
         Symbol {name: s, typ: t}
-    }
-
-    pub fn clone(&self) -> Symbol {
-        Symbol::new(self.name.clone(), self.typ.clone())
     }
 }
 

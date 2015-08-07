@@ -3,9 +3,10 @@ use std::collections::{HashMap, HashSet};
 
 struct ParserGenerator;
 
-pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<String>> {
+pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
     // This function gradually builds up a FIRST hashmap in stages.
-    let mut firsts: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut firsts: HashMap<String, HashSet<Symbol>> = HashMap::new();
+    let eps = Symbol::new("".to_string(), SymbolType::Epsilon);
 
     // First do the easy bit, which is every terminal at the start of an alternative.
     for rul in grm.rules.values() {
@@ -13,8 +14,8 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<String>> {
         for alt in rul.alternatives.iter() {
             if alt.len() == 0 { continue; }
             let ref sym = alt[0];
-            if sym.typ == SymbolType::Terminal {
-                f.insert(sym.name.clone());
+            if sym.typ == SymbolType::Terminal || sym.typ == SymbolType::Epsilon {
+                f.insert(sym.clone());
             }
         }
         firsts.insert(rul.name.clone(), f);
@@ -31,17 +32,45 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<String>> {
             for alt in rul.alternatives.iter() {
                 // ...and each alternative A
                 for sym in alt.iter() {
-                    if sym.typ == SymbolType::Terminal { break; }
-                    assert!(sym.typ == SymbolType::Nonterminal);
-                    // ...and for each nonterminal X at the beginning of A, see if each terminal T
-                    // in FIRSTS(X) is in FIRSTS(E). If not, add T to FIRSTS(E) and set the changed
-                    // flag, as we need to do another loop.
-                    let of = firsts.get(&sym.name).unwrap().clone();
-                    let mut f = firsts.get_mut(&rul.name).unwrap();
-                    for n in of.iter() {
-                        if !f.contains(n) {
-                            f.insert(n.clone());
+                    if sym.typ == SymbolType::Epsilon {
+                        // epsilon can only appear on their own
+                        // we already dealt with them earlier
+                        break;
+                    }
+                    else if sym.typ == SymbolType::Terminal {
+                        // if symbol is a Terminal, add to FIRSTS
+                        let mut f = firsts.get_mut(&rul.name).unwrap();
+                        if !f.contains(sym) {
+                            f.insert(sym.clone());
                             changed = true;
+                        }
+                        break;
+                    }
+                    else {
+                        assert!(sym.typ == SymbolType::Nonterminal);
+                        // if symbols is Nonterminal, get its FIRSTS and add them to the current
+                        // FIRSTS. if the Nonterminals FIRSTS contain an epsilon, continue looking
+                        // at the succeeding Nonterminal, otherwise break
+                        let of = firsts.get(&sym.name).unwrap().clone();
+                        let mut f = firsts.get_mut(&rul.name).unwrap();
+                        for n in of.iter() {
+                            if n.typ == eps.typ {
+                                // only add epsilon if symbol is the last in the production
+                                if sym == alt.last().unwrap() {
+                                    if !f.contains(n) {
+                                        f.insert(n.clone());
+                                        changed = true;
+                                    }
+                                }
+                            }
+                            else if !f.contains(n) {
+                                f.insert(n.clone());
+                                changed = true;
+                            }
+                        }
+                        // if FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, don't add FIRST(Y2 Y3)
+                        if !of.contains(&eps) {
+                            break;
                         }
                     }
                 }
