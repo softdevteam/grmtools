@@ -32,46 +32,45 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
             for alt in rul.alternatives.iter() {
                 // ...and each alternative A
                 for sym in alt.iter() {
-                    if sym.typ == SymbolType::Epsilon {
-                        // epsilon can only appear on their own
-                        // we already dealt with them earlier
-                        break;
-                    }
-                    else if sym.typ == SymbolType::Terminal {
-                        // if symbol is a Terminal, add to FIRSTS
-                        let mut f = firsts.get_mut(&rul.name).unwrap();
-                        if !f.contains(sym) {
-                            f.insert(sym.clone());
-                            changed = true;
-                        }
-                        break;
-                    }
-                    else {
-                        assert!(sym.typ == SymbolType::Nonterminal);
-                        // if symbols is Nonterminal, get its FIRSTS and add them to the current
-                        // FIRSTS. if the Nonterminals FIRSTS contain an epsilon, continue looking
-                        // at the succeeding Nonterminal, otherwise break
-                        let of = firsts.get(&sym.name).unwrap().clone();
-                        let mut f = firsts.get_mut(&rul.name).unwrap();
-                        for n in of.iter() {
-                            if n.typ == eps.typ {
-                                // only add epsilon if symbol is the last in the production
-                                if sym == alt.last().unwrap() {
-                                    if !f.contains(n) {
-                                        f.insert(n.clone());
-                                        changed = true;
-                                    }
-                                }
-                            }
-                            else if !f.contains(n) {
-                                f.insert(n.clone());
+                    match sym.typ {
+                        // epsilon can only appear on their own we already dealt with them earlier
+                        SymbolType::Epsilon => break,
+                        SymbolType::Terminal => {
+                            // if symbol is a Terminal, add to FIRSTS
+                            let mut f = firsts.get_mut(&rul.name).unwrap();
+                            if !f.contains(sym) {
+                                f.insert(sym.clone());
                                 changed = true;
                             }
-                        }
-                        // if FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, don't add FIRST(Y2 Y3)
-                        if !of.contains(&eps) {
                             break;
-                        }
+                        },
+                        SymbolType::Nonterminal => {
+                            // if symbols is Nonterminal, get its FIRSTS and add them to the
+                            // current FIRSTS. if the Nonterminals FIRSTS contain an epsilon,
+                            // continue looking at the succeeding Nonterminal, otherwise break
+                            let of = firsts.get(&sym.name).unwrap().clone();
+                            let mut f = firsts.get_mut(&rul.name).unwrap();
+                            for n in of.iter() {
+                                if n.typ == eps.typ {
+                                    // only add epsilon if symbol is the last in the production
+                                    if sym == alt.last().unwrap() {
+                                        if !f.contains(n) {
+                                            f.insert(n.clone());
+                                            changed = true;
+                                        }
+                                    }
+                                }
+                                else if !f.contains(n) {
+                                    f.insert(n.clone());
+                                    changed = true;
+                                }
+                            }
+                            // if FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, don't
+                            // add FIRST(Y2 Y3)
+                            if !of.contains(&eps) {
+                                break;
+                            }
+                        },
                     }
                 }
             }
