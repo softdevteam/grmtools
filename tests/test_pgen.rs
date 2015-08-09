@@ -57,6 +57,20 @@ fn test_first_epsilon() {
 }
 
 #[test]
+fn test_last_epsilon() {
+    let mut grm = Grammar::new();
+    grm.add_rule("A".to_string(), vec!(nonterminal!("B"), nonterminal!("C")));
+    grm.add_rule("B".to_string(), vec!(terminal!("b")));
+    grm.add_rule("B".to_string(), vec!(Symbol::new("".to_string(), SymbolType::Epsilon)));
+    grm.add_rule("C".to_string(), vec!(nonterminal!("B"), terminal!("c"), nonterminal!("B")));
+
+    let firsts = calc_firsts(grm);
+    has(&firsts, "A", vec![terminal!("b"), terminal!("c")]);
+    has(&firsts, "B", vec![terminal!("b"), Symbol::new("".to_string(), SymbolType::Epsilon)]);
+    has(&firsts, "C", vec![terminal!("b"), terminal!("c")]);
+}
+
+#[test]
 fn test_first_no_multiples() {
     let mut grm = Grammar::new();
     grm.add_rule("A".to_string(), vec!(nonterminal!("B"), terminal!("b")));

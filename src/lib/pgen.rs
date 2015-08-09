@@ -31,7 +31,7 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
             // For each rule E...
             for alt in rul.alternatives.iter() {
                 // ...and each alternative A
-                for sym in alt.iter() {
+                for (sym_i, sym) in alt.iter().enumerate() {
                     match sym.typ {
                         // epsilon can only appear on their own we already dealt with them earlier
                         SymbolType::Epsilon => break,
@@ -53,7 +53,7 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
                             for n in of.iter() {
                                 if n.typ == SymbolType::Epsilon {
                                     // only add epsilon if symbol is the last in the production
-                                    if sym == alt.last().unwrap() {
+                                    if sym_i == alt.len() - 1 {
                                         if !f.contains(n) {
                                             f.insert(n.clone());
                                             changed = true;
