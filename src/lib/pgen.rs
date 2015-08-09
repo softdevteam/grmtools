@@ -51,7 +51,7 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
                             let of = firsts.get(&sym.name).unwrap().clone();
                             let mut f = firsts.get_mut(&rul.name).unwrap();
                             for n in of.iter() {
-                                if n.typ == eps.typ {
+                                if n.typ == SymbolType::Epsilon {
                                     // only add epsilon if symbol is the last in the production
                                     if sym == alt.last().unwrap() {
                                         if !f.contains(n) {
