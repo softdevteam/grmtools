@@ -20,15 +20,15 @@ impl Grammar {
         rule.add_symbols(value);
     }
 
-    pub fn get_rule(&mut self, key: &str) -> Option<&Rule>{
+    pub fn get_rule(&self, key: &str) -> Option<&Rule>{
         self.rules.get(key)
     }
 
-    pub fn get_start(&mut self) -> &str {
+    pub fn get_start(&self) -> &str {
         &self.start
     }
 
-    pub fn has_token(&mut self, s: &str) -> bool{
+    pub fn has_token(&self, s: &str) -> bool{
         self.tokens.contains(s)
     }
 }
@@ -48,16 +48,16 @@ impl fmt::Debug for Grammar {
 
 pub struct Rule {
     pub name: String,
-    pub symbols: Vec<Vec<Symbol>>
+    pub alternatives: Vec<Vec<Symbol>>
 }
 
 impl Rule {
     pub fn new(name: String) -> Rule{
-        Rule {name: name, symbols: vec![]}
+        Rule {name: name, alternatives: vec![]}
     }
 
     pub fn add_symbols(&mut self, v: Vec<Symbol>) {
-        self.symbols.push(v);
+        self.alternatives.push(v);
     }
 }
 
@@ -65,7 +65,7 @@ impl fmt::Display for Rule {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Rule")
            .field("name", &self.name)
-           .field("symbols", &self.symbols)
+           .field("alternatives", &self.alternatives)
            .finish()
     }
 }
@@ -74,25 +74,25 @@ impl fmt::Debug for Rule {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Rule")
            .field("name", &self.name)
-           .field("symbols", &self.symbols)
+           .field("alternatives", &self.alternatives)
            .finish()
     }
 }
 
 impl PartialEq for Rule {
     fn eq(&self, other: &Rule) -> bool {
-        self.name == other.name && self.symbols == other.symbols
+        self.name == other.name && self.alternatives == other.alternatives
     }
 }
 
 
-#[derive(PartialEq)]
+#[derive(Hash, Eq, PartialEq, Clone)]
 pub enum SymbolType {
     Terminal,
-    Nonterminal,
-    Epsilon
+    Nonterminal
 }
 
+#[derive(Clone, Hash, Eq)]
 pub struct Symbol {
     pub name: String,
     pub typ: SymbolType
@@ -115,11 +115,20 @@ impl fmt::Debug for Symbol {
         let mut classname = String::new();
         match self.typ {
             SymbolType::Nonterminal => classname.push_str("Nonterminal"),
-            SymbolType::Terminal => classname.push_str("Terminal"),
-            SymbolType::Epsilon => classname.push_str("Epislon")
+            SymbolType::Terminal => classname.push_str("Terminal")
         }
         fmt.debug_struct(&classname)
            .field("name", &self.name)
            .finish()
     }
+}
+
+#[macro_export]
+macro_rules! terminal {
+    ($x:expr) => ($crate::grammar::Symbol::new($x.to_string(), $crate::grammar::SymbolType::Terminal));
+}
+
+#[macro_export]
+macro_rules! nonterminal {
+    ($x:expr) => ($crate::grammar::Symbol::new($x.to_string(), $crate::grammar::SymbolType::Nonterminal));
 }
