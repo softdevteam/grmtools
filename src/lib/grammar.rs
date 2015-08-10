@@ -89,8 +89,7 @@ impl PartialEq for Rule {
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub enum SymbolType {
     Terminal,
-    Nonterminal,
-    Epsilon
+    Nonterminal
 }
 
 #[derive(Clone, Hash, Eq)]
@@ -116,8 +115,7 @@ impl fmt::Debug for Symbol {
         let mut classname = String::new();
         match self.typ {
             SymbolType::Nonterminal => classname.push_str("Nonterminal"),
-            SymbolType::Terminal => classname.push_str("Terminal"),
-            SymbolType::Epsilon => classname.push_str("Epislon")
+            SymbolType::Terminal => classname.push_str("Terminal")
         }
         fmt.debug_struct(&classname)
            .field("name", &self.name)

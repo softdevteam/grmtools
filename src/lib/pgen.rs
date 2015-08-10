@@ -3,19 +3,21 @@ use std::collections::{HashMap, HashSet};
 
 struct ParserGenerator;
 
-pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
+pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<String>> {
     // This function gradually builds up a FIRST hashmap in stages.
-    let mut firsts: HashMap<String, HashSet<Symbol>> = HashMap::new();
-    let eps = Symbol::new("".to_string(), SymbolType::Epsilon);
+    let mut firsts: HashMap<String, HashSet<String>> = HashMap::new();
 
     // First do the easy bit, which is every terminal at the start of an alternative.
     for rul in grm.rules.values() {
         let mut f = HashSet::new();
         for alt in rul.alternatives.iter() {
-            if alt.len() == 0 { continue; }
+            if alt.len() == 0 { 
+                f.insert("".to_string());
+                continue;
+            }
             let ref sym = alt[0];
-            if sym.typ == SymbolType::Terminal || sym.typ == SymbolType::Epsilon {
-                f.insert(sym.clone());
+            if sym.typ == SymbolType::Terminal {
+                f.insert(sym.name.clone());
             }
         }
         firsts.insert(rul.name.clone(), f);
@@ -33,13 +35,11 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
                 // ...and each alternative A
                 for (sym_i, sym) in alt.iter().enumerate() {
                     match sym.typ {
-                        // epsilon can only appear on their own we already dealt with them earlier
-                        SymbolType::Epsilon => break,
                         SymbolType::Terminal => {
                             // if symbol is a Terminal, add to FIRSTS
                             let mut f = firsts.get_mut(&rul.name).unwrap();
-                            if !f.contains(sym) {
-                                f.insert(sym.clone());
+                            if !f.contains(&sym.name) {
+                                f.insert(sym.name.clone());
                                 changed = true;
                             }
                             break;
@@ -51,7 +51,7 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
                             let of = firsts.get(&sym.name).unwrap().clone();
                             let mut f = firsts.get_mut(&rul.name).unwrap();
                             for n in of.iter() {
-                                if n.typ == SymbolType::Epsilon {
+                                if n == "" {
                                     // only add epsilon if symbol is the last in the production
                                     if sym_i == alt.len() - 1 {
                                         if !f.contains(n) {
@@ -67,7 +67,7 @@ pub fn calc_firsts(grm: Grammar) -> HashMap<String, HashSet<Symbol>> {
                             }
                             // if FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, don't
                             // add FIRST(Y2 Y3)
-                            if !of.contains(&eps) {
+                            if !of.contains("") {
                                 break;
                             }
                         },
