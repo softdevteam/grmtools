@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::{Read, stderr, Write};
 use std::path::Path;
 
-use lrpar::parse_yacc;
+use lrpar::from_yacc;
 
 fn usage(prog: String, msg: &str) {
     let path = Path::new(prog.as_str());
@@ -51,7 +51,7 @@ fn main() {
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
 
-    match parse_yacc(&s) {
+    match from_yacc(&s) {
         Ok(ast) => println!("{:?}", ast),
         Err(s) => {
             println!("Error: {}", &s);
