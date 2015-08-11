@@ -3,7 +3,7 @@
 extern crate lrpar;
 use lrpar::parse_yacc;
 use lrpar::grammar::{Grammar, Symbol, SymbolType};
-use lrpar::pgen::calc_firsts;
+use lrpar::pgen::{calc_firsts, calc_follows, get_firsts_from_symbols};
 use std::collections::{HashMap, HashSet};
 
 fn has(firsts: &HashMap<String, HashSet<String>>, n: &str, should_be: Vec<&str>) {
@@ -23,7 +23,7 @@ fn test_first(){
     grm.add_rule("E".to_string(), vec!(nonterminal!("D")));
     grm.add_rule("E".to_string(), vec!(nonterminal!("C")));
     grm.add_rule("F".to_string(), vec!(nonterminal!("E")));
-    let firsts = calc_firsts(grm);
+    let firsts = calc_firsts(&grm);
     has(&firsts, "D", vec!["d"]);
     has(&firsts, "E", vec!["d", "c"]);
     has(&firsts, "F", vec!["d", "c"]);
@@ -35,7 +35,7 @@ fn test_first_no_subsequent_nonterminals() {
     grm.add_rule("C".to_string(), vec!(terminal!("c")));
     grm.add_rule("D".to_string(), vec!(terminal!("d")));
     grm.add_rule("E".to_string(), vec!(nonterminal!("D"), nonterminal!("C")));
-    let firsts = calc_firsts(grm);
+    let firsts = calc_firsts(&grm);
     has(&firsts, "E", vec!["d"]);
 }
 
@@ -50,7 +50,7 @@ fn test_first_epsilon() {
     grm.add_rule("C".to_string(), vec!(terminal!("c")));
     grm.add_rule("C".to_string(), vec!());
 
-    let firsts = calc_firsts(grm);
+    let firsts = calc_firsts(&grm);
     has(&firsts, "A", vec!["b", "a"]);
     has(&firsts, "C", vec!["c", ""]);
     has(&firsts, "D", vec!["c", ""]);
@@ -64,7 +64,7 @@ fn test_last_epsilon() {
     grm.add_rule("B".to_string(), vec!());
     grm.add_rule("C".to_string(), vec!(nonterminal!("B"), terminal!("c"), nonterminal!("B")));
 
-    let firsts = calc_firsts(grm);
+    let firsts = calc_firsts(&grm);
     has(&firsts, "A", vec!["b", "c"]);
     has(&firsts, "B", vec!["b", ""]);
     has(&firsts, "C", vec!["b", "c"]);
@@ -76,12 +76,11 @@ fn test_first_no_multiples() {
     grm.add_rule("A".to_string(), vec!(nonterminal!("B"), terminal!("b")));
     grm.add_rule("B".to_string(), vec!(terminal!("b")));
     grm.add_rule("B".to_string(), vec!());
-    let firsts = calc_firsts(grm);
+    let firsts = calc_firsts(&grm);
     has(&firsts, "A", vec!["b"]);
 }
 
-#[test]
-fn test_first_from_eco() {
+fn eco_grammar() -> Grammar {
     let mut grm = Grammar::new();
     grm.add_rule("Z".to_string(), vec!(nonterminal!("S")));
     grm.add_rule("S".to_string(), vec!(nonterminal!("S"), terminal!("b")));
@@ -95,14 +94,31 @@ fn test_first_from_eco() {
     grm.add_rule("D".to_string(), vec!(terminal!("d")));
     grm.add_rule("D".to_string(), vec!());
     grm.add_rule("F".to_string(), vec!(nonterminal!("C"), nonterminal!("D"), terminal!("f")));
+    grm
+}
 
-    let firsts = calc_firsts(grm);
+#[test]
+fn test_first_from_eco() {
+    let mut grm = eco_grammar();
+    let firsts = calc_firsts(&grm);
     has(&firsts, "S", vec!["a", "b"]);
     has(&firsts, "A", vec!["a"]);
     has(&firsts, "B", vec!["a"]);
     has(&firsts, "D", vec!["d", ""]);
     has(&firsts, "C", vec!["d", "a"]);
     has(&firsts, "F", vec!["d", "a"]);
+}
+
+#[test]
+fn test_follow_from_eco() {
+    let mut grm = eco_grammar();
+    let firsts = calc_firsts(&grm);
+    let follow = calc_follows(&grm, &firsts);
+    has(&follow, "S", vec!["b", "c"]);
+    has(&follow, "A", vec!["a", "b", "d", "f"]);
+    has(&follow, "B", vec![]);
+    has(&follow, "C", vec!["d", "f"]);
+    has(&follow, "D", vec!["a", "f"]);
 }
 
 #[test]
@@ -121,7 +137,7 @@ fn test_first_from_eco_bug() {
     grm.add_rule("F".to_string(), vec!());
     grm.add_rule("G".to_string(), vec!(nonterminal!("C"), nonterminal!("D")));
 
-    let firsts = calc_firsts(grm);
+    let firsts = calc_firsts(&grm);
     has(&firsts, "E", vec!["a"]);
     has(&firsts, "T", vec!["a"]);
     has(&firsts, "P", vec!["a"]);
