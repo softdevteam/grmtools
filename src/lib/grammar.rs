@@ -7,6 +7,37 @@ pub struct Grammar {
     pub tokens: HashSet<String>
 }
 
+/// The various different possible grammar validation errors.
+#[derive(Debug)]
+pub enum GrammarErrorKind {
+    InvalidStartRule,
+    UnknownRuleRef,
+    UnknownToken
+}
+
+/// Grammar validation errors return an instance of this struct.
+#[derive(Debug)]
+pub struct GrammarError {
+    pub kind: GrammarErrorKind,
+    pub sym: Option<Symbol>
+}
+
+impl fmt::Display for GrammarError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.kind {
+            GrammarErrorKind::InvalidStartRule => {
+                write!(f, "Start rule does not appear in grammar")
+            },
+            GrammarErrorKind::UnknownRuleRef => {
+                write!(f, "Unknown reference to rule {}", self.sym.as_ref().unwrap().name)
+            },
+            GrammarErrorKind::UnknownToken => {
+                write!(f, "Unknown token {}", self.sym.as_ref().unwrap().name)
+            }
+        }
+    }
+}
+
 impl Grammar {
     pub fn new() -> Grammar {
         let s = String::new();
@@ -28,8 +59,40 @@ impl Grammar {
         &self.start
     }
 
-    pub fn has_token(&self, s: &str) -> bool{
+    pub fn has_token(&self, s: &str) -> bool {
         self.tokens.contains(s)
+    }
+
+    /// Perform basic validation on the grammar, namely:
+    ///   1) The start rule references a rule in the grammar
+    ///   2) Every nonterminal reference references a rule in the grammar
+    ///   3) Every terminal reference references a declared token
+    /// If the validation succeeds, None is returned.
+    pub fn validate(&self) -> Option<GrammarError> {
+        if !self.rules.contains_key(&self.start) {
+            return Some(GrammarError{kind: GrammarErrorKind::InvalidStartRule, sym: None});
+        }
+        for rule in self.rules.values() {
+            for alt in rule.alternatives.iter() {
+                for sym in alt {
+                    match sym.typ {
+                        SymbolType::Nonterminal => {
+                            if !self.rules.contains_key(&sym.name) {
+                                return Some(GrammarError{kind: GrammarErrorKind::UnknownRuleRef,
+                                    sym: Some(sym.clone())});
+                            }
+                        }
+                        SymbolType::Terminal => {
+                            if !self.tokens.contains(&sym.name) {
+                                return Some(GrammarError{kind: GrammarErrorKind::UnknownToken,
+                                    sym: Some(sym.clone())});
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
@@ -52,7 +115,7 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub fn new(name: String) -> Rule{
+    pub fn new(name: String) -> Rule {
         Rule {name: name, alternatives: vec![]}
     }
 
