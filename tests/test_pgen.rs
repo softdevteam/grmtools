@@ -145,3 +145,34 @@ fn test_first_from_eco_bug() {
     has(&firsts, "D", vec!["f", "d", ""]);
     has(&firsts, "G", vec!["c", "d", "f", ""]);
 }
+
+fn grammar2() -> Grammar {
+    let mut grm = Grammar::new();
+    grm.add_rule("E".to_string(), vec!(nonterminal!("T"), nonterminal!("P")));
+    grm.add_rule("P".to_string(), vec!(terminal!("+"), nonterminal!("T"), nonterminal!("P")));
+    grm.add_rule("P".to_string(), vec!());
+    grm.add_rule("T".to_string(), vec!(nonterminal!("F"), nonterminal!("Q")));
+    grm.add_rule("Q".to_string(), vec!(terminal!("*"), nonterminal!("F"), nonterminal!("Q")));
+    grm.add_rule("Q".to_string(), vec!());
+    grm.add_rule("F".to_string(), vec!(terminal!("("), nonterminal!("E"), terminal!(")")));
+    grm.add_rule("F".to_string(), vec!(terminal!("id")));
+    grm
+}
+
+#[test]
+fn test_grammar2() {
+    let mut grm = grammar2();
+    let firsts = calc_firsts(&grm);
+    let follow = calc_follows(&grm, &firsts);
+    has(&firsts, "E", vec!["(", "id"]);
+    has(&firsts, "P", vec!["+", ""]);
+    has(&firsts, "T", vec!["(", "id"]);
+    has(&firsts, "Q", vec!["*", ""]);
+    has(&firsts, "F", vec!["(", "id"]);
+
+    has(&follow, "E", vec![")"]);
+    has(&follow, "P", vec![")"]);
+    has(&follow, "T", vec!["+",")"]);
+    has(&follow, "Q", vec!["+",")"]);
+    has(&follow, "F", vec!["*", "+", ")"]);
+}

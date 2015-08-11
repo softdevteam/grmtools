@@ -177,7 +177,9 @@ pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
                     let followers = alt[sym_i+1..].to_vec();
                     let f = get_firsts_from_symbols(firsts, &followers);
                     for e in f.iter() {
-                        new.insert(e.clone());
+                        if e != "" {
+                            new.insert(e.clone());
+                        }
                     }
                     // if no symbols are following sym, or FIRST(followers) contains epsilon, then add
                     // FOLLOW(rule.name) to the set as well
