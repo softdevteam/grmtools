@@ -1,6 +1,7 @@
 extern crate lrpar;
-use lrpar::{parse_yacc, YaccError, YaccErrorKind};
+use lrpar::{YaccError, YaccErrorKind};
 use lrpar::grammar::{Rule, Symbol, SymbolType};
+use lrpar::yacc::parse_yacc;
 
 macro_rules! terminal {
     ($x:expr) => (Symbol::new($x.to_string(), SymbolType::Terminal));
