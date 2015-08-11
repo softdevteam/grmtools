@@ -1,7 +1,6 @@
 #[macro_use]
 
 extern crate lrpar;
-use lrpar::parse_yacc;
 use lrpar::grammar::{Grammar, Symbol, SymbolType};
 use lrpar::pgen::{calc_firsts, calc_follows, get_firsts_from_symbols};
 use std::collections::{HashMap, HashSet};
