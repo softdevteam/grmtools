@@ -1,8 +1,6 @@
 use grammar::{Grammar, Symbol, SymbolType};
 use std::collections::{HashMap, HashSet};
 
-struct ParserGenerator;
-
 /// Generates and returns the first set for the given grammar.
 ///
 /// # Example
@@ -159,8 +157,7 @@ pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
     // initialise follow set
     let mut follows: HashMap<String, HashSet<String>> = HashMap::new();
     for rule in grm.rules.values() {
-        let mut f = HashSet::new();
-        follows.insert(rule.name.clone(), f);
+        follows.insert(rule.name.clone(), HashSet::new());
     }
 
     let mut changed;

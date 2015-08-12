@@ -1,8 +1,8 @@
 #[macro_use]
 
 extern crate lrpar;
-use lrpar::grammar::{Grammar, Symbol, SymbolType};
-use lrpar::pgen::{calc_firsts, calc_follows, get_firsts_from_symbols};
+use lrpar::grammar::Grammar;
+use lrpar::pgen::{calc_firsts, calc_follows};
 use std::collections::{HashMap, HashSet};
 
 fn has(firsts: &HashMap<String, HashSet<String>>, n: &str, should_be: Vec<&str>) {
@@ -98,7 +98,7 @@ fn eco_grammar() -> Grammar {
 
 #[test]
 fn test_first_from_eco() {
-    let mut grm = eco_grammar();
+    let grm = eco_grammar();
     let firsts = calc_firsts(&grm);
     has(&firsts, "S", vec!["a", "b"]);
     has(&firsts, "A", vec!["a"]);
@@ -110,7 +110,7 @@ fn test_first_from_eco() {
 
 #[test]
 fn test_follow_from_eco() {
-    let mut grm = eco_grammar();
+    let grm = eco_grammar();
     let firsts = calc_firsts(&grm);
     let follow = calc_follows(&grm, &firsts);
     has(&follow, "S", vec!["b", "c"]);
@@ -160,7 +160,7 @@ fn grammar2() -> Grammar {
 
 #[test]
 fn test_grammar2() {
-    let mut grm = grammar2();
+    let grm = grammar2();
     let firsts = calc_firsts(&grm);
     let follow = calc_follows(&grm, &firsts);
     has(&firsts, "E", vec!["(", "id"]);
