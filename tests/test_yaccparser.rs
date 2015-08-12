@@ -43,7 +43,7 @@ fn test_rule() {
         %%
         A : 'a';
     ".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
     let mut rule1 = Rule::new("A".to_string());
     rule1.add_symbols(vec![terminal!("a")]);
     assert_eq!(*grm.get_rule("A").unwrap(), rule1);
@@ -59,7 +59,7 @@ fn test_rule_alternative_simple() {
         A : 'a';
         A : 'b';
     ".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
     let mut rule1 = Rule::new("A".to_string());
     rule1.add_symbols(vec![terminal!("a")]);
     rule1.add_symbols(vec![terminal!("b")]);
@@ -78,7 +78,7 @@ fn test_rule_empty() {
         B : 'b' | ;
         C : | 'c';
     ".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
 
     let mut rule1 = Rule::new("A".to_string());
     rule1.add_symbols(vec![]);
@@ -101,7 +101,7 @@ fn test_rule_alternative_verticalbar() {
         %%
         A : 'a' | 'b';
     ".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
     let mut rule1 = Rule::new("A".to_string());
     rule1.add_symbols(vec![terminal!("a")]);
     rule1.add_symbols(vec![terminal!("b")]);
@@ -120,7 +120,7 @@ fn test_empty_program() {
 #[test]
 fn test_multiple_symbols() {
     let src = "%%\nA : 'a' B;".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
     let mut rule = Rule::new("A".to_string());
     rule.add_symbols(vec![terminal!("a"), nonterminal!("B")]);
     assert_eq!(*grm.get_rule("A").unwrap(), rule)
@@ -129,7 +129,7 @@ fn test_multiple_symbols() {
 #[test]
 fn test_token_types() {
     let src = "%%\nA : 'a' \"b\";".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
     let mut rule = Rule::new("A".to_string());
     rule.add_symbols(vec![terminal!("a"), terminal!("b")]);
     assert_eq!(*grm.get_rule("A").unwrap(), rule)
@@ -138,21 +138,21 @@ fn test_token_types() {
 #[test]
 fn test_declaration_start() {
     let src = "%start   A\n%%\nA : a;".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
     assert_eq!(grm.get_start(), "A");
 }
 
 #[test]
 fn test_declaration_token() {
     let src = "%token   a\n%%\nA : a;".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
     assert!(grm.has_token("a"));
 }
 
 #[test]
 fn test_declaration_tokens() {
     let src = "%token   a b c\n%%\nA : a;".to_string();
-    let mut grm = parse_yacc(&src).unwrap();
+    let grm = parse_yacc(&src).unwrap();
     assert!(grm.has_token("a"));
     assert!(grm.has_token("b"));
     assert!(grm.has_token("c"));
