@@ -1,8 +1,8 @@
 #[macro_use]
 
 extern crate lrpar;
-use lrpar::grammar::{Grammar, Symbol, SymbolType};
-use lrpar::pgen::{calc_firsts, calc_follows, get_firsts_from_symbols, LR1Item, closure1};
+use lrpar::grammar::{Grammar, Symbol};
+use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1};
 use std::collections::{HashMap, HashSet};
 
 fn has(firsts: &HashMap<String, HashSet<String>>, n: &str, should_be: Vec<&str>) {
@@ -262,8 +262,6 @@ fn test_closure1() {
     let la3 = vec_to_set(vec!["a"]);
 
     let closure3 = closure1(&grm, &firsts, item3, la3);
-    let c6 = lritem("A", vec![t("a")], 1);
-    let c7 = lritem("A", vec![t("a"), nt("S"), t("b")], 1);
     let c8 = lritem("S", vec![nt("S"), t("b")], 0);
     let c9 = lritem("S", vec![t("b"), nt("A"), t("a")], 0);
 

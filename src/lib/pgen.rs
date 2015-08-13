@@ -1,6 +1,6 @@
 use grammar::{Grammar, Symbol, SymbolType};
 use std::collections::{HashMap, HashSet};
-use std::hash::{hash, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 /// Generates and returns the first set for the given grammar.
 ///
