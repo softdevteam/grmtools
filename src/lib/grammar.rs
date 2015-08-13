@@ -68,9 +68,9 @@ impl Grammar {
     ///   2) Every nonterminal reference references a rule in the grammar
     ///   3) Every terminal reference references a declared token
     /// If the validation succeeds, None is returned.
-    pub fn validate(&self) -> Option<GrammarError> {
+    pub fn validate(&self) -> Result<(), GrammarError> {
         if !self.rules.contains_key(&self.start) {
-            return Some(GrammarError{kind: GrammarErrorKind::InvalidStartRule, sym: None});
+            return Err(GrammarError{kind: GrammarErrorKind::InvalidStartRule, sym: None});
         }
         for rule in self.rules.values() {
             for alt in rule.alternatives.iter() {
@@ -78,13 +78,13 @@ impl Grammar {
                     match sym.typ {
                         SymbolType::Nonterminal => {
                             if !self.rules.contains_key(&sym.name) {
-                                return Some(GrammarError{kind: GrammarErrorKind::UnknownRuleRef,
+                                return Err(GrammarError{kind: GrammarErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
                             }
                         }
                         SymbolType::Terminal => {
                             if !self.tokens.contains(&sym.name) {
-                                return Some(GrammarError{kind: GrammarErrorKind::UnknownToken,
+                                return Err(GrammarError{kind: GrammarErrorKind::UnknownToken,
                                     sym: Some(sym.clone())});
                             }
                         }
@@ -92,7 +92,7 @@ impl Grammar {
                 }
             }
         }
-        None
+        Ok(())
     }
 }
 
