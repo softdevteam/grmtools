@@ -184,20 +184,12 @@ fn lritem(lhs: &str, rhs: Vec<Symbol>, d: usize) -> LR1Item {
     item
 }
 
-fn vec_to_set(vec: Vec<&str>) -> HashSet<String> {
+fn mk_string_hashset(vec: Vec<&str>) -> HashSet<String> {
     let mut hs = HashSet::new();
     for e in vec.iter() {
         hs.insert(e.to_string());
     }
     hs
-}
-
-fn nt(s: &str) -> Symbol {
-    nonterminal!(s.to_string())
-}
-
-fn t(s: &str) -> Symbol {
-    terminal!(s.to_string())
 }
 
 #[test]
@@ -231,40 +223,46 @@ fn grammar3() -> Grammar {
 }
 
 #[test]
-fn test_closure1() {
+fn test_closure1_grm3() {
     let grm = grammar3();
     let firsts = calc_firsts(&grm);
 
-    let item = lritem("Z", vec![nt("S")], 0);
-    let la = vec_to_set(vec!["$"]);
-    let closure = closure1(&grm, &firsts, item, la);
+    let item = lritem("Z", vec![nonterminal!("S")], 0);
+    let la = mk_string_hashset(vec!["$"]);
+    let mut state = HashMap::new();
+    state.insert(item, la);
+    closure1(&grm, &firsts, &mut state);
 
-    let c0 = lritem("Z", vec![nt("S")], 0);
-    let c1 = lritem("S", vec![nt("S"), t("b")], 0);
-    let c2 = lritem("S", vec![t("b"), nt("A"), t("a")], 0);
-    assert_eq!(closure.get(&c0).unwrap(), &vec_to_set(vec!["$"]));
-    assert_eq!(closure.get(&c1).unwrap(), &vec_to_set(vec!["b", "$"]));
-    assert_eq!(closure.get(&c2).unwrap(), &vec_to_set(vec!["b", "$"]));
+    let c0 = lritem("Z", vec![nonterminal!("S")], 0);
+    let c1 = lritem("S", vec![nonterminal!("S"), terminal!("b")], 0);
+    let c2 = lritem("S", vec![terminal!("b"), nonterminal!("A"), terminal!("a")], 0);
+    assert_eq!(state.get(&c0).unwrap(), &mk_string_hashset(vec!["$"]));
+    assert_eq!(state.get(&c1).unwrap(), &mk_string_hashset(vec!["b", "$"]));
+    assert_eq!(state.get(&c2).unwrap(), &mk_string_hashset(vec!["b", "$"]));
 
-    let item2 = lritem("S", vec![t("b"), nt("A"), t("a")], 1);
-    let la2 = vec_to_set(vec!["$", "b"]);
-    let closure2 = closure1(&grm, &firsts, item2, la2);
+    let item2 = lritem("S", vec![terminal!("b"), nonterminal!("A"), terminal!("a")], 1);
+    let la2 = mk_string_hashset(vec!["$", "b"]);
+    let mut state2 = HashMap::new();
+    state2.insert(item2, la2);
+    closure1(&grm, &firsts, &mut state2);
 
-    let c3 = lritem("A", vec![t("a"), nt("S"), t("c")], 0);
-    let c4 = lritem("A", vec![t("a")], 0);
-    let c5 = lritem("A", vec![t("a"), nt("S"), t("b")], 0);
+    let c3 = lritem("A", vec![terminal!("a"), nonterminal!("S"), terminal!("c")], 0);
+    let c4 = lritem("A", vec![terminal!("a")], 0);
+    let c5 = lritem("A", vec![terminal!("a"), nonterminal!("S"), terminal!("b")], 0);
 
-    assert_eq!(closure2.get(&c3).unwrap(), &vec_to_set(vec!["a"]));
-    assert_eq!(closure2.get(&c4).unwrap(), &vec_to_set(vec!["a"]));
-    assert_eq!(closure2.get(&c5).unwrap(), &vec_to_set(vec!["a"]));
+    assert_eq!(state2.get(&c3).unwrap(), &mk_string_hashset(vec!["a"]));
+    assert_eq!(state2.get(&c4).unwrap(), &mk_string_hashset(vec!["a"]));
+    assert_eq!(state2.get(&c5).unwrap(), &mk_string_hashset(vec!["a"]));
 
-    let item3 = lritem("A", vec![t("a"), nt("S"), t("c")], 1);
-    let la3 = vec_to_set(vec!["a"]);
+    let item3 = lritem("A", vec![terminal!("a"), nonterminal!("S"), terminal!("c")], 1);
+    let la3 = mk_string_hashset(vec!["a"]);
+    let mut state3 = HashMap::new();
+    state3.insert(item3, la3);
+    closure1(&grm, &firsts, &mut state3);
 
-    let closure3 = closure1(&grm, &firsts, item3, la3);
-    let c8 = lritem("S", vec![nt("S"), t("b")], 0);
-    let c9 = lritem("S", vec![t("b"), nt("A"), t("a")], 0);
+    let c8 = lritem("S", vec![nonterminal!("S"), terminal!("b")], 0);
+    let c9 = lritem("S", vec![terminal!("b"), nonterminal!("A"), terminal!("a")], 0);
 
-    assert_eq!(closure3.get(&c8).unwrap(), &vec_to_set(vec!["b", "c"]));
-    assert_eq!(closure3.get(&c9).unwrap(), &vec_to_set(vec!["b", "c"]));
+    assert_eq!(state3.get(&c8).unwrap(), &mk_string_hashset(vec!["b", "c"]));
+    assert_eq!(state3.get(&c9).unwrap(), &mk_string_hashset(vec!["b", "c"]));
 }

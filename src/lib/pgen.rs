@@ -212,10 +212,8 @@ pub struct LR1Item {
     pub lhs: String,
     pub rhs: Vec<Symbol>,
     pub dot: usize,
-    //pub la: HashSet<String>
 }
 
-// TODO add customised Eq, PartialEq (if needed)
 impl LR1Item {
     /// Returns a new LR1Item
     ///
@@ -250,23 +248,19 @@ impl LR1Item {
 
 impl Hash for LR1Item {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // we don't need to hash the lookahead as LR1Items with the same lookahead can be merged
         self.lhs.hash(state);
         self.rhs.hash(state);
         self.dot.hash(state);
     }
 }
 
-/// Calculates the closure of an LR1Item
+/// Calculates the closure of a HashMap containing LR1Items
 pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
-                item: LR1Item, la: HashSet<String>) -> HashMap<LR1Item, HashSet<String>> {
-    let mut closure:HashMap<LR1Item, HashSet<String>> = HashMap::new();
-    closure.insert(item, la);
-    let mut changed;
+                closure: &mut HashMap<LR1Item, HashSet<String>>) {
     loop {
-        changed = false;
+        let mut changed = false;
         let mut tmp_closure = Vec::new();
-        for (item, la) in &closure {
+        for (item, la) in closure.iter() {
             // get next symbol after dot
             let next_sym = item.next();
             if next_sym != None {
@@ -281,7 +275,6 @@ pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
                     let lhs = ns.name.clone();
                     let rhs = alt.clone();
                     let dot = 0;
-                    //let la = HashSet::new();
                     // calculate lookahead
                     let mut newla = HashSet::new();
                     let remaining_symbols = &item.rhs[item.dot+1..];
@@ -325,5 +318,4 @@ pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
             break;
         }
     }
-    closure
 }
