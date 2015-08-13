@@ -205,6 +205,9 @@ pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
 }
 
 #[derive(PartialEq, Eq, Debug)]
+/// Implementation of `LR1Item` which is used to build the state graph of a grammar. Consists of a
+/// left-hand-side `String`, a right-hand-side list of `Symbols` and an integer `dot`, denoting the
+/// current position of the parser inside of `rhs`.
 pub struct LR1Item {
     pub lhs: String,
     pub rhs: Vec<Symbol>,
@@ -214,10 +217,26 @@ pub struct LR1Item {
 
 // TODO add customised Eq, PartialEq (if needed)
 impl LR1Item {
+    /// Returns a new LR1Item
+    ///
+    /// # Example
+    ///
+    /// ```c
+    /// let item = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string())], 1);
+    /// ```
     pub fn new(lhs: String, rhs: Vec<Symbol>, dot: usize) -> LR1Item {
         LR1Item {lhs: lhs, rhs: rhs, dot: dot}
     }
 
+    /// Returns a copy of the `Symbol` at the current position inside the `rhs`.
+    ///
+    /// # Example
+    ///
+    /// ```c
+    /// let item = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string()),
+    ///                                               terminal!("a".to_string())], 1);
+    /// let n = item.next(); // returns terminal!("a")
+    /// ```
     pub fn next(&self) -> Option<Symbol>{
         if self.dot < self.rhs.len() {
             let ref sym = self.rhs[self.dot];
@@ -238,7 +257,9 @@ impl Hash for LR1Item {
     }
 }
 
-pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>, item: LR1Item, la: HashSet<String>) -> HashMap<LR1Item, HashSet<String>> {
+/// Calculates the closure of an LR1Item
+pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
+                item: LR1Item, la: HashSet<String>) -> HashMap<LR1Item, HashSet<String>> {
     let mut closure:HashMap<LR1Item, HashSet<String>> = HashMap::new();
     closure.insert(item, la);
     let mut changed;
@@ -267,7 +288,8 @@ pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>, item: 
                     for e in la.iter() {
                         // chain each lookahead with the remaining symbols...
                         let mut chain = Vec::new();
-                        for r in remaining_symbols.iter() { // XXX replace with extend/push_all when stable
+                        // XXX replace with extend/push_all when stable
+                        for r in remaining_symbols.iter() {
                             chain.push(r.clone());
                         }
                         chain.push(Symbol::new(e.clone(), SymbolType::Terminal));
