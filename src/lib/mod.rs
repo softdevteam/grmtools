@@ -37,6 +37,6 @@ impl fmt::Display for FromYaccError {
 
 pub fn from_yacc(s:&String) -> Result<Grammar, FromYaccError> {
     let grm = try!(parse_yacc(s));
-    if let Some(e) = grm.validate() { return Err(FromYaccError::GrammarError(e)); }
+    try!(grm.validate());
     Ok(grm)
 }
