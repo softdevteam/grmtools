@@ -1,8 +1,8 @@
 #[macro_use]
 
 extern crate lrpar;
-use lrpar::grammar::Grammar;
-use lrpar::pgen::{calc_firsts, calc_follows};
+use lrpar::grammar::{Grammar, Symbol, SymbolType};
+use lrpar::pgen::{calc_firsts, calc_follows, get_firsts_from_symbols, LR1Item, closure1};
 use std::collections::{HashMap, HashSet};
 
 fn has(firsts: &HashMap<String, HashSet<String>>, n: &str, should_be: Vec<&str>) {
@@ -174,4 +174,99 @@ fn test_grammar2() {
     has(&follow, "T", vec!["+",")"]);
     has(&follow, "Q", vec!["+",")"]);
     has(&follow, "F", vec!["*", "+", ")"]);
+}
+
+fn lritem(lhs: &str, rhs: Vec<Symbol>, d: usize) -> LR1Item {
+    let mut item = LR1Item::new(lhs.to_string(), Vec::new(), d);
+    for e in rhs.iter() {
+        item.rhs.push(e.clone());
+    }
+    item
+}
+
+fn vec_to_set(vec: Vec<&str>) -> HashSet<String> {
+    let mut hs = HashSet::new();
+    for e in vec.iter() {
+        hs.insert(e.to_string());
+    }
+    hs
+}
+
+fn nt(s: &str) -> Symbol {
+    nonterminal!(s.to_string())
+}
+
+fn t(s: &str) -> Symbol {
+    terminal!(s.to_string())
+}
+
+#[test]
+fn test_lrelements() {
+    let mut e = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string()), terminal!("b".to_string())], 0);
+    assert_eq!(e.lhs, "S");
+    assert_eq!(e.rhs, vec![nonterminal!("A"), terminal!("b")]);
+    assert_eq!(e.dot, 0);
+    assert_eq!(e.next().unwrap(), nonterminal!("A".to_string()));
+
+    e.dot = 1;
+    assert_eq!(e.next().unwrap(), terminal!("b".to_string()));
+}
+
+// Grammar from 'LR(k) Analyse fuer Pragmatiker'
+// Z : S
+// S : Sb
+//     bAa
+// A : aSc
+//     a
+//     aSb
+fn grammar3() -> Grammar {
+    let mut grm = Grammar::new();
+    grm.add_rule("Z".to_string(), vec!(nonterminal!("S")));
+    grm.add_rule("S".to_string(), vec!(nonterminal!("S"), terminal!("b")));
+    grm.add_rule("S".to_string(), vec!(terminal!("b"), nonterminal!("A"), terminal!("a")));
+    grm.add_rule("A".to_string(), vec!(terminal!("a"), nonterminal!("S"), terminal!("c")));
+    grm.add_rule("A".to_string(), vec!(terminal!("a")));
+    grm.add_rule("A".to_string(), vec!(terminal!("a"), nonterminal!("S"), terminal!("b")));
+    grm
+}
+
+#[test]
+fn test_closure1() {
+    let grm = grammar3();
+    let firsts = calc_firsts(&grm);
+
+    let item = lritem("Z", vec![nt("S")], 0);
+    let la = vec_to_set(vec!["$"]);
+    let closure = closure1(&grm, &firsts, item, la);
+
+    let c0 = lritem("Z", vec![nt("S")], 0);
+    let c1 = lritem("S", vec![nt("S"), t("b")], 0);
+    let c2 = lritem("S", vec![t("b"), nt("A"), t("a")], 0);
+    assert_eq!(closure.get(&c0).unwrap(), &vec_to_set(vec!["$"]));
+    assert_eq!(closure.get(&c1).unwrap(), &vec_to_set(vec!["b", "$"]));
+    assert_eq!(closure.get(&c2).unwrap(), &vec_to_set(vec!["b", "$"]));
+
+    let item2 = lritem("S", vec![t("b"), nt("A"), t("a")], 1);
+    let la2 = vec_to_set(vec!["$", "b"]);
+    let closure2 = closure1(&grm, &firsts, item2, la2);
+
+    let c3 = lritem("A", vec![t("a"), nt("S"), t("c")], 0);
+    let c4 = lritem("A", vec![t("a")], 0);
+    let c5 = lritem("A", vec![t("a"), nt("S"), t("b")], 0);
+
+    assert_eq!(closure2.get(&c3).unwrap(), &vec_to_set(vec!["a"]));
+    assert_eq!(closure2.get(&c4).unwrap(), &vec_to_set(vec!["a"]));
+    assert_eq!(closure2.get(&c5).unwrap(), &vec_to_set(vec!["a"]));
+
+    let item3 = lritem("A", vec![t("a"), nt("S"), t("c")], 1);
+    let la3 = vec_to_set(vec!["a"]);
+
+    let closure3 = closure1(&grm, &firsts, item3, la3);
+    let c6 = lritem("A", vec![t("a")], 1);
+    let c7 = lritem("A", vec![t("a"), nt("S"), t("b")], 1);
+    let c8 = lritem("S", vec![nt("S"), t("b")], 0);
+    let c9 = lritem("S", vec![t("b"), nt("A"), t("a")], 0);
+
+    assert_eq!(closure3.get(&c8).unwrap(), &vec_to_set(vec!["b", "c"]));
+    assert_eq!(closure3.get(&c9).unwrap(), &vec_to_set(vec!["b", "c"]));
 }
