@@ -5,7 +5,7 @@ use self::regex::Regex;
 
 type YaccResult<T> = Result<T, YaccError>;
 
-use grammar::{Grammar, Symbol, SymbolType};
+use grammar::{Grammar, Symbol};
 
 pub struct YaccParser {
     src: String,
@@ -136,12 +136,12 @@ impl YaccParser {
               || self.lookahead_is("'", i).is_some() {
                 let (j, sym) = try!(self.parse_terminal(i));
                 i = try!(self.parse_ws(j));
-                syms.push(Symbol::new(sym, SymbolType::Terminal));
+                syms.push(Symbol::Terminal(sym));
             }
             else {
                 let (j, sym) = try!(self.parse_name(i));
                 i = j;
-                syms.push(Symbol::new(sym, SymbolType::Nonterminal));
+                syms.push(Symbol::Nonterminal(sym));
             }
             i = try!(self.parse_ws(i));
         }

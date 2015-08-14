@@ -1,4 +1,4 @@
-use grammar::{Grammar, Symbol, SymbolType};
+use grammar::{Grammar, Symbol};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
@@ -24,13 +24,13 @@ pub fn calc_firsts(grm: &Grammar) -> HashMap<String, HashSet<String>> {
     for rul in grm.rules.values() {
         let mut f = HashSet::new();
         for alt in rul.alternatives.iter() {
-            if alt.len() == 0 { 
+            if alt.len() == 0 {
                 f.insert("".to_string());
                 continue;
             }
             let ref sym = alt[0];
-            if sym.typ == SymbolType::Terminal {
-                f.insert(sym.name.clone());
+            if let &Symbol::Terminal(ref name) = sym {
+                f.insert(name.clone());
             }
         }
         firsts.insert(rul.name.clone(), f);
@@ -47,21 +47,21 @@ pub fn calc_firsts(grm: &Grammar) -> HashMap<String, HashSet<String>> {
             for alt in rul.alternatives.iter() {
                 // ...and each alternative A
                 for (sym_i, sym) in alt.iter().enumerate() {
-                    match sym.typ {
-                        SymbolType::Terminal => {
+                    match sym {
+                        &Symbol::Terminal(ref name) => {
                             // if symbol is a Terminal, add to FIRSTS
                             let mut f = firsts.get_mut(&rul.name).unwrap();
-                            if !f.contains(&sym.name) {
-                                f.insert(sym.name.clone());
+                            if !f.contains(name) {
+                                f.insert(name.clone());
                                 changed = true;
                             }
                             break;
                         },
-                        SymbolType::Nonterminal => {
+                        &Symbol::Nonterminal(ref name) => {
                             // if symbols is Nonterminal, get its FIRSTS and add them to the
                             // current FIRSTS. if the Nonterminals FIRSTS contain an epsilon,
                             // continue looking at the succeeding Nonterminal, otherwise break
-                            let of = firsts.get(&sym.name).unwrap().clone();
+                            let of = firsts.get(name).unwrap().clone();
                             let mut f = firsts.get_mut(&rul.name).unwrap();
                             for n in of.iter() {
                                 if n == "" {
@@ -114,13 +114,13 @@ pub fn get_firsts_from_symbols(firsts: &HashMap<String, HashSet<String>>,
                                symbols: &Vec<Symbol>) -> HashSet<String> {
     let mut r = HashSet::new();
     for (i, s) in symbols.iter().enumerate() {
-        match s.typ {
-            SymbolType::Terminal => {
-                r.insert(s.name.clone());
+        match s {
+            &Symbol::Terminal(ref name) => {
+                r.insert(name.clone());
                 break;
             },
-            SymbolType::Nonterminal => {
-                let f = firsts.get(&s.name).unwrap();
+            &Symbol::Nonterminal(ref name) => {
+                let f = firsts.get(name).unwrap();
                 for e in f {
                     if e == "" && i != symbols.len() - 1 {
                         continue;
@@ -167,32 +167,34 @@ pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
         for rule in grm.rules.values() {
             for alt in rule.alternatives.iter() {
                 for (sym_i, sym) in alt.iter().enumerate() {
-                    if sym.typ == SymbolType::Terminal {
-                        continue
-                    }
-                    let mut new = HashSet::new();
-                    // add FIRSTS(succeeding symbols) to temporary follow set
-                    let followers = alt[sym_i+1..].to_vec();
-                    let f = get_firsts_from_symbols(firsts, &followers);
-                    for e in f.iter() {
-                        if e != "" {
-                            new.insert(e.clone());
-                        }
-                    }
-                    // if no symbols are following sym, or FIRST(followers) contains epsilon, then add
-                    // FOLLOW(rule.name) to the set as well
-                    if followers.len() == 0 || f.contains("") {
-                        let rule_follow = follows.get(&rule.name).unwrap();
-                        for e in rule_follow {
-                            new.insert(e.clone());
-                        }
-                    }
-                    // add everything from temporary set to current follow set
-                    let mut old = follows.get_mut(&sym.name).unwrap();
-                    for e in new {
-                        if !old.contains(&e) {
-                            old.insert(e.clone());
-                            changed = true;
+                    match sym {
+                        &Symbol::Terminal(_) => continue,
+                        &Symbol::Nonterminal(ref name) => {
+                            let mut new = HashSet::new();
+                            // add FIRSTS(succeeding symbols) to temporary follow set
+                            let followers = alt[sym_i+1..].to_vec();
+                            let f = get_firsts_from_symbols(firsts, &followers);
+                            for e in f.iter() {
+                                if e != "" {
+                                    new.insert(e.clone());
+                                }
+                            }
+                            // if no symbols are following sym, or FIRST(followers) contains epsilon, then add
+                            // FOLLOW(rule.name) to the set as well
+                            if followers.len() == 0 || f.contains("") {
+                                let rule_follow = follows.get(&rule.name).unwrap();
+                                for e in rule_follow {
+                                    new.insert(e.clone());
+                                }
+                            }
+                            // add everything from temporary set to current follow set
+                            let mut old = follows.get_mut(name).unwrap();
+                            for e in new {
+                                if !old.contains(&e) {
+                                    old.insert(e.clone());
+                                    changed = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -264,37 +266,38 @@ pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
             // get next symbol after dot
             let next_sym = item.next();
             if next_sym != None {
-                let ns = next_sym.unwrap();
-                // get rule with next_sym at the beginning
-                if ns.typ == SymbolType::Terminal {
-                    continue
-                }
-                let rule = grm.get_rule(&ns.name).unwrap();
-                // add each alternative as an LR1Item to the closure
-                for alt in rule.alternatives.iter() {
-                    let lhs = ns.name.clone();
-                    let rhs = alt.clone();
-                    let dot = 0;
-                    // calculate lookahead
-                    let mut newla = HashSet::new();
-                    let remaining_symbols = &item.rhs[item.dot+1..];
-                    for e in la.iter() {
-                        // chain each lookahead with the remaining symbols...
-                        let mut chain = Vec::new();
-                        // XXX replace with extend/push_all when stable
-                        for r in remaining_symbols.iter() {
-                            chain.push(r.clone());
-                        }
-                        chain.push(Symbol::new(e.clone(), SymbolType::Terminal));
-                        // ..and calculate their first sets...
-                        let first = get_firsts_from_symbols(firsts, &chain);
-                        // ...and union them together.
-                        for f in first.iter() {
-                            newla.insert(f.clone());
+                match next_sym.unwrap() {
+                    // get rule with next_sym at the beginning
+                    Symbol::Terminal(_) => continue,
+                    Symbol::Nonterminal(name) => {
+                        let rule = grm.get_rule(&name).unwrap();
+                        // add each alternative as an LR1Item to the closure
+                        for alt in rule.alternatives.iter() {
+                            let lhs = name.clone();
+                            let rhs = alt.clone();
+                            let dot = 0;
+                            // calculate lookahead
+                            let mut newla = HashSet::new();
+                            let remaining_symbols = &item.rhs[item.dot+1..];
+                            for e in la.iter() {
+                                // chain each lookahead with the remaining symbols...
+                                let mut chain = Vec::new();
+                                // XXX replace with extend/push_all when stable
+                                for r in remaining_symbols.iter() {
+                                    chain.push(r.clone());
+                                }
+                                chain.push(Symbol::Terminal(e.clone()));
+                                // ..and calculate their first sets...
+                                let first = get_firsts_from_symbols(firsts, &chain);
+                                // ...and union them together.
+                                for f in first.iter() {
+                                    newla.insert(f.clone());
+                                }
+                            }
+                            let new_item = LR1Item::new(lhs, rhs, dot);
+                            tmp_closure.push((new_item, newla));
                         }
                     }
-                    let new_item = LR1Item::new(lhs, rhs, dot);
-                    tmp_closure.push((new_item, newla));
                 }
             }
         }
