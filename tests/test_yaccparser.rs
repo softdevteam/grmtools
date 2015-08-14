@@ -1,28 +1,26 @@
 extern crate lrpar;
 use lrpar::{YaccError, YaccErrorKind};
-use lrpar::grammar::{Rule, Symbol, SymbolType};
+use lrpar::grammar::{Rule, Symbol};
 use lrpar::yacc::parse_yacc;
 
-macro_rules! terminal {
-    ($x:expr) => (Symbol::new($x.to_string(), SymbolType::Terminal));
-}
 macro_rules! nonterminal {
-    ($x:expr) => (Symbol::new($x.to_string(), SymbolType::Nonterminal));
+    ($x:expr) => (Symbol::Nonterminal($x.to_string()));
+}
+
+macro_rules! terminal {
+    ($x:expr) => (Symbol::Terminal($x.to_string()));
 }
 
 #[test]
 fn test_macro() {
-    assert_eq!(Symbol::new("A".to_string(), SymbolType::Terminal), terminal!("A"));
+    assert_eq!(Symbol::Terminal("A".to_string()), terminal!("A"));
 }
 
 #[test]
 fn test_symbol_eq() {
-    assert_eq!(Symbol::new("A".to_string(), SymbolType::Nonterminal),
-      Symbol::new("A".to_string(), SymbolType::Nonterminal));
-    assert!(Symbol::new("A".to_string(), SymbolType::Terminal)
-      != Symbol::new("B".to_string(), SymbolType::Terminal));
-    assert!(Symbol::new("A".to_string(), SymbolType::Terminal)
-      != Symbol::new("A".to_string(), SymbolType::Nonterminal));
+    assert_eq!(nonterminal!("A"), nonterminal!("A"));
+    assert!(nonterminal!("A") != nonterminal!("B"));
+    assert!(nonterminal!("A") != terminal!("A"));
 }
 
 #[test]

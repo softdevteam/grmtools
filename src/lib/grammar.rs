@@ -29,10 +29,10 @@ impl fmt::Display for GrammarError {
                 write!(f, "Start rule does not appear in grammar")
             },
             GrammarErrorKind::UnknownRuleRef => {
-                write!(f, "Unknown reference to rule {}", self.sym.as_ref().unwrap().name)
+                write!(f, "Unknown reference to rule")
             },
             GrammarErrorKind::UnknownToken => {
-                write!(f, "Unknown token {}", self.sym.as_ref().unwrap().name)
+                write!(f, "Unknown token")
             }
         }
     }
@@ -74,16 +74,16 @@ impl Grammar {
         }
         for rule in self.rules.values() {
             for alt in rule.alternatives.iter() {
-                for sym in alt {
-                    match sym.typ {
-                        SymbolType::Nonterminal => {
-                            if !self.rules.contains_key(&sym.name) {
+                for sym in alt.iter() {
+                    match sym {
+                        &Symbol::Nonterminal(ref name) => {
+                            if !self.rules.contains_key(name) {
                                 return Err(GrammarError{kind: GrammarErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
                             }
                         }
-                        SymbolType::Terminal => {
-                            if !self.tokens.contains(&sym.name) {
+                        &Symbol::Terminal(ref name) => {
+                            if !self.tokens.contains(name) {
                                 return Err(GrammarError{kind: GrammarErrorKind::UnknownToken,
                                     sym: Some(sym.clone())});
                             }
@@ -148,50 +148,20 @@ impl PartialEq for Rule {
     }
 }
 
-
-#[derive(Hash, Eq, PartialEq, Clone)]
-pub enum SymbolType {
-    Terminal,
-    Nonterminal
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub enum Symbol {
+    Nonterminal(String),
+    Terminal(String)
 }
 
-#[derive(Clone, Hash, Eq)]
-pub struct Symbol {
-    pub name: String,
-    pub typ: SymbolType
-}
 
-impl Symbol {
-    pub fn new(s: String, t: SymbolType) -> Symbol {
-        Symbol {name: s, typ: t}
-    }
-}
-
-impl PartialEq for Symbol {
-    fn eq(&self, other: &Symbol) -> bool {
-        self.name == other.name && self.typ == other.typ
-    }
-}
-
-impl fmt::Debug for Symbol {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let mut classname = String::new();
-        match self.typ {
-            SymbolType::Nonterminal => classname.push_str("Nonterminal"),
-            SymbolType::Terminal => classname.push_str("Terminal")
-        }
-        fmt.debug_struct(&classname)
-           .field("name", &self.name)
-           .finish()
-    }
+#[macro_export]
+macro_rules! nonterminal {
+    ($x:expr) => ($crate::grammar::Symbol::Nonterminal($x.to_string()));
 }
 
 #[macro_export]
 macro_rules! terminal {
-    ($x:expr) => ($crate::grammar::Symbol::new($x.to_string(), $crate::grammar::SymbolType::Terminal));
+    ($x:expr) => ($crate::grammar::Symbol::Terminal($x.to_string()));
 }
 
-#[macro_export]
-macro_rules! nonterminal {
-    ($x:expr) => ($crate::grammar::Symbol::new($x.to_string(), $crate::grammar::SymbolType::Nonterminal));
-}
