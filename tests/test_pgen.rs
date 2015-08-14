@@ -204,6 +204,42 @@ fn test_lrelements() {
     assert_eq!(e.next().unwrap(), terminal!("b".to_string()));
 }
 
+#[test]
+fn test_closure1_ecogrm() {
+    let grm = eco_grammar();
+    let firsts = calc_firsts(&grm);
+
+    let item = lritem("Z", vec![nonterminal!("S")], 0);
+    let la = mk_string_hashset(vec!["$"]);
+    let mut state = HashMap::new();
+    state.insert(item, la);
+    closure1(&grm, &firsts, &mut state);
+
+    let c0 = lritem("Z", vec![nonterminal!("S")], 0);
+    let c1 = lritem("S", vec![nonterminal!("S"), terminal!("b")], 0);
+    let c2 = lritem("S", vec![terminal!("b"), nonterminal!("A"), terminal!("a")], 0);
+    let c3 = lritem("S", vec![terminal!("a")], 0);
+    assert_eq!(state.get(&c0).unwrap(), &mk_string_hashset(vec!["$"]));
+    assert_eq!(state.get(&c1).unwrap(), &mk_string_hashset(vec!["b", "$"]));
+    assert_eq!(state.get(&c2).unwrap(), &mk_string_hashset(vec!["b", "$"]));
+    assert_eq!(state.get(&c3).unwrap(), &mk_string_hashset(vec!["b", "$"]));
+
+    let item2 = lritem("F", vec![nonterminal!("C"), nonterminal!("D"), terminal!("f")], 0);
+    let la2 = mk_string_hashset(vec!["$"]);
+    let mut state2 = HashMap::new();
+    state2.insert(item2, la2);
+    closure1(&grm, &firsts, &mut state2);
+
+    let c4 = lritem("F", vec![nonterminal!("C"), nonterminal!("D"), terminal!("f")], 0);
+    let c5 = lritem("C", vec![nonterminal!("D"), nonterminal!("A")], 0);
+    let c6 = lritem("D", vec![terminal!("d")], 0);
+    let c7 = lritem("D", vec![], 0);
+    assert_eq!(state2.get(&c4).unwrap(), &mk_string_hashset(vec!["$"]));
+    assert_eq!(state2.get(&c5).unwrap(), &mk_string_hashset(vec!["d", "f"]));
+    assert_eq!(state2.get(&c6).unwrap(), &mk_string_hashset(vec!["a"]));
+    assert_eq!(state2.get(&c7).unwrap(), &mk_string_hashset(vec!["a"]));
+}
+
 // Grammar from 'LR(k) Analyse fuer Pragmatiker'
 // Z : S
 // S : Sb
