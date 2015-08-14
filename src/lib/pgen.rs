@@ -1,5 +1,6 @@
 use grammar::{Grammar, Symbol, SymbolType};
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 /// Generates and returns the first set for the given grammar.
 ///
@@ -199,6 +200,122 @@ pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
         }
         if !changed {
             return follows;
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
+/// Implementation of `LR1Item` which is used to build the state graph of a grammar. Consists of a
+/// left-hand-side `String`, a right-hand-side list of `Symbols` and an integer `dot`, denoting the
+/// current position of the parser inside of `rhs`.
+pub struct LR1Item {
+    pub lhs: String,
+    pub rhs: Vec<Symbol>,
+    pub dot: usize,
+}
+
+impl LR1Item {
+    /// Returns a new LR1Item
+    ///
+    /// # Example
+    ///
+    /// ```c
+    /// let item = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string())], 1);
+    /// ```
+    pub fn new(lhs: String, rhs: Vec<Symbol>, dot: usize) -> LR1Item {
+        LR1Item {lhs: lhs, rhs: rhs, dot: dot}
+    }
+
+    /// Returns a copy of the `Symbol` at the current position inside the `rhs`.
+    ///
+    /// # Example
+    ///
+    /// ```c
+    /// let item = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string()),
+    ///                                               terminal!("a".to_string())], 1);
+    /// let n = item.next(); // returns terminal!("a")
+    /// ```
+    pub fn next(&self) -> Option<Symbol>{
+        if self.dot < self.rhs.len() {
+            let ref sym = self.rhs[self.dot];
+            Some(sym.clone())
+        }
+        else {
+            None
+        }
+    }
+}
+
+impl Hash for LR1Item {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.lhs.hash(state);
+        self.rhs.hash(state);
+        self.dot.hash(state);
+    }
+}
+
+/// Calculates the closure of a HashMap containing LR1Items
+pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
+                closure: &mut HashMap<LR1Item, HashSet<String>>) {
+    loop {
+        let mut changed = false;
+        let mut tmp_closure = Vec::new();
+        for (item, la) in closure.iter() {
+            // get next symbol after dot
+            let next_sym = item.next();
+            if next_sym != None {
+                let ns = next_sym.unwrap();
+                // get rule with next_sym at the beginning
+                if ns.typ == SymbolType::Terminal {
+                    continue
+                }
+                let rule = grm.get_rule(&ns.name).unwrap();
+                // add each alternative as an LR1Item to the closure
+                for alt in rule.alternatives.iter() {
+                    let lhs = ns.name.clone();
+                    let rhs = alt.clone();
+                    let dot = 0;
+                    // calculate lookahead
+                    let mut newla = HashSet::new();
+                    let remaining_symbols = &item.rhs[item.dot+1..];
+                    for e in la.iter() {
+                        // chain each lookahead with the remaining symbols...
+                        let mut chain = Vec::new();
+                        // XXX replace with extend/push_all when stable
+                        for r in remaining_symbols.iter() {
+                            chain.push(r.clone());
+                        }
+                        chain.push(Symbol::new(e.clone(), SymbolType::Terminal));
+                        // ..and calculate their first sets...
+                        let first = get_firsts_from_symbols(firsts, &chain);
+                        // ...and union them together.
+                        for f in first.iter() {
+                            newla.insert(f.clone());
+                        }
+                    }
+                    let new_item = LR1Item::new(lhs, rhs, dot);
+                    tmp_closure.push((new_item, newla));
+                }
+            }
+        }
+        // merge new LR1Item candidates into closure map
+        for (i, l) in tmp_closure.drain(..) {
+            if closure.contains_key(&i) {
+                let x = closure.get_mut(&i).unwrap();
+                for k in l {
+                    if !x.contains(&k) {
+                        x.insert(k.clone());
+                        changed = true;
+                    }
+                }
+            }
+            else {
+                closure.insert(i,l);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
         }
     }
 }
