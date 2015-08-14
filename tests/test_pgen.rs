@@ -2,7 +2,7 @@
 
 extern crate lrpar;
 use lrpar::grammar::{Grammar, Symbol};
-use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1};
+use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1};
 use std::collections::{HashMap, HashSet};
 
 fn has(firsts: &HashMap<String, HashSet<String>>, n: &str, should_be: Vec<&str>) {
@@ -301,4 +301,54 @@ fn test_closure1_grm3() {
 
     assert_eq!(state3.get(&c8).unwrap(), &mk_string_hashset(vec!["b", "c"]));
     assert_eq!(state3.get(&c9).unwrap(), &mk_string_hashset(vec!["b", "c"]));
+}
+
+#[test]
+fn test_goto1() {
+    let grm = grammar3();
+    let firsts = calc_firsts(&grm);
+
+    let item = lritem("Z", vec![nonterminal!("S")], 0);
+    let la = mk_string_hashset(vec!["$"]);
+    let mut state = HashMap::new();
+    state.insert(item, la);
+    closure1(&grm, &firsts, &mut state);
+
+    // follow 'S' from start set
+    let goto = goto1(&grm, &firsts, &state, nonterminal!("S"));
+
+    let g1 = lritem("Z", vec![nonterminal!("S")], 1);
+    let g2 = lritem("S", vec![nonterminal!("S"), terminal!("b")], 1);
+
+    assert_eq!(goto.get(&g1).unwrap(), &mk_string_hashset(vec!["$"]));
+    assert_eq!(goto.get(&g2).unwrap(), &mk_string_hashset(vec!["$", "b"]));
+
+    // follow 'b' from start set
+    let goto2 = goto1(&grm, &firsts, &state, terminal!("b"));
+    
+    let g3 = lritem("S", vec![terminal!("b"), nonterminal!("A"), terminal!("a")], 1);
+    let g4 = lritem("A", vec![terminal!("a"), nonterminal!("S"), terminal!("c")], 0);
+    let g5 = lritem("A", vec![terminal!("a")], 0);
+    let g6 = lritem("A", vec![terminal!("a"), nonterminal!("S"), terminal!("b")], 0);
+
+    assert_eq!(goto2.get(&g3).unwrap(), &mk_string_hashset(vec!["$", "b"]));
+    assert_eq!(goto2.get(&g4).unwrap(), &mk_string_hashset(vec!["a"]));
+    assert_eq!(goto2.get(&g5).unwrap(), &mk_string_hashset(vec!["a"]));
+    assert_eq!(goto2.get(&g6).unwrap(), &mk_string_hashset(vec!["a"]));
+
+    // continue by following 'a' from last goto
+    let goto3 = goto1(&grm, &firsts, &goto2, terminal!("a"));
+
+    let g31 = lritem("A", vec![terminal!("a"), nonterminal!("S"), terminal!("c")], 1);
+    let g32 = lritem("A", vec![terminal!("a")], 1);
+    let g33 = lritem("A", vec![terminal!("a"), nonterminal!("S"), terminal!("b")], 1);
+    let g34 = lritem("S", vec![nonterminal!("S"), terminal!("b")], 0);
+    let g35 = lritem("S", vec![terminal!("b"), nonterminal!("A"), terminal!("a")], 0);
+
+    assert_eq!(goto3.get(&g31).unwrap(), &mk_string_hashset(vec!["a"]));
+    assert_eq!(goto3.get(&g32).unwrap(), &mk_string_hashset(vec!["a"]));
+    assert_eq!(goto3.get(&g33).unwrap(), &mk_string_hashset(vec!["a"]));
+    assert_eq!(goto3.get(&g34).unwrap(), &mk_string_hashset(vec!["c", "b"]));
+    assert_eq!(goto3.get(&g35).unwrap(), &mk_string_hashset(vec!["c", "b"]));
+
 }

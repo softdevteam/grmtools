@@ -319,3 +319,26 @@ pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
         }
     }
 }
+
+/// Calculates the goto that results from reading past a certain symbol in another set.
+pub fn goto1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
+             state: &HashMap<LR1Item, HashSet<String>>, symbol: Symbol)
+             -> HashMap<LR1Item, HashSet<String>> {
+    let mut goto = HashMap::new();
+
+    for (item, la) in state.iter() {
+        if item.next() != None {
+            if item.next().unwrap() == symbol {
+                // Clone item and insert into new goto set
+                let lhs = item.lhs.clone();
+                let rhs = item.rhs.clone();
+                let dot = item.dot + 1;
+                let gotoitm = LR1Item::new(lhs, rhs, dot);
+                let gotola = la.clone();
+                goto.insert(gotoitm, gotola);
+            }
+        }
+    }
+    closure1(grm, firsts, &mut goto);
+    goto
+}
