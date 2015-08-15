@@ -1,15 +1,9 @@
+#[macro_use]
+
 extern crate lrpar;
 use lrpar::{YaccError, YaccErrorKind};
 use lrpar::grammar::{Rule, Symbol};
 use lrpar::yacc::parse_yacc;
-
-macro_rules! nonterminal {
-    ($x:expr) => (Symbol::Nonterminal($x.to_string()));
-}
-
-macro_rules! terminal {
-    ($x:expr) => (Symbol::Terminal($x.to_string()));
-}
 
 #[test]
 fn test_macro() {
