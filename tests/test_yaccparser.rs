@@ -59,7 +59,6 @@ fn test_rule_alternative_simple() {
     assert!(*grm.get_rule("A").unwrap() != rule2);
 }
 
-
 #[test]
 fn test_rule_empty() {
     let src = "

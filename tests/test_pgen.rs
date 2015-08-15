@@ -323,7 +323,7 @@ fn test_goto1() {
 
     // follow 'b' from start set
     let goto2 = goto1(&grm, &firsts, &state, terminal("b"));
-    
+
     let g3 = lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 1);
     let g4 = lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 0);
     let g5 = lritem("A", vec![terminal("a")], 0);

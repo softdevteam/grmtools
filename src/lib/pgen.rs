@@ -154,7 +154,6 @@ pub fn get_firsts_from_symbols(firsts: &HashMap<String, HashSet<String>>,
 /// ```
 pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
                     -> HashMap<String, HashSet<String>> {
-
     // initialise follow set
     let mut follows: HashMap<String, HashSet<String>> = HashMap::new();
     for rule in grm.rules.values() {
