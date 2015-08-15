@@ -1,20 +1,18 @@
-#[macro_use]
-
 extern crate lrpar;
 use lrpar::{YaccError, YaccErrorKind};
-use lrpar::grammar::{Rule, Symbol};
+use lrpar::grammar::{Rule, Symbol, nonterminal, terminal};
 use lrpar::yacc::parse_yacc;
 
 #[test]
 fn test_macro() {
-    assert_eq!(Symbol::Terminal("A".to_string()), terminal!("A"));
+    assert_eq!(Symbol::Terminal("A".to_string()), terminal("A"));
 }
 
 #[test]
 fn test_symbol_eq() {
-    assert_eq!(nonterminal!("A"), nonterminal!("A"));
-    assert!(nonterminal!("A") != nonterminal!("B"));
-    assert!(nonterminal!("A") != terminal!("A"));
+    assert_eq!(nonterminal("A"), nonterminal("A"));
+    assert!(nonterminal("A") != nonterminal("B"));
+    assert!(nonterminal("A") != terminal("A"));
 }
 
 #[test]
@@ -23,9 +21,9 @@ fn test_rule_eq() {
     assert!(Rule::new("A".to_string()) != Rule::new("B".to_string()));
 
     let mut rule1 = Rule::new("A".to_string());
-    rule1.add_symbols(vec![terminal!("a")]);
+    rule1.add_symbols(vec![terminal("a")]);
     let mut rule2 = Rule::new("A".to_string());
-    rule2.add_symbols(vec![terminal!("a")]);
+    rule2.add_symbols(vec![terminal("a")]);
     assert_eq!(rule1, rule2);
 }
 
@@ -37,10 +35,10 @@ fn test_rule() {
     ".to_string();
     let grm = parse_yacc(&src).unwrap();
     let mut rule1 = Rule::new("A".to_string());
-    rule1.add_symbols(vec![terminal!("a")]);
+    rule1.add_symbols(vec![terminal("a")]);
     assert_eq!(*grm.get_rule("A").unwrap(), rule1);
     let mut rule2 = Rule::new("B".to_string());
-    rule2.add_symbols(vec![terminal!("a")]);
+    rule2.add_symbols(vec![terminal("a")]);
     assert!(*grm.get_rule("A").unwrap() != rule2);
 }
 
@@ -53,11 +51,11 @@ fn test_rule_alternative_simple() {
     ".to_string();
     let grm = parse_yacc(&src).unwrap();
     let mut rule1 = Rule::new("A".to_string());
-    rule1.add_symbols(vec![terminal!("a")]);
-    rule1.add_symbols(vec![terminal!("b")]);
+    rule1.add_symbols(vec![terminal("a")]);
+    rule1.add_symbols(vec![terminal("b")]);
     assert_eq!(*grm.get_rule("A").unwrap(), rule1);
     let mut rule2 = Rule::new("B".to_string());
-    rule2.add_symbols(vec![terminal!("a")]);
+    rule2.add_symbols(vec![terminal("a")]);
     assert!(*grm.get_rule("A").unwrap() != rule2);
 }
 
@@ -77,13 +75,13 @@ fn test_rule_empty() {
     assert_eq!(*grm.get_rule("A").unwrap(), rule1);
 
     let mut rule2 = Rule::new("B".to_string());
-    rule2.add_symbols(vec![terminal!("b")]);
+    rule2.add_symbols(vec![terminal("b")]);
     rule2.add_symbols(vec![]);
     assert_eq!(*grm.get_rule("B").unwrap(), rule2);
 
     let mut rule3 = Rule::new("C".to_string());
     rule3.add_symbols(vec![]);
-    rule3.add_symbols(vec![terminal!("c")]);
+    rule3.add_symbols(vec![terminal("c")]);
     assert_eq!(*grm.get_rule("C").unwrap(), rule3);
 }
 
@@ -95,11 +93,11 @@ fn test_rule_alternative_verticalbar() {
     ".to_string();
     let grm = parse_yacc(&src).unwrap();
     let mut rule1 = Rule::new("A".to_string());
-    rule1.add_symbols(vec![terminal!("a")]);
-    rule1.add_symbols(vec![terminal!("b")]);
+    rule1.add_symbols(vec![terminal("a")]);
+    rule1.add_symbols(vec![terminal("b")]);
     assert_eq!(*grm.get_rule("A").unwrap(), rule1);
     let mut rule2 = Rule::new("B".to_string());
-    rule2.add_symbols(vec![terminal!("a")]);
+    rule2.add_symbols(vec![terminal("a")]);
     assert!(*grm.get_rule("A").unwrap() != rule2);
 }
 
@@ -114,7 +112,7 @@ fn test_multiple_symbols() {
     let src = "%%\nA : 'a' B;".to_string();
     let grm = parse_yacc(&src).unwrap();
     let mut rule = Rule::new("A".to_string());
-    rule.add_symbols(vec![terminal!("a"), nonterminal!("B")]);
+    rule.add_symbols(vec![terminal("a"), nonterminal("B")]);
     assert_eq!(*grm.get_rule("A").unwrap(), rule)
 }
 
@@ -123,7 +121,7 @@ fn test_token_types() {
     let src = "%%\nA : 'a' \"b\";".to_string();
     let grm = parse_yacc(&src).unwrap();
     let mut rule = Rule::new("A".to_string());
-    rule.add_symbols(vec![terminal!("a"), terminal!("b")]);
+    rule.add_symbols(vec![terminal("a"), terminal("b")]);
     assert_eq!(*grm.get_rule("A").unwrap(), rule)
 }
 

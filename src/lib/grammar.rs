@@ -154,13 +154,13 @@ impl PartialEq for Rule {
     }
 }
 
-#[macro_export]
-macro_rules! nonterminal {
-    ($x:expr) => ($crate::grammar::Symbol::Nonterminal($x.to_string()));
+/// Returns a nonterminal symbol with name `n`.
+pub fn nonterminal(n: &str) -> Symbol {
+    Symbol::Nonterminal(n.to_string())
 }
 
-#[macro_export]
-macro_rules! terminal {
-    ($x:expr) => ($crate::grammar::Symbol::Terminal($x.to_string()));
+/// Returns a terminal symbol with name `n`.
+pub fn terminal(n: &str) -> Symbol {
+    Symbol::Terminal(n.to_string())
 }
 
