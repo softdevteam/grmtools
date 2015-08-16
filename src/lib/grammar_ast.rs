@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 pub struct Grammar {
-    pub start: String,
+    pub start: Option<String>,
     pub rules: HashMap<String, Rule>,
     pub tokens: HashSet<String>
 }
@@ -21,6 +21,7 @@ pub enum Symbol {
 /// The various different possible grammar validation errors.
 #[derive(Debug)]
 pub enum GrammarErrorKind {
+    NoStartRule,
     InvalidStartRule,
     UnknownRuleRef,
     UnknownToken
@@ -36,6 +37,9 @@ pub struct GrammarError {
 impl fmt::Display for GrammarError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
+            GrammarErrorKind::NoStartRule => {
+                write!(f, "No start rule specified")
+            },
             GrammarErrorKind::InvalidStartRule => {
                 write!(f, "Start rule does not appear in grammar")
             },
@@ -51,7 +55,7 @@ impl fmt::Display for GrammarError {
 
 impl Grammar {
     pub fn new() -> Grammar {
-        let s = String::new();
+        let s = None;
         let hm = HashMap::new();
         let t = HashSet::new();
         Grammar {start: s, rules: hm, tokens: t}
@@ -66,10 +70,6 @@ impl Grammar {
         self.rules.get(key)
     }
 
-    pub fn get_start(&self) -> &str {
-        &self.start
-    }
-
     pub fn has_token(&self, s: &str) -> bool {
         self.tokens.contains(s)
     }
@@ -80,8 +80,13 @@ impl Grammar {
     ///   3) Every terminal reference references a declared token
     /// If the validation succeeds, None is returned.
     pub fn validate(&self) -> Result<(), GrammarError> {
-        if !self.rules.contains_key(&self.start) {
-            return Err(GrammarError{kind: GrammarErrorKind::InvalidStartRule, sym: None});
+        match self.start {
+            None => return Err(GrammarError{kind: GrammarErrorKind::NoStartRule, sym: None}),
+            Some(ref s) => {
+                if !self.rules.contains_key(s) {
+                    return Err(GrammarError{kind: GrammarErrorKind::InvalidStartRule, sym: None});
+                }
+            }
         }
         for rule in self.rules.values() {
             for alt in rule.alternatives.iter() {
@@ -111,7 +116,7 @@ impl fmt::Debug for Grammar {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let mut s = String::new();
         s.push_str("Grammar:\n");
-        s.push_str(&format!("   start: {}\n", &self.start));
+        s.push_str(&format!("   start: {:?}\n", &self.start));
         s.push_str(&format!("   tokens: {:?}\n", &self.tokens));
         for rule in &self.rules {
             s.push_str(&format!("   rule: {:?}\n", &rule));

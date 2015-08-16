@@ -128,7 +128,7 @@ fn test_token_types() {
 fn test_declaration_start() {
     let src = "%start   A\n%%\nA : a;".to_string();
     let grm = parse_yacc(&src).unwrap();
-    assert_eq!(grm.get_start(), "A");
+    assert_eq!(grm.start.unwrap(), "A");
 }
 
 #[test]

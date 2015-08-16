@@ -86,7 +86,7 @@ impl YaccParser {
             else if let Some(j) = self.lookahead_is("%start", i) {
                 i = try!(self.parse_ws(j));
                 let (j, n) = try!(self.parse_name(i));
-                self.grammar.start = n;
+                self.grammar.start = Some(n);
                 i = try!(self.parse_ws(j));
             }
             else {
