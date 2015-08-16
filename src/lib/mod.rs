@@ -2,11 +2,11 @@
 
 use std::fmt;
 
-pub mod grammar;
+pub mod grammar_ast;
 pub mod yacc;
 
 pub mod pgen;
-pub use grammar::{Grammar, GrammarError};
+pub use grammar_ast::{Grammar, GrammarError};
 pub use self::yacc::{YaccError, YaccErrorKind};
 use self::yacc::parse_yacc;
 

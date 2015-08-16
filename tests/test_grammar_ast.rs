@@ -1,5 +1,5 @@
 extern crate lrpar;
-use lrpar::grammar::{Grammar, GrammarError, GrammarErrorKind, nonterminal, terminal};
+use lrpar::grammar_ast::{Grammar, GrammarError, GrammarErrorKind, nonterminal, terminal};
 
 #[test]
 fn test_empty_grammar(){

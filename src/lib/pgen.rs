@@ -1,4 +1,4 @@
-use grammar::{Grammar, Symbol, nonterminal};
+use grammar_ast::{Grammar, Symbol, nonterminal};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 

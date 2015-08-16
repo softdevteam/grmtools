@@ -1,5 +1,5 @@
 extern crate lrpar;
-use lrpar::grammar::{Grammar, Symbol, nonterminal, terminal};
+use lrpar::grammar_ast::{Grammar, Symbol, nonterminal, terminal};
 use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1, build_graph,
                   mk_string_hashset, lritem, StateGraph};
 use std::collections::{HashMap, HashSet};

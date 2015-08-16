@@ -1,6 +1,6 @@
 extern crate lrpar;
 use lrpar::{YaccError, YaccErrorKind};
-use lrpar::grammar::{Rule, Symbol, nonterminal, terminal};
+use lrpar::grammar_ast::{Rule, Symbol, nonterminal, terminal};
 use lrpar::yacc::parse_yacc;
 
 #[test]

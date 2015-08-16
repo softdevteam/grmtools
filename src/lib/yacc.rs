@@ -5,7 +5,7 @@ use self::regex::Regex;
 
 type YaccResult<T> = Result<T, YaccError>;
 
-use grammar::{Grammar, Symbol};
+use grammar_ast::{Grammar, Symbol};
 
 pub struct YaccParser {
     src: String,
