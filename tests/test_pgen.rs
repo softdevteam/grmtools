@@ -1,5 +1,5 @@
 extern crate lrpar;
-use lrpar::grammar_ast::{Grammar, Symbol, nonterminal, terminal};
+use lrpar::grammar_ast::{GrammarAST, Symbol, nonterminal, terminal};
 use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1, build_graph,
                   mk_string_hashset, lritem, StateGraph};
 use std::collections::{HashMap, HashSet};
@@ -15,7 +15,7 @@ fn has(firsts: &HashMap<String, HashSet<String>>, n: &str, should_be: Vec<&str>)
 
 #[test]
 fn test_first(){
-    let mut grm = Grammar::new();
+    let mut grm = GrammarAST::new();
     grm.add_rule("C".to_string(), vec!(terminal("c")));
     grm.add_rule("D".to_string(), vec!(terminal("d")));
     grm.add_rule("E".to_string(), vec!(nonterminal("D")));
@@ -29,7 +29,7 @@ fn test_first(){
 
 #[test]
 fn test_first_no_subsequent_nonterminals() {
-    let mut grm = Grammar::new();
+    let mut grm = GrammarAST::new();
     grm.add_rule("C".to_string(), vec!(terminal("c")));
     grm.add_rule("D".to_string(), vec!(terminal("d")));
     grm.add_rule("E".to_string(), vec!(nonterminal("D"), nonterminal("C")));
@@ -39,7 +39,7 @@ fn test_first_no_subsequent_nonterminals() {
 
 #[test]
 fn test_first_epsilon() {
-    let mut grm = Grammar::new();
+    let mut grm = GrammarAST::new();
     grm.add_rule("A".to_string(), vec!(nonterminal("B"), terminal("a")));
     grm.add_rule("B".to_string(), vec!(terminal("b")));
     grm.add_rule("B".to_string(), vec!());
@@ -56,7 +56,7 @@ fn test_first_epsilon() {
 
 #[test]
 fn test_last_epsilon() {
-    let mut grm = Grammar::new();
+    let mut grm = GrammarAST::new();
     grm.add_rule("A".to_string(), vec!(nonterminal("B"), nonterminal("C")));
     grm.add_rule("B".to_string(), vec!(terminal("b")));
     grm.add_rule("B".to_string(), vec!());
@@ -70,7 +70,7 @@ fn test_last_epsilon() {
 
 #[test]
 fn test_first_no_multiples() {
-    let mut grm = Grammar::new();
+    let mut grm = GrammarAST::new();
     grm.add_rule("A".to_string(), vec!(nonterminal("B"), terminal("b")));
     grm.add_rule("B".to_string(), vec!(terminal("b")));
     grm.add_rule("B".to_string(), vec!());
@@ -78,8 +78,8 @@ fn test_first_no_multiples() {
     has(&firsts, "A", vec!["b"]);
 }
 
-fn eco_grammar() -> Grammar {
-    let mut grm = Grammar::new();
+fn eco_grammar() -> GrammarAST {
+    let mut grm = GrammarAST::new();
     grm.add_rule("Z".to_string(), vec!(nonterminal("S")));
     grm.add_rule("S".to_string(), vec!(nonterminal("S"), terminal("b")));
     grm.add_rule("S".to_string(), vec!(terminal("b"), nonterminal("A"), terminal("a")));
@@ -121,7 +121,7 @@ fn test_follow_from_eco() {
 
 #[test]
 fn test_first_from_eco_bug() {
-    let mut grm = Grammar::new();
+    let mut grm = GrammarAST::new();
     grm.add_rule("E".to_string(), vec!(nonterminal("T")));
     grm.add_rule("E".to_string(), vec!(nonterminal("E"), terminal("+"), nonterminal("T")));
     grm.add_rule("T".to_string(), vec!(nonterminal("P")));
@@ -144,8 +144,8 @@ fn test_first_from_eco_bug() {
     has(&firsts, "G", vec!["c", "d", "f", ""]);
 }
 
-fn grammar2() -> Grammar {
-    let mut grm = Grammar::new();
+fn grammar2() -> GrammarAST {
+    let mut grm = GrammarAST::new();
     grm.add_rule("E".to_string(), vec!(nonterminal("T"), nonterminal("P")));
     grm.add_rule("P".to_string(), vec!(terminal("+"), nonterminal("T"), nonterminal("P")));
     grm.add_rule("P".to_string(), vec!());
@@ -223,22 +223,22 @@ fn test_closure1_ecogrm() {
     assert_eq!(state2.get(&c7).unwrap(), &mk_string_hashset(vec!["a"]));
 }
 
-// Grammar from 'LR(k) Analyse fuer Pragmatiker'
+// GrammarAST from 'LR(k) Analyse fuer Pragmatiker'
 // Z : S
 // S : Sb
 //     bAa
 // A : aSc
 //     a
 //     aSb
-fn grammar3() -> Grammar {
-    let mut grm = Grammar::new();
+fn grammar3() -> GrammarAST {
+    let mut grm = GrammarAST::new();
     grm.add_rule("Z".to_string(), vec!(nonterminal("S")));
     grm.add_rule("S".to_string(), vec!(nonterminal("S"), terminal("b")));
     grm.add_rule("S".to_string(), vec!(terminal("b"), nonterminal("A"), terminal("a")));
     grm.add_rule("A".to_string(), vec!(terminal("a"), nonterminal("S"), terminal("c")));
     grm.add_rule("A".to_string(), vec!(terminal("a")));
     grm.add_rule("A".to_string(), vec!(terminal("a"), nonterminal("S"), terminal("b")));
-    grm.start = "Z".to_string();
+    grm.start = Some("Z".to_string());
     grm
 }
 

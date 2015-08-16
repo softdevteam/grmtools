@@ -1,4 +1,4 @@
-use grammar_ast::{Grammar, Symbol, nonterminal};
+use grammar_ast::{GrammarAST, Symbol, nonterminal};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
@@ -16,7 +16,7 @@ use std::hash::{Hash, Hasher};
 /// let firsts = calc_firsts(&grm);
 /// println!(firsts); // {"S": {"a", "b"}, "A": {"a"}};
 /// ```
-pub fn calc_firsts(grm: &Grammar) -> HashMap<String, HashSet<String>> {
+pub fn calc_firsts(grm: &GrammarAST) -> HashMap<String, HashSet<String>> {
     // This function gradually builds up a FIRST hashmap in stages.
     let mut firsts: HashMap<String, HashSet<String>> = HashMap::new();
 
@@ -152,7 +152,7 @@ pub fn get_firsts_from_symbols(firsts: &HashMap<String, HashSet<String>>,
 /// let follows = calc_follows(&grm, &firsts);
 /// println!(follows); // {"S": {}, "A": {"b"}};
 /// ```
-pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
+pub fn calc_follows(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>)
                     -> HashMap<String, HashSet<String>> {
     // initialise follow set
     let mut follows: HashMap<String, HashSet<String>> = HashMap::new();
@@ -272,7 +272,7 @@ pub fn mk_string_hashset(vec: Vec<&str>) -> HashSet<String> {
 }
 
 /// Calculates the closure of a HashMap containing LR1Items
-pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
+pub fn closure1(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>,
                 closure: &mut HashMap<LR1Item, HashSet<String>>) {
     loop {
         let mut changed = false;
@@ -339,7 +339,7 @@ pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
 }
 
 /// Calculates the goto that results from reading past a certain symbol in another set.
-pub fn goto1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
+pub fn goto1(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>,
              state: &HashMap<LR1Item, HashSet<String>>, symbol: &Symbol)
              -> HashMap<LR1Item, HashSet<String>> {
     let mut goto = HashMap::new();
@@ -373,7 +373,7 @@ impl StateGraph {
 }
 
 /// Builds a `StateGraph` from the given `Grammar`.
-pub fn build_graph(grm: &Grammar) -> StateGraph {
+pub fn build_graph(grm: &GrammarAST) -> StateGraph {
     let mut states = Vec::new();
     let mut edges = HashMap::new();
     let mut todo = Vec::new();
@@ -382,7 +382,7 @@ pub fn build_graph(grm: &Grammar) -> StateGraph {
     let firsts = calc_firsts(&grm);
     
     // Create first state
-    let item = lritem("Start!", vec![nonterminal(&grm.start)], 0);
+    let item = lritem("Start!", vec![nonterminal(&grm.start.clone().unwrap())], 0);
     let mut la = HashSet::new();
     la.insert("$".to_string());
     let mut s0 = HashMap::new();

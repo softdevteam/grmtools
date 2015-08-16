@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-pub struct Grammar {
+pub struct GrammarAST {
     pub start: Option<String>,
     pub rules: HashMap<String, Rule>,
     pub tokens: HashSet<String>
@@ -20,45 +20,44 @@ pub enum Symbol {
 
 /// The various different possible grammar validation errors.
 #[derive(Debug)]
-pub enum GrammarErrorKind {
+pub enum GrammarASTErrorKind {
     NoStartRule,
     InvalidStartRule,
     UnknownRuleRef,
     UnknownToken
 }
 
-/// Grammar validation errors return an instance of this struct.
+/// GrammarAST validation errors return an instance of this struct.
 #[derive(Debug)]
-pub struct GrammarError {
-    pub kind: GrammarErrorKind,
+pub struct GrammarASTError {
+    pub kind: GrammarASTErrorKind,
     pub sym: Option<Symbol>
 }
 
-impl fmt::Display for GrammarError {
+impl fmt::Display for GrammarASTError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
-            GrammarErrorKind::NoStartRule => {
+            GrammarASTErrorKind::NoStartRule => {
                 write!(f, "No start rule specified")
             },
-            GrammarErrorKind::InvalidStartRule => {
+            GrammarASTErrorKind::InvalidStartRule => {
                 write!(f, "Start rule does not appear in grammar")
             },
-            GrammarErrorKind::UnknownRuleRef => {
+            GrammarASTErrorKind::UnknownRuleRef => {
                 write!(f, "Unknown reference to rule")
             },
-            GrammarErrorKind::UnknownToken => {
+            GrammarASTErrorKind::UnknownToken => {
                 write!(f, "Unknown token")
             }
         }
     }
 }
 
-impl Grammar {
-    pub fn new() -> Grammar {
-        let s = None;
+impl GrammarAST {
+    pub fn new() -> GrammarAST {
         let hm = HashMap::new();
         let t = HashSet::new();
-        Grammar {start: s, rules: hm, tokens: t}
+        GrammarAST {start: None, rules: hm, tokens: t}
     }
 
     pub fn add_rule(&mut self, key: String, value: Vec<Symbol>) {
@@ -79,12 +78,12 @@ impl Grammar {
     ///   2) Every nonterminal reference references a rule in the grammar
     ///   3) Every terminal reference references a declared token
     /// If the validation succeeds, None is returned.
-    pub fn validate(&self) -> Result<(), GrammarError> {
+    pub fn validate(&self) -> Result<(), GrammarASTError> {
         match self.start {
-            None => return Err(GrammarError{kind: GrammarErrorKind::NoStartRule, sym: None}),
+            None => return Err(GrammarASTError{kind: GrammarASTErrorKind::NoStartRule, sym: None}),
             Some(ref s) => {
                 if !self.rules.contains_key(s) {
-                    return Err(GrammarError{kind: GrammarErrorKind::InvalidStartRule, sym: None});
+                    return Err(GrammarASTError{kind: GrammarASTErrorKind::InvalidStartRule, sym: None});
                 }
             }
         }
@@ -94,13 +93,13 @@ impl Grammar {
                     match sym {
                         &Symbol::Nonterminal(ref name) => {
                             if !self.rules.contains_key(name) {
-                                return Err(GrammarError{kind: GrammarErrorKind::UnknownRuleRef,
+                                return Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
                             }
                         }
                         &Symbol::Terminal(ref name) => {
                             if !self.tokens.contains(name) {
-                                return Err(GrammarError{kind: GrammarErrorKind::UnknownToken,
+                                return Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownToken,
                                     sym: Some(sym.clone())});
                             }
                         }
@@ -112,10 +111,10 @@ impl Grammar {
     }
 }
 
-impl fmt::Debug for Grammar {
+impl fmt::Debug for GrammarAST {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let mut s = String::new();
-        s.push_str("Grammar:\n");
+        s.push_str("GrammarAST:\n");
         s.push_str(&format!("   start: {:?}\n", &self.start));
         s.push_str(&format!("   tokens: {:?}\n", &self.tokens));
         for rule in &self.rules {
