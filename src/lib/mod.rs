@@ -2,10 +2,12 @@
 
 use std::fmt;
 
+pub mod grammar;
 pub mod grammar_ast;
 pub mod yacc;
 
 pub mod pgen;
+pub use grammar::ast_to_grammar;
 pub use grammar_ast::{GrammarAST, GrammarASTError};
 pub use self::yacc::{YaccError, YaccErrorKind};
 use self::yacc::parse_yacc;
@@ -38,7 +40,8 @@ impl fmt::Display for FromYaccError {
 }
 
 pub fn from_yacc(s:&String) -> Result<GrammarAST, FromYaccError> {
-    let grm = try!(parse_yacc(s));
-    try!(grm.validate());
-    Ok(grm)
+    let grmast = try!(parse_yacc(s));
+    try!(grmast.validate());
+    let grm = ast_to_grammar(&grmast);
+    Ok(grmast)
 }
