@@ -7,6 +7,17 @@ pub struct Grammar {
     pub tokens: HashSet<String>
 }
 
+pub struct Rule {
+    pub name: String,
+    pub alternatives: Vec<Vec<Symbol>>
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub enum Symbol {
+    Nonterminal(String),
+    Terminal(String)
+}
+
 /// The various different possible grammar validation errors.
 #[derive(Debug)]
 pub enum GrammarErrorKind {
@@ -109,11 +120,6 @@ impl fmt::Debug for Grammar {
     }
 }
 
-pub struct Rule {
-    pub name: String,
-    pub alternatives: Vec<Vec<Symbol>>
-}
-
 impl Rule {
     pub fn new(name: String) -> Rule {
         Rule {name: name, alternatives: vec![]}
@@ -148,20 +154,13 @@ impl PartialEq for Rule {
     }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
-pub enum Symbol {
-    Nonterminal(String),
-    Terminal(String)
+/// Returns a nonterminal symbol with name `n`.
+pub fn nonterminal(n: &str) -> Symbol {
+    Symbol::Nonterminal(n.to_string())
 }
 
-
-#[macro_export]
-macro_rules! nonterminal {
-    ($x:expr) => ($crate::grammar::Symbol::Nonterminal($x.to_string()));
-}
-
-#[macro_export]
-macro_rules! terminal {
-    ($x:expr) => ($crate::grammar::Symbol::Terminal($x.to_string()));
+/// Returns a terminal symbol with name `n`.
+pub fn terminal(n: &str) -> Symbol {
+    Symbol::Terminal(n.to_string())
 }
 
