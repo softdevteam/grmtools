@@ -1,6 +1,7 @@
 extern crate lrpar;
 use lrpar::grammar::{Grammar, Symbol, nonterminal, terminal};
-use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1};
+use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1, build_graph,
+                  mk_string_hashset, lritem, StateGraph};
 use std::collections::{HashMap, HashSet};
 
 fn has(firsts: &HashMap<String, HashSet<String>>, n: &str, should_be: Vec<&str>) {
@@ -174,22 +175,6 @@ fn test_grammar2() {
     has(&follow, "F", vec!["*", "+", ")"]);
 }
 
-fn lritem(lhs: &str, rhs: Vec<Symbol>, d: usize) -> LR1Item {
-    let mut item = LR1Item::new(lhs.to_string(), Vec::new(), d);
-    for e in rhs.iter() {
-        item.rhs.push(e.clone());
-    }
-    item
-}
-
-fn mk_string_hashset(vec: Vec<&str>) -> HashSet<String> {
-    let mut hs = HashSet::new();
-    for e in vec.iter() {
-        hs.insert(e.to_string());
-    }
-    hs
-}
-
 #[test]
 fn test_lrelements() {
     let mut e = LR1Item::new("S".to_string(), vec![nonterminal("A"), terminal("b")], 0);
@@ -253,6 +238,7 @@ fn grammar3() -> Grammar {
     grm.add_rule("A".to_string(), vec!(terminal("a"), nonterminal("S"), terminal("c")));
     grm.add_rule("A".to_string(), vec!(terminal("a")));
     grm.add_rule("A".to_string(), vec!(terminal("a"), nonterminal("S"), terminal("b")));
+    grm.start = "Z".to_string();
     grm
 }
 
@@ -313,7 +299,7 @@ fn test_goto1() {
     closure1(&grm, &firsts, &mut state);
 
     // follow 'S' from start set
-    let goto = goto1(&grm, &firsts, &state, nonterminal("S"));
+    let goto = goto1(&grm, &firsts, &state, &nonterminal("S"));
 
     let g1 = lritem("Z", vec![nonterminal("S")], 1);
     let g2 = lritem("S", vec![nonterminal("S"), terminal("b")], 1);
@@ -322,7 +308,7 @@ fn test_goto1() {
     assert_eq!(goto.get(&g2).unwrap(), &mk_string_hashset(vec!["$", "b"]));
 
     // follow 'b' from start set
-    let goto2 = goto1(&grm, &firsts, &state, terminal("b"));
+    let goto2 = goto1(&grm, &firsts, &state, &terminal("b"));
 
     let g3 = lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 1);
     let g4 = lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 0);
@@ -335,7 +321,7 @@ fn test_goto1() {
     assert_eq!(goto2.get(&g6).unwrap(), &mk_string_hashset(vec!["a"]));
 
     // continue by following 'a' from last goto
-    let goto3 = goto1(&grm, &firsts, &goto2, terminal("a"));
+    let goto3 = goto1(&grm, &firsts, &goto2, &terminal("a"));
 
     let g31 = lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 1);
     let g32 = lritem("A", vec![terminal("a")], 1);
@@ -349,4 +335,122 @@ fn test_goto1() {
     assert_eq!(goto3.get(&g34).unwrap(), &mk_string_hashset(vec!["c", "b"]));
     assert_eq!(goto3.get(&g35).unwrap(), &mk_string_hashset(vec!["c", "b"]));
 
+}
+
+#[test]
+fn test_stategraph() {
+    let grm = grammar3();
+    let graph = build_graph(&grm);
+
+    // State 0
+    let mut s0 = HashMap::new();
+    s0.insert(lritem("Start!", vec![nonterminal("Z")], 0), mk_string_hashset(vec!["$"]));
+    s0.insert(lritem("Z", vec![nonterminal("S")], 0), mk_string_hashset(vec!["$"]));
+    s0.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 0), mk_string_hashset(vec!["$", "b"]));
+    s0.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 0), mk_string_hashset(vec!["$", "b"]));
+
+    // State 1
+    let mut s1 = HashMap::new();
+    s1.insert(lritem("Start!", vec![nonterminal("Z")], 1), mk_string_hashset(vec!["$"]));
+
+    // State 2
+    let mut s2 = HashMap::new();
+    s2.insert(lritem("Z", vec![nonterminal("S")], 1), mk_string_hashset(vec!["$"]));
+    s2.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 1), mk_string_hashset(vec!["$", "b"]));
+
+    // State 3
+    let mut s3 = HashMap::new();
+    s3.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 1), mk_string_hashset(vec!["$", "b"]));
+    s3.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 0), mk_string_hashset(vec!["a"]));
+    s3.insert(lritem("A", vec![terminal("a")], 0), mk_string_hashset(vec!["a"]));
+    s3.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 0), mk_string_hashset(vec!["a"]));
+
+    // State 4
+    let mut s4 = HashMap::new();
+    s4.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 2), mk_string_hashset(vec!["$", "b"]));
+
+    // State 5
+    let mut s5 = HashMap::new();
+    s5.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 1), mk_string_hashset(vec!["a"]));
+    s5.insert(lritem("A", vec![terminal("a")], 1), mk_string_hashset(vec!["a"]));
+    s5.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 1), mk_string_hashset(vec!["a"]));
+    s5.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 0), mk_string_hashset(vec!["c", "b"]));
+    s5.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 0), mk_string_hashset(vec!["c", "b"]));
+
+    // State 6
+    let mut s6 = HashMap::new();
+    s6.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 2), mk_string_hashset(vec!["$", "b"]));
+
+    // State 7
+    let mut s7 = HashMap::new();
+    s7.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 2), mk_string_hashset(vec!["a"]));
+    s7.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 2), mk_string_hashset(vec!["a"]));
+    s7.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 1), mk_string_hashset(vec!["c", "b"]));
+
+    // State 8
+    let mut s8 = HashMap::new();
+    s8.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 1), mk_string_hashset(vec!["c", "b"]));
+    s8.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 0), mk_string_hashset(vec!["a"]));
+    s8.insert(lritem("A", vec![terminal("a")], 0), mk_string_hashset(vec!["a"]));
+    s8.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 0), mk_string_hashset(vec!["a"]));
+
+    // State 9
+    let mut s9 = HashMap::new();
+    s9.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 3), mk_string_hashset(vec!["$", "b"]));
+
+    // State 10
+    let mut s10 = HashMap::new();
+    s10.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 3), mk_string_hashset(vec!["a"]));
+    s10.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 2), mk_string_hashset(vec!["c", "b"]));
+
+    // State 11
+    let mut s11 = HashMap::new();
+    s11.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 3), mk_string_hashset(vec!["a"]));
+
+    // State 12
+    let mut s12 = HashMap::new();
+    s12.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 2), mk_string_hashset(vec!["c", "b"]));
+
+    // State 13
+    let mut s13 = HashMap::new();
+    s13.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 3), mk_string_hashset(vec!["c", "b"]));
+
+    // test states
+    assert!(graph.states.len() == 14);
+    assert!(graph.contains(&s0));
+    assert!(graph.contains(&s1));
+    assert!(graph.contains(&s2));
+    assert!(graph.contains(&s3));
+    assert!(graph.contains(&s4));
+    assert!(graph.contains(&s5));
+    assert!(graph.contains(&s6));
+    assert!(graph.contains(&s7));
+    assert!(graph.contains(&s8));
+    assert!(graph.contains(&s9));
+    assert!(graph.contains(&s10));
+    assert!(graph.contains(&s11));
+    assert!(graph.contains(&s12));
+    assert!(graph.contains(&s13));
+
+    // test edges
+    test_edge(&graph, &s0, nonterminal("Z"), &s1);
+    test_edge(&graph, &s0, nonterminal("S"), &s2);
+    test_edge(&graph, &s0, terminal("b"), &s3);
+    test_edge(&graph, &s2, terminal("b"), &s4);
+    test_edge(&graph, &s3, nonterminal("A"), &s6);
+    test_edge(&graph, &s3, terminal("a"), &s5);
+    test_edge(&graph, &s5, nonterminal("S"), &s7);
+    test_edge(&graph, &s5, terminal("b"), &s8);
+    test_edge(&graph, &s6, terminal("a"), &s9);
+    test_edge(&graph, &s7, terminal("c"), &s11);
+    test_edge(&graph, &s7, terminal("b"), &s10);
+    test_edge(&graph, &s8, terminal("a"), &s5);
+    test_edge(&graph, &s8, nonterminal("A"), &s12);
+    test_edge(&graph, &s12, terminal("a"), &s13);
+}
+
+fn test_edge(graph: &StateGraph, state: &HashMap<LR1Item, HashSet<String>>, symbol: Symbol, other: &HashMap<LR1Item, HashSet<String>>) {
+    let pos = graph.states.iter().position(|s| s == state).unwrap();
+    let pos_other = graph.edges.get(&(pos as i32, symbol)).unwrap().clone() as usize;
+    assert!(graph.states.get(pos_other).unwrap() == other);
 }

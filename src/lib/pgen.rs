@@ -1,4 +1,4 @@
-use grammar::{Grammar, Symbol};
+use grammar::{Grammar, Symbol, nonterminal};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
@@ -255,6 +255,22 @@ impl Hash for LR1Item {
     }
 }
 
+pub fn lritem(lhs: &str, rhs: Vec<Symbol>, d: usize) -> LR1Item {
+    let mut item = LR1Item::new(lhs.to_string(), Vec::new(), d);
+    for e in rhs.iter() {
+        item.rhs.push(e.clone());
+    }
+    item
+}
+
+pub fn mk_string_hashset(vec: Vec<&str>) -> HashSet<String> {
+    let mut hs = HashSet::new();
+    for e in vec.iter() {
+        hs.insert(e.to_string());
+    }
+    hs
+}
+
 /// Calculates the closure of a HashMap containing LR1Items
 pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
                 closure: &mut HashMap<LR1Item, HashSet<String>>) {
@@ -324,13 +340,13 @@ pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
 
 /// Calculates the goto that results from reading past a certain symbol in another set.
 pub fn goto1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
-             state: &HashMap<LR1Item, HashSet<String>>, symbol: Symbol)
+             state: &HashMap<LR1Item, HashSet<String>>, symbol: &Symbol)
              -> HashMap<LR1Item, HashSet<String>> {
     let mut goto = HashMap::new();
 
     for (item, la) in state.iter() {
         if item.next() != None {
-            if item.next().unwrap() == symbol {
+            if &item.next().unwrap() == symbol {
                 // Clone item and insert into new goto set
                 let lhs = item.lhs.clone();
                 let rhs = item.rhs.clone();
@@ -343,4 +359,84 @@ pub fn goto1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
     }
     closure1(grm, firsts, &mut goto);
     goto
+}
+
+pub struct StateGraph {
+    pub states: Vec<HashMap<LR1Item, HashSet<String>>>,
+    pub edges: HashMap<(i32, Symbol), i32>
+}
+
+impl StateGraph {
+    pub fn contains(&self, state: &HashMap<LR1Item, HashSet<String>>) -> bool {
+        self.states.contains(state)
+    }
+}
+
+/// Builds a `StateGraph` from the given `Grammar`.
+pub fn build_graph(grm: &Grammar) -> StateGraph {
+    let mut states = Vec::new();
+    let mut edges = HashMap::new();
+    let mut todo = Vec::new();
+
+    // calculate first sets
+    let firsts = calc_firsts(&grm);
+    
+    // Create first state
+    let item = lritem("Start!", vec![nonterminal(&grm.start)], 0);
+    let mut la = HashSet::new();
+    la.insert("$".to_string());
+    let mut s0 = HashMap::new();
+    s0.insert(item, la);
+    closure1(&grm, &firsts, &mut s0);
+
+    // add to list of states as #0
+    todo.push(s0);
+
+    let mut current_id = 0;
+    let mut unique_id = 1;
+
+    loop {
+        if todo.len() == 0 {
+            break;
+        }
+        let state = todo.remove(0);
+
+        let mut symbols_done = HashSet::new();
+        for (item, _) in state.iter() {
+            let symbol = match item.next() {
+                Some(x) => x,
+                None => continue
+            };
+            if symbols_done.contains(&symbol) {
+                continue;
+            }
+            else {
+                // Cache processed symbols so that we don't create the same
+                // goto set multiple times for different rules with the same
+                // next symbol
+                symbols_done.insert(symbol.clone());
+            }
+            let goto = goto1(&grm, &firsts, &state, &symbol);
+            // This is slow! We are better off hashing the state HashMaps and making `states` a set
+            // instead of a vector.
+            // Although on second thought, when we add the weakly_compatible optimisation later we
+            // might have to iterate over all states anyway
+            match states.iter().position(|s| s == &goto) {
+                // If goto is already contained map current_id to its position...
+                Some(pos) => {edges.insert((current_id, symbol.clone()), pos as i32); ()},
+                // ...otherwise add goto to todo-list and map current_id to its unique_id
+                None => {
+                    todo.push(goto);
+                    edges.insert((current_id, symbol.clone()), unique_id);
+                    unique_id += 1;
+                    ()
+                }
+            }
+        }
+
+        states.push(state);
+        current_id += 1;
+    }
+
+    StateGraph {states: states, edges: edges}
 }
