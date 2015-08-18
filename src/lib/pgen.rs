@@ -1,11 +1,52 @@
-use grammar_ast::{GrammarAST, Symbol, nonterminal};
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
+extern crate bit_vec;
+use self::bit_vec::BitVec;
 
-/// Generates and returns the first set for the given grammar.
+use grammar::{Grammar, NIdx, Symbol, TIdx};
+//use std::collections::{HashMap, HashSet};
+//use std::hash::{Hash, Hasher};
+
+/// Firsts stores all the first sets for a given grammar.
+#[derive(Debug)]
+pub struct Firsts {
+    // The representation is a contiguous bitfield, of (terms_len * 1) * nonterms_len. Put another
+    // way, each nonterminal has (terms_len + 1) bits, where the bit at position terms_len
+    // represents epsilon.
+    bf: BitVec,
+    terms_len: NIdx
+}
+
+impl Firsts {
+    fn new(nonterms_len: NIdx, terms_len: TIdx) -> Firsts {
+        Firsts {
+            bf        : BitVec::from_elem((nonterms_len * (terms_len + 1)) as usize, false),
+            terms_len : terms_len
+        }
+    }
+
+    /// Returns true if the firsts bit for terminal `tidx` nonterminal `nidx` is set, or
+    /// false otherwise. Bit `terms_len` represents epsilon.
+    pub fn get(&self, nidx: NIdx, tidx: TIdx) -> bool {
+        self.bf.get((nidx * (self.terms_len + 1) + tidx) as usize).unwrap()
+    }
+
+    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
+    /// it was already set, or false otherwise. Bit `terms_len` represents epsilon.
+    pub fn set(&mut self, nidx: NIdx, tidx: TIdx) -> bool {
+        if self.get(nidx, tidx) {
+            true
+        }
+        else {
+            self.bf.set((nidx * (self.terms_len + 1) + tidx) as usize, true);
+            false
+        }
+    }
+}
+
+
+/// Generates and returns the firsts set for the given grammar.
 ///
 /// # Example
-/// Given a grammar `grm`:
+/// Given a grammar `input`:
 ///
 /// ```c
 /// S : A "b";
@@ -13,74 +54,65 @@ use std::hash::{Hash, Hasher};
 /// ```
 ///
 /// ```c
+/// let ast = parse_yacc(&input);
+/// let grm = ast_to_grammar(&ast);
 /// let firsts = calc_firsts(&grm);
-/// println!(firsts); // {"S": {"a", "b"}, "A": {"a"}};
 /// ```
-pub fn calc_firsts(grm: &GrammarAST) -> HashMap<String, HashSet<String>> {
-    // This function gradually builds up a FIRST hashmap in stages.
-    let mut firsts: HashMap<String, HashSet<String>> = HashMap::new();
+pub fn calc_firsts(grm: &Grammar) -> Firsts {
+    let terms_len = grm.terminal_names.len() as TIdx;
+    let mut firsts = Firsts::new(grm.nonterminal_names.len() as NIdx, terms_len);
 
-    // First do the easy bit, which is every terminal at the start of an alternative.
-    for rul in grm.rules.values() {
-        let mut f = HashSet::new();
-        for alt in rul.alternatives.iter() {
-            if alt.len() == 0 {
-                f.insert("".to_string());
-                continue;
-            }
-            let ref sym = alt[0];
-            if let &Symbol::Terminal(ref name) = sym {
-                f.insert(name.clone());
-            }
-        }
-        firsts.insert(rul.name.clone(), f);
-    }
-
-    // Now we do the slow, iterative part, where we loop until we reach a fixed point. In essence,
-    // we look at each rule E, and see if any of the nonterminals at the start of its alternatives
+    // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
+    // look at each rule E, and see if any of the nonterminals at the start of its alternatives
     // have new elements in since we last looked. If they do, we'll have to do another round.
-    let mut changed;
     loop {
-        changed = false;
-        for rul in grm.rules.values() {
-            // For each rule E...
-            for alt in rul.alternatives.iter() {
+        let mut changed = false;
+        for (rul_i_usize, alts) in grm.rules_alts.iter().enumerate() {
+            let rul_i = rul_i_usize as NIdx;
+            // For each rule E
+            for alt_i in alts.iter() {
                 // ...and each alternative A
+                let ref alt = grm.alts[*alt_i as usize];
+                if alt.len() == 0 {
+                    // if it's an empty alternative, ensure this nonterminal's epsilon bit is set.
+                    if !firsts.set(rul_i, terms_len) {
+                        changed = true;
+                    }
+                    continue;
+                }
                 for (sym_i, sym) in alt.iter().enumerate() {
                     match sym {
-                        &Symbol::Terminal(ref name) => {
+                        &Symbol::Terminal(term_i) => {
                             // if symbol is a Terminal, add to FIRSTS
-                            let mut f = firsts.get_mut(&rul.name).unwrap();
-                            if !f.contains(name) {
-                                f.insert(name.clone());
+                            if !firsts.set(rul_i, term_i) {
                                 changed = true;
                             }
                             break;
                         },
-                        &Symbol::Nonterminal(ref name) => {
-                            // if symbols is Nonterminal, get its FIRSTS and add them to the
-                            // current FIRSTS. if the Nonterminals FIRSTS contain an epsilon,
-                            // continue looking at the succeeding Nonterminal, otherwise break
-                            let of = firsts.get(name).unwrap().clone();
-                            let mut f = firsts.get_mut(&rul.name).unwrap();
-                            for n in of.iter() {
-                                if n == "" {
-                                    // only add epsilon if symbol is the last in the production
-                                    if sym_i == alt.len() - 1 {
-                                        if !f.contains(n) {
-                                            f.insert(n.clone());
-                                            changed = true;
-                                        }
-                                    }
-                                }
-                                else if !f.contains(n) {
-                                    f.insert(n.clone());
+                        &Symbol::Nonterminal(nonterm_i) => {
+                            // if we're dealing with another Nonterminal, union its FIRSTs together
+                            // with the current nonterminals FIRSTs. Note this is (intentionally) a
+                            // no-op if the two terminals are one and the same.
+                            for bit_i in 0..terms_len {
+                                if firsts.get(nonterm_i, bit_i)
+                                  && !firsts.set(rul_i, bit_i) {
                                     changed = true;
                                 }
                             }
-                            // if FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, don't
-                            // add FIRST(Y2 Y3)
-                            if !of.contains("") {
+
+                            // If the epsilon bit in the nonterminal being referenced is set, and
+                            // if its the last symbol in the alternative, then add epsilon to
+                            // FIRSTs.
+                            if firsts.get(nonterm_i, terms_len) && sym_i == alt.len() - 1 {
+                                // only add epsilon if the symbol is the last in the production
+                                if !firsts.set(rul_i, terms_len) {
+                                    changed = true;
+                                }
+                            }
+
+                            // If FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, then
+                            // don't try and calculate the FIRSTS of Y2 or Y3 (i.e. stop now).
+                            if !firsts.get(nonterm_i, terms_len) {
                                 break;
                             }
                         },
@@ -94,6 +126,7 @@ pub fn calc_firsts(grm: &GrammarAST) -> HashMap<String, HashSet<String>> {
     }
 }
 
+/*
 /// Returns the first set for the given list of symbols.
 ///
 /// # Example
@@ -440,3 +473,4 @@ pub fn build_graph(grm: &GrammarAST) -> StateGraph {
 
     StateGraph {states: states, edges: edges}
 }
+*/

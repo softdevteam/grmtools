@@ -1,6 +1,6 @@
 extern crate lrpar;
 
-use lrpar::grammar::{ast_to_grammar, Grammar, NIdx, Symbol, TIdx};
+use lrpar::grammar::{ast_to_grammar, Symbol};
 use lrpar::yacc::parse_yacc;
 
 #[test]

@@ -1,112 +1,170 @@
+extern crate bit_vec;
 extern crate lrpar;
-use lrpar::grammar_ast::{GrammarAST, Symbol, nonterminal, terminal};
-use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1, build_graph,
-                  mk_string_hashset, lritem, StateGraph};
-use std::collections::{HashMap, HashSet};
 
-fn has(firsts: &HashMap<String, HashSet<String>>, n: &str, should_be: Vec<&str>) {
-    let f = firsts.get(&n.to_string()).unwrap();
-    println!("{:?} {:?}", f, should_be);
-    assert!(f.len() == should_be.len());
-    for k in should_be.iter() {
-        assert!(f.contains(&k.to_string()));
+use lrpar::grammar::{ast_to_grammar, Grammar, TIdx};
+use lrpar::yacc::parse_yacc;
+//use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1};
+use lrpar::pgen::{calc_firsts, Firsts};
+
+fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
+    let nt_i = grm.nonterminal_off(rn);
+    println!("{:?} {} {:?} {:?}", firsts, rn, should_be, grm.terminal_names);
+    for (i_usize, n) in grm.terminal_names.iter().enumerate() {
+        let i = i_usize as TIdx;
+        println!("matching {} {} {:?} {:?}", i, n, should_be.iter().position(|x| x == n), firsts.get(nt_i, i));
+        match should_be.iter().position(|x| x == n) {
+            Some(_) => {
+                if !firsts.get(nt_i, i) {
+                    panic!("{} is not set in {}", n, rn);
+                }
+            }
+            None    => {
+                if firsts.get(nt_i, i) {
+                    panic!("{} is incorrectly set in {}", n, rn);
+                }
+            }
+        }
+    }
+    if should_be.iter().position(|x| x == &"".to_string()).is_some() {
+        assert!(firsts.get(nt_i, grm.terminal_names.len() as TIdx));
     }
 }
 
 #[test]
 fn test_first(){
-    let mut grm = GrammarAST::new();
-    grm.add_rule("C".to_string(), vec!(terminal("c")));
-    grm.add_rule("D".to_string(), vec!(terminal("d")));
-    grm.add_rule("E".to_string(), vec!(nonterminal("D")));
-    grm.add_rule("E".to_string(), vec!(nonterminal("C")));
-    grm.add_rule("F".to_string(), vec!(nonterminal("E")));
+    let ast = parse_yacc(&"
+      %start C
+      %token c d
+      %%
+      C: 'c';
+      D: 'd';
+      E: D | C;
+      F: E;
+      ".to_string()).unwrap();
+    let grm = ast_to_grammar(&ast);
     let firsts = calc_firsts(&grm);
-    has(&firsts, "D", vec!["d"]);
-    has(&firsts, "E", vec!["d", "c"]);
-    has(&firsts, "F", vec!["d", "c"]);
+    has(&grm, &firsts, "D", vec!["d"]);
+    has(&grm, &firsts, "E", vec!["d", "c"]);
+    has(&grm, &firsts, "F", vec!["d", "c"]);
 }
 
 #[test]
 fn test_first_no_subsequent_nonterminals() {
-    let mut grm = GrammarAST::new();
-    grm.add_rule("C".to_string(), vec!(terminal("c")));
-    grm.add_rule("D".to_string(), vec!(terminal("d")));
-    grm.add_rule("E".to_string(), vec!(nonterminal("D"), nonterminal("C")));
+    let ast = parse_yacc(&"
+      %start C
+      %token c d
+      %%
+      C: 'c';
+      D: 'd';
+      E: D C;
+      ".to_string()).unwrap();
+    let grm = ast_to_grammar(&ast);
     let firsts = calc_firsts(&grm);
-    has(&firsts, "E", vec!["d"]);
+    has(&grm, &firsts, "E", vec!["d"]);
 }
 
 #[test]
 fn test_first_epsilon() {
-    let mut grm = GrammarAST::new();
-    grm.add_rule("A".to_string(), vec!(nonterminal("B"), terminal("a")));
-    grm.add_rule("B".to_string(), vec!(terminal("b")));
-    grm.add_rule("B".to_string(), vec!());
-
-    grm.add_rule("D".to_string(), vec!(nonterminal("C")));
-    grm.add_rule("C".to_string(), vec!(terminal("c")));
-    grm.add_rule("C".to_string(), vec!());
-
+    let ast = parse_yacc(&"
+      %start A
+      %token a b c
+      %%
+      A: B 'a';
+      B: 'b' | ;
+      C: 'c' | ;
+      D: C;
+      ".to_string()).unwrap();
+    let grm = ast_to_grammar(&ast);
     let firsts = calc_firsts(&grm);
-    has(&firsts, "A", vec!["b", "a"]);
-    has(&firsts, "C", vec!["c", ""]);
-    has(&firsts, "D", vec!["c", ""]);
+    has(&grm, &firsts, "A", vec!["b", "a"]);
+    has(&grm, &firsts, "C", vec!["c", ""]);
+    has(&grm, &firsts, "D", vec!["c", ""]);
 }
 
 #[test]
 fn test_last_epsilon() {
-    let mut grm = GrammarAST::new();
-    grm.add_rule("A".to_string(), vec!(nonterminal("B"), nonterminal("C")));
-    grm.add_rule("B".to_string(), vec!(terminal("b")));
-    grm.add_rule("B".to_string(), vec!());
-    grm.add_rule("C".to_string(), vec!(nonterminal("B"), terminal("c"), nonterminal("B")));
-
+    let ast = parse_yacc(&"
+      %start A
+      %token b c
+      %%
+      A: B C;
+      B: 'b' | ;
+      C: B 'c' B;
+      ".to_string()).unwrap();
+    let grm = ast_to_grammar(&ast);
     let firsts = calc_firsts(&grm);
-    has(&firsts, "A", vec!["b", "c"]);
-    has(&firsts, "B", vec!["b", ""]);
-    has(&firsts, "C", vec!["b", "c"]);
+    has(&grm, &firsts, "A", vec!["b", "c"]);
+    has(&grm, &firsts, "B", vec!["b", ""]);
+    has(&grm, &firsts, "C", vec!["b", "c"]);
 }
 
 #[test]
 fn test_first_no_multiples() {
-    let mut grm = GrammarAST::new();
-    grm.add_rule("A".to_string(), vec!(nonterminal("B"), terminal("b")));
-    grm.add_rule("B".to_string(), vec!(terminal("b")));
-    grm.add_rule("B".to_string(), vec!());
+    let ast = parse_yacc(&"
+      %start A
+      %token b c
+      %%
+      A: B 'b';
+      B: 'b' | ;
+      ".to_string()).unwrap();
+    let grm = ast_to_grammar(&ast);
     let firsts = calc_firsts(&grm);
-    has(&firsts, "A", vec!["b"]);
+    has(&grm, &firsts, "A", vec!["b"]);
 }
 
-fn eco_grammar() -> GrammarAST {
-    let mut grm = GrammarAST::new();
-    grm.add_rule("Z".to_string(), vec!(nonterminal("S")));
-    grm.add_rule("S".to_string(), vec!(nonterminal("S"), terminal("b")));
-    grm.add_rule("S".to_string(), vec!(terminal("b"), nonterminal("A"), terminal("a")));
-    grm.add_rule("S".to_string(), vec!(terminal("a")));
-    grm.add_rule("A".to_string(), vec!(terminal("a"), nonterminal("S"), terminal("c")));
-    grm.add_rule("A".to_string(), vec!(terminal("a")));
-    grm.add_rule("A".to_string(), vec!(terminal("a"), nonterminal("S"), terminal("b")));
-    grm.add_rule("B".to_string(), vec!(nonterminal("A"), nonterminal("S")));
-    grm.add_rule("C".to_string(), vec!(nonterminal("D"), nonterminal("A")));
-    grm.add_rule("D".to_string(), vec!(terminal("d")));
-    grm.add_rule("D".to_string(), vec!());
-    grm.add_rule("F".to_string(), vec!(nonterminal("C"), nonterminal("D"), terminal("f")));
-    grm
+fn eco_grammar() -> Grammar {
+    let ast = parse_yacc(&"
+      %start Z
+      %token a b c d f
+      %%
+      Z: S;
+      S: S 'b' | 'b' A 'a' | 'a';
+      A: 'a' S 'c' | 'a' | 'a' S 'b';
+      B: A S;
+      C: D A;
+      D: 'd' | ;
+      F: C D 'f';
+      ".to_string()).unwrap();
+    ast_to_grammar(&ast)
 }
 
 #[test]
 fn test_first_from_eco() {
     let grm = eco_grammar();
     let firsts = calc_firsts(&grm);
-    has(&firsts, "S", vec!["a", "b"]);
-    has(&firsts, "A", vec!["a"]);
-    has(&firsts, "B", vec!["a"]);
-    has(&firsts, "D", vec!["d", ""]);
-    has(&firsts, "C", vec!["d", "a"]);
-    has(&firsts, "F", vec!["d", "a"]);
+    has(&grm, &firsts, "S", vec!["a", "b"]);
+    has(&grm, &firsts, "A", vec!["a"]);
+    has(&grm, &firsts, "B", vec!["a"]);
+    has(&grm, &firsts, "D", vec!["d", ""]);
+    has(&grm, &firsts, "C", vec!["d", "a"]);
+    has(&grm, &firsts, "F", vec!["d", "a"]);
 }
 
+#[test]
+fn test_first_from_eco_bug() {
+    let ast = parse_yacc(&"
+      %start E
+      %token a b c d e f
+      %%
+      E : T | E 'b' T;
+      T : P | T 'e' P;
+      P : 'a';
+      C: C 'c' | ;
+      D: D 'd' | F;
+      F: 'f' | ;
+      G: C D;
+      ".to_string()).unwrap();
+    let grm = ast_to_grammar(&ast);
+    let firsts = calc_firsts(&grm);
+    has(&grm, &firsts, "E", vec!["a"]);
+    has(&grm, &firsts, "T", vec!["a"]);
+    has(&grm, &firsts, "P", vec!["a"]);
+    has(&grm, &firsts, "C", vec!["c", ""]);
+    has(&grm, &firsts, "D", vec!["f", "d", ""]);
+    has(&grm, &firsts, "G", vec!["c", "d", "f", ""]);
+}
+
+/*
 #[test]
 fn test_follow_from_eco() {
     let grm = eco_grammar();
@@ -117,31 +175,6 @@ fn test_follow_from_eco() {
     has(&follow, "B", vec![]);
     has(&follow, "C", vec!["d", "f"]);
     has(&follow, "D", vec!["a", "f"]);
-}
-
-#[test]
-fn test_first_from_eco_bug() {
-    let mut grm = GrammarAST::new();
-    grm.add_rule("E".to_string(), vec!(nonterminal("T")));
-    grm.add_rule("E".to_string(), vec!(nonterminal("E"), terminal("+"), nonterminal("T")));
-    grm.add_rule("T".to_string(), vec!(nonterminal("P")));
-    grm.add_rule("T".to_string(), vec!(nonterminal("T"), terminal("*"), nonterminal("P")));
-    grm.add_rule("P".to_string(), vec!(terminal("a")));
-    grm.add_rule("C".to_string(), vec!(nonterminal("C"), terminal("c")));
-    grm.add_rule("C".to_string(), vec!());
-    grm.add_rule("D".to_string(), vec!(nonterminal("D"), terminal("d")));
-    grm.add_rule("D".to_string(), vec!(nonterminal("F")));
-    grm.add_rule("F".to_string(), vec!(terminal("f")));
-    grm.add_rule("F".to_string(), vec!());
-    grm.add_rule("G".to_string(), vec!(nonterminal("C"), nonterminal("D")));
-
-    let firsts = calc_firsts(&grm);
-    has(&firsts, "E", vec!["a"]);
-    has(&firsts, "T", vec!["a"]);
-    has(&firsts, "P", vec!["a"]);
-    has(&firsts, "C", vec!["c", ""]);
-    has(&firsts, "D", vec!["f", "d", ""]);
-    has(&firsts, "G", vec!["c", "d", "f", ""]);
 }
 
 fn grammar2() -> GrammarAST {
@@ -454,3 +487,4 @@ fn test_edge(graph: &StateGraph, state: &HashMap<LR1Item, HashSet<String>>, symb
     let pos_other = graph.edges.get(&(pos as i32, symbol)).unwrap().clone() as usize;
     assert!(graph.states.get(pos_other).unwrap() == other);
 }
+*/
