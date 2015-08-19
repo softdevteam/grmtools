@@ -9,10 +9,18 @@ fn test_minimal() {
     let grm = ast_to_grammar(&ast);
 
     assert_eq!(grm.start_rule, 0);
-    assert_eq!(grm.nonterminal_names, vec!["R"]);
-    assert_eq!(grm.terminal_names, vec!["T"]);
-    assert_eq!(grm.rules_alts, vec![vec![0]]);
-    assert_eq!(grm.alts, vec![vec![Symbol::Terminal(0)]]);
+    grm.nonterminal_off("^");
+    grm.nonterminal_off("R");
+    grm.terminal_off("$");
+    grm.terminal_off("T");
+
+    assert_eq!(grm.rules_alts, vec![vec![0], vec![1]]);
+    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^") as usize).unwrap()[0]
+                                 as usize).unwrap();
+    assert_eq!(*start_alt, vec![Symbol::Nonterminal(grm.nonterminal_off("R")), Symbol::Terminal(grm.terminal_off("$"))]);
+    let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R") as usize).unwrap()[0] as
+                             usize).unwrap();
+    assert_eq!(*r_alt, vec![Symbol::Terminal(grm.terminal_off("T"))]);
 }
 
 #[test]
@@ -20,12 +28,16 @@ fn test_rule_ref() {
     let ast = parse_yacc(&"%start R %token T %% R : S; S: 'T';".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
 
-    assert_eq!(grm.start_rule, grm.nonterminal_off("R"));
-
+    grm.nonterminal_off("^");
     grm.nonterminal_off("R");
     grm.nonterminal_off("S");
-    assert_eq!(grm.terminal_names, vec!["T"]);
-    assert_eq!(grm.rules_alts, vec![vec![0], vec![1]]);
+    grm.terminal_off("$");
+    grm.terminal_off("T");
+
+    assert_eq!(grm.rules_alts, vec![vec![0], vec![1], vec![2]]);
+    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^") as usize).unwrap()[0]
+                                 as usize).unwrap();
+    assert_eq!(*start_alt, vec![Symbol::Nonterminal(grm.nonterminal_off("R")), Symbol::Terminal(grm.terminal_off("$"))]);
     let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R") as usize).unwrap()[0] as
                              usize).unwrap();
     assert_eq!(r_alt.len(), 1);
@@ -41,13 +53,17 @@ fn test_long_alt() {
     let ast = parse_yacc(&"%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
 
-    assert_eq!(grm.start_rule, grm.nonterminal_off("R"));
-
+    grm.nonterminal_off("^");
     grm.nonterminal_off("R");
     grm.nonterminal_off("S");
+    grm.terminal_off("$");
     grm.terminal_off("T1");
     grm.terminal_off("T2");
-    assert_eq!(grm.rules_alts, vec![vec![0], vec![1]]);
+
+    assert_eq!(grm.rules_alts, vec![vec![0], vec![1], vec![2]]);
+    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^") as usize).unwrap()[0]
+                                 as usize).unwrap();
+    assert_eq!(*start_alt, vec![Symbol::Nonterminal(grm.nonterminal_off("R")), Symbol::Terminal(grm.terminal_off("$"))]);
     let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R") as usize).unwrap()[0] as
                              usize).unwrap();
     assert_eq!(r_alt.len(), 3);
