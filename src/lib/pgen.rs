@@ -18,7 +18,7 @@ pub struct Firsts {
 impl Firsts {
     fn new(nonterms_len: NIdx, terms_len: TIdx) -> Firsts {
         Firsts {
-            bf        : BitVec::from_elem((nonterms_len * (terms_len + 1)) as usize, false),
+            bf        : BitVec::from_elem((nonterms_len * (terms_len + 1)), false),
             terms_len : terms_len
         }
     }
@@ -26,7 +26,7 @@ impl Firsts {
     /// Returns true if the firsts bit for terminal `tidx` nonterminal `nidx` is set, or
     /// false otherwise. Bit `terms_len` represents epsilon.
     pub fn get(&self, nidx: NIdx, tidx: TIdx) -> bool {
-        self.bf.get((nidx * (self.terms_len + 1) + tidx) as usize).unwrap()
+        self.bf.get((nidx * (self.terms_len + 1) + tidx)).unwrap()
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
@@ -36,7 +36,7 @@ impl Firsts {
             true
         }
         else {
-            self.bf.set((nidx * (self.terms_len + 1) + tidx) as usize, true);
+            self.bf.set((nidx * (self.terms_len + 1) + tidx), true);
             false
         }
     }
@@ -59,23 +59,21 @@ impl Firsts {
 /// let firsts = calc_firsts(&grm);
 /// ```
 pub fn calc_firsts(grm: &Grammar) -> Firsts {
-    let terms_len = grm.terminal_names.len() as TIdx;
-    let mut firsts = Firsts::new(grm.nonterminal_names.len() as NIdx, terms_len);
+    let mut firsts = Firsts::new(grm.nonterms_len, grm.terms_len);
 
     // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
     // look at each rule E, and see if any of the nonterminals at the start of its alternatives
     // have new elements in since we last looked. If they do, we'll have to do another round.
     loop {
         let mut changed = false;
-        for (rul_i_usize, alts) in grm.rules_alts.iter().enumerate() {
-            let rul_i = rul_i_usize as NIdx;
+        for (rul_i, alts) in grm.rules_alts.iter().enumerate() {
             // For each rule E
             for alt_i in alts.iter() {
                 // ...and each alternative A
-                let ref alt = grm.alts[*alt_i as usize];
+                let ref alt = grm.alts[*alt_i];
                 if alt.len() == 0 {
                     // if it's an empty alternative, ensure this nonterminal's epsilon bit is set.
-                    if !firsts.set(rul_i, terms_len) {
+                    if !firsts.set(rul_i, grm.terms_len) {
                         changed = true;
                     }
                     continue;
@@ -93,7 +91,7 @@ pub fn calc_firsts(grm: &Grammar) -> Firsts {
                             // if we're dealing with another Nonterminal, union its FIRSTs together
                             // with the current nonterminals FIRSTs. Note this is (intentionally) a
                             // no-op if the two terminals are one and the same.
-                            for bit_i in 0..terms_len {
+                            for bit_i in 0..grm.terms_len {
                                 if firsts.get(nonterm_i, bit_i)
                                   && !firsts.set(rul_i, bit_i) {
                                     changed = true;
@@ -103,16 +101,16 @@ pub fn calc_firsts(grm: &Grammar) -> Firsts {
                             // If the epsilon bit in the nonterminal being referenced is set, and
                             // if its the last symbol in the alternative, then add epsilon to
                             // FIRSTs.
-                            if firsts.get(nonterm_i, terms_len) && sym_i == alt.len() - 1 {
+                            if firsts.get(nonterm_i, grm.terms_len) && sym_i == alt.len() - 1 {
                                 // only add epsilon if the symbol is the last in the production
-                                if !firsts.set(rul_i, terms_len) {
+                                if !firsts.set(rul_i, grm.terms_len) {
                                     changed = true;
                                 }
                             }
 
                             // If FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, then
                             // don't try and calculate the FIRSTS of Y2 or Y3 (i.e. stop now).
-                            if !firsts.get(nonterm_i, terms_len) {
+                            if !firsts.get(nonterm_i, grm.terms_len) {
                                 break;
                             }
                         },

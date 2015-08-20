@@ -9,8 +9,7 @@ use lrpar::pgen::{calc_firsts, Firsts};
 fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
     let nt_i = grm.nonterminal_off(rn);
     println!("{:?} {} {:?} {:?}", firsts, rn, should_be, grm.terminal_names);
-    for (i_usize, n) in grm.terminal_names.iter().enumerate() {
-        let i = i_usize as TIdx;
+    for (i, n) in grm.terminal_names.iter().enumerate() {
         println!("matching {} {} {:?} {:?}", i, n, should_be.iter().position(|x| x == n), firsts.get(nt_i, i));
         match should_be.iter().position(|x| x == n) {
             Some(_) => {
@@ -26,7 +25,7 @@ fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
         }
     }
     if should_be.iter().position(|x| x == &"".to_string()).is_some() {
-        assert!(firsts.get(nt_i, grm.terminal_names.len() as TIdx));
+        assert!(firsts.get(nt_i, grm.terms_len));
     }
 }
 

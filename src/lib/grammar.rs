@@ -7,15 +7,17 @@ pub const END_TERM     : &'static str = "$";
 
 /// A type specifically for nonterminal indices (i.e. corresponding to a rule
 /// name).
-pub type NIdx = i32;
+pub type NIdx = usize;
 /// A type specifically for alternative indices (e.g. a rule "E::=A|B" would
 /// have two alternatives for the single rule E).
-pub type AIdx = i32;
+pub type AIdx = usize;
 /// A type specifically for symbol indices.
-pub type TIdx = i32;
+pub type TIdx = usize;
 
 pub struct Grammar {
+    pub nonterms_len: NIdx,
     pub nonterminal_names: Vec<String>,
+    pub terms_len: TIdx,
     pub terminal_names: Vec<String>,
     pub start_rule: NIdx,
     pub end_term: TIdx,
@@ -33,12 +35,12 @@ pub enum Symbol {
 impl Grammar {
     // For testing purposes only
     pub fn nonterminal_off(&self, n: &str) -> AIdx {
-        self.nonterminal_names.iter().position(|x| x == n).unwrap() as NIdx
+        self.nonterminal_names.iter().position(|x| x == n).unwrap()
     }
 
     // For testing purposes only
     pub fn terminal_off(&self, n: &str) -> NIdx {
-        self.terminal_names.iter().position(|x| x == n).unwrap() as NIdx
+        self.terminal_names.iter().position(|x| x == n).unwrap()
     }
 }
 
@@ -77,14 +79,14 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
     let mut nonterminal_map = HashMap::<String, NIdx>::new();
     for (i, v) in nonterminal_names.iter().enumerate() {
         rules_alts.push(Vec::new());
-        nonterminal_map.insert(v.clone(), i as NIdx);
+        nonterminal_map.insert(v.clone(), i);
     }
     let mut terminal_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
     terminal_names.push(end_term.clone());
     for k in ast.tokens.iter() { terminal_names.push(k.clone()); }
     let mut terminal_map = HashMap::<String, TIdx>::new();
     for (i, v) in terminal_names.iter().enumerate() {
-        terminal_map.insert(v.clone(), i as TIdx);
+        terminal_map.insert(v.clone(), i);
     }
 
     let mut alts = Vec::new();
@@ -93,9 +95,9 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
       Symbol::Terminal(*terminal_map.get(&end_term).unwrap())
     ];
     alts.push(start_alt);
-    rules_alts.get_mut(*nonterminal_map.get(&start_nonterm).unwrap() as usize).unwrap().push(0 as AIdx);
+    rules_alts.get_mut(*nonterminal_map.get(&start_nonterm).unwrap()).unwrap().push(0);
     for astrule in ast.rules.values() {
-        let mut rule = rules_alts.get_mut(*nonterminal_map.get(&astrule.name).unwrap() as usize).unwrap();
+        let mut rule = rules_alts.get_mut(*nonterminal_map.get(&astrule.name).unwrap()).unwrap();
         for astalt in astrule.alternatives.iter() {
             let mut alt = Vec::with_capacity(astalt.len());
             for astsym in astalt.iter() {
@@ -107,16 +109,18 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
                 };
                 alt.push(sym);
             }
-            (*rule).push(alts.len() as AIdx);
+            (*rule).push(alts.len());
             alts.push(alt);
         }
     }
 
     Grammar{
+        nonterms_len:      nonterminal_names.len(),
         nonterminal_names: nonterminal_names,
+        terms_len:         terminal_names.len(),
         terminal_names:    terminal_names,
-        start_rule:        *nonterminal_map.get(&start_nonterm).unwrap() as NIdx,
-        end_term:          *terminal_map.get(&end_term).unwrap() as TIdx,
+        start_rule:        *nonterminal_map.get(&start_nonterm).unwrap(),
+        end_term:          *terminal_map.get(&end_term).unwrap(),
         rules_alts:        rules_alts,
         alts:              alts,
     }

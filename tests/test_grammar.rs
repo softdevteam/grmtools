@@ -15,10 +15,9 @@ fn test_minimal() {
     grm.terminal_off("T");
 
     assert_eq!(grm.rules_alts, vec![vec![0], vec![1]]);
-    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^") as usize).unwrap()[0]
-                                 as usize).unwrap();
+    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^")).unwrap()[0]).unwrap();
     assert_eq!(*start_alt, vec![Symbol::Nonterminal(grm.nonterminal_off("R")), Symbol::Terminal(grm.terminal_off("$"))]);
-    let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R") as usize).unwrap()[0] as
+    let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R")).unwrap()[0] as
                              usize).unwrap();
     assert_eq!(*r_alt, vec![Symbol::Terminal(grm.terminal_off("T"))]);
 }
@@ -35,14 +34,13 @@ fn test_rule_ref() {
     grm.terminal_off("T");
 
     assert_eq!(grm.rules_alts, vec![vec![0], vec![1], vec![2]]);
-    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^") as usize).unwrap()[0]
-                                 as usize).unwrap();
+    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^")).unwrap()[0]).unwrap();
     assert_eq!(*start_alt, vec![Symbol::Nonterminal(grm.nonterminal_off("R")), Symbol::Terminal(grm.terminal_off("$"))]);
-    let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R") as usize).unwrap()[0] as
+    let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R")).unwrap()[0] as
                              usize).unwrap();
     assert_eq!(r_alt.len(), 1);
     assert_eq!(r_alt[0], Symbol::Nonterminal(grm.nonterminal_off("S")));
-    let s_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("S") as usize).unwrap()[0] as
+    let s_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("S")).unwrap()[0] as
                              usize).unwrap();
     assert_eq!(s_alt.len(), 1);
     assert_eq!(s_alt[0], Symbol::Terminal(grm.terminal_off("T")));
@@ -61,16 +59,15 @@ fn test_long_alt() {
     grm.terminal_off("T2");
 
     assert_eq!(grm.rules_alts, vec![vec![0], vec![1], vec![2]]);
-    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^") as usize).unwrap()[0]
-                                 as usize).unwrap();
+    let start_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("^")).unwrap()[0]).unwrap();
     assert_eq!(*start_alt, vec![Symbol::Nonterminal(grm.nonterminal_off("R")), Symbol::Terminal(grm.terminal_off("$"))]);
-    let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R") as usize).unwrap()[0] as
+    let r_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("R")).unwrap()[0] as
                              usize).unwrap();
     assert_eq!(r_alt.len(), 3);
     assert_eq!(r_alt[0], Symbol::Nonterminal(grm.nonterminal_off("S")));
     assert_eq!(r_alt[1], Symbol::Terminal(grm.terminal_off("T1")));
     assert_eq!(r_alt[2], Symbol::Nonterminal(grm.nonterminal_off("S")));
-    let s_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("S") as usize).unwrap()[0] as
+    let s_alt = grm.alts.get(grm.rules_alts.get(grm.nonterminal_off("S")).unwrap()[0] as
                              usize).unwrap();
     assert_eq!(s_alt.len(), 1);
     assert_eq!(s_alt[0], Symbol::Terminal(grm.terminal_off("T2")));
