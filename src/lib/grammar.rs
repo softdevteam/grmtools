@@ -91,21 +91,21 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
 
     let mut alts = Vec::new();
     let start_alt = vec![
-      Symbol::Nonterminal(*nonterminal_map.get(ast.start.as_ref().unwrap()).unwrap()),
-      Symbol::Terminal(*terminal_map.get(&end_term).unwrap())
+      Symbol::Nonterminal(nonterminal_map[ast.start.as_ref().unwrap()]),
+      Symbol::Terminal(terminal_map[&end_term])
     ];
     alts.push(start_alt);
-    rules_alts.get_mut(*nonterminal_map.get(&start_nonterm).unwrap()).unwrap().push(0);
+    rules_alts.get_mut(nonterminal_map[&start_nonterm]).unwrap().push(0);
     for astrule in ast.rules.values() {
-        let mut rule = rules_alts.get_mut(*nonterminal_map.get(&astrule.name).unwrap()).unwrap();
+        let mut rule = rules_alts.get_mut(nonterminal_map[&astrule.name]).unwrap();
         for astalt in astrule.alternatives.iter() {
             let mut alt = Vec::with_capacity(astalt.len());
             for astsym in astalt.iter() {
                 let sym = match astsym {
                     &grammar_ast::Symbol::Nonterminal(ref n) =>
-                        Symbol::Nonterminal(*nonterminal_map.get(n).unwrap()),
+                        Symbol::Nonterminal(nonterminal_map[n]),
                     &grammar_ast::Symbol::Terminal(ref n) =>
-                        Symbol::Terminal(*terminal_map.get(n).unwrap())
+                        Symbol::Terminal(terminal_map[n])
                 };
                 alt.push(sym);
             }
@@ -119,8 +119,8 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
         nonterminal_names: nonterminal_names,
         terms_len:         terminal_names.len(),
         terminal_names:    terminal_names,
-        start_rule:        *nonterminal_map.get(&start_nonterm).unwrap(),
-        end_term:          *terminal_map.get(&end_term).unwrap(),
+        start_rule:        nonterminal_map[&start_nonterm],
+        end_term:          terminal_map[&end_term],
         rules_alts:        rules_alts,
         alts:              alts,
     }

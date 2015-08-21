@@ -26,7 +26,7 @@ impl Firsts {
     /// Returns true if the firsts bit for terminal `tidx` nonterminal `nidx` is set, or
     /// false otherwise. Bit `terms_len` represents epsilon.
     pub fn get(&self, nidx: NIdx, tidx: TIdx) -> bool {
-        self.bf.get((nidx * (self.terms_len + 1) + tidx)).unwrap()
+        self.bf[nidx * (self.terms_len + 1) + tidx]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
