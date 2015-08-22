@@ -1,9 +1,10 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 extern crate bit_vec;
 use self::bit_vec::BitVec;
 
-use grammar::{Grammar, NIdx, Symbol, TIdx};
-//use std::collections::{HashMap, HashSet};
-//use std::hash::{Hash, Hasher};
+use grammar::{AIdx, Grammar, NIdx, Symbol, SIdx, TIdx};
 
 /// Firsts stores all the first sets for a given grammar.
 #[derive(Debug)]
@@ -125,49 +126,6 @@ pub fn calc_firsts(grm: &Grammar) -> Firsts {
 }
 
 /*
-/// Returns the first set for the given list of symbols.
-///
-/// # Example
-/// Given a grammar `grm`:
-///
-/// ```c
-/// S : A "b";
-/// A : "a" |;
-/// ```
-///
-/// ```c
-/// let firsts = calc_firsts(&grm);
-/// let symbols = vec![nonterminal!("A"), terminal!("b")];
-/// let f = get_firsts_from_symbols(&firsts, &symbols);
-/// println!(f); // {"a", "b"};
-/// ```
-pub fn get_firsts_from_symbols(firsts: &HashMap<String, HashSet<String>>,
-                               symbols: &Vec<Symbol>) -> HashSet<String> {
-    let mut r = HashSet::new();
-    for (i, s) in symbols.iter().enumerate() {
-        match s {
-            &Symbol::Terminal(ref name) => {
-                r.insert(name.clone());
-                break;
-            },
-            &Symbol::Nonterminal(ref name) => {
-                let f = firsts.get(name).unwrap();
-                for e in f {
-                    if e == "" && i != symbols.len() - 1 {
-                        continue;
-                    }
-                    r.insert(e.clone());
-                }
-                if f.contains("") {
-                    continue;
-                }
-                break;
-            }
-        }
-    }
-    r
-}
-
 /// Generates and returns the follow set for the given grammar.
 ///
 /// # Example
@@ -235,140 +193,107 @@ pub fn calc_follows(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>)
         }
     }
 }
+*/
 
-#[derive(PartialEq, Eq, Debug)]
-/// Implementation of `LR1Item` which is used to build the state graph of a grammar. Consists of a
-/// left-hand-side `String`, a right-hand-side list of `Symbols` and an integer `dot`, denoting the
-/// current position of the parser inside of `rhs`.
-pub struct LR1Item {
-    pub lhs: String,
-    pub rhs: Vec<Symbol>,
-    pub dot: usize,
+#[derive(Debug)]
+pub struct Closure {
+    pub itemset: Rc<Vec<RefCell<ClosureAlt>>>
 }
 
-impl LR1Item {
-    /// Returns a new LR1Item
-    ///
-    /// # Example
-    ///
-    /// ```c
-    /// let item = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string())], 1);
-    /// ```
-    pub fn new(lhs: String, rhs: Vec<Symbol>, dot: usize) -> LR1Item {
-        LR1Item {lhs: lhs, rhs: rhs, dot: dot}
+#[derive(Debug)]
+pub struct ClosureAlt {
+    pub active: BitVec,
+    pub dots: BitVec
+}
+
+impl Closure {
+    pub fn new(grm: &Grammar) -> Closure {
+        let mut itemset = Vec::with_capacity(grm.alts.len());
+        for alt in grm.alts.iter() { 
+            let num_syms = alt.len() + 1;
+            itemset.push(RefCell::new(ClosureAlt {
+                active: BitVec::from_elem(num_syms, false),
+                dots  : BitVec::from_elem(grm.terms_len * num_syms, false)
+            }));
+        }
+        Closure {itemset: Rc::new(itemset)}
     }
 
-    /// Returns a copy of the `Symbol` at the current position inside the `rhs`.
-    ///
-    /// # Example
-    ///
-    /// ```c
-    /// let item = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string()),
-    ///                                               terminal!("a".to_string())], 1);
-    /// let n = item.next(); // returns terminal!("a")
-    /// ```
-    pub fn next(&self) -> Option<Symbol>{
-        if self.dot < self.rhs.len() {
-            let ref sym = self.rhs[self.dot];
-            Some(sym.clone())
-        }
-        else {
-            None
+    pub fn add(&mut self, grm: &Grammar, aidx: AIdx, dot: SIdx, la: &BitVec) {
+        let mut alt_cl = self.itemset[aidx].borrow_mut();
+        alt_cl.active.set(dot, true);
+        let dots = &mut alt_cl.dots;
+        for (i, bit) in la.iter().enumerate() {
+            if bit {
+                dots.set(dot * grm.nonterms_len + i, true);
+            }
         }
     }
-}
 
-impl Hash for LR1Item {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.lhs.hash(state);
-        self.rhs.hash(state);
-        self.dot.hash(state);
-    }
-}
-
-pub fn lritem(lhs: &str, rhs: Vec<Symbol>, d: usize) -> LR1Item {
-    let mut item = LR1Item::new(lhs.to_string(), Vec::new(), d);
-    for e in rhs.iter() {
-        item.rhs.push(e.clone());
-    }
-    item
-}
-
-pub fn mk_string_hashset(vec: Vec<&str>) -> HashSet<String> {
-    let mut hs = HashSet::new();
-    for e in vec.iter() {
-        hs.insert(e.to_string());
-    }
-    hs
-}
-
-/// Calculates the closure of a HashMap containing LR1Items
-pub fn closure1(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>,
-                closure: &mut HashMap<LR1Item, HashSet<String>>) {
-    loop {
-        let mut changed = false;
-        let mut tmp_closure = Vec::new();
-        for (item, la) in closure.iter() {
-            // get next symbol after dot
-            let next_sym = item.next();
-            if next_sym != None {
-                match next_sym.unwrap() {
-                    // get rule with next_sym at the beginning
-                    Symbol::Terminal(_) => continue,
-                    Symbol::Nonterminal(name) => {
-                        let rule = grm.get_rule(&name).unwrap();
-                        // add each alternative as an LR1Item to the closure
-                        for alt in rule.alternatives.iter() {
-                            let lhs = name.clone();
-                            let rhs = alt.clone();
-                            let dot = 0;
-                            // calculate lookahead
-                            let mut newla = HashSet::new();
-                            let remaining_symbols = &item.rhs[item.dot+1..];
-                            for e in la.iter() {
-                                // chain each lookahead with the remaining symbols...
-                                let mut chain = Vec::new();
-                                // XXX replace with extend/push_all when stable
-                                for r in remaining_symbols.iter() {
-                                    chain.push(r.clone());
-                                }
-                                chain.push(Symbol::Terminal(e.clone()));
-                                // ..and calculate their first sets...
-                                let first = get_firsts_from_symbols(firsts, &chain);
-                                // ...and union them together.
-                                for f in first.iter() {
-                                    newla.insert(f.clone());
+    pub fn close(&mut self, grm: &Grammar, firsts: &Firsts) {
+        let itemset = &self.itemset;
+        let mut new_la = BitVec::from_elem(grm.terms_len, false);
+        loop {
+            let mut changed = false;
+            for i in 0..itemset.len() {
+                let alt = &grm.alts[i];
+                for dot in 0..alt.len() {
+                    if !itemset[i].borrow().active[dot] { continue; }
+                    if dot == alt.len() { continue; }
+                    if let Symbol::Nonterminal(nonterm_i) = alt[dot] {
+                        new_la.clear();
+                        let mut nullabled = false;
+                        for k in dot + 1..alt.len() {
+                            match alt[k] {
+                                Symbol::Terminal(term_j) => {
+                                    new_la.set(term_j, true);
+                                    nullabled = true;
+                                    break;
+                                },
+                                Symbol::Nonterminal(nonterm_j) => {
+                                    for l in 0..grm.terms_len {
+                                        if firsts.get(nonterm_j, l) {
+                                            new_la.set(l, true);
+                                        }
+                                    }
+                                    if !firsts.get(nonterm_j, grm.terms_len) {
+                                        nullabled = true;
+                                        break;
+                                    }
                                 }
                             }
-                            let new_item = LR1Item::new(lhs, rhs, dot);
-                            tmp_closure.push((new_item, newla));
+                        }
+                        if !nullabled {
+                            let dots = &itemset[i].borrow().dots;
+                            for l in 0..grm.terms_len {
+                                if dots[dot * grm.terms_len + l] {
+                                    new_la.set(l, true);
+                                }
+                            }
+                        }
+
+                        for alt_i in grm.rules_alts[nonterm_i].iter() {
+                            let mut clalt = itemset[*alt_i].borrow_mut();
+                            if !clalt.active[0] {
+                                clalt.active.set(0, true);
+                                changed = true;
+                            }
+                            for l in 0..grm.terms_len {
+                                if new_la[l] && !clalt.dots[l] {
+                                    clalt.dots.set(l, true);
+                                    changed = true;
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
-        // merge new LR1Item candidates into closure map
-        for (i, l) in tmp_closure.drain(..) {
-            if closure.contains_key(&i) {
-                let x = closure.get_mut(&i).unwrap();
-                for k in l {
-                    if !x.contains(&k) {
-                        x.insert(k.clone());
-                        changed = true;
-                    }
-                }
-            }
-            else {
-                closure.insert(i,l);
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
+            if !changed { break; }
         }
     }
 }
 
+/*
 /// Calculates the goto that results from reading past a certain symbol in another set.
 pub fn goto1(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>,
              state: &HashMap<LR1Item, HashSet<String>>, symbol: &Symbol)
@@ -411,7 +336,7 @@ pub fn build_graph(grm: &GrammarAST) -> StateGraph {
 
     // calculate first sets
     let firsts = calc_firsts(&grm);
-    
+
     // Create first state
     let item = lritem("Start!", vec![nonterminal(&grm.start.clone().unwrap())], 0);
     let mut la = HashSet::new();

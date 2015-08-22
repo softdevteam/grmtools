@@ -1,10 +1,11 @@
 extern crate bit_vec;
-extern crate lrpar;
+use self::bit_vec::BitVec;
 
-use lrpar::grammar::{ast_to_grammar, Grammar, TIdx};
+extern crate lrpar;
+use lrpar::grammar::{AIdx, ast_to_grammar, Grammar};
 use lrpar::yacc::parse_yacc;
 //use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1};
-use lrpar::pgen::{calc_firsts, Firsts};
+use lrpar::pgen::{calc_firsts, Closure, Firsts};
 
 fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
     let nt_i = grm.nonterminal_off(rn);
@@ -42,6 +43,7 @@ fn test_first(){
       ".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
     let firsts = calc_firsts(&grm);
+    has(&grm, &firsts, "^", vec!["c"]);
     has(&grm, &firsts, "D", vec!["d"]);
     has(&grm, &firsts, "E", vec!["d", "c"]);
     has(&grm, &firsts, "F", vec!["d", "c"]);
@@ -113,10 +115,9 @@ fn test_first_no_multiples() {
 
 fn eco_grammar() -> Grammar {
     let ast = parse_yacc(&"
-      %start Z
+      %start S
       %token a b c d f
       %%
-      Z: S;
       S: S 'b' | 'b' A 'a' | 'a';
       A: 'a' S 'c' | 'a' | 'a' S 'b';
       B: A S;
@@ -206,54 +207,84 @@ fn test_grammar2() {
     has(&follow, "Q", vec!["+",")"]);
     has(&follow, "F", vec!["*", "+", ")"]);
 }
+*/
+
+pub fn state_exists(grm: &Grammar, cl: &Closure, nt: &str, alt_off: AIdx, dot: usize, la: Vec<&str>) {
+    let ab_alt_off = grm.rules_alts[grm.nonterminal_off(nt)][alt_off];
+    let is = &cl.itemset[ab_alt_off].borrow();
+    if !is.active[dot] { 
+        panic!("{}, alternative {}: dot {} is not active when it should be", nt, alt_off, dot);
+    }
+    for i in 0..grm.terms_len {
+        let d = dot * grm.terms_len + i;
+        let bit = is.dots[d];
+        let mut found = false;
+        for t in la.iter() {
+            if grm.terminal_off(t) == i {
+                if !bit { 
+                    panic!("bit for terminal {} is not set in alternative {} of {} when it should be", t, alt_off, nt);
+                }
+                found = true;
+                break;
+            }
+        }
+        if !found && bit {
+            panic!("bit for terminal {} is set in alternative {} of {} when it shouldn't be", grm.terminal_names[i], alt_off, nt);
+        }
+    }
+}
 
 #[test]
-fn test_lrelements() {
-    let mut e = LR1Item::new("S".to_string(), vec![nonterminal("A"), terminal("b")], 0);
-    assert_eq!(e.lhs, "S");
-    assert_eq!(e.rhs, vec![nonterminal("A"), terminal("b")]);
-    assert_eq!(e.dot, 0);
-    assert_eq!(e.next().unwrap(), nonterminal("A"));
+fn test_dragon_grammar() {
+    // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
+    let grm = ast_to_grammar(&parse_yacc(&"
+      %start S
+      %token e m i
+      %%
+      S: L 'e' R | R;
+      L: 'm' R | 'i';
+      R: L;
+      ".to_string()).unwrap());
+    let firsts = calc_firsts(&grm);
 
-    e.dot = 1;
-    assert_eq!(e.next().unwrap(), terminal("b"));
-}
+    let mut cl = Closure::new(&grm);
+    let mut la = BitVec::from_elem(grm.terms_len, false);
+    la.set(grm.terminal_off("$"), true);
+    cl.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+    cl.close(&grm, &firsts);
+    state_exists(&grm, &cl, "^", 0, 0, vec!["$"]);
+    state_exists(&grm, &cl, "S", 0, 0, vec!["$"]);
+    state_exists(&grm, &cl, "S", 1, 0, vec!["$"]);
+    state_exists(&grm, &cl, "L", 0, 0, vec!["$", "e"]);
+    state_exists(&grm, &cl, "L", 1, 0, vec!["$", "e"]);
+    state_exists(&grm, &cl, "R", 0, 0, vec!["$"]);
+ }
 
 #[test]
 fn test_closure1_ecogrm() {
     let grm = eco_grammar();
     let firsts = calc_firsts(&grm);
 
-    let item = lritem("Z", vec![nonterminal("S")], 0);
-    let la = mk_string_hashset(vec!["$"]);
-    let mut state = HashMap::new();
-    state.insert(item, la);
-    closure1(&grm, &firsts, &mut state);
+    let mut cl = Closure::new(&grm);
+    let mut la = BitVec::from_elem(grm.terms_len, false);
+    la.set(grm.terminal_off("$"), true);
+    cl.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+    cl.close(&grm, &firsts);
 
-    let c0 = lritem("Z", vec![nonterminal("S")], 0);
-    let c1 = lritem("S", vec![nonterminal("S"), terminal("b")], 0);
-    let c2 = lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 0);
-    let c3 = lritem("S", vec![terminal("a")], 0);
-    assert_eq!(state.get(&c0).unwrap(), &mk_string_hashset(vec!["$"]));
-    assert_eq!(state.get(&c1).unwrap(), &mk_string_hashset(vec!["b", "$"]));
-    assert_eq!(state.get(&c2).unwrap(), &mk_string_hashset(vec!["b", "$"]));
-    assert_eq!(state.get(&c3).unwrap(), &mk_string_hashset(vec!["b", "$"]));
+    state_exists(&grm, &cl, "^", 0, 0, vec!["$"]);
+    state_exists(&grm, &cl, "S", 0, 0, vec!["b", "$"]);
+    state_exists(&grm, &cl, "S", 1, 0, vec!["b", "$"]);
+    state_exists(&grm, &cl, "S", 2, 0, vec!["b", "$"]);
 
-    let item2 = lritem("F", vec![nonterminal("C"), nonterminal("D"), terminal("f")], 0);
-    let la2 = mk_string_hashset(vec!["$"]);
-    let mut state2 = HashMap::new();
-    state2.insert(item2, la2);
-    closure1(&grm, &firsts, &mut state2);
-
-    let c4 = lritem("F", vec![nonterminal("C"), nonterminal("D"), terminal("f")], 0);
-    let c5 = lritem("C", vec![nonterminal("D"), nonterminal("A")], 0);
-    let c6 = lritem("D", vec![terminal("d")], 0);
-    let c7 = lritem("D", vec![], 0);
-    assert_eq!(state2.get(&c4).unwrap(), &mk_string_hashset(vec!["$"]));
-    assert_eq!(state2.get(&c5).unwrap(), &mk_string_hashset(vec!["d", "f"]));
-    assert_eq!(state2.get(&c6).unwrap(), &mk_string_hashset(vec!["a"]));
-    assert_eq!(state2.get(&c7).unwrap(), &mk_string_hashset(vec!["a"]));
+    cl = Closure::new(&grm);
+    cl.add(&grm, grm.rules_alts[grm.nonterminal_off("F") as usize][0], 0, &la);
+    cl.close(&grm, &firsts);
+    state_exists(&grm, &cl, "F", 0, 0, vec!["$"]);
+    state_exists(&grm, &cl, "C", 0, 0, vec!["d", "f"]);
+    state_exists(&grm, &cl, "D", 0, 0, vec!["a"]);
+    state_exists(&grm, &cl, "D", 1, 0, vec!["a"]);
 }
+
 
 // GrammarAST from 'LR(k) Analyse fuer Pragmatiker'
 // Z : S
@@ -262,63 +293,52 @@ fn test_closure1_ecogrm() {
 // A : aSc
 //     a
 //     aSb
-fn grammar3() -> GrammarAST {
-    let mut grm = GrammarAST::new();
-    grm.add_rule("Z".to_string(), vec!(nonterminal("S")));
-    grm.add_rule("S".to_string(), vec!(nonterminal("S"), terminal("b")));
-    grm.add_rule("S".to_string(), vec!(terminal("b"), nonterminal("A"), terminal("a")));
-    grm.add_rule("A".to_string(), vec!(terminal("a"), nonterminal("S"), terminal("c")));
-    grm.add_rule("A".to_string(), vec!(terminal("a")));
-    grm.add_rule("A".to_string(), vec!(terminal("a"), nonterminal("S"), terminal("b")));
-    grm.start = Some("Z".to_string());
-    grm
+fn grammar3() -> Grammar {
+    ast_to_grammar(&parse_yacc(&"
+      %start S
+      %token a b c d
+      %%
+      S: S 'b' | 'b' A 'a';
+      A: 'a' S 'c' | 'a' | 'a' S 'b';
+      ".to_string()).unwrap())
 }
+
 
 #[test]
 fn test_closure1_grm3() {
     let grm = grammar3();
     let firsts = calc_firsts(&grm);
 
-    let item = lritem("Z", vec![nonterminal("S")], 0);
-    let la = mk_string_hashset(vec!["$"]);
-    let mut state = HashMap::new();
-    state.insert(item, la);
-    closure1(&grm, &firsts, &mut state);
+    let mut cl = Closure::new(&grm);
+    let mut la = BitVec::from_elem(grm.terms_len, false);
+    la.set(grm.terminal_off("$"), true);
+    cl.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+    cl.close(&grm, &firsts);
 
-    let c0 = lritem("Z", vec![nonterminal("S")], 0);
-    let c1 = lritem("S", vec![nonterminal("S"), terminal("b")], 0);
-    let c2 = lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 0);
-    assert_eq!(state.get(&c0).unwrap(), &mk_string_hashset(vec!["$"]));
-    assert_eq!(state.get(&c1).unwrap(), &mk_string_hashset(vec!["b", "$"]));
-    assert_eq!(state.get(&c2).unwrap(), &mk_string_hashset(vec!["b", "$"]));
+    state_exists(&grm, &cl, "^", 0, 0, vec!["$"]);
+    state_exists(&grm, &cl, "S", 0, 0, vec!["b", "$"]);
+    state_exists(&grm, &cl, "S", 1, 0, vec!["b", "$"]);
 
-    let item2 = lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 1);
-    let la2 = mk_string_hashset(vec!["$", "b"]);
-    let mut state2 = HashMap::new();
-    state2.insert(item2, la2);
-    closure1(&grm, &firsts, &mut state2);
+    cl = Closure::new(&grm);
+    la = BitVec::from_elem(grm.terms_len, false);
+    la.set(grm.terminal_off("b"), true);
+    la.set(grm.terminal_off("$"), true);
+    cl.add(&grm, grm.rules_alts[grm.nonterminal_off("S") as usize][1], 1, &la);
+    cl.close(&grm, &firsts);
+    state_exists(&grm, &cl, "A", 0, 0, vec!["a"]);
+    state_exists(&grm, &cl, "A", 1, 0, vec!["a"]);
+    state_exists(&grm, &cl, "A", 2, 0, vec!["a"]);
 
-    let c3 = lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 0);
-    let c4 = lritem("A", vec![terminal("a")], 0);
-    let c5 = lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 0);
-
-    assert_eq!(state2.get(&c3).unwrap(), &mk_string_hashset(vec!["a"]));
-    assert_eq!(state2.get(&c4).unwrap(), &mk_string_hashset(vec!["a"]));
-    assert_eq!(state2.get(&c5).unwrap(), &mk_string_hashset(vec!["a"]));
-
-    let item3 = lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 1);
-    let la3 = mk_string_hashset(vec!["a"]);
-    let mut state3 = HashMap::new();
-    state3.insert(item3, la3);
-    closure1(&grm, &firsts, &mut state3);
-
-    let c8 = lritem("S", vec![nonterminal("S"), terminal("b")], 0);
-    let c9 = lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 0);
-
-    assert_eq!(state3.get(&c8).unwrap(), &mk_string_hashset(vec!["b", "c"]));
-    assert_eq!(state3.get(&c9).unwrap(), &mk_string_hashset(vec!["b", "c"]));
+    cl = Closure::new(&grm);
+    la = BitVec::from_elem(grm.terms_len, false);
+    la.set(grm.terminal_off("a"), true);
+    cl.add(&grm, grm.rules_alts[grm.nonterminal_off("A") as usize][0], 1, &la);
+    cl.close(&grm, &firsts);
+    state_exists(&grm, &cl, "S", 0, 0, vec!["b", "c"]);
+    state_exists(&grm, &cl, "S", 1, 0, vec!["b", "c"]);
 }
 
+/*
 #[test]
 fn test_goto1() {
     let grm = grammar3();

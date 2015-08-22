@@ -11,7 +11,9 @@ pub type NIdx = usize;
 /// A type specifically for alternative indices (e.g. a rule "E::=A|B" would
 /// have two alternatives for the single rule E).
 pub type AIdx = usize;
-/// A type specifically for symbol indices.
+/// A type specifically for symbol indices (within an alternative).
+pub type SIdx = usize;
+/// A type specifically for token indices.
 pub type TIdx = usize;
 
 pub struct Grammar {
@@ -41,6 +43,16 @@ impl Grammar {
     // For testing purposes only
     pub fn terminal_off(&self, n: &str) -> NIdx {
         self.terminal_names.iter().position(|x| x == n).unwrap()
+    }
+
+    // For testing purposes only
+    pub fn alt_to_term_name(&self, i: AIdx) -> String {
+        for (j, rule) in self.rules_alts.iter().enumerate() {
+            if rule.iter().position(|x| *x == i).is_some() {
+                return self.nonterminal_names[j].clone();
+            }
+        }
+        panic!("Invalid index {}", i);
     }
 }
 
