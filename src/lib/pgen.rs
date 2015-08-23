@@ -7,44 +7,6 @@ use self::bit_vec::BitVec;
 use grammar::{AIdx, Grammar, NIdx, Symbol, SIdx, TIdx};
 
 /// Firsts stores all the first sets for a given grammar.
-#[derive(Debug)]
-pub struct Firsts {
-    // The representation is a contiguous bitfield, of (terms_len * 1) * nonterms_len. Put another
-    // way, each nonterminal has (terms_len + 1) bits, where the bit at position terms_len
-    // represents epsilon.
-    bf: BitVec,
-    terms_len: NIdx
-}
-
-impl Firsts {
-    fn new(nonterms_len: NIdx, terms_len: TIdx) -> Firsts {
-        Firsts {
-            bf        : BitVec::from_elem((nonterms_len * (terms_len + 1)), false),
-            terms_len : terms_len
-        }
-    }
-
-    /// Returns true if the firsts bit for terminal `tidx` nonterminal `nidx` is set, or
-    /// false otherwise. Bit `terms_len` represents epsilon.
-    pub fn get(&self, nidx: NIdx, tidx: TIdx) -> bool {
-        self.bf[nidx * (self.terms_len + 1) + tidx]
-    }
-
-    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
-    /// it was already set, or false otherwise. Bit `terms_len` represents epsilon.
-    pub fn set(&mut self, nidx: NIdx, tidx: TIdx) -> bool {
-        if self.get(nidx, tidx) {
-            true
-        }
-        else {
-            self.bf.set((nidx * (self.terms_len + 1) + tidx), true);
-            false
-        }
-    }
-}
-
-
-/// Generates and returns the firsts set for the given grammar.
 ///
 /// # Example
 /// Given a grammar `input`:
@@ -55,72 +17,125 @@ impl Firsts {
 /// ```
 ///
 /// ```c
-/// let ast = parse_yacc(&input);
-/// let grm = ast_to_grammar(&ast);
-/// let firsts = calc_firsts(&grm);
+/// let grm = ast_to_grammar(parse_yacc(&input));
+/// let firsts = Firsts::new(grm);
 /// ```
-pub fn calc_firsts(grm: &Grammar) -> Firsts {
-    let mut firsts = Firsts::new(grm.nonterms_len, grm.terms_len);
+/// 
+/// Then the following assertions (and only the following assertions) about the firsts set are
+/// correct:
+/// ```c
+/// assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("a")));
+/// assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("b")));
+/// assert!(firsts.is_epsilon_set(grm.nonterminal_off("S")));
+/// assert!(firsts.is_set(grm.nonterminal_off("A"), grm.terminal_off("a")));
+/// assert!(firsts.is_epsilon_set(grm.nonterminal_off("A")));
+/// ```
+#[derive(Debug)]
+pub struct Firsts {
+    // The representation is a contiguous bitfield, of (terms_len * 1) * nonterms_len. Put another
+    // way, each nonterminal has (terms_len + 1) bits, where the bit at position terms_len
+    // represents epsilon. So for the grammar given above, the bitvector would be two sequences of
+    // 3 bits where bits 0, 1, 2 represent terminals a, b, epsilon respectively.
+    //   111101
+    // Where "111" is for the nonterminal S, and 101 for A.
+    bf: BitVec,
+    terms_len: NIdx
+}
 
-    // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
-    // look at each rule E, and see if any of the nonterminals at the start of its alternatives
-    // have new elements in since we last looked. If they do, we'll have to do another round.
-    loop {
-        let mut changed = false;
-        for (rul_i, alts) in grm.rules_alts.iter().enumerate() {
-            // For each rule E
-            for alt_i in alts.iter() {
-                // ...and each alternative A
-                let ref alt = grm.alts[*alt_i];
-                if alt.len() == 0 {
-                    // if it's an empty alternative, ensure this nonterminal's epsilon bit is set.
-                    if !firsts.set(rul_i, grm.terms_len) {
-                        changed = true;
+impl Firsts {
+    /// Generates and returns the firsts set for the given grammar.
+    pub fn new(grm: &Grammar) -> Firsts {
+        let mut firsts = Firsts {
+            bf        : BitVec::from_elem((grm.nonterms_len * (grm.terms_len + 1)), false),
+            terms_len : grm.terms_len
+        };
+
+        // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
+        // look at each rule E, and see if any of the nonterminals at the start of its alternatives
+        // have new elements in since we last looked. If they do, we'll have to do another round.
+        loop {
+            let mut changed = false;
+            for (rul_i, alts) in grm.rules_alts.iter().enumerate() {
+                // For each rule E
+                for alt_i in alts.iter() {
+                    // ...and each alternative A
+                    let ref alt = grm.alts[*alt_i];
+                    if alt.len() == 0 {
+                        // if it's an empty alternative, ensure this nonterminal's epsilon bit is set.
+                        if !firsts.set(rul_i, grm.terms_len) {
+                            changed = true;
+                        }
+                        continue;
                     }
-                    continue;
-                }
-                for (sym_i, sym) in alt.iter().enumerate() {
-                    match sym {
-                        &Symbol::Terminal(term_i) => {
-                            // if symbol is a Terminal, add to FIRSTS
-                            if !firsts.set(rul_i, term_i) {
-                                changed = true;
-                            }
-                            break;
-                        },
-                        &Symbol::Nonterminal(nonterm_i) => {
-                            // if we're dealing with another Nonterminal, union its FIRSTs together
-                            // with the current nonterminals FIRSTs. Note this is (intentionally) a
-                            // no-op if the two terminals are one and the same.
-                            for bit_i in 0..grm.terms_len {
-                                if firsts.get(nonterm_i, bit_i)
-                                  && !firsts.set(rul_i, bit_i) {
+                    for (sym_i, sym) in alt.iter().enumerate() {
+                        match sym {
+                            &Symbol::Terminal(term_i) => {
+                                // if symbol is a Terminal, add to FIRSTS
+                                if !firsts.set(rul_i, term_i) {
                                     changed = true;
                                 }
-                            }
-
-                            // If the epsilon bit in the nonterminal being referenced is set, and
-                            // if its the last symbol in the alternative, then add epsilon to
-                            // FIRSTs.
-                            if firsts.get(nonterm_i, grm.terms_len) && sym_i == alt.len() - 1 {
-                                // only add epsilon if the symbol is the last in the production
-                                if !firsts.set(rul_i, grm.terms_len) {
-                                    changed = true;
-                                }
-                            }
-
-                            // If FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, then
-                            // don't try and calculate the FIRSTS of Y2 or Y3 (i.e. stop now).
-                            if !firsts.get(nonterm_i, grm.terms_len) {
                                 break;
-                            }
-                        },
+                            },
+                            &Symbol::Nonterminal(nonterm_i) => {
+                                // if we're dealing with another Nonterminal, union its FIRSTs
+                                // together with the current nonterminals FIRSTs. Note this is
+                                // (intentionally) a no-op if the two terminals are one and the
+                                // same.
+                                for bit_i in 0..grm.terms_len {
+                                    if firsts.is_set(nonterm_i, bit_i)
+                                      && !firsts.set(rul_i, bit_i) {
+                                        changed = true;
+                                    }
+                                }
+
+                                // If the epsilon bit in the nonterminal being referenced is set,
+                                // and if its the last symbol in the alternative, then add epsilon
+                                // to FIRSTs.
+                                if firsts.is_epsilon_set(nonterm_i) && sym_i == alt.len() - 1 {
+                                    // only add epsilon if the symbol is the last in the production
+                                    if !firsts.set(rul_i, grm.terms_len) {
+                                        changed = true;
+                                    }
+                                }
+
+                                // If FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon,
+                                // then don't try and calculate the FIRSTS of Y2 or Y3 (i.e. stop
+                                // now).
+                                if !firsts.is_epsilon_set(nonterm_i) {
+                                    break;
+                                }
+                            },
+                        }
                     }
                 }
             }
+            if !changed {
+                return firsts;
+            }
         }
-        if !changed {
-            return firsts;
+    }
+
+    /// Returns true if the terminal `tidx' is in the first set for nonterminal `nidx` is set.
+    pub fn is_set(&self, nidx: NIdx, tidx: TIdx) -> bool {
+        assert!(tidx < self.terms_len);
+        self.bf[nidx * (self.terms_len + 1) + tidx]
+    }
+
+    /// Returns true if the nonterminal `nidx' has epsilon in its first set.
+    pub fn is_epsilon_set(&self, nidx: NIdx) -> bool {
+        self.bf[nidx * (self.terms_len + 1) + self.terms_len]
+    }
+
+    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
+    /// it was already set, or false otherwise. Bit `terms_len` represents epsilon.
+    fn set(&mut self, nidx: NIdx, tidx: TIdx) -> bool {
+        let off = nidx * (self.terms_len + 1) + tidx;
+        if self.bf[off] {
+            true
+        }
+        else {
+            self.bf.set(off, true);
+            false
         }
     }
 }
@@ -252,11 +267,11 @@ impl Closure {
                                 },
                                 Symbol::Nonterminal(nonterm_j) => {
                                     for l in 0..grm.terms_len {
-                                        if firsts.get(nonterm_j, l) {
+                                        if firsts.is_set(nonterm_j, l) {
                                             new_la.set(l, true);
                                         }
                                     }
-                                    if !firsts.get(nonterm_j, grm.terms_len) {
+                                    if !firsts.is_epsilon_set(nonterm_j) {
                                         nullabled = true;
                                         break;
                                     }

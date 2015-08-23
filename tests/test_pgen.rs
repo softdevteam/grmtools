@@ -5,28 +5,28 @@ extern crate lrpar;
 use lrpar::grammar::{AIdx, ast_to_grammar, Grammar};
 use lrpar::yacc::parse_yacc;
 //use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1};
-use lrpar::pgen::{calc_firsts, Closure, Firsts};
+use lrpar::pgen::{Closure, Firsts};
 
 fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
     let nt_i = grm.nonterminal_off(rn);
     println!("{:?} {} {:?} {:?}", firsts, rn, should_be, grm.terminal_names);
     for (i, n) in grm.terminal_names.iter().enumerate() {
-        println!("matching {} {} {:?} {:?}", i, n, should_be.iter().position(|x| x == n), firsts.get(nt_i, i));
+        println!("matching {} {} {:?} {:?}", i, n, should_be.iter().position(|x| x == n), firsts.is_set(nt_i, i));
         match should_be.iter().position(|x| x == n) {
             Some(_) => {
-                if !firsts.get(nt_i, i) {
+                if !firsts.is_set(nt_i, i) {
                     panic!("{} is not set in {}", n, rn);
                 }
             }
             None    => {
-                if firsts.get(nt_i, i) {
+                if firsts.is_set(nt_i, i) {
                     panic!("{} is incorrectly set in {}", n, rn);
                 }
             }
         }
     }
     if should_be.iter().position(|x| x == &"".to_string()).is_some() {
-        assert!(firsts.get(nt_i, grm.terms_len));
+        assert!(firsts.is_epsilon_set(nt_i));
     }
 }
 
@@ -42,7 +42,7 @@ fn test_first(){
       F: E;
       ".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
     has(&grm, &firsts, "^", vec!["c"]);
     has(&grm, &firsts, "D", vec!["d"]);
     has(&grm, &firsts, "E", vec!["d", "c"]);
@@ -60,7 +60,7 @@ fn test_first_no_subsequent_nonterminals() {
       E: D C;
       ".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
     has(&grm, &firsts, "E", vec!["d"]);
 }
 
@@ -76,7 +76,7 @@ fn test_first_epsilon() {
       D: C;
       ".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
     has(&grm, &firsts, "A", vec!["b", "a"]);
     has(&grm, &firsts, "C", vec!["c", ""]);
     has(&grm, &firsts, "D", vec!["c", ""]);
@@ -93,7 +93,7 @@ fn test_last_epsilon() {
       C: B 'c' B;
       ".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
     has(&grm, &firsts, "A", vec!["b", "c"]);
     has(&grm, &firsts, "B", vec!["b", ""]);
     has(&grm, &firsts, "C", vec!["b", "c"]);
@@ -109,7 +109,7 @@ fn test_first_no_multiples() {
       B: 'b' | ;
       ".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
     has(&grm, &firsts, "A", vec!["b"]);
 }
 
@@ -131,7 +131,7 @@ fn eco_grammar() -> Grammar {
 #[test]
 fn test_first_from_eco() {
     let grm = eco_grammar();
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
     has(&grm, &firsts, "S", vec!["a", "b"]);
     has(&grm, &firsts, "A", vec!["a"]);
     has(&grm, &firsts, "B", vec!["a"]);
@@ -155,7 +155,7 @@ fn test_first_from_eco_bug() {
       G: C D;
       ".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
     has(&grm, &firsts, "E", vec!["a"]);
     has(&grm, &firsts, "T", vec!["a"]);
     has(&grm, &firsts, "P", vec!["a"]);
@@ -245,7 +245,7 @@ fn test_dragon_grammar() {
       L: 'm' R | 'i';
       R: L;
       ".to_string()).unwrap());
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
 
     let mut cl = Closure::new(&grm);
     let mut la = BitVec::from_elem(grm.terms_len, false);
@@ -263,7 +263,7 @@ fn test_dragon_grammar() {
 #[test]
 fn test_closure1_ecogrm() {
     let grm = eco_grammar();
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
 
     let mut cl = Closure::new(&grm);
     let mut la = BitVec::from_elem(grm.terms_len, false);
@@ -307,7 +307,7 @@ fn grammar3() -> Grammar {
 #[test]
 fn test_closure1_grm3() {
     let grm = grammar3();
-    let firsts = calc_firsts(&grm);
+    let firsts = Firsts::new(&grm);
 
     let mut cl = Closure::new(&grm);
     let mut la = BitVec::from_elem(grm.terms_len, false);
