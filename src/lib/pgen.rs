@@ -211,31 +211,33 @@ pub fn calc_follows(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>)
 */
 
 #[derive(Debug)]
-pub struct Closure {
-    pub itemset: Rc<Vec<RefCell<ClosureAlt>>>
+pub struct Itemset {
+    // This immutable vector stores a Item for each alternative in the grammar, in the same
+    // order as grm.alts.
+    pub items: Rc<Vec<RefCell<Item>>>
 }
 
 #[derive(Debug)]
-pub struct ClosureAlt {
+pub struct Item {
     pub active: BitVec,
     pub dots: BitVec
 }
 
-impl Closure {
-    pub fn new(grm: &Grammar) -> Closure {
-        let mut itemset = Vec::with_capacity(grm.alts.len());
+impl Itemset {
+    pub fn new(grm: &Grammar) -> Itemset {
+        let mut items = Vec::with_capacity(grm.alts.len());
         for alt in grm.alts.iter() { 
             let num_syms = alt.len() + 1;
-            itemset.push(RefCell::new(ClosureAlt {
+            items.push(RefCell::new(Item {
                 active: BitVec::from_elem(num_syms, false),
                 dots  : BitVec::from_elem(grm.terms_len * num_syms, false)
             }));
         }
-        Closure {itemset: Rc::new(itemset)}
+        Itemset {items: Rc::new(items)}
     }
 
-    pub fn add(&mut self, grm: &Grammar, aidx: AIdx, dot: SIdx, la: &BitVec) {
-        let mut alt_cl = self.itemset[aidx].borrow_mut();
+    pub fn add(&self, grm: &Grammar, aidx: AIdx, dot: SIdx, la: &BitVec) {
+        let mut alt_cl = self.items[aidx].borrow_mut();
         alt_cl.active.set(dot, true);
         let dots = &mut alt_cl.dots;
         for (i, bit) in la.iter().enumerate() {
@@ -245,15 +247,15 @@ impl Closure {
         }
     }
 
-    pub fn close(&mut self, grm: &Grammar, firsts: &Firsts) {
-        let itemset = &self.itemset;
+    pub fn close(&self, grm: &Grammar, firsts: &Firsts) {
+        let items = &self.items;
         let mut new_la = BitVec::from_elem(grm.terms_len, false);
         loop {
             let mut changed = false;
-            for i in 0..itemset.len() {
+            for i in 0..items.len() {
                 let alt = &grm.alts[i];
                 for dot in 0..alt.len() {
-                    if !itemset[i].borrow().active[dot] { continue; }
+                    if !items[i].borrow().active[dot] { continue; }
                     if dot == alt.len() { continue; }
                     if let Symbol::Nonterminal(nonterm_i) = alt[dot] {
                         new_la.clear();
@@ -279,7 +281,7 @@ impl Closure {
                             }
                         }
                         if !nullabled {
-                            let dots = &itemset[i].borrow().dots;
+                            let dots = &items[i].borrow().dots;
                             for l in 0..grm.terms_len {
                                 if dots[dot * grm.terms_len + l] {
                                     new_la.set(l, true);
@@ -288,7 +290,7 @@ impl Closure {
                         }
 
                         for alt_i in grm.rules_alts[nonterm_i].iter() {
-                            let mut clalt = itemset[*alt_i].borrow_mut();
+                            let mut clalt = items[*alt_i].borrow_mut();
                             if !clalt.active[0] {
                                 clalt.active.set(0, true);
                                 changed = true;
@@ -306,32 +308,29 @@ impl Closure {
             if !changed { break; }
         }
     }
+
+    pub fn goto(&self, grm: &Grammar, firsts: &Firsts, sym: Symbol) {
+        let items = &self.items;
+        for i in 0..items.len() {
+            let mut item = items[i].borrow_mut();
+            let alt = &grm.alts[i];
+            for dot in 0..alt.len() {
+                if !item.active[dot] { continue; }
+                if sym == alt[dot] {
+                    item.active.set(dot + 1, true);
+                    for j in 0..grm.terms_len {
+                        if item.dots[dot * grm.terms_len + j] {
+                            item.dots.set((dot + 1) * grm.terms_len + j, true);
+                        }
+                    }
+                }
+            }
+        }
+        self.close(&grm, &firsts)
+    }
 }
 
 /*
-/// Calculates the goto that results from reading past a certain symbol in another set.
-pub fn goto1(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>,
-             state: &HashMap<LR1Item, HashSet<String>>, symbol: &Symbol)
-             -> HashMap<LR1Item, HashSet<String>> {
-    let mut goto = HashMap::new();
-
-    for (item, la) in state.iter() {
-        if item.next() != None {
-            if &item.next().unwrap() == symbol {
-                // Clone item and insert into new goto set
-                let lhs = item.lhs.clone();
-                let rhs = item.rhs.clone();
-                let dot = item.dot + 1;
-                let gotoitm = LR1Item::new(lhs, rhs, dot);
-                let gotola = la.clone();
-                goto.insert(gotoitm, gotola);
-            }
-        }
-    }
-    closure1(grm, firsts, &mut goto);
-    goto
-}
-
 pub struct StateGraph {
     pub states: Vec<HashMap<LR1Item, HashSet<String>>>,
     pub edges: HashMap<(i32, Symbol), i32>
