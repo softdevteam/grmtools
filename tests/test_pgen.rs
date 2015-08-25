@@ -348,24 +348,24 @@ fn test_goto1() {
     is.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
     is.close(&grm, &firsts);
 
-    is.goto(&grm, &firsts, Symbol::Nonterminal(grm.nonterminal_off("S")));
-    state_exists(&grm, &is, "^", 0, 1, vec!["$"]);
-    state_exists(&grm, &is, "S", 0, 1, vec!["$", "b"]);
+    let goto1 = is.goto(&grm, &firsts, Symbol::Nonterminal(grm.nonterminal_off("S")));
+    state_exists(&grm, &goto1, "^", 0, 1, vec!["$"]);
+    state_exists(&grm, &goto1, "S", 0, 1, vec!["$", "b"]);
 
     // follow 'b' from start set
-    is.goto(&grm, &firsts, Symbol::Terminal(grm.terminal_off("b")));
-    state_exists(&grm, &is, "S", 1, 1, vec!["$", "b"]);
-    state_exists(&grm, &is, "A", 0, 0, vec!["a"]);
-    state_exists(&grm, &is, "A", 1, 0, vec!["a"]);
-    state_exists(&grm, &is, "A", 2, 0, vec!["a"]);
+    let goto2 = is.goto(&grm, &firsts, Symbol::Terminal(grm.terminal_off("b")));
+    state_exists(&grm, &goto2, "S", 1, 1, vec!["$", "b"]);
+    state_exists(&grm, &goto2, "A", 0, 0, vec!["a"]);
+    state_exists(&grm, &goto2, "A", 1, 0, vec!["a"]);
+    state_exists(&grm, &goto2, "A", 2, 0, vec!["a"]);
 
     // continue by following 'a' from last goto
-    is.goto(&grm, &firsts, Symbol::Terminal(grm.terminal_off("a")));
-    state_exists(&grm, &is, "A", 0, 1, vec!["a"]);
-    state_exists(&grm, &is, "A", 1, 1, vec!["a"]);
-    state_exists(&grm, &is, "A", 2, 1, vec!["a"]);
-    state_exists(&grm, &is, "S", 0, 0, vec!["$", "b", "c"]);
-    state_exists(&grm, &is, "S", 1, 0, vec!["$", "b", "c"]);
+    let goto3 = goto2.goto(&grm, &firsts, Symbol::Terminal(grm.terminal_off("a")));
+    state_exists(&grm, &goto3, "A", 0, 1, vec!["a"]);
+    state_exists(&grm, &goto3, "A", 1, 1, vec!["a"]);
+    state_exists(&grm, &goto3, "A", 2, 1, vec!["a"]);
+    state_exists(&grm, &goto3, "S", 0, 0, vec!["b", "c"]);
+    state_exists(&grm, &goto3, "S", 1, 0, vec!["b", "c"]);
 }
 
 /*

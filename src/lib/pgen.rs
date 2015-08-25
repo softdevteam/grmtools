@@ -347,24 +347,30 @@ impl Itemset {
     }
 
     /// Add states by calculating the goto of 'sym' on this itemset.
-    pub fn goto(&self, grm: &Grammar, firsts: &Firsts, sym: Symbol) {
-        let items = &self.items;
-        for i in 0..items.len() {
-            let mut item = items[i].borrow_mut();
-            let alt = &grm.alts[i];
-            for dot in 0..alt.len() {
-                if !item.active[dot] { continue; }
-                if sym == alt[dot] {
-                    item.active.set(dot + 1, true);
-                    for j in 0..grm.terms_len {
-                        if item.dots[dot * grm.terms_len + j] {
-                            item.dots.set((dot + 1) * grm.terms_len + j, true);
+    pub fn goto(&self, grm: &Grammar, firsts: &Firsts, sym: Symbol) -> Itemset {
+        let newis = Itemset::new(&grm);
+        {
+            let items = &self.items;
+            let newitems = &newis.items;
+            for i in 0..items.len() {
+                let item = items[i].borrow_mut();
+                let mut newitem = newitems[i].borrow_mut();
+                let alt = &grm.alts[i];
+                for dot in 0..alt.len() {
+                    if !item.active[dot] { continue; }
+                    if sym == alt[dot] {
+                        newitem.active.set(dot + 1, true);
+                        for j in 0..grm.terms_len {
+                            if item.dots[dot * grm.terms_len + j] {
+                                newitem.dots.set((dot + 1) * grm.terms_len + j, true);
+                            }
                         }
                     }
                 }
             }
+            newis.close(&grm, &firsts);
         }
-        self.close(&grm, &firsts)
+        newis
     }
 }
 
