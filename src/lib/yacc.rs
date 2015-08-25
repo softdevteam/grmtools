@@ -149,7 +149,7 @@ impl YaccParser {
     }
 
     fn parse_name(&self, i: usize) -> YaccResult<(usize, String)> {
-        let re = Regex::new("^[a-zA-Z_][a-zA-Z0-9_]*").unwrap();
+        let re = Regex::new(r"^[^\t\n\v\f\r :;|]+").unwrap();
         match re.find(&self.src[i..]) {
             Some((s, e)) => {
                 assert!(s == 0);
@@ -160,7 +160,7 @@ impl YaccParser {
     }
 
     fn parse_terminal(&self, i: usize) -> YaccResult<(usize, String)> {
-        let re = Regex::new("^(\"[a-zA-Z_][a-zA-Z0-9_]*\")|('[a-zA-Z_][a-zA-Z0-9_]*')").unwrap();
+        let re = Regex::new("^(\".+?\")|('.+?')").unwrap();
         match re.find(&self.src[i..]) {
             Some((s, e)) => {
                 assert!(s == 0);

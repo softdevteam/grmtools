@@ -162,26 +162,6 @@ fn test_empty() {
 }
 
 #[test]
-fn test_illegal_name() {
-    let src = "%%0:A;".to_string();
-    match parse_yacc(&src) {
-        Ok(_)  => panic!("Illegal name parsed"),
-        Err(YaccError{kind: YaccErrorKind::IllegalName, ..}) => (),
-        Err(_) => panic!("Incorrect error returned")
-    }
-}
-
-#[test]
-fn test_illegal_string() {
-    let src = "%%A:' ';".to_string();
-    match parse_yacc(&src) {
-        Ok(_)  => panic!("Illegal string parsed"),
-        Err(YaccError{kind: YaccErrorKind::IllegalString, ..}) => (),
-        Err(e) => panic!("Incorrect error returned {}", e)
-    }
-}
-
-#[test]
 fn test_incomplete_rule1() {
     let src = "%%A:".to_string();
     match parse_yacc(&src) {
