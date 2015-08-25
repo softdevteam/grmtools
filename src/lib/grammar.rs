@@ -102,10 +102,7 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
     }
 
     let mut alts = Vec::new();
-    let start_alt = vec![
-      Symbol::Nonterminal(nonterminal_map[ast.start.as_ref().unwrap()]),
-      Symbol::Terminal(terminal_map[&end_term])
-    ];
+    let start_alt = vec![Symbol::Nonterminal(nonterminal_map[ast.start.as_ref().unwrap()])];
     alts.push(start_alt);
     rules_alts.get_mut(nonterminal_map[&start_nonterm]).unwrap().push(0);
     for astrule in ast.rules.values() {
