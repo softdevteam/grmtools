@@ -20,7 +20,7 @@ use grammar::{AIdx, Grammar, NIdx, Symbol, SIdx, TIdx};
 /// let grm = ast_to_grammar(parse_yacc(&input));
 /// let firsts = Firsts::new(grm);
 /// ```
-/// 
+///
 /// Then the following assertions (and only the following assertions) about the firsts set are
 /// correct:
 /// ```c
@@ -218,15 +218,46 @@ pub struct Itemset {
 }
 
 #[derive(Debug)]
+// An Item instance represents all the possible items that derive from a given alternative in a
+// grammar. We know that if a given alternative E has n symbols, it can lead to at most n+1 items.
+// For example, Consider an alternative:
+//    E : 'b' S;
+// There are at most three possible items that this alternative can lead to:
+//    E : . 'b' S;
+//    E : 'b' . S;
+//    E : 'b' S .;
+// Each of these items can then have one or more terminals as lookahead (crucially, each terminal
+// can only appear once in the lookahead). Knowing this, we can create a very compact fixed-size
+// representation with room for all the possible items that an alternative can lead to.
+//
+// active is a bitfield of length n+1 (where n is the number of symbols in an alternative). If bit
+// i is set, it means that there is an item with a dot at position i. When this is set, the
+// corresponding section of the dots bitvec is then meaningful.
+//
+// dots is a bitfield of length (n + 1)*grm.terms_len i.e. for each dot, it stores a single bit for
+// each terminal in the grammar. Note that, unlike Firsts::bf, we do not need a bit to represent
+// epsilon.
+//
+// Let us assume that our state has the following items:
+//    E : . 'b' S; // Lookahead 'a' and '$'
+//    E : 'b' S .; // Lookahead '$'
+// then active would be set to:
+//   101
+// and (assuming the grammar has terminals '$', 'a', and 'b' only) dots would be something like the
+// following (depending on the order the terminals are stored in grm.terminal_names):
+//   011000001
+// Where "011" corresponds to "E: . 'b' S;", the middle 000 are inactive, and 001 corresponds to
+// "E: 'b' S .;".
 pub struct Item {
     pub active: BitVec,
     pub dots: BitVec
 }
 
 impl Itemset {
+    /// Create a blank Itemset.
     pub fn new(grm: &Grammar) -> Itemset {
         let mut items = Vec::with_capacity(grm.alts.len());
-        for alt in grm.alts.iter() { 
+        for alt in grm.alts.iter() {
             let num_syms = alt.len() + 1;
             items.push(RefCell::new(Item {
                 active: BitVec::from_elem(num_syms, false),
@@ -236,7 +267,12 @@ impl Itemset {
         Itemset {items: Rc::new(items)}
     }
 
+    /// Add an item for the alternative 'aidx' with the dot set to position 'dot' and with
+    /// lookahead set to 'la'.
     pub fn add(&self, grm: &Grammar, aidx: AIdx, dot: SIdx, la: &BitVec) {
+        if la.len() != grm.terms_len {
+            panic!("Passed a bitfield of length {} instead of {}", la.len(), grm.terms_len);
+        }
         let mut alt_cl = self.items[aidx].borrow_mut();
         alt_cl.active.set(dot, true);
         let dots = &mut alt_cl.dots;
@@ -247,6 +283,7 @@ impl Itemset {
         }
     }
 
+    /// Close over this Itemset.
     pub fn close(&self, grm: &Grammar, firsts: &Firsts) {
         let items = &self.items;
         let mut new_la = BitVec::from_elem(grm.terms_len, false);
@@ -309,6 +346,7 @@ impl Itemset {
         }
     }
 
+    /// Add states by calculating the goto of 'sym' on this itemset.
     pub fn goto(&self, grm: &Grammar, firsts: &Firsts, sym: Symbol) {
         let items = &self.items;
         for i in 0..items.len() {
