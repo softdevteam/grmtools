@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -140,84 +141,14 @@ impl Firsts {
     }
 }
 
-/*
-/// Generates and returns the follow set for the given grammar.
-///
-/// # Example
-/// Given a grammar `grm`:
-///
-/// ```c
-/// S : A "b";
-/// A : "a" |;
-/// ```
-///
-/// ```c
-/// let firsts = calc_firsts(&grm);
-/// let follows = calc_follows(&grm, &firsts);
-/// println!(follows); // {"S": {}, "A": {"b"}};
-/// ```
-pub fn calc_follows(grm: &GrammarAST, firsts: &HashMap<String, HashSet<String>>)
-                    -> HashMap<String, HashSet<String>> {
-    // initialise follow set
-    let mut follows: HashMap<String, HashSet<String>> = HashMap::new();
-    for rule in grm.rules.values() {
-        follows.insert(rule.name.clone(), HashSet::new());
-    }
-
-    let mut changed;
-    loop {
-        changed = false;
-        for rule in grm.rules.values() {
-            for alt in rule.alternatives.iter() {
-                for (sym_i, sym) in alt.iter().enumerate() {
-                    match sym {
-                        &Symbol::Terminal(_) => continue,
-                        &Symbol::Nonterminal(ref name) => {
-                            let mut new = HashSet::new();
-                            // add FIRSTS(succeeding symbols) to temporary follow set
-                            let followers = alt[sym_i+1..].to_vec();
-                            let f = get_firsts_from_symbols(firsts, &followers);
-                            for e in f.iter() {
-                                if e != "" {
-                                    new.insert(e.clone());
-                                }
-                            }
-                            // if no symbols are following sym, or FIRST(followers) contains epsilon, then add
-                            // FOLLOW(rule.name) to the set as well
-                            if followers.len() == 0 || f.contains("") {
-                                let rule_follow = follows.get(&rule.name).unwrap();
-                                for e in rule_follow {
-                                    new.insert(e.clone());
-                                }
-                            }
-                            // add everything from temporary set to current follow set
-                            let mut old = follows.get_mut(name).unwrap();
-                            for e in new {
-                                if !old.contains(&e) {
-                                    old.insert(e.clone());
-                                    changed = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if !changed {
-            return follows;
-        }
-    }
-}
-*/
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Itemset {
     // This immutable vector stores a Item for each alternative in the grammar, in the same
     // order as grm.alts.
     pub items: Rc<Vec<RefCell<Item>>>
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 // An Item instance represents all the possible items that derive from a given alternative in a
 // grammar. We know that if a given alternative E has n symbols, it can lead to at most n+1 items.
 // For example, Consider an alternative:
@@ -346,7 +277,7 @@ impl Itemset {
         }
     }
 
-    /// Add states by calculating the goto of 'sym' on this itemset.
+    /// Create a new Itemset based on calculating goto of 'sym' on the current Itemset.
     pub fn goto(&self, grm: &Grammar, firsts: &Firsts, sym: Symbol) -> Itemset {
         let newis = Itemset::new(&grm);
         {
@@ -374,84 +305,76 @@ impl Itemset {
     }
 }
 
-/*
 pub struct StateGraph {
-    pub states: Vec<HashMap<LR1Item, HashSet<String>>>,
-    pub edges: HashMap<(i32, Symbol), i32>
+    pub states: Vec<Itemset>,
+    pub edges: HashMap<(usize, Symbol), usize>
 }
 
 impl StateGraph {
-    pub fn contains(&self, state: &HashMap<LR1Item, HashSet<String>>) -> bool {
-        self.states.contains(state)
-    }
-}
+    /// Create a StateGraph from 'grm'.
+    pub fn new(grm: &Grammar) -> StateGraph {
+        let firsts     = Firsts::new(grm);
+        let mut states = Vec::new();
+        let mut edges  = HashMap::new();
 
-/// Builds a `StateGraph` from the given `Grammar`.
-pub fn build_graph(grm: &GrammarAST) -> StateGraph {
-    let mut states = Vec::new();
-    let mut edges = HashMap::new();
-    let mut todo = Vec::new();
+        // Create the start state and seed the stategraph with it
+        let state0 = Itemset::new(&grm);
+        let mut la = BitVec::from_elem(grm.terms_len, false);
+        la.set(grm.end_term, true);
+        state0.add(&grm, grm.start_rule, 0, &la);
+        state0.close(&grm, &firsts);
+        states.push(state0);
 
-    // calculate first sets
-    let firsts = calc_firsts(&grm);
-
-    // Create first state
-    let item = lritem("Start!", vec![nonterminal(&grm.start.clone().unwrap())], 0);
-    let mut la = HashSet::new();
-    la.insert("$".to_string());
-    let mut s0 = HashMap::new();
-    s0.insert(item, la);
-    closure1(&grm, &firsts, &mut s0);
-
-    // add to list of states as #0
-    todo.push(s0);
-
-    let mut current_id = 0;
-    let mut unique_id = 1;
-
-    loop {
-        if todo.len() == 0 {
-            break;
-        }
-        let state = todo.remove(0);
-
-        let mut symbols_done = HashSet::new();
-        for (item, _) in state.iter() {
-            let symbol = match item.next() {
-                Some(x) => x,
-                None => continue
-            };
-            if symbols_done.contains(&symbol) {
-                continue;
-            }
-            else {
-                // Cache processed symbols so that we don't create the same
-                // goto set multiple times for different rules with the same
-                // next symbol
-                symbols_done.insert(symbol.clone());
-            }
-            let goto = goto1(&grm, &firsts, &state, &symbol);
-            // This is slow! We are better off hashing the state HashMaps and making `states` a set
-            // instead of a vector.
-            // Although on second thought, when we add the weakly_compatible optimisation later we
-            // might have to iterate over all states anyway
-            match states.iter().position(|s| s == &goto) {
-                // If goto is already contained map current_id to its position...
-                Some(pos) => {edges.insert((current_id, symbol.clone()), pos as i32); ()},
-                // ...otherwise add goto to todo-list and map current_id to its unique_id
-                None => {
-                    todo.push(goto);
-                    edges.insert((current_id, symbol.clone()), unique_id);
-                    unique_id += 1;
-                    ()
+        let mut seen_nonterms = BitVec::from_elem(grm.nonterms_len, false);
+        let mut seen_terms = BitVec::from_elem(grm.terms_len, false);
+        let mut state_i = 0; // How far through states have we processed so far?
+        while state_i < states.len() {
+            // We maintain two lists of which nonterms and terms we've seen; when processing a
+            // given state there's no point processing any given nonterm or term more than once.
+            seen_nonterms.clear();
+            seen_terms.clear();
+            // Iterate over active item in the stategraph.
+            for i in 0..grm.alts.len() {
+                let alt = &grm.alts[i];
+                for dot in 0..alt.len() {
+                    let sym;
+                    let nstate;
+                    {
+                        let state = &states[state_i] as &Itemset;
+                        if !state.items[i].borrow().active[dot] { continue; }
+                        // We have an active item. If the symbol at the dot hasn't been seen
+                        // before, we calculate its goto relative to the current state. We then add
+                        // that new state to the list of states.
+                        sym = &alt[dot];
+                        match sym {
+                            &Symbol::Nonterminal(nonterm_i) => {
+                                if seen_nonterms[nonterm_i] {
+                                    continue;
+                                }
+                                seen_nonterms.set(nonterm_i, true);
+                            },
+                            &Symbol::Terminal(term_i) => {
+                                if seen_terms[term_i] {
+                                    continue;
+                                }
+                                seen_terms.set(term_i, true);
+                            }
+                        }
+                        nstate = state.goto(&grm, &firsts, sym.clone());
+                    }
+                    let j = states.iter().position(|x| x == &nstate);
+                    match j {
+                        Some(k) => { edges.insert((state_i, sym.clone()), k); },
+                        None    => {
+                            edges.insert((state_i, sym.clone()), states.len());
+                            states.push(nstate);
+                        }
+                    }
                 }
             }
+            state_i += 1;
         }
-
-        states.push(state);
-        current_id += 1;
+        StateGraph{states: states, edges: edges}
     }
-
-    StateGraph {states: states, edges: edges}
 }
-*/
+

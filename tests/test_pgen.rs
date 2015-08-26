@@ -5,7 +5,7 @@ extern crate lrpar;
 use lrpar::grammar::{AIdx, ast_to_grammar, Grammar, Symbol};
 use lrpar::yacc::parse_yacc;
 //use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1};
-use lrpar::pgen::{Itemset, Firsts};
+use lrpar::pgen::{Itemset, Firsts, StateGraph};
 
 fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
     let nt_i = grm.nonterminal_off(rn);
@@ -212,7 +212,7 @@ fn test_grammar2() {
 pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: usize, la: Vec<&str>) {
     let ab_alt_off = grm.rules_alts[grm.nonterminal_off(nt)][alt_off];
     let is = &is.items[ab_alt_off].borrow();
-    if !is.active[dot] { 
+    if !is.active[dot] {
         panic!("{}, alternative {}: dot {} is not active when it should be", nt, alt_off, dot);
     }
     for i in 0..grm.terms_len {
@@ -221,7 +221,7 @@ pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: u
         let mut found = false;
         for t in la.iter() {
             if grm.terminal_off(t) == i {
-                if !bit { 
+                if !bit {
                     panic!("bit for terminal {}, dot {} is not set in alternative {} of {} when it should be", t, dot, alt_off, nt);
                 }
                 found = true;
@@ -232,6 +232,18 @@ pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: u
             panic!("bit for terminal {}, dot {} is set in alternative {} of {} when it shouldn't be", grm.terminal_names[i], dot, alt_off, nt);
         }
     }
+}
+
+pub fn num_active_states(is: &Itemset) -> usize {
+    let mut a = 0;
+    for i in 0..is.items.len() {
+        let item = is.items[i].borrow_mut();
+        for dot in 0..item.active.len() {
+            if !item.active[dot] { continue; }
+            a += 1;
+        }
+    }
+    a
 }
 
 #[test]
@@ -368,122 +380,81 @@ fn test_goto1() {
     state_exists(&grm, &goto3, "S", 1, 0, vec!["b", "c"]);
 }
 
-/*
 #[test]
 fn test_stategraph() {
     let grm = grammar3();
-    let graph = build_graph(&grm);
+    let sg = StateGraph::new(&grm);
+    for st in sg.states.iter() { println!("  {:?}", st); }
 
-    // State 0
-    let mut s0 = HashMap::new();
-    s0.insert(lritem("Start!", vec![nonterminal("Z")], 0), mk_string_hashset(vec!["$"]));
-    s0.insert(lritem("Z", vec![nonterminal("S")], 0), mk_string_hashset(vec!["$"]));
-    s0.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 0), mk_string_hashset(vec!["$", "b"]));
-    s0.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 0), mk_string_hashset(vec!["$", "b"]));
+    assert_eq!(sg.states.len(), 13);
+    assert_eq!(sg.edges.len(), 13);
 
-    // State 1
-    let mut s1 = HashMap::new();
-    s1.insert(lritem("Start!", vec![nonterminal("Z")], 1), mk_string_hashset(vec!["$"]));
+    assert_eq!(num_active_states(&sg.states[0]), 3);
+    state_exists(&grm, &sg.states[0], "^", 0, 0, vec!["$"]);
+    state_exists(&grm, &sg.states[0], "S", 0, 0, vec!["$", "b"]);
+    state_exists(&grm, &sg.states[0], "S", 1, 0, vec!["$", "b"]);
 
-    // State 2
-    let mut s2 = HashMap::new();
-    s2.insert(lritem("Z", vec![nonterminal("S")], 1), mk_string_hashset(vec!["$"]));
-    s2.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 1), mk_string_hashset(vec!["$", "b"]));
+    let s1 = sg.edges[&(0, Symbol::Nonterminal(grm.nonterminal_off("S")))];
+    assert_eq!(num_active_states(&sg.states[s1]), 2);
+    state_exists(&grm, &sg.states[s1], "^", 0, 1, vec!["$"]);
+    state_exists(&grm, &sg.states[s1], "S", 0, 1, vec!["$", "b"]);
 
-    // State 3
-    let mut s3 = HashMap::new();
-    s3.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 1), mk_string_hashset(vec!["$", "b"]));
-    s3.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 0), mk_string_hashset(vec!["a"]));
-    s3.insert(lritem("A", vec![terminal("a")], 0), mk_string_hashset(vec!["a"]));
-    s3.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 0), mk_string_hashset(vec!["a"]));
+    let s2 = sg.edges[&(s1, Symbol::Terminal(grm.terminal_off("b")))];
+    assert_eq!(num_active_states(&sg.states[s2]), 1);
+    state_exists(&grm, &sg.states[s2], "S", 0, 2, vec!["$", "b"]);
 
-    // State 4
-    let mut s4 = HashMap::new();
-    s4.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 2), mk_string_hashset(vec!["$", "b"]));
+    let s3 = sg.edges[&(0, Symbol::Terminal(grm.terminal_off("b")))];
+    assert_eq!(num_active_states(&sg.states[s3]), 4);
+    state_exists(&grm, &sg.states[s3], "S", 1, 1, vec!["$", "b"]);
+    state_exists(&grm, &sg.states[s3], "A", 0, 0, vec!["a"]);
+    state_exists(&grm, &sg.states[s3], "A", 1, 0, vec!["a"]);
+    state_exists(&grm, &sg.states[s3], "A", 2, 0, vec!["a"]);
 
-    // State 5
-    let mut s5 = HashMap::new();
-    s5.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 1), mk_string_hashset(vec!["a"]));
-    s5.insert(lritem("A", vec![terminal("a")], 1), mk_string_hashset(vec!["a"]));
-    s5.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 1), mk_string_hashset(vec!["a"]));
-    s5.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 0), mk_string_hashset(vec!["c", "b"]));
-    s5.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 0), mk_string_hashset(vec!["c", "b"]));
+    let s4 = sg.edges[&(s3, Symbol::Nonterminal(grm.nonterminal_off("A")))];
+    assert_eq!(num_active_states(&sg.states[s4]), 1);
+    state_exists(&grm, &sg.states[s4], "S", 1, 2, vec!["$", "b"]);
 
-    // State 6
-    let mut s6 = HashMap::new();
-    s6.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 2), mk_string_hashset(vec!["$", "b"]));
+    let s5 = sg.edges[&(s4, Symbol::Terminal(grm.terminal_off("a")))];
+    assert_eq!(num_active_states(&sg.states[s5]), 1);
+    state_exists(&grm, &sg.states[s5], "S", 1, 3, vec!["$", "b"]);
 
-    // State 7
-    let mut s7 = HashMap::new();
-    s7.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 2), mk_string_hashset(vec!["a"]));
-    s7.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 2), mk_string_hashset(vec!["a"]));
-    s7.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 1), mk_string_hashset(vec!["c", "b"]));
+    let s6 = sg.edges[&(s3, Symbol::Terminal(grm.terminal_off("a")))];
+    assert_eq!(num_active_states(&sg.states[s6]), 5);
+    state_exists(&grm, &sg.states[s6], "A", 0, 1, vec!["a"]);
+    state_exists(&grm, &sg.states[s6], "A", 1, 1, vec!["a"]);
+    state_exists(&grm, &sg.states[s6], "A", 2, 1, vec!["a"]);
+    state_exists(&grm, &sg.states[s6], "S", 0, 0, vec!["b", "c"]);
+    state_exists(&grm, &sg.states[s6], "S", 1, 0, vec!["b", "c"]);
 
-    // State 8
-    let mut s8 = HashMap::new();
-    s8.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 1), mk_string_hashset(vec!["c", "b"]));
-    s8.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 0), mk_string_hashset(vec!["a"]));
-    s8.insert(lritem("A", vec![terminal("a")], 0), mk_string_hashset(vec!["a"]));
-    s8.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 0), mk_string_hashset(vec!["a"]));
+    let s7 = sg.edges[&(s6, Symbol::Nonterminal(grm.nonterminal_off("S")))];
+    assert_eq!(num_active_states(&sg.states[s7]), 3);
+    state_exists(&grm, &sg.states[s7], "A", 0, 2, vec!["a"]);
+    state_exists(&grm, &sg.states[s7], "A", 2, 2, vec!["a"]);
+    state_exists(&grm, &sg.states[s7], "S", 0, 1, vec!["b", "c"]);
 
-    // State 9
-    let mut s9 = HashMap::new();
-    s9.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 3), mk_string_hashset(vec!["$", "b"]));
+    let s8 = sg.edges[&(s7, Symbol::Terminal(grm.terminal_off("c")))];
+    assert_eq!(num_active_states(&sg.states[s8]), 1);
+    state_exists(&grm, &sg.states[s8], "A", 0, 3, vec!["a"]);
 
-    // State 10
-    let mut s10 = HashMap::new();
-    s10.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("b")], 3), mk_string_hashset(vec!["a"]));
-    s10.insert(lritem("S", vec![nonterminal("S"), terminal("b")], 2), mk_string_hashset(vec!["c", "b"]));
+    let s9 = sg.edges[&(s7, Symbol::Terminal(grm.terminal_off("b")))];
+    assert_eq!(num_active_states(&sg.states[s9]), 2);
+    state_exists(&grm, &sg.states[s9], "A", 2, 3, vec!["a"]);
+    state_exists(&grm, &sg.states[s9], "S", 0, 2, vec!["b", "c"]);
 
-    // State 11
-    let mut s11 = HashMap::new();
-    s11.insert(lritem("A", vec![terminal("a"), nonterminal("S"), terminal("c")], 3), mk_string_hashset(vec!["a"]));
+    let s10 = sg.edges[&(s6, Symbol::Terminal(grm.terminal_off("b")))];
+    assert_eq!(s6, sg.edges[&(s10, Symbol::Terminal(grm.terminal_off("a")))]);
+    assert_eq!(num_active_states(&sg.states[s10]), 4);
+    state_exists(&grm, &sg.states[s10], "S", 1, 1, vec!["b", "c"]);
+    state_exists(&grm, &sg.states[s10], "A", 0, 0, vec!["a"]);
+    state_exists(&grm, &sg.states[s10], "A", 1, 0, vec!["a"]);
+    state_exists(&grm, &sg.states[s10], "A", 2, 0, vec!["a"]);
 
-    // State 12
-    let mut s12 = HashMap::new();
-    s12.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 2), mk_string_hashset(vec!["c", "b"]));
+    let s11 = sg.edges[&(s10, Symbol::Nonterminal(grm.nonterminal_off("A")))];
+    assert_eq!(num_active_states(&sg.states[s11]), 1);
+    state_exists(&grm, &sg.states[s11], "S", 1, 2, vec!["b", "c"]);
 
-    // State 13
-    let mut s13 = HashMap::new();
-    s13.insert(lritem("S", vec![terminal("b"), nonterminal("A"), terminal("a")], 3), mk_string_hashset(vec!["c", "b"]));
-
-    // test states
-    assert!(graph.states.len() == 14);
-    assert!(graph.contains(&s0));
-    assert!(graph.contains(&s1));
-    assert!(graph.contains(&s2));
-    assert!(graph.contains(&s3));
-    assert!(graph.contains(&s4));
-    assert!(graph.contains(&s5));
-    assert!(graph.contains(&s6));
-    assert!(graph.contains(&s7));
-    assert!(graph.contains(&s8));
-    assert!(graph.contains(&s9));
-    assert!(graph.contains(&s10));
-    assert!(graph.contains(&s11));
-    assert!(graph.contains(&s12));
-    assert!(graph.contains(&s13));
-
-    // test edges
-    test_edge(&graph, &s0, nonterminal("Z"), &s1);
-    test_edge(&graph, &s0, nonterminal("S"), &s2);
-    test_edge(&graph, &s0, terminal("b"), &s3);
-    test_edge(&graph, &s2, terminal("b"), &s4);
-    test_edge(&graph, &s3, nonterminal("A"), &s6);
-    test_edge(&graph, &s3, terminal("a"), &s5);
-    test_edge(&graph, &s5, nonterminal("S"), &s7);
-    test_edge(&graph, &s5, terminal("b"), &s8);
-    test_edge(&graph, &s6, terminal("a"), &s9);
-    test_edge(&graph, &s7, terminal("c"), &s11);
-    test_edge(&graph, &s7, terminal("b"), &s10);
-    test_edge(&graph, &s8, terminal("a"), &s5);
-    test_edge(&graph, &s8, nonterminal("A"), &s12);
-    test_edge(&graph, &s12, terminal("a"), &s13);
+    let s12 = sg.edges[&(s11, Symbol::Terminal(grm.terminal_off("a")))];
+    assert_eq!(num_active_states(&sg.states[s12]), 1);
+    state_exists(&grm, &sg.states[s12], "S", 1, 3, vec!["b", "c"]);
 }
 
-fn test_edge(graph: &StateGraph, state: &HashMap<LR1Item, HashSet<String>>, symbol: Symbol, other: &HashMap<LR1Item, HashSet<String>>) {
-    let pos = graph.states.iter().position(|s| s == state).unwrap();
-    let pos_other = graph.edges.get(&(pos as i32, symbol)).unwrap().clone() as usize;
-    assert!(graph.states.get(pos_other).unwrap() == other);
-}
-*/
