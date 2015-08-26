@@ -164,51 +164,6 @@ fn test_first_from_eco_bug() {
     has(&grm, &firsts, "G", vec!["c", "d", "f", ""]);
 }
 
-/*
-#[test]
-fn test_follow_from_eco() {
-    let grm = eco_grammar();
-    let firsts = calc_firsts(&grm);
-    let follow = calc_follows(&grm, &firsts);
-    has(&follow, "S", vec!["b", "c"]);
-    has(&follow, "A", vec!["a", "b", "d", "f"]);
-    has(&follow, "B", vec![]);
-    has(&follow, "C", vec!["d", "f"]);
-    has(&follow, "D", vec!["a", "f"]);
-}
-
-fn grammar2() -> GrammarAST {
-    let mut grm = GrammarAST::new();
-    grm.add_rule("E".to_string(), vec!(nonterminal("T"), nonterminal("P")));
-    grm.add_rule("P".to_string(), vec!(terminal("+"), nonterminal("T"), nonterminal("P")));
-    grm.add_rule("P".to_string(), vec!());
-    grm.add_rule("T".to_string(), vec!(nonterminal("F"), nonterminal("Q")));
-    grm.add_rule("Q".to_string(), vec!(terminal("*"), nonterminal("F"), nonterminal("Q")));
-    grm.add_rule("Q".to_string(), vec!());
-    grm.add_rule("F".to_string(), vec!(terminal("("), nonterminal("E"), terminal(")")));
-    grm.add_rule("F".to_string(), vec!(terminal("id")));
-    grm
-}
-
-#[test]
-fn test_grammar2() {
-    let grm = grammar2();
-    let firsts = calc_firsts(&grm);
-    let follow = calc_follows(&grm, &firsts);
-    has(&firsts, "E", vec!["(", "id"]);
-    has(&firsts, "P", vec!["+", ""]);
-    has(&firsts, "T", vec!["(", "id"]);
-    has(&firsts, "Q", vec!["*", ""]);
-    has(&firsts, "F", vec!["(", "id"]);
-
-    has(&follow, "E", vec![")"]);
-    has(&follow, "P", vec![")"]);
-    has(&follow, "T", vec!["+",")"]);
-    has(&follow, "Q", vec!["+",")"]);
-    has(&follow, "F", vec!["*", "+", ")"]);
-}
-*/
-
 pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: usize, la: Vec<&str>) {
     let ab_alt_off = grm.rules_alts[grm.nonterminal_off(nt)][alt_off];
     let is = &is.items[ab_alt_off].borrow();
