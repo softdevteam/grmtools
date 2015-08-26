@@ -77,7 +77,8 @@ impl Grammar {
     /// Perform basic validation on the grammar, namely:
     ///   1) The start rule references a rule in the grammar
     ///   2) Every nonterminal reference references a rule in the grammar
-    ///   3) Every terminal reference references a declared token
+    ///   3) If a nonterminal does't reference a rule, it might have been
+    ///      defined as a token using '%token'
     /// If the validation succeeds, None is returned.
     pub fn validate(&self) -> Result<(), GrammarError> {
         if !self.rules.contains_key(&self.start) {
@@ -88,17 +89,12 @@ impl Grammar {
                 for sym in alt.iter() {
                     match sym {
                         &Symbol::Nonterminal(ref name) => {
-                            if !self.rules.contains_key(name) {
+                            if !self.rules.contains_key(name) && !self.tokens.contains(name) {
                                 return Err(GrammarError{kind: GrammarErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
                             }
                         }
-                        &Symbol::Terminal(ref name) => {
-                            if !self.tokens.contains(name) {
-                                return Err(GrammarError{kind: GrammarErrorKind::UnknownToken,
-                                    sym: Some(sym.clone())});
-                            }
-                        }
+                        &Symbol::Terminal(_) => { }
                     }
                 }
             }

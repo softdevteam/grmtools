@@ -1,5 +1,5 @@
 extern crate lrpar;
-use lrpar::grammar::{Grammar, GrammarError, GrammarErrorKind, nonterminal, terminal};
+use lrpar::grammar::{Grammar, GrammarError, GrammarErrorKind, nonterminal};
 
 #[test]
 fn test_empty_grammar(){
@@ -50,21 +50,10 @@ fn test_invalid_nonterminal_ref(){
 }
 
 #[test]
-fn test_valid_terminal_ref(){
+fn test_valid_token_ref(){
     let mut grm = Grammar::new();
     grm.tokens.insert("b".to_string());
     grm.start = "A".to_string();
-    grm.add_rule("A".to_string(), vec!(terminal("b")));
+    grm.add_rule("A".to_string(), vec!(nonterminal("b")));
     assert!(grm.validate().is_ok());
-}
-
-#[test]
-fn test_invalid_terminal_ref(){
-    let mut grm = Grammar::new();
-    grm.start = "A".to_string();
-    grm.add_rule("A".to_string(), vec!(terminal("b")));
-    match grm.validate() {
-        Err(GrammarError{kind: GrammarErrorKind::UnknownToken, ..}) => (),
-        _ => panic!("Validation error")
-    }
 }
