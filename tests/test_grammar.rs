@@ -50,7 +50,10 @@ fn test_invalid_nonterminal_ref(){
 }
 
 #[test]
+#[should_panic]
 fn test_valid_token_ref(){
+    // for now we won't support the YACC feature that allows
+    // to redefine nonterminals as tokens by adding them to '%token'
     let mut grm = Grammar::new();
     grm.tokens.insert("b".to_string());
     grm.start = "A".to_string();

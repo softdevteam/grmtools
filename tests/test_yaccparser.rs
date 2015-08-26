@@ -148,6 +148,16 @@ fn test_declaration_tokens() {
 }
 
 #[test]
+fn test_auto_add_tokens() {
+    // we don't support the YACC feature that allows to redeclare
+    // nonterminals as tokens using %token. Instead we automatically
+    // add all tokens we find to the %token list
+    let src = "%%\nA : 'a';".to_string();
+    let grm = parse_yacc(&src).unwrap();
+    assert!(grm.has_token("a"));
+}
+
+#[test]
 #[should_panic]
 fn test_simple_decl_fail() {
     let src = "%fail x\n%%\nA : a".to_string();

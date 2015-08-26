@@ -136,6 +136,7 @@ impl YaccParser {
               || self.lookahead_is("'", i).is_some() {
                 let (j, sym) = try!(self.parse_terminal(i));
                 i = try!(self.parse_ws(j));
+                self.grammar.tokens.insert(sym.clone());
                 syms.push(Symbol::Terminal(sym));
             }
             else {

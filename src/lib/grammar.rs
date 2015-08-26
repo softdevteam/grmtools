@@ -89,12 +89,17 @@ impl Grammar {
                 for sym in alt.iter() {
                     match sym {
                         &Symbol::Nonterminal(ref name) => {
-                            if !self.rules.contains_key(name) && !self.tokens.contains(name) {
+                            if !self.rules.contains_key(name) {
                                 return Err(GrammarError{kind: GrammarErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
                             }
                         }
-                        &Symbol::Terminal(_) => { }
+                        &Symbol::Terminal(ref name) => {
+                            if !self.tokens.contains(name) {
+                                return Err(GrammarError{kind: GrammarErrorKind::UnknownToken,
+                                    sym: Some(sym.clone())});
+                            }
+                        }
                     }
                 }
             }
