@@ -166,7 +166,11 @@ fn test_first_from_eco_bug() {
 
 pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: usize, la: Vec<&str>) {
     let ab_alt_off = grm.rules_alts[grm.nonterminal_off(nt)][alt_off];
-    let is = &is.items[ab_alt_off].borrow();
+    let is_rc = &is.items[ab_alt_off].borrow();
+    if is_rc.as_ref().is_none() {
+        panic!("{}, alternative {} is not allocated when it should be", nt, alt_off);
+    }
+    let is = is_rc.as_ref().unwrap();
     if !is.active[dot] {
         panic!("{}, alternative {}: dot {} is not active when it should be", nt, alt_off, dot);
     }
@@ -192,7 +196,9 @@ pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: u
 pub fn num_active_states(is: &Itemset) -> usize {
     let mut a = 0;
     for i in 0..is.items.len() {
-        let item = is.items[i].borrow_mut();
+        if is.items[i].borrow().is_none() { continue; }
+        let item_rc = is.items[i].borrow();
+        let item = item_rc.as_ref().unwrap();
         for dot in 0..item.active.len() {
             if !item.active[dot] { continue; }
             a += 1;
@@ -225,7 +231,7 @@ fn test_dragon_grammar() {
     state_exists(&grm, &is, "L", 0, 0, vec!["$", "e"]);
     state_exists(&grm, &is, "L", 1, 0, vec!["$", "e"]);
     state_exists(&grm, &is, "R", 0, 0, vec!["$"]);
- }
+}
 
 #[test]
 fn test_closure1_ecogrm() {
@@ -251,7 +257,6 @@ fn test_closure1_ecogrm() {
     state_exists(&grm, &is, "D", 0, 0, vec!["a"]);
     state_exists(&grm, &is, "D", 1, 0, vec!["a"]);
 }
-
 
 // GrammarAST from 'LR(k) Analyse fuer Pragmatiker'
 // Z : S

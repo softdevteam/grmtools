@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
-use std::rc::Rc;
 
 extern crate bit_vec;
 use self::bit_vec::BitVec;
@@ -145,7 +144,7 @@ impl Firsts {
 pub struct Itemset {
     // This immutable vector stores a Item for each alternative in the grammar, in the same
     // order as grm.alts.
-    pub items: Rc<Vec<RefCell<Item>>>
+    pub items: Vec<RefCell<Option<Item>>>
 }
 
 #[derive(Debug, PartialEq)]
@@ -188,14 +187,10 @@ impl Itemset {
     /// Create a blank Itemset.
     pub fn new(grm: &Grammar) -> Itemset {
         let mut items = Vec::with_capacity(grm.alts.len());
-        for alt in grm.alts.iter() {
-            let num_syms = alt.len() + 1;
-            items.push(RefCell::new(Item {
-                active: BitVec::from_elem(num_syms, false),
-                dots  : BitVec::from_elem(grm.terms_len * num_syms, false)
-            }));
+        for _ in grm.alts.iter() {
+            items.push(RefCell::new(None));
         }
-        Itemset {items: Rc::new(items)}
+        Itemset {items: items}
     }
 
     /// Add an item for the alternative 'aidx' with the dot set to position 'dot' and with
@@ -204,7 +199,9 @@ impl Itemset {
         if la.len() != grm.terms_len {
             panic!("Passed a bitfield of length {} instead of {}", la.len(), grm.terms_len);
         }
-        let mut alt_cl = self.items[aidx].borrow_mut();
+        self.ensure_item_allocd(&grm, &self, aidx);
+        let mut item_rc = self.items[aidx].borrow_mut();
+        let mut alt_cl = &mut item_rc.as_mut().unwrap();
         alt_cl.active.set(dot, true);
         let dots = &mut alt_cl.dots;
         for (i, bit) in la.iter().enumerate() {
@@ -216,15 +213,16 @@ impl Itemset {
 
     /// Close over this Itemset.
     pub fn close(&self, grm: &Grammar, firsts: &Firsts) {
-        let items = &self.items;
         let mut new_la = BitVec::from_elem(grm.terms_len, false);
         loop {
             let mut changed = false;
-            for i in 0..items.len() {
+            for i in 0..self.items.len() {
+                if self.items[i].borrow().is_none() { continue; }
+                // From this point onwards in the for loop, we know that self.items[i] is
+                // definitely allocated and that calling unwrap() on it is safe.
                 let alt = &grm.alts[i];
                 for dot in 0..alt.len() {
-                    if !items[i].borrow().active[dot] { continue; }
-                    if dot == alt.len() { continue; }
+                    if !self.items[i].borrow().as_ref().unwrap().active[dot] { continue; }
                     if let Symbol::Nonterminal(nonterm_i) = alt[dot] {
                         new_la.clear();
                         let mut nullabled = false;
@@ -249,7 +247,8 @@ impl Itemset {
                             }
                         }
                         if !nullabled {
-                            let dots = &items[i].borrow().dots;
+                            let item_rc = self.items[i].borrow();
+                            let dots = &item_rc.as_ref().unwrap().dots;
                             for l in 0..grm.terms_len {
                                 if dots[dot * grm.terms_len + l] {
                                     new_la.set(l, true);
@@ -258,7 +257,9 @@ impl Itemset {
                         }
 
                         for alt_i in grm.rules_alts[nonterm_i].iter() {
-                            let mut clalt = items[*alt_i].borrow_mut();
+                            self.ensure_item_allocd(&grm, &self, *alt_i);
+                            let mut clalt_rc = self.items[*alt_i].borrow_mut();
+                            let mut clalt = clalt_rc.as_mut().unwrap();
                             if !clalt.active[0] {
                                 clalt.active.set(0, true);
                                 changed = true;
@@ -277,6 +278,17 @@ impl Itemset {
         }
     }
 
+    fn ensure_item_allocd(&self, grm: &Grammar, is: &Itemset, aidx: AIdx) {
+        let mut item_rc = is.items[aidx].borrow_mut();
+        if item_rc.as_ref().is_none() {
+            let num_syms = grm.alts[aidx].len() + 1;
+            *item_rc = Some(Item {
+                active: BitVec::from_elem(num_syms, false),
+                dots  : BitVec::from_elem(grm.terms_len * num_syms, false)
+            });
+        }
+    }
+
     /// Create a new Itemset based on calculating goto of 'sym' on the current Itemset.
     pub fn goto(&self, grm: &Grammar, firsts: &Firsts, sym: Symbol) -> Itemset {
         let newis = Itemset::new(&grm);
@@ -284,8 +296,12 @@ impl Itemset {
             let items = &self.items;
             let newitems = &newis.items;
             for i in 0..items.len() {
-                let item = items[i].borrow_mut();
-                let mut newitem = newitems[i].borrow_mut();
+                let item_rc = items[i].borrow();
+                if item_rc.is_none() { continue; }
+                let item = item_rc.as_ref().unwrap();
+                self.ensure_item_allocd(&grm, &newis, i);
+                let mut newitem_rc = newitems[i].borrow_mut();
+                let mut newitem = newitem_rc.as_mut().unwrap();
                 let alt = &grm.alts[i];
                 for dot in 0..alt.len() {
                     if !item.active[dot] { continue; }
@@ -335,13 +351,18 @@ impl StateGraph {
             seen_terms.clear();
             // Iterate over active item in the stategraph.
             for i in 0..grm.alts.len() {
+                if states[state_i].items[i].borrow().is_none() { continue; }
+                // From this point onwards in the for loop, we know that states[state_i].items is
+                // definitely allocated and that calling unwrap() on it is safe.
                 let alt = &grm.alts[i];
                 for dot in 0..alt.len() {
                     let sym;
                     let nstate;
                     {
                         let state = &states[state_i] as &Itemset;
-                        if !state.items[i].borrow().active[dot] { continue; }
+                        if !state.items[i].borrow().as_ref().unwrap().active[dot] {
+                            continue;
+                        }
                         // We have an active item. If the symbol at the dot hasn't been seen
                         // before, we calculate its goto relative to the current state. We then add
                         // that new state to the list of states.
