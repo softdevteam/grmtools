@@ -5,11 +5,11 @@ use self::regex::Regex;
 
 type YaccResult<T> = Result<T, YaccError>;
 
-use grammar::{Grammar, Symbol};
+use grammar_ast::{GrammarAST, Symbol};
 
 pub struct YaccParser {
     src: String,
-    grammar: Grammar
+    grammar: GrammarAST
 }
 
 /// The various different possible Yacc parser errors.
@@ -52,7 +52,7 @@ impl YaccParser {
     fn new(src: String) -> YaccParser {
         YaccParser {
             src: src,
-            grammar: Grammar::new()
+            grammar: GrammarAST::new()
         }
     }
 
@@ -86,7 +86,7 @@ impl YaccParser {
             else if let Some(j) = self.lookahead_is("%start", i) {
                 i = try!(self.parse_ws(j));
                 let (j, n) = try!(self.parse_name(i));
-                self.grammar.start = n;
+                self.grammar.start = Some(n);
                 i = try!(self.parse_ws(j));
             }
             else {
@@ -190,7 +190,7 @@ impl YaccParser {
     }
 }
 
-pub fn parse_yacc(s:&String) -> Result<Grammar, YaccError> {
+pub fn parse_yacc(s:&String) -> Result<GrammarAST, YaccError> {
     let mut yp = YaccParser::new(s.to_string());
     match yp.parse() {
         Ok(_) => Ok(yp.grammar),

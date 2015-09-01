@@ -11,6 +11,8 @@ use std::io::{Read, stderr, Write};
 use std::path::Path;
 
 use lrpar::from_yacc;
+use lrpar::pgen::StateGraph;
+use lrpar::grammar::ast_to_grammar;
 
 fn usage(prog: String, msg: &str) {
     let path = Path::new(prog.as_str());
@@ -53,7 +55,10 @@ fn main() {
     f.read_to_string(&mut s).unwrap();
 
     match from_yacc(&s) {
-        Ok(ast) => println!("{:?}", ast),
+        Ok(ast) => {
+            let grm = ast_to_grammar(&ast);
+            StateGraph::new(&grm);
+        },
         Err(s) => {
             println!("Error: {}", &s);
             process::exit(1);
