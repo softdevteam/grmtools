@@ -148,6 +148,16 @@ fn test_declaration_tokens() {
 }
 
 #[test]
+fn test_auto_add_tokens() {
+    // we don't support the YACC feature that allows to redeclare
+    // nonterminals as tokens using %token. Instead we automatically
+    // add all tokens we find to the %token list
+    let src = "%%\nA : 'a';".to_string();
+    let grm = parse_yacc(&src).unwrap();
+    assert!(grm.has_token("a"));
+}
+
+#[test]
 #[should_panic]
 fn test_simple_decl_fail() {
     let src = "%fail x\n%%\nA : a".to_string();
@@ -159,26 +169,6 @@ fn test_simple_decl_fail() {
 fn test_empty() {
     let src = "".to_string();
     parse_yacc(&src).unwrap();
-}
-
-#[test]
-fn test_illegal_name() {
-    let src = "%%0:A;".to_string();
-    match parse_yacc(&src) {
-        Ok(_)  => panic!("Illegal name parsed"),
-        Err(YaccError{kind: YaccErrorKind::IllegalName, ..}) => (),
-        Err(_) => panic!("Incorrect error returned")
-    }
-}
-
-#[test]
-fn test_illegal_string() {
-    let src = "%%A:' ';".to_string();
-    match parse_yacc(&src) {
-        Ok(_)  => panic!("Illegal string parsed"),
-        Err(YaccError{kind: YaccErrorKind::IllegalString, ..}) => (),
-        Err(e) => panic!("Incorrect error returned {}", e)
-    }
 }
 
 #[test]
