@@ -1,11 +1,15 @@
-use grammar::{Grammar, Symbol, nonterminal};
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
+use std::cell::RefCell;
 
-/// Generates and returns the first set for the given grammar.
+extern crate bit_vec;
+use self::bit_vec::BitVec;
+
+use grammar::{AIdx, Grammar, NIdx, Symbol, SIdx, TIdx};
+
+/// Firsts stores all the first sets for a given grammar.
 ///
 /// # Example
-/// Given a grammar `grm`:
+/// Given a grammar `input`:
 ///
 /// ```c
 /// S : A "b";
@@ -13,184 +17,256 @@ use std::hash::{Hash, Hasher};
 /// ```
 ///
 /// ```c
-/// let firsts = calc_firsts(&grm);
-/// println!(firsts); // {"S": {"a", "b"}, "A": {"a"}};
+/// let grm = ast_to_grammar(parse_yacc(&input));
+/// let firsts = Firsts::new(grm);
 /// ```
-pub fn calc_firsts(grm: &Grammar) -> HashMap<String, HashSet<String>> {
-    // This function gradually builds up a FIRST hashmap in stages.
-    let mut firsts: HashMap<String, HashSet<String>> = HashMap::new();
-
-    // First do the easy bit, which is every terminal at the start of an alternative.
-    for rul in grm.rules.values() {
-        let mut f = HashSet::new();
-        for alt in rul.alternatives.iter() {
-            if alt.len() == 0 {
-                f.insert("".to_string());
-                continue;
-            }
-            let ref sym = alt[0];
-            if let &Symbol::Terminal(ref name) = sym {
-                f.insert(name.clone());
-            }
-        }
-        firsts.insert(rul.name.clone(), f);
-    }
-
-    // Now we do the slow, iterative part, where we loop until we reach a fixed point. In essence,
-    // we look at each rule E, and see if any of the nonterminals at the start of its alternatives
-    // have new elements in since we last looked. If they do, we'll have to do another round.
-    let mut changed;
-    loop {
-        changed = false;
-        for rul in grm.rules.values() {
-            // For each rule E...
-            for alt in rul.alternatives.iter() {
-                // ...and each alternative A
-                for (sym_i, sym) in alt.iter().enumerate() {
-                    match sym {
-                        &Symbol::Terminal(ref name) => {
-                            // if symbol is a Terminal, add to FIRSTS
-                            let mut f = firsts.get_mut(&rul.name).unwrap();
-                            if !f.contains(name) {
-                                f.insert(name.clone());
-                                changed = true;
-                            }
-                            break;
-                        },
-                        &Symbol::Nonterminal(ref name) => {
-                            // if symbols is Nonterminal, get its FIRSTS and add them to the
-                            // current FIRSTS. if the Nonterminals FIRSTS contain an epsilon,
-                            // continue looking at the succeeding Nonterminal, otherwise break
-                            let of = firsts.get(name).unwrap().clone();
-                            let mut f = firsts.get_mut(&rul.name).unwrap();
-                            for n in of.iter() {
-                                if n == "" {
-                                    // only add epsilon if symbol is the last in the production
-                                    if sym_i == alt.len() - 1 {
-                                        if !f.contains(n) {
-                                            f.insert(n.clone());
-                                            changed = true;
-                                        }
-                                    }
-                                }
-                                else if !f.contains(n) {
-                                    f.insert(n.clone());
-                                    changed = true;
-                                }
-                            }
-                            // if FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon, don't
-                            // add FIRST(Y2 Y3)
-                            if !of.contains("") {
-                                break;
-                            }
-                        },
-                    }
-                }
-            }
-        }
-        if !changed {
-            return firsts;
-        }
-    }
+///
+/// Then the following assertions (and only the following assertions) about the firsts set are
+/// correct:
+/// ```c
+/// assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("a")));
+/// assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("b")));
+/// assert!(firsts.is_epsilon_set(grm.nonterminal_off("S")));
+/// assert!(firsts.is_set(grm.nonterminal_off("A"), grm.terminal_off("a")));
+/// assert!(firsts.is_epsilon_set(grm.nonterminal_off("A")));
+/// ```
+#[derive(Debug)]
+pub struct Firsts {
+    // The representation is a contiguous bitfield, of (terms_len * 1) * nonterms_len. Put another
+    // way, each nonterminal has (terms_len + 1) bits, where the bit at position terms_len
+    // represents epsilon. So for the grammar given above, the bitvector would be two sequences of
+    // 3 bits where bits 0, 1, 2 represent terminals a, b, epsilon respectively.
+    //   111101
+    // Where "111" is for the nonterminal S, and 101 for A.
+    bf: BitVec,
+    terms_len: NIdx
 }
 
-/// Returns the first set for the given list of symbols.
-///
-/// # Example
-/// Given a grammar `grm`:
-///
-/// ```c
-/// S : A "b";
-/// A : "a" |;
-/// ```
-///
-/// ```c
-/// let firsts = calc_firsts(&grm);
-/// let symbols = vec![nonterminal!("A"), terminal!("b")];
-/// let f = get_firsts_from_symbols(&firsts, &symbols);
-/// println!(f); // {"a", "b"};
-/// ```
-pub fn get_firsts_from_symbols(firsts: &HashMap<String, HashSet<String>>,
-                               symbols: &Vec<Symbol>) -> HashSet<String> {
-    let mut r = HashSet::new();
-    for (i, s) in symbols.iter().enumerate() {
-        match s {
-            &Symbol::Terminal(ref name) => {
-                r.insert(name.clone());
-                break;
-            },
-            &Symbol::Nonterminal(ref name) => {
-                let f = firsts.get(name).unwrap();
-                for e in f {
-                    if e == "" && i != symbols.len() - 1 {
+impl Firsts {
+    /// Generates and returns the firsts set for the given grammar.
+    pub fn new(grm: &Grammar) -> Firsts {
+        let mut firsts = Firsts {
+            bf        : BitVec::from_elem((grm.nonterms_len * (grm.terms_len + 1)), false),
+            terms_len : grm.terms_len
+        };
+
+        // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
+        // look at each rule E, and see if any of the nonterminals at the start of its alternatives
+        // have new elements in since we last looked. If they do, we'll have to do another round.
+        loop {
+            let mut changed = false;
+            for (rul_i, alts) in grm.rules_alts.iter().enumerate() {
+                // For each rule E
+                for alt_i in alts.iter() {
+                    // ...and each alternative A
+                    let ref alt = grm.alts[*alt_i];
+                    if alt.len() == 0 {
+                        // if it's an empty alternative, ensure this nonterminal's epsilon bit is set.
+                        if !firsts.set(rul_i, grm.terms_len) {
+                            changed = true;
+                        }
                         continue;
                     }
-                    r.insert(e.clone());
+                    for (sym_i, sym) in alt.iter().enumerate() {
+                        match sym {
+                            &Symbol::Terminal(term_i) => {
+                                // if symbol is a Terminal, add to FIRSTS
+                                if !firsts.set(rul_i, term_i) {
+                                    changed = true;
+                                }
+                                break;
+                            },
+                            &Symbol::Nonterminal(nonterm_i) => {
+                                // if we're dealing with another Nonterminal, union its FIRSTs
+                                // together with the current nonterminals FIRSTs. Note this is
+                                // (intentionally) a no-op if the two terminals are one and the
+                                // same.
+                                for bit_i in 0..grm.terms_len {
+                                    if firsts.is_set(nonterm_i, bit_i)
+                                      && !firsts.set(rul_i, bit_i) {
+                                        changed = true;
+                                    }
+                                }
+
+                                // If the epsilon bit in the nonterminal being referenced is set,
+                                // and if its the last symbol in the alternative, then add epsilon
+                                // to FIRSTs.
+                                if firsts.is_epsilon_set(nonterm_i) && sym_i == alt.len() - 1 {
+                                    // only add epsilon if the symbol is the last in the production
+                                    if !firsts.set(rul_i, grm.terms_len) {
+                                        changed = true;
+                                    }
+                                }
+
+                                // If FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon,
+                                // then don't try and calculate the FIRSTS of Y2 or Y3 (i.e. stop
+                                // now).
+                                if !firsts.is_epsilon_set(nonterm_i) {
+                                    break;
+                                }
+                            },
+                        }
+                    }
                 }
-                if f.contains("") {
-                    continue;
-                }
-                break;
+            }
+            if !changed {
+                return firsts;
             }
         }
     }
-    r
-}
 
-/// Generates and returns the follow set for the given grammar.
-///
-/// # Example
-/// Given a grammar `grm`:
-///
-/// ```c
-/// S : A "b";
-/// A : "a" |;
-/// ```
-///
-/// ```c
-/// let firsts = calc_firsts(&grm);
-/// let follows = calc_follows(&grm, &firsts);
-/// println!(follows); // {"S": {}, "A": {"b"}};
-/// ```
-pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
-                    -> HashMap<String, HashSet<String>> {
-    // initialise follow set
-    let mut follows: HashMap<String, HashSet<String>> = HashMap::new();
-    for rule in grm.rules.values() {
-        follows.insert(rule.name.clone(), HashSet::new());
+    /// Returns true if the terminal `tidx' is in the first set for nonterminal `nidx` is set.
+    pub fn is_set(&self, nidx: NIdx, tidx: TIdx) -> bool {
+        assert!(tidx < self.terms_len);
+        self.bf[nidx * (self.terms_len + 1) + tidx]
     }
 
-    let mut changed;
-    loop {
-        changed = false;
-        for rule in grm.rules.values() {
-            for alt in rule.alternatives.iter() {
-                for (sym_i, sym) in alt.iter().enumerate() {
-                    match sym {
-                        &Symbol::Terminal(_) => continue,
-                        &Symbol::Nonterminal(ref name) => {
-                            let mut new = HashSet::new();
-                            // add FIRSTS(succeeding symbols) to temporary follow set
-                            let followers = alt[sym_i+1..].to_vec();
-                            let f = get_firsts_from_symbols(firsts, &followers);
-                            for e in f.iter() {
-                                if e != "" {
-                                    new.insert(e.clone());
+    /// Returns true if the nonterminal `nidx' has epsilon in its first set.
+    pub fn is_epsilon_set(&self, nidx: NIdx) -> bool {
+        self.bf[nidx * (self.terms_len + 1) + self.terms_len]
+    }
+
+    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
+    /// it was already set, or false otherwise. Bit `terms_len` represents epsilon.
+    fn set(&mut self, nidx: NIdx, tidx: TIdx) -> bool {
+        let off = nidx * (self.terms_len + 1) + tidx;
+        if self.bf[off] {
+            true
+        }
+        else {
+            self.bf.set(off, true);
+            false
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Itemset {
+    // This immutable vector stores a Item for each alternative in the grammar, in the same
+    // order as grm.alts.
+    pub items: Vec<RefCell<Option<Item>>>
+}
+
+#[derive(Debug, PartialEq)]
+// An Item instance represents all the possible items that derive from a given alternative in a
+// grammar. We know that if a given alternative E has n symbols, it can lead to at most n+1 items.
+// For example, Consider an alternative:
+//    E : 'b' S;
+// There are at most three possible items that this alternative can lead to:
+//    E : . 'b' S;
+//    E : 'b' . S;
+//    E : 'b' S .;
+// Each of these items can then have one or more terminals as lookahead (crucially, each terminal
+// can only appear once in the lookahead). Knowing this, we can create a very compact fixed-size
+// representation with room for all the possible items that an alternative can lead to.
+//
+// active is a bitfield of length n+1 (where n is the number of symbols in an alternative). If bit
+// i is set, it means that there is an item with a dot at position i. When this is set, the
+// corresponding section of the dots bitvec is then meaningful.
+//
+// dots is a bitfield of length (n + 1)*grm.terms_len i.e. for each dot, it stores a single bit for
+// each terminal in the grammar. Note that, unlike Firsts::bf, we do not need a bit to represent
+// epsilon.
+//
+// Let us assume that our state has the following items:
+//    E : . 'b' S; // Lookahead 'a' and '$'
+//    E : 'b' S .; // Lookahead '$'
+// then active would be set to:
+//   101
+// and (assuming the grammar has terminals '$', 'a', and 'b' only) dots would be something like the
+// following (depending on the order the terminals are stored in grm.terminal_names):
+//   011000001
+// Where "011" corresponds to "E: . 'b' S;", the middle 000 are inactive, and 001 corresponds to
+// "E: 'b' S .;".
+pub struct Item {
+    pub active: BitVec,
+    pub dots: BitVec
+}
+
+impl Itemset {
+    /// Create a blank Itemset.
+    pub fn new(grm: &Grammar) -> Itemset {
+        let mut items = Vec::with_capacity(grm.alts.len());
+        for _ in grm.alts.iter() {
+            items.push(RefCell::new(None));
+        }
+        Itemset {items: items}
+    }
+
+    /// Add an item for the alternative 'aidx' with the dot set to position 'dot' and with
+    /// lookahead set to 'la'.
+    pub fn add(&self, grm: &Grammar, aidx: AIdx, dot: SIdx, la: &BitVec) {
+        if la.len() != grm.terms_len {
+            panic!("Passed a bitfield of length {} instead of {}", la.len(), grm.terms_len);
+        }
+        self.ensure_item_allocd(&grm, &self, aidx);
+        let mut item_rc = self.items[aidx].borrow_mut();
+        let mut alt_cl = &mut item_rc.as_mut().unwrap();
+        alt_cl.active.set(dot, true);
+        let dots = &mut alt_cl.dots;
+        for (i, bit) in la.iter().enumerate() {
+            if bit {
+                dots.set(dot * grm.nonterms_len + i, true);
+            }
+        }
+    }
+
+    /// Close over this Itemset.
+    pub fn close(&self, grm: &Grammar, firsts: &Firsts) {
+        let mut new_la = BitVec::from_elem(grm.terms_len, false);
+        loop {
+            let mut changed = false;
+            for i in 0..self.items.len() {
+                if self.items[i].borrow().is_none() { continue; }
+                // From this point onwards in the for loop, we know that self.items[i] is
+                // definitely allocated and that calling unwrap() on it is safe.
+                let alt = &grm.alts[i];
+                for dot in 0..alt.len() {
+                    if !self.items[i].borrow().as_ref().unwrap().active[dot] { continue; }
+                    if let Symbol::Nonterminal(nonterm_i) = alt[dot] {
+                        new_la.clear();
+                        let mut nullabled = false;
+                        for k in dot + 1..alt.len() {
+                            match alt[k] {
+                                Symbol::Terminal(term_j) => {
+                                    new_la.set(term_j, true);
+                                    nullabled = true;
+                                    break;
+                                },
+                                Symbol::Nonterminal(nonterm_j) => {
+                                    for l in 0..grm.terms_len {
+                                        if firsts.is_set(nonterm_j, l) {
+                                            new_la.set(l, true);
+                                        }
+                                    }
+                                    if !firsts.is_epsilon_set(nonterm_j) {
+                                        nullabled = true;
+                                        break;
+                                    }
                                 }
                             }
-                            // if no symbols are following sym, or FIRST(followers) contains epsilon, then add
-                            // FOLLOW(rule.name) to the set as well
-                            if followers.len() == 0 || f.contains("") {
-                                let rule_follow = follows.get(&rule.name).unwrap();
-                                for e in rule_follow {
-                                    new.insert(e.clone());
+                        }
+                        if !nullabled {
+                            let item_rc = self.items[i].borrow();
+                            let dots = &item_rc.as_ref().unwrap().dots;
+                            for l in 0..grm.terms_len {
+                                if dots[dot * grm.terms_len + l] {
+                                    new_la.set(l, true);
                                 }
                             }
-                            // add everything from temporary set to current follow set
-                            let mut old = follows.get_mut(name).unwrap();
-                            for e in new {
-                                if !old.contains(&e) {
-                                    old.insert(e.clone());
+                        }
+
+                        for alt_i in grm.rules_alts[nonterm_i].iter() {
+                            self.ensure_item_allocd(&grm, &self, *alt_i);
+                            let mut clalt_rc = self.items[*alt_i].borrow_mut();
+                            let mut clalt = clalt_rc.as_mut().unwrap();
+                            if !clalt.active[0] {
+                                clalt.active.set(0, true);
+                                changed = true;
+                            }
+                            for l in 0..grm.terms_len {
+                                if new_la[l] && !clalt.dots[l] {
+                                    clalt.dots.set(l, true);
                                     changed = true;
                                 }
                             }
@@ -198,245 +274,128 @@ pub fn calc_follows(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>)
                     }
                 }
             }
-        }
-        if !changed {
-            return follows;
+            if !changed { break; }
         }
     }
-}
 
-#[derive(PartialEq, Eq, Debug)]
-/// Implementation of `LR1Item` which is used to build the state graph of a grammar. Consists of a
-/// left-hand-side `String`, a right-hand-side list of `Symbols` and an integer `dot`, denoting the
-/// current position of the parser inside of `rhs`.
-pub struct LR1Item {
-    pub lhs: String,
-    pub rhs: Vec<Symbol>,
-    pub dot: usize,
-}
-
-impl LR1Item {
-    /// Returns a new LR1Item
-    ///
-    /// # Example
-    ///
-    /// ```c
-    /// let item = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string())], 1);
-    /// ```
-    pub fn new(lhs: String, rhs: Vec<Symbol>, dot: usize) -> LR1Item {
-        LR1Item {lhs: lhs, rhs: rhs, dot: dot}
-    }
-
-    /// Returns a copy of the `Symbol` at the current position inside the `rhs`.
-    ///
-    /// # Example
-    ///
-    /// ```c
-    /// let item = LR1Item::new("S".to_string(), vec![nonterminal!("A".to_string()),
-    ///                                               terminal!("a".to_string())], 1);
-    /// let n = item.next(); // returns terminal!("a")
-    /// ```
-    pub fn next(&self) -> Option<Symbol>{
-        if self.dot < self.rhs.len() {
-            let ref sym = self.rhs[self.dot];
-            Some(sym.clone())
-        }
-        else {
-            None
+    fn ensure_item_allocd(&self, grm: &Grammar, is: &Itemset, aidx: AIdx) {
+        let mut item_rc = is.items[aidx].borrow_mut();
+        if item_rc.as_ref().is_none() {
+            let num_syms = grm.alts[aidx].len() + 1;
+            *item_rc = Some(Item {
+                active: BitVec::from_elem(num_syms, false),
+                dots  : BitVec::from_elem(grm.terms_len * num_syms, false)
+            });
         }
     }
-}
 
-impl Hash for LR1Item {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.lhs.hash(state);
-        self.rhs.hash(state);
-        self.dot.hash(state);
-    }
-}
-
-pub fn lritem(lhs: &str, rhs: Vec<Symbol>, d: usize) -> LR1Item {
-    let mut item = LR1Item::new(lhs.to_string(), Vec::new(), d);
-    for e in rhs.iter() {
-        item.rhs.push(e.clone());
-    }
-    item
-}
-
-pub fn mk_string_hashset(vec: Vec<&str>) -> HashSet<String> {
-    let mut hs = HashSet::new();
-    for e in vec.iter() {
-        hs.insert(e.to_string());
-    }
-    hs
-}
-
-/// Calculates the closure of a HashMap containing LR1Items
-pub fn closure1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
-                closure: &mut HashMap<LR1Item, HashSet<String>>) {
-    loop {
-        let mut changed = false;
-        let mut tmp_closure = Vec::new();
-        for (item, la) in closure.iter() {
-            // get next symbol after dot
-            let next_sym = item.next();
-            if next_sym != None {
-                match next_sym.unwrap() {
-                    // get rule with next_sym at the beginning
-                    Symbol::Terminal(_) => continue,
-                    Symbol::Nonterminal(name) => {
-                        let rule = grm.get_rule(&name).unwrap();
-                        // add each alternative as an LR1Item to the closure
-                        for alt in rule.alternatives.iter() {
-                            let lhs = name.clone();
-                            let rhs = alt.clone();
-                            let dot = 0;
-                            // calculate lookahead
-                            let mut newla = HashSet::new();
-                            let remaining_symbols = &item.rhs[item.dot+1..];
-                            for e in la.iter() {
-                                // chain each lookahead with the remaining symbols...
-                                let mut chain = Vec::new();
-                                // XXX replace with extend/push_all when stable
-                                for r in remaining_symbols.iter() {
-                                    chain.push(r.clone());
-                                }
-                                chain.push(Symbol::Terminal(e.clone()));
-                                // ..and calculate their first sets...
-                                let first = get_firsts_from_symbols(firsts, &chain);
-                                // ...and union them together.
-                                for f in first.iter() {
-                                    newla.insert(f.clone());
-                                }
+    /// Create a new Itemset based on calculating goto of 'sym' on the current Itemset.
+    pub fn goto(&self, grm: &Grammar, firsts: &Firsts, sym: Symbol) -> Itemset {
+        let newis = Itemset::new(&grm);
+        {
+            let items = &self.items;
+            let newitems = &newis.items;
+            for i in 0..items.len() {
+                let item_rc = items[i].borrow();
+                if item_rc.is_none() { continue; }
+                let item = item_rc.as_ref().unwrap();
+                self.ensure_item_allocd(&grm, &newis, i);
+                let mut newitem_rc = newitems[i].borrow_mut();
+                let mut newitem = newitem_rc.as_mut().unwrap();
+                let alt = &grm.alts[i];
+                for dot in 0..alt.len() {
+                    if !item.active[dot] { continue; }
+                    if sym == alt[dot] {
+                        newitem.active.set(dot + 1, true);
+                        for j in 0..grm.terms_len {
+                            if item.dots[dot * grm.terms_len + j] {
+                                newitem.dots.set((dot + 1) * grm.terms_len + j, true);
                             }
-                            let new_item = LR1Item::new(lhs, rhs, dot);
-                            tmp_closure.push((new_item, newla));
                         }
                     }
                 }
             }
+            newis.close(&grm, &firsts);
         }
-        // merge new LR1Item candidates into closure map
-        for (i, l) in tmp_closure.drain(..) {
-            if closure.contains_key(&i) {
-                let x = closure.get_mut(&i).unwrap();
-                for k in l {
-                    if !x.contains(&k) {
-                        x.insert(k.clone());
-                        changed = true;
-                    }
-                }
-            }
-            else {
-                closure.insert(i,l);
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
-        }
+        newis
     }
-}
-
-/// Calculates the goto that results from reading past a certain symbol in another set.
-pub fn goto1(grm: &Grammar, firsts: &HashMap<String, HashSet<String>>,
-             state: &HashMap<LR1Item, HashSet<String>>, symbol: &Symbol)
-             -> HashMap<LR1Item, HashSet<String>> {
-    let mut goto = HashMap::new();
-
-    for (item, la) in state.iter() {
-        if item.next() != None {
-            if &item.next().unwrap() == symbol {
-                // Clone item and insert into new goto set
-                let lhs = item.lhs.clone();
-                let rhs = item.rhs.clone();
-                let dot = item.dot + 1;
-                let gotoitm = LR1Item::new(lhs, rhs, dot);
-                let gotola = la.clone();
-                goto.insert(gotoitm, gotola);
-            }
-        }
-    }
-    closure1(grm, firsts, &mut goto);
-    goto
 }
 
 pub struct StateGraph {
-    pub states: Vec<HashMap<LR1Item, HashSet<String>>>,
-    pub edges: HashMap<(i32, Symbol), i32>
+    pub states: Vec<Itemset>,
+    pub edges: HashMap<(usize, Symbol), usize>
 }
 
 impl StateGraph {
-    pub fn contains(&self, state: &HashMap<LR1Item, HashSet<String>>) -> bool {
-        self.states.contains(state)
-    }
-}
+    /// Create a StateGraph from 'grm'.
+    pub fn new(grm: &Grammar) -> StateGraph {
+        let firsts     = Firsts::new(grm);
+        let mut states = Vec::new();
+        let mut edges  = HashMap::new();
 
-/// Builds a `StateGraph` from the given `Grammar`.
-pub fn build_graph(grm: &Grammar) -> StateGraph {
-    let mut states = Vec::new();
-    let mut edges = HashMap::new();
-    let mut todo = Vec::new();
+        // Create the start state and seed the stategraph with it
+        let state0 = Itemset::new(&grm);
+        let mut la = BitVec::from_elem(grm.terms_len, false);
+        la.set(grm.end_term, true);
+        state0.add(&grm, grm.start_rule, 0, &la);
+        state0.close(&grm, &firsts);
+        states.push(state0);
 
-    // calculate first sets
-    let firsts = calc_firsts(&grm);
-    
-    // Create first state
-    let item = lritem("Start!", vec![nonterminal(&grm.start)], 0);
-    let mut la = HashSet::new();
-    la.insert("$".to_string());
-    let mut s0 = HashMap::new();
-    s0.insert(item, la);
-    closure1(&grm, &firsts, &mut s0);
-
-    // add to list of states as #0
-    todo.push(s0);
-
-    let mut current_id = 0;
-    let mut unique_id = 1;
-
-    loop {
-        if todo.len() == 0 {
-            break;
-        }
-        let state = todo.remove(0);
-
-        let mut symbols_done = HashSet::new();
-        for (item, _) in state.iter() {
-            let symbol = match item.next() {
-                Some(x) => x,
-                None => continue
-            };
-            if symbols_done.contains(&symbol) {
-                continue;
-            }
-            else {
-                // Cache processed symbols so that we don't create the same
-                // goto set multiple times for different rules with the same
-                // next symbol
-                symbols_done.insert(symbol.clone());
-            }
-            let goto = goto1(&grm, &firsts, &state, &symbol);
-            // This is slow! We are better off hashing the state HashMaps and making `states` a set
-            // instead of a vector.
-            // Although on second thought, when we add the weakly_compatible optimisation later we
-            // might have to iterate over all states anyway
-            match states.iter().position(|s| s == &goto) {
-                // If goto is already contained map current_id to its position...
-                Some(pos) => {edges.insert((current_id, symbol.clone()), pos as i32); ()},
-                // ...otherwise add goto to todo-list and map current_id to its unique_id
-                None => {
-                    todo.push(goto);
-                    edges.insert((current_id, symbol.clone()), unique_id);
-                    unique_id += 1;
-                    ()
+        let mut seen_nonterms = BitVec::from_elem(grm.nonterms_len, false);
+        let mut seen_terms = BitVec::from_elem(grm.terms_len, false);
+        let mut state_i = 0; // How far through states have we processed so far?
+        while state_i < states.len() {
+            // We maintain two lists of which nonterms and terms we've seen; when processing a
+            // given state there's no point processing any given nonterm or term more than once.
+            seen_nonterms.clear();
+            seen_terms.clear();
+            // Iterate over active item in the stategraph.
+            for i in 0..grm.alts.len() {
+                if states[state_i].items[i].borrow().is_none() { continue; }
+                // From this point onwards in the for loop, we know that states[state_i].items is
+                // definitely allocated and that calling unwrap() on it is safe.
+                let alt = &grm.alts[i];
+                for dot in 0..alt.len() {
+                    let sym;
+                    let nstate;
+                    {
+                        let state = &states[state_i] as &Itemset;
+                        if !state.items[i].borrow().as_ref().unwrap().active[dot] {
+                            continue;
+                        }
+                        // We have an active item. If the symbol at the dot hasn't been seen
+                        // before, we calculate its goto relative to the current state. We then add
+                        // that new state to the list of states.
+                        sym = &alt[dot];
+                        match sym {
+                            &Symbol::Nonterminal(nonterm_i) => {
+                                if seen_nonterms[nonterm_i] {
+                                    continue;
+                                }
+                                seen_nonterms.set(nonterm_i, true);
+                            },
+                            &Symbol::Terminal(term_i) => {
+                                if seen_terms[term_i] {
+                                    continue;
+                                }
+                                seen_terms.set(term_i, true);
+                            }
+                        }
+                        nstate = state.goto(&grm, &firsts, sym.clone());
+                    }
+                    let j = states.iter().position(|x| x == &nstate);
+                    match j {
+                        Some(k) => { edges.insert((state_i, sym.clone()), k); },
+                        None    => {
+                            edges.insert((state_i, sym.clone()), states.len());
+                            states.push(nstate);
+                        }
+                    }
                 }
             }
+            state_i += 1;
         }
-
-        states.push(state);
-        current_id += 1;
+        StateGraph{states: states, edges: edges}
     }
-
-    StateGraph {states: states, edges: edges}
 }
+

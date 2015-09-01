@@ -12,5 +12,6 @@ name = "lrpar"
 path = "src/lib/mod.rs"
 
 [dependencies]
+bit-vec = "0.4.1"
 getopts = "0.2.1"
 regex = "0.1.8"
