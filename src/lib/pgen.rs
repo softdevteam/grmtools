@@ -299,13 +299,13 @@ impl Itemset {
                 let item_rc = items[i].borrow();
                 if item_rc.is_none() { continue; }
                 let item = item_rc.as_ref().unwrap();
-                self.ensure_item_allocd(&grm, &newis, i);
-                let mut newitem_rc = newitems[i].borrow_mut();
-                let mut newitem = newitem_rc.as_mut().unwrap();
                 let alt = &grm.alts[i];
                 for dot in 0..alt.len() {
                     if !item.active[dot] { continue; }
                     if sym == alt[dot] {
+                        self.ensure_item_allocd(&grm, &newis, i);
+                        let mut newitem_rc = newitems[i].borrow_mut();
+                        let mut newitem = newitem_rc.as_mut().unwrap();
                         newitem.active.set(dot + 1, true);
                         for j in 0..grm.terms_len {
                             if item.dots[dot * grm.terms_len + j] {
