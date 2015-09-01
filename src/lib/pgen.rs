@@ -278,6 +278,10 @@ impl Itemset {
         }
     }
 
+    /// Ensure that memory is allocated for alternative `aidx` in itemset `is`.
+    ///
+    /// If memory is already allocated, this is a no-op. If no memory is yet allocated, it will
+    /// allocate it.
     fn ensure_item_allocd(&self, grm: &Grammar, is: &Itemset, aidx: AIdx) {
         let mut item_rc = is.items[aidx].borrow_mut();
         if item_rc.as_ref().is_none() {
