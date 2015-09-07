@@ -4,14 +4,11 @@ use self::bit_vec::BitVec;
 extern crate lrpar;
 use lrpar::grammar::{AIdx, ast_to_grammar, Grammar, Symbol};
 use lrpar::yacc::parse_yacc;
-//use lrpar::pgen::{calc_firsts, calc_follows, LR1Item, closure1, goto1};
 use lrpar::pgen::{Itemset, Firsts, StateGraph};
 
 fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
     let nt_i = grm.nonterminal_off(rn);
-    println!("{:?} {} {:?} {:?}", firsts, rn, should_be, grm.terminal_names);
     for (i, n) in grm.terminal_names.iter().enumerate() {
-        println!("matching {} {} {:?} {:?}", i, n, should_be.iter().position(|x| x == n), firsts.is_set(nt_i, i));
         match should_be.iter().position(|x| x == n) {
             Some(_) => {
                 if !firsts.is_set(nt_i, i) {
@@ -164,45 +161,47 @@ fn test_first_from_eco_bug() {
     has(&grm, &firsts, "G", vec!["c", "d", "f", ""]);
 }
 
-pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: usize, la: Vec<&str>) {
+pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: usize, la:
+                    Vec<&str>) {
     let ab_alt_off = grm.rules_alts[grm.nonterminal_off(nt)][alt_off];
-    let is_rc = &is.items[ab_alt_off].borrow();
-    if is_rc.as_ref().is_none() {
+    let item_rc = &is.items[ab_alt_off].borrow();
+    if item_rc.as_ref().is_none() {
         panic!("{}, alternative {} is not allocated when it should be", nt, alt_off);
     }
-    let is = is_rc.as_ref().unwrap();
-    if !is.active[dot] {
+    let lookahead_opt = &item_rc.as_ref().unwrap().lookaheads[dot].borrow();
+    if lookahead_opt.is_none() {
         panic!("{}, alternative {}: dot {} is not active when it should be", nt, alt_off, dot);
     }
+    let lookahead = &lookahead_opt.as_ref().unwrap();
     for i in 0..grm.terms_len {
-        let d = dot * grm.terms_len + i;
-        let bit = is.dots[d];
+        let bit = lookahead[i];
         let mut found = false;
         for t in la.iter() {
             if grm.terminal_off(t) == i {
                 if !bit {
-                    panic!("bit for terminal {}, dot {} is not set in alternative {} of {} when it should be", t, dot, alt_off, nt);
+                    panic!("bit for terminal {}, dot {} is not set in alternative {} of {} when it should be",
+                           t, dot, alt_off, nt);
                 }
                 found = true;
                 break;
             }
         }
         if !found && bit {
-            panic!("bit for terminal {}, dot {} is set in alternative {} of {} when it shouldn't be", grm.terminal_names[i], dot, alt_off, nt);
+            panic!("bit for terminal {}, dot {} is set in alternative {} of {} when it shouldn't be",
+                   grm.terminal_names[i], dot, alt_off, nt);
         }
     }
 }
 
 pub fn num_active_states(is: &Itemset) -> usize {
     let mut a = 0;
-    for i in 0..is.items.len() {
-        if is.items[i].borrow().is_none() { continue; }
-        let item_rc = is.items[i].borrow();
-        let item = item_rc.as_ref().unwrap();
-        for dot in 0..item.active.len() {
-            if !item.active[dot] { continue; }
-            a += 1;
-        }
+    for item_rc in is.items.iter() {
+        let item_opt = item_rc.borrow();
+        if item_opt.is_none() { continue; }
+        a += item_opt.as_ref().unwrap().lookaheads.iter().fold(0, |acc, ref la_opt|
+                                                                  if la_opt.borrow().is_some() {
+                                                                      acc + 1 
+                                                                  } else { acc });
     }
     a
 }
@@ -225,6 +224,7 @@ fn test_dragon_grammar() {
     la.set(grm.terminal_off("$"), true);
     is.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
     is.close(&grm, &firsts);
+    assert_eq!(num_active_states(&is), 6);
     state_exists(&grm, &is, "^", 0, 0, vec!["$"]);
     state_exists(&grm, &is, "S", 0, 0, vec!["$"]);
     state_exists(&grm, &is, "S", 1, 0, vec!["$"]);
