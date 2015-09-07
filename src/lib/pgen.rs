@@ -38,16 +38,22 @@ pub struct Firsts {
     // 3 bits where bits 0, 1, 2 represent terminals a, b, epsilon respectively.
     //   111101
     // Where "111" is for the nonterminal S, and 101 for A.
-    bf: BitVec,
+    alt_firsts: Vec<BitVec>,
+    alt_epsilons: BitVec,
     terms_len: NIdx
 }
 
 impl Firsts {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &Grammar) -> Firsts {
+        let mut alt_firsts = Vec::with_capacity(grm.nonterms_len);
+        for _ in 0..grm.nonterms_len {
+            alt_firsts.push(BitVec::from_elem(grm.terms_len, false));
+        }
         let mut firsts = Firsts {
-            bf        : BitVec::from_elem((grm.nonterms_len * (grm.terms_len + 1)), false),
-            terms_len : grm.terms_len
+            alt_firsts  : alt_firsts,
+            alt_epsilons: BitVec::from_elem(grm.nonterms_len, false),
+            terms_len   : grm.terms_len
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -62,7 +68,8 @@ impl Firsts {
                     let ref alt = grm.alts[*alt_i];
                     if alt.len() == 0 {
                         // if it's an empty alternative, ensure this nonterminal's epsilon bit is set.
-                        if !firsts.set(rul_i, grm.terms_len) {
+                        if !firsts.is_epsilon_set(rul_i) {
+                            firsts.alt_epsilons.set(rul_i, true);
                             changed = true;
                         }
                         continue;
@@ -92,8 +99,9 @@ impl Firsts {
                                 // and if its the last symbol in the alternative, then add epsilon
                                 // to FIRSTs.
                                 if firsts.is_epsilon_set(nonterm_i) && sym_i == alt.len() - 1 {
-                                    // only add epsilon if the symbol is the last in the production
-                                    if !firsts.set(rul_i, grm.terms_len) {
+                                    // Only add epsilon if the symbol is the last in the production
+                                    if !firsts.alt_epsilons[rul_i] {
+                                        firsts.alt_epsilons.set(rul_i, true);
                                         changed = true;
                                     }
                                 }
@@ -109,32 +117,34 @@ impl Firsts {
                     }
                 }
             }
-            if !changed {
-                return firsts;
-            }
+            if !changed { return firsts; }
         }
     }
 
-    /// Returns true if the terminal `tidx' is in the first set for nonterminal `nidx` is set.
+    /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
     pub fn is_set(&self, nidx: NIdx, tidx: TIdx) -> bool {
-        assert!(tidx < self.terms_len);
-        self.bf[nidx * (self.terms_len + 1) + tidx]
+        self.alt_firsts[nidx][tidx]
     }
 
-    /// Returns true if the nonterminal `nidx' has epsilon in its first set.
+    /// Get all the firsts for alternative `nidx` as a `BitVec`.
+    pub fn alt_firsts(&self, nidx: NIdx) -> &BitVec {
+        &self.alt_firsts[nidx]
+    }
+
+    /// Returns true if the nonterminal `nidx` has epsilon in its first set.
     pub fn is_epsilon_set(&self, nidx: NIdx) -> bool {
-        self.bf[nidx * (self.terms_len + 1) + self.terms_len]
+        self.alt_epsilons[nidx]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
-    /// it was already set, or false otherwise. Bit `terms_len` represents epsilon.
+    /// it was already set, or false otherwise.
     fn set(&mut self, nidx: NIdx, tidx: TIdx) -> bool {
-        let off = nidx * (self.terms_len + 1) + tidx;
-        if self.bf[off] {
+        let mut alt = &mut self.alt_firsts[nidx];
+        if alt[tidx] {
             true
         }
         else {
-            self.bf.set(off, true);
+            alt.set(tidx, true);
             false
         }
     }
@@ -235,11 +245,7 @@ impl Itemset {
                                     break;
                                 },
                                 Symbol::Nonterminal(nonterm_j) => {
-                                    for l in 0..grm.terms_len {
-                                        if firsts.is_set(nonterm_j, l) {
-                                            new_la.set(l, true);
-                                        }
-                                    }
+                                    new_la.union(firsts.alt_firsts(nonterm_j));
                                     if !firsts.is_epsilon_set(nonterm_j) {
                                         nullabled = true;
                                         break;
