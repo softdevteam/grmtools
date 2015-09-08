@@ -38,16 +38,22 @@ pub struct Firsts {
     // 3 bits where bits 0, 1, 2 represent terminals a, b, epsilon respectively.
     //   111101
     // Where "111" is for the nonterminal S, and 101 for A.
-    bf: BitVec,
+    alt_firsts: Vec<BitVec>,
+    alt_epsilons: BitVec,
     terms_len: NIdx
 }
 
 impl Firsts {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &Grammar) -> Firsts {
+        let mut alt_firsts = Vec::with_capacity(grm.nonterms_len);
+        for _ in 0..grm.nonterms_len {
+            alt_firsts.push(BitVec::from_elem(grm.terms_len, false));
+        }
         let mut firsts = Firsts {
-            bf        : BitVec::from_elem((grm.nonterms_len * (grm.terms_len + 1)), false),
-            terms_len : grm.terms_len
+            alt_firsts  : alt_firsts,
+            alt_epsilons: BitVec::from_elem(grm.nonterms_len, false),
+            terms_len   : grm.terms_len
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -62,7 +68,8 @@ impl Firsts {
                     let ref alt = grm.alts[*alt_i];
                     if alt.len() == 0 {
                         // if it's an empty alternative, ensure this nonterminal's epsilon bit is set.
-                        if !firsts.set(rul_i, grm.terms_len) {
+                        if !firsts.is_epsilon_set(rul_i) {
+                            firsts.alt_epsilons.set(rul_i, true);
                             changed = true;
                         }
                         continue;
@@ -92,8 +99,9 @@ impl Firsts {
                                 // and if its the last symbol in the alternative, then add epsilon
                                 // to FIRSTs.
                                 if firsts.is_epsilon_set(nonterm_i) && sym_i == alt.len() - 1 {
-                                    // only add epsilon if the symbol is the last in the production
-                                    if !firsts.set(rul_i, grm.terms_len) {
+                                    // Only add epsilon if the symbol is the last in the production
+                                    if !firsts.alt_epsilons[rul_i] {
+                                        firsts.alt_epsilons.set(rul_i, true);
                                         changed = true;
                                     }
                                 }
@@ -109,32 +117,34 @@ impl Firsts {
                     }
                 }
             }
-            if !changed {
-                return firsts;
-            }
+            if !changed { return firsts; }
         }
     }
 
-    /// Returns true if the terminal `tidx' is in the first set for nonterminal `nidx` is set.
+    /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
     pub fn is_set(&self, nidx: NIdx, tidx: TIdx) -> bool {
-        assert!(tidx < self.terms_len);
-        self.bf[nidx * (self.terms_len + 1) + tidx]
+        self.alt_firsts[nidx][tidx]
     }
 
-    /// Returns true if the nonterminal `nidx' has epsilon in its first set.
+    /// Get all the firsts for alternative `nidx` as a `BitVec`.
+    pub fn alt_firsts(&self, nidx: NIdx) -> &BitVec {
+        &self.alt_firsts[nidx]
+    }
+
+    /// Returns true if the nonterminal `nidx` has epsilon in its first set.
     pub fn is_epsilon_set(&self, nidx: NIdx) -> bool {
-        self.bf[nidx * (self.terms_len + 1) + self.terms_len]
+        self.alt_epsilons[nidx]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
-    /// it was already set, or false otherwise. Bit `terms_len` represents epsilon.
+    /// it was already set, or false otherwise.
     fn set(&mut self, nidx: NIdx, tidx: TIdx) -> bool {
-        let off = nidx * (self.terms_len + 1) + tidx;
-        if self.bf[off] {
+        let mut alt = &mut self.alt_firsts[nidx];
+        if alt[tidx] {
             true
         }
         else {
-            self.bf.set(off, true);
+            alt.set(tidx, true);
             false
         }
     }
@@ -147,7 +157,6 @@ pub struct Itemset {
     pub items: Vec<RefCell<Option<Item>>>
 }
 
-#[derive(Debug, PartialEq)]
 // An Item instance represents all the possible items that derive from a given alternative in a
 // grammar. We know that if a given alternative E has n symbols, it can lead to at most n+1 items.
 // For example, Consider an alternative:
@@ -160,27 +169,16 @@ pub struct Itemset {
 // can only appear once in the lookahead). Knowing this, we can create a very compact fixed-size
 // representation with room for all the possible items that an alternative can lead to.
 //
-// active is a bitfield of length n+1 (where n is the number of symbols in an alternative). If bit
-// i is set, it means that there is an item with a dot at position i. When this is set, the
-// corresponding section of the dots bitvec is then meaningful.
-//
-// dots is a bitfield of length (n + 1)*grm.terms_len i.e. for each dot, it stores a single bit for
-// each terminal in the grammar. Note that, unlike Firsts::bf, we do not need a bit to represent
-// epsilon.
-//
 // Let us assume that our state has the following items:
 //    E : . 'b' S; // Lookahead 'a' and '$'
 //    E : 'b' S .; // Lookahead '$'
-// then active would be set to:
-//   101
-// and (assuming the grammar has terminals '$', 'a', and 'b' only) dots would be something like the
-// following (depending on the order the terminals are stored in grm.terminal_names):
-//   011000001
-// Where "011" corresponds to "E: . 'b' S;", the middle 000 are inactive, and 001 corresponds to
-// "E: 'b' S .;".
+// and the terminals '$' (bit 0), 'a' (bit 1), and 'b' (bit 2) only. 'lookaheads' then lookaheads
+// would then be set to something along the lines of:
+//    [RefCell(Some(BitVec(011))), RefCell(None), RefCell(Some(BitVec(001)))]
+// Where "011" corresponds to "E: . 'b' S;", and 001 corresponds to "E: 'b' S .;".
+#[derive(Debug, PartialEq)]
 pub struct Item {
-    pub active: BitVec,
-    pub dots: BitVec
+    pub lookaheads: Vec<RefCell<Option<BitVec>>>
 }
 
 impl Itemset {
@@ -193,22 +191,34 @@ impl Itemset {
         Itemset {items: items}
     }
 
+    /// Ensure that memory is allocated for dot `dot` in alternative `aidx` in itemset `is`.
+    ///
+    /// If memory is already allocated, this is a no-op. If no memory is yet allocated, it will
+    /// allocate it.
+    fn ensure_lookahead_allocd(&self, grm: &Grammar, is: &Itemset, aidx: AIdx, dot: SIdx) {
+        let mut item_opt = is.items[aidx].borrow_mut();
+        if item_opt.is_none() {
+            let mut las = Vec::with_capacity(grm.alts[aidx].len());
+            for _ in 0..grm.alts[aidx].len() + 1 {
+                las.push(RefCell::new(None));
+            }
+            *item_opt = Some(Item{lookaheads: las});
+        }
+        let mut la_opt = item_opt.as_ref().unwrap().lookaheads[dot].borrow_mut();
+        if la_opt.is_none() {
+            *la_opt = Some(BitVec::from_elem(grm.terms_len, false));
+        }
+    }
+
     /// Add an item for the alternative 'aidx' with the dot set to position 'dot' and with
     /// lookahead set to 'la'.
     pub fn add(&self, grm: &Grammar, aidx: AIdx, dot: SIdx, la: &BitVec) {
-        if la.len() != grm.terms_len {
-            panic!("Passed a bitfield of length {} instead of {}", la.len(), grm.terms_len);
-        }
-        self.ensure_item_allocd(&grm, &self, aidx);
-        let mut item_rc = self.items[aidx].borrow_mut();
-        let mut alt_cl = &mut item_rc.as_mut().unwrap();
-        alt_cl.active.set(dot, true);
-        let dots = &mut alt_cl.dots;
-        for (i, bit) in la.iter().enumerate() {
-            if bit {
-                dots.set(dot * grm.nonterms_len + i, true);
-            }
-        }
+        assert!(la.len() == grm.terms_len);
+        self.ensure_lookahead_allocd(&grm, &self, aidx, dot);
+        let item_opt = self.items[aidx].borrow_mut();
+        let mut la_opt = item_opt.as_ref().unwrap().lookaheads[dot].borrow_mut();
+        debug_assert!(la_opt.as_ref().unwrap().none());
+        la_opt.as_mut().unwrap().union(la);
     }
 
     /// Close over this Itemset.
@@ -216,13 +226,14 @@ impl Itemset {
         let mut new_la = BitVec::from_elem(grm.terms_len, false);
         loop {
             let mut changed = false;
-            for i in 0..self.items.len() {
-                if self.items[i].borrow().is_none() { continue; }
-                // From this point onwards in the for loop, we know that self.items[i] is
-                // definitely allocated and that calling unwrap() on it is safe.
+            for (i, item_rc) in self.items.iter().enumerate() {
+                if item_rc.borrow().is_none() { continue; }
                 let alt = &grm.alts[i];
                 for dot in 0..alt.len() {
-                    if !self.items[i].borrow().as_ref().unwrap().active[dot] { continue; }
+                    {
+                        let item_opt = item_rc.borrow();
+                        if item_opt.as_ref().unwrap().lookaheads[dot].borrow().is_none() { continue; }
+                    }
                     if let Symbol::Nonterminal(nonterm_i) = alt[dot] {
                         new_la.clear();
                         let mut nullabled = false;
@@ -234,11 +245,7 @@ impl Itemset {
                                     break;
                                 },
                                 Symbol::Nonterminal(nonterm_j) => {
-                                    for l in 0..grm.terms_len {
-                                        if firsts.is_set(nonterm_j, l) {
-                                            new_la.set(l, true);
-                                        }
-                                    }
+                                    new_la.union(firsts.alt_firsts(nonterm_j));
                                     if !firsts.is_epsilon_set(nonterm_j) {
                                         nullabled = true;
                                         break;
@@ -247,49 +254,21 @@ impl Itemset {
                             }
                         }
                         if !nullabled {
-                            let item_rc = self.items[i].borrow();
-                            let dots = &item_rc.as_ref().unwrap().dots;
-                            for l in 0..grm.terms_len {
-                                if dots[dot * grm.terms_len + l] {
-                                    new_la.set(l, true);
-                                }
-                            }
+                            let item_opt = item_rc.borrow();
+                            let la_opt = item_opt.as_ref().unwrap().lookaheads[dot].borrow();
+                            new_la.union(&la_opt.as_ref().unwrap());
                         }
 
                         for alt_i in grm.rules_alts[nonterm_i].iter() {
-                            self.ensure_item_allocd(&grm, &self, *alt_i);
-                            let mut clalt_rc = self.items[*alt_i].borrow_mut();
-                            let mut clalt = clalt_rc.as_mut().unwrap();
-                            if !clalt.active[0] {
-                                clalt.active.set(0, true);
-                                changed = true;
-                            }
-                            for l in 0..grm.terms_len {
-                                if new_la[l] && !clalt.dots[l] {
-                                    clalt.dots.set(l, true);
-                                    changed = true;
-                                }
-                            }
+                            self.ensure_lookahead_allocd(&grm, &self, *alt_i, 0);
+                            let clitem_opt = self.items[*alt_i].borrow_mut();
+                            let mut clla_opt = clitem_opt.as_ref().unwrap().lookaheads[0].borrow_mut();
+                            if clla_opt.as_mut().unwrap().union(&new_la) { changed = true; }
                         }
                     }
                 }
             }
             if !changed { break; }
-        }
-    }
-
-    /// Ensure that memory is allocated for alternative `aidx` in itemset `is`.
-    ///
-    /// If memory is already allocated, this is a no-op. If no memory is yet allocated, it will
-    /// allocate it.
-    fn ensure_item_allocd(&self, grm: &Grammar, is: &Itemset, aidx: AIdx) {
-        let mut item_rc = is.items[aidx].borrow_mut();
-        if item_rc.as_ref().is_none() {
-            let num_syms = grm.alts[aidx].len() + 1;
-            *item_rc = Some(Item {
-                active: BitVec::from_elem(num_syms, false),
-                dots  : BitVec::from_elem(grm.terms_len * num_syms, false)
-            });
         }
     }
 
@@ -299,23 +278,19 @@ impl Itemset {
         {
             let items = &self.items;
             let newitems = &newis.items;
-            for i in 0..items.len() {
-                let item_rc = items[i].borrow();
-                if item_rc.is_none() { continue; }
-                let item = item_rc.as_ref().unwrap();
+            for (i, item_rc) in items.iter().enumerate() {
+                let item_opt = item_rc.borrow();
+                if item_opt.is_none() { continue; }
+                let lookaheads = &item_opt.as_ref().unwrap().lookaheads;
                 let alt = &grm.alts[i];
                 for dot in 0..alt.len() {
-                    if !item.active[dot] { continue; }
+                    let la_rc = lookaheads[dot].borrow();
+                    if la_rc.is_none() { continue; }
                     if sym == alt[dot] {
-                        self.ensure_item_allocd(&grm, &newis, i);
-                        let mut newitem_rc = newitems[i].borrow_mut();
-                        let mut newitem = newitem_rc.as_mut().unwrap();
-                        newitem.active.set(dot + 1, true);
-                        for j in 0..grm.terms_len {
-                            if item.dots[dot * grm.terms_len + j] {
-                                newitem.dots.set((dot + 1) * grm.terms_len + j, true);
-                            }
-                        }
+                        self.ensure_lookahead_allocd(&grm, &newis, i, dot + 1);
+                        let newitem_opt = newitems[i].borrow_mut();
+                        let mut newla_opt = newitem_opt.as_ref().unwrap().lookaheads[dot + 1].borrow_mut();
+                        newla_opt.as_mut().unwrap().union(&la_rc.as_ref().unwrap());
                     }
                 }
             }
@@ -364,7 +339,8 @@ impl StateGraph {
                     let nstate;
                     {
                         let state = &states[state_i] as &Itemset;
-                        if !state.items[i].borrow().as_ref().unwrap().active[dot] {
+                        let item_opt = state.items[i].borrow();
+                        if item_opt.as_ref().unwrap().lookaheads[dot].borrow().is_none() {
                             continue;
                         }
                         // We have an active item. If the symbol at the dot hasn't been seen
