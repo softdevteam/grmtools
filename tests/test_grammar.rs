@@ -8,7 +8,7 @@ fn test_minimal() {
     let ast = parse_yacc(&"%start R %token T %% R: 'T';".to_string()).unwrap();
     let grm = ast_to_grammar(&ast);
 
-    assert_eq!(grm.start_rule, 0);
+    assert_eq!(grm.start_alt, 0);
     grm.nonterminal_off("^");
     grm.nonterminal_off("R");
     grm.terminal_off("$");
