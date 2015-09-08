@@ -316,7 +316,7 @@ impl StateGraph {
         let state0 = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(grm.end_term, true);
-        state0.add(&grm, grm.start_rule, 0, &la);
+        state0.add(&grm, grm.start_alt, 0, &la);
         state0.close(&grm, &firsts);
         states.push(state0);
 

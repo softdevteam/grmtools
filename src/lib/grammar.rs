@@ -21,7 +21,7 @@ pub struct Grammar {
     pub nonterminal_names: Vec<String>,
     pub terms_len: TIdx,
     pub terminal_names: Vec<String>,
-    pub start_rule: NIdx,
+    pub start_alt: AIdx,
     pub end_term: TIdx,
     pub rules_alts: Vec<Vec<AIdx>>,
     pub alts: Vec<Vec<Symbol>>,
@@ -87,6 +87,7 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
     let mut nonterminal_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
     nonterminal_names.push(start_nonterm.clone());
     for k in ast.rules.keys() { nonterminal_names.push(k.clone()); }
+    nonterminal_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
     let mut rules_alts:Vec<Vec<AIdx>> = Vec::with_capacity(nonterminal_names.len());
     let mut nonterminal_map = HashMap::<String, NIdx>::new();
     for (i, v) in nonterminal_names.iter().enumerate() {
@@ -102,10 +103,14 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
     }
 
     let mut alts = Vec::new();
-    let start_alt = vec![Symbol::Nonterminal(nonterminal_map[ast.start.as_ref().unwrap()])];
-    alts.push(start_alt);
-    rules_alts.get_mut(nonterminal_map[&start_nonterm]).unwrap().push(0);
-    for astrule in ast.rules.values() {
+    for astrulename in nonterminal_names.iter() {
+        if astrulename == &start_nonterm {
+            rules_alts.get_mut(nonterminal_map[&start_nonterm]).unwrap().push(alts.len());
+            let start_alt = vec![Symbol::Nonterminal(nonterminal_map[ast.start.as_ref().unwrap()])];
+            alts.push(start_alt);
+            continue;
+        }
+        let astrule = &ast.rules[astrulename];
         let mut rule = rules_alts.get_mut(nonterminal_map[&astrule.name]).unwrap();
         for astalt in astrule.alternatives.iter() {
             let mut alt = Vec::with_capacity(astalt.len());
@@ -128,7 +133,7 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
         nonterminal_names: nonterminal_names,
         terms_len:         terminal_names.len(),
         terminal_names:    terminal_names,
-        start_rule:        nonterminal_map[&start_nonterm],
+        start_alt:         rules_alts[nonterminal_map[&start_nonterm]][0],
         end_term:          terminal_map[&end_term],
         rules_alts:        rules_alts,
         alts:              alts,
