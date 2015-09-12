@@ -164,17 +164,9 @@ fn test_first_from_eco_bug() {
 pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: usize, la:
                     Vec<&str>) {
     let ab_alt_off = grm.rules_alts[grm.nonterminal_off(nt)][alt_off];
-    let item_rc = &is.items[ab_alt_off].borrow();
-    if item_rc.as_ref().is_none() {
-        panic!("{}, alternative {} is not allocated when it should be", nt, alt_off);
-    }
-    let lookahead_opt = &item_rc.as_ref().unwrap().lookaheads[dot].borrow();
-    if lookahead_opt.is_none() {
-        panic!("{}, alternative {}: dot {} is not active when it should be", nt, alt_off, dot);
-    }
-    let lookahead = &lookahead_opt.as_ref().unwrap();
+    let ctx = &is.items[&(ab_alt_off, dot)];
     for i in 0..grm.terms_len {
-        let bit = lookahead[i];
+        let bit = ctx[i];
         let mut found = false;
         for t in la.iter() {
             if grm.terminal_off(t) == i {
@@ -194,43 +186,35 @@ pub fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: u
 }
 
 pub fn num_active_states(is: &Itemset) -> usize {
-    let mut a = 0;
-    for item_rc in is.items.iter() {
-        let item_opt = item_rc.borrow();
-        if item_opt.is_none() { continue; }
-        a += item_opt.as_ref().unwrap().lookaheads.iter().fold(0, |acc, ref la_opt|
-                                                                  if la_opt.borrow().is_some() {
-                                                                      acc + 1 
-                                                                  } else { acc });
-    }
-    a
+    is.items.len()
 }
+
 
 #[test]
 fn test_dragon_grammar() {
     // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
     let grm = ast_to_grammar(&parse_yacc(&"
       %start S
-      %token e m i
       %%
-      S: L 'e' R | R;
-      L: 'm' R | 'i';
+      S: L '=' R | R;
+      L: '*' R | 'id';
       R: L;
       ".to_string()).unwrap());
     let firsts = Firsts::new(&grm);
 
-    let is = Itemset::new(&grm);
+    let mut is = Itemset::new(&grm);
     let mut la = BitVec::from_elem(grm.terms_len, false);
     la.set(grm.terminal_off("$"), true);
-    is.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
-    is.close(&grm, &firsts);
-    assert_eq!(num_active_states(&is), 6);
-    state_exists(&grm, &is, "^", 0, 0, vec!["$"]);
-    state_exists(&grm, &is, "S", 0, 0, vec!["$"]);
-    state_exists(&grm, &is, "S", 1, 0, vec!["$"]);
-    state_exists(&grm, &is, "L", 0, 0, vec!["$", "e"]);
-    state_exists(&grm, &is, "L", 1, 0, vec!["$", "e"]);
-    state_exists(&grm, &is, "R", 0, 0, vec!["$"]);
+    is.add(grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+    let cls_is = is.close(&grm, &firsts);
+    println!("{:?}", cls_is);
+    assert_eq!(num_active_states(&cls_is), 6);
+    state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
+    state_exists(&grm, &cls_is, "S", 0, 0, vec!["$"]);
+    state_exists(&grm, &cls_is, "S", 1, 0, vec!["$"]);
+    state_exists(&grm, &cls_is, "L", 0, 0, vec!["$", "="]);
+    state_exists(&grm, &cls_is, "L", 1, 0, vec!["$", "="]);
+    state_exists(&grm, &cls_is, "R", 0, 0, vec!["$"]);
 }
 
 #[test]
@@ -241,21 +225,21 @@ fn test_closure1_ecogrm() {
     let mut is = Itemset::new(&grm);
     let mut la = BitVec::from_elem(grm.terms_len, false);
     la.set(grm.terminal_off("$"), true);
-    is.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
-    is.close(&grm, &firsts);
+    is.add(grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+    let mut cls_is = is.close(&grm, &firsts);
 
-    state_exists(&grm, &is, "^", 0, 0, vec!["$"]);
-    state_exists(&grm, &is, "S", 0, 0, vec!["b", "$"]);
-    state_exists(&grm, &is, "S", 1, 0, vec!["b", "$"]);
-    state_exists(&grm, &is, "S", 2, 0, vec!["b", "$"]);
+    state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
+    state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "$"]);
+    state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "$"]);
+    state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
 
     is = Itemset::new(&grm);
-    is.add(&grm, grm.rules_alts[grm.nonterminal_off("F") as usize][0], 0, &la);
-    is.close(&grm, &firsts);
-    state_exists(&grm, &is, "F", 0, 0, vec!["$"]);
-    state_exists(&grm, &is, "C", 0, 0, vec!["d", "f"]);
-    state_exists(&grm, &is, "D", 0, 0, vec!["a"]);
-    state_exists(&grm, &is, "D", 1, 0, vec!["a"]);
+    is.add(grm.rules_alts[grm.nonterminal_off("F") as usize][0], 0, &la);
+    cls_is = is.close(&grm, &firsts);
+    state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
+    state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
+    state_exists(&grm, &cls_is, "D", 0, 0, vec!["a"]);
+    state_exists(&grm, &cls_is, "D", 1, 0, vec!["a"]);
 }
 
 // GrammarAST from 'LR(k) Analyse fuer Pragmatiker'
@@ -283,30 +267,30 @@ fn test_closure1_grm3() {
     let mut is = Itemset::new(&grm);
     let mut la = BitVec::from_elem(grm.terms_len, false);
     la.set(grm.terminal_off("$"), true);
-    is.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
-    is.close(&grm, &firsts);
+    is.add(grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+    let mut cls_is = is.close(&grm, &firsts);
 
-    state_exists(&grm, &is, "^", 0, 0, vec!["$"]);
-    state_exists(&grm, &is, "S", 0, 0, vec!["b", "$"]);
-    state_exists(&grm, &is, "S", 1, 0, vec!["b", "$"]);
+    state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
+    state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "$"]);
+    state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "$"]);
 
     is = Itemset::new(&grm);
     la = BitVec::from_elem(grm.terms_len, false);
     la.set(grm.terminal_off("b"), true);
     la.set(grm.terminal_off("$"), true);
-    is.add(&grm, grm.rules_alts[grm.nonterminal_off("S") as usize][1], 1, &la);
-    is.close(&grm, &firsts);
-    state_exists(&grm, &is, "A", 0, 0, vec!["a"]);
-    state_exists(&grm, &is, "A", 1, 0, vec!["a"]);
-    state_exists(&grm, &is, "A", 2, 0, vec!["a"]);
+    is.add(grm.rules_alts[grm.nonterminal_off("S") as usize][1], 1, &la);
+    cls_is = is.close(&grm, &firsts);
+    state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
+    state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
+    state_exists(&grm, &cls_is, "A", 2, 0, vec!["a"]);
 
     is = Itemset::new(&grm);
     la = BitVec::from_elem(grm.terms_len, false);
     la.set(grm.terminal_off("a"), true);
-    is.add(&grm, grm.rules_alts[grm.nonterminal_off("A") as usize][0], 1, &la);
-    is.close(&grm, &firsts);
-    state_exists(&grm, &is, "S", 0, 0, vec!["b", "c"]);
-    state_exists(&grm, &is, "S", 1, 0, vec!["b", "c"]);
+    is.add(grm.rules_alts[grm.nonterminal_off("A") as usize][0], 1, &la);
+    cls_is = is.close(&grm, &firsts);
+    state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
+    state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
 }
 
 #[test]
@@ -314,30 +298,24 @@ fn test_goto1() {
     let grm = grammar3();
     let firsts = Firsts::new(&grm);
 
-    let is = Itemset::new(&grm);
+    let mut is = Itemset::new(&grm);
     let mut la = BitVec::from_elem(grm.terms_len, false);
     la.set(grm.terminal_off("$"), true);
-    is.add(&grm, grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
-    is.close(&grm, &firsts);
+    is.add(grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+    let cls_is = is.close(&grm, &firsts);
 
-    let goto1 = is.goto(&grm, &firsts, Symbol::Nonterminal(grm.nonterminal_off("S")));
+    let goto1 = cls_is.goto(&grm, &Symbol::Nonterminal(grm.nonterminal_off("S")));
     state_exists(&grm, &goto1, "^", 0, 1, vec!["$"]);
     state_exists(&grm, &goto1, "S", 0, 1, vec!["$", "b"]);
 
     // follow 'b' from start set
-    let goto2 = is.goto(&grm, &firsts, Symbol::Terminal(grm.terminal_off("b")));
+    let goto2 = cls_is.goto(&grm, &Symbol::Terminal(grm.terminal_off("b")));
     state_exists(&grm, &goto2, "S", 1, 1, vec!["$", "b"]);
-    state_exists(&grm, &goto2, "A", 0, 0, vec!["a"]);
-    state_exists(&grm, &goto2, "A", 1, 0, vec!["a"]);
-    state_exists(&grm, &goto2, "A", 2, 0, vec!["a"]);
 
-    // continue by following 'a' from last goto
-    let goto3 = goto2.goto(&grm, &firsts, Symbol::Terminal(grm.terminal_off("a")));
-    state_exists(&grm, &goto3, "A", 0, 1, vec!["a"]);
+    // continue by following 'a' from last goto, after it's been closed
+    let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Terminal(grm.terminal_off("a")));
     state_exists(&grm, &goto3, "A", 1, 1, vec!["a"]);
     state_exists(&grm, &goto3, "A", 2, 1, vec!["a"]);
-    state_exists(&grm, &goto3, "S", 0, 0, vec!["b", "c"]);
-    state_exists(&grm, &goto3, "S", 1, 0, vec!["b", "c"]);
 }
 
 #[test]
