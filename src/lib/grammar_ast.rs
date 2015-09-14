@@ -41,14 +41,23 @@ impl fmt::Display for GrammarASTError {
                 write!(f, "No start rule specified")
             },
             GrammarASTErrorKind::InvalidStartRule => {
-                write!(f, "Start rule does not appear in grammar")
+                write!(f, "Start rule '{}' does not appear in grammar", self.sym.as_ref().unwrap())
             },
             GrammarASTErrorKind::UnknownRuleRef => {
-                write!(f, "Unknown reference to rule")
+                write!(f, "Unknown reference to rule '{}'", self.sym.as_ref().unwrap())
             },
             GrammarASTErrorKind::UnknownToken => {
-                write!(f, "Unknown token")
+                write!(f, "Unknown token '{}'", self.sym.as_ref().unwrap())
             }
+        }
+    }
+}
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &Symbol::Nonterminal(ref s) => write!(f, "{}", s),
+            &Symbol::Terminal(ref s)    => write!(f, "{}", s)
         }
     }
 }
@@ -83,7 +92,8 @@ impl GrammarAST {
             None => return Err(GrammarASTError{kind: GrammarASTErrorKind::NoStartRule, sym: None}),
             Some(ref s) => {
                 if !self.rules.contains_key(s) {
-                    return Err(GrammarASTError{kind: GrammarASTErrorKind::InvalidStartRule, sym: None});
+                    return Err(GrammarASTError{kind: GrammarASTErrorKind::InvalidStartRule,
+                                               sym: Some(Symbol::Nonterminal(s.clone()))});
                 }
             }
         }
