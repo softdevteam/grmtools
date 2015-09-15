@@ -205,7 +205,7 @@ impl Itemset {
         // these will lead to new entries being put into new_is, but we have to least check them.
         let mut todo = HashSet::new();
         // Seed todo with every (alternative, dot) combination from self.items.
-        for (&(alt_i, dot), _) in self.items.iter() {
+        for &(alt_i, dot) in self.items.keys() {
             todo.insert((alt_i, dot));
         }
         let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
@@ -270,6 +270,91 @@ impl Itemset {
         }
         newis
     }
+
+    /// Return true if `other` is weakly compatible with `self`.
+    pub fn weakly_compatible(&self, other: &Itemset) -> bool {
+        // The weakly compatible check is one of the three core parts of Pager's algorithm
+        // (along with merging and change propagation). In essence, there are three conditions
+        // which, if satisfied, guarantee that `other` is weakly compatible with `self`
+        // (p255 of Pager's paper, and p50 of Chen's dissertation).
+        //
+        // Since neither Pager nor Chen talk about data-structures, they don't provide an algorithm
+        // for sensibly checking these three conditions. The approach in this function is 1) try
+        // and fail at the earliest point that we notice that the two itemsets can't be weakly
+        // compatible 2) perform the checks of all three conditions in one go.
+
+        // The two itemsets must have the same number of core configurations. Since our itemsets
+        // only store core configurations, two itemsets with different numbers of items can't
+        // possibly be weakly compatible.
+        let len = self.items.len();
+        if len != other.items.len() {
+            return false;
+        }
+
+        // Check that each itemset has the same core configuration.
+        for &(alt_i, dot) in self.items.keys() {
+            if other.items.get(&(alt_i, dot)).is_none() {
+                return false;
+            }
+        }
+
+        // If there's only one core configuration to deal with -- which happens surprisingly often
+        // -- then the for loop below will always return true, so we save ourselves allocating
+        // memory and bail out early.
+        if len == 1 {
+            return true;
+        }
+
+        // Pager's conditions rely on itemsets being ordered. However, ours are stored as hashmaps:
+        // iterating over self.items and other.items will not generally give the same order of
+        // configurations.
+        //
+        // The most practical thing we can do is to convert one of the itemsets's keys into a list
+        // and use that as a stable ordering mechanism. This uses more hash lookups than we might
+        // like, but we're helped by the fact that most itemsets are smallish in number.
+        let keys: Vec<_> = self.items.keys().collect();
+        for i in 0..len - 1 {
+            let i_key = keys[i];
+            for j in i + 1..len {
+                let j_key = keys[j];
+                 // Condition 1 in the Pager paper
+                if !(bitvec_intersect(&self.items[i_key], &other.items[j_key])
+                    || bitvec_intersect(&self.items[j_key], &other.items[i_key])) {
+                    continue;
+                }
+                // Conditions 2 and 3 in the Pager paper
+                if bitvec_intersect(&self.items[i_key], &self.items[j_key])
+                   || bitvec_intersect(&other.items[i_key], &other.items[j_key]) {
+                    continue;
+                }
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Merge `other` into `self`, returning `true` if this led to any changes. If `other` is not
+    /// weakly compatible with `self`, this function's effects and return value are undefined.
+    pub fn weakly_merge(&mut self, other: &Itemset) -> bool {
+        let mut changed = false;
+        for (&(alt_i, dot), ctx) in self.items.iter_mut() {
+            if ctx.union(&other.items[&(alt_i, dot)]) {
+                changed = true;
+            }
+        }
+        changed
+    }
+}
+
+/// Returns true if two identically sized bitvecs intersect.
+fn bitvec_intersect(v1: &BitVec, v2: &BitVec) -> bool {
+    // Iterating over integer sized blocks allows us to do this operation very quickly. Note that
+    // the BitVec implementation guarantees that the last block's unused bits will be zeroed out.
+    for (b1, b2) in v1.blocks().zip(v2.blocks()) {
+        if b1 & b2 != 0 { return true; }
+    }
+    false
 }
 
 pub struct StateGraph {
@@ -283,8 +368,6 @@ impl StateGraph {
         // This function can be seen as a modified version of items() from Chen's dissertation.
 
         let firsts     = Firsts::new(grm);
-        // states wraps its contents in an Rc<RefCell> because in the loop below we need to have a
-        // read of an item within the vector whilst also being able to push extra elements into it.
         let mut states = Vec::new();
         let mut edges  = HashMap::new();
 
@@ -292,18 +375,33 @@ impl StateGraph {
         let mut ctx = BitVec::from_elem(grm.terms_len, false);
         ctx.set(grm.end_term, true);
         state0.add(grm.start_alt, 0, &ctx);
-        states.push(state0.close(&grm, &firsts));
+        states.push(state0);
 
+        // We maintain two lists of which nonterms and terms we've seen; when processing a given
+        // state there's no point processing a nonterm or term more than once.
         let mut seen_nonterms = BitVec::from_elem(grm.nonterms_len, false);
         let mut seen_terms = BitVec::from_elem(grm.terms_len, false);
-        let mut state_i = 0; // How far through states have we processed so far?
+        // new_states is used to separate out iterating over states vs. mutating it
         let mut new_states = Vec::new();
-        while state_i < states.len() {
+        // todo is a set of integers, representing states which need to be (re)visited
+        let mut todo = HashSet::new();
+        // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
+        // matches for a given symbol.
+        let mut cnd_nonterm_weaklies: Vec<Vec<usize>> = Vec::with_capacity(grm.nonterms_len);
+        let mut cnd_term_weaklies: Vec<Vec<usize>> = Vec::with_capacity(grm.terms_len);
+        for _ in 0..grm.terms_len { cnd_term_weaklies.push(Vec::new()); }
+        for _ in 0..grm.nonterms_len { cnd_nonterm_weaklies.push(Vec::new()); }
+
+        todo.insert(0);
+        while todo.len() > 0 {
+            // XXX This is the clumsy way we're forced to do what we'd prefer to be:
+            //     "let &(alt_i, dot) = todo.pop()"
+            let state_i = *todo.iter().next().unwrap();
+            todo.remove(&state_i);
+
             {
                 let state_rc = &states[state_i];
-                let state = state_rc;
-                // We maintain two lists of which nonterms and terms we've seen; when processing a
-                // given state there's no point processing a nonterm or term more than once.
+                let state = state_rc.close(&grm, &firsts);
                 seen_nonterms.clear();
                 seen_terms.clear();
                 for &(alt_i, dot) in state.items.keys() {
@@ -324,27 +422,90 @@ impl StateGraph {
                             seen_terms.set(term_i, true);
                         }
                     }
-                    let nstate = state.goto(&grm, &sym).close(&grm, &firsts);
+                    let nstate = state.goto(&grm, &sym);
                     new_states.push((sym, nstate));
                 }
             }
+
             for (sym, nstate) in new_states.drain(..) {
-                let j = states.iter().position(|x| x == &nstate);
-                match j {
-                    Some(k) => { edges.insert((state_i, sym), k); },
+                let mut m = None;
+                {
+                    // Try and find a weakly compatible match for this state.
+                    let cnd_weaklies = match sym {
+                        Symbol::Nonterminal(nonterm_i) => &cnd_nonterm_weaklies[nonterm_i],
+                        Symbol::Terminal(term_i) => &cnd_term_weaklies[term_i]
+                    };
+                    for cnd in cnd_weaklies.iter() {
+                        if states[*cnd].weakly_compatible(&nstate) {
+                            m = Some(*cnd);
+                            break;
+                        }
+                    }
+                }
+                match m {
+                    Some(k) => {
+                        // A weakly compatible match has been found.
+                        edges.insert((state_i, sym), k);
+                        if states[k].weakly_merge(&nstate) {
+                            todo.insert(k);
+                        }
+                    },
                     None    => {
+                        match sym {
+                            Symbol::Nonterminal(nonterm_i) =>
+                                cnd_nonterm_weaklies[nonterm_i].push(states.len()),
+                            Symbol::Terminal(term_i) =>
+                                cnd_term_weaklies[term_i].push(states.len()),
+                        }
                         edges.insert((state_i, sym), states.len());
+                        // We only do the simplest change propagation, forcing possibly affected
+                        // sets to be entirely reprocessed (which will recursively force
+                        // propagation too).  Even though this does unnecessary computation, it is
+                        // still pretty fast.
+                        todo.insert(states.len());
                         states.push(nstate);
                     }
                 }
             }
-            state_i += 1;
         }
 
         StateGraph {
             states: states,
             edges: edges
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    extern crate bit_vec;
+    use self::bit_vec::BitVec;
+
+    use super::bitvec_intersect;
+
+    #[test]
+    fn test_bitvec_intersect() {
+        let mut b1 = BitVec::from_elem(8, false);
+        let mut b2 = BitVec::from_elem(8, false);
+        assert!(!bitvec_intersect(&b1, &b2));
+        // Check that partial blocks (i.e. when only part of a word is used in the bitvec for
+        // storage) maintain the expected guarantees.
+        b1.push(false);
+        b2.push(false);
+        assert!(!bitvec_intersect(&b1, &b2));
+        b1.push(true);
+        b2.push(true);
+        assert!(bitvec_intersect(&b1, &b2));
+
+        b1 = BitVec::from_elem(64, false);
+        b2 = BitVec::from_elem(64, false);
+        b1.push(true);
+        b2.push(true);
+        for _ in 0..63 {
+            b1.push(false);
+            b2.push(false);
+        }
+        assert!(bitvec_intersect(&b1, &b2));
     }
 }
 
