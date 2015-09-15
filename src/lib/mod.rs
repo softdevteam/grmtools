@@ -1,3 +1,5 @@
+#![feature(drain)]
+
 use std::fmt;
 
 pub mod grammar;

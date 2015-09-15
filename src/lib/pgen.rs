@@ -1,10 +1,28 @@
-use std::collections::HashMap;
-use std::cell::RefCell;
+use std::collections::HashSet;
+use std::collections::hash_map::{Entry, HashMap};
 
 extern crate bit_vec;
 use self::bit_vec::BitVec;
 
 use grammar::{AIdx, Grammar, NIdx, Symbol, SIdx, TIdx};
+
+// This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
+// do this that I know of -- certainly not one that talks about sensible ways to arrange data and
+// low-level optimisations. That said, the general algorithms that form the basis of what's used in
+// this file can be found in:
+//
+//   A Practical General Method for Constructing LR(k) Parsers
+//     David Pager, Acta Informatica 7, 249--268, 1977
+//
+// However Pager's paper is dense, and doesn't name sub-parts of the algorithm. We mostly reference
+// the (still incomplete, but less incomplete) version of the algorithm found in:
+//
+//   Measuring and extending LR(1) parser generation
+//     Xin Chen, PhD thesis, University of Hawaii, 2009
+
+
+/// The type of "context" (also known as "lookaheads")
+pub type Ctx = BitVec;
 
 /// Firsts stores all the first sets for a given grammar.
 ///
@@ -38,7 +56,7 @@ pub struct Firsts {
     // 3 bits where bits 0, 1, 2 represent terminals a, b, epsilon respectively.
     //   111101
     // Where "111" is for the nonterminal S, and 101 for A.
-    alt_firsts: Vec<BitVec>,
+    alt_firsts: Vec<Ctx>,
     alt_epsilons: BitVec,
     terms_len: NIdx
 }
@@ -67,7 +85,8 @@ impl Firsts {
                     // ...and each alternative A
                     let ref alt = grm.alts[*alt_i];
                     if alt.len() == 0 {
-                        // if it's an empty alternative, ensure this nonterminal's epsilon bit is set.
+                        // if it's an empty alternative, ensure this nonterminal's epsilon bit is
+                        // set.
                         if !firsts.is_epsilon_set(rul_i) {
                             firsts.alt_epsilons.set(rul_i, true);
                             changed = true;
@@ -126,8 +145,8 @@ impl Firsts {
         self.alt_firsts[nidx][tidx]
     }
 
-    /// Get all the firsts for alternative `nidx` as a `BitVec`.
-    pub fn alt_firsts(&self, nidx: NIdx) -> &BitVec {
+    /// Get all the firsts for alternative `nidx` as a `Ctx`.
+    pub fn alt_firsts(&self, nidx: NIdx) -> &Ctx {
         &self.alt_firsts[nidx]
     }
 
@@ -150,151 +169,104 @@ impl Firsts {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Itemset {
-    // This immutable vector stores a Item for each alternative in the grammar, in the same
-    // order as grm.alts.
-    pub items: Vec<RefCell<Option<Item>>>
-}
-
-// An Item instance represents all the possible items that derive from a given alternative in a
-// grammar. We know that if a given alternative E has n symbols, it can lead to at most n+1 items.
-// For example, Consider an alternative:
-//    E : 'b' S;
-// There are at most three possible items that this alternative can lead to:
-//    E : . 'b' S;
-//    E : 'b' . S;
-//    E : 'b' S .;
-// Each of these items can then have one or more terminals as lookahead (crucially, each terminal
-// can only appear once in the lookahead). Knowing this, we can create a very compact fixed-size
-// representation with room for all the possible items that an alternative can lead to.
-//
-// Let us assume that our state has the following items:
-//    E : . 'b' S; // Lookahead 'a' and '$'
-//    E : 'b' S .; // Lookahead '$'
-// and the terminals '$' (bit 0), 'a' (bit 1), and 'b' (bit 2) only. 'lookaheads' then lookaheads
-// would then be set to something along the lines of:
-//    [RefCell(Some(BitVec(011))), RefCell(None), RefCell(Some(BitVec(001)))]
-// Where "011" corresponds to "E: . 'b' S;", and 001 corresponds to "E: 'b' S .;".
-#[derive(Debug, PartialEq)]
-pub struct Item {
-    pub lookaheads: Vec<RefCell<Option<BitVec>>>
+    pub items: HashMap<(AIdx, SIdx), Ctx>
 }
 
 impl Itemset {
     /// Create a blank Itemset.
-    pub fn new(grm: &Grammar) -> Itemset {
-        let mut items = Vec::with_capacity(grm.alts.len());
-        for _ in grm.alts.iter() {
-            items.push(RefCell::new(None));
-        }
-        Itemset {items: items}
+    pub fn new(_: &Grammar) -> Itemset {
+        Itemset {items: HashMap::new()}
     }
 
-    /// Ensure that memory is allocated for dot `dot` in alternative `aidx` in itemset `is`.
-    ///
-    /// If memory is already allocated, this is a no-op. If no memory is yet allocated, it will
-    /// allocate it.
-    fn ensure_lookahead_allocd(&self, grm: &Grammar, is: &Itemset, aidx: AIdx, dot: SIdx) {
-        let mut item_opt = is.items[aidx].borrow_mut();
-        if item_opt.is_none() {
-            let mut las = Vec::with_capacity(grm.alts[aidx].len());
-            for _ in 0..grm.alts[aidx].len() + 1 {
-                las.push(RefCell::new(None));
+    /// Add an item `(alt, dot)` with context `ctx` to this itemset. Returns true if this led to
+    /// any changes in the itemset.
+    pub fn add(&mut self, alt: AIdx, dot: SIdx, ctx: &Ctx) -> bool {
+        let entry = self.items.entry((alt, dot));
+        match entry {
+            Entry::Occupied(mut e) => {
+                e.get_mut().union(&ctx)
             }
-            *item_opt = Some(Item{lookaheads: las});
-        }
-        let mut la_opt = item_opt.as_ref().unwrap().lookaheads[dot].borrow_mut();
-        if la_opt.is_none() {
-            *la_opt = Some(BitVec::from_elem(grm.terms_len, false));
+            Entry::Vacant(e)       => {
+                e.insert(ctx.clone());
+                true
+            }
         }
     }
 
-    /// Add an item for the alternative 'aidx' with the dot set to position 'dot' and with
-    /// lookahead set to 'la'.
-    pub fn add(&self, grm: &Grammar, aidx: AIdx, dot: SIdx, la: &BitVec) {
-        assert!(la.len() == grm.terms_len);
-        self.ensure_lookahead_allocd(&grm, &self, aidx, dot);
-        let item_opt = self.items[aidx].borrow_mut();
-        let mut la_opt = item_opt.as_ref().unwrap().lookaheads[dot].borrow_mut();
-        debug_assert!(la_opt.as_ref().unwrap().none());
-        la_opt.as_mut().unwrap().union(la);
-    }
+    pub fn close(&self, grm: &Grammar, firsts: &Firsts) -> Itemset {
+        // This function can be seen as a merger of getClosure and getContext from Chen's
+        // dissertation. It is written in such a style that it allocates relatively little memory
+        // and does as few hashmap lookups as practical.
 
-    /// Close over this Itemset.
-    pub fn close(&self, grm: &Grammar, firsts: &Firsts) {
-        let mut new_la = BitVec::from_elem(grm.terms_len, false);
-        loop {
-            let mut changed = false;
-            for (i, item_rc) in self.items.iter().enumerate() {
-                if item_rc.borrow().is_none() { continue; }
-                let alt = &grm.alts[i];
-                for dot in 0..alt.len() {
-                    {
-                        let item_opt = item_rc.borrow();
-                        if item_opt.as_ref().unwrap().lookaheads[dot].borrow().is_none() { continue; }
-                    }
-                    if let Symbol::Nonterminal(nonterm_i) = alt[dot] {
-                        new_la.clear();
-                        let mut nullabled = false;
-                        for k in dot + 1..alt.len() {
-                            match alt[k] {
-                                Symbol::Terminal(term_j) => {
-                                    new_la.set(term_j, true);
-                                    nullabled = true;
-                                    break;
-                                },
-                                Symbol::Nonterminal(nonterm_j) => {
-                                    new_la.union(firsts.alt_firsts(nonterm_j));
-                                    if !firsts.is_epsilon_set(nonterm_j) {
-                                        nullabled = true;
-                                        break;
-                                    }
-                                }
+        let mut new_is = self.clone();
+        // todo is a list of all (alternative, dot) pairs that require investigation. Not all of
+        // these will lead to new entries being put into new_is, but we have to least check them.
+        let mut todo = HashSet::new();
+        // Seed todo with every (alternative, dot) combination from self.items.
+        for (&(alt_i, dot), _) in self.items.iter() {
+            todo.insert((alt_i, dot));
+        }
+        let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
+        while todo.len() > 0 {
+            // XXX This is the clumsy way we're forced to do what we'd prefer to be:
+            //     "let &(alt_i, dot) = todo.pop()"
+            let &(alt_i, dot) = todo.iter().next().unwrap();
+            todo.remove(&(alt_i, dot));
+
+            let alt = &grm.alts[alt_i];
+            if dot == alt.len() { continue; }
+            if let Symbol::Nonterminal(nonterm_i) = alt[dot] {
+                // This if statement is, in essence, a fast version of what's called getContext in
+                // Chen's dissertation, folding in getTHeads at the same time. The particular
+                // formulation here is based as much on
+                // http://binarysculpting.com/2012/02/04/computing-lr1-closure/ as it is any of the
+                // several versions of getTHeads in Chen's dissertation. Nevertheless, the mapping
+                // between the two different formulations is fairly straight-forward.
+                new_ctx.clear();
+                let mut nullable = true;
+                for sym in alt.iter().skip(dot + 1) {
+                    match sym {
+                        &Symbol::Terminal(term_j) => {
+                            new_ctx.set(term_j, true);
+                            nullable = false;
+                            break;
+                        },
+                        &Symbol::Nonterminal(nonterm_j) => {
+                            new_ctx.union(firsts.alt_firsts(nonterm_j));
+                            if !firsts.is_epsilon_set(nonterm_j) {
+                                nullable = false;
+                                break;
                             }
                         }
-                        if !nullabled {
-                            let item_opt = item_rc.borrow();
-                            let la_opt = item_opt.as_ref().unwrap().lookaheads[dot].borrow();
-                            new_la.union(&la_opt.as_ref().unwrap());
-                        }
+                    }
+                }
+                if nullable {
+                    new_ctx.union(&new_is.items[&(alt_i, dot)]);
+                }
 
-                        for alt_i in grm.rules_alts[nonterm_i].iter() {
-                            self.ensure_lookahead_allocd(&grm, &self, *alt_i, 0);
-                            let clitem_opt = self.items[*alt_i].borrow_mut();
-                            let mut clla_opt = clitem_opt.as_ref().unwrap().lookaheads[0].borrow_mut();
-                            if clla_opt.as_mut().unwrap().union(&new_la) { changed = true; }
-                        }
+                for ref_alt_i in grm.rules_alts[nonterm_i].iter() {
+                    if new_is.add(*ref_alt_i, 0, &new_ctx) {
+                        todo.insert((*ref_alt_i, 0));
                     }
                 }
             }
-            if !changed { break; }
         }
+        new_is
     }
 
-    /// Create a new Itemset based on calculating goto of 'sym' on the current Itemset.
-    pub fn goto(&self, grm: &Grammar, firsts: &Firsts, sym: Symbol) -> Itemset {
-        let newis = Itemset::new(&grm);
-        {
-            let items = &self.items;
-            let newitems = &newis.items;
-            for (i, item_rc) in items.iter().enumerate() {
-                let item_opt = item_rc.borrow();
-                if item_opt.is_none() { continue; }
-                let lookaheads = &item_opt.as_ref().unwrap().lookaheads;
-                let alt = &grm.alts[i];
-                for dot in 0..alt.len() {
-                    let la_rc = lookaheads[dot].borrow();
-                    if la_rc.is_none() { continue; }
-                    if sym == alt[dot] {
-                        self.ensure_lookahead_allocd(&grm, &newis, i, dot + 1);
-                        let newitem_opt = newitems[i].borrow_mut();
-                        let mut newla_opt = newitem_opt.as_ref().unwrap().lookaheads[dot + 1].borrow_mut();
-                        newla_opt.as_mut().unwrap().union(&la_rc.as_ref().unwrap());
-                    }
-                }
+    /// Create a new Itemset based on calculating the goto of 'sym' on the current Itemset.
+    pub fn goto(&self, grm: &Grammar, sym: &Symbol) -> Itemset {
+        // This is called 'transition' in Chen's dissertation, though note that the definition
+        // therein appears to get the dot in the input/output the wrong way around.
+        let mut newis = Itemset::new(&grm);
+        for (&(alt_i, dot), ctx) in self.items.iter() {
+            let alt = &grm.alts[alt_i];
+            if dot == alt.len() { continue; }
+            if sym == &alt[dot] {
+                newis.add(alt_i, dot + 1, &ctx);
             }
-            newis.close(&grm, &firsts);
         }
         newis
     }
@@ -308,74 +280,71 @@ pub struct StateGraph {
 impl StateGraph {
     /// Create a StateGraph from 'grm'.
     pub fn new(grm: &Grammar) -> StateGraph {
+        // This function can be seen as a modified version of items() from Chen's dissertation.
+
         let firsts     = Firsts::new(grm);
+        // states wraps its contents in an Rc<RefCell> because in the loop below we need to have a
+        // read of an item within the vector whilst also being able to push extra elements into it.
         let mut states = Vec::new();
         let mut edges  = HashMap::new();
 
-        // Create the start state and seed the stategraph with it
-        let state0 = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len, false);
-        la.set(grm.end_term, true);
-        state0.add(&grm, grm.start_alt, 0, &la);
-        state0.close(&grm, &firsts);
-        states.push(state0);
+        let mut state0 = Itemset::new(&grm);
+        let mut ctx = BitVec::from_elem(grm.terms_len, false);
+        ctx.set(grm.end_term, true);
+        state0.add(grm.start_alt, 0, &ctx);
+        states.push(state0.close(&grm, &firsts));
 
         let mut seen_nonterms = BitVec::from_elem(grm.nonterms_len, false);
         let mut seen_terms = BitVec::from_elem(grm.terms_len, false);
         let mut state_i = 0; // How far through states have we processed so far?
+        let mut new_states = Vec::new();
         while state_i < states.len() {
-            // We maintain two lists of which nonterms and terms we've seen; when processing a
-            // given state there's no point processing any given nonterm or term more than once.
-            seen_nonterms.clear();
-            seen_terms.clear();
-            // Iterate over active item in the stategraph.
-            for i in 0..grm.alts.len() {
-                if states[state_i].items[i].borrow().is_none() { continue; }
-                // From this point onwards in the for loop, we know that states[state_i].items is
-                // definitely allocated and that calling unwrap() on it is safe.
-                let alt = &grm.alts[i];
-                for dot in 0..alt.len() {
-                    let sym;
-                    let nstate;
-                    {
-                        let state = &states[state_i] as &Itemset;
-                        let item_opt = state.items[i].borrow();
-                        if item_opt.as_ref().unwrap().lookaheads[dot].borrow().is_none() {
-                            continue;
-                        }
-                        // We have an active item. If the symbol at the dot hasn't been seen
-                        // before, we calculate its goto relative to the current state. We then add
-                        // that new state to the list of states.
-                        sym = &alt[dot];
-                        match sym {
-                            &Symbol::Nonterminal(nonterm_i) => {
-                                if seen_nonterms[nonterm_i] {
-                                    continue;
-                                }
-                                seen_nonterms.set(nonterm_i, true);
-                            },
-                            &Symbol::Terminal(term_i) => {
-                                if seen_terms[term_i] {
-                                    continue;
-                                }
-                                seen_terms.set(term_i, true);
+            {
+                let state_rc = &states[state_i];
+                let state = state_rc;
+                // We maintain two lists of which nonterms and terms we've seen; when processing a
+                // given state there's no point processing a nonterm or term more than once.
+                seen_nonterms.clear();
+                seen_terms.clear();
+                for &(alt_i, dot) in state.items.keys() {
+                    let alt = &grm.alts[alt_i];
+                    if dot == alt.len() { continue; }
+                    let sym = alt[dot].clone();
+                    match sym {
+                        Symbol::Nonterminal(nonterm_i) => {
+                            if seen_nonterms[nonterm_i] {
+                                continue;
                             }
+                            seen_nonterms.set(nonterm_i, true);
+                        },
+                        Symbol::Terminal(term_i) => {
+                            if seen_terms[term_i] {
+                                continue;
+                            }
+                            seen_terms.set(term_i, true);
                         }
-                        nstate = state.goto(&grm, &firsts, sym.clone());
                     }
-                    let j = states.iter().position(|x| x == &nstate);
-                    match j {
-                        Some(k) => { edges.insert((state_i, sym.clone()), k); },
-                        None    => {
-                            edges.insert((state_i, sym.clone()), states.len());
-                            states.push(nstate);
-                        }
+                    let nstate = state.goto(&grm, &sym).close(&grm, &firsts);
+                    new_states.push((sym, nstate));
+                }
+            }
+            for (sym, nstate) in new_states.drain(..) {
+                let j = states.iter().position(|x| x == &nstate);
+                match j {
+                    Some(k) => { edges.insert((state_i, sym), k); },
+                    None    => {
+                        edges.insert((state_i, sym), states.len());
+                        states.push(nstate);
                     }
                 }
             }
             state_i += 1;
         }
-        StateGraph{states: states, edges: edges}
+
+        StateGraph {
+            states: states,
+            edges: edges
+        }
     }
 }
 
