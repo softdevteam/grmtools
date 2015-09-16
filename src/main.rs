@@ -11,7 +11,7 @@ use std::io::{Read, stderr, Write};
 use std::path::Path;
 
 use lrpar::from_yacc;
-use lrpar::pgen::StateGraph;
+use lrpar::stategraph::StateGraph;
 use lrpar::grammar::ast_to_grammar;
 
 fn usage(prog: String, msg: &str) {
