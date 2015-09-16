@@ -4,7 +4,7 @@ use self::bit_vec::BitVec;
 extern crate lrpar;
 use lrpar::grammar::{AIdx, ast_to_grammar, Grammar, Symbol};
 use lrpar::yacc::parse_yacc;
-use lrpar::pgen::{Itemset, Firsts, StateGraph};
+use lrpar::stategraph::{Itemset, Firsts, StateGraph};
 
 fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
     let nt_i = grm.nonterminal_off(rn);

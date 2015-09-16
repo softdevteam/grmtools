@@ -6,7 +6,7 @@ pub mod grammar;
 pub mod grammar_ast;
 pub mod yacc;
 
-pub mod pgen;
+pub mod stategraph;
 pub use grammar::ast_to_grammar;
 pub use grammar_ast::{GrammarAST, GrammarASTError};
 pub use self::yacc::{YaccError, YaccErrorKind};
