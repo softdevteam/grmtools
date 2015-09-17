@@ -445,6 +445,16 @@ impl StateGraph {
                 match m {
                     Some(k) => {
                         // A weakly compatible match has been found.
+                        if let Some(l) = edges.get(&(state_i, sym.clone())) {
+                            if k != *l {
+                                // My understanding of Pager's algorithm is that reevaluating a
+                                // state may cause the outgoing edge for a given symbol to change
+                                // from an old state to a new state. If that happens, we would need
+                                // to garbage collect states to remove duds. I haven't yet seen a
+                                // case where this happens though.
+                                panic!("Internal error: states may need garbage collecting");
+                            }
+                        }
                         edges.insert((state_i, sym), k);
                         if states[k].weakly_merge(&nstate) {
                             todo.insert(k);
