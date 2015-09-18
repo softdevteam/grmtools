@@ -108,14 +108,14 @@ mod test {
         assert_eq!(sg.states.len(), 9);
 
         let s0 = 0;
-        let s1 = sg.edges[&(s0, Symbol::Nonterminal(grm.nonterminal_off("Expr")))];
-        let s2 = sg.edges[&(s0, Symbol::Nonterminal(grm.nonterminal_off("Term")))];
-        let s3 = sg.edges[&(s0, Symbol::Nonterminal(grm.nonterminal_off("Factor")))];
-        let s4 = sg.edges[&(s0, Symbol::Terminal(grm.terminal_off("id")))];
-        let s5 = sg.edges[&(s2, Symbol::Terminal(grm.terminal_off("-")))];
-        let s6 = sg.edges[&(s3, Symbol::Terminal(grm.terminal_off("*")))];
-        let s7 = sg.edges[&(s5, Symbol::Nonterminal(grm.nonterminal_off("Expr")))];
-        let s8 = sg.edges[&(s6, Symbol::Nonterminal(grm.nonterminal_off("Term")))];
+        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s2 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
+        let s3 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Factor"))];
+        let s4 = sg.edges[s0][&Symbol::Terminal(grm.terminal_off("id"))];
+        let s5 = sg.edges[s2][&Symbol::Terminal(grm.terminal_off("-"))];
+        let s6 = sg.edges[s3][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s7 = sg.edges[s5][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s8 = sg.edges[s6][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
 
         let st = StateTable::new(&grm, &sg);
 
