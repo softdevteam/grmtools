@@ -22,7 +22,7 @@ use grammar::{AIdx, Grammar, NIdx, Symbol, SIdx, TIdx};
 
 
 /// The type of "context" (also known as "lookaheads")
-type Ctx = BitVec;
+pub type Ctx = BitVec;
 
 /// Firsts stores all the first sets for a given grammar.
 ///
@@ -170,8 +170,8 @@ impl Firsts {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct Itemset {
-    items: HashMap<(AIdx, SIdx), Ctx>
+pub struct Itemset {
+    pub items: HashMap<(AIdx, SIdx), Ctx>
 }
 
 impl Itemset {
@@ -358,7 +358,7 @@ fn bitvec_intersect(v1: &BitVec, v2: &BitVec) -> bool {
 }
 
 pub struct StateGraph {
-    states: Vec<Itemset>,
+    pub states: Vec<Itemset>,
     pub edges: HashMap<(usize, Symbol), usize>
 }
 
@@ -407,7 +407,7 @@ impl StateGraph {
                 for &(alt_i, dot) in state.items.keys() {
                     let alt = &grm.alts[alt_i];
                     if dot == alt.len() { continue; }
-                    let sym = alt[dot].clone();
+                    let sym = alt[dot];
                     match sym {
                         Symbol::Nonterminal(nonterm_i) => {
                             if seen_nonterms[nonterm_i] {
@@ -445,7 +445,7 @@ impl StateGraph {
                 match m {
                     Some(k) => {
                         // A weakly compatible match has been found.
-                        if let Some(l) = edges.get(&(state_i, sym.clone())) {
+                        if let Some(l) = edges.get(&(state_i, sym)) {
                             if k != *l {
                                 // My understanding of Pager's algorithm is that reevaluating a
                                 // state may cause the outgoing edge for a given symbol to change

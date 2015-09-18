@@ -27,7 +27,7 @@ pub struct Grammar {
     pub alts: Vec<Vec<Symbol>>,
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
     Nonterminal(NIdx),
     Terminal(TIdx)
