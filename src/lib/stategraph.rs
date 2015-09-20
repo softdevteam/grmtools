@@ -476,11 +476,80 @@ impl StateGraph {
                 }
             }
         }
-        
+
+        // Although the Pager paper doesn't talk about it, the algorithm above can create
+        // unreachable states due to the non-determinism inherent in working with hashsets. Indeed,
+        // this can even happen with the example from Pager's paper (on perhaps 1 out of
+        // 100 runs, 24 or 25 states will be created instead of 23). We thus need to weed out
+        // unreachable states and update edges accordingly.
+        let (gc_states, gc_edges) = StateGraph::gc(states, edges);
+
         StateGraph {
-            states: states.iter().map(|x| x.close(&grm, &firsts)).collect(),
-            edges: edges
+            states: gc_states.iter().map(|s| s.close(&grm, &firsts)).collect(),
+            edges:  gc_edges
         }
+    }
+
+    /// Garbage collect `states` and `edges`. Returns a new pair with unused states and their
+    /// corresponding edges removed.
+    fn gc(mut states: Vec<Itemset>, mut edges: Vec<HashMap<Symbol, usize>>)
+          -> (Vec<Itemset>, Vec<HashMap<Symbol, usize>>) {
+        // First of all, do a simple pass over all states. All state indexes reachable from the
+        // start state will be inserted into the 'seen' set.
+        let mut todo = HashSet::new();
+        todo.insert(0);
+        let mut seen = HashSet::new();
+        while todo.len() > 0 {
+            // XXX This is the clumsy way we're forced to do what we'd prefer to be:
+            //     "let &(alt_i, dot) = todo.pop()"
+            let state_i = *todo.iter().next().unwrap();
+            todo.remove(&state_i);
+            seen.insert(state_i);
+
+            todo.extend(edges[state_i].values().filter(|x| !seen.contains(&x)));
+        }
+
+        if states.len() == seen.len() {
+            // Nothing to garbage collect.
+            return (states, edges);
+        }
+
+        // Imagine we started with 3 states and their edges:
+        //   states: [0, 1, 2]
+        //   edges : [[_ => 2]]
+        //
+        // At this point, 'seen' will be the set {0, 2}. What we need to do is to create a new list
+        // of states that doesn't have state 1 in it. That will cause state 2 to become to state 1,
+        // meaning that we need to adjust edges so that the pointer to state 2 is updated to state
+        // 1. In other words we want to achieve this output:
+        //   states: [0, 2]
+        //   edges : [_ => 1]
+        //
+        // The way we do this is to first iterate over all states, working out what the mapping
+        // from seen states to their new offsets is.
+        let mut gc_states = Vec::with_capacity(seen.len());
+        let mut offsets   = Vec::with_capacity(states.len());
+        let mut offset    = 0;
+        for (state_i, state) in states.drain(..).enumerate() {
+            offsets.push(state_i - offset);
+            if !seen.contains(&state_i) {
+                offset += 1;
+                continue;
+            }
+            gc_states.push(state);
+        }
+
+        // At this point the offsets list will be [0, 1, 1]. We now create new edges where each
+        // offset is corrected by looking it up in the offsets list.
+        let mut gc_edges = Vec::with_capacity(seen.len());
+        for (st_edge_i, st_edges) in edges.drain(..).enumerate() {
+            if !seen.contains(&st_edge_i) {
+                continue;
+            }
+            gc_edges.push(st_edges.iter().map(|(&k, &v)| (k, offsets[v])).collect());
+        }
+
+        (gc_states, gc_edges)
     }
 }
 
@@ -907,9 +976,7 @@ mod test {
           ".to_string()).unwrap())
     }
 
-    #[test]
-    fn test_pager_graph() {
-        let grm = grammar_pager();
+    fn test_pager_graph(grm: &Grammar) {
         let sg = StateGraph::new(&grm);
 
         assert_eq!(sg.states.len(), 23);
@@ -1040,5 +1107,21 @@ mod test {
         let s9v = sg.edges[s9][&Symbol::Nonterminal(grm.nonterminal_off("V"))];
         assert_eq!(s9v, sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("V"))]);
         state_exists(&grm, &sg.states[s9v], "W", 0, 2, vec!["d", "e"]);
+    }
+
+    #[test]
+    fn test_pager_graph_and_gc() {
+        // The example from Pager's paper (in test_pager_graph) occasionally creates unreachable
+        // states, depending on the non-determinism inherent in iterating over sets in our
+        // implementation, causing the test to fail. This happens in roughly 1 every 100 executions
+        // if GC isn't present. So we run this test a lot of times on the basis that if the GC
+        // fails to work correctly, this will eventually trigger.
+        //
+        // It goes without saying that this is not the ideal way of testing this, but if you can
+        // distil this down to a small, deterministic example, you're a better person than I am.
+        let grm = grammar_pager();
+        for _ in 0..750 {
+            test_pager_graph(&grm);
+        }
     }
 }
