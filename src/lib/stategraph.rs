@@ -4,7 +4,7 @@ use std::collections::hash_map::{Entry, HashMap};
 extern crate bit_vec;
 use self::bit_vec::BitVec;
 
-use grammar::{AIdx, Grammar, NIdx, Symbol, SIdx, TIdx};
+use grammar::{PIdx, Grammar, RIdx, Symbol, SIdx, TIdx};
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -56,44 +56,44 @@ struct Firsts {
     // 3 bits where bits 0, 1, 2 represent terminals a, b, epsilon respectively.
     //   111101
     // Where "111" is for the nonterminal S, and 101 for A.
-    alt_firsts: Vec<Ctx>,
-    alt_epsilons: BitVec,
-    terms_len: NIdx
+    prod_firsts: Vec<Ctx>,
+    prod_epsilons: BitVec,
+    terms_len: RIdx
 }
 
 impl Firsts {
     /// Generates and returns the firsts set for the given grammar.
     fn new(grm: &Grammar) -> Firsts {
-        let mut alt_firsts = Vec::with_capacity(grm.nonterms_len);
+        let mut prod_firsts = Vec::with_capacity(grm.nonterms_len);
         for _ in 0..grm.nonterms_len {
-            alt_firsts.push(BitVec::from_elem(grm.terms_len, false));
+            prod_firsts.push(BitVec::from_elem(grm.terms_len, false));
         }
         let mut firsts = Firsts {
-            alt_firsts  : alt_firsts,
-            alt_epsilons: BitVec::from_elem(grm.nonterms_len, false),
+            prod_firsts  : prod_firsts,
+            prod_epsilons: BitVec::from_elem(grm.nonterms_len, false),
             terms_len   : grm.terms_len
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
-        // look at each rule E, and see if any of the nonterminals at the start of its alternatives
+        // look at each rule E, and see if any of the nonterminals at the start of its productions
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for (rul_i, alts) in grm.rules_alts.iter().enumerate() {
+            for (rul_i, prods) in grm.rules_prods.iter().enumerate() {
                 // For each rule E
-                for alt_i in alts.iter() {
-                    // ...and each alternative A
-                    let ref alt = grm.alts[*alt_i];
-                    if alt.len() == 0 {
-                        // if it's an empty alternative, ensure this nonterminal's epsilon bit is
+                for prod_i in prods.iter() {
+                    // ...and each production A
+                    let ref prod = grm.prods[*prod_i];
+                    if prod.len() == 0 {
+                        // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
                         if !firsts.is_epsilon_set(rul_i) {
-                            firsts.alt_epsilons.set(rul_i, true);
+                            firsts.prod_epsilons.set(rul_i, true);
                             changed = true;
                         }
                         continue;
                     }
-                    for (sym_i, sym) in alt.iter().enumerate() {
+                    for (sym_i, sym) in prod.iter().enumerate() {
                         match sym {
                             &Symbol::Terminal(term_i) => {
                                 // if symbol is a Terminal, add to FIRSTS
@@ -115,12 +115,12 @@ impl Firsts {
                                 }
 
                                 // If the epsilon bit in the nonterminal being referenced is set,
-                                // and if its the last symbol in the alternative, then add epsilon
+                                // and if its the last symbol in the production, then add epsilon
                                 // to FIRSTs.
-                                if firsts.is_epsilon_set(nonterm_i) && sym_i == alt.len() - 1 {
+                                if firsts.is_epsilon_set(nonterm_i) && sym_i == prod.len() - 1 {
                                     // Only add epsilon if the symbol is the last in the production
-                                    if !firsts.alt_epsilons[rul_i] {
-                                        firsts.alt_epsilons.set(rul_i, true);
+                                    if !firsts.prod_epsilons[rul_i] {
+                                        firsts.prod_epsilons.set(rul_i, true);
                                         changed = true;
                                     }
                                 }
@@ -141,29 +141,29 @@ impl Firsts {
     }
 
     /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
-    fn is_set(&self, nidx: NIdx, tidx: TIdx) -> bool {
-        self.alt_firsts[nidx][tidx]
+    fn is_set(&self, nidx: RIdx, tidx: TIdx) -> bool {
+        self.prod_firsts[nidx][tidx]
     }
 
-    /// Get all the firsts for alternative `nidx` as a `Ctx`.
-    fn alt_firsts(&self, nidx: NIdx) -> &Ctx {
-        &self.alt_firsts[nidx]
+    /// Get all the firsts for production `nidx` as a `Ctx`.
+    fn prod_firsts(&self, nidx: RIdx) -> &Ctx {
+        &self.prod_firsts[nidx]
     }
 
     /// Returns true if the nonterminal `nidx` has epsilon in its first set.
-    fn is_epsilon_set(&self, nidx: NIdx) -> bool {
-        self.alt_epsilons[nidx]
+    fn is_epsilon_set(&self, nidx: RIdx) -> bool {
+        self.prod_epsilons[nidx]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
-    fn set(&mut self, nidx: NIdx, tidx: TIdx) -> bool {
-        let mut alt = &mut self.alt_firsts[nidx];
-        if alt[tidx] {
+    fn set(&mut self, nidx: RIdx, tidx: TIdx) -> bool {
+        let mut prod = &mut self.prod_firsts[nidx];
+        if prod[tidx] {
             true
         }
         else {
-            alt.set(tidx, true);
+            prod.set(tidx, true);
             false
         }
     }
@@ -171,7 +171,7 @@ impl Firsts {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Itemset {
-    pub items: HashMap<(AIdx, SIdx), Ctx>
+    pub items: HashMap<(PIdx, SIdx), Ctx>
 }
 
 impl Itemset {
@@ -180,10 +180,10 @@ impl Itemset {
         Itemset {items: HashMap::new()}
     }
 
-    /// Add an item `(alt, dot)` with context `ctx` to this itemset. Returns true if this led to
+    /// Add an item `(prod, dot)` with context `ctx` to this itemset. Returns true if this led to
     /// any changes in the itemset.
-    fn add(&mut self, alt: AIdx, dot: SIdx, ctx: &Ctx) -> bool {
-        let entry = self.items.entry((alt, dot));
+    fn add(&mut self, prod: PIdx, dot: SIdx, ctx: &Ctx) -> bool {
+        let entry = self.items.entry((prod, dot));
         match entry {
             Entry::Occupied(mut e) => {
                 e.get_mut().union(&ctx)
@@ -201,23 +201,23 @@ impl Itemset {
         // and does as few hashmap lookups as practical.
 
         let mut new_is = self.clone();
-        // todo is a list of all (alternative, dot) pairs that require investigation. Not all of
+        // todo is a list of all (production, dot) pairs that require investigation. Not all of
         // these will lead to new entries being put into new_is, but we have to least check them.
         let mut todo = HashSet::new();
-        // Seed todo with every (alternative, dot) combination from self.items.
-        for &(alt_i, dot) in self.items.keys() {
-            todo.insert((alt_i, dot));
+        // Seed todo with every (production, dot) combination from self.items.
+        for &(prod_i, dot) in self.items.keys() {
+            todo.insert((prod_i, dot));
         }
         let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
         while todo.len() > 0 {
             // XXX This is the clumsy way we're forced to do what we'd prefer to be:
-            //     "let &(alt_i, dot) = todo.pop()"
-            let &(alt_i, dot) = todo.iter().next().unwrap();
-            todo.remove(&(alt_i, dot));
+            //     "let &(prod_i, dot) = todo.pop()"
+            let &(prod_i, dot) = todo.iter().next().unwrap();
+            todo.remove(&(prod_i, dot));
 
-            let alt = &grm.alts[alt_i];
-            if dot == alt.len() { continue; }
-            if let Symbol::Nonterminal(nonterm_i) = alt[dot] {
+            let prod = &grm.prods[prod_i];
+            if dot == prod.len() { continue; }
+            if let Symbol::Nonterminal(nonterm_i) = prod[dot] {
                 // This if statement is, in essence, a fast version of what's called getContext in
                 // Chen's dissertation, folding in getTHeads at the same time. The particular
                 // formulation here is based as much on
@@ -226,7 +226,7 @@ impl Itemset {
                 // between the two different formulations is fairly straight-forward.
                 new_ctx.clear();
                 let mut nullable = true;
-                for sym in alt.iter().skip(dot + 1) {
+                for sym in prod.iter().skip(dot + 1) {
                     match sym {
                         &Symbol::Terminal(term_j) => {
                             new_ctx.set(term_j, true);
@@ -234,7 +234,7 @@ impl Itemset {
                             break;
                         },
                         &Symbol::Nonterminal(nonterm_j) => {
-                            new_ctx.union(firsts.alt_firsts(nonterm_j));
+                            new_ctx.union(firsts.prod_firsts(nonterm_j));
                             if !firsts.is_epsilon_set(nonterm_j) {
                                 nullable = false;
                                 break;
@@ -243,12 +243,12 @@ impl Itemset {
                     }
                 }
                 if nullable {
-                    new_ctx.union(&new_is.items[&(alt_i, dot)]);
+                    new_ctx.union(&new_is.items[&(prod_i, dot)]);
                 }
 
-                for ref_alt_i in grm.rules_alts[nonterm_i].iter() {
-                    if new_is.add(*ref_alt_i, 0, &new_ctx) {
-                        todo.insert((*ref_alt_i, 0));
+                for ref_prod_i in grm.rules_prods[nonterm_i].iter() {
+                    if new_is.add(*ref_prod_i, 0, &new_ctx) {
+                        todo.insert((*ref_prod_i, 0));
                     }
                 }
             }
@@ -261,11 +261,11 @@ impl Itemset {
         // This is called 'transition' in Chen's dissertation, though note that the definition
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(&grm);
-        for (&(alt_i, dot), ctx) in self.items.iter() {
-            let alt = &grm.alts[alt_i];
-            if dot == alt.len() { continue; }
-            if sym == &alt[dot] {
-                newis.add(alt_i, dot + 1, &ctx);
+        for (&(prod_i, dot), ctx) in self.items.iter() {
+            let prod = &grm.prods[prod_i];
+            if dot == prod.len() { continue; }
+            if sym == &prod[dot] {
+                newis.add(prod_i, dot + 1, &ctx);
             }
         }
         newis
@@ -292,8 +292,8 @@ impl Itemset {
         }
 
         // Check that each itemset has the same core configuration.
-        for &(alt_i, dot) in self.items.keys() {
-            if other.items.get(&(alt_i, dot)).is_none() {
+        for &(prod_i, dot) in self.items.keys() {
+            if other.items.get(&(prod_i, dot)).is_none() {
                 return false;
             }
         }
@@ -338,8 +338,8 @@ impl Itemset {
     /// weakly compatible with `self`, this function's effects and return value are undefined.
     fn weakly_merge(&mut self, other: &Itemset) -> bool {
         let mut changed = false;
-        for (&(alt_i, dot), ctx) in self.items.iter_mut() {
-            if ctx.union(&other.items[&(alt_i, dot)]) {
+        for (&(prod_i, dot), ctx) in self.items.iter_mut() {
+            if ctx.union(&other.items[&(prod_i, dot)]) {
                 changed = true;
             }
         }
@@ -376,7 +376,7 @@ impl StateGraph {
         let mut state0 = Itemset::new(&grm);
         let mut ctx = BitVec::from_elem(grm.terms_len, false);
         ctx.set(grm.end_term, true);
-        state0.add(grm.start_alt, 0, &ctx);
+        state0.add(grm.start_prod, 0, &ctx);
         states.push(state0);
         edges.push(HashMap::new());
 
@@ -398,7 +398,7 @@ impl StateGraph {
         todo.insert(0);
         while todo.len() > 0 {
             // XXX This is the clumsy way we're forced to do what we'd prefer to be:
-            //     "let &(alt_i, dot) = todo.pop()"
+            //     "let &(prod_i, dot) = todo.pop()"
             let state_i = *todo.iter().next().unwrap();
             todo.remove(&state_i);
 
@@ -407,10 +407,10 @@ impl StateGraph {
                 let state = state_rc.close(&grm, &firsts);
                 seen_nonterms.clear();
                 seen_terms.clear();
-                for &(alt_i, dot) in state.items.keys() {
-                    let alt = &grm.alts[alt_i];
-                    if dot == alt.len() { continue; }
-                    let sym = alt[dot];
+                for &(prod_i, dot) in state.items.keys() {
+                    let prod = &grm.prods[prod_i];
+                    if dot == prod.len() { continue; }
+                    let sym = prod[dot];
                     match sym {
                         Symbol::Nonterminal(nonterm_i) => {
                             if seen_nonterms[nonterm_i] {
@@ -501,7 +501,7 @@ impl StateGraph {
         let mut seen = HashSet::new();
         while todo.len() > 0 {
             // XXX This is the clumsy way we're forced to do what we'd prefer to be:
-            //     "let &(alt_i, dot) = todo.pop()"
+            //     "let &(prod_i, dot) = todo.pop()"
             let state_i = *todo.iter().next().unwrap();
             todo.remove(&state_i);
             seen.insert(state_i);
@@ -559,7 +559,7 @@ mod test {
     use self::bit_vec::BitVec;
 
     use super::{bitvec_intersect, Itemset, Firsts, StateGraph};
-    use grammar::{AIdx, ast_to_grammar, Grammar, Symbol};
+    use grammar::{PIdx, ast_to_grammar, Grammar, Symbol};
     use yacc::parse_yacc;
 
     #[test]
@@ -742,26 +742,26 @@ mod test {
         has(&grm, &firsts, "G", vec!["c", "d", "f", ""]);
     }
 
-    fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, alt_off: AIdx, dot: usize, la:
+    fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, prod_off: PIdx, dot: usize, la:
                         Vec<&str>) {
-        let ab_alt_off = grm.rules_alts[grm.nonterminal_off(nt)][alt_off];
-        let ctx = &is.items[&(ab_alt_off, dot)];
+        let ab_prod_off = grm.rules_prods[grm.nonterminal_off(nt)][prod_off];
+        let ctx = &is.items[&(ab_prod_off, dot)];
         for i in 0..grm.terms_len {
             let bit = ctx[i];
             let mut found = false;
             for t in la.iter() {
                 if grm.terminal_off(t) == i {
                     if !bit {
-                        panic!("bit for terminal {}, dot {} is not set in alternative {} of {} when it should be",
-                               t, dot, alt_off, nt);
+                        panic!("bit for terminal {}, dot {} is not set in production {} of {} when it should be",
+                               t, dot, prod_off, nt);
                     }
                     found = true;
                     break;
                 }
             }
             if !found && bit {
-                panic!("bit for terminal {}, dot {} is set in alternative {} of {} when it shouldn't be",
-                       grm.terminal_names[i], dot, alt_off, nt);
+                panic!("bit for terminal {}, dot {} is set in production {} of {} when it shouldn't be",
+                       grm.terminal_names[i], dot, prod_off, nt);
             }
         }
     }
@@ -786,7 +786,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(grm.terminal_off("$"), true);
-        is.add(grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+        is.add(grm.rules_prods[grm.nonterminal_off("^") as usize][0], 0, &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(num_active_states(&cls_is), 6);
@@ -806,7 +806,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(grm.terminal_off("$"), true);
-        is.add(grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+        is.add(grm.rules_prods[grm.nonterminal_off("^") as usize][0], 0, &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -815,7 +815,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        is.add(grm.rules_alts[grm.nonterminal_off("F") as usize][0], 0, &la);
+        is.add(grm.rules_prods[grm.nonterminal_off("F") as usize][0], 0, &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
         state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
@@ -848,7 +848,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(grm.terminal_off("$"), true);
-        is.add(grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+        is.add(grm.rules_prods[grm.nonterminal_off("^") as usize][0], 0, &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -859,7 +859,7 @@ mod test {
         la = BitVec::from_elem(grm.terms_len, false);
         la.set(grm.terminal_off("b"), true);
         la.set(grm.terminal_off("$"), true);
-        is.add(grm.rules_alts[grm.nonterminal_off("S") as usize][1], 1, &la);
+        is.add(grm.rules_prods[grm.nonterminal_off("S") as usize][1], 1, &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
         state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
@@ -868,7 +868,7 @@ mod test {
         is = Itemset::new(&grm);
         la = BitVec::from_elem(grm.terms_len, false);
         la.set(grm.terminal_off("a"), true);
-        is.add(grm.rules_alts[grm.nonterminal_off("A") as usize][0], 1, &la);
+        is.add(grm.rules_prods[grm.nonterminal_off("A") as usize][0], 1, &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
@@ -882,7 +882,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(grm.terminal_off("$"), true);
-        is.add(grm.rules_alts[grm.nonterminal_off("^") as usize][0], 0, &la);
+        is.add(grm.rules_prods[grm.nonterminal_off("^") as usize][0], 0, &la);
         let cls_is = is.close(&grm, &firsts);
 
         let goto1 = cls_is.goto(&grm, &Symbol::Nonterminal(grm.nonterminal_off("S")));

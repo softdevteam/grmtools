@@ -251,7 +251,7 @@ mod test {
     }
 
     #[test]
-    fn test_rule_alternative_simple() {
+    fn test_rule_production_simple() {
         let src = "
             %%
             A : 'a';
@@ -293,7 +293,7 @@ mod test {
     }
 
     #[test]
-    fn test_rule_alternative_verticalbar() {
+    fn test_rule_alternative() {
         let src = "
             %%
             A : 'a' | 'b';
