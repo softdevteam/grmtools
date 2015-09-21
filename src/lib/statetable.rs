@@ -56,27 +56,27 @@ impl StateTable {
                     }
                 }
             }
-        }
 
-        for (&(state_i, sym), state_j) in sg.edges.iter() {
-            match sym {
-                Symbol::Nonterminal(nonterm_i) => {
-                    // Populate gotos
-                    debug_assert!(gotos.get(&(state_i, nonterm_i)).is_none());
-                    gotos.insert((state_i, nonterm_i), *state_j);
-                },
-                Symbol::Terminal(_) => {
-                    // Populate shifts
-                    match actions.entry((state_i, sym)) {
-                        Entry::Occupied(e) => {
-                            match e.get() {
-                                &Action::Shift(x) => assert_eq!(*state_j, x),
-                                &Action::Reduce(_) => panic!("shift/reduce error"),
-                                &Action::Accept => panic!("Internal error")
+            for (&sym, state_j) in sg.edges[state_i].iter() {
+                match sym {
+                    Symbol::Nonterminal(nonterm_i) => {
+                        // Populate gotos
+                        debug_assert!(gotos.get(&(state_i, nonterm_i)).is_none());
+                        gotos.insert((state_i, nonterm_i), *state_j);
+                    },
+                    Symbol::Terminal(_) => {
+                        // Populate shifts
+                        match actions.entry((state_i, sym)) {
+                            Entry::Occupied(e) => {
+                                match e.get() {
+                                    &Action::Shift(x) => assert_eq!(*state_j, x),
+                                    &Action::Reduce(_) => panic!("shift/reduce error"),
+                                    &Action::Accept => panic!("Internal error")
+                                }
+                            },
+                            Entry::Vacant(e) => {
+                                e.insert(Action::Shift(*state_j));
                             }
-                        },
-                        Entry::Vacant(e) => {
-                            e.insert(Action::Shift(*state_j));
                         }
                     }
                 }
@@ -108,14 +108,14 @@ mod test {
         assert_eq!(sg.states.len(), 9);
 
         let s0 = 0;
-        let s1 = sg.edges[&(s0, Symbol::Nonterminal(grm.nonterminal_off("Expr")))];
-        let s2 = sg.edges[&(s0, Symbol::Nonterminal(grm.nonterminal_off("Term")))];
-        let s3 = sg.edges[&(s0, Symbol::Nonterminal(grm.nonterminal_off("Factor")))];
-        let s4 = sg.edges[&(s0, Symbol::Terminal(grm.terminal_off("id")))];
-        let s5 = sg.edges[&(s2, Symbol::Terminal(grm.terminal_off("-")))];
-        let s6 = sg.edges[&(s3, Symbol::Terminal(grm.terminal_off("*")))];
-        let s7 = sg.edges[&(s5, Symbol::Nonterminal(grm.nonterminal_off("Expr")))];
-        let s8 = sg.edges[&(s6, Symbol::Nonterminal(grm.nonterminal_off("Term")))];
+        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s2 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
+        let s3 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Factor"))];
+        let s4 = sg.edges[s0][&Symbol::Terminal(grm.terminal_off("id"))];
+        let s5 = sg.edges[s2][&Symbol::Terminal(grm.terminal_off("-"))];
+        let s6 = sg.edges[s3][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s7 = sg.edges[s5][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s8 = sg.edges[s6][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
 
         let st = StateTable::new(&grm, &sg);
 
