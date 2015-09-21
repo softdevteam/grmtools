@@ -12,6 +12,7 @@ use std::path::Path;
 
 use lrpar::from_yacc;
 use lrpar::stategraph::StateGraph;
+use lrpar::statetable::StateTable;
 use lrpar::grammar::ast_to_grammar;
 
 fn usage(prog: String, msg: &str) {
@@ -57,7 +58,8 @@ fn main() {
     match from_yacc(&s) {
         Ok(ast) => {
             let grm = ast_to_grammar(&ast);
-            StateGraph::new(&grm);
+            let sg = StateGraph::new(&grm);
+            StateTable::new(&grm, &sg);
         },
         Err(s) => {
             println!("Error: {}", &s);
