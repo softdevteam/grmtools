@@ -9,7 +9,7 @@ pub struct GrammarAST {
 
 pub struct Rule {
     pub name: String,
-    pub alternatives: Vec<Vec<Symbol>>
+    pub productions: Vec<Vec<Symbol>>
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -98,7 +98,7 @@ impl GrammarAST {
             }
         }
         for rule in self.rules.values() {
-            for alt in rule.alternatives.iter() {
+            for alt in rule.productions.iter() {
                 for sym in alt.iter() {
                     match sym {
                         &Symbol::Nonterminal(ref name) => {
@@ -136,11 +136,11 @@ impl fmt::Debug for GrammarAST {
 
 impl Rule {
     pub fn new(name: String) -> Rule {
-        Rule {name: name, alternatives: vec![]}
+        Rule {name: name, productions: vec![]}
     }
 
     pub fn add_symbols(&mut self, v: Vec<Symbol>) {
-        self.alternatives.push(v);
+        self.productions.push(v);
     }
 }
 
@@ -148,7 +148,7 @@ impl fmt::Display for Rule {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Rule")
            .field("name", &self.name)
-           .field("alternatives", &self.alternatives)
+           .field("productions", &self.productions)
            .finish()
     }
 }
@@ -157,14 +157,14 @@ impl fmt::Debug for Rule {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Rule")
            .field("name", &self.name)
-           .field("alternatives", &self.alternatives)
+           .field("productions", &self.productions)
            .finish()
     }
 }
 
 impl PartialEq for Rule {
     fn eq(&self, other: &Rule) -> bool {
-        self.name == other.name && self.alternatives == other.alternatives
+        self.name == other.name && self.productions == other.productions
     }
 }
 

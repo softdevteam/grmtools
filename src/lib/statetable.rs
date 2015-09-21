@@ -1,6 +1,6 @@
 use std::collections::hash_map::{Entry, HashMap};
 
-use grammar::{AIdx, Grammar, Symbol};
+use grammar::{PIdx, Grammar, Symbol};
 use stategraph::StateGraph;
 
 /// A representation of a StateTable for a grammar. `actions` and `gotos` are split into two
@@ -8,14 +8,14 @@ use stategraph::StateGraph;
 #[derive(Debug)]
 pub struct StateTable {
     pub actions: HashMap<(usize, Symbol), Action>,
-    pub gotos  : HashMap<(usize, AIdx), usize>
+    pub gotos  : HashMap<(usize, PIdx), usize>
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Action {
     /// Shift to state X in the statetable.
     Shift(usize),
-    /// Reduce alternative X in the grammar.
+    /// Reduce production X in the grammar.
     Reduce(usize),
     /// Accept this input.
     Accept
@@ -24,12 +24,12 @@ pub enum Action {
 impl StateTable {
     pub fn new(grm: &Grammar, sg: &StateGraph) -> StateTable {
         let mut actions: HashMap<(usize, Symbol), Action> = HashMap::new();
-        let mut gotos  : HashMap<(usize, AIdx), usize>    = HashMap::new();
+        let mut gotos  : HashMap<(usize, PIdx), usize>    = HashMap::new();
 
         for (state_i, state) in sg.states.iter().enumerate() {
             // Populate reduce and accepts
-            for (&(alt_i, dot), ctx) in state.items.iter() {
-                if dot < grm.alts[alt_i].len() {
+            for (&(prod_i, dot), ctx) in state.items.iter() {
+                if dot < grm.prods[prod_i].len() {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
@@ -37,8 +37,8 @@ impl StateTable {
                     match actions.entry((state_i, sym)) {
                         Entry::Occupied(e) => {
                             match e.get() {
-                                &Action::Reduce(alt_j) => {
-                                    if alt_i != alt_j {
+                                &Action::Reduce(prod_j) => {
+                                    if prod_i != prod_j {
                                         panic!("reduce/reduce error");
                                     }
                                 },
@@ -46,11 +46,11 @@ impl StateTable {
                             }
                         }
                         Entry::Vacant(e) => {
-                            if alt_i == grm.start_alt && term_i == grm.end_term {
+                            if prod_i == grm.start_prod && term_i == grm.end_term {
                                 e.insert(Action::Accept);
                             }
                             else {
-                                e.insert(Action::Reduce(alt_i));
+                                e.insert(Action::Reduce(prod_i));
                             }
                         }
                     }
@@ -121,9 +121,9 @@ mod test {
 
         // Actions
         assert_eq!(st.actions.len(), 15);
-        let assert_reduce = |state_i: usize, term_i: TIdx, rule: &str, alt_off: usize| {
-            let alt_i = grm.rules_alts[grm.nonterminal_off(rule)][alt_off];
-            assert_eq!(st.actions[&(state_i, Symbol::Terminal(term_i))], Action::Reduce(alt_i));
+        let assert_reduce = |state_i: usize, term_i: TIdx, rule: &str, prod_off: usize| {
+            let prod_i = grm.rules_prods[grm.nonterminal_off(rule)][prod_off];
+            assert_eq!(st.actions[&(state_i, Symbol::Terminal(term_i))], Action::Reduce(prod_i));
         };
 
         assert_eq!(st.actions[&(s0, Symbol::Terminal(grm.terminal_off("id")))], Action::Shift(s4));
