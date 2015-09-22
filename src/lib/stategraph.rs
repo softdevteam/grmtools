@@ -203,18 +203,14 @@ impl Itemset {
         let mut new_is = self.clone();
         // todo is a list of all (production, dot) pairs that require investigation. Not all of
         // these will lead to new entries being put into new_is, but we have to least check them.
-        let mut todo = HashSet::new();
+        let mut todo = Vec::new();
         // Seed todo with every (production, dot) combination from self.items.
         for &(prod_i, dot) in self.items.keys() {
-            todo.insert((prod_i, dot));
+            todo.push((prod_i, dot));
         }
         let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
         while todo.len() > 0 {
-            // XXX This is the clumsy way we're forced to do what we'd prefer to be:
-            //     "let &(prod_i, dot) = todo.pop()"
-            let &(prod_i, dot) = todo.iter().next().unwrap();
-            todo.remove(&(prod_i, dot));
-
+            let (prod_i, dot) = todo.pop().unwrap();
             let prod = &grm.prods[prod_i];
             if dot == prod.len() { continue; }
             if let Symbol::Nonterminal(nonterm_i) = prod[dot] {
@@ -248,7 +244,15 @@ impl Itemset {
 
                 for ref_prod_i in grm.rules_prods[nonterm_i].iter() {
                     if new_is.add(*ref_prod_i, 0, &new_ctx) {
-                        todo.insert((*ref_prod_i, 0));
+                        // At this point, it may seem that we really want todo to be a set.
+                        // However, it typically has relatively few items in it, so it's generally
+                        // fast to iterate over the small number of items to spot duplicates. It
+                        // then turns out that constructing an equivalent of pop() on sets is very
+                        // slow, so in this case we gain more from doing todo.pop() on a vector
+                        // than we do on detecting duplicates in a set.
+                        if todo.iter().position(|x| x == &(*ref_prod_i, 0)).is_none() {
+                            todo.push((*ref_prod_i, 0));
+                        }
                     }
                 }
             }
