@@ -374,14 +374,19 @@ impl StateGraph {
         // This function can be seen as a modified version of items() from Chen's dissertation.
 
         let firsts                                 = Firsts::new(grm);
-        let mut states                             = Vec::new();
+        // closed_states and core_states are both equally sized vectors of states. Core states are
+        // smaller, and used for the weakly compatible checks; but we ultimately need to return
+        // closed states.
+        let mut closed_states                      = Vec::new();
+        let mut core_states                        = Vec::new();
         let mut edges: Vec<HashMap<Symbol, usize>> = Vec::new();
 
         let mut state0 = Itemset::new(&grm);
         let mut ctx = BitVec::from_elem(grm.terms_len, false);
         ctx.set(grm.end_term, true);
         state0.add(grm.start_prod, 0, &ctx);
-        states.push(state0);
+        closed_states.push(state0.close(&grm, &firsts));
+        core_states.push(state0);
         edges.push(HashMap::new());
 
         // We maintain two lists of which nonterms and terms we've seen; when processing a given
@@ -401,17 +406,17 @@ impl StateGraph {
 
         todo.insert(0);
         while todo.len() > 0 {
+            debug_assert_eq!(closed_states.len(), core_states.len());
             // XXX This is the clumsy way we're forced to do what we'd prefer to be:
             //     "let &(prod_i, dot) = todo.pop()"
             let state_i = *todo.iter().next().unwrap();
             todo.remove(&state_i);
 
             {
-                let state_rc = &states[state_i];
-                let state = state_rc.close(&grm, &firsts);
+                let cl_state = &closed_states[state_i];
                 seen_nonterms.clear();
                 seen_terms.clear();
-                for &(prod_i, dot) in state.items.keys() {
+                for &(prod_i, dot) in cl_state.items.keys() {
                     let prod = &grm.prods[prod_i];
                     if dot == prod.len() { continue; }
                     let sym = prod[dot];
@@ -429,7 +434,7 @@ impl StateGraph {
                             seen_terms.set(term_i, true);
                         }
                     }
-                    let nstate = state.goto(&grm, &sym);
+                    let nstate = cl_state.goto(&grm, &sym);
                     new_states.push((sym, nstate));
                 }
             }
@@ -443,7 +448,7 @@ impl StateGraph {
                         Symbol::Terminal(term_i) => &cnd_term_weaklies[term_i]
                     };
                     for cnd in cnd_weaklies.iter() {
-                        if states[*cnd].weakly_compatible(&nstate) {
+                        if core_states[*cnd].weakly_compatible(&nstate) {
                             m = Some(*cnd);
                             break;
                         }
@@ -453,7 +458,8 @@ impl StateGraph {
                     Some(k) => {
                         // A weakly compatible match has been found.
                         edges[state_i].insert(sym, k);
-                        if states[k].weakly_merge(&nstate) {
+                        if core_states[k].weakly_merge(&nstate) {
+                            closed_states[k] = core_states[k].close(&grm, &firsts);
                             // We only do the simplest change propagation, forcing possibly
                             // affected sets to be entirely reprocessed (which will recursively
                             // force propagation too). Even though this does unnecessary
@@ -468,14 +474,15 @@ impl StateGraph {
                     None    => {
                         match sym {
                             Symbol::Nonterminal(nonterm_i) =>
-                                cnd_nonterm_weaklies[nonterm_i].push(states.len()),
+                                cnd_nonterm_weaklies[nonterm_i].push(core_states.len()),
                             Symbol::Terminal(term_i) =>
-                                cnd_term_weaklies[term_i].push(states.len()),
+                                cnd_term_weaklies[term_i].push(core_states.len()),
                         }
-                        todo.insert(states.len());
-                        edges[state_i].insert(sym, states.len());
+                        todo.insert(core_states.len());
+                        edges[state_i].insert(sym, core_states.len());
                         edges.push(HashMap::new());
-                        states.push(nstate);
+                        closed_states.push(nstate.close(&grm, &firsts));
+                        core_states.push(nstate);
                     }
                 }
             }
@@ -486,11 +493,11 @@ impl StateGraph {
         // this can even happen with the example from Pager's paper (on perhaps 1 out of
         // 100 runs, 24 or 25 states will be created instead of 23). We thus need to weed out
         // unreachable states and update edges accordingly.
-        let (gc_states, gc_edges) = StateGraph::gc(states, edges);
+        let (closed_states, edges) = StateGraph::gc(closed_states, edges);
 
         StateGraph {
-            states: gc_states.iter().map(|s| s.close(&grm, &firsts)).collect(),
-            edges:  gc_edges
+            states: closed_states,
+            edges:  edges
         }
     }
 
