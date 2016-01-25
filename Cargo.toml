@@ -1,10 +1,10 @@
 [package]
-name = "lrpar"
+name = "lrtable"
 version = "0.1.0"
 authors = ["Lukas Diekmann <http://lukasdiekmann.com/>", "Laurence Tratt <http://tratt.net/laurie/>"]
 
 [lib]
-name = "lrpar"
+name = "lrtable"
 path = "src/lib/mod.rs"
 
 [dependencies]
