@@ -1,17 +1,13 @@
 [package]
-name = "lrpar"
+name = "lrtable"
 version = "0.1.0"
 authors = ["Lukas Diekmann <http://lukasdiekmann.com/>", "Laurence Tratt <http://tratt.net/laurie/>"]
 
-[[bin]]
-doc = false
-name = "lrpar"
-
 [lib]
-name = "lrpar"
+name = "lrtable"
 path = "src/lib/mod.rs"
 
 [dependencies]
-bit-vec = "0.4.1"
-getopts = "0.2.1"
-regex = "0.1.8"
+bit-vec = "0.4.3"
+getopts = "0.2.14"
+regex = "0.1.48"
