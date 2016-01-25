@@ -2,7 +2,7 @@
 #![feature(convert)]
 
 extern crate getopts;
-extern crate lrpar;
+extern crate lrtable;
 
 use getopts::Options;
 use std::{env, process};
@@ -10,10 +10,10 @@ use std::fs::File;
 use std::io::{Read, stderr, Write};
 use std::path::Path;
 
-use lrpar::from_yacc;
-use lrpar::stategraph::StateGraph;
-use lrpar::statetable::StateTable;
-use lrpar::grammar::ast_to_grammar;
+use lrtable::from_yacc;
+use lrtable::stategraph::StateGraph;
+use lrtable::statetable::StateTable;
+use lrtable::grammar::ast_to_grammar;
 
 fn usage(prog: String, msg: &str) {
     let path = Path::new(prog.as_str());
