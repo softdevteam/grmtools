@@ -1,5 +1,4 @@
 #![cfg_attr(test, allow(dead_code))]
-#![feature(convert)]
 
 extern crate getopts;
 extern crate lrtable;
