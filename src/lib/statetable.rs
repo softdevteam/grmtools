@@ -7,8 +7,12 @@ use stategraph::StateGraph;
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[derive(Debug)]
 pub struct StateTable {
-    pub actions: HashMap<(usize, Symbol), Action>,
-    pub gotos  : HashMap<(usize, PIdx), usize>
+    pub actions      : HashMap<(usize, Symbol), Action>,
+    pub gotos        : HashMap<(usize, PIdx), usize>,
+    /// The number of reduce/reduce errors encountered.
+    pub reduce_reduce: u64,
+    /// The number of shift/reduce errors encountered.
+    pub shift_reduce : u64
 }
 
 #[derive(Debug, PartialEq)]
@@ -25,6 +29,8 @@ impl StateTable {
     pub fn new(grm: &Grammar, sg: &StateGraph) -> StateTable {
         let mut actions: HashMap<(usize, Symbol), Action> = HashMap::new();
         let mut gotos  : HashMap<(usize, PIdx), usize>    = HashMap::new();
+        let mut reduce_reduce = 0;
+        let mut shift_reduce  = 0;
 
         for (state_i, state) in sg.states.iter().enumerate() {
             // Populate reduce and accepts
@@ -35,11 +41,17 @@ impl StateTable {
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
                     let sym = Symbol::Terminal(term_i);
                     match actions.entry((state_i, sym)) {
-                        Entry::Occupied(e) => {
-                            match e.get() {
-                                &Action::Reduce(prod_j) => {
-                                    if prod_i != prod_j {
-                                        panic!("reduce/reduce error");
+                        Entry::Occupied(mut e) => {
+                            match e.get_mut() {
+                                &mut Action::Reduce(prod_j) => {
+                                    // By default, Yacc resolves reduce/reduce conflicts in favour
+                                    // of the earlier production in the grammar.
+                                    if prod_i < prod_j {
+                                        reduce_reduce += 1;
+                                        e.insert(Action::Reduce(prod_i));
+                                    }
+                                    else if prod_i > prod_j {
+                                        reduce_reduce += 1;
                                     }
                                 },
                                 _ => panic!("Internal error")
@@ -67,11 +79,16 @@ impl StateTable {
                     Symbol::Terminal(_) => {
                         // Populate shifts
                         match actions.entry((state_i, sym)) {
-                            Entry::Occupied(e) => {
-                                match e.get() {
-                                    &Action::Shift(x) => assert_eq!(*state_j, x),
-                                    &Action::Reduce(_) => panic!("shift/reduce error"),
-                                    &Action::Accept => panic!("Internal error")
+                            Entry::Occupied(mut e) => {
+                                match e.get_mut() {
+                                    &mut Action::Shift(x) => assert_eq!(*state_j, x),
+                                    &mut Action::Reduce(_) => {
+                                        // By default, Yacc resolves shift/reduce conflicts in
+                                        // favour of the shift.
+                                        shift_reduce += 1;
+                                        e.insert(Action::Shift(*state_j));
+                                    }
+                                    &mut Action::Accept => panic!("Internal error")
                                 }
                             },
                             Entry::Vacant(e) => {
@@ -83,7 +100,8 @@ impl StateTable {
             }
         }
 
-        StateTable { actions: actions, gotos: gotos }
+        StateTable { actions: actions, gotos: gotos, reduce_reduce: reduce_reduce,
+                     shift_reduce: shift_reduce }
     }
 }
 
@@ -152,5 +170,55 @@ mod test {
         assert_eq!(st.gotos[&(s5, grm.nonterminal_off("Factor"))], s3);
         assert_eq!(st.gotos[&(s6, grm.nonterminal_off("Term"))], s8);
         assert_eq!(st.gotos[&(s6, grm.nonterminal_off("Factor"))], s3);
+    }
+
+    #[test]
+    fn test_default_reduce_reduce() {
+        let grm = ast_to_grammar(&parse_yacc(&"
+            %start A
+            %%
+            A : B 'x' | C 'x' 'x';
+            B : 'a';
+            C : 'a';
+          ".to_string()).unwrap());
+        let sg = StateGraph::new(&grm);
+        let st = StateTable::new(&grm, &sg);
+        assert_eq!(st.actions.len(), 8);
+
+        // We only extract the states necessary to test those rules affected by the reduce/reduce.
+
+        let s0 = 0;
+        let s4 = sg.edges[s0][&Symbol::Terminal(grm.terminal_off("a"))];
+
+        assert_eq!(st.actions[&(s4, Symbol::Terminal(grm.terminal_off("x")))], Action::Reduce(3));
+    }
+
+    #[test]
+    fn test_default_shift_reduce() {
+        let grm = ast_to_grammar(&parse_yacc(&"
+            %start Expr
+            %%
+            Expr : Expr '+' Expr
+                 | Expr '*' Expr
+                 | 'id' ;
+          ".to_string()).unwrap());
+        let sg = StateGraph::new(&grm);
+        let st = StateTable::new(&grm, &sg);
+        assert_eq!(st.actions.len(), 15);
+
+        // We only extract the states necessary to test those rules affected by the shift/reduce.
+
+        let s0 = 0;
+        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
+        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s5 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s6 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+
+        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
+        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
+
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
     }
 }
