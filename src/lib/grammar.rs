@@ -153,10 +153,10 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
         nonterminal_names: nonterminal_names,
         terms_len:         terminal_names.len(),
         terminal_names:    terminal_names,
-        start_prod:         rules_prods[nonterminal_map[&start_nonterm]][0],
+        start_prod:        rules_prods[nonterminal_map[&start_nonterm]][0],
         end_term:          terminal_map[&end_term],
-        rules_prods:        rules_prods,
-        prods:              prods,
+        rules_prods:       rules_prods,
+        prods:             prods,
     }
 }
 
