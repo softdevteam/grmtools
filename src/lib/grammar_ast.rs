@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use grammar::Precedence;
+
 pub struct GrammarAST {
     pub start: Option<String>,
     pub rules: HashMap<String, Rule>,
@@ -17,19 +19,6 @@ pub struct Rule {
 pub enum Symbol {
     Nonterminal(String),
     Terminal(String)
-}
-
-pub type PrecedenceLevel = u64;
-#[derive(Debug, PartialEq)]
-pub struct Precedence {
-    pub level: PrecedenceLevel,
-    pub kind:  AssocKind
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum AssocKind {
-    Left,
-    Right
 }
 
 /// The various different possible grammar validation errors.

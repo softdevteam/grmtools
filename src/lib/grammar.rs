@@ -33,6 +33,8 @@ pub struct Grammar {
     pub nonterms_len: RIdx,
     /// A mapping from TIdx -> String.
     pub terminal_names: Vec<String>,
+    /// A mapping from TIdx -> Option<Precedence>
+    pub terminal_precs: Vec<Option<Precedence>>,
     pub terms_len: TIdx,
     /// Which production is the sole production of the start rule?
     pub start_prod: PIdx,
@@ -43,13 +45,27 @@ pub struct Grammar {
     /// are not necessarily stored sequentially.
     pub rules_prods: Vec<Vec<PIdx>>,
     /// A list of all productions.
-    pub prods: Vec<Vec<Symbol>>
+    pub prods: Vec<Vec<Symbol>>,
+    pub prod_precs: Vec<Option<Precedence>>
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
     Nonterminal(RIdx),
     Terminal(TIdx)
+}
+
+pub type PrecedenceLevel = u64;
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Precedence {
+    pub level: PrecedenceLevel,
+    pub kind:  AssocKind
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AssocKind {
+    Left,
+    Right
 }
 
 #[cfg(test)]
@@ -115,25 +131,33 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
         nonterminal_map.insert(v.clone(), i);
     }
     let mut terminal_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
+    let mut terminal_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
     terminal_names.push(end_term.clone());
-    for k in ast.tokens.iter() { terminal_names.push(k.clone()); }
+    terminal_precs.push(None);
+    for k in ast.tokens.iter() {
+        terminal_names.push(k.clone());
+        terminal_precs.push(ast.precs.get(k).map(|p| *p));
+    }
     let mut terminal_map = HashMap::<String, TIdx>::new();
     for (i, v) in terminal_names.iter().enumerate() {
         terminal_map.insert(v.clone(), i);
     }
 
-    let mut prods = Vec::new();
+    let mut prods                               = Vec::new();
+    let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
     for astrulename in nonterminal_names.iter() {
         if astrulename == &start_nonterm {
             rules_prods.get_mut(nonterminal_map[&start_nonterm]).unwrap().push(prods.len());
             let start_prod = vec![Symbol::Nonterminal(nonterminal_map[ast.start.as_ref().unwrap()])];
             prods.push(start_prod);
+            prod_precs.push(None);
             continue;
         }
         let astrule = &ast.rules[astrulename];
         let mut rule = rules_prods.get_mut(nonterminal_map[&astrule.name]).unwrap();
         for astprod in astrule.productions.iter() {
             let mut prod = Vec::with_capacity(astprod.len());
+            let mut prec = None;
             for astsym in astprod.iter() {
                 let sym = match astsym {
                     &grammar_ast::Symbol::Nonterminal(ref n) =>
@@ -143,8 +167,19 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
                 };
                 prod.push(sym);
             }
+            if prec.is_none() {
+                for astsym in astprod.iter().rev() {
+                    if let &grammar_ast::Symbol::Terminal(ref n) = astsym {
+                        if let Some(p) = ast.precs.get(n) {
+                            prec = Some(*p);
+                        }
+                        break;
+                    }
+                }
+            }
             (*rule).push(prods.len());
             prods.push(prod);
+            prod_precs.push(prec);
         }
     }
 
@@ -153,16 +188,18 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
         nonterminal_names: nonterminal_names,
         terms_len:         terminal_names.len(),
         terminal_names:    terminal_names,
+        terminal_precs:    terminal_precs,
         start_prod:        rules_prods[nonterminal_map[&start_nonterm]][0],
         end_term:          terminal_map[&end_term],
         rules_prods:       rules_prods,
         prods:             prods,
+        prod_precs:        prod_precs
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{ast_to_grammar, Symbol};
+    use super::{AssocKind, ast_to_grammar, Precedence, Symbol};
     use yacc::parse_yacc;
 
     #[test]
@@ -233,5 +270,32 @@ mod test {
                                  usize).unwrap();
         assert_eq!(s_prod.len(), 1);
         assert_eq!(s_prod[0], Symbol::Terminal(grm.terminal_off("T2")));
+    }
+
+    #[test]
+    fn test_left_right_precs() {
+        let grm = ast_to_grammar(&parse_yacc(&"
+            %start Expr
+            %right '='
+            %left '+' '-'
+            %left '/'
+            %left '*'
+            %%
+            Expr : Expr '=' Expr
+                 | Expr '+' Expr
+                 | Expr '-' Expr
+                 | Expr '/' Expr
+                 | Expr '*' Expr
+                 | 'id' ;
+          ".to_string()).unwrap());
+
+        assert_eq!(grm.prod_precs.len(), 7);
+        assert_eq!(grm.prod_precs[0], None); 
+        assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 0, kind: AssocKind::Right});
+        assert_eq!(grm.prod_precs[2].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[3].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[4].unwrap(), Precedence{level: 2, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[5].unwrap(), Precedence{level: 3, kind: AssocKind::Left});
+        assert!(grm.prod_precs[6].is_none());
     }
 }
