@@ -1,6 +1,6 @@
 use std::collections::hash_map::{Entry, HashMap};
 
-use grammar::{PIdx, Grammar, Symbol};
+use grammar::{AssocKind, Grammar, Precedence, PIdx, Symbol};
 use stategraph::StateGraph;
 
 /// A representation of a StateTable for a grammar. `actions` and `gotos` are split into two
@@ -76,17 +76,56 @@ impl StateTable {
                         debug_assert!(gotos.get(&(state_i, nonterm_i)).is_none());
                         gotos.insert((state_i, nonterm_i), *state_j);
                     },
-                    Symbol::Terminal(_) => {
+                    Symbol::Terminal(term_k) => {
                         // Populate shifts
                         match actions.entry((state_i, sym)) {
                             Entry::Occupied(mut e) => {
                                 match e.get_mut() {
                                     &mut Action::Shift(x) => assert_eq!(*state_j, x),
-                                    &mut Action::Reduce(_) => {
-                                        // By default, Yacc resolves shift/reduce conflicts in
-                                        // favour of the shift.
-                                        shift_reduce += 1;
-                                        e.insert(Action::Shift(*state_j));
+                                    &mut Action::Reduce(prod_k) => {
+                                        // We have a shift/reduce conflict.
+                                        let term_k_prec = grm.terminal_precs[term_k];
+                                        let prod_k_prec = grm.prod_precs[prod_k];
+                                        match (term_k_prec, prod_k_prec) {
+                                            (None, None) | (Some(_), None) | (None, Some(_)) => {
+                                                // If the terminal and production don't both
+                                                // have precedences, we use Yacc's default
+                                                // resolution, which is in favour of the shift.
+                                                shift_reduce += 1;
+                                                e.insert(Action::Shift(*state_j));
+                                            },
+                                            (Some(Precedence{level: term_lev, kind: term_kind}),
+                                             Some(Precedence{level: prod_lev, kind: prod_kind})) => {
+                                                if term_lev == prod_lev {
+                                                    // Both terminal and production have the same
+                                                    // level precedence, so we need to look at the
+                                                    // precedence kind.
+                                                    match (term_kind, prod_kind) {
+                                                        (AssocKind::Left, AssocKind::Left) => {
+                                                            // Left associativity is resolved in
+                                                            // favour of the reduce (i.e. leave
+                                                            // as-is).
+                                                        }
+                                                        (AssocKind::Right, AssocKind::Right) => {
+                                                            // Right associativity is resolved in
+                                                            // favour of the shift.
+                                                            e.insert(Action::Shift(*state_j));
+                                                        }
+                                                        (_, _) => {
+                                                            panic!("Not supported.");
+                                                        }
+                                                    }
+                                                }
+                                                else if term_lev > prod_lev {
+                                                    // The terminal has higher level precedence, so
+                                                    // resolve in favour of shift.
+                                                    e.insert(Action::Shift(*state_j));
+                                                }
+                                                // If term_lev < prod_lev, then the production has
+                                                // higher level precedence and we keep the reduce
+                                                // as-is.
+                                            }
+                                        }
                                     }
                                     &mut Action::Accept => panic!("Internal error")
                                 }
@@ -186,7 +225,6 @@ mod test {
         assert_eq!(st.actions.len(), 8);
 
         // We only extract the states necessary to test those rules affected by the reduce/reduce.
-
         let s0 = 0;
         let s4 = sg.edges[s0][&Symbol::Terminal(grm.terminal_off("a"))];
 
@@ -206,8 +244,6 @@ mod test {
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 15);
 
-        // We only extract the states necessary to test those rules affected by the shift/reduce.
-
         let s0 = 0;
         let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
         let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
@@ -220,5 +256,78 @@ mod test {
 
         assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
         assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
+    }
+
+    #[test]
+    fn test_left_associativity() {
+        let grm = ast_to_grammar(&parse_yacc(&"
+            %start Expr
+            %left '+'
+            %left '*'
+            %%
+            Expr : Expr '+' Expr
+                 | Expr '*' Expr
+                 | 'id' ;
+          ".to_string()).unwrap());
+        let sg = StateGraph::new(&grm);
+        let st = StateTable::new(&grm, &sg);
+        assert_eq!(st.actions.len(), 15);
+
+        let s0 = 0;
+        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
+        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s5 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s6 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+
+        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.end_term))], Action::Reduce(2));
+
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.end_term))], Action::Reduce(1));
+    }
+
+    #[test]
+    fn test_left_right_associativity() {
+        let grm = ast_to_grammar(&parse_yacc(&"
+            %start Expr
+            %right '='
+            %left '+'
+            %left '*'
+            %%
+            Expr : Expr '+' Expr
+                 | Expr '*' Expr
+                 | Expr '=' Expr
+                 | 'id' ;
+          ".to_string()).unwrap());
+        let sg = StateGraph::new(&grm);
+        let st = StateTable::new(&grm, &sg);
+        assert_eq!(st.actions.len(), 24);
+
+        let s0 = 0;
+        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
+        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s5 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("="))];
+        let s6 = sg.edges[s5][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s7 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s8 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("=")))], Action::Shift(s5));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.end_term))], Action::Reduce(3));
+
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.end_term))], Action::Reduce(2));
+
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.end_term))], Action::Reduce(1));
     }
 }
