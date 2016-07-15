@@ -1,6 +1,6 @@
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 
-use grammar::{AssocKind, Grammar, Precedence, PIdx, Symbol};
+use grammar::{AssocKind, Grammar, PIdx, Symbol, TIdx};
 use stategraph::StateGraph;
 
 /// A representation of a StateTable for a grammar. `actions` and `gotos` are split into two
@@ -29,8 +29,8 @@ impl StateTable {
     pub fn new(grm: &Grammar, sg: &StateGraph) -> StateTable {
         let mut actions: HashMap<(usize, Symbol), Action> = HashMap::new();
         let mut gotos  : HashMap<(usize, PIdx), usize>    = HashMap::new();
-        let mut reduce_reduce = 0;
-        let mut shift_reduce  = 0;
+        let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
+        let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
 
         for (state_i, state) in sg.states.iter().enumerate() {
             // Populate reduce and accepts
@@ -83,55 +83,8 @@ impl StateTable {
                                 match e.get_mut() {
                                     &mut Action::Shift(x) => assert_eq!(*state_j, x),
                                     &mut Action::Reduce(prod_k) => {
-                                        // We have a shift/reduce conflict.
-                                        let term_k_prec = grm.terminal_precs[term_k];
-                                        let prod_k_prec = grm.prod_precs[prod_k];
-                                        match (term_k_prec, prod_k_prec) {
-                                            (None, None) | (Some(_), None) | (None, Some(_)) => {
-                                                // If the terminal and production don't both
-                                                // have precedences, we use Yacc's default
-                                                // resolution, which is in favour of the shift.
-                                                shift_reduce += 1;
-                                                e.insert(Action::Shift(*state_j));
-                                            },
-                                            (Some(Precedence{level: term_lev, kind: term_kind}),
-                                             Some(Precedence{level: prod_lev, kind: prod_kind})) => {
-                                                if term_lev == prod_lev {
-                                                    // Both terminal and production have the same
-                                                    // level precedence, so we need to look at the
-                                                    // precedence kind.
-                                                    match (term_kind, prod_kind) {
-                                                        (AssocKind::Left, AssocKind::Left) => {
-                                                            // Left associativity is resolved in
-                                                            // favour of the reduce (i.e. leave
-                                                            // as-is).
-                                                        }
-                                                        (AssocKind::Right, AssocKind::Right) => {
-                                                            // Right associativity is resolved in
-                                                            // favour of the shift.
-                                                            e.insert(Action::Shift(*state_j));
-                                                        }
-                                                        (AssocKind::Nonassoc, AssocKind::Nonassoc) => {
-                                                            // Nonassociativity leads to a run-time
-                                                            // parsing error, so we need to remove
-                                                            // the action entirely.
-                                                            e.remove();
-                                                        }
-                                                        (_, _) => {
-                                                            panic!("Not supported.");
-                                                        }
-                                                    }
-                                                }
-                                                else if term_lev > prod_lev {
-                                                    // The terminal has higher level precedence, so
-                                                    // resolve in favour of shift.
-                                                    e.insert(Action::Shift(*state_j));
-                                                }
-                                                // If term_lev < prod_lev, then the production has
-                                                // higher level precedence and we keep the reduce
-                                                // as-is.
-                                            }
-                                        }
+                                        shift_reduce += resolve_shift_reduce(&grm, e, term_k,
+                                                                             prod_k, *state_j);
                                     }
                                     &mut Action::Accept => panic!("Internal error")
                                 }
@@ -148,6 +101,52 @@ impl StateTable {
         StateTable { actions: actions, gotos: gotos, reduce_reduce: reduce_reduce,
                      shift_reduce: shift_reduce }
     }
+
+}
+
+fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(usize, Symbol), Action>, term_k: TIdx,
+                        prod_k: PIdx, state_j: usize) -> u64 {
+    let mut shift_reduce = 0;
+    let term_k_prec = grm.terminal_precs[term_k];
+    let prod_k_prec = grm.prod_precs[prod_k];
+    match (term_k_prec, prod_k_prec) {
+        (_, None) | (None, _) => {
+            // If the terminal and production don't both have precedences, we use Yacc's default
+            // resolution, which is in favour of the shift.
+            e.insert(Action::Shift(state_j));
+            shift_reduce += 1;
+        },
+        (Some(term_prec), Some(prod_prec)) => {
+            if term_prec.level == prod_prec.level {
+                // Both terminal and production have the same level precedence, so we need to look
+                // at the precedence kind.
+                match (term_prec.kind, prod_prec.kind) {
+                    (AssocKind::Left, AssocKind::Left) => {
+                        // Left associativity is resolved in favour of the reduce (i.e. leave
+                        // as-is).
+                    },
+                    (AssocKind::Right, AssocKind::Right) => {
+                        // Right associativity is resolved in favour of the shift.
+                        e.insert(Action::Shift(state_j));
+                    },
+                    (AssocKind::Nonassoc, AssocKind::Nonassoc) => {
+                        // Nonassociativity leads to a run-time parsing error, so we need to remove
+                        // the action entirely.
+                        e.remove();
+                    },
+                    (_, _) => {
+                        panic!("Not supported.");
+                    }
+                }
+            } else if term_prec.level > prod_prec.level {
+                // The terminal has higher level precedence, so resolve in favour of shift.
+                e.insert(Action::Shift(state_j));
+            }
+            // If term_lev < prod_lev, then the production has higher level precedence and we keep
+            // the reduce as-is.
+        }
+    }
+    shift_reduce
 }
 
 #[cfg(test)]
