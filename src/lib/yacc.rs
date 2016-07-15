@@ -54,7 +54,7 @@ impl fmt::Display for YaccError {
 impl YaccParser {
     fn new(src: String) -> YaccParser {
         YaccParser {
-            src:     src,
+            src    : src,
             grammar: GrammarAST::new()
         }
     }
@@ -98,12 +98,13 @@ impl YaccParser {
                 if let Some(j) = self.lookahead_is("%left", i) {
                     kind = AssocKind::Left;
                     k = j;
-                }
-                else if let Some(j) = self.lookahead_is("%right", i) {
+                } else if let Some(j) = self.lookahead_is("%right", i) {
                     kind = AssocKind::Right;
                     k = j;
-                }
-                else {
+                } else if let Some(j) = self.lookahead_is("%nonassoc", i) {
+                    kind = AssocKind::Nonassoc;
+                    k = j;
+                } else {
                     return Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, off: i});
                 }
 
@@ -465,15 +466,17 @@ mod test {
           %left '*'
           %right '/'
           %right '^'
+          %nonassoc '~'
           %%
           ".to_string();
         let grm = parse_yacc(&src).unwrap();
-        assert_eq!(grm.precs.len(), 5);
+        assert_eq!(grm.precs.len(), 6);
         assert_eq!(*grm.precs.get("+").unwrap(), Precedence{level: 0, kind: AssocKind::Left});
         assert_eq!(*grm.precs.get("-").unwrap(), Precedence{level: 0, kind: AssocKind::Left});
         assert_eq!(*grm.precs.get("*").unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert_eq!(*grm.precs.get("/").unwrap(), Precedence{level: 2, kind: AssocKind::Right});
         assert_eq!(*grm.precs.get("^").unwrap(), Precedence{level: 3, kind: AssocKind::Right});
+        assert_eq!(*grm.precs.get("~").unwrap(), Precedence{level: 4, kind: AssocKind::Nonassoc});
     }
 
     #[test]
@@ -494,6 +497,21 @@ mod test {
           %right 'x'
           %%
           ",
+          "
+          %nonassoc 'x'
+          %nonassoc 'x'
+          %%
+          ",
+          "
+          %left 'x'
+          %nonassoc 'x'
+          %%
+          ",
+          "
+          %right 'x'
+          %nonassoc 'x'
+          %%
+          "
           ];
         for src in srcs.iter() {
             match parse_yacc(&src.to_string()) {

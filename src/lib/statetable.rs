@@ -111,6 +111,12 @@ impl StateTable {
                                                             // favour of the shift.
                                                             e.insert(Action::Shift(*state_j));
                                                         }
+                                                        (AssocKind::Nonassoc, AssocKind::Nonassoc) => {
+                                                            // Nonassociativity leads to a run-time
+                                                            // parsing error, so we need to remove
+                                                            // the action entirely.
+                                                            e.remove();
+                                                        }
                                                         (_, _) => {
                                                             panic!("Not supported.");
                                                         }
@@ -329,5 +335,59 @@ mod test {
         assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
         assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(1));
         assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.end_term))], Action::Reduce(1));
+    }
+
+    #[test]
+    fn test_left_right_nonassoc_associativity() {
+        let grm = ast_to_grammar(&parse_yacc(&"
+            %start Expr
+            %right '='
+            %left '+'
+            %left '*'
+            %nonassoc '~'
+            %%
+            Expr : Expr '+' Expr
+                 | Expr '*' Expr
+                 | Expr '=' Expr
+                 | Expr '~' Expr
+                 | 'id' ;
+          ".to_string()).unwrap());
+        let sg = StateGraph::new(&grm);
+        let st = StateTable::new(&grm, &sg);
+        assert_eq!(st.actions.len(), 34);
+
+        let s0 = 0;
+        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
+        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s5 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("="))];
+        let s6 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("~"))];
+        let s7 = sg.edges[s6][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s8 = sg.edges[s5][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s9 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s10 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(4));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(4));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(4));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.end_term))], Action::Reduce(4));
+
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("=")))], Action::Shift(s5));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("~")))], Action::Shift(s6));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.end_term))], Action::Reduce(3));
+
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("~")))], Action::Shift(s6));
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.end_term))], Action::Reduce(2));
+
+        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
+        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("~")))], Action::Shift(s6));
+        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.end_term))], Action::Reduce(1));
     }
 }

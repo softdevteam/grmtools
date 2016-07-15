@@ -65,7 +65,8 @@ pub struct Precedence {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AssocKind {
     Left,
-    Right
+    Right,
+    Nonassoc
 }
 
 #[cfg(test)]
@@ -273,29 +274,32 @@ mod test {
     }
 
     #[test]
-    fn test_left_right_precs() {
+    fn test_left_right_nonassoc_precs() {
         let grm = ast_to_grammar(&parse_yacc(&"
             %start Expr
             %right '='
             %left '+' '-'
             %left '/'
             %left '*'
+            %nonassoc '~'
             %%
             Expr : Expr '=' Expr
                  | Expr '+' Expr
                  | Expr '-' Expr
                  | Expr '/' Expr
                  | Expr '*' Expr
+                 | Expr '~' Expr
                  | 'id' ;
           ".to_string()).unwrap());
 
-        assert_eq!(grm.prod_precs.len(), 7);
+        assert_eq!(grm.prod_precs.len(), 8);
         assert_eq!(grm.prod_precs[0], None); 
         assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 0, kind: AssocKind::Right});
         assert_eq!(grm.prod_precs[2].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[3].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[4].unwrap(), Precedence{level: 2, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[5].unwrap(), Precedence{level: 3, kind: AssocKind::Left});
-        assert!(grm.prod_precs[6].is_none());
+        assert_eq!(grm.prod_precs[6].unwrap(), Precedence{level: 4, kind: AssocKind::Nonassoc});
+        assert!(grm.prod_precs[7].is_none());
     }
 }
