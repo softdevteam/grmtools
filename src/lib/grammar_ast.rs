@@ -1,10 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use grammar::Precedence;
+
 pub struct GrammarAST {
     pub start: Option<String>,
     pub rules: HashMap<String, Rule>,
-    pub tokens: HashSet<String>
+    pub tokens: HashSet<String>,
+    pub precs: HashMap<String, Precedence>
 }
 
 pub struct Rule {
@@ -64,9 +67,12 @@ impl fmt::Display for Symbol {
 
 impl GrammarAST {
     pub fn new() -> GrammarAST {
-        let hm = HashMap::new();
-        let t = HashSet::new();
-        GrammarAST {start: None, rules: hm, tokens: t}
+        GrammarAST {
+            start:   None,
+            rules:   HashMap::new(),
+            tokens:  HashSet::new(),
+            precs:   HashMap::new(),
+        }
     }
 
     pub fn add_rule(&mut self, key: String, value: Vec<Symbol>) {

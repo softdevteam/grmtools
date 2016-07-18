@@ -5,6 +5,7 @@ use self::regex::Regex;
 
 type YaccResult<T> = Result<T, YaccError>;
 
+use grammar::{AssocKind, Precedence};
 use grammar_ast::{GrammarAST, Symbol};
 
 pub struct YaccParser {
@@ -21,7 +22,8 @@ pub enum YaccErrorKind {
     MissingColon,
     PrematureEnd,
     ProgramsNotSupported,
-    UnknownDeclaration
+    UnknownDeclaration,
+    DuplicatePrecedence
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -41,7 +43,8 @@ impl fmt::Display for YaccError {
             YaccErrorKind::MissingColon         => s = "Missing colon",
             YaccErrorKind::PrematureEnd         => s = "File ends prematurely",
             YaccErrorKind::ProgramsNotSupported => s = "Programs not currently supported",
-            YaccErrorKind::UnknownDeclaration   => s = "Unknown declaration"
+            YaccErrorKind::UnknownDeclaration   => s = "Unknown declaration",
+            YaccErrorKind::DuplicatePrecedence  => s = "Token already has a precedence"
         }
         write!(f, "{} at position {}", s, self.off)
     }
@@ -51,14 +54,13 @@ impl fmt::Display for YaccError {
 impl YaccParser {
     fn new(src: String) -> YaccParser {
         YaccParser {
-            src: src,
+            src    : src,
             grammar: GrammarAST::new()
         }
     }
 
     fn parse(&mut self) -> YaccResult<usize> {
-        let mut i: usize = 0;
-        i = try!(self.parse_declarations(i));
+        let mut i = try!(self.parse_declarations(0));
         i = try!(self.parse_rules(i));
         // We don't currently support the programs part of a specification. One day we might...
         match self.lookahead_is("%%", i) {
@@ -72,6 +74,7 @@ impl YaccParser {
 
     fn parse_declarations(&mut self, mut i: usize) -> YaccResult<usize> {
         i = try!(self.parse_ws(i));
+        let mut prec_level  = 0;
         while i < self.src.len() {
             if self.lookahead_is("%%", i).is_some() { return Ok(i); }
             if let Some(j) = self.lookahead_is("%token", i) {
@@ -90,7 +93,33 @@ impl YaccParser {
                 i = try!(self.parse_ws(j));
             }
             else {
-                return Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, off: i});
+                let k;
+                let kind;
+                if let Some(j) = self.lookahead_is("%left", i) {
+                    kind = AssocKind::Left;
+                    k = j;
+                } else if let Some(j) = self.lookahead_is("%right", i) {
+                    kind = AssocKind::Right;
+                    k = j;
+                } else if let Some(j) = self.lookahead_is("%nonassoc", i) {
+                    kind = AssocKind::Nonassoc;
+                    k = j;
+                } else {
+                    return Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, off: i});
+                }
+
+                i = try!(self.parse_ws(k));
+                while i < self.src.len() {
+                    if self.lookahead_is("%", i).is_some() { break; }
+                    let (j, n) = try!(self.parse_terminal(i));
+                    if self.grammar.precs.contains_key(&n) {
+                        return Err(YaccError{kind: YaccErrorKind::DuplicatePrecedence, off: i})
+                    }
+                    let prec = Precedence{level: prec_level, kind: kind};
+                    self.grammar.precs.insert(n, prec);
+                    i = try!(self.parse_ws(j));
+                }
+                prec_level += 1;
             }
         }
         Err(YaccError{kind: YaccErrorKind::PrematureEnd, off: i})
@@ -201,6 +230,7 @@ pub fn parse_yacc(s:&String) -> Result<GrammarAST, YaccError> {
 #[cfg(test)]
 mod test {
     use super::{parse_yacc, YaccError, YaccErrorKind};
+    use grammar::{AssocKind, Precedence};
     use grammar_ast::{Rule, Symbol};
 
     fn nonterminal(n: &str) -> Symbol {
@@ -426,6 +456,69 @@ mod test {
             Ok(_)  => panic!("Unknown declaration parsed"),
             Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, ..}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_precs() {
+        let src = "
+          %left '+' '-'
+          %left '*'
+          %right '/'
+          %right '^'
+          %nonassoc '~'
+          %%
+          ".to_string();
+        let grm = parse_yacc(&src).unwrap();
+        assert_eq!(grm.precs.len(), 6);
+        assert_eq!(*grm.precs.get("+").unwrap(), Precedence{level: 0, kind: AssocKind::Left});
+        assert_eq!(*grm.precs.get("-").unwrap(), Precedence{level: 0, kind: AssocKind::Left});
+        assert_eq!(*grm.precs.get("*").unwrap(), Precedence{level: 1, kind: AssocKind::Left});
+        assert_eq!(*grm.precs.get("/").unwrap(), Precedence{level: 2, kind: AssocKind::Right});
+        assert_eq!(*grm.precs.get("^").unwrap(), Precedence{level: 3, kind: AssocKind::Right});
+        assert_eq!(*grm.precs.get("~").unwrap(), Precedence{level: 4, kind: AssocKind::Nonassoc});
+    }
+
+    #[test]
+    fn test_dup_precs() {
+        let srcs = vec![
+          "
+          %left 'x'
+          %left 'x'
+          %%
+          ",
+          "
+          %left 'x'
+          %right 'x'
+          %%
+          ",
+          "
+          %right 'x'
+          %right 'x'
+          %%
+          ",
+          "
+          %nonassoc 'x'
+          %nonassoc 'x'
+          %%
+          ",
+          "
+          %left 'x'
+          %nonassoc 'x'
+          %%
+          ",
+          "
+          %right 'x'
+          %nonassoc 'x'
+          %%
+          "
+          ];
+        for src in srcs.iter() {
+            match parse_yacc(&src.to_string()) {
+                Ok(_) => panic!("Duplicate precedence parsed"),
+                Err(YaccError{kind: YaccErrorKind::DuplicatePrecedence, ..}) => (),
+                Err(e) => panic!("Incorrect error returned {}", e)
+            }
         }
     }
 }
