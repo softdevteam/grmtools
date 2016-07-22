@@ -81,7 +81,7 @@ impl YaccParser {
                 i = try!(self.parse_ws(j));
                 while i < self.src.len() {
                     if self.lookahead_is("%", i).is_some() { break; }
-                    let (j, n) = try!(self.parse_name(i));
+                    let (j, n) = try!(self.parse_terminal(i));
                     self.grammar.tokens.insert(n);
                     i = try!(self.parse_ws(j));
                 }
@@ -169,9 +169,13 @@ impl YaccParser {
                 syms.push(Symbol::Terminal(sym));
             }
             else {
-                let (j, sym) = try!(self.parse_name(i));
+                let (j, sym) = try!(self.parse_terminal(i));
+                if self.grammar.tokens.contains(&sym) {
+                    syms.push(Symbol::Terminal(sym));
+                } else {
+                    syms.push(Symbol::Nonterminal(sym));
+                }
                 i = j;
-                syms.push(Symbol::Nonterminal(sym));
             }
             i = try!(self.parse_ws(i));
         }
@@ -190,11 +194,17 @@ impl YaccParser {
     }
 
     fn parse_terminal(&self, i: usize) -> YaccResult<(usize, String)> {
-        let re = Regex::new("^(\".+?\")|('.+?')").unwrap();
+        let re = Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap();
         match re.find(&self.src[i..]) {
             Some((s, e)) => {
-                assert!(s == 0);
-                Ok((i + e, self.src[i + 1..i + e - 1].to_string()))
+                assert!(s == 0 && e > 0);
+                let first_char = self.src.chars().nth(i).unwrap();
+                if first_char == '"' || first_char == '\'' {
+                    Ok((i + e, self.src[i + 1..i + e - 1].to_string()))
+                } else {
+                    Ok((i + e, self.src[i..i + e].to_string()))
+                }
+
             },
             None => Err(YaccError{kind: YaccErrorKind::IllegalString, off: i})
         }
@@ -377,8 +387,15 @@ mod test {
     }
 
     #[test]
+    fn test_declaration_token_literal() {
+        let src = "%token   'a'\n%%\nA : 'a';".to_string();
+        let grm = parse_yacc(&src).unwrap();
+        assert!(grm.has_token("a"));
+    }
+
+    #[test]
     fn test_declaration_tokens() {
-        let src = "%token   a b c\n%%\nA : a;".to_string();
+        let src = "%token   a b c 'd'\n%%\nA : a;".to_string();
         let grm = parse_yacc(&src).unwrap();
         assert!(grm.has_token("a"));
         assert!(grm.has_token("b"));
@@ -387,12 +404,20 @@ mod test {
 
     #[test]
     fn test_auto_add_tokens() {
-        // we don't support the YACC feature that allows to redeclare
-        // nonterminals as tokens using %token. Instead we automatically
-        // add all tokens we find to the %token list
         let src = "%%\nA : 'a';".to_string();
         let grm = parse_yacc(&src).unwrap();
         assert!(grm.has_token("a"));
+    }
+
+    #[test]
+    fn test_token_non_literal() {
+        let src = "%token T %%\nA : T;".to_string();
+        let grm = parse_yacc(&src).unwrap();
+        assert!(grm.has_token("T"));
+        match grm.rules.get("A").unwrap().productions[0][0] {
+            Symbol::Nonterminal(_) => panic!("Should be terminal"),
+            Symbol::Terminal(_)    => ()
+        }
     }
 
     #[test]
