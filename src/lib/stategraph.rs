@@ -375,7 +375,7 @@ impl StateGraph {
 
         let firsts                                 = Firsts::new(grm);
         // closed_states and core_states are both equally sized vectors of states. Core states are
-        // smaller, and used for the weakly compatible checks; but we ultimately need to return
+        // smaller, and used for the weakly compatible checks, but we ultimately need to return
         // closed states.
         let mut closed_states                      = Vec::new();
         let mut core_states                        = Vec::new();
@@ -385,7 +385,7 @@ impl StateGraph {
         let mut ctx = BitVec::from_elem(grm.terms_len, false);
         ctx.set(grm.end_term, true);
         state0.add(grm.start_prod, 0, &ctx);
-        closed_states.push(state0.close(&grm, &firsts));
+        closed_states.push(None);
         core_states.push(state0);
         edges.push(HashMap::new());
 
@@ -413,7 +413,15 @@ impl StateGraph {
             todo.remove(&state_i);
 
             {
-                let cl_state = &closed_states[state_i];
+                // Since it's possible for the same state to be added multiple times to 'todo'
+                // before it's actually processed, we wait until we know for sure that we'll use
+                // the closed version of the state before calculating it. Once we've calculated
+                // the closed state, however, we cache it, since we ultimately return closed states
+                // and we don't want to calculate the final lot of closed states twice.
+                if closed_states[state_i].is_none() {
+                    closed_states[state_i] = Some(core_states[state_i].close(&grm, &firsts));
+                }
+                let cl_state = &closed_states[state_i].as_ref().unwrap();
                 seen_nonterms.clear();
                 seen_terms.clear();
                 for &(prod_i, dot) in cl_state.items.keys() {
@@ -459,7 +467,7 @@ impl StateGraph {
                         // A weakly compatible match has been found.
                         edges[state_i].insert(sym, k);
                         if core_states[k].weakly_merge(&nstate) {
-                            closed_states[k] = core_states[k].close(&grm, &firsts);
+                            closed_states[k] = None;
                             // We only do the simplest change propagation, forcing possibly
                             // affected sets to be entirely reprocessed (which will recursively
                             // force propagation too). Even though this does unnecessary
@@ -481,7 +489,7 @@ impl StateGraph {
                         todo.insert(core_states.len());
                         edges[state_i].insert(sym, core_states.len());
                         edges.push(HashMap::new());
-                        closed_states.push(nstate.close(&grm, &firsts));
+                        closed_states.push(None);
                         core_states.push(nstate);
                     }
                 }
@@ -493,7 +501,10 @@ impl StateGraph {
         // this can even happen with the example from Pager's paper (on perhaps 1 out of
         // 100 runs, 24 or 25 states will be created instead of 23). We thus need to weed out
         // unreachable states and update edges accordingly.
-        let (closed_states, edges) = StateGraph::gc(closed_states, edges);
+        let (closed_states, edges) = StateGraph::gc(closed_states.drain(..)
+                                                                 .map(|x| x.unwrap())
+                                                                 .collect(),
+                                                    edges);
 
         StateGraph {
             states: closed_states,
