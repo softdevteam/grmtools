@@ -1,5 +1,8 @@
 use std::fmt;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod grammar;
 pub mod grammar_ast;
 pub mod yacc;
