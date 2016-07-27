@@ -50,6 +50,18 @@ impl fmt::Display for YaccError {
     }
 }
 
+lazy_static! {
+    static ref RE_NAME: Regex = {
+        Regex::new(r"^[a-zA-Z_.][a-zA-Z0-9_.]*").unwrap()
+    };
+    static ref RE_TERMINAL: Regex = {
+        Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap()
+    };
+    static ref RE_WHITESPACE: Regex = {
+        Regex::new(r"^\s+").unwrap()
+    };
+}
+
 /// The actual parser is intended to be entirely opaque from outside users.
 impl YaccParser {
     fn new(src: String) -> YaccParser {
@@ -183,8 +195,7 @@ impl YaccParser {
     }
 
     fn parse_name(&self, i: usize) -> YaccResult<(usize, String)> {
-        let re = Regex::new(r"^[a-zA-Z_.][a-zA-Z0-9_.]*").unwrap();
-        match re.find(&self.src[i..]) {
+        match RE_NAME.find(&self.src[i..]) {
             Some((s, e)) => {
                 assert!(s == 0);
                 Ok((i + e, self.src[i..i + e].to_string()))
@@ -194,8 +205,7 @@ impl YaccParser {
     }
 
     fn parse_terminal(&self, i: usize) -> YaccResult<(usize, String)> {
-        let re = Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap();
-        match re.find(&self.src[i..]) {
+        match RE_TERMINAL.find(&self.src[i..]) {
             Some((s, e)) => {
                 assert!(s == 0 && e > 0);
                 let first_char = self.src.chars().nth(i).unwrap();
@@ -211,8 +221,7 @@ impl YaccParser {
     }
 
     fn parse_ws(&self, i: usize) -> YaccResult<usize> {
-        let re = Regex::new(r"^\s+").unwrap();
-        match re.find(&self.src[i..]) {
+        match RE_WHITESPACE.find(&self.src[i..]) {
             Some((s, e)) => {
                 assert!(s == 0);
                 Ok(i + e)
