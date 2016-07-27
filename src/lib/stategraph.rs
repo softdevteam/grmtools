@@ -376,7 +376,8 @@ impl StateGraph {
         let firsts                                 = Firsts::new(grm);
         // closed_states and core_states are both equally sized vectors of states. Core states are
         // smaller, and used for the weakly compatible checks, but we ultimately need to return
-        // closed states.
+        // closed states. Closed states which are None are those which require processing; thus
+        // closed_states also implicitly serves as a todo list.
         let mut closed_states                      = Vec::new();
         let mut core_states                        = Vec::new();
         let mut edges: Vec<HashMap<Symbol, usize>> = Vec::new();
@@ -395,8 +396,6 @@ impl StateGraph {
         let mut seen_terms = BitVec::from_elem(grm.terms_len, false);
         // new_states is used to separate out iterating over states vs. mutating it
         let mut new_states = Vec::new();
-        // todo is a set of integers, representing states which need to be (re)visited
-        let mut todo = HashSet::new();
         // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
         // matches for a given symbol.
         let mut cnd_nonterm_weaklies: Vec<Vec<usize>> = Vec::with_capacity(grm.nonterms_len);
@@ -404,23 +403,24 @@ impl StateGraph {
         for _ in 0..grm.terms_len { cnd_term_weaklies.push(Vec::new()); }
         for _ in 0..grm.nonterms_len { cnd_nonterm_weaklies.push(Vec::new()); }
 
-        todo.insert(0);
-        while todo.len() > 0 {
+        let mut todo = 1; // How many None values are there in closed_states?
+        let mut todo_off = 0; // Offset in closed states to start searching for the next todo.
+        while todo > 0 {
             debug_assert_eq!(closed_states.len(), core_states.len());
-            // XXX This is the clumsy way we're forced to do what we'd prefer to be:
-            //     "let &(prod_i, dot) = todo.pop()"
-            let state_i = *todo.iter().next().unwrap();
-            todo.remove(&state_i);
+            // state_i is the next item to process. We don't want to continually search for the
+            // next None from the beginning, so we remember where we last saw a None (todo_off) and
+            // search from that point onwards, wrapping as necessary. Since processing a state x
+            // disproportionately causes state x + 1 to require processing, this prevents the
+            // search from becoming horribly non-linear.
+            let state_i = match closed_states.iter().skip(todo_off).position(|x| x.is_none()) {
+                Some(i) => todo_off + i,
+                None    => closed_states.iter().position(|x| x.is_none()).unwrap()
+            };
+            todo_off = state_i + 1;
+            todo -= 1;
 
             {
-                // Since it's possible for the same state to be added multiple times to 'todo'
-                // before it's actually processed, we wait until we know for sure that we'll use
-                // the closed version of the state before calculating it. Once we've calculated
-                // the closed state, however, we cache it, since we ultimately return closed states
-                // and we don't want to calculate the final lot of closed states twice.
-                if closed_states[state_i].is_none() {
-                    closed_states[state_i] = Some(core_states[state_i].close(&grm, &firsts));
-                }
+                closed_states[state_i] = Some(core_states[state_i].close(&grm, &firsts));
                 let cl_state = &closed_states[state_i].as_ref().unwrap();
                 seen_nonterms.clear();
                 seen_terms.clear();
@@ -467,7 +467,6 @@ impl StateGraph {
                         // A weakly compatible match has been found.
                         edges[state_i].insert(sym, k);
                         if core_states[k].weakly_merge(&nstate) {
-                            closed_states[k] = None;
                             // We only do the simplest change propagation, forcing possibly
                             // affected sets to be entirely reprocessed (which will recursively
                             // force propagation too). Even though this does unnecessary
@@ -476,7 +475,10 @@ impl StateGraph {
                             // Note also that edges[k] will be completely regenerated, overwriting
                             // all existing entries and possibly adding new ones. We thus don't
                             // need to clear it manually.
-                            todo.insert(k);
+                            if closed_states[k].is_some() {
+                                closed_states[k] = None;
+                                todo += 1;
+                            }
                         }
                     },
                     None    => {
@@ -486,11 +488,11 @@ impl StateGraph {
                             Symbol::Terminal(term_i) =>
                                 cnd_term_weaklies[term_i].push(core_states.len()),
                         }
-                        todo.insert(core_states.len());
                         edges[state_i].insert(sym, core_states.len());
                         edges.push(HashMap::new());
                         closed_states.push(None);
                         core_states.push(nstate);
+                        todo += 1;
                     }
                 }
             }
