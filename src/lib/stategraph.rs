@@ -1,8 +1,12 @@
 use std::collections::HashSet;
 use std::collections::hash_map::{Entry, HashMap};
+use std::hash::BuildHasherDefault;
 
 extern crate bit_vec;
 use self::bit_vec::BitVec;
+
+extern crate fnv;
+use self::fnv::FnvHasher;
 
 use grammar::{PIdx, Grammar, RIdx, Symbol, SIdx, TIdx};
 
@@ -171,13 +175,13 @@ impl Firsts {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Itemset {
-    pub items: HashMap<(PIdx, SIdx), Ctx>
+    pub items: HashMap<(PIdx, SIdx), Ctx, BuildHasherDefault<FnvHasher>>
 }
 
 impl Itemset {
     /// Create a blank Itemset.
     fn new(_: &Grammar) -> Itemset {
-        Itemset {items: HashMap::new()}
+        Itemset {items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default())}
     }
 
     /// Add an item `(prod, dot)` with context `ctx` to this itemset. Returns true if this led to
