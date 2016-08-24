@@ -71,6 +71,11 @@ impl YaccParser {
         }
     }
 
+    fn mk_error(&self, k: YaccErrorKind, off: usize) -> YaccError {
+        let (line, col) = self.off_to_line_col(off);
+        YaccError{kind: k, line: line, col: col}
+    }
+
     fn off_to_line_col(&self, off: usize) -> (usize, usize) {
         if self.newlines.is_empty() {
             return (1, off + 1);
@@ -91,8 +96,7 @@ impl YaccParser {
             Some(j) => {
                 if try!(self.parse_ws(j)) == self.src.len() { Ok(i) }
                 else {
-                    let (line, col) = self.off_to_line_col(i);
-                    Err(YaccError{kind: YaccErrorKind::ProgramsNotSupported, line: line, col: col})
+                    Err(self.mk_error(YaccErrorKind::ProgramsNotSupported, i))
                 }
             }
             None    => Ok(i)
@@ -132,9 +136,7 @@ impl YaccParser {
                     kind = AssocKind::Nonassoc;
                     k = j;
                 } else {
-                    let (line, col) = self.off_to_line_col(i);
-                    return Err(YaccError{kind: YaccErrorKind::UnknownDeclaration,
-                                         line: line, col: col});
+                    return Err(self.mk_error(YaccErrorKind::UnknownDeclaration, i));
                 }
 
                 i = try!(self.parse_ws(k));
@@ -142,9 +144,7 @@ impl YaccParser {
                     if self.lookahead_is("%", i).is_some() { break; }
                     let (j, n) = try!(self.parse_terminal(i));
                     if self.grammar.precs.contains_key(&n) {
-                        let (line, col) = self.off_to_line_col(i);
-                        return Err(YaccError{kind: YaccErrorKind::DuplicatePrecedence,
-                                             line: line, col: col})
+                        return Err(self.mk_error(YaccErrorKind::DuplicatePrecedence, i));
                     }
                     let prec = Precedence{level: prec_level, kind: kind};
                     self.grammar.precs.insert(n, prec);
@@ -153,8 +153,7 @@ impl YaccParser {
                 prec_level += 1;
             }
         }
-        let (line, col) = self.off_to_line_col(i - 1);
-        Err(YaccError{kind: YaccErrorKind::PrematureEnd, line: line, col: col})
+        Err(self.mk_error(YaccErrorKind::PrematureEnd, i - 1))
     }
 
     fn parse_rules(&mut self, mut i: usize) -> YaccResult<usize> {
@@ -178,8 +177,7 @@ impl YaccParser {
         match self.lookahead_is(":", i) {
             Some(j) => i = j,
             None    => {
-                let (line, col) = self.off_to_line_col(i);
-                return Err(YaccError{kind: YaccErrorKind::MissingColon, line: line, col: col})
+                return Err(self.mk_error(YaccErrorKind::MissingColon, i));
             }
         }
         let mut syms = Vec::new();
@@ -214,8 +212,7 @@ impl YaccParser {
             }
             i = try!(self.parse_ws(i));
         }
-        let (line, col) = self.off_to_line_col(i);
-        Err(YaccError{kind: YaccErrorKind::IncompleteRule, line: line, col: col})
+        Err(self.mk_error(YaccErrorKind::IncompleteRule, i))
     }
 
     fn parse_name(&self, i: usize) -> YaccResult<(usize, String)> {
@@ -225,8 +222,7 @@ impl YaccParser {
                 Ok((i + e, self.src[i..i + e].to_string()))
             },
             None         => {
-                let (line, col) = self.off_to_line_col(i);
-                Err(YaccError{kind: YaccErrorKind::IllegalName, line: line, col: col})
+                Err(self.mk_error(YaccErrorKind::IllegalName, i))
             }
         }
     }
@@ -244,8 +240,7 @@ impl YaccParser {
 
             },
             None => {
-                let (line, col) = self.off_to_line_col(i);
-                Err(YaccError{kind: YaccErrorKind::IllegalString, line: line, col: col})
+                Err(self.mk_error(YaccErrorKind::IllegalString, i))
             }
         }
     }
