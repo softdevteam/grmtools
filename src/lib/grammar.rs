@@ -96,7 +96,7 @@ impl Grammar {
 /// Translate a `GrammarAST` into a grammar. This function is akin to the part a traditional
 /// compiler that takes in an AST and converts it into a binary.
 ///
-/// As we're compiling the GrammarAST into a Grammar we do two extra things:
+/// As we're compiling the `GrammarAST` into a `Grammar` we do two extra things:
 ///   1) Add a new start rule (which we'll refer to as "^", though the actual name is a fresh name
 ///      that is guaranteed to be unique) that references the user defined start rule.
 ///   2) Add a new end terminal (which we'll refer to as "$", though the actual name is a fresh
@@ -117,7 +117,7 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
     }
 
     let mut end_term = END_TERM.to_string();
-    while ast.tokens.iter().position(|x| x == &end_term).is_some() {
+    while ast.tokens.iter().any(|x| x == &end_term) {
         end_term = end_term + END_TERM;
     }
 
@@ -135,7 +135,7 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
     let mut terminal_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
     terminal_names.push(end_term.clone());
     terminal_precs.push(None);
-    for k in ast.tokens.iter() {
+    for k in &ast.tokens {
         terminal_names.push(k.clone());
         terminal_precs.push(ast.precs.get(k).map(|p| *p));
     }
@@ -146,7 +146,7 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
 
     let mut prods                               = Vec::new();
     let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
-    for astrulename in nonterminal_names.iter() {
+    for astrulename in &nonterminal_names {
         if astrulename == &start_nonterm {
             rules_prods.get_mut(nonterminal_map[&start_nonterm]).unwrap().push(prods.len());
             let start_prod = vec![Symbol::Nonterminal(nonterminal_map[ast.start.as_ref().unwrap()])];
@@ -156,21 +156,21 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
         }
         let astrule = &ast.rules[astrulename];
         let mut rule = rules_prods.get_mut(nonterminal_map[&astrule.name]).unwrap();
-        for astprod in astrule.productions.iter() {
+        for astprod in &astrule.productions {
             let mut prod = Vec::with_capacity(astprod.len());
             let mut prec = None;
             for astsym in astprod.iter() {
-                let sym = match astsym {
-                    &grammar_ast::Symbol::Nonterminal(ref n) =>
+                let sym = match *astsym {
+                    grammar_ast::Symbol::Nonterminal(ref n) =>
                         Symbol::Nonterminal(nonterminal_map[n]),
-                    &grammar_ast::Symbol::Terminal(ref n) =>
+                    grammar_ast::Symbol::Terminal(ref n) =>
                         Symbol::Terminal(terminal_map[n])
                 };
                 prod.push(sym);
             }
             if prec.is_none() {
                 for astsym in astprod.iter().rev() {
-                    if let &grammar_ast::Symbol::Terminal(ref n) = astsym {
+                    if let grammar_ast::Symbol::Terminal(ref n) = *astsym {
                         if let Some(p) = ast.precs.get(n) {
                             prec = Some(*p);
                         }

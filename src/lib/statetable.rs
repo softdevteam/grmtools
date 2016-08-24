@@ -3,7 +3,7 @@ use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 use grammar::{AssocKind, Grammar, PIdx, Symbol, TIdx};
 use stategraph::StateGraph;
 
-/// A representation of a StateTable for a grammar. `actions` and `gotos` are split into two
+/// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[derive(Debug)]
 pub struct StateTable {
@@ -34,7 +34,7 @@ impl StateTable {
 
         for (state_i, state) in sg.states.iter().enumerate() {
             // Populate reduce and accepts
-            for (&(prod_i, dot), ctx) in state.items.iter() {
+            for (&(prod_i, dot), ctx) in &state.items {
                 if dot < grm.prods[prod_i].len() {
                     continue;
                 }
@@ -42,8 +42,8 @@ impl StateTable {
                     let sym = Symbol::Terminal(term_i);
                     match actions.entry((state_i, sym)) {
                         Entry::Occupied(mut e) => {
-                            match e.get_mut() {
-                                &mut Action::Reduce(prod_j) => {
+                            match *e.get_mut() {
+                                Action::Reduce(prod_j) => {
                                     // By default, Yacc resolves reduce/reduce conflicts in favour
                                     // of the earlier production in the grammar.
                                     if prod_i < prod_j {
@@ -69,7 +69,7 @@ impl StateTable {
                 }
             }
 
-            for (&sym, state_j) in sg.edges[state_i].iter() {
+            for (&sym, state_j) in &sg.edges[state_i] {
                 match sym {
                     Symbol::Nonterminal(nonterm_i) => {
                         // Populate gotos
@@ -80,13 +80,13 @@ impl StateTable {
                         // Populate shifts
                         match actions.entry((state_i, sym)) {
                             Entry::Occupied(mut e) => {
-                                match e.get_mut() {
-                                    &mut Action::Shift(x) => assert_eq!(*state_j, x),
-                                    &mut Action::Reduce(prod_k) => {
-                                        shift_reduce += resolve_shift_reduce(&grm, e, term_k,
+                                match *e.get_mut() {
+                                    Action::Shift(x) => assert_eq!(*state_j, x),
+                                    Action::Reduce(prod_k) => {
+                                        shift_reduce += resolve_shift_reduce(grm, e, term_k,
                                                                              prod_k, *state_j);
                                     }
-                                    &mut Action::Accept => panic!("Internal error")
+                                    Action::Accept => panic!("Internal error")
                                 }
                             },
                             Entry::Vacant(e) => {

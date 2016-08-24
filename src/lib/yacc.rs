@@ -266,7 +266,7 @@ impl YaccParser {
     }
 }
 
-pub fn parse_yacc(s:&String) -> Result<GrammarAST, YaccError> {
+pub fn parse_yacc(s:&str) -> Result<GrammarAST, YaccError> {
     let mut yp = YaccParser::new(s.to_string());
     match yp.parse() {
         Ok(_) => Ok(yp.grammar),

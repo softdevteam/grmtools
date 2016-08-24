@@ -41,7 +41,7 @@ impl fmt::Display for FromYaccError {
     }
 }
 
-pub fn from_yacc(s:&String) -> Result<GrammarAST, FromYaccError> {
+pub fn from_yacc(s: &str) -> Result<GrammarAST, FromYaccError> {
     let grmast = try!(parse_yacc(s));
     try!(grmast.validate());
     Ok(grmast)
