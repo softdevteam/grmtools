@@ -87,8 +87,8 @@ impl Firsts {
                 // For each rule E
                 for prod_i in prods.iter() {
                     // ...and each production A
-                    let ref prod = grm.prods[*prod_i];
-                    if prod.len() == 0 {
+                    let prod = &grm.prods[*prod_i];
+                    if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
                         if !firsts.is_epsilon_set(rul_i) {
@@ -98,15 +98,15 @@ impl Firsts {
                         continue;
                     }
                     for (sym_i, sym) in prod.iter().enumerate() {
-                        match sym {
-                            &Symbol::Terminal(term_i) => {
+                        match *sym {
+                            Symbol::Terminal(term_i) => {
                                 // if symbol is a Terminal, add to FIRSTS
                                 if !firsts.set(rul_i, term_i) {
                                     changed = true;
                                 }
                                 break;
                             },
-                            &Symbol::Nonterminal(nonterm_i) => {
+                            Symbol::Nonterminal(nonterm_i) => {
                                 // if we're dealing with another Nonterminal, union its FIRSTs
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
@@ -190,7 +190,7 @@ impl Itemset {
         let entry = self.items.entry((prod, dot));
         match entry {
             Entry::Occupied(mut e) => {
-                e.get_mut().union(&ctx)
+                e.get_mut().union(ctx)
             }
             Entry::Vacant(e)       => {
                 e.insert(ctx.clone());
@@ -213,7 +213,7 @@ impl Itemset {
             todo.push((prod_i, dot));
         }
         let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
-        while todo.len() > 0 {
+        while !todo.is_empty() {
             let (prod_i, dot) = todo.pop().unwrap();
             let prod = &grm.prods[prod_i];
             if dot == prod.len() { continue; }
@@ -246,7 +246,7 @@ impl Itemset {
                     new_ctx.union(&new_is.items[&(prod_i, dot)]);
                 }
 
-                for ref_prod_i in grm.rules_prods[nonterm_i].iter() {
+                for ref_prod_i in &grm.rules_prods[nonterm_i] {
                     if new_is.add(*ref_prod_i, 0, &new_ctx) {
                         // At this point, it may seem that we really want todo to be a set.
                         // However, it typically has relatively few items in it, so it's generally
@@ -268,12 +268,12 @@ impl Itemset {
     fn goto(&self, grm: &Grammar, sym: &Symbol) -> Itemset {
         // This is called 'transition' in Chen's dissertation, though note that the definition
         // therein appears to get the dot in the input/output the wrong way around.
-        let mut newis = Itemset::new(&grm);
-        for (&(prod_i, dot), ctx) in self.items.iter() {
+        let mut newis = Itemset::new(grm);
+        for (&(prod_i, dot), ctx) in &self.items {
             let prod = &grm.prods[prod_i];
             if dot == prod.len() { continue; }
             if sym == &prod[dot] {
-                newis.add(prod_i, dot + 1, &ctx);
+                newis.add(prod_i, dot + 1, ctx);
             }
         }
         newis
@@ -321,18 +321,16 @@ impl Itemset {
         // and use that as a stable ordering mechanism. This uses more hash lookups than we might
         // like, but we're helped by the fact that most itemsets are smallish in number.
         let keys: Vec<_> = self.items.keys().collect();
-        for i in 0..len - 1 {
-            let i_key = keys[i];
-            for j in i + 1..len {
-                let j_key = keys[j];
-                 // Condition 1 in the Pager paper
-                if !(bitvec_intersect(&self.items[i_key], &other.items[j_key])
-                    || bitvec_intersect(&self.items[j_key], &other.items[i_key])) {
+        for (i, i_key) in keys.iter().enumerate().take(len - 1) {
+            for j_key in keys.iter().take(len).skip(i + 1) {
+                // Condition 1 in the Pager paper
+                if !(bitvec_intersect(&self.items[*i_key], &other.items[*j_key])
+                    || bitvec_intersect(&self.items[*j_key], &other.items[*i_key])) {
                     continue;
                 }
                 // Conditions 2 and 3 in the Pager paper
-                if bitvec_intersect(&self.items[i_key], &self.items[j_key])
-                   || bitvec_intersect(&other.items[i_key], &other.items[j_key]) {
+                if bitvec_intersect(&self.items[*i_key], &self.items[*j_key])
+                   || bitvec_intersect(&other.items[*i_key], &other.items[*j_key]) {
                     continue;
                 }
                 return false;
@@ -346,7 +344,7 @@ impl Itemset {
     /// weakly compatible with `self`, this function's effects and return value are undefined.
     fn weakly_merge(&mut self, other: &Itemset) -> bool {
         let mut changed = false;
-        for (&(prod_i, dot), ctx) in self.items.iter_mut() {
+        for (&(prod_i, dot), ctx) in &mut self.items {
             if ctx.union(&other.items[&(prod_i, dot)]) {
                 changed = true;
             }
@@ -386,7 +384,7 @@ impl StateGraph {
         let mut core_states                        = Vec::new();
         let mut edges: Vec<HashMap<Symbol, usize>> = Vec::new();
 
-        let mut state0 = Itemset::new(&grm);
+        let mut state0 = Itemset::new(grm);
         let mut ctx = BitVec::from_elem(grm.terms_len, false);
         ctx.set(grm.end_term, true);
         state0.add(grm.start_prod, 0, &ctx);
@@ -424,7 +422,7 @@ impl StateGraph {
             todo -= 1;
 
             {
-                closed_states[state_i] = Some(core_states[state_i].close(&grm, &firsts));
+                closed_states[state_i] = Some(core_states[state_i].close(grm, &firsts));
                 let cl_state = &closed_states[state_i].as_ref().unwrap();
                 seen_nonterms.clear();
                 seen_terms.clear();
@@ -446,7 +444,7 @@ impl StateGraph {
                             seen_terms.set(term_i, true);
                         }
                     }
-                    let nstate = cl_state.goto(&grm, &sym);
+                    let nstate = cl_state.goto(grm, &sym);
                     new_states.push((sym, nstate));
                 }
             }
@@ -527,14 +525,14 @@ impl StateGraph {
         let mut todo = HashSet::new();
         todo.insert(0);
         let mut seen = HashSet::new();
-        while todo.len() > 0 {
+        while !todo.is_empty() {
             // XXX This is the clumsy way we're forced to do what we'd prefer to be:
             //     "let &(prod_i, dot) = todo.pop()"
             let state_i = *todo.iter().next().unwrap();
             todo.remove(&state_i);
             seen.insert(state_i);
 
-            todo.extend(edges[state_i].values().filter(|x| !seen.contains(&x)));
+            todo.extend(edges[state_i].values().filter(|x| !seen.contains(x)));
         }
 
         if states.len() == seen.len() {

@@ -58,9 +58,9 @@ impl fmt::Display for GrammarASTError {
 
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Symbol::Nonterminal(ref s) => write!(f, "{}", s),
-            &Symbol::Terminal(ref s)    => write!(f, "{}", s)
+        match *self {
+            Symbol::Nonterminal(ref s) => write!(f, "{}", s),
+            Symbol::Terminal(ref s)    => write!(f, "{}", s)
         }
     }
 }
@@ -76,7 +76,7 @@ impl GrammarAST {
     }
 
     pub fn add_rule(&mut self, key: String, value: Vec<Symbol>) {
-        let rule = self.rules.entry(key.clone()).or_insert(Rule::new(key));
+        let rule = self.rules.entry(key.clone()).or_insert_with(|| Rule::new(key));
         rule.add_symbols(value);
     }
 
@@ -104,16 +104,16 @@ impl GrammarAST {
             }
         }
         for rule in self.rules.values() {
-            for alt in rule.productions.iter() {
+            for alt in &rule.productions {
                 for sym in alt.iter() {
-                    match sym {
-                        &Symbol::Nonterminal(ref name) => {
+                    match *sym {
+                        Symbol::Nonterminal(ref name) => {
                             if !self.rules.contains_key(name) {
                                 return Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
                             }
                         }
-                        &Symbol::Terminal(ref name) => {
+                        Symbol::Terminal(ref name) => {
                             if !self.tokens.contains(name) {
                                 return Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownToken,
                                     sym: Some(sym.clone())});
