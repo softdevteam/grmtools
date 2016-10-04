@@ -3,7 +3,7 @@ use std::collections::hash_map::{Entry, HashMap};
 use std::hash::BuildHasherDefault;
 
 extern crate bit_vec;
-use self::bit_vec::BitVec;
+use self::bit_vec::{BitBlock, BitVec};
 
 extern crate fnv;
 use self::fnv::FnvHasher;
@@ -199,22 +199,58 @@ impl Itemset {
         }
     }
 
+    /// Create a new itemset which is a closed version of `self`.
     fn close(&self, grm: &Grammar, firsts: &Firsts) -> Itemset {
         // This function can be seen as a merger of getClosure and getContext from Chen's
-        // dissertation. It is written in such a style that it allocates relatively little memory
-        // and does as few hashmap lookups as practical.
+        // dissertation.
 
-        let mut new_is = self.clone();
-        // todo is a list of all (production, dot) pairs that require investigation. Not all of
-        // these will lead to new entries being put into new_is, but we have to least check them.
-        let mut todo = Vec::new();
-        // Seed todo with every (production, dot) combination from self.items.
-        for &(prod_i, dot) in self.items.keys() {
-            todo.push((prod_i, dot));
-        }
+        let mut new_is = self.clone(); // The new itemset we're building up
+
+        // In a typical description of this algorithm, one would have a todo set which contains
+        // pairs (prod_i, dot). Unfortunately this is a slow way of doing things. Searching the set
+        // for the next item and removing it is slow; and, since we don't know how many potential
+        // dots there are in a production, the set is of potentially unbounded size, so we can end
+        // up resizing memory. Since this function is the most expensive in the table generation,
+        // using a HashSet (which is the "obvious" solution) is slow.
+        //
+        // However, we can reduce these costs through two observations:
+        //   1) The initial todo set is populated with (prod_i, dot) pairs that all come from
+        //      self.items.keys(). There's no point copying these into a todo list.
+        //   2) All subsequent todo items are of the form (prod_off, 0). Since the dot in these
+        //      cases is always 0, we don't need to store pairs: simply knowing which prod_off's we
+        //      need to look at is sufficient. We can represent these with a fixed-size bitfield.
+        // All we need to do is first iterate through the items in 1 and, when it's exhausted,
+        // continually iterate over the bitfield from 2 until no new items have been added.
+
+        let mut keys_iter = self.items.keys(); // The initial todo list
+        type BitVecBitSize = u32; // As of 0.4.3, BitVec only supports u32 blocks
+        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods.len(), false); // Subsequent todos
         let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
-        while !todo.is_empty() {
-            let (prod_i, dot) = todo.pop().unwrap();
+        loop {
+            let prod_i;
+            let dot;
+            // Find the next todo item or, if there are none, break the loop. First of all we try
+            // pumping keys_iter for its next value. If there is none (i.e. we've exhausted that
+            // part of the todo set), we iterate over zero_todos.
+            match keys_iter.next() {
+                Some(&(x, y)) => {
+                    prod_i = x;
+                    dot = y;
+                }
+                None => {
+                    // Quickly iterate over the BitVec looking for the first non-zero word.
+                    match zero_todos.blocks().enumerate().filter(|&(_, b)| b != 0).next() {
+                        Some((b_off, b)) => {
+                            // prod_i is the block offset plus the index of the first bit set.
+                            prod_i = b_off * BitVecBitSize::bits() + (b.trailing_zeros() as usize)
+                        },
+                        None => break
+                    }
+                    dot = 0;
+                    zero_todos.set(prod_i, false);
+                }
+            }
+
             let prod = &grm.prods[prod_i];
             if dot == prod.len() { continue; }
             if let Symbol::Nonterminal(nonterm_i) = prod[dot] {
@@ -248,15 +284,7 @@ impl Itemset {
 
                 for ref_prod_i in &grm.rules_prods[nonterm_i] {
                     if new_is.add(*ref_prod_i, 0, &new_ctx) {
-                        // At this point, it may seem that we really want todo to be a set.
-                        // However, it typically has relatively few items in it, so it's generally
-                        // fast to iterate over the small number of items to spot duplicates. It
-                        // then turns out that constructing an equivalent of pop() on sets is very
-                        // slow, so in this case we gain more from doing todo.pop() on a vector
-                        // than we do on detecting duplicates in a set.
-                        if todo.iter().position(|x| x == &(*ref_prod_i, 0)).is_none() {
-                            todo.push((*ref_prod_i, 0));
-                        }
+                        zero_todos.set(*ref_prod_i, true);
                     }
                 }
             }
