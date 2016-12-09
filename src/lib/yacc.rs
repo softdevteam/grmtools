@@ -247,7 +247,7 @@ impl YaccParser {
         for c in self.src.chars().skip(i) {
             match c {
                 ' '  | '\t' => (),
-                '\n' | '\r' => self.newlines.push(i),
+                '\n' | '\r' => self.newlines.push(j),
                 _           => break
             }
             j += 1;
@@ -497,6 +497,18 @@ A:
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incomplete rule parsed"),
             Err(YaccError{kind: YaccErrorKind::IncompleteRule, line: 3, col: 1}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_line_col_report3() {
+        let src = "
+        
+        %woo".to_string();
+        match parse_yacc(&src) {
+            Ok(_)  => panic!("Incomplete rule parsed"),
+            Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, line: 3, col: 9}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
