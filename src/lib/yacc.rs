@@ -77,15 +77,12 @@ impl YaccParser {
     }
 
     fn off_to_line_col(&self, off: usize) -> (usize, usize) {
-        if self.newlines.is_empty() {
-            return (1, off + 1);
-        }
-        for (line_m1, &line_off) in self.newlines.iter().enumerate() {
-            if line_off >= off {
-                return (line_m1 + 1, off - line_off + 1);
+        for (line_m1, &line_off) in self.newlines.iter().enumerate().rev() {
+            if line_off <= off {
+                return (line_m1 + 2, off - line_off);
             }
         }
-        (self.newlines.len() + 1, off - self.newlines.last().unwrap())
+        (1, off + 1)
     }
 
     fn parse(&mut self) -> YaccResult<usize> {
@@ -250,7 +247,7 @@ impl YaccParser {
         for c in self.src.chars().skip(i) {
             match c {
                 ' '  | '\t' => (),
-                '\n' | '\r' => self.newlines.push(i),
+                '\n' | '\r' => self.newlines.push(j),
                 _           => break
             }
             j += 1;
@@ -505,6 +502,18 @@ A:
     }
 
     #[test]
+    fn test_line_col_report3() {
+        let src = "
+        
+        %woo".to_string();
+        match parse_yacc(&src) {
+            Ok(_)  => panic!("Incomplete rule parsed"),
+            Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, line: 3, col: 9}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
     fn test_missing_colon() {
         let src = "%%A x;".to_string();
         match parse_yacc(&src) {
@@ -526,7 +535,8 @@ A:
 
     #[test]
     fn test_programs_not_supported() {
-        let src = "%% %% x".to_string();
+        let src = "%% %%
+x".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Programs parsed"),
             Err(YaccError{kind: YaccErrorKind::ProgramsNotSupported, line: 1, col: 4}) => (),
