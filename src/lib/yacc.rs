@@ -86,6 +86,9 @@ impl YaccParser {
     }
 
     fn parse(&mut self) -> YaccResult<usize> {
+        // We pass around an index into the *bytes* of self.src. We guarantee that at all times
+        // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
+        // every byte within the string is also a valid character).
         let mut i = try!(self.parse_declarations(0));
         i = try!(self.parse_rules(i));
         // We don't currently support the programs part of a specification. One day we might...
@@ -228,13 +231,13 @@ impl YaccParser {
         match RE_TERMINAL.find(&self.src[i..]) {
             Some((s, e)) => {
                 assert!(s == 0 && e > 0);
-                let first_char = self.src.chars().nth(i).unwrap();
-                if first_char == '"' || first_char == '\'' {
-                    Ok((i + e, self.src[i + 1..i + e - 1].to_string()))
-                } else {
-                    Ok((i + e, self.src[i..i + e].to_string()))
+                match self.src[i..].chars().next().unwrap() {
+                    '"' | '\'' => {
+                        assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
+                        Ok((i + e, self.src[i + 1..i + e - 1].to_string()))
+                    },
+                    _ =>  Ok((i + e, self.src[i..i + e].to_string()))
                 }
-
             },
             None => {
                 Err(self.mk_error(YaccErrorKind::IllegalString, i))
@@ -244,22 +247,24 @@ impl YaccParser {
 
     fn parse_ws(&mut self, i: usize) -> YaccResult<usize> {
         let mut j = i;
-        for c in self.src.chars().skip(i) {
+        for c in self.src[i..].chars() {
             match c {
                 ' '  | '\t' => (),
                 '\n' | '\r' => self.newlines.push(j),
                 _           => break
             }
-            j += 1;
+            j += c.len_utf8();
         }
         Ok(j)
     }
 
     fn lookahead_is(&self, s: &'static str, i: usize) -> Option<usize> {
-        if i + s.len() <= self.src.len() && &self.src[i..i + s.len()] == s {
-            return Some(i + s.len());
+        if self.src[i..].starts_with(s) {
+            Some(i + s.len())
         }
-        None
+        else {
+            None
+        }
     }
 }
 
@@ -455,6 +460,13 @@ mod test {
     }
 
     #[test]
+    fn test_token_unicode() {
+        let src = "%token '❤' %%\nA : '❤';".to_string();
+        let grm = parse_yacc(&src).unwrap();
+        assert!(grm.has_token("❤"));
+    }
+
+    #[test]
     #[should_panic]
     fn test_simple_decl_fail() {
         let src = "%fail x\n%%\nA : a".to_string();
@@ -504,7 +516,7 @@ A:
     #[test]
     fn test_line_col_report3() {
         let src = "
-        
+
         %woo".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incomplete rule parsed"),
