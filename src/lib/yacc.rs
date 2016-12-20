@@ -66,7 +66,7 @@ impl YaccParser {
     fn new(src: String) -> YaccParser {
         YaccParser {
             src     : src,
-            newlines: Vec::new(),
+            newlines: vec![0],
             grammar : GrammarAST::new()
         }
     }
@@ -77,12 +77,20 @@ impl YaccParser {
     }
 
     fn off_to_line_col(&self, off: usize) -> (usize, usize) {
-        for (line_m1, &line_off) in self.newlines.iter().enumerate().rev() {
-            if line_off <= off {
-                return (line_m1 + 2, off - line_off);
-            }
+        if off == self.src.len() {
+            let line_off = *self.newlines.iter().last().unwrap();
+            return (self.newlines.len(), self.src[line_off..].chars().count() + 1);
         }
-        (1, off + 1)
+        let (line_m1, &line_off) = self.newlines.iter()
+                                                .enumerate()
+                                                .rev()
+                                                .find(|&(_, &line_off)| line_off <= off)
+                                                .unwrap();
+        let c_off = self.src[line_off..]
+                        .char_indices()
+                        .position(|(c_off, _)| c_off == off - line_off)
+                        .unwrap();
+        return (line_m1 + 1, c_off + 1);
     }
 
     fn parse(&mut self) -> YaccResult<usize> {
@@ -250,7 +258,7 @@ impl YaccParser {
         for c in self.src[i..].chars() {
             match c {
                 ' '  | '\t' => (),
-                '\n' | '\r' => self.newlines.push(j),
+                '\n' | '\r' => self.newlines.push(j + 1),
                 _           => break
             }
             j += c.len_utf8();
@@ -464,6 +472,26 @@ mod test {
         let src = "%token '❤' %%\nA : '❤';".to_string();
         let grm = parse_yacc(&src).unwrap();
         assert!(grm.has_token("❤"));
+    }
+
+    #[test]
+    fn test_unicode_err1() {
+        let src = "%token '❤' ❤;".to_string();
+        match parse_yacc(&src) {
+            Ok(_)  => panic!("Incorrect token parsed"),
+            Err(YaccError{kind: YaccErrorKind::IllegalString, line: 1, col: 12}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_unicode_err2() {
+        let src = "%token '❤'\n%%\nA : '❤' | ❤;".to_string();
+        match parse_yacc(&src) {
+            Ok(_)  => panic!("Incorrect token parsed"),
+            Err(YaccError{kind: YaccErrorKind::IllegalString, line: 3, col: 11}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
     }
 
     #[test]
