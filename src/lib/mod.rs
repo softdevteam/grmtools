@@ -4,15 +4,18 @@ use std::fmt;
 extern crate lazy_static;
 
 pub mod grammar;
-pub mod grammar_ast;
-pub mod yacc;
-pub mod stategraph;
+mod grammar_ast;
+mod yacc;
+mod stategraph;
 pub mod statetable;
 
 pub use grammar::ast_to_grammar;
+use grammar::Grammar;
 pub use grammar_ast::{GrammarAST, GrammarASTError};
-pub use self::yacc::{YaccError, YaccErrorKind};
-use self::yacc::parse_yacc;
+use stategraph::StateGraph;
+use statetable::StateTable;
+pub use yacc::{YaccError, YaccErrorKind};
+use yacc::parse_yacc;
 
 #[derive(Debug)]
 pub enum FromYaccError {
@@ -41,8 +44,11 @@ impl fmt::Display for FromYaccError {
     }
 }
 
-pub fn from_yacc(s: &str) -> Result<GrammarAST, FromYaccError> {
-    let grmast = try!(parse_yacc(s));
-    try!(grmast.validate());
-    Ok(grmast)
+pub fn yacc_to_statetable(s: &str) -> Result<(Grammar, StateTable), FromYaccError> {
+    let ast = try!(parse_yacc(s));
+    try!(ast.validate());
+    let grm = ast_to_grammar(&ast);
+    let sg = StateGraph::new(&grm);
+    let st = StateTable::new(&grm, &sg);
+    Ok((grm, st))
 }

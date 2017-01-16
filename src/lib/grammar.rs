@@ -121,48 +121,48 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
         end_term = end_term + END_TERM;
     }
 
-    let mut nonterminal_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
-    nonterminal_names.push(start_nonterm.clone());
-    for k in ast.rules.keys() { nonterminal_names.push(k.clone()); }
-    nonterminal_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
-    let mut rules_prods:Vec<Vec<PIdx>> = Vec::with_capacity(nonterminal_names.len());
-    let mut nonterminal_map = HashMap::<String, RIdx>::new();
-    for (i, v) in nonterminal_names.iter().enumerate() {
+    let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
+    nonterm_names.push(start_nonterm.clone());
+    for k in ast.rules.keys() { nonterm_names.push(k.clone()); }
+    nonterm_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    let mut rules_prods:Vec<Vec<PIdx>> = Vec::with_capacity(nonterm_names.len());
+    let mut nonterm_map = HashMap::<String, RIdx>::new();
+    for (i, v) in nonterm_names.iter().enumerate() {
         rules_prods.push(Vec::new());
-        nonterminal_map.insert(v.clone(), i);
+        nonterm_map.insert(v.clone(), i);
     }
-    let mut terminal_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
-    let mut terminal_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
-    terminal_names.push(end_term.clone());
-    terminal_precs.push(None);
+    let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
+    let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
+    term_names.push(end_term.clone());
+    term_precs.push(None);
     for k in &ast.tokens {
-        terminal_names.push(k.clone());
-        terminal_precs.push(ast.precs.get(k).map(|p| *p));
+        term_names.push(k.clone());
+        term_precs.push(ast.precs.get(k).map(|p| *p));
     }
     let mut terminal_map = HashMap::<String, TIdx>::new();
-    for (i, v) in terminal_names.iter().enumerate() {
+    for (i, v) in term_names.iter().enumerate() {
         terminal_map.insert(v.clone(), i);
     }
 
     let mut prods                               = Vec::new();
     let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
-    for astrulename in &nonterminal_names {
+    for astrulename in &nonterm_names {
         if astrulename == &start_nonterm {
-            rules_prods.get_mut(nonterminal_map[&start_nonterm]).unwrap().push(prods.len());
-            let start_prod = vec![Symbol::Nonterminal(nonterminal_map[ast.start.as_ref().unwrap()])];
+            rules_prods.get_mut(nonterm_map[&start_nonterm]).unwrap().push(prods.len());
+            let start_prod = vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])];
             prods.push(start_prod);
             prod_precs.push(None);
             continue;
         }
         let astrule = &ast.rules[astrulename];
-        let mut rule = rules_prods.get_mut(nonterminal_map[&astrule.name]).unwrap();
+        let mut rule = rules_prods.get_mut(nonterm_map[&astrule.name]).unwrap();
         for astprod in &astrule.productions {
             let mut prod = Vec::with_capacity(astprod.len());
             let mut prec = None;
             for astsym in astprod.iter() {
                 let sym = match *astsym {
                     grammar_ast::Symbol::Nonterminal(ref n) =>
-                        Symbol::Nonterminal(nonterminal_map[n]),
+                        Symbol::Nonterminal(nonterm_map[n]),
                     grammar_ast::Symbol::Terminal(ref n) =>
                         Symbol::Terminal(terminal_map[n])
                 };
@@ -185,12 +185,12 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
     }
 
     Grammar{
-        nonterms_len:      nonterminal_names.len(),
-        nonterminal_names: nonterminal_names,
-        terms_len:         terminal_names.len(),
-        terminal_names:    terminal_names,
-        terminal_precs:    terminal_precs,
-        start_prod:        rules_prods[nonterminal_map[&start_nonterm]][0],
+        nonterms_len:      nonterm_names.len(),
+        nonterminal_names: nonterm_names,
+        terms_len:         term_names.len(),
+        terminal_names:    term_names,
+        terminal_precs:    term_precs,
+        start_prod:        rules_prods[nonterm_map[&start_nonterm]][0],
         end_term:          terminal_map[&end_term],
         rules_prods:       rules_prods,
         prods:             prods,
