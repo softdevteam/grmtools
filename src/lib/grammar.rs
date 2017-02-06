@@ -69,6 +69,18 @@ pub enum AssocKind {
     Nonassoc
 }
 
+impl Grammar {
+    /// Return the rule index of the production `i`.
+    pub fn prod_to_rule_idx(&self, i: PIdx) -> RIdx {
+        for (j, rule) in self.rules_prods.iter().enumerate() {
+            if rule.iter().position(|x| *x == i).is_some() {
+                return j;
+            }
+        }
+        panic!("Invalid index {}", i);
+    }
+}
+
 #[cfg(test)]
 impl Grammar {
     /// Map a nonterminal name to the corresponding rule offset.
