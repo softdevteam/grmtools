@@ -98,7 +98,7 @@ impl LexParser {
         if orig_name == ";" {
             name = None;
         }
-        else if self.ast.get_rule(orig_name).is_some() {
+        else if self.ast.get_rule_by_name(orig_name).is_some() {
             return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1))
         }
         else {
@@ -113,7 +113,8 @@ impl LexParser {
             Ok(x) => x,
             Err(_)  => return Err(self.mk_error(LexErrorKind::RegexError, i))
         };
-        self.ast.set_rule(Rule{id: usize::max_value(),
+        let rules_len = self.ast.rules.len();
+        self.ast.set_rule(Rule{tok_id: rules_len,
                                name: name,
                                re: re,
                                re_str: re_str});
@@ -177,10 +178,10 @@ mod test {
 [a-zA-Z]+ id
 ".to_string();
         let ast = parse_lex(&src).unwrap();
-        let intrule = ast.get_rule("int").unwrap();
+        let intrule = ast.get_rule_by_name("int").unwrap();
         assert_eq!("int", intrule.name.as_ref().unwrap());
         assert_eq!("[0-9]+", intrule.re_str);
-        let idrule = ast.get_rule("id").unwrap();
+        let idrule = ast.get_rule_by_name("id").unwrap();
         assert_eq!("id", idrule.name.as_ref().unwrap());
         assert_eq!("[a-zA-Z]+", idrule.re_str);
     }

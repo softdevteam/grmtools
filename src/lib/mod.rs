@@ -7,7 +7,8 @@ mod lexer;
 mod parser;
 
 use ast::LexAST;
-use lexer::{lex, Lexeme, LexError};
+pub use lexer::Lexeme;
+use lexer::{lex, LexError};
 use parser::parse_lex;
 
 #[macro_use]

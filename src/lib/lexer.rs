@@ -2,7 +2,7 @@ use ast::LexAST;
 
 #[derive(Debug)]
 pub struct Lexeme {
-    pub rule_idx: usize,
+    pub tok_id: usize,
     /// Byte offset of the start of the lexeme
     pub start: usize,
     /// Length in bytes of the lexeme
@@ -17,6 +17,7 @@ pub struct LexError {
 pub fn lex(ast: &LexAST, s: &str) -> Result<Vec<Lexeme>, LexError> {
     let mut i = 0; // byte index into s
     let mut lxs = Vec::new(); // lexemes
+
     while i < s.len() {
         let mut longest = 0; // Length of the longest match
         let mut longest_ridx = 0; // This is only valid iff longest != 0
@@ -34,7 +35,7 @@ pub fn lex(ast: &LexAST, s: &str) -> Result<Vec<Lexeme>, LexError> {
         if longest > 0 {
             let r = ast.rules.get(longest_ridx).unwrap();
             if r.name.is_some() {
-                lxs.push(Lexeme{rule_idx: longest_ridx, start: i, len: longest});
+                lxs.push(Lexeme{tok_id: r.tok_id, start: i, len: longest});
             }
             i += longest;
         } else {
@@ -67,11 +68,11 @@ mod test {
         let lexemes = lex(&ast, "abc 123").unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes.get(0).unwrap();
-        assert_eq!(lex1.rule_idx, 1);
+        assert_eq!(lex1.tok_id, 1);
         assert_eq!(lex1.start, 0);
         assert_eq!(lex1.len, 3);
         let lex2 = lexemes.get(1).unwrap();
-        assert_eq!(lex2.rule_idx, 0);
+        assert_eq!(lex2.tok_id, 0);
         assert_eq!(lex2.start, 4);
         assert_eq!(lex2.len, 3);
     }
@@ -106,11 +107,11 @@ if IF
         println!("{:?}", lexemes);
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes.get(0).unwrap();
-        assert_eq!(lex1.rule_idx, 1);
+        assert_eq!(lex1.tok_id, 1);
         assert_eq!(lex1.start, 0);
         assert_eq!(lex1.len, 3);
         let lex2 = lexemes.get(1).unwrap();
-        assert_eq!(lex2.rule_idx, 0);
+        assert_eq!(lex2.tok_id, 0);
         assert_eq!(lex2.start, 4);
         assert_eq!(lex2.len, 2);
     }

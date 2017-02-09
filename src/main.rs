@@ -61,6 +61,6 @@ fn main() {
     let input = &read_file(&matches.free[1]);
     let lexemes = do_lex(&lex_ast, &input).unwrap();
     for l in lexemes.iter() {
-        println!("{} {}", lex_ast.rules.get(l.rule_idx).unwrap().name.as_ref().unwrap(), &input[l.start..l.start + l.len]);
+        println!("{} {}", lex_ast.get_rule_by_id(l.tok_id).unwrap().name.as_ref().unwrap(), &input[l.start..l.start + l.len]);
     }
 }
