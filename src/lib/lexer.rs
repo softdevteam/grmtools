@@ -17,20 +17,29 @@ pub struct LexError {
 pub fn lex(ast: &LexAST, s: &str) -> Result<Vec<Lexeme>, LexError> {
     let mut i = 0; // byte index into s
     let mut lxs = Vec::new(); // lexemes
-    'n: while i < s.len() {
-        for (r_idx, r) in ast.rules.iter().enumerate() {
-            match r.re.find(&s[i..]) {
-                None => continue,
-                Some(m) => {
-                    if r.name.is_some() {
-                        lxs.push(Lexeme{rule_idx: r_idx, start: i, len: m.end()});
-                    }
-                    i += m.end();
-                    continue 'n;
+    while i < s.len() {
+        let mut longest = 0; // Length of the longest match
+        let mut longest_ridx = 0; // This is only valid iff longest != 0
+        for (ridx, r) in ast.rules.iter().enumerate() {
+            if let Some(m) = r.re.find(&s[i..]) {
+                let len = m.end();
+                // Note that by using ">", we implicitly prefer an earlier over a later rule, if
+                // both match an input of the same length.
+                if len > longest {
+                    longest = len;
+                    longest_ridx = ridx;
                 }
             }
         }
-        return Err(LexError{idx: i});
+        if longest > 0 {
+            let r = ast.rules.get(longest_ridx).unwrap();
+            if r.name.is_some() {
+                lxs.push(Lexeme{rule_idx: longest_ridx, start: i, len: longest});
+            }
+            i += longest;
+        } else {
+            return Err(LexError{idx: i});
+        }
     }
     Ok(lxs)
 }
@@ -67,7 +76,6 @@ mod test {
         assert_eq!(lex2.len, 3);
     }
 
-
     #[test]
     fn test_basic_error() {
         let src = "
@@ -80,5 +88,30 @@ mod test {
             Err(LexError{idx: 0}) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
         };
+    }
+
+    #[test]
+    fn test_longest_match() {
+        let src = "%%
+if IF
+[a-z]+ ID
+[ ] ;".to_string();
+        let mut ast = parse_lex(&src).unwrap();
+        let mut map = HashMap::new();
+        map.insert("IF", 0);
+        map.insert("ID", 1);
+        ast.set_rule_ids(&map);
+
+        let lexemes = lex(&ast, "iff if").unwrap();
+        println!("{:?}", lexemes);
+        assert_eq!(lexemes.len(), 2);
+        let lex1 = lexemes.get(0).unwrap();
+        assert_eq!(lex1.rule_idx, 1);
+        assert_eq!(lex1.start, 0);
+        assert_eq!(lex1.len, 3);
+        let lex2 = lexemes.get(1).unwrap();
+        assert_eq!(lex2.rule_idx, 0);
+        assert_eq!(lex2.start, 4);
+        assert_eq!(lex2.len, 2);
     }
 }
