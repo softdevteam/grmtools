@@ -7,6 +7,11 @@ authors = ["Lukas Diekmann <http://lukasdiekmann.com/>", "Laurence Tratt <http:/
 doc = false
 name = "lrpar"
 
+[lib]
+name = "lrpar"
+path = "src/lib/mod.rs"
+
 [dependencies]
 getopts = "0.2.14"
 lrtable = { git = "http://github.com/softdevteam/lrtable" }
+lrlex = { git = "http://github.com/softdevteam/lrlex" }
