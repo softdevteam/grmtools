@@ -1,6 +1,6 @@
 use ast::LexAST;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Lexeme {
     pub tok_id: usize,
     /// Byte offset of the start of the lexeme
