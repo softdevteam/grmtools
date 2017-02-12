@@ -33,7 +33,7 @@ pub fn lex(ast: &LexAST, s: &str) -> Result<Vec<Lexeme>, LexError> {
             }
         }
         if longest > 0 {
-            let r = ast.rules.get(longest_ridx).unwrap();
+            let r = &ast.rules[longest_ridx];
             if r.name.is_some() {
                 lxs.push(Lexeme{tok_id: r.tok_id, start: i, len: longest});
             }

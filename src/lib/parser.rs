@@ -1,4 +1,4 @@
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 
 use {LexErrorKind, LexBuildError, LexBuildResult};
 
@@ -109,7 +109,10 @@ impl LexParser {
         }
 
         let re_str = line[..rspace].trim_right().to_string();
-        let re = match Regex::new(&format!("^(?:{})", &re_str)) {
+        let re = match RegexBuilder::new(&format!("\\A(?:{})", &re_str))
+                                    .multi_line(true)
+                                    .dot_matches_new_line(true)
+                                    .build() {
             Ok(x) => x,
             Err(_)  => return Err(self.mk_error(LexErrorKind::RegexError, i))
         };
