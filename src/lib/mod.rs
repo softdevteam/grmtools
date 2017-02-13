@@ -17,33 +17,33 @@ pub use yacc_parser::{YaccParserError, YaccParserErrorKind};
 use yacc_parser::parse_yacc;
 
 #[derive(Debug)]
-pub enum FromYaccParserError {
+pub enum YaccToStateTableError {
     YaccParserError(YaccParserError),
     GrammarValidationError(GrammarValidationError)
 }
 
-impl From<YaccParserError> for FromYaccParserError {
-    fn from(err: YaccParserError) -> FromYaccParserError {
-        FromYaccParserError::YaccParserError(err)
+impl From<YaccParserError> for YaccToStateTableError {
+    fn from(err: YaccParserError) -> YaccToStateTableError {
+        YaccToStateTableError::YaccParserError(err)
     }
 }
 
-impl From<GrammarValidationError> for FromYaccParserError {
-    fn from(err: GrammarValidationError) -> FromYaccParserError {
-        FromYaccParserError::GrammarValidationError(err)
+impl From<GrammarValidationError> for YaccToStateTableError {
+    fn from(err: GrammarValidationError) -> YaccToStateTableError {
+        YaccToStateTableError::GrammarValidationError(err)
     }
 }
 
-impl fmt::Display for FromYaccParserError {
+impl fmt::Display for YaccToStateTableError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            FromYaccParserError::YaccParserError(ref e) => e.fmt(f),
-            FromYaccParserError::GrammarValidationError(ref e) => e.fmt(f),
+            YaccToStateTableError::YaccParserError(ref e) => e.fmt(f),
+            YaccToStateTableError::GrammarValidationError(ref e) => e.fmt(f),
         }
     }
 }
 
-pub fn yacc_to_statetable(s: &str) -> Result<(Grammar, StateTable), FromYaccParserError> {
+pub fn yacc_to_statetable(s: &str) -> Result<(Grammar, StateTable), YaccToStateTableError> {
     let ast = try!(parse_yacc(s));
     try!(ast.validate());
     let grm = Grammar::new(&ast);
