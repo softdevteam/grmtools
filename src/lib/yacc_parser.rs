@@ -6,7 +6,7 @@ use self::regex::Regex;
 type YaccResult<T> = Result<T, YaccParserError>;
 
 use grammar::{AssocKind, Precedence};
-use grammar_ast::{GrammarAST, Symbol};
+use ast::{GrammarAST, Symbol};
 
 pub struct YaccParser {
     src: String,
@@ -288,7 +288,7 @@ pub fn parse_yacc(s:&str) -> Result<GrammarAST, YaccParserError> {
 mod test {
     use super::{parse_yacc, YaccParserError, YaccParserErrorKind};
     use grammar::{AssocKind, Precedence};
-    use grammar_ast::{Rule, Symbol};
+    use ast::{Rule, Symbol};
 
     fn nonterminal(n: &str) -> Symbol {
         Symbol::Nonterminal(n.to_string())

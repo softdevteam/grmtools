@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use grammar_ast;
+use ast;
 
 pub const START_NONTERM: &'static str = "^";
 pub const END_TERM     : &'static str = "$";
@@ -80,7 +80,7 @@ impl Grammar {
     ///      name that is guaranteed to be unique).
     /// So, if the user's start rule is S, we add a nonterminal with a single production:
     ///   ^ : S '$';
-    pub fn new(ast: &grammar_ast::GrammarAST) -> Grammar {
+    pub fn new(ast: &ast::GrammarAST) -> Grammar {
         // The user is expected to have called validate before calling this function.
         debug_assert!(ast.validate().is_ok());
 
@@ -138,16 +138,16 @@ impl Grammar {
                 let mut prec = None;
                 for astsym in astprod.iter() {
                     let sym = match *astsym {
-                        grammar_ast::Symbol::Nonterminal(ref n) =>
+                        ast::Symbol::Nonterminal(ref n) =>
                             Symbol::Nonterminal(nonterm_map[n]),
-                        grammar_ast::Symbol::Terminal(ref n) =>
+                        ast::Symbol::Terminal(ref n) =>
                             Symbol::Terminal(terminal_map[n])
                     };
                     prod.push(sym);
                 }
                 if prec.is_none() {
                     for astsym in astprod.iter().rev() {
-                        if let grammar_ast::Symbol::Terminal(ref n) = *astsym {
+                        if let ast::Symbol::Terminal(ref n) = *astsym {
                             if let Some(p) = ast.precs.get(n) {
                                 prec = Some(*p);
                             }

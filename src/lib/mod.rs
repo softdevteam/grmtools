@@ -3,14 +3,14 @@ use std::fmt;
 #[macro_use]
 extern crate lazy_static;
 
+mod ast;
 pub mod grammar;
-mod grammar_ast;
 mod yacc_parser;
 mod stategraph;
 pub mod statetable;
 
 pub use grammar::{Grammar, RIdx, Symbol};
-pub use grammar_ast::{GrammarAST, GrammarASTError};
+pub use ast::{GrammarAST, GrammarASTError};
 use stategraph::StateGraph;
 pub use statetable::{Action, StateTable};
 pub use yacc_parser::{YaccParserError, YaccParserErrorKind};
