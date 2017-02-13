@@ -23,7 +23,7 @@ pub enum Symbol {
 
 /// The various different possible grammar validation errors.
 #[derive(Debug)]
-pub enum GrammarASTErrorKind {
+pub enum GrammarValidationErrorKind {
     NoStartRule,
     InvalidStartRule,
     UnknownRuleRef,
@@ -32,24 +32,24 @@ pub enum GrammarASTErrorKind {
 
 /// GrammarAST validation errors return an instance of this struct.
 #[derive(Debug)]
-pub struct GrammarASTError {
-    pub kind: GrammarASTErrorKind,
+pub struct GrammarValidationError {
+    pub kind: GrammarValidationErrorKind,
     pub sym: Option<Symbol>
 }
 
-impl fmt::Display for GrammarASTError {
+impl fmt::Display for GrammarValidationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
-            GrammarASTErrorKind::NoStartRule => {
+            GrammarValidationErrorKind::NoStartRule => {
                 write!(f, "No start rule specified")
             },
-            GrammarASTErrorKind::InvalidStartRule => {
+            GrammarValidationErrorKind::InvalidStartRule => {
                 write!(f, "Start rule '{}' does not appear in grammar", self.sym.as_ref().unwrap())
             },
-            GrammarASTErrorKind::UnknownRuleRef => {
+            GrammarValidationErrorKind::UnknownRuleRef => {
                 write!(f, "Unknown reference to rule '{}'", self.sym.as_ref().unwrap())
             },
-            GrammarASTErrorKind::UnknownToken => {
+            GrammarValidationErrorKind::UnknownToken => {
                 write!(f, "Unknown token '{}'", self.sym.as_ref().unwrap())
             }
         }
@@ -93,12 +93,12 @@ impl GrammarAST {
     ///   2) Every nonterminal reference references a rule in the grammar
     ///   3) Every terminal reference references a declared token
     /// If the validation succeeds, None is returned.
-    pub fn validate(&self) -> Result<(), GrammarASTError> {
+    pub fn validate(&self) -> Result<(), GrammarValidationError> {
         match self.start {
-            None => return Err(GrammarASTError{kind: GrammarASTErrorKind::NoStartRule, sym: None}),
+            None => return Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoStartRule, sym: None}),
             Some(ref s) => {
                 if !self.rules.contains_key(s) {
-                    return Err(GrammarASTError{kind: GrammarASTErrorKind::InvalidStartRule,
+                    return Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule,
                                                sym: Some(Symbol::Nonterminal(s.clone()))});
                 }
             }
@@ -109,13 +109,13 @@ impl GrammarAST {
                     match *sym {
                         Symbol::Nonterminal(ref name) => {
                             if !self.rules.contains_key(name) {
-                                return Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownRuleRef,
+                                return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
                             }
                         }
                         Symbol::Terminal(ref name) => {
                             if !self.tokens.contains(name) {
-                                return Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownToken,
+                                return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
                                     sym: Some(sym.clone())});
                             }
                         }
@@ -176,7 +176,7 @@ impl PartialEq for Rule {
 
 #[cfg(test)]
 mod test {
-    use super::{GrammarAST, GrammarASTError, GrammarASTErrorKind, Symbol};
+    use super::{GrammarAST, GrammarValidationError, GrammarValidationErrorKind, Symbol};
 
     fn nonterminal(n: &str) -> Symbol {
         Symbol::Nonterminal(n.to_string())
@@ -190,7 +190,7 @@ mod test {
     fn test_empty_grammar(){
         let grm = GrammarAST::new();
         match grm.validate() {
-            Err(GrammarASTError{kind: GrammarASTErrorKind::NoStartRule, ..}) => (),
+            Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoStartRule, ..}) => (),
             _ => panic!("Validation error")
         }
     }
@@ -201,7 +201,7 @@ mod test {
         grm.start = Some("A".to_string());
         grm.add_rule("B".to_string(), vec!());
         match grm.validate() {
-            Err(GrammarASTError{kind: GrammarASTErrorKind::InvalidStartRule, ..}) => (),
+            Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule, ..}) => (),
             _ => panic!("Validation error")
         }
     }
@@ -229,7 +229,7 @@ mod test {
         grm.start = Some("A".to_string());
         grm.add_rule("A".to_string(), vec!(nonterminal("B")));
         match grm.validate() {
-            Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownRuleRef, ..}) => (),
+            Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
         }
     }
@@ -261,7 +261,7 @@ mod test {
         grm.start = Some("A".to_string());
         grm.add_rule("A".to_string(), vec!(terminal("b")));
         match grm.validate() {
-            Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownToken, ..}) => (),
+            Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
             _ => panic!("Validation error")
         }
     }
@@ -272,7 +272,7 @@ mod test {
         grm.start = Some("A".to_string());
         grm.add_rule("A".to_string(), vec!(nonterminal("b"), terminal("b")));
         match grm.validate() {
-            Err(GrammarASTError{kind: GrammarASTErrorKind::UnknownRuleRef, ..}) => (),
+            Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
         }
     }
