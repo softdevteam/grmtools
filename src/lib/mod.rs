@@ -9,7 +9,7 @@ mod yacc_parser;
 mod stategraph;
 pub mod statetable;
 
-pub use grammar::{ast_to_grammar, Grammar, RIdx, Symbol};
+pub use grammar::{Grammar, RIdx, Symbol};
 pub use grammar_ast::{GrammarAST, GrammarASTError};
 use stategraph::StateGraph;
 pub use statetable::{Action, StateTable};
@@ -46,7 +46,7 @@ impl fmt::Display for FromYaccParserError {
 pub fn yacc_to_statetable(s: &str) -> Result<(Grammar, StateTable), FromYaccParserError> {
     let ast = try!(parse_yacc(s));
     try!(ast.validate());
-    let grm = ast_to_grammar(&ast);
+    let grm = Grammar::new(&ast);
     let sg = StateGraph::new(&grm);
     let st = StateTable::new(&grm, &sg);
     Ok((grm, st))

@@ -39,7 +39,7 @@ pub type Ctx = BitVec;
 /// ```
 ///
 /// ```c
-/// let grm = ast_to_grammar(parse_yacc(&input));
+/// let grm = Grammar::new(parse_yacc(&input));
 /// let firsts = Firsts::new(grm);
 /// ```
 ///
@@ -613,7 +613,7 @@ mod test {
     use self::bit_vec::BitVec;
 
     use super::{bitvec_intersect, Itemset, Firsts, StateGraph};
-    use grammar::{PIdx, ast_to_grammar, Grammar, Symbol};
+    use grammar::{PIdx, Grammar, Symbol};
     use yacc_parser::parse_yacc;
 
     #[test]
@@ -673,7 +673,7 @@ mod test {
           E: D | C;
           F: E;
           ".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "^", vec!["c"]);
         has(&grm, &firsts, "D", vec!["d"]);
@@ -691,7 +691,7 @@ mod test {
           D: 'd';
           E: D C;
           ".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "E", vec!["d"]);
     }
@@ -707,7 +707,7 @@ mod test {
           C: 'c' | ;
           D: C;
           ".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b", "a"]);
         has(&grm, &firsts, "C", vec!["c", ""]);
@@ -724,7 +724,7 @@ mod test {
           B: 'b' | ;
           C: B 'c' B;
           ".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b", "c"]);
         has(&grm, &firsts, "B", vec!["b", ""]);
@@ -740,7 +740,7 @@ mod test {
           A: B 'b';
           B: 'b' | ;
           ".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b"]);
     }
@@ -757,7 +757,7 @@ mod test {
           D: 'd' | ;
           F: C D 'f';
           ".to_string()).unwrap();
-        ast_to_grammar(&ast)
+        Grammar::new(&ast)
     }
 
     #[test]
@@ -786,7 +786,7 @@ mod test {
           F: 'f' | ;
           G: C D;
           ".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "E", vec!["a"]);
         has(&grm, &firsts, "T", vec!["a"]);
@@ -828,7 +828,7 @@ mod test {
     #[test]
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
-        let grm = ast_to_grammar(&parse_yacc(&"
+        let grm = Grammar::new(&parse_yacc(&"
           %start S
           %%
           S: L '=' R | R;
@@ -885,7 +885,7 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> Grammar {
-        ast_to_grammar(&parse_yacc(&"
+        Grammar::new(&parse_yacc(&"
           %start S
           %token a b c d
           %%
@@ -1018,7 +1018,7 @@ mod test {
 
     // Pager grammar
     fn grammar_pager() -> Grammar {
-        ast_to_grammar(&parse_yacc(&"
+        Grammar::new(&parse_yacc(&"
             %start X
             %%
              X : 'a' Y 'd' | 'a' Z 'c' | 'a' T | 'b' Y 'e' | 'b' Z 'd' | 'b' T;

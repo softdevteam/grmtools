@@ -153,13 +153,13 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(usize, Symbol), Act
 mod test {
     use super::{Action, StateTable};
     use stategraph::StateGraph;
-    use grammar::{ast_to_grammar, Symbol, TIdx};
+    use grammar::{Grammar, Symbol, TIdx};
     use yacc_parser::parse_yacc;
 
     #[test]
     fn test_statetable() {
         // Taken from p19 of www.cs.umd.edu/~mvz/cmsc430-s07/M10lr.pdf
-        let grm = ast_to_grammar(&parse_yacc(&"
+        let grm = Grammar::new(&parse_yacc(&"
             %start Expr
             %%
             Expr : Term '-' Expr | Term;
@@ -218,7 +218,7 @@ mod test {
 
     #[test]
     fn test_default_reduce_reduce() {
-        let grm = ast_to_grammar(&parse_yacc(&"
+        let grm = Grammar::new(&parse_yacc(&"
             %start A
             %%
             A : B 'x' | C 'x' 'x';
@@ -238,7 +238,7 @@ mod test {
 
     #[test]
     fn test_default_shift_reduce() {
-        let grm = ast_to_grammar(&parse_yacc(&"
+        let grm = Grammar::new(&parse_yacc(&"
             %start Expr
             %%
             Expr : Expr '+' Expr
@@ -265,7 +265,7 @@ mod test {
 
     #[test]
     fn test_left_associativity() {
-        let grm = ast_to_grammar(&parse_yacc(&"
+        let grm = Grammar::new(&parse_yacc(&"
             %start Expr
             %left '+'
             %left '*'
@@ -296,7 +296,7 @@ mod test {
 
     #[test]
     fn test_left_right_associativity() {
-        let grm = ast_to_grammar(&parse_yacc(&"
+        let grm = Grammar::new(&parse_yacc(&"
             %start Expr
             %right '='
             %left '+'
@@ -338,7 +338,7 @@ mod test {
 
     #[test]
     fn test_left_right_nonassoc_associativity() {
-        let grm = ast_to_grammar(&parse_yacc(&"
+        let grm = Grammar::new(&parse_yacc(&"
             %start Expr
             %right '='
             %left '+'
