@@ -614,7 +614,7 @@ mod test {
 
     use super::{bitvec_intersect, Itemset, Firsts, StateGraph};
     use grammar::{PIdx, ast_to_grammar, Grammar, Symbol};
-    use yacc::parse_yacc;
+    use yacc_parser::parse_yacc;
 
     #[test]
     fn test_bitvec_intersect() {

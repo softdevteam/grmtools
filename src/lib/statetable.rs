@@ -154,7 +154,7 @@ mod test {
     use super::{Action, StateTable};
     use stategraph::StateGraph;
     use grammar::{ast_to_grammar, Symbol, TIdx};
-    use yacc::parse_yacc;
+    use yacc_parser::parse_yacc;
 
     #[test]
     fn test_statetable() {

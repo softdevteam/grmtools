@@ -213,7 +213,7 @@ pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
 #[cfg(test)]
 mod test {
     use super::{AssocKind, ast_to_grammar, Precedence, Symbol};
-    use yacc::parse_yacc;
+    use yacc_parser::parse_yacc;
 
     #[test]
     fn test_minimal() {

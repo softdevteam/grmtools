@@ -5,7 +5,7 @@ extern crate lazy_static;
 
 pub mod grammar;
 mod grammar_ast;
-mod yacc;
+mod yacc_parser;
 mod stategraph;
 pub mod statetable;
 
@@ -13,8 +13,8 @@ pub use grammar::{ast_to_grammar, Grammar, RIdx, Symbol};
 pub use grammar_ast::{GrammarAST, GrammarASTError};
 use stategraph::StateGraph;
 pub use statetable::{Action, StateTable};
-pub use yacc::{YaccError, YaccErrorKind};
-use yacc::parse_yacc;
+pub use yacc_parser::{YaccError, YaccErrorKind};
+use yacc_parser::parse_yacc;
 
 #[derive(Debug)]
 pub enum FromYaccError {
