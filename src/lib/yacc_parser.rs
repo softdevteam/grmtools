@@ -3,7 +3,7 @@ use std::fmt;
 extern crate regex;
 use self::regex::Regex;
 
-type YaccResult<T> = Result<T, YaccError>;
+type YaccResult<T> = Result<T, YaccParserError>;
 
 use grammar::{AssocKind, Precedence};
 use grammar_ast::{GrammarAST, Symbol};
@@ -16,7 +16,7 @@ pub struct YaccParser {
 
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
-pub enum YaccErrorKind {
+pub enum YaccParserErrorKind {
     IllegalName,
     IllegalString,
     IncompleteRule,
@@ -29,24 +29,24 @@ pub enum YaccErrorKind {
 
 /// Any error from the Yacc parser returns an instance of this struct.
 #[derive(Debug)]
-pub struct YaccError {
-    pub kind: YaccErrorKind,
+pub struct YaccParserError {
+    pub kind: YaccParserErrorKind,
     line: usize,
     col: usize
 }
 
-impl fmt::Display for YaccError {
+impl fmt::Display for YaccParserError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s;
         match self.kind {
-            YaccErrorKind::IllegalName          => s = "Illegal name",
-            YaccErrorKind::IllegalString        => s = "Illegal string",
-            YaccErrorKind::IncompleteRule       => s = "Incomplete rule",
-            YaccErrorKind::MissingColon         => s = "Missing colon",
-            YaccErrorKind::PrematureEnd         => s = "File ends prematurely",
-            YaccErrorKind::ProgramsNotSupported => s = "Programs not currently supported",
-            YaccErrorKind::UnknownDeclaration   => s = "Unknown declaration",
-            YaccErrorKind::DuplicatePrecedence  => s = "Token already has a precedence"
+            YaccParserErrorKind::IllegalName          => s = "Illegal name",
+            YaccParserErrorKind::IllegalString        => s = "Illegal string",
+            YaccParserErrorKind::IncompleteRule       => s = "Incomplete rule",
+            YaccParserErrorKind::MissingColon         => s = "Missing colon",
+            YaccParserErrorKind::PrematureEnd         => s = "File ends prematurely",
+            YaccParserErrorKind::ProgramsNotSupported => s = "Programs not currently supported",
+            YaccParserErrorKind::UnknownDeclaration   => s = "Unknown declaration",
+            YaccParserErrorKind::DuplicatePrecedence  => s = "Token already has a precedence"
         }
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -71,9 +71,9 @@ impl YaccParser {
         }
     }
 
-    fn mk_error(&self, k: YaccErrorKind, off: usize) -> YaccError {
+    fn mk_error(&self, k: YaccParserErrorKind, off: usize) -> YaccParserError {
         let (line, col) = self.off_to_line_col(off);
-        YaccError{kind: k, line: line, col: col}
+        YaccParserError{kind: k, line: line, col: col}
     }
 
     fn off_to_line_col(&self, off: usize) -> (usize, usize) {
@@ -104,7 +104,7 @@ impl YaccParser {
             Some(j) => {
                 if try!(self.parse_ws(j)) == self.src.len() { Ok(i) }
                 else {
-                    Err(self.mk_error(YaccErrorKind::ProgramsNotSupported, i))
+                    Err(self.mk_error(YaccParserErrorKind::ProgramsNotSupported, i))
                 }
             }
             None    => Ok(i)
@@ -144,7 +144,7 @@ impl YaccParser {
                     kind = AssocKind::Nonassoc;
                     k = j;
                 } else {
-                    return Err(self.mk_error(YaccErrorKind::UnknownDeclaration, i));
+                    return Err(self.mk_error(YaccParserErrorKind::UnknownDeclaration, i));
                 }
 
                 i = try!(self.parse_ws(k));
@@ -152,7 +152,7 @@ impl YaccParser {
                     if self.lookahead_is("%", i).is_some() { break; }
                     let (j, n) = try!(self.parse_terminal(i));
                     if self.grammar.precs.contains_key(&n) {
-                        return Err(self.mk_error(YaccErrorKind::DuplicatePrecedence, i));
+                        return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
                     }
                     let prec = Precedence{level: prec_level, kind: kind};
                     self.grammar.precs.insert(n, prec);
@@ -161,7 +161,7 @@ impl YaccParser {
                 prec_level += 1;
             }
         }
-        Err(self.mk_error(YaccErrorKind::PrematureEnd, i - 1))
+        Err(self.mk_error(YaccParserErrorKind::PrematureEnd, i - 1))
     }
 
     fn parse_rules(&mut self, mut i: usize) -> YaccResult<usize> {
@@ -185,7 +185,7 @@ impl YaccParser {
         match self.lookahead_is(":", i) {
             Some(j) => i = j,
             None    => {
-                return Err(self.mk_error(YaccErrorKind::MissingColon, i));
+                return Err(self.mk_error(YaccParserErrorKind::MissingColon, i));
             }
         }
         let mut syms = Vec::new();
@@ -220,7 +220,7 @@ impl YaccParser {
             }
             i = try!(self.parse_ws(i));
         }
-        Err(self.mk_error(YaccErrorKind::IncompleteRule, i))
+        Err(self.mk_error(YaccParserErrorKind::IncompleteRule, i))
     }
 
     fn parse_name(&self, i: usize) -> YaccResult<(usize, String)> {
@@ -230,7 +230,7 @@ impl YaccParser {
                 Ok((i + e, self.src[i..i + e].to_string()))
             },
             None         => {
-                Err(self.mk_error(YaccErrorKind::IllegalName, i))
+                Err(self.mk_error(YaccParserErrorKind::IllegalName, i))
             }
         }
     }
@@ -248,7 +248,7 @@ impl YaccParser {
                 }
             },
             None => {
-                Err(self.mk_error(YaccErrorKind::IllegalString, i))
+                Err(self.mk_error(YaccParserErrorKind::IllegalString, i))
             }
         }
     }
@@ -276,7 +276,7 @@ impl YaccParser {
     }
 }
 
-pub fn parse_yacc(s:&str) -> Result<GrammarAST, YaccError> {
+pub fn parse_yacc(s:&str) -> Result<GrammarAST, YaccParserError> {
     let mut yp = YaccParser::new(s.to_string());
     match yp.parse() {
         Ok(_) => Ok(yp.grammar),
@@ -286,7 +286,7 @@ pub fn parse_yacc(s:&str) -> Result<GrammarAST, YaccError> {
 
 #[cfg(test)]
 mod test {
-    use super::{parse_yacc, YaccError, YaccErrorKind};
+    use super::{parse_yacc, YaccParserError, YaccParserErrorKind};
     use grammar::{AssocKind, Precedence};
     use grammar_ast::{Rule, Symbol};
 
@@ -479,7 +479,7 @@ mod test {
         let src = "%token '❤' ❤;".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incorrect token parsed"),
-            Err(YaccError{kind: YaccErrorKind::IllegalString, line: 1, col: 12}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::IllegalString, line: 1, col: 12}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -489,7 +489,7 @@ mod test {
         let src = "%token '❤'\n%%\nA : '❤' | ❤;".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incorrect token parsed"),
-            Err(YaccError{kind: YaccErrorKind::IllegalString, line: 3, col: 11}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::IllegalString, line: 3, col: 11}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -513,7 +513,7 @@ mod test {
         let src = "%%A:".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incomplete rule parsed"),
-            Err(YaccError{kind: YaccErrorKind::IncompleteRule, line: 1, col: 5}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteRule, line: 1, col: 5}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -524,7 +524,7 @@ mod test {
 A:".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incomplete rule parsed"),
-            Err(YaccError{kind: YaccErrorKind::IncompleteRule, line: 2, col: 3}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteRule, line: 2, col: 3}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -536,7 +536,7 @@ A:
 ".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incomplete rule parsed"),
-            Err(YaccError{kind: YaccErrorKind::IncompleteRule, line: 3, col: 1}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteRule, line: 3, col: 1}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -548,7 +548,7 @@ A:
         %woo".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incomplete rule parsed"),
-            Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, line: 3, col: 9}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::UnknownDeclaration, line: 3, col: 9}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -558,7 +558,7 @@ A:
         let src = "%%A x;".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Missing colon parsed"),
-            Err(YaccError{kind: YaccErrorKind::MissingColon, line: 1, col: 5}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::MissingColon, line: 1, col: 5}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -568,7 +568,7 @@ A:
         let src = "%token x".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Incomplete rule parsed"),
-            Err(YaccError{kind: YaccErrorKind::PrematureEnd, line: 1, col: 8}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::PrematureEnd, line: 1, col: 8}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -579,7 +579,7 @@ A:
 x".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Programs parsed"),
-            Err(YaccError{kind: YaccErrorKind::ProgramsNotSupported, line: 1, col: 4}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::ProgramsNotSupported, line: 1, col: 4}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -589,7 +589,7 @@ x".to_string();
         let src = "%woo".to_string();
         match parse_yacc(&src) {
             Ok(_)  => panic!("Unknown declaration parsed"),
-            Err(YaccError{kind: YaccErrorKind::UnknownDeclaration, line: 1, col: 1}) => (),
+            Err(YaccParserError{kind: YaccParserErrorKind::UnknownDeclaration, line: 1, col: 1}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -651,7 +651,7 @@ x".to_string();
         for src in srcs.iter() {
             match parse_yacc(&src.to_string()) {
                 Ok(_) => panic!("Duplicate precedence parsed"),
-                Err(YaccError{kind: YaccErrorKind::DuplicatePrecedence, line: 3, ..}) => (),
+                Err(YaccParserError{kind: YaccParserErrorKind::DuplicatePrecedence, line: 3, ..}) => (),
                 Err(e) => panic!("Incorrect error returned {}", e)
             }
         }

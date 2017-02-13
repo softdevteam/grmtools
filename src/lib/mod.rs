@@ -13,37 +13,37 @@ pub use grammar::{ast_to_grammar, Grammar, RIdx, Symbol};
 pub use grammar_ast::{GrammarAST, GrammarASTError};
 use stategraph::StateGraph;
 pub use statetable::{Action, StateTable};
-pub use yacc_parser::{YaccError, YaccErrorKind};
+pub use yacc_parser::{YaccParserError, YaccParserErrorKind};
 use yacc_parser::parse_yacc;
 
 #[derive(Debug)]
-pub enum FromYaccError {
-    YaccError(YaccError),
+pub enum FromYaccParserError {
+    YaccParserError(YaccParserError),
     GrammarASTError(GrammarASTError)
 }
 
-impl From<YaccError> for FromYaccError {
-    fn from(err: YaccError) -> FromYaccError {
-        FromYaccError::YaccError(err)
+impl From<YaccParserError> for FromYaccParserError {
+    fn from(err: YaccParserError) -> FromYaccParserError {
+        FromYaccParserError::YaccParserError(err)
     }
 }
 
-impl From<GrammarASTError> for FromYaccError {
-    fn from(err: GrammarASTError) -> FromYaccError {
-        FromYaccError::GrammarASTError(err)
+impl From<GrammarASTError> for FromYaccParserError {
+    fn from(err: GrammarASTError) -> FromYaccParserError {
+        FromYaccParserError::GrammarASTError(err)
     }
 }
 
-impl fmt::Display for FromYaccError {
+impl fmt::Display for FromYaccParserError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            FromYaccError::YaccError(ref e) => e.fmt(f),
-            FromYaccError::GrammarASTError(ref e) => e.fmt(f),
+            FromYaccParserError::YaccParserError(ref e) => e.fmt(f),
+            FromYaccParserError::GrammarASTError(ref e) => e.fmt(f),
         }
     }
 }
 
-pub fn yacc_to_statetable(s: &str) -> Result<(Grammar, StateTable), FromYaccError> {
+pub fn yacc_to_statetable(s: &str) -> Result<(Grammar, StateTable), FromYaccParserError> {
     let ast = try!(parse_yacc(s));
     try!(ast.validate());
     let grm = ast_to_grammar(&ast);
