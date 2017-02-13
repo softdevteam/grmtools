@@ -9,11 +9,10 @@ mod yacc;
 mod stategraph;
 pub mod statetable;
 
-pub use grammar::ast_to_grammar;
-use grammar::Grammar;
+pub use grammar::{ast_to_grammar, Grammar, RIdx, Symbol};
 pub use grammar_ast::{GrammarAST, GrammarASTError};
 use stategraph::StateGraph;
-use statetable::StateTable;
+pub use statetable::{Action, StateTable};
 pub use yacc::{YaccError, YaccErrorKind};
 use yacc::parse_yacc;
 
