@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use grammar_ast;
+use ast;
 
 pub const START_NONTERM: &'static str = "^";
 pub const END_TERM     : &'static str = "$";
@@ -70,6 +70,111 @@ pub enum AssocKind {
 }
 
 impl Grammar {
+    /// Translate a `GrammarAST` into a grammar. This function is akin to the part a traditional
+    /// compiler that takes in an AST and converts it into a binary.
+    ///
+    /// As we're compiling the `GrammarAST` into a `Grammar` we do two extra things:
+    ///   1) Add a new start rule (which we'll refer to as "^", though the actual name is a fresh name
+    ///      that is guaranteed to be unique) that references the user defined start rule.
+    ///   2) Add a new end terminal (which we'll refer to as "$", though the actual name is a fresh
+    ///      name that is guaranteed to be unique).
+    /// So, if the user's start rule is S, we add a nonterminal with a single production:
+    ///   ^ : S '$';
+    pub fn new(ast: &ast::GrammarAST) -> Grammar {
+        // The user is expected to have called validate before calling this function.
+        debug_assert!(ast.validate().is_ok());
+
+        // First of all generate guaranteed unique start nonterm and end term names. We simply keep
+        // making the string longer until we've hit something unique (at the very worst, this will
+        // require looping for as many times as there are nonterminals / terminals).
+
+        let mut start_nonterm = START_NONTERM.to_string();
+        while ast.rules.get(&start_nonterm).is_some() {
+            start_nonterm = start_nonterm + START_NONTERM;
+        }
+
+        let mut end_term = END_TERM.to_string();
+        while ast.tokens.iter().any(|x| x == &end_term) {
+            end_term = end_term + END_TERM;
+        }
+
+        let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
+        nonterm_names.push(start_nonterm.clone());
+        for k in ast.rules.keys() { nonterm_names.push(k.clone()); }
+        nonterm_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        let mut rules_prods:Vec<Vec<PIdx>> = Vec::with_capacity(nonterm_names.len());
+        let mut nonterm_map = HashMap::<String, RIdx>::new();
+        for (i, v) in nonterm_names.iter().enumerate() {
+            rules_prods.push(Vec::new());
+            nonterm_map.insert(v.clone(), i);
+        }
+        let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
+        let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
+        term_names.push(end_term.clone());
+        term_precs.push(None);
+        for k in &ast.tokens {
+            term_names.push(k.clone());
+            term_precs.push(ast.precs.get(k).map(|p| *p));
+        }
+        let mut terminal_map = HashMap::<String, TIdx>::new();
+        for (i, v) in term_names.iter().enumerate() {
+            terminal_map.insert(v.clone(), i);
+        }
+
+        let mut prods                               = Vec::new();
+        let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
+        for astrulename in &nonterm_names {
+            if astrulename == &start_nonterm {
+                rules_prods.get_mut(nonterm_map[&start_nonterm]).unwrap().push(prods.len());
+                let start_prod = vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])];
+                prods.push(start_prod);
+                prod_precs.push(None);
+                continue;
+            }
+            let astrule = &ast.rules[astrulename];
+            let mut rule = rules_prods.get_mut(nonterm_map[&astrule.name]).unwrap();
+            for astprod in &astrule.productions {
+                let mut prod = Vec::with_capacity(astprod.len());
+                let mut prec = None;
+                for astsym in astprod.iter() {
+                    let sym = match *astsym {
+                        ast::Symbol::Nonterminal(ref n) =>
+                            Symbol::Nonterminal(nonterm_map[n]),
+                        ast::Symbol::Terminal(ref n) =>
+                            Symbol::Terminal(terminal_map[n])
+                    };
+                    prod.push(sym);
+                }
+                if prec.is_none() {
+                    for astsym in astprod.iter().rev() {
+                        if let ast::Symbol::Terminal(ref n) = *astsym {
+                            if let Some(p) = ast.precs.get(n) {
+                                prec = Some(*p);
+                            }
+                            break;
+                        }
+                    }
+                }
+                (*rule).push(prods.len());
+                prods.push(prod);
+                prod_precs.push(prec);
+            }
+        }
+
+        Grammar{
+            nonterms_len:      nonterm_names.len(),
+            nonterminal_names: nonterm_names,
+            terms_len:         term_names.len(),
+            terminal_names:    term_names,
+            terminal_precs:    term_precs,
+            start_prod:        rules_prods[nonterm_map[&start_nonterm]][0],
+            end_term:          terminal_map[&end_term],
+            rules_prods:       rules_prods,
+            prods:             prods,
+            prod_precs:        prod_precs
+        }
+    }
+
     /// Return the rule index of the production `i`.
     pub fn prod_to_rule_idx(&self, i: PIdx) -> RIdx {
         for (j, rule) in self.rules_prods.iter().enumerate() {
@@ -105,120 +210,16 @@ impl Grammar {
     }
 }
 
-/// Translate a `GrammarAST` into a grammar. This function is akin to the part a traditional
-/// compiler that takes in an AST and converts it into a binary.
-///
-/// As we're compiling the `GrammarAST` into a `Grammar` we do two extra things:
-///   1) Add a new start rule (which we'll refer to as "^", though the actual name is a fresh name
-///      that is guaranteed to be unique) that references the user defined start rule.
-///   2) Add a new end terminal (which we'll refer to as "$", though the actual name is a fresh
-///      name that is guaranteed to be unique).
-/// So, if the user's start rule is S, we add a nonterminal with a single production:
-///   ^ : S '$';
-pub fn ast_to_grammar(ast: &grammar_ast::GrammarAST) -> Grammar {
-    // The user is expected to have called validate before calling this function.
-    debug_assert!(ast.validate().is_ok());
-
-    // First of all generate guaranteed unique start nonterm and end term names. We simply keep
-    // making the string longer until we've hit something unique (at the very worst, this will
-    // require looping for as many times as there are nonterminals / terminals).
-
-    let mut start_nonterm = START_NONTERM.to_string();
-    while ast.rules.get(&start_nonterm).is_some() {
-        start_nonterm = start_nonterm + START_NONTERM;
-    }
-
-    let mut end_term = END_TERM.to_string();
-    while ast.tokens.iter().any(|x| x == &end_term) {
-        end_term = end_term + END_TERM;
-    }
-
-    let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
-    nonterm_names.push(start_nonterm.clone());
-    for k in ast.rules.keys() { nonterm_names.push(k.clone()); }
-    nonterm_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
-    let mut rules_prods:Vec<Vec<PIdx>> = Vec::with_capacity(nonterm_names.len());
-    let mut nonterm_map = HashMap::<String, RIdx>::new();
-    for (i, v) in nonterm_names.iter().enumerate() {
-        rules_prods.push(Vec::new());
-        nonterm_map.insert(v.clone(), i);
-    }
-    let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
-    let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
-    term_names.push(end_term.clone());
-    term_precs.push(None);
-    for k in &ast.tokens {
-        term_names.push(k.clone());
-        term_precs.push(ast.precs.get(k).map(|p| *p));
-    }
-    let mut terminal_map = HashMap::<String, TIdx>::new();
-    for (i, v) in term_names.iter().enumerate() {
-        terminal_map.insert(v.clone(), i);
-    }
-
-    let mut prods                               = Vec::new();
-    let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
-    for astrulename in &nonterm_names {
-        if astrulename == &start_nonterm {
-            rules_prods.get_mut(nonterm_map[&start_nonterm]).unwrap().push(prods.len());
-            let start_prod = vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])];
-            prods.push(start_prod);
-            prod_precs.push(None);
-            continue;
-        }
-        let astrule = &ast.rules[astrulename];
-        let mut rule = rules_prods.get_mut(nonterm_map[&astrule.name]).unwrap();
-        for astprod in &astrule.productions {
-            let mut prod = Vec::with_capacity(astprod.len());
-            let mut prec = None;
-            for astsym in astprod.iter() {
-                let sym = match *astsym {
-                    grammar_ast::Symbol::Nonterminal(ref n) =>
-                        Symbol::Nonterminal(nonterm_map[n]),
-                    grammar_ast::Symbol::Terminal(ref n) =>
-                        Symbol::Terminal(terminal_map[n])
-                };
-                prod.push(sym);
-            }
-            if prec.is_none() {
-                for astsym in astprod.iter().rev() {
-                    if let grammar_ast::Symbol::Terminal(ref n) = *astsym {
-                        if let Some(p) = ast.precs.get(n) {
-                            prec = Some(*p);
-                        }
-                        break;
-                    }
-                }
-            }
-            (*rule).push(prods.len());
-            prods.push(prod);
-            prod_precs.push(prec);
-        }
-    }
-
-    Grammar{
-        nonterms_len:      nonterm_names.len(),
-        nonterminal_names: nonterm_names,
-        terms_len:         term_names.len(),
-        terminal_names:    term_names,
-        terminal_precs:    term_precs,
-        start_prod:        rules_prods[nonterm_map[&start_nonterm]][0],
-        end_term:          terminal_map[&end_term],
-        rules_prods:       rules_prods,
-        prods:             prods,
-        prod_precs:        prod_precs
-    }
-}
 
 #[cfg(test)]
 mod test {
-    use super::{AssocKind, ast_to_grammar, Precedence, Symbol};
-    use yacc::parse_yacc;
+    use super::{AssocKind, Grammar, Precedence, Symbol};
+    use yacc_parser::parse_yacc;
 
     #[test]
     fn test_minimal() {
         let ast = parse_yacc(&"%start R %token T %% R: 'T';".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
 
         assert_eq!(grm.start_prod, 0);
         grm.nonterminal_off("^");
@@ -237,7 +238,7 @@ mod test {
     #[test]
     fn test_rule_ref() {
         let ast = parse_yacc(&"%start R %token T %% R : S; S: 'T';".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
 
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
@@ -261,7 +262,7 @@ mod test {
     #[test]
     fn test_long_prod() {
         let ast = parse_yacc(&"%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';".to_string()).unwrap();
-        let grm = ast_to_grammar(&ast);
+        let grm = Grammar::new(&ast);
 
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
@@ -287,7 +288,7 @@ mod test {
 
     #[test]
     fn test_left_right_nonassoc_precs() {
-        let grm = ast_to_grammar(&parse_yacc(&"
+        let grm = Grammar::new(&parse_yacc(&"
             %start Expr
             %right '='
             %left '+' '-'
