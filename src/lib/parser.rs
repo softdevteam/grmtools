@@ -10,22 +10,25 @@ pub enum Node {
 pub struct ParseError;
 
 impl Node {
-    /// Return a pretty-printed version of this node. In general, you should call this with
-    /// `indent` set to 0.
-    pub fn pp(&self, grm: &Grammar, input: &str, indent: usize) -> String {
+    /// Return a pretty-printed version of this node.
+    pub fn pp(&self, grm: &Grammar, input: &str) -> String {
+        let mut st = vec![(0, self)]; // Stack of (indent level, node) pairs
         let mut s = String::new();
-        for _ in 0..indent {
-            s.push_str(" ");
-        }
-        match self {
-            &Node::Terminal{lexeme: Lexeme{tok_id, start, len}} => {
-                s.push_str(&format!("{} {}\n", grm.terminal_names.get(tok_id).unwrap(), &input[start..start + len]));
+        while !st.is_empty() {
+            let (indent, e) = st.pop().unwrap();
+            for _ in 0..indent {
+                s.push_str(" ");
             }
-            &Node::Nonterminal{rule_idx, ref nodes} => {
-                s.push_str(&format!("{}\n", grm.nonterminal_names.get(rule_idx).unwrap()));
-                for n in nodes.iter() {
-                    s.push_str(&n.pp(&grm, &input, indent + 1));
-                };
+            match e {
+                &Node::Terminal{lexeme: Lexeme{tok_id, start, len}} => {
+                    s.push_str(&format!("{} {}\n", grm.terminal_names.get(tok_id).unwrap(), &input[start..start + len]));
+                }
+                &Node::Nonterminal{rule_idx, ref nodes} => {
+                    s.push_str(&format!("{}\n", grm.nonterminal_names.get(rule_idx).unwrap()));
+                    for x in nodes.iter().rev() {
+                        st.push((indent + 1, x));
+                    }
+                }
             }
         }
         s
@@ -89,7 +92,7 @@ mod test {
         let mut lexemes = do_lex(&lexer, &input).unwrap();
         lexemes.push(Lexeme{tok_id: grm.end_term, start: input.len(), len: 0});
         let pt = parse(&grm, &stable, &lexemes).unwrap();
-        assert_eq!(expected, pt.pp(&grm, &input, 0));
+        assert_eq!(expected, pt.pp(&grm, &input));
     }
 
     #[test]

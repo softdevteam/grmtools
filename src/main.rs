@@ -89,5 +89,5 @@ fn main() {
     let mut lexemes = do_lex(&lexer, &input).unwrap();
     lexemes.push(Lexeme{tok_id: grm.end_term, start: input.len(), len: 0});
     let pt = parse(&grm, &stable, &lexemes).unwrap();
-    println!("{}", pt.pp(&grm, &input, 0));
+    println!("{}", pt.pp(&grm, &input));
 }
