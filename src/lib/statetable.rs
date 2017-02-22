@@ -39,7 +39,7 @@ impl StateTable {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
-                    let sym = Symbol::Terminal(term_i);
+                    let sym = Symbol::Terminal(TIdx::from(term_i));
                     match actions.entry((state_i, sym)) {
                         Entry::Occupied(mut e) => {
                             match *e.get_mut() {
@@ -58,7 +58,7 @@ impl StateTable {
                             }
                         }
                         Entry::Vacant(e) => {
-                            if prod_i == grm.start_prod && term_i == grm.end_term {
+                            if prod_i == grm.start_prod && TIdx::from(term_i) == grm.end_term {
                                 e.insert(Action::Accept);
                             }
                             else {
@@ -107,7 +107,7 @@ impl StateTable {
 fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(usize, Symbol), Action>, term_k: TIdx,
                         prod_k: PIdx, state_j: usize) -> u64 {
     let mut shift_reduce = 0;
-    let term_k_prec = grm.terminal_precs[term_k];
+    let term_k_prec = grm.terminal_precs[usize::from(term_k)];
     let prod_k_prec = grm.prod_precs[usize::from(prod_k)];
     match (term_k_prec, prod_k_prec) {
         (_, None) | (None, _) => {

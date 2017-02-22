@@ -33,8 +33,11 @@ custom_derive! {
     #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq, PartialOrd)]
     pub struct SIdx(usize);
 }
-/// A type specifically for token indices.
-pub type TIdx = usize;
+custom_derive! {
+    /// A type specifically for token indices.
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq)]
+    pub struct TIdx(usize);
+}
 
 pub struct Grammar {
     /// A mapping from RIdx -> String.
@@ -44,7 +47,7 @@ pub struct Grammar {
     pub terminal_names: Vec<String>,
     /// A mapping from TIdx -> Option<Precedence>
     pub terminal_precs: Vec<Option<Precedence>>,
-    pub terms_len: TIdx,
+    pub terms_len: usize,
     /// Which production is the sole production of the start rule?
     pub start_prod: PIdx,
     /// The offset of the EOF terminal.
@@ -127,7 +130,7 @@ impl Grammar {
         }
         let mut terminal_map = HashMap::<String, TIdx>::new();
         for (i, v) in term_names.iter().enumerate() {
-            terminal_map.insert(v.clone(), i);
+            terminal_map.insert(v.clone(), TIdx(i));
         }
 
         let mut prods                               = Vec::new();
@@ -216,7 +219,7 @@ impl Grammar {
 
     /// Map a terminal name to the corresponding terminal offset.
     pub fn terminal_off(&self, n: &str) -> TIdx {
-        self.terminal_names.iter().position(|x| x == n).unwrap()
+        TIdx(self.terminal_names.iter().position(|x| x == n).unwrap())
     }
 
     /// Map a production number to a rule name. Note: this has a worst case of O(n * m) where n is
