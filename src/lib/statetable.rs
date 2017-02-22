@@ -1,6 +1,6 @@
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 
-use grammar::{AssocKind, Grammar, PIdx, Symbol, TIdx};
+use grammar::{AssocKind, Grammar, PIdx, RIdx, Symbol, TIdx};
 use stategraph::StateGraph;
 
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
@@ -8,7 +8,7 @@ use stategraph::StateGraph;
 #[derive(Debug)]
 pub struct StateTable {
     pub actions      : HashMap<(usize, Symbol), Action>,
-    pub gotos        : HashMap<(usize, PIdx), usize>,
+    pub gotos        : HashMap<(usize, RIdx), usize>,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
     /// The number of shift/reduce errors encountered.
@@ -20,7 +20,7 @@ pub enum Action {
     /// Shift to state X in the statetable.
     Shift(usize),
     /// Reduce production X in the grammar.
-    Reduce(usize),
+    Reduce(PIdx),
     /// Accept this input.
     Accept
 }
@@ -28,14 +28,14 @@ pub enum Action {
 impl StateTable {
     pub fn new(grm: &Grammar, sg: &StateGraph) -> StateTable {
         let mut actions: HashMap<(usize, Symbol), Action> = HashMap::new();
-        let mut gotos  : HashMap<(usize, PIdx), usize>    = HashMap::new();
+        let mut gotos  : HashMap<(usize, RIdx), usize>    = HashMap::new();
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
 
         for (state_i, state) in sg.states.iter().enumerate() {
             // Populate reduce and accepts
             for (&(prod_i, dot), ctx) in &state.items {
-                if dot < grm.prods[prod_i].len() {
+                if dot < grm.get_prod(prod_i).unwrap().len() {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
@@ -62,7 +62,7 @@ impl StateTable {
                                 e.insert(Action::Accept);
                             }
                             else {
-                                e.insert(Action::Reduce(prod_i));
+                                e.insert(Action::Reduce(PIdx::from(prod_i)));
                             }
                         }
                     }
@@ -108,7 +108,7 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(usize, Symbol), Act
                         prod_k: PIdx, state_j: usize) -> u64 {
     let mut shift_reduce = 0;
     let term_k_prec = grm.terminal_precs[term_k];
-    let prod_k_prec = grm.prod_precs[prod_k];
+    let prod_k_prec = grm.prod_precs[usize::from(prod_k)];
     match (term_k_prec, prod_k_prec) {
         (_, None) | (None, _) => {
             // If the terminal and production don't both have precedences, we use Yacc's default
@@ -153,7 +153,7 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(usize, Symbol), Act
 mod test {
     use super::{Action, StateTable};
     use stategraph::StateGraph;
-    use grammar::{Grammar, Symbol, TIdx};
+    use grammar::{Grammar, PIdx, Symbol, TIdx};
     use yacc_parser::parse_yacc;
 
     #[test]
@@ -185,7 +185,7 @@ mod test {
         assert_eq!(st.actions.len(), 15);
         let assert_reduce = |state_i: usize, term_i: TIdx, rule: &str, prod_off: usize| {
             let prod_i = grm.rules_prods[grm.nonterminal_off(rule)][prod_off];
-            assert_eq!(st.actions[&(state_i, Symbol::Terminal(term_i))], Action::Reduce(prod_i));
+            assert_eq!(st.actions[&(state_i, Symbol::Terminal(term_i))], Action::Reduce(PIdx::from(prod_i)));
         };
 
         assert_eq!(st.actions[&(s0, Symbol::Terminal(grm.terminal_off("id")))], Action::Shift(s4));
@@ -233,7 +233,7 @@ mod test {
         let s0 = 0;
         let s4 = sg.edges[s0][&Symbol::Terminal(grm.terminal_off("a"))];
 
-        assert_eq!(st.actions[&(s4, Symbol::Terminal(grm.terminal_off("x")))], Action::Reduce(3));
+        assert_eq!(st.actions[&(s4, Symbol::Terminal(grm.terminal_off("x")))], Action::Reduce(PIdx::from(3)));
     }
 
     #[test]
@@ -285,13 +285,13 @@ mod test {
         let s5 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
         let s6 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
 
-        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(2));
-        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(2));
-        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.end_term))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(2)));
 
-        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(1)));
         assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
-        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.end_term))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(1)));
     }
 
     #[test]
@@ -323,17 +323,17 @@ mod test {
         assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
         assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
         assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("=")))], Action::Shift(s5));
-        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.end_term))], Action::Reduce(3));
+        assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(3)));
 
-        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(2));
-        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(2));
-        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(2));
-        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.end_term))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(2)));
 
-        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(1)));
         assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
-        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(1));
-        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.end_term))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(PIdx::from(1)));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(1)));
     }
 
     #[test]
@@ -366,27 +366,27 @@ mod test {
         let s9 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
         let s10 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
 
-        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(4));
-        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(4));
-        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(4));
-        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.end_term))], Action::Reduce(4));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(4)));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(PIdx::from(4)));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(PIdx::from(4)));
+        assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(4)));
 
         assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
         assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
         assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("=")))], Action::Shift(s5));
         assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.terminal_off("~")))], Action::Shift(s6));
-        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.end_term))], Action::Reduce(3));
+        assert_eq!(st.actions[&(s8, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(3)));
 
-        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(2));
-        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(2));
-        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(PIdx::from(2)));
         assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.terminal_off("~")))], Action::Shift(s6));
-        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.end_term))], Action::Reduce(2));
+        assert_eq!(st.actions[&(s9, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(2)));
 
-        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(1)));
         assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
-        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("=")))], Action::Reduce(PIdx::from(1)));
         assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.terminal_off("~")))], Action::Shift(s6));
-        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.end_term))], Action::Reduce(1));
+        assert_eq!(st.actions[&(s10, Symbol::Terminal(grm.end_term))], Action::Reduce(PIdx::from(1)));
     }
 }

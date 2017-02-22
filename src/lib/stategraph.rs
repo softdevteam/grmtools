@@ -87,7 +87,7 @@ impl Firsts {
                 // For each rule E
                 for prod_i in prods.iter() {
                     // ...and each production A
-                    let prod = &grm.prods[*prod_i];
+                    let prod = grm.get_prod(*prod_i).unwrap();
                     if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
@@ -224,7 +224,7 @@ impl Itemset {
 
         let mut keys_iter = self.items.keys(); // The initial todo list
         type BitVecBitSize = u32; // As of 0.4.3, BitVec only supports u32 blocks
-        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods.len(), false); // Subsequent todos
+        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods_len(), false); // Subsequent todos
         let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
         loop {
             let prod_i;
@@ -242,16 +242,15 @@ impl Itemset {
                     match zero_todos.blocks().enumerate().filter(|&(_, b)| b != 0).next() {
                         Some((b_off, b)) => {
                             // prod_i is the block offset plus the index of the first bit set.
-                            prod_i = b_off * BitVecBitSize::bits() + (b.trailing_zeros() as usize)
+                            prod_i = PIdx::from(b_off * BitVecBitSize::bits() + (b.trailing_zeros() as usize))
                         },
                         None => break
                     }
                     dot = 0;
-                    zero_todos.set(prod_i, false);
+                    zero_todos.set(prod_i.into(), false);
                 }
             }
-
-            let prod = &grm.prods[prod_i];
+            let prod = grm.get_prod(prod_i).unwrap();
             if dot == prod.len() { continue; }
             if let Symbol::Nonterminal(nonterm_i) = prod[dot] {
                 // This if statement is, in essence, a fast version of what's called getContext in
@@ -284,7 +283,7 @@ impl Itemset {
 
                 for ref_prod_i in &grm.rules_prods[nonterm_i] {
                     if new_is.add(*ref_prod_i, 0, &new_ctx) {
-                        zero_todos.set(*ref_prod_i, true);
+                        zero_todos.set(usize::from(*ref_prod_i), true);
                     }
                 }
             }
@@ -298,7 +297,7 @@ impl Itemset {
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(grm);
         for (&(prod_i, dot), ctx) in &self.items {
-            let prod = &grm.prods[prod_i];
+            let prod = grm.get_prod(prod_i).unwrap();
             if dot == prod.len() { continue; }
             if sym == &prod[dot] {
                 newis.add(prod_i, dot + 1, ctx);
@@ -455,7 +454,7 @@ impl StateGraph {
                 seen_nonterms.clear();
                 seen_terms.clear();
                 for &(prod_i, dot) in cl_state.items.keys() {
-                    let prod = &grm.prods[prod_i];
+                    let prod = grm.get_prod(prod_i).unwrap();
                     if dot == prod.len() { continue; }
                     let sym = prod[dot];
                     match sym {
@@ -796,7 +795,7 @@ mod test {
         has(&grm, &firsts, "G", vec!["c", "d", "f", ""]);
     }
 
-    fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, prod_off: PIdx, dot: usize, la:
+    fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, prod_off: usize, dot: usize, la:
                         Vec<&str>) {
         let ab_prod_off = grm.rules_prods[grm.nonterminal_off(nt)][prod_off];
         let ctx = &is.items[&(ab_prod_off, dot)];
