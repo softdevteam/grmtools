@@ -28,8 +28,11 @@ custom_derive! {
     #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq)]
     pub struct RIdx(usize);
 }
-/// A type specifically for symbol indices (within a production).
-pub type SIdx = usize;
+custom_derive! {
+    /// A type specifically for symbol indices (within a production).
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq, PartialOrd)]
+    pub struct SIdx(usize);
+}
 /// A type specifically for token indices.
 pub type TIdx = usize;
 

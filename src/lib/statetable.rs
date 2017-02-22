@@ -1,6 +1,6 @@
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 
-use grammar::{AssocKind, Grammar, PIdx, RIdx, Symbol, TIdx};
+use grammar::{AssocKind, Grammar, PIdx, RIdx, SIdx, Symbol, TIdx};
 use stategraph::StateGraph;
 
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
@@ -35,7 +35,7 @@ impl StateTable {
         for (state_i, state) in sg.states.iter().enumerate() {
             // Populate reduce and accepts
             for (&(prod_i, dot), ctx) in &state.items {
-                if dot < grm.get_prod(prod_i).unwrap().len() {
+                if dot < SIdx::from(grm.get_prod(prod_i).unwrap().len()) {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
