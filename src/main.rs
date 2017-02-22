@@ -87,7 +87,7 @@ fn main() {
     let input = read_file(&matches.free[2]);
 
     let mut lexemes = do_lex(&lexer, &input).unwrap();
-    lexemes.push(Lexeme{tok_id: grm.end_term, start: input.len(), len: 0});
+    lexemes.push(Lexeme{tok_id: usize::from(grm.end_term), start: input.len(), len: 0});
     let pt = parse(&grm, &stable, &lexemes).unwrap();
     println!("{}", pt.pp(&grm, &input));
 }
