@@ -184,7 +184,7 @@ mod test {
         // Actions
         assert_eq!(st.actions.len(), 15);
         let assert_reduce = |state_i: usize, term_i: TIdx, rule: &str, prod_off: usize| {
-            let prod_i = grm.rules_prods[grm.nonterminal_off(rule)][prod_off];
+            let prod_i = grm.rules_prods[usize::from(grm.nonterminal_off(rule))][prod_off];
             assert_eq!(st.actions[&(state_i, Symbol::Terminal(term_i))], Action::Reduce(PIdx::from(prod_i)));
         };
 
