@@ -1,5 +1,5 @@
 use lrlex::Lexeme;
-use lrtable::{Action, Grammar, RIdx, StateTable, Symbol};
+use lrtable::{Action, Grammar, RIdx, StateTable, Symbol, TIdx};
 
 pub enum Node {
     Terminal{lexeme: Lexeme},
@@ -24,7 +24,7 @@ impl Node {
                     s.push_str(&format!("{} {}\n", grm.terminal_names.get(tok_id).unwrap(), &input[start..start + len]));
                 }
                 &Node::Nonterminal{rule_idx, ref nodes} => {
-                    s.push_str(&format!("{}\n", grm.nonterminal_names.get(rule_idx).unwrap()));
+                    s.push_str(&format!("{}\n", grm.get_rule_name(rule_idx).unwrap()));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }
@@ -46,16 +46,16 @@ pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme>) -> Resul
     let mut la = lexemes_iter.next().unwrap();
     loop {
         let st = *pstack.last().unwrap();
-        match stable.actions.get(&(st, Symbol::Terminal(la.tok_id))) {
+        match stable.actions.get(&(st, Symbol::Terminal(TIdx::from(la.tok_id)))) {
             Some(&Action::Reduce(prod_id)) => {
                 let rule_idx = grm.prod_to_rule_idx(prod_id);
-                let pop_idx = pstack.len() - grm.prods.get(prod_id).unwrap().len();
+                let pop_idx = pstack.len() - grm.get_prod(prod_id).unwrap().len();
                 let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node>>();
                 tstack.push(Node::Nonterminal{rule_idx: rule_idx, nodes: nodes});
 
                 pstack.drain(pop_idx..);
                 let prior = *pstack.last().unwrap();
-                pstack.push(*stable.gotos.get(&(prior, rule_idx)).unwrap());
+                pstack.push(*stable.gotos.get(&(prior, RIdx::from(rule_idx))).unwrap());
             },
             Some(&Action::Shift(state_id)) => {
                 tstack.push(Node::Terminal{lexeme: *la});
@@ -63,7 +63,7 @@ pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme>) -> Resul
                 pstack.push(state_id);
             },
             Some(&Action::Accept) => {
-                debug_assert_eq!(la.tok_id, grm.end_term);
+                debug_assert_eq!(TIdx::from(la.tok_id), grm.end_term);
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
@@ -90,7 +90,7 @@ mod test {
         }
         lexer.set_rule_ids(&rule_ids);
         let mut lexemes = do_lex(&lexer, &input).unwrap();
-        lexemes.push(Lexeme{tok_id: grm.end_term, start: input.len(), len: 0});
+        lexemes.push(Lexeme{tok_id: usize::from(grm.end_term), start: input.len(), len: 0});
         let pt = parse(&grm, &stable, &lexemes).unwrap();
         assert_eq!(expected, pt.pp(&grm, &input));
     }
