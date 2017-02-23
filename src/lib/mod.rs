@@ -1,7 +1,9 @@
 use std::fmt;
 
-#[macro_use]
-extern crate lazy_static;
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate custom_derive;
+#[macro_use] extern crate newtype_derive;
+
 
 mod ast;
 pub mod grammar;
@@ -9,7 +11,7 @@ mod yacc_parser;
 mod stategraph;
 pub mod statetable;
 
-pub use grammar::{Grammar, RIdx, Symbol};
+pub use grammar::{Grammar, PIdx, RIdx, Symbol, TIdx};
 pub use ast::{GrammarAST, GrammarValidationError};
 use stategraph::StateGraph;
 pub use statetable::{Action, StateTable};

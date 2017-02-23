@@ -17,25 +17,37 @@ pub const END_TERM     : &'static str = "$";
 // The code also assumes that the start rule only has a single production. Since the code manually
 // creates this start rule, this is a safe assumption.
 
-/// A type specifically for production indices (e.g. a rule "E::=A|B" would
-/// have two productions for the single rule E).
-pub type PIdx = usize;
-/// A type specifically for rule indices.
-pub type RIdx = usize;
-/// A type specifically for symbol indices (within a production).
-pub type SIdx = usize;
-/// A type specifically for token indices.
-pub type TIdx = usize;
+custom_derive! {
+    /// A type specifically for production indices (e.g. a rule "E::=A|B" would
+    /// have two productions for the single rule E).
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq, PartialOrd)]
+    pub struct PIdx(usize);
+}
+custom_derive! {
+    /// A type specifically for rule indices.
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq)]
+    pub struct RIdx(usize);
+}
+custom_derive! {
+    /// A type specifically for symbol indices (within a production).
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq, PartialOrd)]
+    pub struct SIdx(usize);
+}
+custom_derive! {
+    /// A type specifically for token indices.
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq)]
+    pub struct TIdx(usize);
+}
 
 pub struct Grammar {
     /// A mapping from RIdx -> String.
     pub nonterminal_names: Vec<String>,
-    pub nonterms_len: RIdx,
+    pub nonterms_len: usize,
     /// A mapping from TIdx -> String.
     pub terminal_names: Vec<String>,
     /// A mapping from TIdx -> Option<Precedence>
     pub terminal_precs: Vec<Option<Precedence>>,
-    pub terms_len: TIdx,
+    pub terms_len: usize,
     /// Which production is the sole production of the start rule?
     pub start_prod: PIdx,
     /// The offset of the EOF terminal.
@@ -45,7 +57,7 @@ pub struct Grammar {
     /// are not necessarily stored sequentially.
     pub rules_prods: Vec<Vec<PIdx>>,
     /// A list of all productions.
-    pub prods: Vec<Vec<Symbol>>,
+    prods: Vec<Vec<Symbol>>,
     pub prod_precs: Vec<Option<Precedence>>
 }
 
@@ -106,7 +118,7 @@ impl Grammar {
         let mut nonterm_map = HashMap::<String, RIdx>::new();
         for (i, v) in nonterm_names.iter().enumerate() {
             rules_prods.push(Vec::new());
-            nonterm_map.insert(v.clone(), i);
+            nonterm_map.insert(v.clone(), RIdx(i));
         }
         let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
@@ -118,21 +130,21 @@ impl Grammar {
         }
         let mut terminal_map = HashMap::<String, TIdx>::new();
         for (i, v) in term_names.iter().enumerate() {
-            terminal_map.insert(v.clone(), i);
+            terminal_map.insert(v.clone(), TIdx(i));
         }
 
         let mut prods                               = Vec::new();
         let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
         for astrulename in &nonterm_names {
             if astrulename == &start_nonterm {
-                rules_prods.get_mut(nonterm_map[&start_nonterm]).unwrap().push(prods.len());
+                rules_prods.get_mut(usize::from(nonterm_map[&start_nonterm])).unwrap().push(prods.len().into());
                 let start_prod = vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])];
                 prods.push(start_prod);
                 prod_precs.push(None);
                 continue;
             }
             let astrule = &ast.rules[astrulename];
-            let mut rule = rules_prods.get_mut(nonterm_map[&astrule.name]).unwrap();
+            let mut rule = rules_prods.get_mut(usize::from(nonterm_map[&astrule.name])).unwrap();
             for astprod in &astrule.productions {
                 let mut prod = Vec::with_capacity(astprod.len());
                 let mut prec = None;
@@ -155,7 +167,7 @@ impl Grammar {
                         }
                     }
                 }
-                (*rule).push(prods.len());
+                (*rule).push(prods.len().into());
                 prods.push(prod);
                 prod_precs.push(prec);
             }
@@ -167,7 +179,7 @@ impl Grammar {
             terms_len:         term_names.len(),
             terminal_names:    term_names,
             terminal_precs:    term_precs,
-            start_prod:        rules_prods[nonterm_map[&start_nonterm]][0],
+            start_prod:        rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
             end_term:          terminal_map[&end_term],
             rules_prods:       rules_prods,
             prods:             prods,
@@ -179,10 +191,22 @@ impl Grammar {
     pub fn prod_to_rule_idx(&self, i: PIdx) -> RIdx {
         for (j, rule) in self.rules_prods.iter().enumerate() {
             if rule.iter().position(|x| *x == i).is_some() {
-                return j;
+                return RIdx(j);
             }
         }
-        panic!("Invalid index {}", i);
+        panic!("Invalid index {:?}", i);
+    }
+
+    pub fn get_prod(&self, i: PIdx) -> Option<&Vec<Symbol>> {
+        self.prods.get(usize::from(i))
+    }
+
+    pub fn prods_len(&self) -> usize {
+        self.prods.len()
+    }
+
+    pub fn get_rule_name(&self, i: RIdx) -> Option<&String> {
+        self.nonterminal_names.get(usize::from(i))
     }
 }
 
@@ -190,12 +214,12 @@ impl Grammar {
 impl Grammar {
     /// Map a nonterminal name to the corresponding rule offset.
     pub fn nonterminal_off(&self, n: &str) -> RIdx {
-        self.nonterminal_names.iter().position(|x| x == n).unwrap()
+        RIdx(self.nonterminal_names.iter().position(|x| x == n).unwrap())
     }
 
     /// Map a terminal name to the corresponding terminal offset.
     pub fn terminal_off(&self, n: &str) -> TIdx {
-        self.terminal_names.iter().position(|x| x == n).unwrap()
+        TIdx(self.terminal_names.iter().position(|x| x == n).unwrap())
     }
 
     /// Map a production number to a rule name. Note: this has a worst case of O(n * m) where n is
@@ -206,14 +230,14 @@ impl Grammar {
                 return self.nonterminal_names[j].clone();
             }
         }
-        panic!("Invalid index {}", i);
+        panic!("Invalid index {}", usize::from(i));
     }
 }
 
 
 #[cfg(test)]
 mod test {
-    use super::{AssocKind, Grammar, Precedence, Symbol};
+    use super::{AssocKind, Grammar, PIdx, Precedence, Symbol};
     use yacc_parser::parse_yacc;
 
     #[test]
@@ -221,17 +245,16 @@ mod test {
         let ast = parse_yacc(&"%start R %token T %% R: 'T';".to_string()).unwrap();
         let grm = Grammar::new(&ast);
 
-        assert_eq!(grm.start_prod, 0);
+        assert_eq!(grm.start_prod, PIdx(0));
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
         grm.terminal_off("$");
         grm.terminal_off("T");
 
-        assert_eq!(grm.rules_prods, vec![vec![0], vec![1]]);
-        let start_prod = grm.prods.get(grm.rules_prods.get(grm.nonterminal_off("^")).unwrap()[0]).unwrap();
+        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)]]);
+        let start_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
         assert_eq!(*start_prod, vec![Symbol::Nonterminal(grm.nonterminal_off("R"))]);
-        let r_prod = grm.prods.get(grm.rules_prods.get(grm.nonterminal_off("R")).unwrap()[0] as
-                                 usize).unwrap();
+        let r_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(*r_prod, vec![Symbol::Terminal(grm.terminal_off("T"))]);
     }
 
@@ -246,15 +269,13 @@ mod test {
         grm.terminal_off("$");
         grm.terminal_off("T");
 
-        assert_eq!(grm.rules_prods, vec![vec![0], vec![1], vec![2]]);
-        let start_prod = grm.prods.get(grm.rules_prods.get(grm.nonterminal_off("^")).unwrap()[0]).unwrap();
+        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
+        let start_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
         assert_eq!(*start_prod, vec![Symbol::Nonterminal(grm.nonterminal_off("R"))]);
-        let r_prod = grm.prods.get(grm.rules_prods.get(grm.nonterminal_off("R")).unwrap()[0] as
-                                 usize).unwrap();
+        let r_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(r_prod.len(), 1);
         assert_eq!(r_prod[0], Symbol::Nonterminal(grm.nonterminal_off("S")));
-        let s_prod = grm.prods.get(grm.rules_prods.get(grm.nonterminal_off("S")).unwrap()[0] as
-                                 usize).unwrap();
+        let s_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("S"))][0]).unwrap();
         assert_eq!(s_prod.len(), 1);
         assert_eq!(s_prod[0], Symbol::Terminal(grm.terminal_off("T")));
     }
@@ -271,17 +292,15 @@ mod test {
         grm.terminal_off("T1");
         grm.terminal_off("T2");
 
-        assert_eq!(grm.rules_prods, vec![vec![0], vec![1], vec![2]]);
-        let start_prod = grm.prods.get(grm.rules_prods.get(grm.nonterminal_off("^")).unwrap()[0]).unwrap();
+        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
+        let start_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
         assert_eq!(*start_prod, vec![Symbol::Nonterminal(grm.nonterminal_off("R"))]);
-        let r_prod = grm.prods.get(grm.rules_prods.get(grm.nonterminal_off("R")).unwrap()[0] as
-                                 usize).unwrap();
+        let r_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(r_prod.len(), 3);
         assert_eq!(r_prod[0], Symbol::Nonterminal(grm.nonterminal_off("S")));
         assert_eq!(r_prod[1], Symbol::Terminal(grm.terminal_off("T1")));
         assert_eq!(r_prod[2], Symbol::Nonterminal(grm.nonterminal_off("S")));
-        let s_prod = grm.prods.get(grm.rules_prods.get(grm.nonterminal_off("S")).unwrap()[0] as
-                                 usize).unwrap();
+        let s_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("S"))][0]).unwrap();
         assert_eq!(s_prod.len(), 1);
         assert_eq!(s_prod[0], Symbol::Terminal(grm.terminal_off("T2")));
     }
