@@ -197,8 +197,9 @@ impl Grammar {
         panic!("Invalid index {:?}", i);
     }
 
-    pub fn get_prod(&self, i: PIdx) -> Option<&Vec<Symbol>> {
-        self.prods.get(usize::from(i))
+    /// Get the sequence of symbols for production `i`.
+    pub fn get_prod(&self, i: PIdx) -> Option<&[Symbol]> {
+        self.prods.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
     pub fn prods_len(&self) -> usize {
@@ -253,9 +254,9 @@ mod test {
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)]]);
         let start_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, vec![Symbol::Nonterminal(grm.nonterminal_off("R"))]);
+        assert_eq!(*start_prod, [Symbol::Nonterminal(grm.nonterminal_off("R"))]);
         let r_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
-        assert_eq!(*r_prod, vec![Symbol::Terminal(grm.terminal_off("T"))]);
+        assert_eq!(*r_prod, [Symbol::Terminal(grm.terminal_off("T"))]);
     }
 
     #[test]
@@ -271,7 +272,7 @@ mod test {
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
         let start_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, vec![Symbol::Nonterminal(grm.nonterminal_off("R"))]);
+        assert_eq!(*start_prod, [Symbol::Nonterminal(grm.nonterminal_off("R"))]);
         let r_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(r_prod.len(), 1);
         assert_eq!(r_prod[0], Symbol::Nonterminal(grm.nonterminal_off("S")));
@@ -294,7 +295,7 @@ mod test {
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
         let start_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, vec![Symbol::Nonterminal(grm.nonterminal_off("R"))]);
+        assert_eq!(*start_prod, [Symbol::Nonterminal(grm.nonterminal_off("R"))]);
         let r_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(r_prod.len(), 3);
         assert_eq!(r_prod[0], Symbol::Nonterminal(grm.nonterminal_off("S")));
