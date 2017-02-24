@@ -56,6 +56,8 @@ pub struct Grammar {
     /// that of `nonterminal_names' 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
     pub rules_prods: Vec<Vec<PIdx>>,
+    /// A mapping from productions to their corresponding rule indexes.
+    prods_rules: Vec<RIdx>,
     /// A list of all productions.
     prods: Vec<Vec<Symbol>>,
     pub prod_precs: Vec<Option<Precedence>>
@@ -135,16 +137,19 @@ impl Grammar {
 
         let mut prods                               = Vec::new();
         let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
+        let mut prods_rules = Vec::new();
         for astrulename in &nonterm_names {
+            let rule_idx = nonterm_map[astrulename];
             if astrulename == &start_nonterm {
                 rules_prods.get_mut(usize::from(nonterm_map[&start_nonterm])).unwrap().push(prods.len().into());
                 let start_prod = vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])];
                 prods.push(start_prod);
                 prod_precs.push(None);
+                prods_rules.push(rule_idx);
                 continue;
             }
             let astrule = &ast.rules[astrulename];
-            let mut rule = rules_prods.get_mut(usize::from(nonterm_map[&astrule.name])).unwrap();
+            let mut rule = rules_prods.get_mut(usize::from(rule_idx)).unwrap();
             for astprod in &astrule.productions {
                 let mut prod = Vec::with_capacity(astprod.len());
                 let mut prec = None;
@@ -170,6 +175,7 @@ impl Grammar {
                 (*rule).push(prods.len().into());
                 prods.push(prod);
                 prod_precs.push(prec);
+                prods_rules.push(rule_idx);
             }
         }
 
@@ -182,6 +188,7 @@ impl Grammar {
             start_prod:        rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
             end_term:          terminal_map[&end_term],
             rules_prods:       rules_prods,
+            prods_rules:       prods_rules,
             prods:             prods,
             prod_precs:        prod_precs
         }
@@ -189,12 +196,7 @@ impl Grammar {
 
     /// Return the rule index of the production `i`.
     pub fn prod_to_rule_idx(&self, i: PIdx) -> RIdx {
-        for (j, rule) in self.rules_prods.iter().enumerate() {
-            if rule.iter().position(|x| *x == i).is_some() {
-                return RIdx(j);
-            }
-        }
-        panic!("Invalid index {:?}", i);
+        self.prods_rules[usize::from(i)]
     }
 
     /// Get the sequence of symbols for production `i`.
@@ -239,7 +241,7 @@ impl Grammar {
 
 #[cfg(test)]
 mod test {
-    use super::{AssocKind, Grammar, PIdx, Precedence, Symbol};
+    use super::{AssocKind, Grammar, PIdx, RIdx, Precedence, Symbol};
     use yacc_parser::parse_yacc;
 
     #[test]
@@ -258,6 +260,7 @@ mod test {
         assert_eq!(*start_prod, [Symbol::Nonterminal(grm.nonterminal_off("R"))]);
         let r_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(*r_prod, [Symbol::Terminal(grm.terminal_off("T"))]);
+        assert_eq!(grm.prods_rules, vec![RIdx(0), RIdx(1)]);
     }
 
     #[test]
@@ -295,6 +298,7 @@ mod test {
         grm.terminal_off("T2");
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
+        assert_eq!(grm.prods_rules, vec![RIdx(0), RIdx(1), RIdx(2)]);
         let start_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
         assert_eq!(*start_prod, [Symbol::Nonterminal(grm.nonterminal_off("R"))]);
         let r_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
@@ -305,6 +309,22 @@ mod test {
         let s_prod = grm.get_prod(grm.rules_prods[usize::from(grm.nonterminal_off("S"))][0]).unwrap();
         assert_eq!(s_prod.len(), 1);
         assert_eq!(s_prod[0], Symbol::Terminal(grm.terminal_off("T2")));
+    }
+
+
+    #[test]
+    fn test_prods_rules() {
+        let grm = Grammar::new(&parse_yacc(&"
+            %start A
+            %%
+            A: B
+             | C;
+            B: 'x';
+            C: 'y'
+             | 'z';
+          ".to_string()).unwrap());
+
+        assert_eq!(grm.prods_rules, vec![RIdx(0), RIdx(1), RIdx(1), RIdx(2), RIdx(3), RIdx(3)]);
     }
 
     #[test]
