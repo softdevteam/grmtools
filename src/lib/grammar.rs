@@ -206,8 +206,9 @@ impl Grammar {
         self.prods.len()
     }
 
-    pub fn get_rule_name(&self, i: RIdx) -> Option<&String> {
-        self.nonterminal_names.get(usize::from(i))
+    /// Return the rule name for rule `i`.
+    pub fn get_rule_name(&self, i: RIdx) -> Option<&str> {
+        self.nonterminal_names.get(usize::from(i)).map_or(None, |x| Some(&x))
     }
 }
 
