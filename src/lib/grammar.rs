@@ -46,7 +46,7 @@ pub struct Grammar {
     /// A mapping from TIdx -> String.
     pub terminal_names: Vec<String>,
     /// A mapping from TIdx -> Option<Precedence>
-    pub terminal_precs: Vec<Option<Precedence>>,
+    terminal_precs: Vec<Option<Precedence>>,
     pub terms_len: usize,
     /// Which production is the sole production of the start rule?
     pub start_prod: PIdx,
@@ -217,6 +217,11 @@ impl Grammar {
     /// Return the rule name for rule `i`.
     pub fn get_rule_name(&self, i: RIdx) -> Option<&str> {
         self.nonterminal_names.get(usize::from(i)).map_or(None, |x| Some(&x))
+    }
+
+    /// Return the precedence of terminal `i`.
+    pub fn term_precedence(&self, i: TIdx) -> Option<Option<Precedence>> {
+        self.terminal_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
 }
 
