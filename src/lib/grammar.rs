@@ -226,15 +226,9 @@ impl Grammar {
         TIdx(self.terminal_names.iter().position(|x| x == n).unwrap())
     }
 
-    /// Map a production number to a rule name. Note: this has a worst case of O(n * m) where n is
-    /// the number of rules in the grammar and m the total number of productions.
-    pub fn prod_to_term_name(&self, i: PIdx) -> String {
-        for (j, rule) in self.rules_prods.iter().enumerate() {
-            if rule.iter().position(|x| *x == i).is_some() {
-                return self.nonterminal_names[j].clone();
-            }
-        }
-        panic!("Invalid index {}", usize::from(i));
+    /// Map a production number to a rule name.
+    pub fn prod_to_term_name(&self, i: PIdx) -> &str {
+        &self.nonterminal_names[usize::from(self.prod_to_rule_idx(i))]
     }
 }
 
