@@ -83,16 +83,16 @@ impl Firsts {
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for (rul_i, prods) in grm.rules_prods.iter().enumerate() {
+            for rul_i in (0..grm.nonterms_len).map(|x| RIdx::from(x)) {
                 // For each rule E
-                for prod_i in prods.iter() {
+                for prod_i in grm.rule_idx_to_prods(rul_i).unwrap().iter() {
                     // ...and each production A
                     let prod = grm.get_prod(*prod_i).unwrap();
                     if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
                         if !firsts.is_epsilon_set(RIdx::from(rul_i)) {
-                            firsts.prod_epsilons.set(rul_i, true);
+                            firsts.prod_epsilons.set(usize::from(rul_i), true);
                             changed = true;
                         }
                         continue;
@@ -101,7 +101,7 @@ impl Firsts {
                         match *sym {
                             Symbol::Terminal(term_i) => {
                                 // if symbol is a Terminal, add to FIRSTS
-                                if !firsts.set(RIdx::from(rul_i), term_i) {
+                                if !firsts.set(rul_i, term_i) {
                                     changed = true;
                                 }
                                 break;
@@ -113,7 +113,7 @@ impl Firsts {
                                 // same.
                                 for bit_i in 0..grm.terms_len {
                                     if firsts.is_set(nonterm_i, TIdx::from(bit_i))
-                                      && !firsts.set(RIdx::from(rul_i), TIdx::from(bit_i)) {
+                                      && !firsts.set(rul_i, TIdx::from(bit_i)) {
                                         changed = true;
                                     }
                                 }
@@ -123,8 +123,8 @@ impl Firsts {
                                 // to FIRSTs.
                                 if firsts.is_epsilon_set(nonterm_i) && sym_i == prod.len() - 1 {
                                     // Only add epsilon if the symbol is the last in the production
-                                    if !firsts.prod_epsilons[rul_i] {
-                                        firsts.prod_epsilons.set(rul_i, true);
+                                    if !firsts.prod_epsilons[usize::from(rul_i)] {
+                                        firsts.prod_epsilons.set(usize::from(rul_i), true);
                                         changed = true;
                                     }
                                 }
@@ -281,7 +281,7 @@ impl Itemset {
                     new_ctx.union(&new_is.items[&(prod_i, dot)]);
                 }
 
-                for ref_prod_i in &grm.rules_prods[usize::from(nonterm_i)] {
+                for ref_prod_i in grm.rule_idx_to_prods(nonterm_i).unwrap().iter() {
                     if new_is.add(*ref_prod_i, SIdx::from(0), &new_ctx) {
                         zero_todos.set(usize::from(*ref_prod_i), true);
                     }
@@ -797,7 +797,7 @@ mod test {
 
     fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, prod_off: usize, dot: usize, la:
                         Vec<&str>) {
-        let ab_prod_off = grm.rules_prods[usize::from(grm.nonterminal_off(nt))][prod_off];
+        let ab_prod_off = grm.rule_idx_to_prods(grm.nonterminal_off(nt)).unwrap()[prod_off];
         let ctx = &is.items[&(ab_prod_off, SIdx::from(dot))];
         for i in 0..grm.terms_len {
             let bit = ctx[i];
@@ -839,7 +839,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0], SIdx::from(0), &la);
+        is.add(grm.rule_idx_to_prods(grm.nonterminal_off("^")).unwrap()[0], SIdx::from(0), &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(num_active_states(&cls_is), 6);
@@ -859,7 +859,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0], SIdx::from(0), &la);
+        is.add(grm.rule_idx_to_prods(grm.nonterminal_off("^")).unwrap()[0], SIdx::from(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -868,7 +868,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("F"))][0], SIdx::from(0), &la);
+        is.add(grm.rule_idx_to_prods(grm.nonterminal_off("F")).unwrap()[0], SIdx::from(0), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
         state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
@@ -901,7 +901,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0], SIdx::from(0), &la);
+        is.add(grm.rule_idx_to_prods(grm.nonterminal_off("^")).unwrap()[0], SIdx::from(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -912,7 +912,7 @@ mod test {
         la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("b")), true);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("S"))][1], SIdx::from(1), &la);
+        is.add(grm.rule_idx_to_prods(grm.nonterminal_off("S")).unwrap()[1], SIdx::from(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
         state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
@@ -921,7 +921,7 @@ mod test {
         is = Itemset::new(&grm);
         la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("a")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("A"))][0], SIdx::from(1), &la);
+        is.add(grm.rule_idx_to_prods(grm.nonterminal_off("A")).unwrap()[0], SIdx::from(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
@@ -935,7 +935,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0], SIdx::from(0), &la);
+        is.add(grm.rule_idx_to_prods(grm.nonterminal_off("^")).unwrap()[0], SIdx::from(0), &la);
         let cls_is = is.close(&grm, &firsts);
 
         let goto1 = cls_is.goto(&grm, &Symbol::Nonterminal(grm.nonterminal_off("S")));

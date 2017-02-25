@@ -55,7 +55,7 @@ pub struct Grammar {
     /// A mapping from rules to their productions. Note that 2) the order of rules is identical to
     /// that of `nonterminal_names' 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
-    pub rules_prods: Vec<Vec<PIdx>>,
+    rules_prods: Vec<Vec<PIdx>>,
     /// A mapping from productions to their corresponding rule indexes.
     prods_rules: Vec<RIdx>,
     /// A list of all productions.
@@ -194,6 +194,11 @@ impl Grammar {
         }
     }
 
+    /// Return the productions for rule `i`.
+    pub fn rule_idx_to_prods(&self, i: RIdx) -> Option<&[PIdx]> {
+        self.rules_prods.get(usize::from(i)).map_or(None, |x| Some(x))
+    }
+
     /// Return the rule index of the production `i`.
     pub fn prod_to_rule_idx(&self, i: PIdx) -> RIdx {
         self.prods_rules[usize::from(i)]
@@ -204,6 +209,7 @@ impl Grammar {
         self.prods.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
+    /// How many productions does this grammar have?
     pub fn prods_len(&self) -> usize {
         self.prods.len()
     }
