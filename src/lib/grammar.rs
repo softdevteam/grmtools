@@ -194,17 +194,17 @@ impl Grammar {
         }
     }
 
-    /// Return the productions for rule `i`.
+    /// Return the productions for rule `i` or None if it doesn't exist.
     pub fn rule_idx_to_prods(&self, i: RIdx) -> Option<&[PIdx]> {
         self.rules_prods.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
-    /// Return the rule index of the production `i`.
+    /// Return the rule index of the production `i` or None if it doesn't exist.
     pub fn prod_to_rule_idx(&self, i: PIdx) -> RIdx {
         self.prods_rules[usize::from(i)]
     }
 
-    /// Get the sequence of symbols for production `i`.
+    /// Get the sequence of symbols for production `i` or None if it doesn't exist.
     pub fn get_prod(&self, i: PIdx) -> Option<&[Symbol]> {
         self.prods.get(usize::from(i)).map_or(None, |x| Some(x))
     }
@@ -214,17 +214,17 @@ impl Grammar {
         self.prods.len()
     }
 
-    /// Return the rule name for rule `i`.
+    /// Return the rule name for rule `i` or None if it doesn't exist.
     pub fn get_rule_name(&self, i: RIdx) -> Option<&str> {
         self.nonterminal_names.get(usize::from(i)).map_or(None, |x| Some(&x))
     }
 
-    /// Return the precedence of production `i`.
+    /// Return the precedence of production `i` or None if it doesn't exist.
     pub fn prod_precedence(&self, i: PIdx) -> Option<Option<Precedence>> {
         self.prod_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
 
-    /// Return the precedence of terminal `i`.
+    /// Return the precedence of terminal `i` or None if it doesn't exist.
     pub fn term_precedence(&self, i: TIdx) -> Option<Option<Precedence>> {
         self.terminal_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
