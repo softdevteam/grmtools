@@ -642,8 +642,9 @@ mod test {
 
     fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
         let nt_i = grm.nonterminal_off(rn);
-        for (i, n) in grm.terminal_names.iter().enumerate() {
-            match should_be.iter().position(|x| x == n) {
+        for i in 0 .. grm.terms_len {
+            let n = grm.term_name(TIdx::from(i)).unwrap();
+            match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
                     if !firsts.is_set(nt_i, TIdx::from(i)) {
                         panic!("{} is not set in {}", n, rn);
@@ -814,7 +815,7 @@ mod test {
             }
             if !found && bit {
                 panic!("bit for terminal {}, dot {} is set in production {} of {} when it shouldn't be",
-                       grm.terminal_names[i], dot, prod_off, nt);
+                       grm.term_name(TIdx::from(i)).unwrap(), dot, prod_off, nt);
             }
         }
     }
@@ -822,7 +823,6 @@ mod test {
     fn num_active_states(is: &Itemset) -> usize {
         is.items.len()
     }
-
 
     #[test]
     fn test_dragon_grammar() {

@@ -44,7 +44,7 @@ pub struct Grammar {
     pub nonterminal_names: Vec<String>,
     pub nonterms_len: usize,
     /// A mapping from TIdx -> String.
-    pub terminal_names: Vec<String>,
+    terminal_names: Vec<String>,
     /// A mapping from TIdx -> Option<Precedence>
     terminal_precs: Vec<Option<Precedence>>,
     pub terms_len: usize,
@@ -224,9 +224,19 @@ impl Grammar {
         self.prod_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
 
+    /// Return the name of terminal `i` or None if it doesn't exist.
+    pub fn term_name(&self, i: TIdx) -> Option<&str> {
+        self.terminal_names.get(usize::from(i)).map_or(None, |x| Some(&x))
+    }
+
     /// Return the precedence of terminal `i` or None if it doesn't exist.
     pub fn term_precedence(&self, i: TIdx) -> Option<Option<Precedence>> {
         self.terminal_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
+    }
+
+    /// Return an iterator which produces (in no particular order) all this grammar's valid TIdxs.
+    pub fn iter_term_idxs(&self) -> Box<Iterator<Item=TIdx>> {
+        Box::new((0..self.terms_len).map(|x| TIdx(x)))
     }
 }
 
