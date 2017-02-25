@@ -60,7 +60,7 @@ pub struct Grammar {
     prods_rules: Vec<RIdx>,
     /// A list of all productions.
     prods: Vec<Vec<Symbol>>,
-    pub prod_precs: Vec<Option<Precedence>>
+    prod_precs: Vec<Option<Precedence>>
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
@@ -217,6 +217,11 @@ impl Grammar {
     /// Return the rule name for rule `i`.
     pub fn get_rule_name(&self, i: RIdx) -> Option<&str> {
         self.nonterminal_names.get(usize::from(i)).map_or(None, |x| Some(&x))
+    }
+
+    /// Return the precedence of production `i`.
+    pub fn prod_precedence(&self, i: PIdx) -> Option<Option<Precedence>> {
+        self.prod_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
 
     /// Return the precedence of terminal `i`.

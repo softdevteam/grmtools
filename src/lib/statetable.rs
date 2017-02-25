@@ -108,7 +108,7 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(usize, Symbol), Act
                         prod_k: PIdx, state_j: usize) -> u64 {
     let mut shift_reduce = 0;
     let term_k_prec = grm.term_precedence(term_k).unwrap();
-    let prod_k_prec = grm.prod_precs[usize::from(prod_k)];
+    let prod_k_prec = grm.prod_precedence(prod_k).unwrap();
     match (term_k_prec, prod_k_prec) {
         (_, None) | (None, _) => {
             // If the terminal and production don't both have precedences, we use Yacc's default
