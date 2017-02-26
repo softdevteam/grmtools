@@ -60,6 +60,7 @@ pub struct Grammar {
     prods_rules: Vec<RIdx>,
     /// A list of all productions.
     prods: Vec<Vec<Symbol>>,
+    /// The precedence of each production.
     prod_precs: Vec<Option<Precedence>>
 }
 
