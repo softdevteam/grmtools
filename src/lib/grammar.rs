@@ -41,7 +41,7 @@ custom_derive! {
 
 pub struct Grammar {
     /// A mapping from RIdx -> String.
-    pub nonterminal_names: Vec<String>,
+    nonterminal_names: Vec<String>,
     pub nonterms_len: usize,
     /// A mapping from TIdx -> String.
     terminal_names: Vec<String>,
