@@ -1,6 +1,6 @@
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 
-use grammar::{AssocKind, Grammar, PIdx, RIdx, SIdx, Symbol, TIdx};
+use grammar::{AssocKind, Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
 use stategraph::StateGraph;
 
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
@@ -8,7 +8,7 @@ use stategraph::StateGraph;
 #[derive(Debug)]
 pub struct StateTable {
     pub actions      : HashMap<(usize, Symbol), Action>,
-    pub gotos        : HashMap<(usize, RIdx), usize>,
+    pub gotos        : HashMap<(usize, NTIdx), usize>,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
     /// The number of shift/reduce errors encountered.
@@ -28,7 +28,7 @@ pub enum Action {
 impl StateTable {
     pub fn new(grm: &Grammar, sg: &StateGraph) -> StateTable {
         let mut actions: HashMap<(usize, Symbol), Action> = HashMap::new();
-        let mut gotos  : HashMap<(usize, RIdx), usize>    = HashMap::new();
+        let mut gotos  : HashMap<(usize, NTIdx), usize>    = HashMap::new();
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
 

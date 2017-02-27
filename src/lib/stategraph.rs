@@ -8,7 +8,7 @@ use self::bit_vec::{BitBlock, BitVec};
 extern crate fnv;
 use self::fnv::FnvHasher;
 
-use grammar::{PIdx, Grammar, RIdx, Symbol, SIdx, TIdx};
+use grammar::{PIdx, Grammar, NTIdx, Symbol, SIdx, TIdx};
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -83,7 +83,7 @@ impl Firsts {
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for rul_i in (0..grm.nonterms_len).map(|x| RIdx::from(x)) {
+            for rul_i in (0..grm.nonterms_len).map(|x| NTIdx::from(x)) {
                 // For each rule E
                 for prod_i in grm.rule_idx_to_prods(rul_i).unwrap().iter() {
                     // ...and each production A
@@ -91,7 +91,7 @@ impl Firsts {
                     if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
-                        if !firsts.is_epsilon_set(RIdx::from(rul_i)) {
+                        if !firsts.is_epsilon_set(NTIdx::from(rul_i)) {
                             firsts.prod_epsilons.set(usize::from(rul_i), true);
                             changed = true;
                         }
@@ -145,23 +145,23 @@ impl Firsts {
     }
 
     /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
-    fn is_set(&self, nidx: RIdx, tidx: TIdx) -> bool {
+    fn is_set(&self, nidx: NTIdx, tidx: TIdx) -> bool {
         self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
     /// Get all the firsts for production `nidx` as a `Ctx`.
-    fn prod_firsts(&self, nidx: RIdx) -> &Ctx {
+    fn prod_firsts(&self, nidx: NTIdx) -> &Ctx {
         &self.prod_firsts[usize::from(usize::from(nidx))]
     }
 
     /// Returns true if the nonterminal `nidx` has epsilon in its first set.
-    fn is_epsilon_set(&self, nidx: RIdx) -> bool {
+    fn is_epsilon_set(&self, nidx: NTIdx) -> bool {
         self.prod_epsilons[usize::from(usize::from(nidx))]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
-    fn set(&mut self, nidx: RIdx, tidx: TIdx) -> bool {
+    fn set(&mut self, nidx: NTIdx, tidx: TIdx) -> bool {
         let mut prod = &mut self.prod_firsts[usize::from(nidx)];
         if prod[usize::from(tidx)] {
             true
