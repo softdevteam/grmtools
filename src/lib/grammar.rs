@@ -41,18 +41,22 @@ custom_derive! {
 }
 
 pub struct Grammar {
+    /// How many nonterminals does this grammar have?
+    pub nonterms_len: usize,
     /// A mapping from NTIdx -> String.
     nonterminal_names: Vec<String>,
-    pub nonterms_len: usize,
     /// A mapping from TIdx -> String.
     terminal_names: Vec<String>,
     /// A mapping from TIdx -> Option<Precedence>
     terminal_precs: Vec<Option<Precedence>>,
+    /// How many terminals does this grammar have?
     pub terms_len: usize,
-    /// Which production is the sole production of the start rule?
-    pub start_prod: PIdx,
     /// The offset of the EOF terminal.
     pub end_term: TIdx,
+    /// How many productions does this grammar have?
+    pub prods_len: usize,
+    /// Which production is the sole production of the start rule?
+    pub start_prod: PIdx,
     /// A list of all productions.
     prods: Vec<Vec<Symbol>>,
     /// A mapping from rules to their productions. Note that 2) the order of rules is identical to
@@ -185,10 +189,11 @@ impl Grammar {
             nonterms_len:      nonterm_names.len(),
             nonterminal_names: nonterm_names,
             terms_len:         term_names.len(),
+            end_term:          terminal_map[&end_term],
             terminal_names:    term_names,
             terminal_precs:    term_precs,
+            prods_len:         prods.len(),
             start_prod:        rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
-            end_term:          terminal_map[&end_term],
             rules_prods:       rules_prods,
             prods_rules:       prods_rules,
             prods:             prods,
@@ -209,11 +214,6 @@ impl Grammar {
     /// Return an iterator which produces (in no particular order) all this grammar's valid NTIdxs.
     pub fn iter_nonterm_idxs(&self) -> Box<Iterator<Item=NTIdx>> {
         Box::new((0..self.nonterms_len).map(|x| NTIdx(x)))
-    }
-
-    /// How many productions does this grammar have?
-    pub fn prods_len(&self) -> usize {
-        self.prods.len()
     }
 
     /// Get the sequence of symbols for production `i` or None if it doesn't exist.

@@ -224,7 +224,7 @@ impl Itemset {
 
         let mut keys_iter = self.items.keys(); // The initial todo list
         type BitVecBitSize = u32; // As of 0.4.3, BitVec only supports u32 blocks
-        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods_len(), false); // Subsequent todos
+        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods_len, false); // Subsequent todos
         let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
         loop {
             let prod_i;
