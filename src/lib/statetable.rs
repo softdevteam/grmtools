@@ -35,7 +35,7 @@ impl StateTable {
         for (state_i, state) in sg.states.iter().enumerate() {
             // Populate reduce and accepts
             for (&(prod_i, dot), ctx) in &state.items {
-                if dot < SIdx::from(grm.get_prod(prod_i).unwrap().len()) {
+                if dot < SIdx::from(grm.prod(prod_i).unwrap().len()) {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
@@ -184,7 +184,7 @@ mod test {
         // Actions
         assert_eq!(st.actions.len(), 15);
         let assert_reduce = |state_i: usize, term_i: TIdx, rule: &str, prod_off: usize| {
-            let prod_i = grm.rule_idx_to_prods(grm.nonterminal_off(rule)).unwrap()[prod_off];
+            let prod_i = grm.nonterm_to_prods(grm.nonterminal_off(rule)).unwrap()[prod_off];
             assert_eq!(st.actions[&(state_i, Symbol::Terminal(term_i))], Action::Reduce(PIdx::from(prod_i)));
         };
 
