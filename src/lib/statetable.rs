@@ -8,15 +8,15 @@ use stategraph::StateGraph;
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[derive(Debug)]
 pub struct StateTable {
-    pub actions      : HashMap<(StIdx, Symbol), Action>,
-    pub gotos        : HashMap<(StIdx, NTIdx), StIdx>,
+    actions          : HashMap<(StIdx, Symbol), Action>,
+    gotos            : HashMap<(StIdx, NTIdx), StIdx>,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
     /// The number of shift/reduce errors encountered.
     pub shift_reduce : u64
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Action {
     /// Shift to state X in the statetable.
     Shift(StIdx),
@@ -103,6 +103,15 @@ impl StateTable {
                      shift_reduce: shift_reduce }
     }
 
+    /// Return the action for `state_idx` and `sym`, or None if there isn't any.
+    pub fn action(&self, state_idx: StIdx, sym: Symbol) -> Option<Action> {
+        self.actions.get(&(state_idx, sym)).map_or(None, |x| Some(*x))
+    }
+
+    /// Return the goto state for `state_idx` and `nonterm_idx`, or None if there isn't any.
+    pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
+        self.gotos.get(&(state_idx, nonterm_idx)).map_or(None, |x| Some(*x))
+    }
 }
 
 fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(StIdx, Symbol), Action>, term_k: TIdx,
