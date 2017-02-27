@@ -2,20 +2,21 @@ use std::collections::HashMap;
 
 use ast;
 
-pub const START_NONTERM: &'static str = "^";
-pub const END_TERM     : &'static str = "$";
-
-// A note on the terminology we use (since this isn't entirely consistent in the literature):
-//   A symbol is either a nonterminal or a terminal.
+// A note on the terminology we use, since there's no universal standard (and EBNF, which is
+// perhaps the closest we've got, uses terminology that now seems partially anachronistic):
 //   A rule is a mapping from a nonterminal name to 1 or more productions (the latter of which is
 //     often called 'alternatives').
-//   A production is a possibly empty list of symbols.
+//   A symbol is either a nonterminal or a terminal.
+//   A production is a (possibly empty) ordered sequence of symbols.
 //
-// Because we're dealing with traditional LR grammars, every nonterminal name must have a
-// corresponding rule; terminals are not required to appear in any production.
+// Every nonterminal has a corresponding rule; however, terminals are not required to appear in any
+// production (such terminals can be used to catch error conditions).
 //
-// The code also assumes that the start rule only has a single production. Since the code manually
-// creates this start rule, this is a safe assumption.
+// Internally, we assume that a grammar's start rule has a single production. Since we manually
+// create the start rule ourselves (without relying on user input), this is a safe assumption.
+
+pub const START_NONTERM: &'static str = "^";
+pub const END_TERM     : &'static str = "$";
 
 custom_derive! {
     /// A type specifically for production indices (e.g. a rule "E::=A|B" would
@@ -233,6 +234,11 @@ impl Grammar {
     /// Return the precedence of terminal `i` or None if it doesn't exist.
     pub fn term_precedence(&self, i: TIdx) -> Option<Option<Precedence>> {
         self.terminal_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
+    }
+
+    /// Return an iterator which produces (in no particular order) all this grammar's valid RIdxs.
+    pub fn iter_nonterm_idxs(&self) -> Box<Iterator<Item=RIdx>> {
+        Box::new((0..self.nonterms_len).map(|x| RIdx(x)))
     }
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid TIdxs.
