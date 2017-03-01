@@ -1,24 +1,25 @@
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 
-use grammar::{AssocKind, Grammar, PIdx, RIdx, SIdx, Symbol, TIdx};
+use StIdx;
+use grammar::{AssocKind, Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
 use stategraph::StateGraph;
 
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[derive(Debug)]
 pub struct StateTable {
-    pub actions      : HashMap<(usize, Symbol), Action>,
-    pub gotos        : HashMap<(usize, RIdx), usize>,
+    actions          : HashMap<(StIdx, Symbol), Action>,
+    gotos            : HashMap<(StIdx, NTIdx), StIdx>,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
     /// The number of shift/reduce errors encountered.
     pub shift_reduce : u64
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Action {
     /// Shift to state X in the statetable.
-    Shift(usize),
+    Shift(StIdx),
     /// Reduce production X in the grammar.
     Reduce(PIdx),
     /// Accept this input.
@@ -27,15 +28,15 @@ pub enum Action {
 
 impl StateTable {
     pub fn new(grm: &Grammar, sg: &StateGraph) -> StateTable {
-        let mut actions: HashMap<(usize, Symbol), Action> = HashMap::new();
-        let mut gotos  : HashMap<(usize, RIdx), usize>    = HashMap::new();
+        let mut actions: HashMap<(StIdx, Symbol), Action> = HashMap::new();
+        let mut gotos  : HashMap<(StIdx, NTIdx), StIdx>   = HashMap::new();
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
 
-        for (state_i, state) in sg.states.iter().enumerate() {
+        for (state_i, state) in sg.states.iter().enumerate().map(|(x, y)| (StIdx(x), y)) {
             // Populate reduce and accepts
             for (&(prod_i, dot), ctx) in &state.items {
-                if dot < SIdx::from(grm.get_prod(prod_i).unwrap().len()) {
+                if dot < SIdx::from(grm.prod(prod_i).unwrap().len()) {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
@@ -69,7 +70,7 @@ impl StateTable {
                 }
             }
 
-            for (&sym, state_j) in &sg.edges[state_i] {
+            for (&sym, state_j) in &sg.edges[usize::from(state_i)] {
                 match sym {
                     Symbol::Nonterminal(nonterm_i) => {
                         // Populate gotos
@@ -102,13 +103,22 @@ impl StateTable {
                      shift_reduce: shift_reduce }
     }
 
+    /// Return the action for `state_idx` and `sym`, or None if there isn't any.
+    pub fn action(&self, state_idx: StIdx, sym: Symbol) -> Option<Action> {
+        self.actions.get(&(state_idx, sym)).map_or(None, |x| Some(*x))
+    }
+
+    /// Return the goto state for `state_idx` and `nonterm_idx`, or None if there isn't any.
+    pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
+        self.gotos.get(&(state_idx, nonterm_idx)).map_or(None, |x| Some(*x))
+    }
 }
 
-fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(usize, Symbol), Action>, term_k: TIdx,
-                        prod_k: PIdx, state_j: usize) -> u64 {
+fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(StIdx, Symbol), Action>, term_k: TIdx,
+                        prod_k: PIdx, state_j: StIdx) -> u64 {
     let mut shift_reduce = 0;
-    let term_k_prec = grm.terminal_precs[usize::from(term_k)];
-    let prod_k_prec = grm.prod_precs[usize::from(prod_k)];
+    let term_k_prec = grm.term_precedence(term_k).unwrap();
+    let prod_k_prec = grm.prod_precedence(prod_k).unwrap();
     match (term_k_prec, prod_k_prec) {
         (_, None) | (None, _) => {
             // If the terminal and production don't both have precedences, we use Yacc's default
@@ -151,6 +161,7 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(usize, Symbol), Act
 
 #[cfg(test)]
 mod test {
+    use StIdx;
     use super::{Action, StateTable};
     use stategraph::StateGraph;
     use grammar::{Grammar, PIdx, Symbol, TIdx};
@@ -169,22 +180,22 @@ mod test {
         let sg = StateGraph::new(&grm);
         assert_eq!(sg.states.len(), 9);
 
-        let s0 = 0;
-        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s2 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
-        let s3 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Factor"))];
-        let s4 = sg.edges[s0][&Symbol::Terminal(grm.terminal_off("id"))];
-        let s5 = sg.edges[s2][&Symbol::Terminal(grm.terminal_off("-"))];
-        let s6 = sg.edges[s3][&Symbol::Terminal(grm.terminal_off("*"))];
-        let s7 = sg.edges[s5][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s8 = sg.edges[s6][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
+        let s0 = StIdx(0);
+        let s1 = sg.edges[usize::from(s0)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s2 = sg.edges[usize::from(s0)][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
+        let s3 = sg.edges[usize::from(s0)][&Symbol::Nonterminal(grm.nonterminal_off("Factor"))];
+        let s4 = sg.edges[usize::from(s0)][&Symbol::Terminal(grm.terminal_off("id"))];
+        let s5 = sg.edges[usize::from(s2)][&Symbol::Terminal(grm.terminal_off("-"))];
+        let s6 = sg.edges[usize::from(s3)][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s7 = sg.edges[usize::from(s5)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s8 = sg.edges[usize::from(s6)][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
 
         let st = StateTable::new(&grm, &sg);
 
         // Actions
         assert_eq!(st.actions.len(), 15);
-        let assert_reduce = |state_i: usize, term_i: TIdx, rule: &str, prod_off: usize| {
-            let prod_i = grm.rules_prods[usize::from(grm.nonterminal_off(rule))][prod_off];
+        let assert_reduce = |state_i: StIdx, term_i: TIdx, rule: &str, prod_off: usize| {
+            let prod_i = grm.nonterm_to_prods(grm.nonterminal_off(rule)).unwrap()[prod_off];
             assert_eq!(st.actions[&(state_i, Symbol::Terminal(term_i))], Action::Reduce(PIdx::from(prod_i)));
         };
 
@@ -230,8 +241,8 @@ mod test {
         assert_eq!(st.actions.len(), 8);
 
         // We only extract the states necessary to test those rules affected by the reduce/reduce.
-        let s0 = 0;
-        let s4 = sg.edges[s0][&Symbol::Terminal(grm.terminal_off("a"))];
+        let s0 = StIdx(0);
+        let s4 = sg.edges[usize::from(s0)][&Symbol::Terminal(grm.terminal_off("a"))];
 
         assert_eq!(st.actions[&(s4, Symbol::Terminal(grm.terminal_off("x")))], Action::Reduce(PIdx::from(3)));
     }
@@ -249,12 +260,12 @@ mod test {
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 15);
 
-        let s0 = 0;
-        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
-        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("*"))];
-        let s5 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s6 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s0 = StIdx(0);
+        let s1 = sg.edges[usize::from(s0)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s3 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("+"))];
+        let s4 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s5 = sg.edges[usize::from(s4)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s6 = sg.edges[usize::from(s3)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
 
         assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
         assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
@@ -278,12 +289,12 @@ mod test {
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 15);
 
-        let s0 = 0;
-        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
-        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("*"))];
-        let s5 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s6 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s0 = StIdx(0);
+        let s1 = sg.edges[usize::from(s0)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s3 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("+"))];
+        let s4 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s5 = sg.edges[usize::from(s4)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s6 = sg.edges[usize::from(s3)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
 
         assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(2)));
         assert_eq!(st.actions[&(s5, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(PIdx::from(2)));
@@ -311,14 +322,14 @@ mod test {
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 24);
 
-        let s0 = 0;
-        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
-        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("*"))];
-        let s5 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("="))];
-        let s6 = sg.edges[s5][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s7 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s8 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s0 = StIdx(0);
+        let s1 = sg.edges[usize::from(s0)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s3 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("+"))];
+        let s4 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s5 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("="))];
+        let s6 = sg.edges[usize::from(s5)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s7 = sg.edges[usize::from(s4)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s8 = sg.edges[usize::from(s3)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
 
         assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("+")))], Action::Shift(s3));
         assert_eq!(st.actions[&(s6, Symbol::Terminal(grm.terminal_off("*")))], Action::Shift(s4));
@@ -355,16 +366,16 @@ mod test {
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 34);
 
-        let s0 = 0;
-        let s1 = sg.edges[s0][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s3 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("+"))];
-        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("*"))];
-        let s5 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("="))];
-        let s6 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("~"))];
-        let s7 = sg.edges[s6][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s8 = sg.edges[s5][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s9 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
-        let s10 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s0 = StIdx(0);
+        let s1 = sg.edges[usize::from(s0)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s3 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("+"))];
+        let s4 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("*"))];
+        let s5 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("="))];
+        let s6 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("~"))];
+        let s7 = sg.edges[usize::from(s6)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s8 = sg.edges[usize::from(s5)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s9 = sg.edges[usize::from(s4)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
+        let s10 = sg.edges[usize::from(s3)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
 
         assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("+")))], Action::Reduce(PIdx::from(4)));
         assert_eq!(st.actions[&(s7, Symbol::Terminal(grm.terminal_off("*")))], Action::Reduce(PIdx::from(4)));

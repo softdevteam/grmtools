@@ -11,12 +11,18 @@ mod yacc_parser;
 mod stategraph;
 pub mod statetable;
 
-pub use grammar::{Grammar, PIdx, RIdx, Symbol, TIdx};
+pub use grammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
 pub use ast::{GrammarAST, GrammarValidationError};
 use stategraph::StateGraph;
 pub use statetable::{Action, StateTable};
 pub use yacc_parser::{YaccParserError, YaccParserErrorKind};
 use yacc_parser::parse_yacc;
+
+custom_derive! {
+    /// A type specifically for state indexes.
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq)]
+    pub struct StIdx(usize);
+}
 
 #[derive(Debug)]
 pub enum YaccToStateTableError {

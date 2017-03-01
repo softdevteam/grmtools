@@ -8,7 +8,8 @@ use self::bit_vec::{BitBlock, BitVec};
 extern crate fnv;
 use self::fnv::FnvHasher;
 
-use grammar::{PIdx, Grammar, RIdx, Symbol, SIdx, TIdx};
+use StIdx;
+use grammar::{PIdx, Grammar, NTIdx, Symbol, SIdx, TIdx};
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -83,16 +84,16 @@ impl Firsts {
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for (rul_i, prods) in grm.rules_prods.iter().enumerate() {
+            for rul_i in grm.iter_nonterm_idxs() {
                 // For each rule E
-                for prod_i in prods.iter() {
+                for prod_i in grm.nonterm_to_prods(rul_i).unwrap().iter() {
                     // ...and each production A
-                    let prod = grm.get_prod(*prod_i).unwrap();
+                    let prod = grm.prod(*prod_i).unwrap();
                     if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
-                        if !firsts.is_epsilon_set(RIdx::from(rul_i)) {
-                            firsts.prod_epsilons.set(rul_i, true);
+                        if !firsts.is_epsilon_set(NTIdx::from(rul_i)) {
+                            firsts.prod_epsilons.set(usize::from(rul_i), true);
                             changed = true;
                         }
                         continue;
@@ -101,7 +102,7 @@ impl Firsts {
                         match *sym {
                             Symbol::Terminal(term_i) => {
                                 // if symbol is a Terminal, add to FIRSTS
-                                if !firsts.set(RIdx::from(rul_i), term_i) {
+                                if !firsts.set(rul_i, term_i) {
                                     changed = true;
                                 }
                                 break;
@@ -111,9 +112,9 @@ impl Firsts {
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
-                                for bit_i in 0..grm.terms_len {
-                                    if firsts.is_set(nonterm_i, TIdx::from(bit_i))
-                                      && !firsts.set(RIdx::from(rul_i), TIdx::from(bit_i)) {
+                                for term_idx in grm.iter_term_idxs() {
+                                    if firsts.is_set(nonterm_i, term_idx)
+                                      && !firsts.set(rul_i, term_idx) {
                                         changed = true;
                                     }
                                 }
@@ -123,8 +124,8 @@ impl Firsts {
                                 // to FIRSTs.
                                 if firsts.is_epsilon_set(nonterm_i) && sym_i == prod.len() - 1 {
                                     // Only add epsilon if the symbol is the last in the production
-                                    if !firsts.prod_epsilons[rul_i] {
-                                        firsts.prod_epsilons.set(rul_i, true);
+                                    if !firsts.prod_epsilons[usize::from(rul_i)] {
+                                        firsts.prod_epsilons.set(usize::from(rul_i), true);
                                         changed = true;
                                     }
                                 }
@@ -145,23 +146,23 @@ impl Firsts {
     }
 
     /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
-    fn is_set(&self, nidx: RIdx, tidx: TIdx) -> bool {
+    fn is_set(&self, nidx: NTIdx, tidx: TIdx) -> bool {
         self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
     /// Get all the firsts for production `nidx` as a `Ctx`.
-    fn prod_firsts(&self, nidx: RIdx) -> &Ctx {
+    fn prod_firsts(&self, nidx: NTIdx) -> &Ctx {
         &self.prod_firsts[usize::from(usize::from(nidx))]
     }
 
     /// Returns true if the nonterminal `nidx` has epsilon in its first set.
-    fn is_epsilon_set(&self, nidx: RIdx) -> bool {
+    fn is_epsilon_set(&self, nidx: NTIdx) -> bool {
         self.prod_epsilons[usize::from(usize::from(nidx))]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
-    fn set(&mut self, nidx: RIdx, tidx: TIdx) -> bool {
+    fn set(&mut self, nidx: NTIdx, tidx: TIdx) -> bool {
         let mut prod = &mut self.prod_firsts[usize::from(nidx)];
         if prod[usize::from(tidx)] {
             true
@@ -224,7 +225,7 @@ impl Itemset {
 
         let mut keys_iter = self.items.keys(); // The initial todo list
         type BitVecBitSize = u32; // As of 0.4.3, BitVec only supports u32 blocks
-        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods_len(), false); // Subsequent todos
+        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods_len, false); // Subsequent todos
         let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
         loop {
             let prod_i;
@@ -250,7 +251,7 @@ impl Itemset {
                     zero_todos.set(prod_i.into(), false);
                 }
             }
-            let prod = grm.get_prod(prod_i).unwrap();
+            let prod = grm.prod(prod_i).unwrap();
             if dot == SIdx::from(prod.len()) { continue; }
             if let Symbol::Nonterminal(nonterm_i) = prod[usize::from(dot)] {
                 // This if statement is, in essence, a fast version of what's called getContext in
@@ -281,7 +282,7 @@ impl Itemset {
                     new_ctx.union(&new_is.items[&(prod_i, dot)]);
                 }
 
-                for ref_prod_i in &grm.rules_prods[usize::from(nonterm_i)] {
+                for ref_prod_i in grm.nonterm_to_prods(nonterm_i).unwrap().iter() {
                     if new_is.add(*ref_prod_i, SIdx::from(0), &new_ctx) {
                         zero_todos.set(usize::from(*ref_prod_i), true);
                     }
@@ -297,7 +298,7 @@ impl Itemset {
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(grm);
         for (&(prod_i, dot), ctx) in &self.items {
-            let prod = grm.get_prod(prod_i).unwrap();
+            let prod = grm.prod(prod_i).unwrap();
             if dot == SIdx::from(prod.len()) { continue; }
             if sym == &prod[usize::from(dot)] {
                 newis.add(prod_i, SIdx::from(usize::from(dot) + 1), ctx);
@@ -394,7 +395,7 @@ pub struct StateGraph {
     /// A vector of states
     pub states: Vec<Itemset>,
     /// For each state in `states`, edges is a hashmap from symbols to state offsets.
-    pub edges: Vec<HashMap<Symbol, usize>>
+    pub edges: Vec<HashMap<Symbol, StIdx>>
 }
 
 impl StateGraph {
@@ -409,7 +410,7 @@ impl StateGraph {
         // closed_states also implicitly serves as a todo list.
         let mut closed_states                      = Vec::new();
         let mut core_states                        = Vec::new();
-        let mut edges: Vec<HashMap<Symbol, usize>> = Vec::new();
+        let mut edges: Vec<HashMap<Symbol, StIdx>> = Vec::new();
 
         let mut state0 = Itemset::new(grm);
         let mut ctx = BitVec::from_elem(grm.terms_len, false);
@@ -427,8 +428,8 @@ impl StateGraph {
         let mut new_states = Vec::new();
         // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
         // matches for a given symbol.
-        let mut cnd_nonterm_weaklies: Vec<Vec<usize>> = Vec::with_capacity(grm.nonterms_len);
-        let mut cnd_term_weaklies: Vec<Vec<usize>> = Vec::with_capacity(grm.terms_len);
+        let mut cnd_nonterm_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.nonterms_len);
+        let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.terms_len);
         for _ in 0..grm.terms_len { cnd_term_weaklies.push(Vec::new()); }
         for _ in 0..grm.nonterms_len { cnd_nonterm_weaklies.push(Vec::new()); }
 
@@ -454,7 +455,7 @@ impl StateGraph {
                 seen_nonterms.clear();
                 seen_terms.clear();
                 for &(prod_i, dot) in cl_state.items.keys() {
-                    let prod = grm.get_prod(prod_i).unwrap();
+                    let prod = grm.prod(prod_i).unwrap();
                     if dot == SIdx::from(prod.len()) { continue; }
                     let sym = prod[usize::from(dot)];
                     match sym {
@@ -484,9 +485,9 @@ impl StateGraph {
                         Symbol::Nonterminal(nonterm_i) => &cnd_nonterm_weaklies[usize::from(nonterm_i)],
                         Symbol::Terminal(term_i) => &cnd_term_weaklies[usize::from(term_i)]
                     };
-                    for cnd in cnd_weaklies.iter() {
-                        if core_states[*cnd].weakly_compatible(&nstate) {
-                            m = Some(*cnd);
+                    for cnd in cnd_weaklies.iter().map(|x| *x) {
+                        if core_states[usize::from(cnd)].weakly_compatible(&nstate) {
+                            m = Some(cnd);
                             break;
                         }
                     }
@@ -495,7 +496,7 @@ impl StateGraph {
                     Some(k) => {
                         // A weakly compatible match has been found.
                         edges[state_i].insert(sym, k);
-                        if core_states[k].weakly_merge(&nstate) {
+                        if core_states[usize::from(k)].weakly_merge(&nstate) {
                             // We only do the simplest change propagation, forcing possibly
                             // affected sets to be entirely reprocessed (which will recursively
                             // force propagation too). Even though this does unnecessary
@@ -504,8 +505,8 @@ impl StateGraph {
                             // Note also that edges[k] will be completely regenerated, overwriting
                             // all existing entries and possibly adding new ones. We thus don't
                             // need to clear it manually.
-                            if closed_states[k].is_some() {
-                                closed_states[k] = None;
+                            if closed_states[usize::from(k)].is_some() {
+                                closed_states[usize::from(k)] = None;
                                 todo += 1;
                             }
                         }
@@ -513,11 +514,11 @@ impl StateGraph {
                     None    => {
                         match sym {
                             Symbol::Nonterminal(nonterm_i) =>
-                                cnd_nonterm_weaklies[usize::from(nonterm_i)].push(core_states.len()),
+                                cnd_nonterm_weaklies[usize::from(nonterm_i)].push(StIdx(core_states.len())),
                             Symbol::Terminal(term_i) =>
-                                cnd_term_weaklies[usize::from(term_i)].push(core_states.len()),
+                                cnd_term_weaklies[usize::from(term_i)].push(StIdx(core_states.len())),
                         }
-                        edges[state_i].insert(sym, core_states.len());
+                        edges[state_i].insert(sym, StIdx(core_states.len()));
                         edges.push(HashMap::new());
                         closed_states.push(None);
                         core_states.push(nstate);
@@ -545,12 +546,12 @@ impl StateGraph {
 
     /// Garbage collect `states` and `edges`. Returns a new pair with unused states and their
     /// corresponding edges removed.
-    fn gc(mut states: Vec<Itemset>, mut edges: Vec<HashMap<Symbol, usize>>)
-          -> (Vec<Itemset>, Vec<HashMap<Symbol, usize>>) {
+    fn gc(mut states: Vec<Itemset>, mut edges: Vec<HashMap<Symbol, StIdx>>)
+          -> (Vec<Itemset>, Vec<HashMap<Symbol, StIdx>>) {
         // First of all, do a simple pass over all states. All state indexes reachable from the
         // start state will be inserted into the 'seen' set.
         let mut todo = HashSet::new();
-        todo.insert(0);
+        todo.insert(StIdx(0));
         let mut seen = HashSet::new();
         while !todo.is_empty() {
             // XXX This is the clumsy way we're forced to do what we'd prefer to be:
@@ -559,7 +560,7 @@ impl StateGraph {
             todo.remove(&state_i);
             seen.insert(state_i);
 
-            todo.extend(edges[state_i].values().filter(|x| !seen.contains(x)));
+            todo.extend(edges[usize::from(state_i)].values().filter(|x| !seen.contains(x)));
         }
 
         if states.len() == seen.len() {
@@ -583,8 +584,8 @@ impl StateGraph {
         let mut gc_states = Vec::with_capacity(seen.len());
         let mut offsets   = Vec::with_capacity(states.len());
         let mut offset    = 0;
-        for (state_i, state) in states.drain(..).enumerate() {
-            offsets.push(state_i - offset);
+        for (state_i, state) in states.drain(..).enumerate().map(|(x, y)| (StIdx(x), y)) {
+            offsets.push(StIdx(usize::from(state_i) - offset));
             if !seen.contains(&state_i) {
                 offset += 1;
                 continue;
@@ -595,11 +596,11 @@ impl StateGraph {
         // At this point the offsets list will be [0, 1, 1]. We now create new edges where each
         // offset is corrected by looking it up in the offsets list.
         let mut gc_edges = Vec::with_capacity(seen.len());
-        for (st_edge_i, st_edges) in edges.drain(..).enumerate() {
+        for (st_edge_i, st_edges) in edges.drain(..).enumerate().map(|(x, y)| (StIdx(x), y)) {
             if !seen.contains(&st_edge_i) {
                 continue;
             }
-            gc_edges.push(st_edges.iter().map(|(&k, &v)| (k, offsets[v])).collect());
+            gc_edges.push(st_edges.iter().map(|(&k, &v)| (k, offsets[usize::from(v)])).collect());
         }
 
         (gc_states, gc_edges)
@@ -642,8 +643,9 @@ mod test {
 
     fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
         let nt_i = grm.nonterminal_off(rn);
-        for (i, n) in grm.terminal_names.iter().enumerate() {
-            match should_be.iter().position(|x| x == n) {
+        for i in 0 .. grm.terms_len {
+            let n = grm.term_name(TIdx::from(i)).unwrap();
+            match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
                     if !firsts.is_set(nt_i, TIdx::from(i)) {
                         panic!("{} is not set in {}", n, rn);
@@ -797,7 +799,7 @@ mod test {
 
     fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, prod_off: usize, dot: usize, la:
                         Vec<&str>) {
-        let ab_prod_off = grm.rules_prods[usize::from(grm.nonterminal_off(nt))][prod_off];
+        let ab_prod_off = grm.nonterm_to_prods(grm.nonterminal_off(nt)).unwrap()[prod_off];
         let ctx = &is.items[&(ab_prod_off, SIdx::from(dot))];
         for i in 0..grm.terms_len {
             let bit = ctx[i];
@@ -814,7 +816,7 @@ mod test {
             }
             if !found && bit {
                 panic!("bit for terminal {}, dot {} is set in production {} of {} when it shouldn't be",
-                       grm.terminal_names[i], dot, prod_off, nt);
+                       grm.term_name(TIdx::from(i)).unwrap(), dot, prod_off, nt);
             }
         }
     }
@@ -822,7 +824,6 @@ mod test {
     fn num_active_states(is: &Itemset) -> usize {
         is.items.len()
     }
-
 
     #[test]
     fn test_dragon_grammar() {
@@ -839,7 +840,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0], SIdx::from(0), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], SIdx::from(0), &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(num_active_states(&cls_is), 6);
@@ -859,7 +860,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0], SIdx::from(0), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], SIdx::from(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -868,7 +869,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("F"))][0], SIdx::from(0), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterminal_off("F")).unwrap()[0], SIdx::from(0), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
         state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
@@ -901,7 +902,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0], SIdx::from(0), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], SIdx::from(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -912,7 +913,7 @@ mod test {
         la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("b")), true);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("S"))][1], SIdx::from(1), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterminal_off("S")).unwrap()[1], SIdx::from(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
         state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
@@ -921,7 +922,7 @@ mod test {
         is = Itemset::new(&grm);
         la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("a")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("A"))][0], SIdx::from(1), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterminal_off("A")).unwrap()[0], SIdx::from(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
@@ -935,7 +936,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len, false);
         la.set(usize::from(grm.terminal_off("$")), true);
-        is.add(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0], SIdx::from(0), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], SIdx::from(0), &la);
         let cls_is = is.close(&grm, &firsts);
 
         let goto1 = cls_is.goto(&grm, &Symbol::Nonterminal(grm.nonterminal_off("S")));
@@ -966,53 +967,53 @@ mod test {
         state_exists(&grm, &sg.states[0], "S", 1, 0, vec!["$", "b"]);
 
         let s1 = sg.edges[0][&Symbol::Nonterminal(grm.nonterminal_off("S"))];
-        assert_eq!(num_active_states(&sg.states[s1]), 2);
-        state_exists(&grm, &sg.states[s1], "^", 0, 1, vec!["$"]);
-        state_exists(&grm, &sg.states[s1], "S", 0, 1, vec!["$", "b"]);
+        assert_eq!(num_active_states(&sg.states[usize::from(s1)]), 2);
+        state_exists(&grm, &sg.states[usize::from(s1)], "^", 0, 1, vec!["$"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "S", 0, 1, vec!["$", "b"]);
 
-        let s2 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("b"))];
-        assert_eq!(num_active_states(&sg.states[s2]), 1);
-        state_exists(&grm, &sg.states[s2], "S", 0, 2, vec!["$", "b"]);
+        let s2 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("b"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s2)]), 1);
+        state_exists(&grm, &sg.states[usize::from(s2)], "S", 0, 2, vec!["$", "b"]);
 
         let s3 = sg.edges[0][&Symbol::Terminal(grm.terminal_off("b"))];
-        assert_eq!(num_active_states(&sg.states[s3]), 4);
-        state_exists(&grm, &sg.states[s3], "S", 1, 1, vec!["$", "b", "c"]);
-        state_exists(&grm, &sg.states[s3], "A", 0, 0, vec!["a"]);
-        state_exists(&grm, &sg.states[s3], "A", 1, 0, vec!["a"]);
-        state_exists(&grm, &sg.states[s3], "A", 2, 0, vec!["a"]);
+        assert_eq!(num_active_states(&sg.states[usize::from(s3)]), 4);
+        state_exists(&grm, &sg.states[usize::from(s3)], "S", 1, 1, vec!["$", "b", "c"]);
+        state_exists(&grm, &sg.states[usize::from(s3)], "A", 0, 0, vec!["a"]);
+        state_exists(&grm, &sg.states[usize::from(s3)], "A", 1, 0, vec!["a"]);
+        state_exists(&grm, &sg.states[usize::from(s3)], "A", 2, 0, vec!["a"]);
 
-        let s4 = sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("A"))];
-        assert_eq!(num_active_states(&sg.states[s4]), 1);
-        state_exists(&grm, &sg.states[s4], "S", 1, 2, vec!["$", "b", "c"]);
+        let s4 = sg.edges[usize::from(s3)][&Symbol::Nonterminal(grm.nonterminal_off("A"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s4)]), 1);
+        state_exists(&grm, &sg.states[usize::from(s4)], "S", 1, 2, vec!["$", "b", "c"]);
 
-        let s5 = sg.edges[s4][&Symbol::Terminal(grm.terminal_off("a"))];
-        assert_eq!(num_active_states(&sg.states[s5]), 1);
-        state_exists(&grm, &sg.states[s5], "S", 1, 3, vec!["$", "b", "c"]);
+        let s5 = sg.edges[usize::from(s4)][&Symbol::Terminal(grm.terminal_off("a"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s5)]), 1);
+        state_exists(&grm, &sg.states[usize::from(s5)], "S", 1, 3, vec!["$", "b", "c"]);
 
-        let s6 = sg.edges[s3][&Symbol::Terminal(grm.terminal_off("a"))];
+        let s6 = sg.edges[usize::from(s3)][&Symbol::Terminal(grm.terminal_off("a"))];
         // result from merging 10 into 3
-        assert_eq!(s3, sg.edges[s6][&Symbol::Terminal(grm.terminal_off("b"))]);
-        assert_eq!(num_active_states(&sg.states[s6]), 5);
-        state_exists(&grm, &sg.states[s6], "A", 0, 1, vec!["a"]);
-        state_exists(&grm, &sg.states[s6], "A", 1, 1, vec!["a"]);
-        state_exists(&grm, &sg.states[s6], "A", 2, 1, vec!["a"]);
-        state_exists(&grm, &sg.states[s6], "S", 0, 0, vec!["b", "c"]);
-        state_exists(&grm, &sg.states[s6], "S", 1, 0, vec!["b", "c"]);
+        assert_eq!(s3, sg.edges[usize::from(s6)][&Symbol::Terminal(grm.terminal_off("b"))]);
+        assert_eq!(num_active_states(&sg.states[usize::from(s6)]), 5);
+        state_exists(&grm, &sg.states[usize::from(s6)], "A", 0, 1, vec!["a"]);
+        state_exists(&grm, &sg.states[usize::from(s6)], "A", 1, 1, vec!["a"]);
+        state_exists(&grm, &sg.states[usize::from(s6)], "A", 2, 1, vec!["a"]);
+        state_exists(&grm, &sg.states[usize::from(s6)], "S", 0, 0, vec!["b", "c"]);
+        state_exists(&grm, &sg.states[usize::from(s6)], "S", 1, 0, vec!["b", "c"]);
 
-        let s7 = sg.edges[s6][&Symbol::Nonterminal(grm.nonterminal_off("S"))];
-        assert_eq!(num_active_states(&sg.states[s7]), 3);
-        state_exists(&grm, &sg.states[s7], "A", 0, 2, vec!["a"]);
-        state_exists(&grm, &sg.states[s7], "A", 2, 2, vec!["a"]);
-        state_exists(&grm, &sg.states[s7], "S", 0, 1, vec!["b", "c"]);
+        let s7 = sg.edges[usize::from(s6)][&Symbol::Nonterminal(grm.nonterminal_off("S"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s7)]), 3);
+        state_exists(&grm, &sg.states[usize::from(s7)], "A", 0, 2, vec!["a"]);
+        state_exists(&grm, &sg.states[usize::from(s7)], "A", 2, 2, vec!["a"]);
+        state_exists(&grm, &sg.states[usize::from(s7)], "S", 0, 1, vec!["b", "c"]);
 
-        let s8 = sg.edges[s7][&Symbol::Terminal(grm.terminal_off("c"))];
-        assert_eq!(num_active_states(&sg.states[s8]), 1);
-        state_exists(&grm, &sg.states[s8], "A", 0, 3, vec!["a"]);
+        let s8 = sg.edges[usize::from(s7)][&Symbol::Terminal(grm.terminal_off("c"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s8)]), 1);
+        state_exists(&grm, &sg.states[usize::from(s8)], "A", 0, 3, vec!["a"]);
 
-        let s9 = sg.edges[s7][&Symbol::Terminal(grm.terminal_off("b"))];
-        assert_eq!(num_active_states(&sg.states[s9]), 2);
-        state_exists(&grm, &sg.states[s9], "A", 2, 3, vec!["a"]);
-        state_exists(&grm, &sg.states[s9], "S", 0, 2, vec!["b", "c"]);
+        let s9 = sg.edges[usize::from(s7)][&Symbol::Terminal(grm.terminal_off("b"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s9)]), 2);
+        state_exists(&grm, &sg.states[usize::from(s9)], "A", 2, 3, vec!["a"]);
+        state_exists(&grm, &sg.states[usize::from(s9)], "S", 0, 2, vec!["b", "c"]);
     }
 
     // Pager grammar
@@ -1046,120 +1047,120 @@ mod test {
         state_exists(&grm, &sg.states[0], "X", 5, 0, vec!["$"]);
 
         let s1 = sg.edges[0][&Symbol::Terminal(grm.terminal_off("a"))];
-        assert_eq!(num_active_states(&sg.states[s1]), 7);
-        state_exists(&grm, &sg.states[s1], "X", 0, 1, vec!["a", "d", "e", "$"]);
-        state_exists(&grm, &sg.states[s1], "X", 1, 1, vec!["a", "d", "e", "$"]);
-        state_exists(&grm, &sg.states[s1], "X", 2, 1, vec!["a", "d", "e", "$"]);
-        state_exists(&grm, &sg.states[s1], "Y", 0, 0, vec!["d"]);
-        state_exists(&grm, &sg.states[s1], "Y", 1, 0, vec!["d"]);
-        state_exists(&grm, &sg.states[s1], "Z", 0, 0, vec!["c"]);
-        state_exists(&grm, &sg.states[s1], "T", 0, 0, vec!["a", "d", "e", "$"]);
+        assert_eq!(num_active_states(&sg.states[usize::from(s1)]), 7);
+        state_exists(&grm, &sg.states[usize::from(s1)], "X", 0, 1, vec!["a", "d", "e", "$"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "X", 1, 1, vec!["a", "d", "e", "$"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "X", 2, 1, vec!["a", "d", "e", "$"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "Y", 0, 0, vec!["d"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "Y", 1, 0, vec!["d"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "Z", 0, 0, vec!["c"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "T", 0, 0, vec!["a", "d", "e", "$"]);
 
         let s7 = sg.edges[0][&Symbol::Terminal(grm.terminal_off("b"))];
-        assert_eq!(num_active_states(&sg.states[s7]), 7);
-        state_exists(&grm, &sg.states[s7], "X", 3, 1, vec!["a", "d", "e", "$"]);
-        state_exists(&grm, &sg.states[s7], "X", 4, 1, vec!["a", "d", "e", "$"]);
-        state_exists(&grm, &sg.states[s7], "X", 5, 1, vec!["a", "d", "e", "$"]);
-        state_exists(&grm, &sg.states[s1], "Y", 0, 0, vec!["d"]);
-        state_exists(&grm, &sg.states[s1], "Y", 1, 0, vec!["d"]);
-        state_exists(&grm, &sg.states[s1], "Z", 0, 0, vec!["c"]);
-        state_exists(&grm, &sg.states[s1], "T", 0, 0, vec!["a", "d", "e", "$"]);
+        assert_eq!(num_active_states(&sg.states[usize::from(s7)]), 7);
+        state_exists(&grm, &sg.states[usize::from(s7)], "X", 3, 1, vec!["a", "d", "e", "$"]);
+        state_exists(&grm, &sg.states[usize::from(s7)], "X", 4, 1, vec!["a", "d", "e", "$"]);
+        state_exists(&grm, &sg.states[usize::from(s7)], "X", 5, 1, vec!["a", "d", "e", "$"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "Y", 0, 0, vec!["d"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "Y", 1, 0, vec!["d"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "Z", 0, 0, vec!["c"]);
+        state_exists(&grm, &sg.states[usize::from(s1)], "T", 0, 0, vec!["a", "d", "e", "$"]);
 
-        let s4 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("u"))];
-        assert_eq!(num_active_states(&sg.states[s4]), 8);
-        assert_eq!(s4, sg.edges[s7][&Symbol::Terminal(grm.terminal_off("u"))]);
-        state_exists(&grm, &sg.states[s4], "Y", 1, 1, vec!["d", "e"]);
-        state_exists(&grm, &sg.states[s4], "T", 0, 1, vec!["a", "d", "e", "$"]);
-        state_exists(&grm, &sg.states[s4], "X", 0, 0, vec!["a", "d", "e"]);
-        state_exists(&grm, &sg.states[s4], "X", 1, 0, vec!["a", "d", "e"]);
-        state_exists(&grm, &sg.states[s4], "X", 2, 0, vec!["a", "d", "e"]);
-        state_exists(&grm, &sg.states[s4], "X", 3, 0, vec!["a", "d", "e"]);
-        state_exists(&grm, &sg.states[s4], "X", 4, 0, vec!["a", "d", "e"]);
-        state_exists(&grm, &sg.states[s4], "X", 5, 0, vec!["a", "d", "e"]);
+        let s4 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("u"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s4)]), 8);
+        assert_eq!(s4, sg.edges[usize::from(s7)][&Symbol::Terminal(grm.terminal_off("u"))]);
+        state_exists(&grm, &sg.states[usize::from(s4)], "Y", 1, 1, vec!["d", "e"]);
+        state_exists(&grm, &sg.states[usize::from(s4)], "T", 0, 1, vec!["a", "d", "e", "$"]);
+        state_exists(&grm, &sg.states[usize::from(s4)], "X", 0, 0, vec!["a", "d", "e"]);
+        state_exists(&grm, &sg.states[usize::from(s4)], "X", 1, 0, vec!["a", "d", "e"]);
+        state_exists(&grm, &sg.states[usize::from(s4)], "X", 2, 0, vec!["a", "d", "e"]);
+        state_exists(&grm, &sg.states[usize::from(s4)], "X", 3, 0, vec!["a", "d", "e"]);
+        state_exists(&grm, &sg.states[usize::from(s4)], "X", 4, 0, vec!["a", "d", "e"]);
+        state_exists(&grm, &sg.states[usize::from(s4)], "X", 5, 0, vec!["a", "d", "e"]);
 
-        assert_eq!(s1, sg.edges[s4][&Symbol::Terminal(grm.terminal_off("a"))]);
-        assert_eq!(s7, sg.edges[s4][&Symbol::Terminal(grm.terminal_off("b"))]);
+        assert_eq!(s1, sg.edges[usize::from(s4)][&Symbol::Terminal(grm.terminal_off("a"))]);
+        assert_eq!(s7, sg.edges[usize::from(s4)][&Symbol::Terminal(grm.terminal_off("b"))]);
 
-        let s2 = sg.edges[s1][&Symbol::Terminal(grm.terminal_off("t"))];
-        assert_eq!(num_active_states(&sg.states[s2]), 3);
-        state_exists(&grm, &sg.states[s2], "Y", 0, 1, vec!["d"]);
-        state_exists(&grm, &sg.states[s2], "Z", 0, 1, vec!["c"]);
-        state_exists(&grm, &sg.states[s2], "W", 0, 0, vec!["d"]);
+        let s2 = sg.edges[usize::from(s1)][&Symbol::Terminal(grm.terminal_off("t"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s2)]), 3);
+        state_exists(&grm, &sg.states[usize::from(s2)], "Y", 0, 1, vec!["d"]);
+        state_exists(&grm, &sg.states[usize::from(s2)], "Z", 0, 1, vec!["c"]);
+        state_exists(&grm, &sg.states[usize::from(s2)], "W", 0, 0, vec!["d"]);
 
-        let s3 = sg.edges[s2][&Symbol::Terminal(grm.terminal_off("u"))];
-        assert_eq!(num_active_states(&sg.states[s3]), 3);
-        state_exists(&grm, &sg.states[s3], "Z", 0, 2, vec!["c"]);
-        state_exists(&grm, &sg.states[s3], "W", 0, 1, vec!["d"]);
-        state_exists(&grm, &sg.states[s3], "V", 0, 0, vec!["d"]);
+        let s3 = sg.edges[usize::from(s2)][&Symbol::Terminal(grm.terminal_off("u"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s3)]), 3);
+        state_exists(&grm, &sg.states[usize::from(s3)], "Z", 0, 2, vec!["c"]);
+        state_exists(&grm, &sg.states[usize::from(s3)], "W", 0, 1, vec!["d"]);
+        state_exists(&grm, &sg.states[usize::from(s3)], "V", 0, 0, vec!["d"]);
 
-        let s5 = sg.edges[s4][&Symbol::Nonterminal(grm.nonterminal_off("X"))];
-        assert_eq!(num_active_states(&sg.states[s5]), 2);
-        state_exists(&grm, &sg.states[s5], "Y", 1, 2, vec!["d", "e"]);
-        state_exists(&grm, &sg.states[s5], "T", 0, 2, vec!["a", "d", "e", "$"]);
+        let s5 = sg.edges[usize::from(s4)][&Symbol::Nonterminal(grm.nonterminal_off("X"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s5)]), 2);
+        state_exists(&grm, &sg.states[usize::from(s5)], "Y", 1, 2, vec!["d", "e"]);
+        state_exists(&grm, &sg.states[usize::from(s5)], "T", 0, 2, vec!["a", "d", "e", "$"]);
 
-        let s6 = sg.edges[s5][&Symbol::Terminal(grm.terminal_off("a"))];
-        assert_eq!(num_active_states(&sg.states[s6]), 1);
-        state_exists(&grm, &sg.states[s6], "T", 0, 3, vec!["a", "d", "e", "$"]);
+        let s6 = sg.edges[usize::from(s5)][&Symbol::Terminal(grm.terminal_off("a"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s6)]), 1);
+        state_exists(&grm, &sg.states[usize::from(s6)], "T", 0, 3, vec!["a", "d", "e", "$"]);
 
-        let s8 = sg.edges[s7][&Symbol::Terminal(grm.terminal_off("t"))];
-        assert_eq!(num_active_states(&sg.states[s8]), 3);
-        state_exists(&grm, &sg.states[s8], "Y", 0, 1, vec!["e"]);
-        state_exists(&grm, &sg.states[s8], "Z", 0, 1, vec!["d"]);
-        state_exists(&grm, &sg.states[s8], "W", 0, 0, vec!["e"]);
+        let s8 = sg.edges[usize::from(s7)][&Symbol::Terminal(grm.terminal_off("t"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s8)]), 3);
+        state_exists(&grm, &sg.states[usize::from(s8)], "Y", 0, 1, vec!["e"]);
+        state_exists(&grm, &sg.states[usize::from(s8)], "Z", 0, 1, vec!["d"]);
+        state_exists(&grm, &sg.states[usize::from(s8)], "W", 0, 0, vec!["e"]);
 
-        let s9 = sg.edges[s8][&Symbol::Terminal(grm.terminal_off("u"))];
-        assert_eq!(num_active_states(&sg.states[s9]), 3);
-        state_exists(&grm, &sg.states[s9], "Z", 0, 2, vec!["d"]);
-        state_exists(&grm, &sg.states[s9], "W", 0, 1, vec!["e"]);
-        state_exists(&grm, &sg.states[s3], "V", 0, 0, vec!["d"]);
+        let s9 = sg.edges[usize::from(s8)][&Symbol::Terminal(grm.terminal_off("u"))];
+        assert_eq!(num_active_states(&sg.states[usize::from(s9)]), 3);
+        state_exists(&grm, &sg.states[usize::from(s9)], "Z", 0, 2, vec!["d"]);
+        state_exists(&grm, &sg.states[usize::from(s9)], "W", 0, 1, vec!["e"]);
+        state_exists(&grm, &sg.states[usize::from(s3)], "V", 0, 0, vec!["d"]);
 
         // Ommitted successors from the graph in Fig.3
 
         // X-successor of S0
         let s0x = sg.edges[0][&Symbol::Nonterminal(grm.nonterminal_off("X"))];
-        state_exists(&grm, &sg.states[s0x], "^", 0, 1, vec!["$"]);
+        state_exists(&grm, &sg.states[usize::from(s0x)], "^", 0, 1, vec!["$"]);
 
         // Y-successor of S1 (and it's d-successor)
-        let s1y = sg.edges[s1][&Symbol::Nonterminal(grm.nonterminal_off("Y"))];
-        state_exists(&grm, &sg.states[s1y], "X", 0, 2, vec!["a", "d", "e", "$"]);
-        let s1yd = sg.edges[s1y][&Symbol::Terminal(grm.terminal_off("d"))];
-        state_exists(&grm, &sg.states[s1yd], "X", 0, 3, vec!["a", "d", "e", "$"]);
+        let s1y = sg.edges[usize::from(s1)][&Symbol::Nonterminal(grm.nonterminal_off("Y"))];
+        state_exists(&grm, &sg.states[usize::from(s1y)], "X", 0, 2, vec!["a", "d", "e", "$"]);
+        let s1yd = sg.edges[usize::from(s1y)][&Symbol::Terminal(grm.terminal_off("d"))];
+        state_exists(&grm, &sg.states[usize::from(s1yd)], "X", 0, 3, vec!["a", "d", "e", "$"]);
 
         // Z-successor of S1 (and it's successor)
-        let s1z = sg.edges[s1][&Symbol::Nonterminal(grm.nonterminal_off("Z"))];
-        state_exists(&grm, &sg.states[s1z], "X", 1, 2, vec!["a", "d", "e", "$"]);
-        let s1zc = sg.edges[s1z][&Symbol::Terminal(grm.terminal_off("c"))];
-        state_exists(&grm, &sg.states[s1zc], "X", 1, 3, vec!["a", "d", "e", "$"]);
+        let s1z = sg.edges[usize::from(s1)][&Symbol::Nonterminal(grm.nonterminal_off("Z"))];
+        state_exists(&grm, &sg.states[usize::from(s1z)], "X", 1, 2, vec!["a", "d", "e", "$"]);
+        let s1zc = sg.edges[usize::from(s1z)][&Symbol::Terminal(grm.terminal_off("c"))];
+        state_exists(&grm, &sg.states[usize::from(s1zc)], "X", 1, 3, vec!["a", "d", "e", "$"]);
 
         // T-successor of S1
-        let s1t = sg.edges[s1][&Symbol::Nonterminal(grm.nonterminal_off("T"))];
-        state_exists(&grm, &sg.states[s1t], "X", 2, 2, vec!["a", "d", "e", "$"]);
+        let s1t = sg.edges[usize::from(s1)][&Symbol::Nonterminal(grm.nonterminal_off("T"))];
+        state_exists(&grm, &sg.states[usize::from(s1t)], "X", 2, 2, vec!["a", "d", "e", "$"]);
 
         // Y-successor of S7 (and it's d-successor)
-        let s7y = sg.edges[s7][&Symbol::Nonterminal(grm.nonterminal_off("Y"))];
-        state_exists(&grm, &sg.states[s7y], "X", 3, 2, vec!["a", "d", "e", "$"]);
-        let s7ye = sg.edges[s7y][&Symbol::Terminal(grm.terminal_off("e"))];
-        state_exists(&grm, &sg.states[s7ye], "X", 3, 3, vec!["a", "d", "e", "$"]);
+        let s7y = sg.edges[usize::from(s7)][&Symbol::Nonterminal(grm.nonterminal_off("Y"))];
+        state_exists(&grm, &sg.states[usize::from(s7y)], "X", 3, 2, vec!["a", "d", "e", "$"]);
+        let s7ye = sg.edges[usize::from(s7y)][&Symbol::Terminal(grm.terminal_off("e"))];
+        state_exists(&grm, &sg.states[usize::from(s7ye)], "X", 3, 3, vec!["a", "d", "e", "$"]);
 
         // Z-successor of S7 (and it's successor)
-        let s7z = sg.edges[s7][&Symbol::Nonterminal(grm.nonterminal_off("Z"))];
-        state_exists(&grm, &sg.states[s7z], "X", 4, 2, vec!["a", "d", "e", "$"]);
-        let s7zd = sg.edges[s7z][&Symbol::Terminal(grm.terminal_off("d"))];
-        state_exists(&grm, &sg.states[s7zd], "X", 4, 3, vec!["a", "d", "e", "$"]);
+        let s7z = sg.edges[usize::from(s7)][&Symbol::Nonterminal(grm.nonterminal_off("Z"))];
+        state_exists(&grm, &sg.states[usize::from(s7z)], "X", 4, 2, vec!["a", "d", "e", "$"]);
+        let s7zd = sg.edges[usize::from(s7z)][&Symbol::Terminal(grm.terminal_off("d"))];
+        state_exists(&grm, &sg.states[usize::from(s7zd)], "X", 4, 3, vec!["a", "d", "e", "$"]);
 
         // T-successor of S7
-        let s7t = sg.edges[s7][&Symbol::Nonterminal(grm.nonterminal_off("T"))];
-        state_exists(&grm, &sg.states[s7t], "X", 5, 2, vec!["a", "d", "e", "$"]);
+        let s7t = sg.edges[usize::from(s7)][&Symbol::Nonterminal(grm.nonterminal_off("T"))];
+        state_exists(&grm, &sg.states[usize::from(s7t)], "X", 5, 2, vec!["a", "d", "e", "$"]);
 
         // W-successor of S2 and S8 (merged)
-        let s8w = sg.edges[s8][&Symbol::Nonterminal(grm.nonterminal_off("W"))];
-        assert_eq!(s8w, sg.edges[s2][&Symbol::Nonterminal(grm.nonterminal_off("W"))]);
-        state_exists(&grm, &sg.states[s8w], "Y", 0, 2, vec!["d", "e"]);
+        let s8w = sg.edges[usize::from(s8)][&Symbol::Nonterminal(grm.nonterminal_off("W"))];
+        assert_eq!(s8w, sg.edges[usize::from(s2)][&Symbol::Nonterminal(grm.nonterminal_off("W"))]);
+        state_exists(&grm, &sg.states[usize::from(s8w)], "Y", 0, 2, vec!["d", "e"]);
 
         // V-successor of S3 and S9 (merged)
-        let s9v = sg.edges[s9][&Symbol::Nonterminal(grm.nonterminal_off("V"))];
-        assert_eq!(s9v, sg.edges[s3][&Symbol::Nonterminal(grm.nonterminal_off("V"))]);
-        state_exists(&grm, &sg.states[s9v], "W", 0, 2, vec!["d", "e"]);
+        let s9v = sg.edges[usize::from(s9)][&Symbol::Nonterminal(grm.nonterminal_off("V"))];
+        assert_eq!(s9v, sg.edges[usize::from(s3)][&Symbol::Nonterminal(grm.nonterminal_off("V"))]);
+        state_exists(&grm, &sg.states[usize::from(s9v)], "W", 0, 2, vec!["d", "e"]);
     }
 
     #[test]
