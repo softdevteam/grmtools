@@ -1,9 +1,9 @@
 use lrlex::Lexeme;
-use lrtable::{Action, Grammar, RIdx, StateTable, Symbol, TIdx};
+use lrtable::{Action, Grammar, NTIdx, StateTable, StIdx, Symbol, TIdx};
 
 pub enum Node {
     Terminal{lexeme: Lexeme},
-    Nonterminal{rule_idx: RIdx, nodes: Vec<Node>}
+    Nonterminal{nonterm_idx: NTIdx, nodes: Vec<Node>}
 }
 
 #[derive(Debug)]
@@ -21,10 +21,10 @@ impl Node {
             }
             match e {
                 &Node::Terminal{lexeme: Lexeme{tok_id, start, len}} => {
-                    s.push_str(&format!("{} {}\n", grm.terminal_names.get(tok_id).unwrap(), &input[start..start + len]));
+                    s.push_str(&format!("{} {}\n", grm.term_name(TIdx::from(tok_id)).unwrap(), &input[start..start + len]));
                 }
-                &Node::Nonterminal{rule_idx, ref nodes} => {
-                    s.push_str(&format!("{}\n", grm.get_rule_name(rule_idx).unwrap()));
+                &Node::Nonterminal{nonterm_idx, ref nodes} => {
+                    s.push_str(&format!("{}\n", grm.nonterm_name(nonterm_idx).unwrap()));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }
@@ -41,28 +41,28 @@ pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme>) -> Resul
     let mut lexemes_iter = lexemes.iter();
     // Instead of having a single stack, which we'd then have to invent a new struct / tuple for,
     // it's easiest to split the parse and parse tree stack into two.
-    let mut pstack = vec![0]; // Parse stack
+    let mut pstack = vec![StIdx::from(0)]; // Parse stack
     let mut tstack: Vec<Node> = Vec::new(); // Parse tree stack
     let mut la = lexemes_iter.next().unwrap();
     loop {
         let st = *pstack.last().unwrap();
-        match stable.actions.get(&(st, Symbol::Terminal(TIdx::from(la.tok_id)))) {
-            Some(&Action::Reduce(prod_id)) => {
-                let rule_idx = grm.prod_to_rule_idx(prod_id);
-                let pop_idx = pstack.len() - grm.get_prod(prod_id).unwrap().len();
+        match stable.action(st, Symbol::Terminal(TIdx::from(la.tok_id))) {
+            Some(Action::Reduce(prod_id)) => {
+                let nonterm_idx = grm.prod_to_nonterm(prod_id);
+                let pop_idx = pstack.len() - grm.prod(prod_id).unwrap().len();
                 let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node>>();
-                tstack.push(Node::Nonterminal{rule_idx: rule_idx, nodes: nodes});
+                tstack.push(Node::Nonterminal{nonterm_idx: nonterm_idx, nodes: nodes});
 
                 pstack.drain(pop_idx..);
                 let prior = *pstack.last().unwrap();
-                pstack.push(*stable.gotos.get(&(prior, RIdx::from(rule_idx))).unwrap());
+                pstack.push(stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
             },
-            Some(&Action::Shift(state_id)) => {
+            Some(Action::Shift(state_id)) => {
                 tstack.push(Node::Terminal{lexeme: *la});
                 la = lexemes_iter.next().unwrap();
                 pstack.push(state_id);
             },
-            Some(&Action::Accept) => {
+            Some(Action::Accept) => {
                 debug_assert_eq!(TIdx::from(la.tok_id), grm.end_term);
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
@@ -85,8 +85,8 @@ mod test {
         let (grm, stable) = yacc_to_statetable(grms).unwrap();
         let mut lexer = build_lex(lexs).unwrap();
         let mut rule_ids = HashMap::<&str, usize>::new();
-        for (i, n) in grm.terminal_names.iter().enumerate() {
-            rule_ids.insert(&*n, i);
+        for term_idx in grm.iter_term_idxs() {
+            rule_ids.insert(grm.term_name(term_idx).unwrap(), usize::from(term_idx));
         }
         lexer.set_rule_ids(&rule_ids);
         let mut lexemes = do_lex(&lexer, &input).unwrap();

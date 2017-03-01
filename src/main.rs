@@ -79,8 +79,8 @@ fn main() {
 
     // Sync up the IDs of terminals in the lexer and parser
     let mut rule_ids = HashMap::<&str, usize>::new();
-    for (i, n) in grm.terminal_names.iter().enumerate() {
-        rule_ids.insert(&*n, i);
+    for term_idx in grm.iter_term_idxs() {
+        rule_ids.insert(grm.term_name(term_idx).unwrap(), usize::from(term_idx));
     }
     lexer.set_rule_ids(&rule_ids);
 
