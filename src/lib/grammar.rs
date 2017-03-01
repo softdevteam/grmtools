@@ -268,7 +268,7 @@ impl Grammar {
 
 #[cfg(test)]
 mod test {
-    use super::{AssocKind, Grammar, PIdx, NTIdx, Precedence, Symbol};
+    use super::{AssocKind, Grammar, NTIdx, PIdx, Precedence, Symbol, TIdx};
     use yacc_parser::parse_yacc;
 
     #[test]
@@ -288,6 +288,9 @@ mod test {
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(*r_prod, [Symbol::Terminal(grm.terminal_off("T"))]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
+
+        assert_eq!(grm.iter_term_idxs().collect::<Vec<TIdx>>(), vec![TIdx(0), TIdx(1)]);
+        assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(), vec![NTIdx(0), NTIdx(1)]);
     }
 
     #[test]

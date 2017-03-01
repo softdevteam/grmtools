@@ -84,7 +84,7 @@ impl Firsts {
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for rul_i in (0..grm.nonterms_len).map(|x| NTIdx::from(x)) {
+            for rul_i in grm.iter_nonterm_idxs() {
                 // For each rule E
                 for prod_i in grm.nonterm_to_prods(rul_i).unwrap().iter() {
                     // ...and each production A
@@ -112,9 +112,9 @@ impl Firsts {
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
-                                for bit_i in 0..grm.terms_len {
-                                    if firsts.is_set(nonterm_i, TIdx::from(bit_i))
-                                      && !firsts.set(rul_i, TIdx::from(bit_i)) {
+                                for term_idx in grm.iter_term_idxs() {
+                                    if firsts.is_set(nonterm_i, term_idx)
+                                      && !firsts.set(rul_i, term_idx) {
                                         changed = true;
                                     }
                                 }
