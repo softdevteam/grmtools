@@ -217,14 +217,14 @@ mod test {
 
         // Gotos
         assert_eq!(st.gotos.len(), 8);
-        assert_eq!(st.gotos[&(s0, grm.nonterminal_off("Expr"))], s1);
-        assert_eq!(st.gotos[&(s0, grm.nonterminal_off("Term"))], s2);
-        assert_eq!(st.gotos[&(s0, grm.nonterminal_off("Factor"))], s3);
-        assert_eq!(st.gotos[&(s5, grm.nonterminal_off("Expr"))], s7);
-        assert_eq!(st.gotos[&(s5, grm.nonterminal_off("Term"))], s2);
-        assert_eq!(st.gotos[&(s5, grm.nonterminal_off("Factor"))], s3);
-        assert_eq!(st.gotos[&(s6, grm.nonterminal_off("Term"))], s8);
-        assert_eq!(st.gotos[&(s6, grm.nonterminal_off("Factor"))], s3);
+        assert_eq!(st.goto(s0, grm.nonterminal_off("Expr")).unwrap(), s1);
+        assert_eq!(st.goto(s0, grm.nonterminal_off("Term")).unwrap(), s2);
+        assert_eq!(st.goto(s0, grm.nonterminal_off("Factor")).unwrap(), s3);
+        assert_eq!(st.goto(s5, grm.nonterminal_off("Expr")).unwrap(), s7);
+        assert_eq!(st.goto(s5, grm.nonterminal_off("Term")).unwrap(), s2);
+        assert_eq!(st.goto(s5, grm.nonterminal_off("Factor")).unwrap(), s3);
+        assert_eq!(st.goto(s6, grm.nonterminal_off("Term")).unwrap(), s8);
+        assert_eq!(st.goto(s6, grm.nonterminal_off("Factor")).unwrap(), s3);
     }
 
     #[test]
