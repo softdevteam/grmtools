@@ -21,7 +21,7 @@ pub fn lex(ast: &LexAST, s: &str) -> Result<Vec<Lexeme>, LexError> {
     while i < s.len() {
         let mut longest = 0; // Length of the longest match
         let mut longest_ridx = 0; // This is only valid iff longest != 0
-        for (ridx, r) in ast.rules.iter().enumerate() {
+        for (ridx, r) in ast.iter_rules().enumerate() {
             if let Some(m) = r.re.find(&s[i..]) {
                 let len = m.end();
                 // Note that by using ">", we implicitly prefer an earlier over a later rule, if
@@ -33,7 +33,7 @@ pub fn lex(ast: &LexAST, s: &str) -> Result<Vec<Lexeme>, LexError> {
             }
         }
         if longest > 0 {
-            let r = &ast.rules[longest_ridx];
+            let r = &ast.get_rule(longest_ridx).unwrap();
             if r.name.is_some() {
                 lxs.push(Lexeme{tok_id: r.tok_id, start: i, len: longest});
             }

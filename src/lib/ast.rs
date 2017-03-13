@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::slice::Iter;
 use regex::Regex;
 
 pub struct LexAST {
-    pub rules: Vec<Rule>
+    rules: Vec<Rule>
 }
 
 impl LexAST {
@@ -14,6 +15,11 @@ impl LexAST {
     pub fn set_rule(&mut self, r: Rule) {
         assert!(r.name.is_none() || self.get_rule_by_name(&r.name.as_ref().unwrap()).is_none());
         self.rules.push(r);
+    }
+
+    /// Get the `Rule` at index `idx`.
+    pub fn get_rule(&self, idx: usize) -> Option<&Rule> {
+        self.rules.get(idx)
     }
 
     /// Get the `Rule` instance associated with a particular token ID.
@@ -37,6 +43,11 @@ impl LexAST {
                 }
             };
         }
+    }
+
+    /// Returns an iterator over all rules in this AST.
+    pub fn iter_rules(&self) -> Iter<Rule> {
+        self.rules.iter()
     }
 }
 

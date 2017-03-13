@@ -116,7 +116,7 @@ impl LexParser {
             Ok(x) => x,
             Err(_)  => return Err(self.mk_error(LexErrorKind::RegexError, i))
         };
-        let rules_len = self.ast.rules.len();
+        let rules_len = self.ast.iter_rules().len();
         self.ast.set_rule(Rule{tok_id: rules_len,
                                name: name,
                                re: re,
@@ -195,7 +195,7 @@ mod test {
 [0-9]+ ;
 ".to_string();
         let ast = parse_lex(&src).unwrap();
-        let intrule = ast.rules.get(0).unwrap();
+        let intrule = ast.get_rule(0).unwrap();
         assert!(intrule.name.is_none());
         assert_eq!("[0-9]+", intrule.re_str);
     }
