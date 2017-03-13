@@ -7,7 +7,7 @@ use ast::{Rule, LexAST};
 pub struct LexParser {
     src: String,
     newlines: Vec<usize>,
-    ast: LexAST
+    rules: Vec<Rule>
 }
 
 lazy_static! {
@@ -21,7 +21,7 @@ impl LexParser {
         let mut p = LexParser{
             src     : src,
             newlines: vec![0],
-            ast     : LexAST::new()
+            rules   : Vec::new()
         };
         try!(p.parse());
         Ok(p)
@@ -103,7 +103,7 @@ impl LexParser {
         if orig_name == ";" {
             name = None;
         }
-        else if self.ast.get_rule_by_name(orig_name).is_some() {
+        else if self.rules.iter().find(|&r| r.name.as_ref().map_or(false, |n| n == orig_name)).is_some() {
             return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1))
         }
         else {
@@ -121,11 +121,11 @@ impl LexParser {
             Ok(x) => x,
             Err(_)  => return Err(self.mk_error(LexErrorKind::RegexError, i))
         };
-        let rules_len = self.ast.iter_rules().len();
-        self.ast.set_rule(Rule{tok_id: rules_len,
-                               name: name,
-                               re: re,
-                               re_str: re_str});
+        let rules_len = self.rules.len();
+        self.rules.push(Rule{tok_id: rules_len,
+                             name: name,
+                             re: re,
+                             re_str: re_str});
         Ok(i + line_len)
     }
 
@@ -153,7 +153,7 @@ impl LexParser {
 }
 
 pub fn parse_lex(s: &str) -> LexBuildResult<LexAST> {
-    LexParser::new(s.to_string()).map(|p| p.ast)
+    LexParser::new(s.to_string()).map(|p| LexAST::new(p.rules))
 }
 
 #[cfg(test)]

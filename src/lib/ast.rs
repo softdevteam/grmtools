@@ -7,14 +7,8 @@ pub struct LexAST {
 }
 
 impl LexAST {
-    pub fn new() -> LexAST {
-        LexAST {rules: Vec::new()}
-    }
-
-    /// Appends a rule to the Vec of rules. Panics if a rule with the same name already exists.
-    pub fn set_rule(&mut self, r: Rule) {
-        assert!(r.name.is_none() || self.get_rule_by_name(&r.name.as_ref().unwrap()).is_none());
-        self.rules.push(r);
+    pub fn new(rules: Vec<Rule>) -> LexAST {
+        LexAST {rules: rules}
     }
 
     /// Get the `Rule` at index `idx`.
