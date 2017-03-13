@@ -150,7 +150,10 @@ impl LexParser {
 pub fn parse_lex(s: &str) -> Result<LexAST, LexBuildError> {
     let mut lp = LexParser::new(s.to_string());
     match lp.parse() {
-        Ok(_) => Ok(lp.ast),
+        Ok(i) => {
+            assert_eq!(i, s.len());
+            Ok(lp.ast)
+        }
         Err(e) => Err(e)
     }
 }
