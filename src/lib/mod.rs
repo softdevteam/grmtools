@@ -6,9 +6,8 @@ pub mod ast;
 mod lexer;
 mod parser;
 
-use ast::LexAST;
-pub use lexer::Lexeme;
-use lexer::{lex, LexError};
+pub use lexer::{Lexeme, Lexer};
+use lexer::LexError;
 use parser::parse_lex;
 
 #[macro_use]
@@ -52,10 +51,10 @@ impl fmt::Display for LexBuildError {
     }
 }
 
-pub fn build_lex(s: &str) -> Result<LexAST, LexBuildError> {
+pub fn build_lex(s: &str) -> Result<Lexer, LexBuildError> {
     parse_lex(s)
 }
 
-pub fn do_lex(ast: &LexAST, s: &str) -> Result<Vec<Lexeme>, LexError> {
-    lex(&ast, s)
+pub fn do_lex(lexer: &Lexer, s: &str) -> Result<Vec<Lexeme>, LexError> {
+    lexer.lex(s)
 }

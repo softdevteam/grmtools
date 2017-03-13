@@ -2,7 +2,8 @@ use regex::{Regex, RegexBuilder};
 
 use {LexErrorKind, LexBuildError, LexBuildResult};
 
-use ast::{Rule, LexAST};
+use ast::Rule;
+use lexer::Lexer;
 
 pub struct LexParser {
     src: String,
@@ -152,8 +153,8 @@ impl LexParser {
     }
 }
 
-pub fn parse_lex(s: &str) -> LexBuildResult<LexAST> {
-    LexParser::new(s.to_string()).map(|p| LexAST::new(p.rules))
+pub fn parse_lex(s: &str) -> LexBuildResult<Lexer> {
+    LexParser::new(s.to_string()).map(|p| Lexer::new(p.rules))
 }
 
 #[cfg(test)]
