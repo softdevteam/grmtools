@@ -42,22 +42,21 @@ fn main() {
                                 .optflag("h", "help", "")
                                 .parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => { usage(prog, f.to_string().as_str()); return }
+        Err(f) => {
+            usage(prog, f.to_string().as_str());
+            return;
+        }
     };
-
     if matches.opt_present("h") || matches.free.len() != 2 {
         usage(prog, "");
         return;
     }
 
     let lex_l_path = &matches.free[0];
-    let lex_ast = match build_lex(&read_file(lex_l_path)) {
-        Ok(ast) => ast,
-        Err(s) => {
+    let lex_ast = build_lex(&read_file(lex_l_path)).unwrap_or_else(|s| {
             writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
             process::exit(1);
-        }
-    };
+        });
     let input = &read_file(&matches.free[1]);
     let lexemes = do_lex(&lex_ast, &input).unwrap();
     for l in lexemes.iter() {
