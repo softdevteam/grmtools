@@ -17,12 +17,14 @@ lazy_static! {
 }
 
 impl LexParser {
-    fn new(src: String) -> LexParser {
-        LexParser{
+    fn new(src: String) -> LexBuildResult<LexParser> {
+        let mut p = LexParser{
             src     : src,
             newlines: vec![0],
             ast     : LexAST::new()
-        }
+        };
+        try!(p.parse());
+        Ok(p)
     }
 
     fn mk_error(&self, k: LexErrorKind, off: usize) -> LexBuildError {
@@ -58,7 +60,10 @@ impl LexParser {
                     Err(self.mk_error(LexErrorKind::RoutinesNotSupported, i))
                 }
             }
-            None    => Ok(i)
+            None    => {
+                assert_eq!(i, self.src.len());
+                Ok(i)
+            }
         }
     }
 
@@ -147,15 +152,8 @@ impl LexParser {
     }
 }
 
-pub fn parse_lex(s: &str) -> Result<LexAST, LexBuildError> {
-    let mut lp = LexParser::new(s.to_string());
-    match lp.parse() {
-        Ok(i) => {
-            assert_eq!(i, s.len());
-            Ok(lp.ast)
-        }
-        Err(e) => Err(e)
-    }
+pub fn parse_lex(s: &str) -> LexBuildResult<LexAST> {
+    LexParser::new(s.to_string()).map(|p| p.ast)
 }
 
 #[cfg(test)]
