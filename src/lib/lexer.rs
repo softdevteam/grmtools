@@ -3,10 +3,10 @@ use std::slice::Iter;
 
 use regex::Regex;
 
-pub struct Rule {
+pub struct Rule<TokId> {
     /// The ID that tokens created against this rule will be given. It is initially given a
     /// guaranteed unique value; that value can be overridden by clients.
-    pub tok_id: usize,
+    pub tok_id: TokId,
     /// This rule's name. If None, then text which matches this rule will be skipped (i.e. will not
     /// create a lexeme).
     pub name: Option<String>,
@@ -15,8 +15,8 @@ pub struct Rule {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Lexeme {
-    pub tok_id: usize,
+pub struct Lexeme<TokId> {
+    pub tok_id: TokId,
     /// Byte offset of the start of the lexeme
     pub start: usize,
     /// Length in bytes of the lexeme
@@ -28,33 +28,33 @@ pub struct LexError {
     idx: usize
 }
 
-pub struct Lexer {
-    rules: Vec<Rule>
+pub struct Lexer<TokId> {
+    rules: Vec<Rule<TokId>>
 }
 
-impl Lexer {
-    pub fn new(rules: Vec<Rule>) -> Lexer {
+impl<TokId: Copy + Eq> Lexer<TokId> {
+    pub fn new(rules: Vec<Rule<TokId>>) -> Lexer<TokId> {
         Lexer {rules: rules}
     }
 
     /// Get the `Rule` at index `idx`.
-    pub fn get_rule(&self, idx: usize) -> Option<&Rule> {
+    pub fn get_rule(&self, idx: usize) -> Option<&Rule<TokId>> {
         self.rules.get(idx)
     }
 
     /// Get the `Rule` instance associated with a particular token ID.
-    pub fn get_rule_by_id(&self, tok_id: usize) -> Option<&Rule> {
+    pub fn get_rule_by_id(&self, tok_id: TokId) -> Option<&Rule<TokId>> {
         self.rules.iter().find(|r| r.tok_id == tok_id)
     }
 
     /// Get the `Rule` instance associated with a particular name.
-    pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule> {
+    pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<TokId>> {
         self.rules.iter().find(|r| !r.name.is_none() && r.name.as_ref().unwrap() == n)
     }
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
     /// to synchronise a parser's notion of token IDs with the lexers.
-    pub fn set_rule_ids(&mut self, map: &HashMap<&str, usize>) {
+    pub fn set_rule_ids(&mut self, map: &HashMap<&str, TokId>) {
         for r in self.rules.iter_mut() {
             match r.name.as_ref() {
                 None => (),
@@ -66,11 +66,11 @@ impl Lexer {
     }
 
     /// Returns an iterator over all rules in this AST.
-    pub fn iter_rules(&self) -> Iter<Rule> {
+    pub fn iter_rules(&self) -> Iter<Rule<TokId>> {
         self.rules.iter()
     }
 
-    pub fn lex(&self, s: &str) -> Result<Vec<Lexeme>, LexError> {
+    pub fn lex(&self, s: &str) -> Result<Vec<Lexeme<TokId>>, LexError> {
         let mut i = 0; // byte index into s
         let mut lxs = Vec::new(); // lexemes
 
@@ -140,7 +140,7 @@ mod test {
 %%
 [0-9]+ int
         ".to_string();
-        let lexer = parse_lex(&src).unwrap();
+        let lexer = parse_lex::<u8>(&src).unwrap();
         match lexer.lex("abc") {
             Ok(_)  => panic!("Invalid input lexed"),
             Err(LexError{idx: 0}) => (),
