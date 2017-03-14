@@ -2,7 +2,6 @@ extern crate regex;
 
 use std::fmt;
 
-pub mod ast;
 mod lexer;
 mod parser;
 

@@ -2,8 +2,7 @@ use regex::{Regex, RegexBuilder};
 
 use {LexErrorKind, LexBuildError, LexBuildResult};
 
-use ast::Rule;
-use lexer::Lexer;
+use lexer::{Lexer, Rule};
 
 pub struct LexParser {
     src: String,
