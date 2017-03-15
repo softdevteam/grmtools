@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::slice::Iter;
 
 use regex::Regex;
@@ -95,17 +96,17 @@ impl<TokId: Copy + Eq> Lexer<TokId> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Lexeme<TokId> {
-    tok_id: TokId,
     start: usize,
-    len: usize
+    len: u32,
+    tok_id: TokId
 }
 
 impl<TokId: Copy> Lexeme<TokId> {
     pub fn new(tok_id: TokId, start: usize, len: usize) -> Lexeme<TokId> {
         Lexeme{
-            tok_id: tok_id,
             start: start,
-            len: len
+            len: u32::try_from(len).unwrap(),
+            tok_id: tok_id
         }
     }
 
@@ -121,7 +122,7 @@ impl<TokId: Copy> Lexeme<TokId> {
 
     /// Length in bytes of the lexeme
     pub fn len(&self) -> usize {
-        self.len
+        self.len as usize
     }
 }
 
