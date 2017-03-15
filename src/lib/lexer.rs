@@ -14,15 +14,6 @@ pub struct Rule<TokId> {
     pub re: Regex
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Lexeme<TokId> {
-    pub tok_id: TokId,
-    /// Byte offset of the start of the lexeme
-    pub start: usize,
-    /// Length in bytes of the lexeme
-    pub len: usize
-}
-
 #[derive(Debug)]
 pub struct LexError {
     idx: usize
@@ -91,7 +82,7 @@ impl<TokId: Copy + Eq> Lexer<TokId> {
             if longest > 0 {
                 let r = &self.get_rule(longest_ridx).unwrap();
                 if r.name.is_some() {
-                    lxs.push(Lexeme{tok_id: r.tok_id, start: i, len: longest});
+                    lxs.push(Lexeme::new(r.tok_id, i, longest));
                 }
                 i += longest;
             } else {
@@ -99,6 +90,38 @@ impl<TokId: Copy + Eq> Lexer<TokId> {
             }
         }
         Ok(lxs)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Lexeme<TokId> {
+    tok_id: TokId,
+    start: usize,
+    len: usize
+}
+
+impl<TokId: Copy> Lexeme<TokId> {
+    pub fn new(tok_id: TokId, start: usize, len: usize) -> Lexeme<TokId> {
+        Lexeme{
+            tok_id: tok_id,
+            start: start,
+            len: len
+        }
+    }
+
+    /// The token ID.
+    pub fn tok_id(&self) -> TokId {
+        self.tok_id
+    }
+
+    /// Byte offset of the start of the lexeme
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    /// Length in bytes of the lexeme
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
 

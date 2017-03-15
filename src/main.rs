@@ -60,6 +60,6 @@ fn main() {
     let input = &read_file(&matches.free[1]);
     let lexemes = lexer.lex(&input).unwrap();
     for l in lexemes.iter() {
-        println!("{} {}", lexer.get_rule_by_id(l.tok_id).unwrap().name.as_ref().unwrap(), &input[l.start..l.start + l.len]);
+        println!("{} {}", lexer.get_rule_by_id(l.tok_id()).unwrap().name.as_ref().unwrap(), &input[l.start()..l.start() + l.len()]);
     }
 }
