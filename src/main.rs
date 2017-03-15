@@ -10,7 +10,7 @@ extern crate getopts;
 use getopts::Options;
 
 extern crate lrlex;
-use lrlex::{build_lex, do_lex, Lexeme};
+use lrlex::{build_lex, Lexeme};
 
 extern crate lrtable;
 use lrtable::yacc_to_statetable;
@@ -86,8 +86,8 @@ fn main() {
 
     let input = read_file(&matches.free[2]);
 
-    let mut lexemes = do_lex(&lexer, &input).unwrap();
-    lexemes.push(Lexeme{tok_id: usize::from(grm.end_term), start: input.len(), len: 0});
+    let mut lexemes = lexer.lex(&input).unwrap();
+    lexemes.push(Lexeme::new(usize::from(grm.end_term), input.len(), 0));
     let pt = parse(&grm, &stable, &lexemes).unwrap();
     println!("{}", pt.pp(&grm, &input));
 }

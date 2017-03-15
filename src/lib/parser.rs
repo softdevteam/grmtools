@@ -2,7 +2,7 @@ use lrlex::Lexeme;
 use lrtable::{Action, Grammar, NTIdx, StateTable, StIdx, Symbol, TIdx};
 
 pub enum Node {
-    Terminal{lexeme: Lexeme},
+    Terminal{lexeme: Lexeme<usize>},
     Nonterminal{nonterm_idx: NTIdx, nodes: Vec<Node>}
 }
 
@@ -20,8 +20,10 @@ impl Node {
                 s.push_str(" ");
             }
             match e {
-                &Node::Terminal{lexeme: Lexeme{tok_id, start, len}} => {
-                    s.push_str(&format!("{} {}\n", grm.term_name(TIdx::from(tok_id)).unwrap(), &input[start..start + len]));
+                &Node::Terminal{lexeme} => {
+                    let tn = grm.term_name(TIdx::from(lexeme.tok_id())).unwrap();
+                    let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
+                    s.push_str(&format!("{} {}\n", tn, lt));
                 }
                 &Node::Nonterminal{nonterm_idx, ref nodes} => {
                     s.push_str(&format!("{}\n", grm.nonterm_name(nonterm_idx).unwrap()));
@@ -37,7 +39,7 @@ impl Node {
 
 
 /// Parse the lexemes into a parse tree.
-pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme>) -> Result<Node, ParseError> {
+pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme<usize>>) -> Result<Node, ParseError> {
     let mut lexemes_iter = lexemes.iter();
     // Instead of having a single stack, which we'd then have to invent a new struct / tuple for,
     // it's easiest to split the parse and parse tree stack into two.
@@ -46,7 +48,7 @@ pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme>) -> Resul
     let mut la = lexemes_iter.next().unwrap();
     loop {
         let st = *pstack.last().unwrap();
-        match stable.action(st, Symbol::Terminal(TIdx::from(la.tok_id))) {
+        match stable.action(st, Symbol::Terminal(TIdx::from(la.tok_id()))) {
             Some(Action::Reduce(prod_id)) => {
                 let nonterm_idx = grm.prod_to_nonterm(prod_id);
                 let pop_idx = pstack.len() - grm.prod(prod_id).unwrap().len();
@@ -63,7 +65,7 @@ pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme>) -> Resul
                 pstack.push(state_id);
             },
             Some(Action::Accept) => {
-                debug_assert_eq!(TIdx::from(la.tok_id), grm.end_term);
+                debug_assert_eq!(TIdx::from(la.tok_id()), grm.end_term);
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
@@ -77,7 +79,7 @@ pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme>) -> Resul
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use lrlex::{build_lex, do_lex, Lexeme};
+    use lrlex::{build_lex, Lexeme};
     use lrtable::yacc_to_statetable;
     use super::*;
 
@@ -89,8 +91,8 @@ mod test {
             rule_ids.insert(grm.term_name(term_idx).unwrap(), usize::from(term_idx));
         }
         lexer.set_rule_ids(&rule_ids);
-        let mut lexemes = do_lex(&lexer, &input).unwrap();
-        lexemes.push(Lexeme{tok_id: usize::from(grm.end_term), start: input.len(), len: 0});
+        let mut lexemes = lexer.lex(&input).unwrap();
+        lexemes.push(Lexeme::new(usize::from(grm.end_term), input.len(), 0));
         let pt = parse(&grm, &stable, &lexemes).unwrap();
         assert_eq!(expected, pt.pp(&grm, &input));
     }
