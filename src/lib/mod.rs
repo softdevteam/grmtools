@@ -1,14 +1,14 @@
+#![feature(try_from)]
+
 extern crate regex;
 
+use std::convert::TryFrom;
 use std::fmt;
 
-pub mod ast;
 mod lexer;
 mod parser;
 
-use ast::LexAST;
-pub use lexer::Lexeme;
-use lexer::{lex, LexError};
+pub use lexer::{Lexeme, Lexer};
 use parser::parse_lex;
 
 #[macro_use]
@@ -52,10 +52,7 @@ impl fmt::Display for LexBuildError {
     }
 }
 
-pub fn build_lex(s: &str) -> Result<LexAST, LexBuildError> {
+pub fn build_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<Lexer<TokId>, LexBuildError> {
     parse_lex(s)
 }
 
-pub fn do_lex(ast: &LexAST, s: &str) -> Result<Vec<Lexeme>, LexError> {
-    lex(&ast, s)
-}

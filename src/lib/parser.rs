@@ -1,13 +1,14 @@
+use std::convert::TryFrom;
+
 use regex::{Regex, RegexBuilder};
 
 use {LexErrorKind, LexBuildError, LexBuildResult};
+use lexer::{Lexer, Rule};
 
-use ast::{Rule, LexAST};
-
-pub struct LexParser {
+pub struct LexParser<TokId> {
     src: String,
     newlines: Vec<usize>,
-    ast: LexAST
+    rules: Vec<Rule<TokId>>
 }
 
 lazy_static! {
@@ -16,13 +17,15 @@ lazy_static! {
     };
 }
 
-impl LexParser {
-    fn new(src: String) -> LexParser {
-        LexParser{
+impl<TokId: TryFrom<usize>> LexParser<TokId> {
+    fn new(src: String) -> LexBuildResult<LexParser<TokId>> {
+        let mut p = LexParser{
             src     : src,
             newlines: vec![0],
-            ast     : LexAST::new()
-        }
+            rules   : Vec::new()
+        };
+        try!(p.parse());
+        Ok(p)
     }
 
     fn mk_error(&self, k: LexErrorKind, off: usize) -> LexBuildError {
@@ -58,7 +61,10 @@ impl LexParser {
                     Err(self.mk_error(LexErrorKind::RoutinesNotSupported, i))
                 }
             }
-            None    => Ok(i)
+            None    => {
+                assert_eq!(i, self.src.len());
+                Ok(i)
+            }
         }
     }
 
@@ -98,7 +104,7 @@ impl LexParser {
         if orig_name == ";" {
             name = None;
         }
-        else if self.ast.get_rule_by_name(orig_name).is_some() {
+        else if self.rules.iter().find(|&r| r.name.as_ref().map_or(false, |n| n == orig_name)).is_some() {
             return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1))
         }
         else {
@@ -116,11 +122,13 @@ impl LexParser {
             Ok(x) => x,
             Err(_)  => return Err(self.mk_error(LexErrorKind::RegexError, i))
         };
-        let rules_len = self.ast.rules.len();
-        self.ast.set_rule(Rule{tok_id: rules_len,
-                               name: name,
-                               re: re,
-                               re_str: re_str});
+        let rules_len = self.rules.len();
+        let tok_id = TokId::try_from(rules_len)
+                           .unwrap_or_else(|_| panic!("TokId::try_from failed on {} (if TokId is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
+        self.rules.push(Rule{tok_id: tok_id,
+                             name: name,
+                             re: re,
+                             re_str: re_str});
         Ok(i + line_len)
     }
 
@@ -147,12 +155,8 @@ impl LexParser {
     }
 }
 
-pub fn parse_lex(s: &str) -> Result<LexAST, LexBuildError> {
-    let mut lp = LexParser::new(s.to_string());
-    match lp.parse() {
-        Ok(_) => Ok(lp.ast),
-        Err(e) => Err(e)
-    }
+pub fn parse_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> LexBuildResult<Lexer<TokId>> {
+    LexParser::new(s.to_string()).map(|p| Lexer::new(p.rules))
 }
 
 #[cfg(test)]
@@ -165,13 +169,13 @@ mod test {
         let src = "
 %option nounput
         ".to_string();
-        assert!(parse_lex(&src).is_err());
+        assert!(parse_lex::<u8>(&src).is_err());
     }
 
     #[test]
     fn test_minimum() {
         let src = "%%".to_string();
-        assert!(parse_lex(&src).is_ok());
+        assert!(parse_lex::<u8>(&src).is_ok());
     }
 
     #[test]
@@ -180,7 +184,7 @@ mod test {
 [0-9]+ int
 [a-zA-Z]+ id
 ".to_string();
-        let ast = parse_lex(&src).unwrap();
+        let ast = parse_lex::<u8>(&src).unwrap();
         let intrule = ast.get_rule_by_name("int").unwrap();
         assert_eq!("int", intrule.name.as_ref().unwrap());
         assert_eq!("[0-9]+", intrule.re_str);
@@ -194,8 +198,8 @@ mod test {
         let src = "%%
 [0-9]+ ;
 ".to_string();
-        let ast = parse_lex(&src).unwrap();
-        let intrule = ast.rules.get(0).unwrap();
+        let ast = parse_lex::<u8>(&src).unwrap();
+        let intrule = ast.get_rule(0).unwrap();
         assert!(intrule.name.is_none());
         assert_eq!("[0-9]+", intrule.re_str);
     }
@@ -205,8 +209,8 @@ mod test {
         let src = "%%
 [0-9]
 int".to_string();
-        assert!(parse_lex(&src).is_err());
-        match parse_lex(&src) {
+        assert!(parse_lex::<u8>(&src).is_err());
+        match parse_lex::<u8>(&src) {
             Ok(_)  => panic!("Broken rule parsed"),
             Err(LexBuildError{kind: LexErrorKind::MissingSpace, line: 2, col: 1}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
@@ -217,8 +221,8 @@ int".to_string();
     fn test_broken_rule2() {
         let src = "%%
 [0-9] ".to_string();
-        assert!(parse_lex(&src).is_err());
-        match parse_lex(&src) {
+        assert!(parse_lex::<u8>(&src).is_err());
+        match parse_lex::<u8>(&src) {
             Ok(_)  => panic!("Broken rule parsed"),
             Err(LexBuildError{kind: LexErrorKind::MissingSpace, line: 2, col: 1}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
@@ -229,7 +233,7 @@ int".to_string();
     fn test_invalid_name() {
         let src = "%%
 [0-9] int.2".to_string();
-        match parse_lex(&src) {
+        match parse_lex::<u8>(&src) {
             Ok(_)  => panic!("Invalid name parsed"),
             Err(LexBuildError{kind: LexErrorKind::InvalidName, line: 2, col: 7}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
@@ -241,10 +245,21 @@ int".to_string();
         let src = "%%
 [0-9] int
 [0-9] int".to_string();
-        match parse_lex(&src) {
+        match parse_lex::<u8>(&src) {
             Ok(_)  => panic!("Duplicate rule parsed"),
             Err(LexBuildError{kind: LexErrorKind::DuplicateName, line: 3, col: 7}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
+    }
+
+    #[test]
+    #[should_panic]
+    fn exceed_tok_id_capacity() {
+        let mut src = "%%
+".to_string();
+        for i in 0..257 {
+            src.push_str(&format!("x x{}\n", i));
+        }
+        parse_lex::<u8>(&src).ok();
     }
 }

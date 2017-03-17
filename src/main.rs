@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::{Read, stderr, Write};
 use std::path::Path;
 
-use lrlex::{build_lex, do_lex};
+use lrlex::{build_lex, Lexer};
 
 fn usage(prog: String, msg: &str) {
     let path = Path::new(prog.as_str());
@@ -42,25 +42,24 @@ fn main() {
                                 .optflag("h", "help", "")
                                 .parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => { usage(prog, f.to_string().as_str()); return }
+        Err(f) => {
+            usage(prog, f.to_string().as_str());
+            return;
+        }
     };
-
     if matches.opt_present("h") || matches.free.len() != 2 {
         usage(prog, "");
         return;
     }
 
     let lex_l_path = &matches.free[0];
-    let lex_ast = match build_lex(&read_file(lex_l_path)) {
-        Ok(ast) => ast,
-        Err(s) => {
+    let lexer: Lexer<usize> = build_lex(&read_file(lex_l_path)).unwrap_or_else(|s| {
             writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
             process::exit(1);
-        }
-    };
+        });
     let input = &read_file(&matches.free[1]);
-    let lexemes = do_lex(&lex_ast, &input).unwrap();
+    let lexemes = lexer.lex(&input).unwrap();
     for l in lexemes.iter() {
-        println!("{} {}", lex_ast.get_rule_by_id(l.tok_id).unwrap().name.as_ref().unwrap(), &input[l.start..l.start + l.len]);
+        println!("{} {}", lexer.get_rule_by_id(l.tok_id()).unwrap().name.as_ref().unwrap(), &input[l.start()..l.start() + l.len()]);
     }
 }
