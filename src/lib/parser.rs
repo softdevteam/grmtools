@@ -1,15 +1,17 @@
+use std::convert::TryInto;
+
 use lrlex::Lexeme;
 use lrtable::{Action, Grammar, NTIdx, StateTable, StIdx, Symbol, TIdx};
 
-pub enum Node {
-    Terminal{lexeme: Lexeme<usize>},
-    Nonterminal{nonterm_idx: NTIdx, nodes: Vec<Node>}
+pub enum Node<TokId> {
+    Terminal{lexeme: Lexeme<TokId>},
+    Nonterminal{nonterm_idx: NTIdx, nodes: Vec<Node<TokId>>}
 }
 
 #[derive(Debug)]
 pub struct ParseError;
 
-impl Node {
+impl<TokId: Copy + TryInto<usize>> Node<TokId> {
     /// Return a pretty-printed version of this node.
     pub fn pp(&self, grm: &Grammar, input: &str) -> String {
         let mut st = vec![(0, self)]; // Stack of (indent level, node) pairs
@@ -21,7 +23,7 @@ impl Node {
             }
             match e {
                 &Node::Terminal{lexeme} => {
-                    let tn = grm.term_name(TIdx::from(lexeme.tok_id())).unwrap();
+                    let tn = grm.term_name(TIdx::from(lexeme.tok_id().try_into().ok().unwrap())).unwrap();
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
@@ -39,20 +41,22 @@ impl Node {
 
 
 /// Parse the lexemes into a parse tree.
-pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme<usize>>) -> Result<Node, ParseError> {
+pub fn parse<TokId: Copy + TryInto<usize>>(grm: &Grammar, stable: &StateTable, lexemes:
+                                        &Vec<Lexeme<TokId>>) -> Result<Node<TokId>, ParseError>
+{
     let mut lexemes_iter = lexemes.iter();
     // Instead of having a single stack, which we'd then have to invent a new struct / tuple for,
     // it's easiest to split the parse and parse tree stack into two.
     let mut pstack = vec![StIdx::from(0)]; // Parse stack
-    let mut tstack: Vec<Node> = Vec::new(); // Parse tree stack
+    let mut tstack: Vec<Node<TokId>> = Vec::new(); // Parse tree stack
     let mut la = lexemes_iter.next().unwrap();
     loop {
         let st = *pstack.last().unwrap();
-        match stable.action(st, Symbol::Terminal(TIdx::from(la.tok_id()))) {
+        match stable.action(st, Symbol::Terminal(TIdx::from(la.tok_id().try_into().ok().unwrap()))) {
             Some(Action::Reduce(prod_id)) => {
                 let nonterm_idx = grm.prod_to_nonterm(prod_id);
                 let pop_idx = pstack.len() - grm.prod(prod_id).unwrap().len();
-                let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node>>();
+                let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<TokId>>>();
                 tstack.push(Node::Nonterminal{nonterm_idx: nonterm_idx, nodes: nodes});
 
                 pstack.drain(pop_idx..);
@@ -65,7 +69,7 @@ pub fn parse(grm: &Grammar, stable: &StateTable, lexemes: &Vec<Lexeme<usize>>) -
                 pstack.push(state_id);
             },
             Some(Action::Accept) => {
-                debug_assert_eq!(TIdx::from(la.tok_id()), grm.end_term);
+                debug_assert_eq!(TIdx::from(la.tok_id().try_into().ok().unwrap()), grm.end_term);
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
