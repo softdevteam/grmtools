@@ -18,7 +18,8 @@ pub struct Rule {
 
 #[derive(Debug)]
 pub struct Production {
-    pub symbols: Vec<Symbol>
+    pub symbols: Vec<Symbol>,
+    pub precedence: Option<String>
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -33,7 +34,8 @@ pub enum GrammarValidationErrorKind {
     NoStartRule,
     InvalidStartRule,
     UnknownRuleRef,
-    UnknownToken
+    UnknownToken,
+    NoPrecForToken
 }
 
 /// GrammarAST validation errors return an instance of this struct.
@@ -57,6 +59,9 @@ impl fmt::Display for GrammarValidationError {
             },
             GrammarValidationErrorKind::UnknownToken => {
                 write!(f, "Unknown token '{}'", self.sym.as_ref().unwrap())
+            },
+            GrammarValidationErrorKind::NoPrecForToken => {
+                write!(f, "Token '{}' used in %prec has no precedence attached", self.sym.as_ref().unwrap())
             }
         }
     }
@@ -81,9 +86,9 @@ impl GrammarAST {
         }
     }
 
-    pub fn add_prod(&mut self, key: String, syms: Vec<Symbol>) {
+    pub fn add_prod(&mut self, key: String, syms: Vec<Symbol>, prec: Option<String>) {
         let rule = self.rules.entry(key.clone()).or_insert_with(|| Rule::new(key));
-        rule.add_prod(syms);
+        rule.add_prod(syms, prec);
     }
 
     pub fn get_rule(&self, key: &str) -> Option<&Rule>{
@@ -98,6 +103,7 @@ impl GrammarAST {
     ///   1) The start rule references a rule in the grammar
     ///   2) Every nonterminal reference references a rule in the grammar
     ///   3) Every terminal reference references a declared token
+    ///   4) If a production has a precedence terminal, then it references a declared token
     /// If the validation succeeds, None is returned.
     pub fn validate(&self) -> Result<(), GrammarValidationError> {
         match self.start {
@@ -111,6 +117,16 @@ impl GrammarAST {
         }
         for rule in self.rules.values() {
             for prod in &rule.productions {
+                if let Some(ref n) = prod.precedence {
+                    if !self.tokens.contains(n) {
+                        return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
+                            sym: Some(Symbol::Terminal(n.clone()))});
+                    }
+                    if !self.precs.contains_key(n) {
+                        return Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoPrecForToken,
+                            sym: Some(Symbol::Terminal(n.clone()))});
+                    }
+                }
                 for sym in prod.symbols.iter() {
                     match *sym {
                         Symbol::Nonterminal(ref name) => {
@@ -144,8 +160,8 @@ impl Rule {
         Rule {name: name, productions: vec![]}
     }
 
-    pub fn add_prod(&mut self, syms: Vec<Symbol>) {
-        self.productions.push(Production{symbols: syms});
+    pub fn add_prod(&mut self, syms: Vec<Symbol>, prec: Option<String>) {
+        self.productions.push(Production{symbols: syms, precedence: prec});
     }
 }
 
@@ -158,6 +174,7 @@ impl PartialEq for Rule {
 #[cfg(test)]
 mod test {
     use super::{GrammarAST, GrammarValidationError, GrammarValidationErrorKind, Symbol};
+    use grammar::{AssocKind, Precedence};
 
     fn nonterminal(n: &str) -> Symbol {
         Symbol::Nonterminal(n.to_string())
@@ -180,7 +197,7 @@ mod test {
     fn test_invalid_start_rule(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("B".to_string(), vec!());
+        grm.add_prod("B".to_string(), vec!(), None);
         match grm.validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule, ..}) => (),
             _ => panic!("Validation error")
@@ -191,7 +208,7 @@ mod test {
     fn test_valid_start_rule(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!());
+        grm.add_prod("A".to_string(), vec!(), None);
         assert!(grm.validate().is_ok());
     }
 
@@ -199,8 +216,8 @@ mod test {
     fn test_valid_nonterminal_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(nonterminal("B")));
-        grm.add_prod("B".to_string(), vec!());
+        grm.add_prod("A".to_string(), vec!(nonterminal("B")), None);
+        grm.add_prod("B".to_string(), vec!(), None);
         assert!(grm.validate().is_ok());
     }
 
@@ -208,7 +225,7 @@ mod test {
     fn test_invalid_nonterminal_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(nonterminal("B")));
+        grm.add_prod("A".to_string(), vec!(nonterminal("B")), None);
         match grm.validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
@@ -220,7 +237,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(terminal("b")));
+        grm.add_prod("A".to_string(), vec!(terminal("b")), None);
         assert!(grm.validate().is_ok());
     }
 
@@ -232,7 +249,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(nonterminal("b")));
+        grm.add_prod("A".to_string(), vec!(nonterminal("b")), None);
         assert!(grm.validate().is_ok());
     }
 
@@ -240,7 +257,7 @@ mod test {
     fn test_invalid_terminal_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(terminal("b")));
+        grm.add_prod("A".to_string(), vec!(terminal("b")), None);
         match grm.validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
             _ => panic!("Validation error")
@@ -251,9 +268,35 @@ mod test {
     fn test_invalid_nonterminal_forgotten_token(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(nonterminal("b"), terminal("b")));
+        grm.add_prod("A".to_string(), vec!(nonterminal("b"), terminal("b")), None);
         match grm.validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
+            _ => panic!("Validation error")
+        }
+    }
+
+    #[test]
+    fn test_precedence_override(){
+        let mut grm = GrammarAST::new();
+        grm.precs.insert("b".to_string(), Precedence{level: 1, kind: AssocKind::Left});
+        grm.start = Some("A".to_string());
+        grm.tokens.insert("b".to_string());
+        grm.add_prod("A".to_string(), vec!(terminal("b")), Some("b".to_string()));
+        assert!(grm.validate().is_ok());
+    }
+
+    #[test]
+    fn test_invalid_precedence_override(){
+        let mut grm = GrammarAST::new();
+        grm.start = Some("A".to_string());
+        grm.add_prod("A".to_string(), vec!(terminal("b")), Some("b".to_string()));
+        match grm.validate() {
+            Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
+            _ => panic!("Validation error")
+        }
+        grm.tokens.insert("b".to_string());
+        match grm.validate() {
+            Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoPrecForToken, ..}) => (),
             _ => panic!("Validation error")
         }
     }

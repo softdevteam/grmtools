@@ -24,7 +24,8 @@ pub enum YaccParserErrorKind {
     PrematureEnd,
     ProgramsNotSupported,
     UnknownDeclaration,
-    DuplicatePrecedence
+    DuplicatePrecedence,
+    PrecNotFollowedByTerminal,
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -46,7 +47,8 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::PrematureEnd         => s = "File ends prematurely",
             YaccParserErrorKind::ProgramsNotSupported => s = "Programs not currently supported",
             YaccParserErrorKind::UnknownDeclaration   => s = "Unknown declaration",
-            YaccParserErrorKind::DuplicatePrecedence  => s = "Token already has a precedence"
+            YaccParserErrorKind::DuplicatePrecedence  => s = "Token already has a precedence",
+            YaccParserErrorKind::PrecNotFollowedByTerminal => s = "%prec not followed by token name"
         }
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -189,25 +191,37 @@ impl YaccParser {
             }
         }
         let mut syms = Vec::new();
+        let mut prec = None;
         i = try!(self.parse_ws(i));
         while i < self.src.len() {
             if let Some(j) = self.lookahead_is("|", i) {
-                self.grammar.add_prod(rn.clone(), syms);
+                self.grammar.add_prod(rn.clone(), syms, prec);
                 syms = Vec::new();
+                prec = None;
                 i = try!(self.parse_ws(j));
                 continue;
             }
             else if let Some(j) = self.lookahead_is(";", i) {
-                self.grammar.add_prod(rn.clone(), syms);
+                self.grammar.add_prod(rn.clone(), syms, prec);
                 return Ok(j);
             }
 
-            if self.lookahead_is("\"", i).is_some()
-              || self.lookahead_is("'", i).is_some() {
+            if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
                 let (j, sym) = try!(self.parse_terminal(i));
                 i = try!(self.parse_ws(j));
                 self.grammar.tokens.insert(sym.clone());
                 syms.push(Symbol::Terminal(sym));
+            }
+            else if let Some(j) = self.lookahead_is("%prec", i) {
+                i = try!(self.parse_ws(j));
+                let (k, sym) = try!(self.parse_terminal(i));
+                if self.grammar.tokens.contains(&sym) {
+                    prec = Some(sym);
+                }
+                else {
+                    return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByTerminal, i));
+                }
+                i = k;
             }
             else {
                 let (j, sym) = try!(self.parse_terminal(i));
@@ -316,9 +330,9 @@ mod test {
         assert!(Rule::new("A".to_string()) != Rule::new("B".to_string()));
 
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_prod(vec![terminal("a")]);
+        rule1.add_prod(vec![terminal("a")], None);
         let mut rule2 = Rule::new("A".to_string());
-        rule2.add_prod(vec![terminal("a")]);
+        rule2.add_prod(vec![terminal("a")], None);
         assert_eq!(rule1, rule2);
     }
 
@@ -330,10 +344,10 @@ mod test {
         ".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_prod(vec![terminal("a")]);
+        rule1.add_prod(vec![terminal("a")], None);
         assert_eq!(*grm.get_rule("A").unwrap(), rule1);
         let mut rule2 = Rule::new("B".to_string());
-        rule2.add_prod(vec![terminal("a")]);
+        rule2.add_prod(vec![terminal("a")], None);
         assert!(*grm.get_rule("A").unwrap() != rule2);
     }
 
@@ -346,11 +360,11 @@ mod test {
         ".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_prod(vec![terminal("a")]);
-        rule1.add_prod(vec![terminal("b")]);
+        rule1.add_prod(vec![terminal("a")], None);
+        rule1.add_prod(vec![terminal("b")], None);
         assert_eq!(*grm.get_rule("A").unwrap(), rule1);
         let mut rule2 = Rule::new("B".to_string());
-        rule2.add_prod(vec![terminal("a")]);
+        rule2.add_prod(vec![terminal("a")], None);
         assert!(*grm.get_rule("A").unwrap() != rule2);
     }
 
@@ -365,17 +379,17 @@ mod test {
         let grm = parse_yacc(&src).unwrap();
 
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_prod(vec![]);
+        rule1.add_prod(vec![], None);
         assert_eq!(*grm.get_rule("A").unwrap(), rule1);
 
         let mut rule2 = Rule::new("B".to_string());
-        rule2.add_prod(vec![terminal("b")]);
-        rule2.add_prod(vec![]);
+        rule2.add_prod(vec![terminal("b")], None);
+        rule2.add_prod(vec![], None);
         assert_eq!(*grm.get_rule("B").unwrap(), rule2);
 
         let mut rule3 = Rule::new("C".to_string());
-        rule3.add_prod(vec![]);
-        rule3.add_prod(vec![terminal("c")]);
+        rule3.add_prod(vec![], None);
+        rule3.add_prod(vec![terminal("c")], None);
         assert_eq!(*grm.get_rule("C").unwrap(), rule3);
     }
 
@@ -387,11 +401,11 @@ mod test {
         ".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_prod(vec![terminal("a")]);
-        rule1.add_prod(vec![terminal("b")]);
+        rule1.add_prod(vec![terminal("a")], None);
+        rule1.add_prod(vec![terminal("b")], None);
         assert_eq!(*grm.get_rule("A").unwrap(), rule1);
         let mut rule2 = Rule::new("B".to_string());
-        rule2.add_prod(vec![terminal("a")]);
+        rule2.add_prod(vec![terminal("a")], None);
         assert!(*grm.get_rule("A").unwrap() != rule2);
     }
 
@@ -406,7 +420,7 @@ mod test {
         let src = "%%\nA : 'a' B;".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule = Rule::new("A".to_string());
-        rule.add_prod(vec![terminal("a"), nonterminal("B")]);
+        rule.add_prod(vec![terminal("a"), nonterminal("B")], None);
         assert_eq!(*grm.get_rule("A").unwrap(), rule)
     }
 
@@ -415,7 +429,7 @@ mod test {
         let src = "%%\nA : 'a' \"b\";".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule = Rule::new("A".to_string());
-        rule.add_prod(vec![terminal("a"), terminal("b")]);
+        rule.add_prod(vec![terminal("a"), terminal("b")], None);
         assert_eq!(*grm.get_rule("A").unwrap(), rule)
     }
 
@@ -654,6 +668,51 @@ x".to_string();
                 Err(YaccParserError{kind: YaccParserErrorKind::DuplicatePrecedence, line: 3, ..}) => (),
                 Err(e) => panic!("Incorrect error returned {}", e)
             }
+        }
+    }
+
+    #[test]
+    fn test_prec_override() {
+        // Taken from the Yacc manual
+        let src = "
+            %left '+' '-'
+            %left '*' '/'
+            %%
+            expr : expr '+' expr
+                 | expr '-' expr
+                 | expr '*' expr
+                 | expr '/' expr
+                 | '-'  expr %prec '*'
+                 | NAME ;
+        ";
+        let grm = parse_yacc(&src).unwrap();
+        assert_eq!(grm.precs.len(), 4);
+        println!("{:?}", grm.rules);
+        assert_eq!(grm.rules["expr"].productions[0].precedence, None);
+        assert_eq!(grm.rules["expr"].productions[3].symbols.len(), 3);
+        assert_eq!(grm.rules["expr"].productions[4].symbols.len(), 2);
+        assert_eq!(grm.rules["expr"].productions[4].precedence, Some("*".to_string()));
+    }
+
+    #[test]
+    fn test_bad_prec_overrides() {
+        match parse_yacc(&"
+          %%
+          S: 'A' %prec ;
+          ") {
+                Ok(_) => panic!("Incorrect %prec parsed"),
+                Err(YaccParserError{kind: YaccParserErrorKind::IllegalString, line: 3, ..}) => (),
+                Err(e) => panic!("Incorrect error returned {}", e)
+        }
+
+        match parse_yacc(&"
+          %%
+          S: 'A' %prec B;
+          B: ;
+          ") {
+                Ok(_) => panic!("Incorrect %prec parsed"),
+                Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByTerminal, line: 3, ..}) => (),
+                Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
 }
