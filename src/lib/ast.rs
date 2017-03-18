@@ -10,9 +10,15 @@ pub struct GrammarAST {
     pub precs: HashMap<String, Precedence>
 }
 
+#[derive(Debug)]
 pub struct Rule {
     pub name: String,
-    pub productions: Vec<Vec<Symbol>>
+    pub productions: Vec<Production>
+}
+
+#[derive(Debug)]
+pub struct Production {
+    pub symbols: Vec<Symbol>
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -75,9 +81,9 @@ impl GrammarAST {
         }
     }
 
-    pub fn add_prod(&mut self, key: String, value: Vec<Symbol>) {
+    pub fn add_prod(&mut self, key: String, syms: Vec<Symbol>) {
         let rule = self.rules.entry(key.clone()).or_insert_with(|| Rule::new(key));
-        rule.add_prod(value);
+        rule.add_prod(syms);
     }
 
     pub fn get_rule(&self, key: &str) -> Option<&Rule>{
@@ -104,8 +110,8 @@ impl GrammarAST {
             }
         }
         for rule in self.rules.values() {
-            for alt in &rule.productions {
-                for sym in alt.iter() {
+            for prod in &rule.productions {
+                for sym in prod.symbols.iter() {
                     match *sym {
                         Symbol::Nonterminal(ref name) => {
                             if !self.rules.contains_key(name) {
@@ -127,16 +133,9 @@ impl GrammarAST {
     }
 }
 
-impl fmt::Debug for GrammarAST {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let mut s = String::new();
-        s.push_str("GrammarAST:\n");
-        s.push_str(&format!("   start: {:?}\n", &self.start));
-        s.push_str(&format!("   tokens: {:?}\n", &self.tokens));
-        for rule in &self.rules {
-            s.push_str(&format!("   rule: {:?}\n", &rule));
-        }
-        writeln!(fmt, "{}", s)
+impl PartialEq for Production {
+    fn eq(&self, other: &Production) -> bool {
+        self.symbols == other.symbols
     }
 }
 
@@ -145,26 +144,8 @@ impl Rule {
         Rule {name: name, productions: vec![]}
     }
 
-    pub fn add_prod(&mut self, v: Vec<Symbol>) {
-        self.productions.push(v);
-    }
-}
-
-impl fmt::Display for Rule {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("Rule")
-           .field("name", &self.name)
-           .field("productions", &self.productions)
-           .finish()
-    }
-}
-
-impl fmt::Debug for Rule {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("Rule")
-           .field("name", &self.name)
-           .field("productions", &self.productions)
-           .finish()
+    pub fn add_prod(&mut self, syms: Vec<Symbol>) {
+        self.productions.push(Production{symbols: syms});
     }
 }
 

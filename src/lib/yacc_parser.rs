@@ -461,7 +461,7 @@ mod test {
         let src = "%token T %%\nA : T;".to_string();
         let grm = parse_yacc(&src).unwrap();
         assert!(grm.has_token("T"));
-        match grm.rules.get("A").unwrap().productions[0][0] {
+        match grm.rules.get("A").unwrap().productions[0].symbols[0] {
             Symbol::Nonterminal(_) => panic!("Should be terminal"),
             Symbol::Terminal(_)    => ()
         }

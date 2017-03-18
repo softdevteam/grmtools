@@ -157,9 +157,9 @@ impl Grammar {
             let astrule = &ast.rules[astrulename];
             let mut rule = rules_prods.get_mut(usize::from(rule_idx)).unwrap();
             for astprod in &astrule.productions {
-                let mut prod = Vec::with_capacity(astprod.len());
+                let mut prod = Vec::with_capacity(astprod.symbols.len());
                 let mut prec = None;
-                for astsym in astprod.iter() {
+                for astsym in astprod.symbols.iter() {
                     let sym = match *astsym {
                         ast::Symbol::Nonterminal(ref n) =>
                             Symbol::Nonterminal(nonterm_map[n]),
@@ -169,7 +169,7 @@ impl Grammar {
                     prod.push(sym);
                 }
                 if prec.is_none() {
-                    for astsym in astprod.iter().rev() {
+                    for astsym in astprod.symbols.iter().rev() {
                         if let ast::Symbol::Terminal(ref n) = *astsym {
                             if let Some(p) = ast.precs.get(n) {
                                 prec = Some(*p);
