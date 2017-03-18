@@ -192,13 +192,13 @@ impl YaccParser {
         i = try!(self.parse_ws(i));
         while i < self.src.len() {
             if let Some(j) = self.lookahead_is("|", i) {
-                self.grammar.add_rule(rn.clone(), syms);
+                self.grammar.add_prod(rn.clone(), syms);
                 syms = Vec::new();
                 i = try!(self.parse_ws(j));
                 continue;
             }
             else if let Some(j) = self.lookahead_is(";", i) {
-                self.grammar.add_rule(rn.clone(), syms);
+                self.grammar.add_prod(rn.clone(), syms);
                 return Ok(j);
             }
 
@@ -316,9 +316,9 @@ mod test {
         assert!(Rule::new("A".to_string()) != Rule::new("B".to_string()));
 
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_symbols(vec![terminal("a")]);
+        rule1.add_prod(vec![terminal("a")]);
         let mut rule2 = Rule::new("A".to_string());
-        rule2.add_symbols(vec![terminal("a")]);
+        rule2.add_prod(vec![terminal("a")]);
         assert_eq!(rule1, rule2);
     }
 
@@ -330,10 +330,10 @@ mod test {
         ".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_symbols(vec![terminal("a")]);
+        rule1.add_prod(vec![terminal("a")]);
         assert_eq!(*grm.get_rule("A").unwrap(), rule1);
         let mut rule2 = Rule::new("B".to_string());
-        rule2.add_symbols(vec![terminal("a")]);
+        rule2.add_prod(vec![terminal("a")]);
         assert!(*grm.get_rule("A").unwrap() != rule2);
     }
 
@@ -346,11 +346,11 @@ mod test {
         ".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_symbols(vec![terminal("a")]);
-        rule1.add_symbols(vec![terminal("b")]);
+        rule1.add_prod(vec![terminal("a")]);
+        rule1.add_prod(vec![terminal("b")]);
         assert_eq!(*grm.get_rule("A").unwrap(), rule1);
         let mut rule2 = Rule::new("B".to_string());
-        rule2.add_symbols(vec![terminal("a")]);
+        rule2.add_prod(vec![terminal("a")]);
         assert!(*grm.get_rule("A").unwrap() != rule2);
     }
 
@@ -365,17 +365,17 @@ mod test {
         let grm = parse_yacc(&src).unwrap();
 
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_symbols(vec![]);
+        rule1.add_prod(vec![]);
         assert_eq!(*grm.get_rule("A").unwrap(), rule1);
 
         let mut rule2 = Rule::new("B".to_string());
-        rule2.add_symbols(vec![terminal("b")]);
-        rule2.add_symbols(vec![]);
+        rule2.add_prod(vec![terminal("b")]);
+        rule2.add_prod(vec![]);
         assert_eq!(*grm.get_rule("B").unwrap(), rule2);
 
         let mut rule3 = Rule::new("C".to_string());
-        rule3.add_symbols(vec![]);
-        rule3.add_symbols(vec![terminal("c")]);
+        rule3.add_prod(vec![]);
+        rule3.add_prod(vec![terminal("c")]);
         assert_eq!(*grm.get_rule("C").unwrap(), rule3);
     }
 
@@ -387,11 +387,11 @@ mod test {
         ".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule1 = Rule::new("A".to_string());
-        rule1.add_symbols(vec![terminal("a")]);
-        rule1.add_symbols(vec![terminal("b")]);
+        rule1.add_prod(vec![terminal("a")]);
+        rule1.add_prod(vec![terminal("b")]);
         assert_eq!(*grm.get_rule("A").unwrap(), rule1);
         let mut rule2 = Rule::new("B".to_string());
-        rule2.add_symbols(vec![terminal("a")]);
+        rule2.add_prod(vec![terminal("a")]);
         assert!(*grm.get_rule("A").unwrap() != rule2);
     }
 
@@ -406,7 +406,7 @@ mod test {
         let src = "%%\nA : 'a' B;".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule = Rule::new("A".to_string());
-        rule.add_symbols(vec![terminal("a"), nonterminal("B")]);
+        rule.add_prod(vec![terminal("a"), nonterminal("B")]);
         assert_eq!(*grm.get_rule("A").unwrap(), rule)
     }
 
@@ -415,7 +415,7 @@ mod test {
         let src = "%%\nA : 'a' \"b\";".to_string();
         let grm = parse_yacc(&src).unwrap();
         let mut rule = Rule::new("A".to_string());
-        rule.add_symbols(vec![terminal("a"), terminal("b")]);
+        rule.add_prod(vec![terminal("a"), terminal("b")]);
         assert_eq!(*grm.get_rule("A").unwrap(), rule)
     }
 

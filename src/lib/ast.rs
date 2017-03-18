@@ -75,9 +75,9 @@ impl GrammarAST {
         }
     }
 
-    pub fn add_rule(&mut self, key: String, value: Vec<Symbol>) {
+    pub fn add_prod(&mut self, key: String, value: Vec<Symbol>) {
         let rule = self.rules.entry(key.clone()).or_insert_with(|| Rule::new(key));
-        rule.add_symbols(value);
+        rule.add_prod(value);
     }
 
     pub fn get_rule(&self, key: &str) -> Option<&Rule>{
@@ -145,7 +145,7 @@ impl Rule {
         Rule {name: name, productions: vec![]}
     }
 
-    pub fn add_symbols(&mut self, v: Vec<Symbol>) {
+    pub fn add_prod(&mut self, v: Vec<Symbol>) {
         self.productions.push(v);
     }
 }
@@ -199,7 +199,7 @@ mod test {
     fn test_invalid_start_rule(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("B".to_string(), vec!());
+        grm.add_prod("B".to_string(), vec!());
         match grm.validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule, ..}) => (),
             _ => panic!("Validation error")
@@ -210,7 +210,7 @@ mod test {
     fn test_valid_start_rule(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string(), vec!());
+        grm.add_prod("A".to_string(), vec!());
         assert!(grm.validate().is_ok());
     }
 
@@ -218,8 +218,8 @@ mod test {
     fn test_valid_nonterminal_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string(), vec!(nonterminal("B")));
-        grm.add_rule("B".to_string(), vec!());
+        grm.add_prod("A".to_string(), vec!(nonterminal("B")));
+        grm.add_prod("B".to_string(), vec!());
         assert!(grm.validate().is_ok());
     }
 
@@ -227,7 +227,7 @@ mod test {
     fn test_invalid_nonterminal_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string(), vec!(nonterminal("B")));
+        grm.add_prod("A".to_string(), vec!(nonterminal("B")));
         match grm.validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
@@ -239,7 +239,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string(), vec!(terminal("b")));
+        grm.add_prod("A".to_string(), vec!(terminal("b")));
         assert!(grm.validate().is_ok());
     }
 
@@ -251,7 +251,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string(), vec!(nonterminal("b")));
+        grm.add_prod("A".to_string(), vec!(nonterminal("b")));
         assert!(grm.validate().is_ok());
     }
 
@@ -259,7 +259,7 @@ mod test {
     fn test_invalid_terminal_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string(), vec!(terminal("b")));
+        grm.add_prod("A".to_string(), vec!(terminal("b")));
         match grm.validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
             _ => panic!("Validation error")
@@ -270,7 +270,7 @@ mod test {
     fn test_invalid_nonterminal_forgotten_token(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string(), vec!(nonterminal("b"), terminal("b")));
+        grm.add_prod("A".to_string(), vec!(nonterminal("b"), terminal("b")));
         match grm.validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
