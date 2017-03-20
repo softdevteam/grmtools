@@ -1,5 +1,6 @@
-#![cfg_attr(test, allow(dead_code))]
+#![feature(try_from)]
 
+use std::convert::TryFrom;
 use std::collections::HashMap;
 use std::{env, process};
 use std::fs::File;
@@ -10,7 +11,7 @@ extern crate getopts;
 use getopts::Options;
 
 extern crate lrlex;
-use lrlex::{build_lex, do_lex, Lexeme};
+use lrlex::{build_lex, Lexeme};
 
 extern crate lrtable;
 use lrtable::yacc_to_statetable;
@@ -60,7 +61,7 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let mut lexer = match build_lex(&read_file(lex_l_path)) {
+    let mut lexer = match build_lex::<u16>(&read_file(lex_l_path)) {
         Ok(ast) => ast,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
@@ -78,16 +79,16 @@ fn main() {
     };
 
     // Sync up the IDs of terminals in the lexer and parser
-    let mut rule_ids = HashMap::<&str, usize>::new();
+    let mut rule_ids = HashMap::<&str, u16>::new();
     for term_idx in grm.iter_term_idxs() {
-        rule_ids.insert(grm.term_name(term_idx).unwrap(), usize::from(term_idx));
+        rule_ids.insert(grm.term_name(term_idx).unwrap(), u16::try_from(usize::from(term_idx)).unwrap());
     }
     lexer.set_rule_ids(&rule_ids);
 
     let input = read_file(&matches.free[2]);
 
-    let mut lexemes = do_lex(&lexer, &input).unwrap();
-    lexemes.push(Lexeme{tok_id: usize::from(grm.end_term), start: input.len(), len: 0});
-    let pt = parse(&grm, &stable, &lexemes).unwrap();
+    let mut lexemes = lexer.lex(&input).unwrap();
+    lexemes.push(Lexeme::new(u16::try_from(usize::from(grm.end_term)).unwrap(), input.len(), 0));
+    let pt = parse::<u16>(&grm, &stable, &lexemes).unwrap();
     println!("{}", pt.pp(&grm, &input));
 }
