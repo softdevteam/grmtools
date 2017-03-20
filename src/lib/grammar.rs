@@ -157,9 +157,8 @@ impl Grammar {
             let astrule = &ast.rules[astrulename];
             let mut rule = rules_prods.get_mut(usize::from(rule_idx)).unwrap();
             for astprod in &astrule.productions {
-                let mut prod = Vec::with_capacity(astprod.len());
-                let mut prec = None;
-                for astsym in astprod.iter() {
+                let mut prod = Vec::with_capacity(astprod.symbols.len());
+                for astsym in astprod.symbols.iter() {
                     let sym = match *astsym {
                         ast::Symbol::Nonterminal(ref n) =>
                             Symbol::Nonterminal(nonterm_map[n]),
@@ -168,8 +167,12 @@ impl Grammar {
                     };
                     prod.push(sym);
                 }
-                if prec.is_none() {
-                    for astsym in astprod.iter().rev() {
+                let mut prec = None;
+                if let Some(ref n) = astprod.precedence {
+                    prec = Some(*ast.precs.get(n).unwrap());
+                }
+                else {
+                    for astsym in astprod.symbols.iter().rev() {
                         if let ast::Symbol::Terminal(ref n) = *astsym {
                             if let Some(p) = ast.precs.get(n) {
                                 prec = Some(*p);
@@ -374,10 +377,10 @@ mod test {
                  | Expr '*' Expr
                  | Expr '~' Expr
                  | 'id' ;
-          ".to_string()).unwrap());
+          ").unwrap());
 
         assert_eq!(grm.prod_precs.len(), 8);
-        assert_eq!(grm.prod_precs[0], None); 
+        assert_eq!(grm.prod_precs[0], None);
         assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 0, kind: AssocKind::Right});
         assert_eq!(grm.prod_precs[2].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[3].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
@@ -386,4 +389,29 @@ mod test {
         assert_eq!(grm.prod_precs[6].unwrap(), Precedence{level: 4, kind: AssocKind::Nonassoc});
         assert!(grm.prod_precs[7].is_none());
     }
+
+    #[test]
+    fn test_prec_override() {
+        let grm = Grammar::new(&parse_yacc(&"
+            %start expr
+            %left '+' '-'
+            %left '*' '/'
+            %%
+            expr : expr '+' expr
+                 | expr '-' expr
+                 | expr '*' expr
+                 | expr '/' expr
+                 | '-'  expr %prec '*'
+                 | 'id' ;
+        ").unwrap());
+        assert_eq!(grm.prod_precs.len(), 7);
+        assert_eq!(grm.prod_precs[0], None);
+        assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 0, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[2].unwrap(), Precedence{level: 0, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[3].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[4].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[5].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
+        assert!(grm.prod_precs[6].is_none());
+    }
+
 }
