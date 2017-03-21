@@ -169,7 +169,7 @@ impl Grammar {
                 }
                 let mut prec = None;
                 if let Some(ref n) = astprod.precedence {
-                    prec = Some(*ast.precs.get(n).unwrap());
+                    prec = Some(ast.precs[n]);
                 }
                 else {
                     for astsym in astprod.symbols.iter().rev() {
