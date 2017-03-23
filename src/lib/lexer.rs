@@ -51,7 +51,7 @@ impl<TokId: Copy + Eq> Lexer<TokId> {
             match r.name.as_ref() {
                 None => (),
                 Some(n) => {
-                    r.tok_id = *map.get(&**n).unwrap()
+                    r.tok_id = map[&**n]
                 }
             };
         }
@@ -148,11 +148,11 @@ mod test {
 
         let lexemes = lexer.lex("abc 123").unwrap();
         assert_eq!(lexemes.len(), 2);
-        let lex1 = lexemes.get(0).unwrap();
+        let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id, 1);
         assert_eq!(lex1.start, 0);
         assert_eq!(lex1.len, 3);
-        let lex2 = lexemes.get(1).unwrap();
+        let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id, 0);
         assert_eq!(lex2.start, 4);
         assert_eq!(lex2.len, 3);
@@ -187,11 +187,11 @@ if IF
         let lexemes = lexer.lex("iff if").unwrap();
         println!("{:?}", lexemes);
         assert_eq!(lexemes.len(), 2);
-        let lex1 = lexemes.get(0).unwrap();
+        let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id, 1);
         assert_eq!(lex1.start, 0);
         assert_eq!(lex1.len, 3);
-        let lex2 = lexemes.get(1).unwrap();
+        let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id, 0);
         assert_eq!(lex2.start, 4);
         assert_eq!(lex2.len, 2);
