@@ -475,7 +475,7 @@ mod test {
         let src = "%token T %%\nA : T;".to_string();
         let grm = parse_yacc(&src).unwrap();
         assert!(grm.has_token("T"));
-        match grm.rules.get("A").unwrap().productions[0].symbols[0] {
+        match grm.rules["A"].productions[0].symbols[0] {
             Symbol::Nonterminal(_) => panic!("Should be terminal"),
             Symbol::Terminal(_)    => ()
         }
@@ -620,12 +620,12 @@ x".to_string();
           ".to_string();
         let grm = parse_yacc(&src).unwrap();
         assert_eq!(grm.precs.len(), 6);
-        assert_eq!(*grm.precs.get("+").unwrap(), Precedence{level: 0, kind: AssocKind::Left});
-        assert_eq!(*grm.precs.get("-").unwrap(), Precedence{level: 0, kind: AssocKind::Left});
-        assert_eq!(*grm.precs.get("*").unwrap(), Precedence{level: 1, kind: AssocKind::Left});
-        assert_eq!(*grm.precs.get("/").unwrap(), Precedence{level: 2, kind: AssocKind::Right});
-        assert_eq!(*grm.precs.get("^").unwrap(), Precedence{level: 3, kind: AssocKind::Right});
-        assert_eq!(*grm.precs.get("~").unwrap(), Precedence{level: 4, kind: AssocKind::Nonassoc});
+        assert_eq!(grm.precs["+"], Precedence{level: 0, kind: AssocKind::Left});
+        assert_eq!(grm.precs["-"], Precedence{level: 0, kind: AssocKind::Left});
+        assert_eq!(grm.precs["*"], Precedence{level: 1, kind: AssocKind::Left});
+        assert_eq!(grm.precs["/"], Precedence{level: 2, kind: AssocKind::Right});
+        assert_eq!(grm.precs["^"], Precedence{level: 3, kind: AssocKind::Right});
+        assert_eq!(grm.precs["~"], Precedence{level: 4, kind: AssocKind::Nonassoc});
     }
 
     #[test]
