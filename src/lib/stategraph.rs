@@ -509,15 +509,29 @@ impl StateGraph {
                 }
             }
 
-            for (sym, nstate) in new_states.drain(..) {
+            'a: for (sym, nstate) in new_states.drain(..) {
                 let mut m = None;
                 {
-                    // Try and find a weakly compatible match for this state.
-                    let cnd_weaklies = match sym {
+                    // Try and compatible match for this state.
+                    let cnd_states = match sym {
                         Symbol::Nonterminal(nonterm_i) => &cnd_nonterm_weaklies[usize::from(nonterm_i)],
                         Symbol::Terminal(term_i) => &cnd_term_weaklies[usize::from(term_i)]
                     };
-                    for cnd in cnd_weaklies.iter().map(|x| *x) {
+                    // First of all see if any of the candidate states are exactly the same as the
+                    // new state, in which case we only need to add an edge to the candidate
+                    // state. This isn't just an optimisation (though it does avoid the expense
+                    // of change propagation), but has a correctness aspect: there's no guarantee
+                    // that the weakly compatible check is reflexive (i.e. a state may not be
+                    // weakly compatible with itself).
+                    for cnd in cnd_states.iter().map(|x| *x) {
+                        if core_states[usize::from(cnd)] == nstate {
+                            edges[state_i].insert(sym, cnd);
+                            continue 'a;
+                        }
+                    }
+                    // No candidate states were equal to the new state, so we need to look for a
+                    // candidate state which is weakly compatible.
+                    for cnd in cnd_states.iter().map(|x| *x) {
                         if core_states[usize::from(cnd)].weakly_compatible(&nstate) {
                             m = Some(cnd);
                             break;
