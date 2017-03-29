@@ -61,14 +61,14 @@ use grammar::{PIdx, Grammar, NTIdx, Symbol, SIdx, TIdx};
 /// The type of "context" (also known as "lookaheads")
 pub type Ctx = BitVec;
 
-// Firsts stores all the first sets for a given grammar:
+// Firsts stores all the first sets for a given grammar. For example, given this code and grammar:
 //   let grm = Grammar::new(parse_yacc("
 //     S: A 'b';
 //     A: 'a'
 //      | ;"));
 //   let firsts = Firsts::new(&grm);
-//   // Given the above grammar then the following assertions (and only the following assertions)
-//   // about the firsts set are correct:
+// then the following assertions (and only the following assertions) about the firsts set are
+// correct:
 //   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("a")));
 //   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("b")));
 //   assert!(firsts.is_set(grm.nonterminal_off("A"), grm.terminal_off("a")));
