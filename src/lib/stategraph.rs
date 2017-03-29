@@ -61,30 +61,18 @@ use grammar::{PIdx, Grammar, NTIdx, Symbol, SIdx, TIdx};
 /// The type of "context" (also known as "lookaheads")
 pub type Ctx = BitVec;
 
-/// Firsts stores all the first sets for a given grammar.
-///
-/// # Example
-/// Given a grammar `input`:
-///
-/// ```c
-/// S : A "b";
-/// A : "a" |;
-/// ```
-///
-/// ```c
-/// let grm = Grammar::new(parse_yacc(&input));
-/// let firsts = Firsts::new(grm);
-/// ```
-///
-/// Then the following assertions (and only the following assertions) about the firsts set are
-/// correct:
-/// ```c
-/// assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("a")));
-/// assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("b")));
-/// assert!(firsts.is_epsilon_set(grm.nonterminal_off("S")));
-/// assert!(firsts.is_set(grm.nonterminal_off("A"), grm.terminal_off("a")));
-/// assert!(firsts.is_epsilon_set(grm.nonterminal_off("A")));
-/// ```
+// Firsts stores all the first sets for a given grammar. For example, given this code and grammar:
+//   let grm = Grammar::new(parse_yacc("
+//     S: A 'b';
+//     A: 'a'
+//      | ;"));
+//   let firsts = Firsts::new(&grm);
+// then the following assertions (and only the following assertions) about the firsts set are
+// correct:
+//   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("a")));
+//   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("b")));
+//   assert!(firsts.is_set(grm.nonterminal_off("A"), grm.terminal_off("a")));
+//   assert!(firsts.is_epsilon_set(grm.nonterminal_off("A")));
 #[derive(Debug)]
 struct Firsts {
     // The representation is a contiguous bitfield, of (terms_len * 1) * nonterms_len. Put another
