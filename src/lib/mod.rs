@@ -83,11 +83,19 @@ impl fmt::Display for YaccToStateTableError {
     }
 }
 
-pub fn yacc_to_statetable(s: &str) -> Result<(Grammar, StateTable), YaccToStateTableError> {
+pub enum Minimiser {
+    Pager
+}
+
+pub fn yacc_to_statetable(s: &str, m: Minimiser) -> Result<(Grammar, StateTable), YaccToStateTableError> {
     let ast = try!(parse_yacc(s));
     try!(ast.validate());
     let grm = Grammar::new(&ast);
-    let sg = StateGraph::new(&grm);
-    let st = StateTable::new(&grm, &sg);
+    let st = match m {
+        Minimiser::Pager => {
+            let sg = StateGraph::new(&grm);
+            StateTable::new(&grm, &sg)
+        }
+    };
     Ok((grm, st))
 }
