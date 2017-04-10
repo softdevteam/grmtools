@@ -41,7 +41,8 @@ extern crate fnv;
 use self::fnv::FnvHasher;
 
 use StIdx;
-use grammar::{PIdx, Grammar, NTIdx, Symbol, SIdx, TIdx};
+use firsts::Firsts;
+use grammar::{PIdx, Grammar, Symbol, SIdx};
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -60,139 +61,6 @@ use grammar::{PIdx, Grammar, NTIdx, Symbol, SIdx, TIdx};
 
 /// The type of "context" (also known as "lookaheads")
 pub type Ctx = BitVec;
-
-// Firsts stores all the first sets for a given grammar. For example, given this code and grammar:
-//   let grm = Grammar::new(parse_yacc("
-//     S: A 'b';
-//     A: 'a'
-//      | ;"));
-//   let firsts = Firsts::new(&grm);
-// then the following assertions (and only the following assertions) about the firsts set are
-// correct:
-//   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("a")));
-//   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("b")));
-//   assert!(firsts.is_set(grm.nonterminal_off("A"), grm.terminal_off("a")));
-//   assert!(firsts.is_epsilon_set(grm.nonterminal_off("A")));
-#[derive(Debug)]
-struct Firsts {
-    // The representation is a contiguous bitfield, of (terms_len * 1) * nonterms_len. Put another
-    // way, each nonterminal has (terms_len + 1) bits, where the bit at position terms_len
-    // represents epsilon. So for the grammar given above, the bitvector would be two sequences of
-    // 3 bits where bits 0, 1, 2 represent terminals a, b, epsilon respectively.
-    //   111101
-    // Where "111" is for the nonterminal S, and 101 for A.
-    prod_firsts: Vec<Ctx>,
-    prod_epsilons: BitVec,
-    terms_len: usize
-}
-
-impl Firsts {
-    /// Generates and returns the firsts set for the given grammar.
-    fn new(grm: &Grammar) -> Firsts {
-        let mut prod_firsts = Vec::with_capacity(grm.nonterms_len);
-        for _ in 0..grm.nonterms_len {
-            prod_firsts.push(BitVec::from_elem(grm.terms_len, false));
-        }
-        let mut firsts = Firsts {
-            prod_firsts  : prod_firsts,
-            prod_epsilons: BitVec::from_elem(grm.nonterms_len, false),
-            terms_len   : grm.terms_len
-        };
-
-        // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
-        // look at each rule E, and see if any of the nonterminals at the start of its productions
-        // have new elements in since we last looked. If they do, we'll have to do another round.
-        loop {
-            let mut changed = false;
-            for rul_i in grm.iter_nonterm_idxs() {
-                // For each rule E
-                for prod_i in grm.nonterm_to_prods(rul_i).unwrap().iter() {
-                    // ...and each production A
-                    let prod = grm.prod(*prod_i).unwrap();
-                    if prod.is_empty() {
-                        // if it's an empty production, ensure this nonterminal's epsilon bit is
-                        // set.
-                        if !firsts.is_epsilon_set(NTIdx::from(rul_i)) {
-                            firsts.prod_epsilons.set(usize::from(rul_i), true);
-                            changed = true;
-                        }
-                        continue;
-                    }
-                    for (sym_i, sym) in prod.iter().enumerate() {
-                        match *sym {
-                            Symbol::Terminal(term_i) => {
-                                // if symbol is a Terminal, add to FIRSTS
-                                if !firsts.set(rul_i, term_i) {
-                                    changed = true;
-                                }
-                                break;
-                            },
-                            Symbol::Nonterminal(nonterm_i) => {
-                                // if we're dealing with another Nonterminal, union its FIRSTs
-                                // together with the current nonterminals FIRSTs. Note this is
-                                // (intentionally) a no-op if the two terminals are one and the
-                                // same.
-                                for term_idx in grm.iter_term_idxs() {
-                                    if firsts.is_set(nonterm_i, term_idx)
-                                      && !firsts.set(rul_i, term_idx) {
-                                        changed = true;
-                                    }
-                                }
-
-                                // If the epsilon bit in the nonterminal being referenced is set,
-                                // and if its the last symbol in the production, then add epsilon
-                                // to FIRSTs.
-                                if firsts.is_epsilon_set(nonterm_i) && sym_i == prod.len() - 1 {
-                                    // Only add epsilon if the symbol is the last in the production
-                                    if !firsts.prod_epsilons[usize::from(rul_i)] {
-                                        firsts.prod_epsilons.set(usize::from(rul_i), true);
-                                        changed = true;
-                                    }
-                                }
-
-                                // If FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon,
-                                // then don't try and calculate the FIRSTS of Y2 or Y3 (i.e. stop
-                                // now).
-                                if !firsts.is_epsilon_set(nonterm_i) {
-                                    break;
-                                }
-                            },
-                        }
-                    }
-                }
-            }
-            if !changed { return firsts; }
-        }
-    }
-
-    /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
-    fn is_set(&self, nidx: NTIdx, tidx: TIdx) -> bool {
-        self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
-    }
-
-    /// Get all the firsts for production `nidx` as a `Ctx`.
-    fn prod_firsts(&self, nidx: NTIdx) -> &Ctx {
-        &self.prod_firsts[usize::from(usize::from(nidx))]
-    }
-
-    /// Returns true if the nonterminal `nidx` has epsilon in its first set.
-    fn is_epsilon_set(&self, nidx: NTIdx) -> bool {
-        self.prod_epsilons[usize::from(usize::from(nidx))]
-    }
-
-    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
-    /// it was already set, or false otherwise.
-    fn set(&mut self, nidx: NTIdx, tidx: TIdx) -> bool {
-        let mut prod = &mut self.prod_firsts[usize::from(nidx)];
-        if prod[usize::from(tidx)] {
-            true
-        }
-        else {
-            prod.set(usize::from(tidx), true);
-            false
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Itemset {
@@ -675,162 +543,6 @@ mod test {
         assert!(bitvec_intersect(&b1, &b2));
     }
 
-    fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
-        let nt_i = grm.nonterminal_off(rn);
-        for i in 0 .. grm.terms_len {
-            let n = grm.term_name(TIdx::from(i)).unwrap();
-            match should_be.iter().position(|&x| x == n) {
-                Some(_) => {
-                    if !firsts.is_set(nt_i, TIdx::from(i)) {
-                        panic!("{} is not set in {}", n, rn);
-                    }
-                }
-                None    => {
-                    if firsts.is_set(nt_i, TIdx::from(i)) {
-                        panic!("{} is incorrectly set in {}", n, rn);
-                    }
-                }
-            }
-        }
-        if should_be.iter().position(|x| x == &"".to_string()).is_some() {
-            assert!(firsts.is_epsilon_set(nt_i));
-        }
-    }
-
-    #[test]
-    fn test_first(){
-        let ast = parse_yacc(&"
-          %start C
-          %token c d
-          %%
-          C: 'c';
-          D: 'd';
-          E: D | C;
-          F: E;
-          ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
-        let firsts = Firsts::new(&grm);
-        has(&grm, &firsts, "^", vec!["c"]);
-        has(&grm, &firsts, "D", vec!["d"]);
-        has(&grm, &firsts, "E", vec!["d", "c"]);
-        has(&grm, &firsts, "F", vec!["d", "c"]);
-    }
-
-    #[test]
-    fn test_first_no_subsequent_nonterminals() {
-        let ast = parse_yacc(&"
-          %start C
-          %token c d
-          %%
-          C: 'c';
-          D: 'd';
-          E: D C;
-          ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
-        let firsts = Firsts::new(&grm);
-        has(&grm, &firsts, "E", vec!["d"]);
-    }
-
-    #[test]
-    fn test_first_epsilon() {
-        let ast = parse_yacc(&"
-          %start A
-          %token a b c
-          %%
-          A: B 'a';
-          B: 'b' | ;
-          C: 'c' | ;
-          D: C;
-          ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
-        let firsts = Firsts::new(&grm);
-        has(&grm, &firsts, "A", vec!["b", "a"]);
-        has(&grm, &firsts, "C", vec!["c", ""]);
-        has(&grm, &firsts, "D", vec!["c", ""]);
-    }
-
-    #[test]
-    fn test_last_epsilon() {
-        let ast = parse_yacc(&"
-          %start A
-          %token b c
-          %%
-          A: B C;
-          B: 'b' | ;
-          C: B 'c' B;
-          ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
-        let firsts = Firsts::new(&grm);
-        has(&grm, &firsts, "A", vec!["b", "c"]);
-        has(&grm, &firsts, "B", vec!["b", ""]);
-        has(&grm, &firsts, "C", vec!["b", "c"]);
-    }
-
-    #[test]
-    fn test_first_no_multiples() {
-        let ast = parse_yacc(&"
-          %start A
-          %token b c
-          %%
-          A: B 'b';
-          B: 'b' | ;
-          ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
-        let firsts = Firsts::new(&grm);
-        has(&grm, &firsts, "A", vec!["b"]);
-    }
-
-    fn eco_grammar() -> Grammar {
-        let ast = parse_yacc(&"
-          %start S
-          %token a b c d f
-          %%
-          S: S 'b' | 'b' A 'a' | 'a';
-          A: 'a' S 'c' | 'a' | 'a' S 'b';
-          B: A S;
-          C: D A;
-          D: 'd' | ;
-          F: C D 'f';
-          ".to_string()).unwrap();
-        Grammar::new(&ast)
-    }
-
-    #[test]
-    fn test_first_from_eco() {
-        let grm = eco_grammar();
-        let firsts = Firsts::new(&grm);
-        has(&grm, &firsts, "S", vec!["a", "b"]);
-        has(&grm, &firsts, "A", vec!["a"]);
-        has(&grm, &firsts, "B", vec!["a"]);
-        has(&grm, &firsts, "D", vec!["d", ""]);
-        has(&grm, &firsts, "C", vec!["d", "a"]);
-        has(&grm, &firsts, "F", vec!["d", "a"]);
-    }
-
-    #[test]
-    fn test_first_from_eco_bug() {
-        let ast = parse_yacc(&"
-          %start E
-          %token a b c d e f
-          %%
-          E : T | E 'b' T;
-          T : P | T 'e' P;
-          P : 'a';
-          C: C 'c' | ;
-          D: D 'd' | F;
-          F: 'f' | ;
-          G: C D;
-          ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
-        let firsts = Firsts::new(&grm);
-        has(&grm, &firsts, "E", vec!["a"]);
-        has(&grm, &firsts, "T", vec!["a"]);
-        has(&grm, &firsts, "P", vec!["a"]);
-        has(&grm, &firsts, "C", vec!["c", ""]);
-        has(&grm, &firsts, "D", vec!["f", "d", ""]);
-        has(&grm, &firsts, "G", vec!["c", "d", "f", ""]);
-    }
-
     fn state_exists(grm: &Grammar, is: &Itemset, nt: &str, prod_off: usize, dot: usize, la:
                         Vec<&str>) {
         let ab_prod_off = grm.nonterm_to_prods(grm.nonterminal_off(nt)).unwrap()[prod_off];
@@ -884,6 +596,21 @@ mod test {
         state_exists(&grm, &cls_is, "L", 0, 0, vec!["$", "="]);
         state_exists(&grm, &cls_is, "L", 1, 0, vec!["$", "="]);
         state_exists(&grm, &cls_is, "R", 0, 0, vec!["$"]);
+    }
+
+    fn eco_grammar() -> Grammar {
+        let ast = parse_yacc(&"
+          %start S
+          %token a b c d f
+          %%
+          S: S 'b' | 'b' A 'a' | 'a';
+          A: 'a' S 'c' | 'a' | 'a' S 'b';
+          B: A S;
+          C: D A;
+          D: 'd' | ;
+          F: C D 'f';
+          ".to_string()).unwrap();
+        Grammar::new(&ast)
     }
 
     #[test]
