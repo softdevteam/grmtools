@@ -40,6 +40,7 @@ use std::fmt;
 mod ast;
 mod firsts;
 pub mod grammar;
+mod itemset;
 mod yacc_parser;
 mod stategraph;
 pub mod statetable;
