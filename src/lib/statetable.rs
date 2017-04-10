@@ -195,8 +195,8 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(StIdx, Symbol), Act
 mod test {
     use StIdx;
     use super::{Action, StateTable};
-    use stategraph::StateGraph;
     use grammar::{Grammar, PIdx, Symbol, TIdx};
+    use pager::pager_stategraph;
     use yacc_parser::parse_yacc;
 
     #[test]
@@ -209,7 +209,7 @@ mod test {
             Term : Factor '*' Term | Factor;
             Factor : 'id';
           ".to_string()).unwrap());
-        let sg = StateGraph::new(&grm);
+        let sg = pager_stategraph(&grm);
         assert_eq!(sg.states.len(), 9);
 
         let s0 = StIdx(0);
@@ -268,7 +268,7 @@ mod test {
             B : 'a';
             C : 'a';
           ".to_string()).unwrap());
-        let sg = StateGraph::new(&grm);
+        let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 8);
 
@@ -288,7 +288,7 @@ mod test {
                  | Expr '*' Expr
                  | 'id' ;
           ".to_string()).unwrap());
-        let sg = StateGraph::new(&grm);
+        let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 15);
 
@@ -317,7 +317,7 @@ mod test {
                  | Expr '*' Expr
                  | 'id' ;
           ".to_string()).unwrap());
-        let sg = StateGraph::new(&grm);
+        let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 15);
 
@@ -350,7 +350,7 @@ mod test {
                  | Expr '=' Expr
                  | 'id' ;
           ".to_string()).unwrap());
-        let sg = StateGraph::new(&grm);
+        let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 24);
 
@@ -394,7 +394,7 @@ mod test {
                  | Expr '~' Expr
                  | 'id' ;
           ".to_string()).unwrap());
-        let sg = StateGraph::new(&grm);
+        let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg);
         assert_eq!(st.actions.len(), 34);
 

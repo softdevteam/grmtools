@@ -42,12 +42,12 @@ mod firsts;
 pub mod grammar;
 mod itemset;
 mod yacc_parser;
+mod pager;
 mod stategraph;
 pub mod statetable;
 
 pub use grammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
 pub use ast::{GrammarAST, GrammarValidationError};
-use stategraph::StateGraph;
 pub use statetable::{Action, StateTable};
 pub use yacc_parser::{YaccParserError, YaccParserErrorKind};
 use yacc_parser::parse_yacc;
@@ -95,7 +95,7 @@ pub fn yacc_to_statetable(s: &str, m: Minimiser) -> Result<(Grammar, StateTable)
     let grm = Grammar::new(&ast);
     let st = match m {
         Minimiser::Pager => {
-            let sg = StateGraph::new(&grm);
+            let sg = pager::pager_stategraph(&grm);
             StateTable::new(&grm, &sg)
         }
     };
