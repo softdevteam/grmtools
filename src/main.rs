@@ -46,7 +46,7 @@ extern crate lrlex;
 use lrlex::{build_lex, Lexeme};
 
 extern crate lrtable;
-use lrtable::yacc_to_statetable;
+use lrtable::{Minimiser, yacc_to_statetable};
 
 extern crate lrpar;
 use lrpar::parse;
@@ -102,7 +102,7 @@ fn main() {
     };
 
     let yacc_y_path = &matches.free[1];
-    let (grm, stable) = match yacc_to_statetable(&read_file(yacc_y_path)) {
+    let (grm, stable) = match yacc_to_statetable(&read_file(yacc_y_path), Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
