@@ -49,7 +49,7 @@ extern crate lrtable;
 use lrtable::{Minimiser, yacc_to_statetable};
 
 extern crate lrpar;
-use lrpar::parse;
+use lrpar::parser::parse;
 
 fn usage(prog: String, msg: &str) {
     let path = Path::new(prog.as_str());
