@@ -91,7 +91,7 @@ pub struct Grammar {
     pub start_prod: PIdx,
     /// A list of all productions.
     prods: Vec<Vec<Symbol>>,
-    /// A mapping from rules to their productions. Note that 2) the order of rules is identical to
+    /// A mapping from rules to their productions. Note that 1) the order of rules is identical to
     /// that of `nonterminal_names' 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
     rules_prods: Vec<Vec<PIdx>>,
