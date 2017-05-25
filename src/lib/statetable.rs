@@ -31,10 +31,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
+use std::fmt;
 
 use StIdx;
 use grammar::{AssocKind, Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
 use stategraph::StateGraph;
+
+/// The various different possible Yacc parser errors.
+#[derive(Debug)]
+pub enum StateTableErrorKind {
+    AcceptReduceConflict
+}
+
+/// Any error from the Yacc parser returns an instance of this struct.
+#[derive(Debug)]
+pub struct StateTableError {
+    pub kind: StateTableErrorKind,
+    pub prod_idx: PIdx
+}
+
+impl fmt::Display for StateTableError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s;
+        match self.kind {
+            StateTableErrorKind::AcceptReduceConflict => s = "Accept/reduce conflict",
+        }
+        write!(f, "{}", s)
+    }
+}
 
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
 /// separate hashmaps, rather than a single table, due to the different types of their values.
@@ -59,7 +83,7 @@ pub enum Action {
 }
 
 impl StateTable {
-    pub fn new(grm: &Grammar, sg: &StateGraph) -> StateTable {
+    pub fn new(grm: &Grammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
         let mut actions: HashMap<(StIdx, Symbol), Action> = HashMap::new();
         let mut gotos  : HashMap<(StIdx, NTIdx), StIdx>   = HashMap::new();
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
@@ -87,6 +111,9 @@ impl StateTable {
                                         reduce_reduce += 1;
                                     }
                                 },
+                                Action::Accept => {
+                                    return Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, prod_idx: prod_i})
+                                }
                                 _ => panic!("Internal error")
                             }
                         }
@@ -131,8 +158,8 @@ impl StateTable {
             }
         }
 
-        StateTable { actions: actions, gotos: gotos, reduce_reduce: reduce_reduce,
-                     shift_reduce: shift_reduce }
+        Ok(StateTable { actions: actions, gotos: gotos, reduce_reduce: reduce_reduce,
+                     shift_reduce: shift_reduce })
     }
 
     /// Return the action for `state_idx` and `sym`, or None if there isn't any.
@@ -194,7 +221,7 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(StIdx, Symbol), Act
 #[cfg(test)]
 mod test {
     use StIdx;
-    use super::{Action, StateTable};
+    use super::{Action, StateTable, StateTableError, StateTableErrorKind};
     use grammar::{Grammar, PIdx, Symbol, TIdx};
     use pager::pager_stategraph;
     use yacc_parser::parse_yacc;
@@ -222,7 +249,7 @@ mod test {
         let s7 = sg.edges[usize::from(s5)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
         let s8 = sg.edges[usize::from(s6)][&Symbol::Nonterminal(grm.nonterminal_off("Term"))];
 
-        let st = StateTable::new(&grm, &sg);
+        let st = StateTable::new(&grm, &sg).unwrap();
 
         // Actions
         assert_eq!(st.actions.len(), 15);
@@ -269,7 +296,7 @@ mod test {
             C : 'a';
           ".to_string()).unwrap());
         let sg = pager_stategraph(&grm);
-        let st = StateTable::new(&grm, &sg);
+        let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 8);
 
         // We only extract the states necessary to test those rules affected by the reduce/reduce.
@@ -289,7 +316,7 @@ mod test {
                  | 'id' ;
           ".to_string()).unwrap());
         let sg = pager_stategraph(&grm);
-        let st = StateTable::new(&grm, &sg);
+        let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 15);
 
         let s0 = StIdx(0);
@@ -318,7 +345,7 @@ mod test {
                  | 'id' ;
           ".to_string()).unwrap());
         let sg = pager_stategraph(&grm);
-        let st = StateTable::new(&grm, &sg);
+        let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 15);
 
         let s0 = StIdx(0);
@@ -351,7 +378,7 @@ mod test {
                  | 'id' ;
           ".to_string()).unwrap());
         let sg = pager_stategraph(&grm);
-        let st = StateTable::new(&grm, &sg);
+        let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 24);
 
         let s0 = StIdx(0);
@@ -395,7 +422,7 @@ mod test {
                  | 'id' ;
           ".to_string()).unwrap());
         let sg = pager_stategraph(&grm);
-        let st = StateTable::new(&grm, &sg);
+        let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 34);
 
         let s0 = StIdx(0);
@@ -431,5 +458,21 @@ mod test {
         assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(PIdx::from(1)));
         assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("~"))).unwrap(), Action::Shift(s6));
         assert_eq!(st.action(s10, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(1)));
+    }
+
+    #[test]
+    fn accept_reduce_conflict() {
+        let grm = Grammar::new(&parse_yacc(&"
+%start D
+%%
+D : D;
+          ".to_string()).unwrap());
+        let sg = pager_stategraph(&grm);
+        match StateTable::new(&grm, &sg) {
+            Ok(_) => panic!("Infinitely recursive rule let through"),
+            Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, prod_idx: prod_idx})
+                if prod_idx == PIdx::from(1) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
     }
 }

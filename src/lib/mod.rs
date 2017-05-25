@@ -48,7 +48,7 @@ pub mod statetable;
 
 pub use grammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
 pub use ast::{GrammarAST, GrammarValidationError};
-pub use statetable::{Action, StateTable};
+pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 pub use yacc_parser::{YaccParserError, YaccParserErrorKind};
 use yacc_parser::parse_yacc;
 
@@ -61,7 +61,8 @@ custom_derive! {
 #[derive(Debug)]
 pub enum YaccToStateTableError {
     YaccParserError(YaccParserError),
-    GrammarValidationError(GrammarValidationError)
+    GrammarValidationError(GrammarValidationError),
+    StateTableError(StateTableError)
 }
 
 impl From<YaccParserError> for YaccToStateTableError {
@@ -76,11 +77,18 @@ impl From<GrammarValidationError> for YaccToStateTableError {
     }
 }
 
+impl From<StateTableError> for YaccToStateTableError {
+    fn from(err: StateTableError) -> YaccToStateTableError {
+        YaccToStateTableError::StateTableError(err)
+    }
+}
+
 impl fmt::Display for YaccToStateTableError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             YaccToStateTableError::YaccParserError(ref e) => e.fmt(f),
             YaccToStateTableError::GrammarValidationError(ref e) => e.fmt(f),
+            YaccToStateTableError::StateTableError(ref e) => e.fmt(f),
         }
     }
 }
@@ -96,7 +104,7 @@ pub fn yacc_to_statetable(s: &str, m: Minimiser) -> Result<(Grammar, StateTable)
     let st = match m {
         Minimiser::Pager => {
             let sg = pager::pager_stategraph(&grm);
-            StateTable::new(&grm, &sg)
+            try!(StateTable::new(&grm, &sg))
         }
     };
     Ok((grm, st))
