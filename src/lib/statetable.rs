@@ -470,7 +470,7 @@ D : D;
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
-            Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, prod_idx: prod_idx})
+            Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, prod_idx})
                 if prod_idx == PIdx::from(1) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
