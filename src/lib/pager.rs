@@ -156,7 +156,7 @@ pub fn pager_stategraph(grm: &Grammar) -> StateGraph {
 
     let mut state0 = Itemset::new(grm);
     let mut ctx = BitVec::from_elem(grm.terms_len, false);
-    ctx.set(usize::from(grm.end_term), true);
+    ctx.set(grm.end_term.into(), true);
     state0.add(grm.start_prod, SIdx::from(0), &ctx);
     closed_states.push(None);
     core_states.push(state0);
@@ -198,7 +198,7 @@ pub fn pager_stategraph(grm: &Grammar) -> StateGraph {
             seen_terms.clear();
             for &(prod_i, dot) in cl_state.items.keys() {
                 let prod = grm.prod(prod_i).unwrap();
-                if dot == SIdx::from(prod.len()) { continue; }
+                if dot == prod.len().into() { continue; }
                 let sym = prod[usize::from(dot)];
                 match sym {
                     Symbol::Nonterminal(nonterm_i) => {

@@ -34,7 +34,7 @@ use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 use std::fmt;
 
 use StIdx;
-use grammar::{AssocKind, Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
+use grammar::{AssocKind, Grammar, PIdx, NTIdx, Symbol, TIdx};
 use stategraph::StateGraph;
 
 /// The various different possible Yacc parser errors.
@@ -92,11 +92,11 @@ impl StateTable {
         for (state_i, state) in sg.states.iter().enumerate().map(|(x, y)| (StIdx(x), y)) {
             // Populate reduce and accepts
             for (&(prod_i, dot), ctx) in &state.items {
-                if dot < SIdx::from(grm.prod(prod_i).unwrap().len()) {
+                if dot < grm.prod(prod_i).unwrap().len().into() {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
-                    let sym = Symbol::Terminal(TIdx::from(term_i));
+                    let sym = Symbol::Terminal(term_i.into());
                     match actions.entry((state_i, sym)) {
                         Entry::Occupied(mut e) => {
                             match *e.get_mut() {
@@ -122,7 +122,7 @@ impl StateTable {
                                 e.insert(Action::Accept);
                             }
                             else {
-                                e.insert(Action::Reduce(PIdx::from(prod_i)));
+                                e.insert(Action::Reduce(prod_i.into()));
                             }
                         }
                     }
@@ -222,7 +222,7 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(StIdx, Symbol), Act
 mod test {
     use StIdx;
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
-    use grammar::{Grammar, PIdx, Symbol, TIdx};
+    use grammar::{Grammar, Symbol, TIdx};
     use pager::pager_stategraph;
     use yacc_parser::parse_yacc;
 
@@ -255,7 +255,7 @@ mod test {
         assert_eq!(st.actions.len(), 15);
         let assert_reduce = |state_i: StIdx, term_i: TIdx, rule: &str, prod_off: usize| {
             let prod_i = grm.nonterm_to_prods(grm.nonterminal_off(rule)).unwrap()[prod_off];
-            assert_eq!(st.action(state_i, Symbol::Terminal(term_i)).unwrap(), Action::Reduce(PIdx::from(prod_i)));
+            assert_eq!(st.action(state_i, Symbol::Terminal(term_i)).unwrap(), Action::Reduce(prod_i.into()));
         };
 
         assert_eq!(st.action(s0, Symbol::Terminal(grm.terminal_off("id"))).unwrap(), Action::Shift(s4));
@@ -303,7 +303,7 @@ mod test {
         let s0 = StIdx(0);
         let s4 = sg.edges[usize::from(s0)][&Symbol::Terminal(grm.terminal_off("a"))];
 
-        assert_eq!(st.action(s4, Symbol::Terminal(grm.terminal_off("x"))).unwrap(), Action::Reduce(PIdx::from(3)));
+        assert_eq!(st.action(s4, Symbol::Terminal(grm.terminal_off("x"))).unwrap(), Action::Reduce(3.into()));
     }
 
     #[test]
@@ -355,13 +355,13 @@ mod test {
         let s5 = sg.edges[usize::from(s4)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
         let s6 = sg.edges[usize::from(s3)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
 
-        assert_eq!(st.action(s5, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(PIdx::from(2)));
-        assert_eq!(st.action(s5, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(PIdx::from(2)));
-        assert_eq!(st.action(s5, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.action(s5, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s5, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s5, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(2.into()));
 
-        assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(PIdx::from(1)));
+        assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(1.into()));
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
-        assert_eq!(st.action(s6, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(1)));
+        assert_eq!(st.action(s6, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(1.into()));
     }
 
     #[test]
@@ -393,17 +393,17 @@ mod test {
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Shift(s3));
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Shift(s5));
-        assert_eq!(st.action(s6, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(3)));
+        assert_eq!(st.action(s6, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(3.into()));
 
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(PIdx::from(2)));
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(PIdx::from(2)));
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(PIdx::from(2)));
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(2.into()));
 
-        assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(PIdx::from(1)));
+        assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(1.into()));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
-        assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(PIdx::from(1)));
-        assert_eq!(st.action(s8, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(1)));
+        assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(1.into()));
+        assert_eq!(st.action(s8, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(1.into()));
     }
 
     #[test]
@@ -436,28 +436,28 @@ mod test {
         let s9 = sg.edges[usize::from(s4)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
         let s10 = sg.edges[usize::from(s3)][&Symbol::Nonterminal(grm.nonterminal_off("Expr"))];
 
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(PIdx::from(4)));
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(PIdx::from(4)));
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(PIdx::from(4)));
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(4)));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(4.into()));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(4.into()));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(4.into()));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(4.into()));
 
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Shift(s3));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Shift(s5));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("~"))).unwrap(), Action::Shift(s6));
-        assert_eq!(st.action(s8, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(3)));
+        assert_eq!(st.action(s8, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(3.into()));
 
-        assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(PIdx::from(2)));
-        assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(PIdx::from(2)));
-        assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(2.into()));
         assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("~"))).unwrap(), Action::Shift(s6));
-        assert_eq!(st.action(s9, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(2)));
+        assert_eq!(st.action(s9, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(2.into()));
 
-        assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(PIdx::from(1)));
+        assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(1.into()));
         assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
-        assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(PIdx::from(1)));
+        assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(1.into()));
         assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("~"))).unwrap(), Action::Shift(s6));
-        assert_eq!(st.action(s10, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(PIdx::from(1)));
+        assert_eq!(st.action(s10, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(1.into()));
     }
 
     #[test]
@@ -471,7 +471,7 @@ D : D;
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
             Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, prod_idx})
-                if prod_idx == PIdx::from(1) => (),
+                if prod_idx == 1.into() => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }

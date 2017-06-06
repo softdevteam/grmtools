@@ -86,7 +86,7 @@ impl Firsts {
                     if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
-                        if !firsts.is_epsilon_set(NTIdx::from(rul_i)) {
+                        if !firsts.is_epsilon_set(rul_i.into()) {
                             firsts.prod_epsilons.set(usize::from(rul_i), true);
                             changed = true;
                         }
@@ -172,21 +172,21 @@ impl Firsts {
 #[cfg(test)]
 mod test {
     use super::Firsts;
-    use grammar::{Grammar, TIdx};
+    use grammar::Grammar;
     use yacc_parser::parse_yacc;
 
     fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
         let nt_i = grm.nonterminal_off(rn);
         for i in 0 .. grm.terms_len {
-            let n = grm.term_name(TIdx::from(i)).unwrap();
+            let n = grm.term_name(i.into()).unwrap();
             match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
-                    if !firsts.is_set(nt_i, TIdx::from(i)) {
+                    if !firsts.is_set(nt_i, i.into()) {
                         panic!("{} is not set in {}", n, rn);
                     }
                 }
                 None    => {
-                    if firsts.is_set(nt_i, TIdx::from(i)) {
+                    if firsts.is_set(nt_i, i.into()) {
                         panic!("{} is incorrectly set in {}", n, rn);
                     }
                 }
