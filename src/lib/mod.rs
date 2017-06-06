@@ -33,7 +33,7 @@
 use std::fmt;
 
 #[macro_use] extern crate lazy_static;
-#[macro_use] extern crate custom_derive;
+#[macro_use] extern crate macro_attr;
 #[macro_use] extern crate newtype_derive;
 
 
@@ -52,9 +52,9 @@ pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 pub use yacc_parser::{YaccParserError, YaccParserErrorKind};
 use yacc_parser::parse_yacc;
 
-custom_derive! {
+macro_attr! {
     /// A type specifically for state indexes.
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq)]
     pub struct StIdx(usize);
 }
 

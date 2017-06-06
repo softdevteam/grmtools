@@ -50,25 +50,25 @@ use ast;
 pub const START_NONTERM: &'static str = "^";
 pub const END_TERM     : &'static str = "$";
 
-custom_derive! {
+macro_attr! {
     /// A type specifically for production indices (e.g. a rule "E::=A|B" would
     /// have two productions for the single rule E).
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq, PartialOrd)]
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq, PartialOrd)]
     pub struct PIdx(usize);
 }
-custom_derive! {
+macro_attr! {
     /// A type specifically for nonterminal indices.
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq)]
     pub struct NTIdx(usize);
 }
-custom_derive! {
+macro_attr! {
     /// A type specifically for symbol indices (within a production).
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq, PartialOrd)]
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq, PartialOrd)]
     pub struct SIdx(usize);
 }
-custom_derive! {
+macro_attr! {
     /// A type specifically for token indices.
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq)]
     pub struct TIdx(usize);
 }
 
