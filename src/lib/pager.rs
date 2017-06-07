@@ -141,7 +141,7 @@ fn bitvec_intersect(v1: &BitVec, v2: &BitVec) -> bool {
     false
 }
 
-/// Create a StateGraph from 'grm'.
+/// Create a `StateGraph` from 'grm'.
 pub fn pager_stategraph(grm: &Grammar) -> StateGraph {
     // This function can be seen as a modified version of items() from Chen's dissertation.
 
@@ -241,7 +241,7 @@ pub fn pager_stategraph(grm: &Grammar) -> StateGraph {
                 }
                 // No candidate states were equal to the new state, so we need to look for a
                 // candidate state which is weakly compatible.
-                for cnd in cnd_states.iter().map(|x| *x) {
+                for cnd in cnd_states.iter().cloned() {
                     if core_states[usize::from(cnd)].weakly_compatible(&nstate) {
                         m = Some(cnd);
                         break;

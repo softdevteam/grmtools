@@ -111,7 +111,7 @@ impl Itemset {
                 }
                 None => {
                     // Quickly iterate over the BitVec looking for the first non-zero word.
-                    match zero_todos.blocks().enumerate().filter(|&(_, b)| b != 0).next() {
+                    match zero_todos.blocks().enumerate().find(|&(_, b)| b != 0) {
                         Some((b_off, b)) => {
                             // prod_i is the block offset plus the index of the first bit set.
                             prod_i = (b_off * BitVecBitSize::bits() + (b.trailing_zeros() as usize)).into();
@@ -134,13 +134,13 @@ impl Itemset {
                 new_ctx.clear();
                 let mut nullable = true;
                 for sym in prod.iter().skip(usize::from(dot) + 1) {
-                    match sym {
-                        &Symbol::Terminal(term_j) => {
+                    match *sym {
+                        Symbol::Terminal(term_j) => {
                             new_ctx.set(usize::from(term_j), true);
                             nullable = false;
                             break;
                         },
-                        &Symbol::Nonterminal(nonterm_j) => {
+                        Symbol::Nonterminal(nonterm_j) => {
                             new_ctx.union(firsts.prod_firsts(nonterm_j));
                             if !firsts.is_epsilon_set(nonterm_j) {
                                 nullable = false;

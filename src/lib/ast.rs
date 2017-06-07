@@ -70,7 +70,7 @@ pub enum GrammarValidationErrorKind {
     NoPrecForToken
 }
 
-/// GrammarAST validation errors return an instance of this struct.
+/// `GrammarAST` validation errors return an instance of this struct.
 #[derive(Debug)]
 pub struct GrammarValidationError {
     pub kind: GrammarValidationErrorKind,
@@ -159,7 +159,7 @@ impl GrammarAST {
                             sym: Some(Symbol::Terminal(n.clone()))});
                     }
                 }
-                for sym in prod.symbols.iter() {
+                for sym in &prod.symbols {
                     match *sym {
                         Symbol::Nonterminal(ref name) => {
                             if !self.rules.contains_key(name) {

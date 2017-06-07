@@ -124,7 +124,7 @@ impl YaccParser {
                         .char_indices()
                         .position(|(c_off, _)| c_off == off - line_off)
                         .unwrap();
-        return (line_m1 + 1, c_off + 1);
+        (line_m1 + 1, c_off + 1)
     }
 
     fn parse(&mut self) -> YaccResult<usize> {
@@ -272,7 +272,7 @@ impl YaccParser {
     fn parse_name(&self, i: usize) -> YaccResult<(usize, String)> {
         match RE_NAME.find(&self.src[i..]) {
             Some((s, e)) => {
-                assert!(s == 0);
+                assert_eq!(s, 0);
                 Ok((i + e, self.src[i..i + e].to_string()))
             },
             None         => {
