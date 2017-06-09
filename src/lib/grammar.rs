@@ -166,7 +166,7 @@ impl Grammar {
         term_precs.push(None);
         for k in &ast.tokens {
             term_names.push(k.clone());
-            term_precs.push(ast.precs.get(k).map(|p| *p));
+            term_precs.push(ast.precs.get(k).cloned());
         }
         let mut terminal_map = HashMap::<String, TIdx>::new();
         for (i, v) in term_names.iter().enumerate() {
@@ -187,10 +187,10 @@ impl Grammar {
                 continue;
             }
             let astrule = &ast.rules[astrulename];
-            let mut rule = rules_prods.get_mut(usize::from(rule_idx)).unwrap();
+            let mut rule = &mut rules_prods[usize::from(rule_idx)];
             for astprod in &astrule.productions {
                 let mut prod = Vec::with_capacity(astprod.symbols.len());
-                for astsym in astprod.symbols.iter() {
+                for astsym in &astprod.symbols {
                     let sym = match *astsym {
                         ast::Symbol::Nonterminal(ref n) =>
                             Symbol::Nonterminal(nonterm_map[n]),
@@ -248,7 +248,7 @@ impl Grammar {
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid NTIdxs.
     pub fn iter_nonterm_idxs(&self) -> Box<Iterator<Item=NTIdx>> {
-        Box::new((0..self.nonterms_len).map(|x| NTIdx(x)))
+        Box::new((0..self.nonterms_len).map(NTIdx))
     }
 
     /// Get the sequence of symbols for production `i` or None if it doesn't exist.
@@ -268,7 +268,7 @@ impl Grammar {
 
     /// Return the name of terminal `i` or None if it doesn't exist.
     pub fn term_name(&self, i: TIdx) -> Option<&str> {
-        self.terminal_names.get(usize::from(i)).map_or(None, |x| Some(&x))
+        self.terminal_names.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
     /// Return the precedence of terminal `i` or None if it doesn't exist.
@@ -278,7 +278,7 @@ impl Grammar {
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid TIdxs.
     pub fn iter_term_idxs(&self) -> Box<Iterator<Item=TIdx>> {
-        Box::new((0..self.terms_len).map(|x| TIdx(x)))
+        Box::new((0..self.terms_len).map(TIdx))
     }
 }
 
