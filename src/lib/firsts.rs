@@ -33,10 +33,11 @@
 extern crate bit_vec;
 use self::bit_vec::BitVec;
 
-use grammar::{Grammar, NTIdx, Symbol, TIdx};
+use cfgrammar::{NTIdx, Symbol, TIdx};
+use cfgrammar::yacc::YaccGrammar;
 
 // Firsts stores all the first sets for a given grammar. For example, given this code and grammar:
-//   let grm = Grammar::new(parse_yacc("
+//   let grm = YaccGrammar::new(parse_yacc("
 //     S: A 'b';
 //     A: 'a'
 //      | ;"));
@@ -62,7 +63,7 @@ pub struct Firsts {
 
 impl Firsts {
     /// Generates and returns the firsts set for the given grammar.
-    pub fn new(grm: &Grammar) -> Firsts {
+    pub fn new(grm: &YaccGrammar) -> Firsts {
         let mut prod_firsts = Vec::with_capacity(grm.nonterms_len);
         for _ in 0..grm.nonterms_len {
             prod_firsts.push(BitVec::from_elem(grm.terms_len, false));
@@ -172,10 +173,10 @@ impl Firsts {
 #[cfg(test)]
 mod test {
     use super::Firsts;
-    use grammar::Grammar;
-    use yacc_parser::parse_yacc;
+    use cfgrammar::yacc::YaccGrammar;
+    use cfgrammar::yacc::parser::parse_yacc;
 
-    fn has(grm: &Grammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
+    fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
         let nt_i = grm.nonterminal_off(rn);
         for i in 0 .. grm.terms_len {
             let n = grm.term_name(i.into()).unwrap();
@@ -208,7 +209,7 @@ mod test {
           E: D | C;
           F: E;
           ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
+        let grm = YaccGrammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "^", vec!["c"]);
         has(&grm, &firsts, "D", vec!["d"]);
@@ -226,7 +227,7 @@ mod test {
           D: 'd';
           E: D C;
           ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
+        let grm = YaccGrammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "E", vec!["d"]);
     }
@@ -242,7 +243,7 @@ mod test {
           C: 'c' | ;
           D: C;
           ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
+        let grm = YaccGrammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b", "a"]);
         has(&grm, &firsts, "C", vec!["c", ""]);
@@ -259,7 +260,7 @@ mod test {
           B: 'b' | ;
           C: B 'c' B;
           ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
+        let grm = YaccGrammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b", "c"]);
         has(&grm, &firsts, "B", vec!["b", ""]);
@@ -275,12 +276,12 @@ mod test {
           A: B 'b';
           B: 'b' | ;
           ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
+        let grm = YaccGrammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b"]);
     }
 
-    fn eco_grammar() -> Grammar {
+    fn eco_grammar() -> YaccGrammar {
         let ast = parse_yacc(&"
           %start S
           %token a b c d f
@@ -292,7 +293,7 @@ mod test {
           D: 'd' | ;
           F: C D 'f';
           ".to_string()).unwrap();
-        Grammar::new(&ast)
+        YaccGrammar::new(&ast)
     }
 
     #[test]
@@ -321,7 +322,7 @@ mod test {
           F: 'f' | ;
           G: C D;
           ".to_string()).unwrap();
-        let grm = Grammar::new(&ast);
+        let grm = YaccGrammar::new(&ast);
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "E", vec!["a"]);
         has(&grm, &firsts, "T", vec!["a"]);

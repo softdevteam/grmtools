@@ -38,7 +38,8 @@ use self::bit_vec::BitVec;
 
 use StIdx;
 use firsts::Firsts;
-use grammar::{Grammar, Symbol, SIdx};
+use cfgrammar::{Symbol, SIdx};
+use cfgrammar::yacc::YaccGrammar;
 use itemset::Itemset;
 use stategraph::StateGraph;
 
@@ -142,7 +143,7 @@ fn bitvec_intersect(v1: &BitVec, v2: &BitVec) -> bool {
 }
 
 /// Create a `StateGraph` from 'grm'.
-pub fn pager_stategraph(grm: &Grammar) -> StateGraph {
+pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
     // This function can be seen as a modified version of items() from Chen's dissertation.
 
     let firsts                                 = Firsts::new(grm);
@@ -368,10 +369,11 @@ mod test {
     use self::bit_vec::BitVec;
 
     use super::bitvec_intersect;
-    use grammar::{Grammar, Symbol};
+    use cfgrammar::Symbol;
+    use cfgrammar::yacc::YaccGrammar;
+    use cfgrammar::yacc::parser::parse_yacc;
     use pager::pager_stategraph;
     use stategraph::state_exists;
-    use yacc_parser::parse_yacc;
 
     #[test]
     fn test_bitvec_intersect() {
@@ -405,8 +407,8 @@ mod test {
     // A : aSc
     //     a
     //     aSb
-    fn grammar3() -> Grammar {
-        Grammar::new(&parse_yacc(&"
+    fn grammar3() -> YaccGrammar {
+        YaccGrammar::new(&parse_yacc(&"
           %start S
           %token a b c d
           %%
@@ -479,8 +481,8 @@ mod test {
     }
 
     // Pager grammar
-    fn grammar_pager() -> Grammar {
-        Grammar::new(&parse_yacc(&"
+    fn grammar_pager() -> YaccGrammar {
+        YaccGrammar::new(&parse_yacc(&"
             %start X
             %%
              X : 'a' Y 'd' | 'a' Z 'c' | 'a' T | 'b' Y 'e' | 'b' Z 'd' | 'b' T;
@@ -492,7 +494,7 @@ mod test {
           ".to_string()).unwrap())
     }
 
-    fn test_pager_graph(grm: &Grammar) {
+    fn test_pager_graph(grm: &YaccGrammar) {
         let sg = pager_stategraph(&grm);
 
         assert_eq!(sg.states.len(), 23);

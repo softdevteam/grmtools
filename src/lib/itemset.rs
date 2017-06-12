@@ -40,7 +40,8 @@ extern crate fnv;
 use self::fnv::FnvHasher;
 
 use firsts::Firsts;
-use grammar::{PIdx, Grammar, Symbol, SIdx};
+use cfgrammar::{PIdx, Symbol, SIdx};
+use cfgrammar::yacc::YaccGrammar;
 
 /// The type of "context" (also known as "lookaheads")
 pub type Ctx = BitVec;
@@ -52,7 +53,7 @@ pub struct Itemset {
 
 impl Itemset {
     /// Create a blank Itemset.
-    pub fn new(_: &Grammar) -> Itemset {
+    pub fn new(_: &YaccGrammar) -> Itemset {
         Itemset {items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default())}
     }
 
@@ -72,7 +73,7 @@ impl Itemset {
     }
 
     /// Create a new itemset which is a closed version of `self`.
-    pub fn close(&self, grm: &Grammar, firsts: &Firsts) -> Itemset {
+    pub fn close(&self, grm: &YaccGrammar, firsts: &Firsts) -> Itemset {
         // This function can be seen as a merger of getClosure and getContext from Chen's
         // dissertation.
 
@@ -164,7 +165,7 @@ impl Itemset {
     }
 
     /// Create a new Itemset based on calculating the goto of 'sym' on the current Itemset.
-    pub fn goto(&self, grm: &Grammar, sym: &Symbol) -> Itemset {
+    pub fn goto(&self, grm: &YaccGrammar, sym: &Symbol) -> Itemset {
         // This is called 'transition' in Chen's dissertation, though note that the definition
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(grm);
@@ -187,14 +188,15 @@ mod test {
 
     use super::Itemset;
     use firsts::Firsts;
-    use grammar::{Grammar, Symbol};
+    use cfgrammar::Symbol;
+    use cfgrammar::yacc::YaccGrammar;
+    use cfgrammar::yacc::parser::parse_yacc;
     use stategraph::state_exists;
-    use yacc_parser::parse_yacc;
 
     #[test]
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
-        let grm = Grammar::new(&parse_yacc(&"
+        let grm = YaccGrammar::new(&parse_yacc(&"
           %start S
           %%
           S: L '=' R | R;
@@ -218,7 +220,7 @@ mod test {
         state_exists(&grm, &cls_is, "R", 0, 0, vec!["$"]);
     }
 
-    fn eco_grammar() -> Grammar {
+    fn eco_grammar() -> YaccGrammar {
         let ast = parse_yacc(&"
           %start S
           %token a b c d f
@@ -230,7 +232,7 @@ mod test {
           D: 'd' | ;
           F: C D 'f';
           ".to_string()).unwrap();
-        Grammar::new(&ast)
+        YaccGrammar::new(&ast)
     }
 
     #[test]
@@ -265,8 +267,8 @@ mod test {
     // A : aSc
     //     a
     //     aSb
-    fn grammar3() -> Grammar {
-        Grammar::new(&parse_yacc(&"
+    fn grammar3() -> YaccGrammar {
+        YaccGrammar::new(&parse_yacc(&"
           %start S
           %token a b c d
           %%
