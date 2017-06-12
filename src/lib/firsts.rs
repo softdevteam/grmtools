@@ -33,7 +33,7 @@
 extern crate bit_vec;
 use self::bit_vec::BitVec;
 
-use cfgrammar::{NTIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 
 // Firsts stores all the first sets for a given grammar. For example, given this code and grammar:
@@ -64,14 +64,14 @@ pub struct Firsts {
 impl Firsts {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar) -> Firsts {
-        let mut prod_firsts = Vec::with_capacity(grm.nonterms_len);
-        for _ in 0..grm.nonterms_len {
-            prod_firsts.push(BitVec::from_elem(grm.terms_len, false));
+        let mut prod_firsts = Vec::with_capacity(grm.nonterms_len());
+        for _ in 0..grm.nonterms_len() {
+            prod_firsts.push(BitVec::from_elem(grm.terms_len(), false));
         }
         let mut firsts = Firsts {
             prod_firsts  : prod_firsts,
-            prod_epsilons: BitVec::from_elem(grm.nonterms_len, false),
-            terms_len   : grm.terms_len
+            prod_epsilons: BitVec::from_elem(grm.nonterms_len(), false),
+            terms_len   : grm.terms_len()
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -173,12 +173,13 @@ impl Firsts {
 #[cfg(test)]
 mod test {
     use super::Firsts;
+    use cfgrammar::Grammar;
     use cfgrammar::yacc::YaccGrammar;
     use cfgrammar::yacc::parser::parse_yacc;
 
     fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
         let nt_i = grm.nonterminal_off(rn);
-        for i in 0 .. grm.terms_len {
+        for i in 0 .. grm.terms_len() {
             let n = grm.term_name(i.into()).unwrap();
             match should_be.iter().position(|&x| x == n) {
                 Some(_) => {

@@ -40,7 +40,7 @@ extern crate fnv;
 use self::fnv::FnvHasher;
 
 use firsts::Firsts;
-use cfgrammar::{PIdx, Symbol, SIdx};
+use cfgrammar::{Grammar, PIdx, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 
 /// The type of "context" (also known as "lookaheads")
@@ -97,8 +97,8 @@ impl Itemset {
 
         let mut keys_iter = self.items.keys(); // The initial todo list
         type BitVecBitSize = u32; // As of 0.4.3, BitVec only supports u32 blocks
-        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods_len, false); // Subsequent todos
-        let mut new_ctx = BitVec::from_elem(grm.terms_len, false);
+        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods_len(), false); // Subsequent todos
+        let mut new_ctx = BitVec::from_elem(grm.terms_len(), false);
         loop {
             let prod_i;
             let dot;
@@ -188,7 +188,7 @@ mod test {
 
     use super::Itemset;
     use firsts::Firsts;
-    use cfgrammar::Symbol;
+    use cfgrammar::{Grammar, Symbol};
     use cfgrammar::yacc::YaccGrammar;
     use cfgrammar::yacc::parser::parse_yacc;
     use stategraph::state_exists;
@@ -206,7 +206,7 @@ mod test {
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len, false);
+        let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.terminal_off("$")), true);
         is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);
@@ -241,7 +241,7 @@ mod test {
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len, false);
+        let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.terminal_off("$")), true);
         is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], 0.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
@@ -283,7 +283,7 @@ mod test {
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len, false);
+        let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.terminal_off("$")), true);
         is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], 0.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
@@ -293,7 +293,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        la = BitVec::from_elem(grm.terms_len, false);
+        la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.terminal_off("b")), true);
         la.set(usize::from(grm.terminal_off("$")), true);
         is.add(grm.nonterm_to_prods(grm.nonterminal_off("S")).unwrap()[1], 1.into(), &la);
@@ -303,7 +303,7 @@ mod test {
         state_exists(&grm, &cls_is, "A", 2, 0, vec!["a"]);
 
         is = Itemset::new(&grm);
-        la = BitVec::from_elem(grm.terms_len, false);
+        la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.terminal_off("a")), true);
         is.add(grm.nonterm_to_prods(grm.nonterminal_off("A")).unwrap()[0], 1.into(), &la);
         cls_is = is.close(&grm, &firsts);
@@ -317,7 +317,7 @@ mod test {
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len, false);
+        let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.terminal_off("$")), true);
         is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);

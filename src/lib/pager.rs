@@ -38,7 +38,7 @@ use self::bit_vec::BitVec;
 
 use StIdx;
 use firsts::Firsts;
-use cfgrammar::{Symbol, SIdx};
+use cfgrammar::{Grammar, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 use itemset::Itemset;
 use stategraph::StateGraph;
@@ -156,25 +156,25 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
     let mut edges: Vec<HashMap<Symbol, StIdx>> = Vec::new();
 
     let mut state0 = Itemset::new(grm);
-    let mut ctx = BitVec::from_elem(grm.terms_len, false);
-    ctx.set(grm.end_term.into(), true);
-    state0.add(grm.start_prod, SIdx::from(0), &ctx);
+    let mut ctx = BitVec::from_elem(grm.terms_len(), false);
+    ctx.set(grm.end_term_idx().into(), true);
+    state0.add(grm.start_prod(), SIdx::from(0), &ctx);
     closed_states.push(None);
     core_states.push(state0);
     edges.push(HashMap::new());
 
     // We maintain two lists of which nonterms and terms we've seen; when processing a given
     // state there's no point processing a nonterm or term more than once.
-    let mut seen_nonterms = BitVec::from_elem(grm.nonterms_len, false);
-    let mut seen_terms = BitVec::from_elem(grm.terms_len, false);
+    let mut seen_nonterms = BitVec::from_elem(grm.nonterms_len(), false);
+    let mut seen_terms = BitVec::from_elem(grm.terms_len(), false);
     // new_states is used to separate out iterating over states vs. mutating it
     let mut new_states = Vec::new();
     // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
     // matches for a given symbol.
-    let mut cnd_nonterm_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.nonterms_len);
-    let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.terms_len);
-    for _ in 0..grm.terms_len { cnd_term_weaklies.push(Vec::new()); }
-    for _ in 0..grm.nonterms_len { cnd_nonterm_weaklies.push(Vec::new()); }
+    let mut cnd_nonterm_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.nonterms_len());
+    let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.terms_len());
+    for _ in 0..grm.terms_len() { cnd_term_weaklies.push(Vec::new()); }
+    for _ in 0..grm.nonterms_len() { cnd_nonterm_weaklies.push(Vec::new()); }
 
     let mut todo = 1; // How many None values are there in closed_states?
     let mut todo_off = 0; // Offset in closed states to start searching for the next todo.

@@ -44,6 +44,8 @@ pub struct StateGraph {
 }
 
 #[cfg(test)]
+use cfgrammar::Grammar;
+#[cfg(test)]
 use cfgrammar::yacc::YaccGrammar;
 
 #[cfg(test)]
@@ -52,7 +54,7 @@ pub fn state_exists(grm: &YaccGrammar, is: &Itemset, nt: &str, prod_off: usize, 
 
     let ab_prod_off = grm.nonterm_to_prods(grm.nonterminal_off(nt)).unwrap()[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot.into())];
-    for i in 0..grm.terms_len {
+    for i in 0..grm.terms_len() {
         let bit = ctx[i];
         let mut found = false;
         for t in la.iter() {
