@@ -77,3 +77,14 @@ pub enum Symbol {
     Nonterminal(NTIdx),
     Terminal(TIdx)
 }
+
+pub trait Grammar {
+    /// How many terminals does this grammar have?
+    fn terms_len(&self) -> usize;
+    /// How many productions does this grammar have?
+    fn prods_len(&self) -> usize;
+    /// How many nonterminals does this grammar have?
+    fn nonterms_len(&self) -> usize;
+    /// What is the index of the start rule?
+    fn start_rule_idx(&self) -> NTIdx;
+}

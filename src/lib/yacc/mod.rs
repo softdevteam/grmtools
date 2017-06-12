@@ -32,10 +32,10 @@
 
 use std::collections::HashMap;
 
-use super::{NTIdx, PIdx, SIdx, Symbol, TIdx};
+use super::{Grammar, NTIdx, PIdx, Symbol, TIdx};
 
-mod ast;
-mod parser;
+pub mod ast;
+pub mod parser;
 
 const START_NONTERM: &'static str = "^";
 const END_TERM     : &'static str = "$";
@@ -56,33 +56,32 @@ pub enum AssocKind {
 
 pub struct YaccGrammar {
     /// How many nonterminals does this grammar have?
-    pub nonterms_len: usize,
+    nonterms_len: usize,
     /// A mapping from NTIdx -> String.
-    pub nonterminal_names: Vec<String>,
+    nonterminal_names: Vec<String>,
     /// A mapping from TIdx -> String.
-    pub terminal_names: Vec<String>,
+    terminal_names: Vec<String>,
     /// A mapping from TIdx -> Option<Precedence>
-    pub terminal_precs: Vec<Option<Precedence>>,
+    terminal_precs: Vec<Option<Precedence>>,
     /// How many terminals does this grammar have?
-    pub terms_len: usize,
+    terms_len: usize,
     /// The offset of the EOF terminal.
-    pub end_term: TIdx,
+    end_term: TIdx,
     /// How many productions does this grammar have?
-    pub prods_len: usize,
+    prods_len: usize,
     /// Which production is the sole production of the start rule?
-    pub start_prod: PIdx,
+    start_prod: PIdx,
     /// A list of all productions.
-    pub prods: Vec<Vec<Symbol>>,
+    prods: Vec<Vec<Symbol>>,
     /// A mapping from rules to their productions. Note that 1) the order of rules is identical to
     /// that of `nonterminal_names' 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
-    pub rules_prods: Vec<Vec<PIdx>>,
+    rules_prods: Vec<Vec<PIdx>>,
     /// A mapping from productions to their corresponding rule indexes.
-    pub prods_rules: Vec<NTIdx>,
+    prods_rules: Vec<NTIdx>,
     /// The precedence of each production.
-    pub prod_precs: Vec<Option<Precedence>>
+    prod_precs: Vec<Option<Precedence>>
 }
-
 
 impl YaccGrammar {
     /// Translate a `GrammarAST` into a `YaccGrammar`. This function is akin to the part a traditional
@@ -197,53 +196,82 @@ impl YaccGrammar {
         }
     }
 
-    /// Return the productions for nonterminal `i` or None if it doesn't exist.
+    /// Return the index of the end terminal.
+    pub fn end_term_idx(&self) -> TIdx {
+        self.end_term
+    }
+
+    /// Return the productions for nonterminal `i` or `None` if it doesn't exist.
     pub fn nonterm_to_prods(&self, i: NTIdx) -> Option<&[PIdx]> {
         self.rules_prods.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
-    /// Return the name of nonterminal `i` or None if it doesn't exist.
+    /// Return the name of nonterminal `i` or `None` if it doesn't exist.
     pub fn nonterm_name(&self, i: NTIdx) -> Option<&str> {
         self.nonterminal_names.get(usize::from(i)).map_or(None, |x| Some(&x))
     }
 
-    /// Return an iterator which produces (in no particular order) all this grammar's valid NTIdxs.
+    /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
     pub fn iter_nonterm_idxs(&self) -> Box<Iterator<Item=NTIdx>> {
         Box::new((0..self.nonterms_len).map(NTIdx))
     }
 
-    /// Get the sequence of symbols for production `i` or None if it doesn't exist.
+    /// Get the sequence of symbols for production `i` or `None` if it doesn't exist.
     pub fn prod(&self, i: PIdx) -> Option<&[Symbol]> {
         self.prods.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
-    /// Return the nonterm index of the production `i` or None if it doesn't exist.
+    /// Return the nonterm index of the production `i` or `None` if it doesn't exist.
     pub fn prod_to_nonterm(&self, i: PIdx) -> NTIdx {
         self.prods_rules[usize::from(i)]
     }
 
-    /// Return the precedence of production `i` or None if it doesn't exist.
+    /// Return the precedence of production `i` or `None` if it doesn't exist.
     pub fn prod_precedence(&self, i: PIdx) -> Option<Option<Precedence>> {
         self.prod_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
 
-    /// Return the name of terminal `i` or None if it doesn't exist.
+    /// Return the name of terminal `i` or `None` if it doesn't exist.
     pub fn term_name(&self, i: TIdx) -> Option<&str> {
         self.terminal_names.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
-    /// Return the precedence of terminal `i` or None if it doesn't exist.
+    /// Return the precedence of terminal `i` or `None` if it doesn't exist.
     pub fn term_precedence(&self, i: TIdx) -> Option<Option<Precedence>> {
         self.terminal_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
 
-    /// Return an iterator which produces (in no particular order) all this grammar's valid TIdxs.
+    /// Return an iterator which produces (in no particular order) all this grammar's valid `TIdx`s.
     pub fn iter_term_idxs(&self) -> Box<Iterator<Item=TIdx>> {
         Box::new((0..self.terms_len).map(TIdx))
     }
+
+    /// Return the production index of the start rule's sole production (for Yacc grammars the
+    /// start rule is defined to have precisely one production).
+    pub fn start_prod(&self) -> PIdx {
+        self.start_prod
+    }
 }
 
-#[cfg(test)]
+impl Grammar for YaccGrammar {
+    fn prods_len(&self) -> usize {
+        self.prods_len
+    }
+
+    fn terms_len(&self) -> usize {
+        self.terms_len
+    }
+
+    fn nonterms_len(&self) -> usize {
+        self.nonterms_len
+    }
+
+    /// Return the index of the start rule.
+    fn start_rule_idx(&self) -> NTIdx {
+        self.prod_to_nonterm(self.start_prod)
+    }
+}
+
 impl YaccGrammar {
     /// Map a nonterminal name to the corresponding rule offset.
     pub fn nonterminal_off(&self, n: &str) -> NTIdx {
