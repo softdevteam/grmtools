@@ -109,6 +109,7 @@ fn main() {
             process::exit(1);
         }
     };
+    println!("reduce/reduce: {}\nshift/reduce: {}", stable.reduce_reduce, stable.shift_reduce);
 
     // Sync up the IDs of terminals in the lexer and parser
     let mut rule_ids = HashMap::<&str, u16>::new();
@@ -120,7 +121,7 @@ fn main() {
     let input = read_file(&matches.free[2]);
 
     let mut lexemes = lexer.lex(&input).unwrap();
-    lexemes.push(Lexeme::new(u16::try_from(usize::from(grm.end_term)).unwrap(), input.len(), 0));
+    lexemes.push(Lexeme::new(u16::try_from(usize::from(grm.end_term_idx())).unwrap(), input.len(), 0));
     let pt = parse::<u16>(&grm, &stable, &lexemes).unwrap();
     println!("{}", pt.pp(&grm, &input));
 }

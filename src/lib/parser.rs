@@ -32,8 +32,10 @@
 
 use std::convert::TryInto;
 
+use cfgrammar::{NTIdx, Symbol, TIdx};
+use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
-use lrtable::{Action, Grammar, NTIdx, StateTable, StIdx, Symbol, TIdx};
+use lrtable::{Action, StateTable, StIdx};
 
 pub enum Node<TokId> {
     Terminal{lexeme: Lexeme<TokId>},
@@ -45,7 +47,7 @@ pub struct ParseError;
 
 impl<TokId: Copy + TryInto<usize>> Node<TokId> {
     /// Return a pretty-printed version of this node.
-    pub fn pp(&self, grm: &Grammar, input: &str) -> String {
+    pub fn pp(&self, grm: &YaccGrammar, input: &str) -> String {
         let mut st = vec![(0, self)]; // Stack of (indent level, node) pairs
         let mut s = String::new();
         while !st.is_empty() {
@@ -73,7 +75,7 @@ impl<TokId: Copy + TryInto<usize>> Node<TokId> {
 
 
 /// Parse the lexemes into a parse tree.
-pub fn parse<TokId: Copy + TryInto<usize>>(grm: &Grammar, stable: &StateTable, lexemes:
+pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTable, lexemes:
                                         &Vec<Lexeme<TokId>>) -> Result<Node<TokId>, ParseError>
 {
     let mut lexemes_iter = lexemes.iter();
@@ -101,7 +103,7 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &Grammar, stable: &StateTable, l
                 pstack.push(state_id);
             },
             Some(Action::Accept) => {
-                debug_assert_eq!(TIdx::from(la.tok_id().try_into().ok().unwrap()), grm.end_term);
+                debug_assert_eq!(TIdx::from(la.tok_id().try_into().ok().unwrap()), grm.end_term_idx());
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
@@ -128,7 +130,7 @@ mod test {
         }
         lexer.set_rule_ids(&rule_ids);
         let mut lexemes = lexer.lex(&input).unwrap();
-        lexemes.push(Lexeme::new(usize::from(grm.end_term), input.len(), 0));
+        lexemes.push(Lexeme::new(usize::from(grm.end_term_idx()), input.len(), 0));
         let pt = parse(&grm, &stable, &lexemes).unwrap();
         assert_eq!(expected, pt.pp(&grm, &input));
     }
