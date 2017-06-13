@@ -1,0 +1,15 @@
+[package]
+name = "cfgrammar"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+
+[lib]
+name = "cfgrammar"
+path = "src/lib/mod.rs"
+
+[dependencies]
+getopts = "0.2.14"
+lazy_static = "0.2.2"
+regex = "0.1.80"
+macro-attr = "0.2.0"
+newtype_derive = "0.1.6"
