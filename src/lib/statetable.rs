@@ -34,7 +34,8 @@ use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 use std::fmt;
 
 use StIdx;
-use grammar::{AssocKind, Grammar, PIdx, NTIdx, Symbol, TIdx};
+use cfgrammar::{PIdx, NTIdx, Symbol, TIdx};
+use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use stategraph::StateGraph;
 
 /// The various different possible Yacc parser errors.
@@ -83,7 +84,7 @@ pub enum Action {
 }
 
 impl StateTable {
-    pub fn new(grm: &Grammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
+    pub fn new(grm: &YaccGrammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
         let mut actions: HashMap<(StIdx, Symbol), Action> = HashMap::new();
         let mut gotos  : HashMap<(StIdx, NTIdx), StIdx>   = HashMap::new();
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
@@ -118,7 +119,7 @@ impl StateTable {
                             }
                         }
                         Entry::Vacant(e) => {
-                            if prod_i == grm.start_prod && TIdx::from(term_i) == grm.end_term {
+                            if prod_i == grm.start_prod() && TIdx::from(term_i) == grm.end_term_idx() {
                                 e.insert(Action::Accept);
                             }
                             else {
@@ -173,7 +174,7 @@ impl StateTable {
     }
 }
 
-fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(StIdx, Symbol), Action>, term_k: TIdx,
+fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<(StIdx, Symbol), Action>, term_k: TIdx,
                         prod_k: PIdx, state_j: StIdx) -> u64 {
     let mut shift_reduce = 0;
     let term_k_prec = grm.term_precedence(term_k).unwrap();
@@ -222,14 +223,15 @@ fn resolve_shift_reduce(grm: &Grammar, mut e: OccupiedEntry<(StIdx, Symbol), Act
 mod test {
     use StIdx;
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
-    use grammar::{Grammar, Symbol, TIdx};
+    use cfgrammar::{Symbol, TIdx};
+    use cfgrammar::yacc::YaccGrammar;
+    use cfgrammar::yacc::parser::parse_yacc;
     use pager::pager_stategraph;
-    use yacc_parser::parse_yacc;
 
     #[test]
     fn test_statetable() {
         // Taken from p19 of www.cs.umd.edu/~mvz/cmsc430-s07/M10lr.pdf
-        let grm = Grammar::new(&parse_yacc(&"
+        let grm = YaccGrammar::new(&parse_yacc(&"
             %start Expr
             %%
             Expr : Term '-' Expr | Term;
@@ -259,20 +261,20 @@ mod test {
         };
 
         assert_eq!(st.action(s0, Symbol::Terminal(grm.terminal_off("id"))).unwrap(), Action::Shift(s4));
-        assert_eq!(st.action(s1, Symbol::Terminal(grm.end_term)).unwrap(), Action::Accept);
+        assert_eq!(st.action(s1, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Accept);
         assert_eq!(st.action(s2, Symbol::Terminal(grm.terminal_off("-"))).unwrap(), Action::Shift(s5));
-        assert_reduce(s2, grm.end_term, "Expr", 1);
+        assert_reduce(s2, grm.end_term_idx(), "Expr", 1);
         assert_reduce(s3, grm.terminal_off("-"), "Term", 1);
         assert_eq!(st.action(s3, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s6));
-        assert_reduce(s3, grm.end_term, "Term", 1);
+        assert_reduce(s3, grm.end_term_idx(), "Term", 1);
         assert_reduce(s4, grm.terminal_off("-"), "Factor", 0);
         assert_reduce(s4, grm.terminal_off("*"), "Factor", 0);
-        assert_reduce(s4, grm.end_term, "Factor", 0);
+        assert_reduce(s4, grm.end_term_idx(), "Factor", 0);
         assert_eq!(st.action(s5, Symbol::Terminal(grm.terminal_off("id"))).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("id"))).unwrap(), Action::Shift(s4));
-        assert_reduce(s7, grm.end_term, "Expr", 0);
+        assert_reduce(s7, grm.end_term_idx(), "Expr", 0);
         assert_reduce(s8, grm.terminal_off("-"), "Term", 0);
-        assert_reduce(s8, grm.end_term, "Term", 0);
+        assert_reduce(s8, grm.end_term_idx(), "Term", 0);
 
         // Gotos
         assert_eq!(st.gotos.len(), 8);
@@ -288,7 +290,7 @@ mod test {
 
     #[test]
     fn test_default_reduce_reduce() {
-        let grm = Grammar::new(&parse_yacc(&"
+        let grm = YaccGrammar::new(&parse_yacc(&"
             %start A
             %%
             A : B 'x' | C 'x' 'x';
@@ -308,7 +310,7 @@ mod test {
 
     #[test]
     fn test_default_shift_reduce() {
-        let grm = Grammar::new(&parse_yacc(&"
+        let grm = YaccGrammar::new(&parse_yacc(&"
             %start Expr
             %%
             Expr : Expr '+' Expr
@@ -335,7 +337,7 @@ mod test {
 
     #[test]
     fn test_left_associativity() {
-        let grm = Grammar::new(&parse_yacc(&"
+        let grm = YaccGrammar::new(&parse_yacc(&"
             %start Expr
             %left '+'
             %left '*'
@@ -357,16 +359,16 @@ mod test {
 
         assert_eq!(st.action(s5, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(2.into()));
         assert_eq!(st.action(s5, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(2.into()));
-        assert_eq!(st.action(s5, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s5, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(2.into()));
 
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(1.into()));
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
-        assert_eq!(st.action(s6, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(1.into()));
+        assert_eq!(st.action(s6, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(1.into()));
     }
 
     #[test]
     fn test_left_right_associativity() {
-        let grm = Grammar::new(&parse_yacc(&"
+        let grm = YaccGrammar::new(&parse_yacc(&"
             %start Expr
             %right '='
             %left '+'
@@ -393,22 +395,22 @@ mod test {
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Shift(s3));
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s6, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Shift(s5));
-        assert_eq!(st.action(s6, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(3.into()));
+        assert_eq!(st.action(s6, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(3.into()));
 
         assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(2.into()));
         assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(2.into()));
         assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(2.into()));
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(2.into()));
 
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(1.into()));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(1.into()));
-        assert_eq!(st.action(s8, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(1.into()));
+        assert_eq!(st.action(s8, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(1.into()));
     }
 
     #[test]
     fn test_left_right_nonassoc_associativity() {
-        let grm = Grammar::new(&parse_yacc(&"
+        let grm = YaccGrammar::new(&parse_yacc(&"
             %start Expr
             %right '='
             %left '+'
@@ -439,30 +441,30 @@ mod test {
         assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(4.into()));
         assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(4.into()));
         assert_eq!(st.action(s7, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(4.into()));
-        assert_eq!(st.action(s7, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(4.into()));
+        assert_eq!(st.action(s7, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(4.into()));
 
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Shift(s3));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Shift(s5));
         assert_eq!(st.action(s8, Symbol::Terminal(grm.terminal_off("~"))).unwrap(), Action::Shift(s6));
-        assert_eq!(st.action(s8, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(3.into()));
+        assert_eq!(st.action(s8, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(3.into()));
 
         assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(2.into()));
         assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Reduce(2.into()));
         assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(2.into()));
         assert_eq!(st.action(s9, Symbol::Terminal(grm.terminal_off("~"))).unwrap(), Action::Shift(s6));
-        assert_eq!(st.action(s9, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(2.into()));
+        assert_eq!(st.action(s9, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(2.into()));
 
         assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("+"))).unwrap(), Action::Reduce(1.into()));
         assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("*"))).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("="))).unwrap(), Action::Reduce(1.into()));
         assert_eq!(st.action(s10, Symbol::Terminal(grm.terminal_off("~"))).unwrap(), Action::Shift(s6));
-        assert_eq!(st.action(s10, Symbol::Terminal(grm.end_term)).unwrap(), Action::Reduce(1.into()));
+        assert_eq!(st.action(s10, Symbol::Terminal(grm.end_term_idx())).unwrap(), Action::Reduce(1.into()));
     }
 
     #[test]
     fn accept_reduce_conflict() {
-        let grm = Grammar::new(&parse_yacc(&"
+        let grm = YaccGrammar::new(&parse_yacc(&"
 %start D
 %%
 D : D;

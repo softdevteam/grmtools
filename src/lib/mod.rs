@@ -32,25 +32,20 @@
 
 use std::fmt;
 
-#[macro_use] extern crate lazy_static;
 #[macro_use] extern crate macro_attr;
 #[macro_use] extern crate newtype_derive;
+extern crate cfgrammar;
 
-
-mod ast;
 mod firsts;
-pub mod grammar;
 mod itemset;
-mod yacc_parser;
 mod pager;
 mod stategraph;
 pub mod statetable;
 
-pub use grammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
-pub use ast::{GrammarAST, GrammarValidationError};
+use cfgrammar::yacc::YaccGrammar;
+use cfgrammar::yacc::ast::GrammarValidationError;
+use cfgrammar::yacc::parser::{parse_yacc, YaccParserError};
 pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
-pub use yacc_parser::{YaccParserError, YaccParserErrorKind};
-use yacc_parser::parse_yacc;
 
 macro_attr! {
     /// A type specifically for state indexes.
@@ -97,10 +92,10 @@ pub enum Minimiser {
     Pager
 }
 
-pub fn yacc_to_statetable(s: &str, m: Minimiser) -> Result<(Grammar, StateTable), YaccToStateTableError> {
+pub fn yacc_to_statetable(s: &str, m: Minimiser) -> Result<(YaccGrammar, StateTable), YaccToStateTableError> {
     let ast = try!(parse_yacc(s));
     try!(ast.validate());
-    let grm = Grammar::new(&ast);
+    let grm = YaccGrammar::new(&ast);
     let st = match m {
         Minimiser::Pager => {
             let sg = pager::pager_stategraph(&grm);
