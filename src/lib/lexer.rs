@@ -30,8 +30,10 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::rc::Rc;
 use std::slice::Iter;
 
 use regex::Regex;
@@ -106,12 +108,13 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
 /// tied to a single `String`, no guarantees are made about whether the lexemes are cached or not.
 pub struct Lexer<'a, TokId: 'a> {
     lexerdef: &'a LexerDef<TokId>,
-    s: &'a String
+    s: &'a String,
+    newlines: Rc<RefCell<Vec<usize>>>
 }
 
 impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
     fn new(lexerdef: &'a LexerDef<TokId>, s: &'a String) -> Lexer<'a, TokId> {
-        Lexer {lexerdef, s}
+        Lexer {lexerdef, s, newlines: Rc::new(RefCell::new(Vec::new()))}
     }
 
     /// Return all this lexer's lexemes or a `LexError` if there was a problem when lexing.
@@ -134,6 +137,11 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
                 }
             }
             if longest > 0 {
+                self.newlines.borrow_mut().extend(self.s[i .. i + longest]
+                                                      .chars()
+                                                      .enumerate()
+                                                      .filter(|&(_, c)| c == '\n')
+                                                      .map(|(j, _)| i + j + 1));
                 let r = &self.lexerdef.get_rule(longest_ridx).unwrap();
                 if r.name.is_some() {
                     lxs.push(Lexeme::new(r.tok_id, i, longest));
@@ -144,6 +152,22 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
             }
         }
         Ok(lxs)
+    }
+
+    /// Return the line and column number of a `Lexeme`, or `Err` if it is clearly out of bounds
+    /// for this lexer.
+    pub fn line_and_col(&self, l: &Lexeme<TokId>) -> Result<(usize, usize), ()> {
+        if l.start > self.s.len() {
+            return Err(());
+        }
+        for (i, n) in self.newlines.borrow().iter().enumerate() {
+            if *n > l.start {
+                return Ok((i + 1, *n - l.start));
+            }
+        }
+        let newlines_brw = self.newlines.borrow();
+        let newlines_len = newlines_brw.len();
+        return Ok((newlines_len + 1, l.start - newlines_brw[newlines_len - 1] + 1))
     }
 }
 
@@ -242,7 +266,6 @@ if IF
         lexer.set_rule_ids(&map);
 
         let lexemes = lexer.lexer(&"iff if".to_string()).lexemes().unwrap();
-        println!("{:?}", lexemes);
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id, 1);
@@ -252,5 +275,28 @@ if IF
         assert_eq!(lex2.tok_id, 0);
         assert_eq!(lex2.start, 4);
         assert_eq!(lex2.len, 2);
+    }
+
+    #[test]
+    fn test_line_and_col() {
+        let src = "%%
+[a-z]+ ID
+[ \\n] ;".to_string();
+        let mut lexer = parse_lex(&src).unwrap();
+        let mut map = HashMap::new();
+        map.insert("ID", 0);
+        lexer.set_rule_ids(&map);
+
+        let stream = " a\nb\n  c".to_string();
+        let lexer = lexer.lexer(&stream);
+        let lexemes = lexer.lexemes().unwrap();
+        assert_eq!(lexemes.len(), 3);
+        assert_eq!(lexer.line_and_col(&lexemes[0]).unwrap(), (1, 2));
+        assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (2, 2));
+        assert_eq!(lexer.line_and_col(&lexemes[2]).unwrap(), (3, 3));
+        let fake_lexeme = Lexeme{start: 100, len: 1, tok_id: 0};
+        if let Ok(_) = lexer.line_and_col(&fake_lexeme) {
+            panic!("line_and_col returned Ok(_) when it should have returned Err.");
+        }
     }
 }
