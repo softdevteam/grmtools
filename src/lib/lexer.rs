@@ -52,13 +52,15 @@ pub struct LexError {
     idx: usize
 }
 
-pub struct Lexer<TokId> {
+/// This struct represents, in essence, a .l file in memory. From it one can produce a `Lexer`
+/// which actually lexes inputs.
+pub struct LexerDef<TokId> {
     rules: Vec<Rule<TokId>>
 }
 
-impl<TokId: Copy + Eq> Lexer<TokId> {
-    pub fn new(rules: Vec<Rule<TokId>>) -> Lexer<TokId> {
-        Lexer {rules: rules}
+impl<TokId: Copy + Eq> LexerDef<TokId> {
+    pub fn new(rules: Vec<Rule<TokId>>) -> LexerDef<TokId> {
+        LexerDef{rules: rules}
     }
 
     /// Get the `Rule` at index `idx`.
@@ -94,15 +96,34 @@ impl<TokId: Copy + Eq> Lexer<TokId> {
         self.rules.iter()
     }
 
-    pub fn lex(&self, s: &str) -> Result<Vec<Lexeme<TokId>>, LexError> {
+    /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
+    pub fn lexer<'a>(&'a self, s: &'a String) -> Lexer<'a, TokId> {
+        Lexer::new(&self, s)
+    }
+}
+
+/// A lexer holds a reference to a `String` and can lex it into `Lexeme`s. Although the struct is
+/// tied to a single `String`, no guarantees are made about whether the lexemes are cached or not.
+pub struct Lexer<'a, TokId: 'a> {
+    lexerdef: &'a LexerDef<TokId>,
+    s: &'a String
+}
+
+impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
+    fn new(lexerdef: &'a LexerDef<TokId>, s: &'a String) -> Lexer<'a, TokId> {
+        Lexer {lexerdef, s}
+    }
+
+    /// Return all this lexer's lexemes or a `LexError` if there was a problem when lexing.
+    pub fn lexemes(&self) -> Result<Vec<Lexeme<TokId>>, LexError> {
         let mut i = 0; // byte index into s
         let mut lxs = Vec::new(); // lexemes
 
-        while i < s.len() {
+        while i < self.s.len() {
             let mut longest = 0; // Length of the longest match
             let mut longest_ridx = 0; // This is only valid iff longest != 0
-            for (ridx, r) in self.iter_rules().enumerate() {
-                if let Some(m) = r.re.find(&s[i..]) {
+            for (ridx, r) in self.lexerdef.iter_rules().enumerate() {
+                if let Some(m) = r.re.find(&self.s[i..]) {
                     let len = m.end();
                     // Note that by using ">", we implicitly prefer an earlier over a later rule, if
                     // both match an input of the same length.
@@ -113,7 +134,7 @@ impl<TokId: Copy + Eq> Lexer<TokId> {
                 }
             }
             if longest > 0 {
-                let r = &self.get_rule(longest_ridx).unwrap();
+                let r = &self.lexerdef.get_rule(longest_ridx).unwrap();
                 if r.name.is_some() {
                     lxs.push(Lexeme::new(r.tok_id, i, longest));
                 }
@@ -126,6 +147,8 @@ impl<TokId: Copy + Eq> Lexer<TokId> {
     }
 }
 
+/// A lexeme has a starting position in a string, a length, and a token id. It is a deliberately
+/// small data-structure to large input files to be stored efficiently.
 #[derive(Clone, Copy, Debug)]
 pub struct Lexeme<TokId> {
     start: usize,
@@ -158,6 +181,8 @@ impl<TokId: Copy> Lexeme<TokId> {
     }
 }
 
+
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
@@ -178,7 +203,7 @@ mod test {
         map.insert("id", 1);
         lexer.set_rule_ids(&map);
 
-        let lexemes = lexer.lex("abc 123").unwrap();
+        let lexemes = lexer.lexer(&"abc 123".to_string()).lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id, 1);
@@ -197,7 +222,7 @@ mod test {
 [0-9]+ int
         ".to_string();
         let lexer = parse_lex::<u8>(&src).unwrap();
-        match lexer.lex("abc") {
+        match lexer.lexer(&"abc".to_string()).lexemes() {
             Ok(_)  => panic!("Invalid input lexed"),
             Err(LexError{idx: 0}) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
@@ -216,7 +241,7 @@ if IF
         map.insert("ID", 1);
         lexer.set_rule_ids(&map);
 
-        let lexemes = lexer.lex("iff if").unwrap();
+        let lexemes = lexer.lexer(&"iff if".to_string()).lexemes().unwrap();
         println!("{:?}", lexemes);
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];

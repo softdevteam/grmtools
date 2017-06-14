@@ -35,7 +35,7 @@ use std::convert::TryFrom;
 use regex::{Regex, RegexBuilder};
 
 use {LexErrorKind, LexBuildError, LexBuildResult};
-use lexer::{Lexer, Rule};
+use lexer::{LexerDef, Rule};
 
 pub struct LexParser<TokId> {
     src: String,
@@ -187,8 +187,8 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
     }
 }
 
-pub fn parse_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> LexBuildResult<Lexer<TokId>> {
-    LexParser::new(s.to_string()).map(|p| Lexer::new(p.rules))
+pub fn parse_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> LexBuildResult<LexerDef<TokId>> {
+    LexParser::new(s.to_string()).map(|p| LexerDef::new(p.rules))
 }
 
 #[cfg(test)]

@@ -39,7 +39,7 @@ use std::fs::File;
 use std::io::{Read, stderr, Write};
 use std::path::Path;
 
-use lrlex::{build_lex, Lexer};
+use lrlex::{build_lex, LexerDef};
 
 fn usage(prog: String, msg: &str) {
     let path = Path::new(prog.as_str());
@@ -85,13 +85,13 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let lexer: Lexer<usize> = build_lex(&read_file(lex_l_path)).unwrap_or_else(|s| {
+    let lexerdef: LexerDef<usize> = build_lex(&read_file(lex_l_path)).unwrap_or_else(|s| {
             writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
             process::exit(1);
         });
     let input = &read_file(&matches.free[1]);
-    let lexemes = lexer.lex(&input).unwrap();
+    let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
     for l in lexemes.iter() {
-        println!("{} {}", lexer.get_rule_by_id(l.tok_id()).unwrap().name.as_ref().unwrap(), &input[l.start()..l.start() + l.len()]);
+        println!("{} {}", lexerdef.get_rule_by_id(l.tok_id()).unwrap().name.as_ref().unwrap(), &input[l.start()..l.start() + l.len()]);
     }
 }

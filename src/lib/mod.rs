@@ -40,7 +40,7 @@ use std::fmt;
 mod lexer;
 mod parser;
 
-pub use lexer::{Lexeme, Lexer};
+pub use lexer::{Lexeme, LexerDef, Lexer};
 use parser::parse_lex;
 
 #[macro_use]
@@ -84,7 +84,7 @@ impl fmt::Display for LexBuildError {
     }
 }
 
-pub fn build_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<Lexer<TokId>, LexBuildError> {
+pub fn build_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerDef<TokId>, LexBuildError> {
     parse_lex(s)
 }
 
