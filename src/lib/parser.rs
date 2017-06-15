@@ -123,13 +123,13 @@ mod test {
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
         let (grm, stable) = yacc_to_statetable(grms, Minimiser::Pager).unwrap();
-        let mut lexer = build_lex(lexs).unwrap();
+        let mut lexerdef = build_lex(lexs).unwrap();
         let mut rule_ids = HashMap::<&str, usize>::new();
         for term_idx in grm.iter_term_idxs() {
             rule_ids.insert(grm.term_name(term_idx).unwrap(), usize::from(term_idx));
         }
-        lexer.set_rule_ids(&rule_ids);
-        let mut lexemes = lexer.lex(&input).unwrap();
+        lexerdef.set_rule_ids(&rule_ids);
+        let mut lexemes = lexerdef.lexer(&input).lexemes().unwrap();
         lexemes.push(Lexeme::new(usize::from(grm.end_term_idx()), input.len(), 0));
         let pt = parse(&grm, &stable, &lexemes).unwrap();
         assert_eq!(expected, pt.pp(&grm, &input));

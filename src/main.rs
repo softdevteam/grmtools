@@ -93,7 +93,7 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let mut lexer = match build_lex::<u16>(&read_file(lex_l_path)) {
+    let mut lexerdef = match build_lex::<u16>(&read_file(lex_l_path)) {
         Ok(ast) => ast,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
@@ -116,11 +116,11 @@ fn main() {
     for term_idx in grm.iter_term_idxs() {
         rule_ids.insert(grm.term_name(term_idx).unwrap(), u16::try_from(usize::from(term_idx)).unwrap());
     }
-    lexer.set_rule_ids(&rule_ids);
+    lexerdef.set_rule_ids(&rule_ids);
 
     let input = read_file(&matches.free[2]);
 
-    let mut lexemes = lexer.lex(&input).unwrap();
+    let mut lexemes = lexerdef.lexer(&input).lexemes().unwrap();
     lexemes.push(Lexeme::new(u16::try_from(usize::from(grm.end_term_idx())).unwrap(), input.len(), 0));
     let pt = parse::<u16>(&grm, &stable, &lexemes).unwrap();
     println!("{}", pt.pp(&grm, &input));
