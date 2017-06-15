@@ -99,21 +99,21 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
     }
 
     /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
-    pub fn lexer<'a>(&'a self, s: &'a String) -> Lexer<'a, TokId> {
+    pub fn lexer<'a>(&'a self, s: &'a str) -> Lexer<'a, TokId> {
         Lexer::new(&self, s)
     }
 }
 
-/// A lexer holds a reference to a `String` and can lex it into `Lexeme`s. Although the struct is
-/// tied to a single `String`, no guarantees are made about whether the lexemes are cached or not.
+/// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
+/// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
 pub struct Lexer<'a, TokId: 'a> {
     lexerdef: &'a LexerDef<TokId>,
-    s: &'a String,
+    s: &'a str,
     newlines: Rc<RefCell<Vec<usize>>>
 }
 
 impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
-    fn new(lexerdef: &'a LexerDef<TokId>, s: &'a String) -> Lexer<'a, TokId> {
+    fn new(lexerdef: &'a LexerDef<TokId>, s: &'a str) -> Lexer<'a, TokId> {
         Lexer {lexerdef, s, newlines: Rc::new(RefCell::new(Vec::new()))}
     }
 
@@ -205,8 +205,6 @@ impl<TokId: Copy> Lexeme<TokId> {
     }
 }
 
-
-
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
@@ -227,7 +225,7 @@ mod test {
         map.insert("id", 1);
         lexer.set_rule_ids(&map);
 
-        let lexemes = lexer.lexer(&"abc 123".to_string()).lexemes().unwrap();
+        let lexemes = lexer.lexer(&"abc 123").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id, 1);
@@ -246,7 +244,7 @@ mod test {
 [0-9]+ int
         ".to_string();
         let lexer = parse_lex::<u8>(&src).unwrap();
-        match lexer.lexer(&"abc".to_string()).lexemes() {
+        match lexer.lexer(&"abc").lexemes() {
             Ok(_)  => panic!("Invalid input lexed"),
             Err(LexError{idx: 0}) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
@@ -265,7 +263,7 @@ if IF
         map.insert("ID", 1);
         lexer.set_rule_ids(&map);
 
-        let lexemes = lexer.lexer(&"iff if".to_string()).lexemes().unwrap();
+        let lexemes = lexer.lexer(&"iff if").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id, 1);
@@ -287,7 +285,7 @@ if IF
         map.insert("ID", 0);
         lexer.set_rule_ids(&map);
 
-        let stream = " a\nb\n  c".to_string();
+        let stream = " a\nb\n  c";
         let lexer = lexer.lexer(&stream);
         let lexemes = lexer.lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
