@@ -309,10 +309,18 @@ impl From<GrammarValidationError> for YaccGrammarError {
     }
 }
 
-pub fn yacc_grm(s: &str) -> Result<YaccGrammar, YaccGrammarError> {
-    let ast = try!(parser::yacc_ast(s));
-    try!(ast.validate());
-    Ok(YaccGrammar::new(&ast))
+pub enum YaccKind {
+    Original
+}
+
+pub fn yacc_grm(yacc_kind: YaccKind, s: &str) -> Result<YaccGrammar, YaccGrammarError> {
+    match yacc_kind {
+        YaccKind::Original => {
+            let ast = try!(parser::yacc_ast(s));
+            try!(ast.validate());
+            Ok(YaccGrammar::new(&ast))
+        }
+    }
 }
 
 #[cfg(test)]
