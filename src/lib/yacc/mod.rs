@@ -33,6 +33,8 @@
 use std::collections::HashMap;
 
 use super::{Grammar, NTIdx, PIdx, Symbol, TIdx};
+pub use self::ast::{GrammarValidationError, GrammarValidationErrorKind};
+pub use self::parser::{YaccParserError, YaccParserErrorKind};
 
 pub mod ast;
 pub mod parser;
@@ -289,16 +291,38 @@ impl YaccGrammar {
     }
 }
 
+#[derive(Debug)]
+pub enum YaccGrammarError {
+    YaccParserError(YaccParserError),
+    GrammarValidationError(GrammarValidationError)
+}
+
+impl From<YaccParserError> for YaccGrammarError {
+    fn from(err: YaccParserError) -> YaccGrammarError {
+        YaccGrammarError::YaccParserError(err)
+    }
+}
+
+impl From<GrammarValidationError> for YaccGrammarError {
+    fn from(err: GrammarValidationError) -> YaccGrammarError {
+        YaccGrammarError::GrammarValidationError(err)
+    }
+}
+
+pub fn yacc_grm(s: &str) -> Result<YaccGrammar, YaccGrammarError> {
+    let ast = try!(parser::yacc_ast(s));
+    try!(ast.validate());
+    Ok(YaccGrammar::new(&ast))
+}
 
 #[cfg(test)]
 mod test {
-    use super::{AssocKind, YaccGrammar, NTIdx, PIdx, Precedence, Symbol, TIdx};
-    use yacc::parser::parse_yacc;
+    use super::{AssocKind, NTIdx, PIdx, Precedence, Symbol, TIdx, yacc_grm, YaccKind};
 
     #[test]
     fn test_minimal() {
-        let ast = parse_yacc(&"%start R %token T %% R: 'T';".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+        let grm = yacc_grm(YaccKind::Original,
+                           &"%start R %token T %% R: 'T';".to_string()).unwrap();
 
         assert_eq!(grm.start_prod, PIdx(0));
         grm.nonterminal_off("^");
@@ -319,8 +343,8 @@ mod test {
 
     #[test]
     fn test_rule_ref() {
-        let ast = parse_yacc(&"%start R %token T %% R : S; S: 'T';".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+        let grm = yacc_grm(YaccKind::Original,
+                           &"%start R %token T %% R : S; S: 'T';".to_string()).unwrap();
 
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
@@ -341,8 +365,8 @@ mod test {
 
     #[test]
     fn test_long_prod() {
-        let ast = parse_yacc(&"%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+        let grm = yacc_grm(YaccKind::Original,
+                           &"%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';".to_string()).unwrap();
 
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
@@ -368,7 +392,7 @@ mod test {
 
     #[test]
     fn test_prods_rules() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
             %start A
             %%
             A: B
@@ -376,14 +400,14 @@ mod test {
             B: 'x';
             C: 'y'
              | 'z';
-          ".to_string()).unwrap());
+          ".to_string()).unwrap();
 
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1), NTIdx(1), NTIdx(2), NTIdx(3), NTIdx(3)]);
     }
 
     #[test]
     fn test_left_right_nonassoc_precs() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
             %start Expr
             %right '='
             %left '+' '-'
@@ -398,7 +422,7 @@ mod test {
                  | Expr '*' Expr
                  | Expr '~' Expr
                  | 'id' ;
-          ").unwrap());
+          ").unwrap();
 
         assert_eq!(grm.prod_precs.len(), 8);
         assert_eq!(grm.prod_precs[0], None);
@@ -413,7 +437,7 @@ mod test {
 
     #[test]
     fn test_prec_override() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
             %start expr
             %left '+' '-'
             %left '*' '/'
@@ -424,7 +448,7 @@ mod test {
                  | expr '/' expr
                  | '-'  expr %prec '*'
                  | 'id' ;
-        ").unwrap());
+        ").unwrap();
         assert_eq!(grm.prod_precs.len(), 7);
         assert_eq!(grm.prod_precs[0], None);
         assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 0, kind: AssocKind::Left});
