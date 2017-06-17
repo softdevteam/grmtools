@@ -42,6 +42,9 @@ use std::path::Path;
 extern crate getopts;
 use getopts::Options;
 
+extern crate cfgrammar;
+use cfgrammar::yacc::{yacc_grm, YaccKind};
+
 extern crate lrlex;
 use lrlex::{build_lex, Lexeme};
 
@@ -102,7 +105,14 @@ fn main() {
     };
 
     let yacc_y_path = &matches.free[1];
-    let (grm, stable) = match yacc_to_statetable(&read_file(yacc_y_path), Minimiser::Pager) {
+    let grm = match yacc_grm(YaccKind::Original, &read_file(yacc_y_path)) {
+        Ok(x) => x,
+        Err(s) => {
+            writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
+            process::exit(1);
+        }
+    };
+    let stable = match yacc_to_statetable(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();

@@ -117,12 +117,14 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
+    use cfgrammar::yacc::{yacc_grm, YaccKind};
     use lrlex::{build_lex, Lexeme};
     use lrtable::{Minimiser, yacc_to_statetable};
     use super::*;
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
-        let (grm, stable) = yacc_to_statetable(grms, Minimiser::Pager).unwrap();
+        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let stable = yacc_to_statetable(&grm, Minimiser::Pager).unwrap();
         let mut lexerdef = build_lex(lexs).unwrap();
         let mut rule_ids = HashMap::<&str, usize>::new();
         for term_idx in grm.iter_term_idxs() {
