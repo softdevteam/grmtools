@@ -30,8 +30,6 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::fmt;
-
 #[macro_use] extern crate macro_attr;
 #[macro_use] extern crate newtype_derive;
 extern crate cfgrammar;
@@ -43,8 +41,6 @@ mod stategraph;
 pub mod statetable;
 
 use cfgrammar::yacc::YaccGrammar;
-use cfgrammar::yacc::ast::GrammarValidationError;
-use cfgrammar::yacc::parser::{parse_yacc, YaccParserError};
 pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
 macro_attr! {
@@ -53,54 +49,16 @@ macro_attr! {
     pub struct StIdx(usize);
 }
 
-#[derive(Debug)]
-pub enum YaccToStateTableError {
-    YaccParserError(YaccParserError),
-    GrammarValidationError(GrammarValidationError),
-    StateTableError(StateTableError)
-}
-
-impl From<YaccParserError> for YaccToStateTableError {
-    fn from(err: YaccParserError) -> YaccToStateTableError {
-        YaccToStateTableError::YaccParserError(err)
-    }
-}
-
-impl From<GrammarValidationError> for YaccToStateTableError {
-    fn from(err: GrammarValidationError) -> YaccToStateTableError {
-        YaccToStateTableError::GrammarValidationError(err)
-    }
-}
-
-impl From<StateTableError> for YaccToStateTableError {
-    fn from(err: StateTableError) -> YaccToStateTableError {
-        YaccToStateTableError::StateTableError(err)
-    }
-}
-
-impl fmt::Display for YaccToStateTableError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            YaccToStateTableError::YaccParserError(ref e) => e.fmt(f),
-            YaccToStateTableError::GrammarValidationError(ref e) => e.fmt(f),
-            YaccToStateTableError::StateTableError(ref e) => e.fmt(f),
-        }
-    }
-}
-
 pub enum Minimiser {
     Pager
 }
 
-pub fn yacc_to_statetable(s: &str, m: Minimiser) -> Result<(YaccGrammar, StateTable), YaccToStateTableError> {
-    let ast = try!(parse_yacc(s));
-    try!(ast.validate());
-    let grm = YaccGrammar::new(&ast);
+pub fn yacc_to_statetable(grm: &YaccGrammar, m: Minimiser) -> Result<StateTable, StateTableError> {
     let st = match m {
         Minimiser::Pager => {
             let sg = pager::pager_stategraph(&grm);
             try!(StateTable::new(&grm, &sg))
         }
     };
-    Ok((grm, st))
+    Ok(st)
 }

@@ -37,7 +37,7 @@ use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 
 // Firsts stores all the first sets for a given grammar. For example, given this code and grammar:
-//   let grm = YaccGrammar::new(parse_yacc("
+//   let grm = YaccGrammar::new(yacc_grm(YaccKind::Original, "
 //     S: A 'b';
 //     A: 'a'
 //      | ;"));
@@ -174,8 +174,7 @@ impl Firsts {
 mod test {
     use super::Firsts;
     use cfgrammar::Grammar;
-    use cfgrammar::yacc::YaccGrammar;
-    use cfgrammar::yacc::parser::parse_yacc;
+    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
 
     fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
         let nt_i = grm.nonterminal_off(rn);
@@ -194,14 +193,14 @@ mod test {
                 }
             }
         }
-        if should_be.iter().position(|x| x == &"".to_string()).is_some() {
+        if should_be.iter().position(|x| x == &"").is_some() {
             assert!(firsts.is_epsilon_set(nt_i));
         }
     }
 
     #[test]
     fn test_first(){
-        let ast = parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
           %start C
           %token c d
           %%
@@ -209,8 +208,7 @@ mod test {
           D: 'd';
           E: D | C;
           F: E;
-          ".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+          ").unwrap();
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "^", vec!["c"]);
         has(&grm, &firsts, "D", vec!["d"]);
@@ -220,22 +218,21 @@ mod test {
 
     #[test]
     fn test_first_no_subsequent_nonterminals() {
-        let ast = parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
           %start C
           %token c d
           %%
           C: 'c';
           D: 'd';
           E: D C;
-          ".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+          ").unwrap();
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "E", vec!["d"]);
     }
 
     #[test]
     fn test_first_epsilon() {
-        let ast = parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
           %start A
           %token a b c
           %%
@@ -243,8 +240,7 @@ mod test {
           B: 'b' | ;
           C: 'c' | ;
           D: C;
-          ".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+          ").unwrap();
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b", "a"]);
         has(&grm, &firsts, "C", vec!["c", ""]);
@@ -253,15 +249,14 @@ mod test {
 
     #[test]
     fn test_last_epsilon() {
-        let ast = parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
           %start A
           %token b c
           %%
           A: B C;
           B: 'b' | ;
           C: B 'c' B;
-          ".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+          ").unwrap();
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b", "c"]);
         has(&grm, &firsts, "B", vec!["b", ""]);
@@ -270,20 +265,19 @@ mod test {
 
     #[test]
     fn test_first_no_multiples() {
-        let ast = parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
           %start A
           %token b c
           %%
           A: B 'b';
           B: 'b' | ;
-          ".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+          ").unwrap();
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "A", vec!["b"]);
     }
 
     fn eco_grammar() -> YaccGrammar {
-        let ast = parse_yacc(&"
+        yacc_grm(YaccKind::Original, &"
           %start S
           %token a b c d f
           %%
@@ -293,8 +287,7 @@ mod test {
           C: D A;
           D: 'd' | ;
           F: C D 'f';
-          ".to_string()).unwrap();
-        YaccGrammar::new(&ast)
+          ").unwrap()
     }
 
     #[test]
@@ -311,7 +304,7 @@ mod test {
 
     #[test]
     fn test_first_from_eco_bug() {
-        let ast = parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
           %start E
           %token a b c d e f
           %%
@@ -322,8 +315,7 @@ mod test {
           D: D 'd' | F;
           F: 'f' | ;
           G: C D;
-          ".to_string()).unwrap();
-        let grm = YaccGrammar::new(&ast);
+          ").unwrap();
         let firsts = Firsts::new(&grm);
         has(&grm, &firsts, "E", vec!["a"]);
         has(&grm, &firsts, "T", vec!["a"]);
