@@ -326,7 +326,7 @@ pub enum YaccKind {
 pub fn yacc_grm(yacc_kind: YaccKind, s: &str) -> Result<YaccGrammar, YaccGrammarError> {
     match yacc_kind {
         YaccKind::Original => {
-            let ast = try!(parser::yacc_ast(s));
+            let ast = try!(parser::yacc_ast(yacc_kind, s));
             try!(ast.validate());
             Ok(YaccGrammar::new(&ast))
         }
