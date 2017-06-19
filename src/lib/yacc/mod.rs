@@ -31,6 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashMap;
+use std::fmt;
 
 use super::{Grammar, NTIdx, PIdx, Symbol, TIdx};
 pub use self::ast::{GrammarValidationError, GrammarValidationErrorKind};
@@ -306,6 +307,15 @@ impl From<YaccParserError> for YaccGrammarError {
 impl From<GrammarValidationError> for YaccGrammarError {
     fn from(err: GrammarValidationError) -> YaccGrammarError {
         YaccGrammarError::GrammarValidationError(err)
+    }
+}
+
+impl fmt::Display for YaccGrammarError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            YaccGrammarError::YaccParserError(ref e) => e.fmt(f),
+            YaccGrammarError::GrammarValidationError(ref e) => e.fmt(f)
+        }
     }
 }
 
