@@ -370,8 +370,7 @@ mod test {
 
     use super::bitvec_intersect;
     use cfgrammar::Symbol;
-    use cfgrammar::yacc::YaccGrammar;
-    use cfgrammar::yacc::parser::parse_yacc;
+    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
     use pager::pager_stategraph;
     use stategraph::state_exists;
 
@@ -408,13 +407,13 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        YaccGrammar::new(&parse_yacc(&"
+        yacc_grm(YaccKind::Original, &"
           %start S
           %token a b c d
           %%
           S: S 'b' | 'b' A 'a';
           A: 'a' S 'c' | 'a' | 'a' S 'b';
-          ".to_string()).unwrap())
+          ").unwrap()
     }
 
     #[test]
@@ -482,7 +481,7 @@ mod test {
 
     // Pager grammar
     fn grammar_pager() -> YaccGrammar {
-        YaccGrammar::new(&parse_yacc(&"
+        yacc_grm(YaccKind::Original, &"
             %start X
             %%
              X : 'a' Y 'd' | 'a' Z 'c' | 'a' T | 'b' Y 'e' | 'b' Z 'd' | 'b' T;
@@ -491,7 +490,7 @@ mod test {
              T : 'u' X 'a';
              W : 'u' V;
              V : ;
-          ".to_string()).unwrap())
+          ").unwrap()
     }
 
     fn test_pager_graph(grm: &YaccGrammar) {

@@ -224,20 +224,19 @@ mod test {
     use StIdx;
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
     use cfgrammar::{Symbol, TIdx};
-    use cfgrammar::yacc::YaccGrammar;
-    use cfgrammar::yacc::parser::parse_yacc;
+    use cfgrammar::yacc::{yacc_grm, YaccKind};
     use pager::pager_stategraph;
 
     #[test]
     fn test_statetable() {
         // Taken from p19 of www.cs.umd.edu/~mvz/cmsc430-s07/M10lr.pdf
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
             %start Expr
             %%
             Expr : Term '-' Expr | Term;
             Term : Factor '*' Term | Factor;
             Factor : 'id';
-          ".to_string()).unwrap());
+          ").unwrap();
         let sg = pager_stategraph(&grm);
         assert_eq!(sg.states.len(), 9);
 
@@ -290,13 +289,13 @@ mod test {
 
     #[test]
     fn test_default_reduce_reduce() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
             %start A
             %%
             A : B 'x' | C 'x' 'x';
             B : 'a';
             C : 'a';
-          ".to_string()).unwrap());
+          ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 8);
@@ -310,13 +309,13 @@ mod test {
 
     #[test]
     fn test_default_shift_reduce() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
             %start Expr
             %%
             Expr : Expr '+' Expr
                  | Expr '*' Expr
                  | 'id' ;
-          ".to_string()).unwrap());
+          ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 15);
@@ -337,7 +336,7 @@ mod test {
 
     #[test]
     fn test_left_associativity() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
             %start Expr
             %left '+'
             %left '*'
@@ -345,7 +344,7 @@ mod test {
             Expr : Expr '+' Expr
                  | Expr '*' Expr
                  | 'id' ;
-          ".to_string()).unwrap());
+          ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 15);
@@ -368,7 +367,7 @@ mod test {
 
     #[test]
     fn test_left_right_associativity() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = &yacc_grm(YaccKind::Original, &"
             %start Expr
             %right '='
             %left '+'
@@ -378,7 +377,7 @@ mod test {
                  | Expr '*' Expr
                  | Expr '=' Expr
                  | 'id' ;
-          ".to_string()).unwrap());
+          ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 24);
@@ -410,7 +409,7 @@ mod test {
 
     #[test]
     fn test_left_right_nonassoc_associativity() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
             %start Expr
             %right '='
             %left '+'
@@ -422,7 +421,7 @@ mod test {
                  | Expr '=' Expr
                  | Expr '~' Expr
                  | 'id' ;
-          ".to_string()).unwrap());
+          ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 34);
@@ -464,11 +463,11 @@ mod test {
 
     #[test]
     fn accept_reduce_conflict() {
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = yacc_grm(YaccKind::Original, &"
 %start D
 %%
 D : D;
-          ".to_string()).unwrap());
+          ").unwrap();
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),

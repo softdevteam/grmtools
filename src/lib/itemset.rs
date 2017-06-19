@@ -189,20 +189,19 @@ mod test {
     use super::Itemset;
     use firsts::Firsts;
     use cfgrammar::{Grammar, Symbol};
-    use cfgrammar::yacc::YaccGrammar;
-    use cfgrammar::yacc::parser::parse_yacc;
+    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
     use stategraph::state_exists;
 
     #[test]
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
-        let grm = YaccGrammar::new(&parse_yacc(&"
+        let grm = &yacc_grm(YaccKind::Original, &"
           %start S
           %%
           S: L '=' R | R;
           L: '*' R | 'id';
           R: L;
-          ".to_string()).unwrap());
+          ").unwrap();
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
@@ -221,7 +220,7 @@ mod test {
     }
 
     fn eco_grammar() -> YaccGrammar {
-        let ast = parse_yacc(&"
+        yacc_grm(YaccKind::Original, &"
           %start S
           %token a b c d f
           %%
@@ -231,8 +230,7 @@ mod test {
           C: D A;
           D: 'd' | ;
           F: C D 'f';
-          ".to_string()).unwrap();
-        YaccGrammar::new(&ast)
+          ").unwrap()
     }
 
     #[test]
@@ -268,13 +266,13 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        YaccGrammar::new(&parse_yacc(&"
+        yacc_grm(YaccKind::Original, &"
           %start S
           %token a b c d
           %%
           S: S 'b' | 'b' A 'a';
           A: 'a' S 'c' | 'a' | 'a' S 'b';
-          ".to_string()).unwrap())
+          ").unwrap()
     }
 
     #[test]
