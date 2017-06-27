@@ -35,7 +35,6 @@
 #[macro_use] extern crate newtype_derive;
 
 pub mod yacc;
-pub use yacc::YaccGrammar;
 
 // A note on the terminology we use, since there's no universal standard (and EBNF, which is
 // perhaps the closest we've got, uses terminology that now seems partially anachronistic):
