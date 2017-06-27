@@ -39,7 +39,8 @@ pub struct GrammarAST {
     pub start: Option<String>,
     pub rules: HashMap<String, Rule>,
     pub tokens: HashSet<String>,
-    pub precs: HashMap<String, Precedence>
+    pub precs: HashMap<String, Precedence>,
+    pub implicit_tokens: Option<HashSet<String>>
 }
 
 #[derive(Debug)]
@@ -111,10 +112,11 @@ impl fmt::Display for Symbol {
 impl GrammarAST {
     pub fn new() -> GrammarAST {
         GrammarAST {
-            start:   None,
-            rules:   HashMap::new(),
-            tokens:  HashSet::new(),
-            precs:   HashMap::new(),
+            start:  None,
+            rules:  HashMap::new(),
+            tokens: HashSet::new(),
+            precs:  HashMap::new(),
+            implicit_tokens: None
         }
     }
 

@@ -30,6 +30,9 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+// Note: this is the parser for both YaccKind::Original and YaccKind::Eco yacc kinds.
+
+use std::collections::HashSet;
 use std::fmt;
 
 extern crate regex;
@@ -39,13 +42,6 @@ type YaccResult<T> = Result<T, YaccParserError>;
 
 use yacc::{AssocKind, Precedence, YaccKind};
 use yacc::ast::{GrammarAST, Symbol};
-
-pub struct YaccParser {
-    yacc_kind: YaccKind,
-    src: String,
-    newlines: Vec<usize>,
-    grammar: GrammarAST
-}
 
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
@@ -59,6 +55,7 @@ pub enum YaccParserErrorKind {
     UnknownDeclaration,
     DuplicatePrecedence,
     PrecNotFollowedByTerminal,
+    DuplicateImplicitTokensDeclaration
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -71,20 +68,29 @@ pub struct YaccParserError {
 
 impl fmt::Display for YaccParserError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s;
-        match self.kind {
-            YaccParserErrorKind::IllegalName          => s = "Illegal name",
-            YaccParserErrorKind::IllegalString        => s = "Illegal string",
-            YaccParserErrorKind::IncompleteRule       => s = "Incomplete rule",
-            YaccParserErrorKind::MissingColon         => s = "Missing colon",
-            YaccParserErrorKind::PrematureEnd         => s = "File ends prematurely",
-            YaccParserErrorKind::ProgramsNotSupported => s = "Programs not currently supported",
-            YaccParserErrorKind::UnknownDeclaration   => s = "Unknown declaration",
-            YaccParserErrorKind::DuplicatePrecedence  => s = "Token already has a precedence",
-            YaccParserErrorKind::PrecNotFollowedByTerminal => s = "%prec not followed by token name"
-        }
+        let s = match self.kind {
+            YaccParserErrorKind::IllegalName          => "Illegal name",
+            YaccParserErrorKind::IllegalString        => "Illegal string",
+            YaccParserErrorKind::IncompleteRule       => "Incomplete rule",
+            YaccParserErrorKind::MissingColon         => "Missing colon",
+            YaccParserErrorKind::PrematureEnd         => "File ends prematurely",
+            YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
+            YaccParserErrorKind::UnknownDeclaration   => "Unknown declaration",
+            YaccParserErrorKind::DuplicatePrecedence  => "Token already has a precedence",
+            YaccParserErrorKind::PrecNotFollowedByTerminal
+                                                      => "%prec not followed by token name",
+            YaccParserErrorKind::DuplicateImplicitTokensDeclaration
+                                                      => "Duplicate %implicit_tokens declaration",
+        };
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
+}
+
+struct YaccParser {
+    yacc_kind: YaccKind,
+    src: String,
+    newlines: Vec<usize>,
+    grammar: GrammarAST
 }
 
 lazy_static! {
@@ -156,17 +162,43 @@ impl YaccParser {
             if let Some(j) = self.lookahead_is("%token", i) {
                 i = try!(self.parse_ws(j));
                 while i < self.src.len() {
-                    if self.lookahead_is("%", i).is_some() { break; }
+                    if self.lookahead_is("%", i).is_some() {
+                        break;
+                    }
                     let (j, n) = try!(self.parse_terminal(i));
                     self.grammar.tokens.insert(n);
                     i = try!(self.parse_ws(j));
                 }
-            } else if let Some(j) = self.lookahead_is("%start", i) {
+                continue;
+            }
+            if let Some(j) = self.lookahead_is("%start", i) {
                 i = try!(self.parse_ws(j));
                 let (j, n) = try!(self.parse_name(i));
                 self.grammar.start = Some(n);
                 i = try!(self.parse_ws(j));
-            } else {
+                continue;
+            }
+            if let YaccKind::Eco = self.yacc_kind {
+                if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
+                    if self.grammar.implicit_tokens.is_some() {
+                        return Err(self.mk_error(YaccParserErrorKind::DuplicateImplicitTokensDeclaration, i));
+                    }
+                    let mut implicit_terms = HashSet::new();
+                    i = try!(self.parse_ws(j));
+                    while j < self.src.len() {
+                        if self.lookahead_is("%", i).is_some() {
+                            break;
+                        }
+                        let (j, n) = try!(self.parse_terminal(i));
+                        self.grammar.tokens.insert(n.clone());
+                        implicit_terms.insert(n);
+                        i = try!(self.parse_ws(j));
+                    }
+                    self.grammar.implicit_tokens = Some(implicit_terms);
+                    continue;
+                }
+            }
+            {
                 let k;
                 let kind;
                 if let Some(j) = self.lookahead_is("%left", i) {
@@ -715,7 +747,6 @@ x".to_string();
         ";
         let grm = yacc_ast(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.precs.len(), 4);
-        println!("{:?}", grm.rules);
         assert_eq!(grm.rules["expr"].productions[0].precedence, None);
         assert_eq!(grm.rules["expr"].productions[3].symbols.len(), 3);
         assert_eq!(grm.rules["expr"].productions[4].symbols.len(), 2);
@@ -741,6 +772,44 @@ x".to_string();
                 Ok(_) => panic!("Incorrect %prec parsed"),
                 Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByTerminal, line: 3, ..}) => (),
                 Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_no_implicit_tokens_in_original_yacc() {
+        match yacc_ast(YaccKind::Original, &"
+          %implicit_tokens X
+          %%
+          ") {
+            Ok(_) => panic!(),
+            Err(YaccParserError{kind: YaccParserErrorKind::UnknownDeclaration, line: 2, ..}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_parse_implicit_tokens() {
+        let ast = yacc_ast(YaccKind::Eco, &"
+          %implicit_tokens ws1 ws2
+          %start R
+          %%
+          R: 'a';
+          ").unwrap();
+        assert_eq!(ast.implicit_tokens, Some(["ws1".to_string(), "ws2".to_string()].iter().cloned().collect()));
+        assert!(ast.tokens.get("ws1").is_some());
+        assert!(ast.tokens.get("ws2").is_some());
+    }
+
+    #[test]
+    fn test_duplicate_implicit_tokens() {
+        match yacc_ast(YaccKind::Eco, &"
+          %implicit_tokens X
+          %implicit_tokens Y
+          %%
+          ") {
+            Ok(_) => panic!(),
+            Err(YaccParserError{kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration, line: 3, ..}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
 }

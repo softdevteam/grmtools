@@ -37,16 +37,18 @@ pub use self::ast::{GrammarValidationError, GrammarValidationErrorKind};
 pub use self::parser::{YaccParserError, YaccParserErrorKind};
 pub use self::grammar::{AssocKind, Precedence, YaccGrammar, YaccGrammarError};
 
+#[derive(Clone, Copy)]
 pub enum YaccKind {
-    Original
+    Original,
+    Eco
 }
 
 pub fn yacc_grm(yacc_kind: YaccKind, s: &str) -> Result<YaccGrammar, YaccGrammarError> {
     match yacc_kind {
-        YaccKind::Original => {
+        YaccKind::Original | YaccKind::Eco => {
             let ast = try!(parser::yacc_ast(yacc_kind, s));
             try!(ast.validate());
-            Ok(YaccGrammar::new(&ast))
+            Ok(YaccGrammar::new(yacc_kind, &ast))
         }
     }
 }

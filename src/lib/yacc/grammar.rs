@@ -34,9 +34,12 @@ use std::collections::HashMap;
 use std::fmt;
 
 use {Grammar, NTIdx, PIdx, Symbol, TIdx};
+use super::YaccKind;
 
-const START_NONTERM: &'static str = "^";
-const END_TERM     : &'static str = "$";
+const START_NONTERM         : &'static str = "^";
+const END_TERM              : &'static str = "$";
+const IMPLICIT_NONTERM      : &'static str = "~";
+const IMPLICIT_START_NONTERM: &'static str = "^~";
 
 use yacc::ast;
 use yacc::ast::GrammarValidationError;
@@ -59,11 +62,11 @@ pub enum AssocKind {
 pub struct YaccGrammar {
     /// How many nonterminals does this grammar have?
     nonterms_len: usize,
-    /// A mapping from NTIdx -> String.
+    /// A mapping from `NTIdx` -> `String`.
     nonterminal_names: Vec<String>,
-    /// A mapping from TIdx -> String.
+    /// A mapping from `TIdx` -> `String`.
     terminal_names: Vec<String>,
-    /// A mapping from TIdx -> Option<Precedence>
+    /// A mapping from `TIdx` -> `Option<Precedence>`
     terminal_precs: Vec<Option<Precedence>>,
     /// How many terminals does this grammar have?
     terms_len: usize,
@@ -76,13 +79,16 @@ pub struct YaccGrammar {
     /// A list of all productions.
     prods: Vec<Vec<Symbol>>,
     /// A mapping from rules to their productions. Note that 1) the order of rules is identical to
-    /// that of `nonterminal_names' 2) every rule will have at least 1 production 3) productions
+    /// that of `nonterminal_names` 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
     rules_prods: Vec<Vec<PIdx>>,
     /// A mapping from productions to their corresponding rule indexes.
     prods_rules: Vec<NTIdx>,
     /// The precedence of each production.
-    prod_precs: Vec<Option<Precedence>>
+    prod_precs: Vec<Option<Precedence>>,
+    /// The index of the nonterminal added for implicit tokens, if they were specified; otherwise
+    /// `None`.
+    implicit_nonterm: Option<NTIdx>
 }
 
 impl YaccGrammar {
@@ -95,33 +101,65 @@ impl YaccGrammar {
     ///   2) Add a new end terminal (which we'll refer to as "$", though the actual name is a fresh
     ///      name that is guaranteed to be unique).
     /// So, if the user's start rule is S, we add a nonterminal with a single production `^ : S '$';`.
-    pub fn new(ast: &ast::GrammarAST) -> YaccGrammar {
+    pub fn new(yacc_kind: YaccKind, ast: &ast::GrammarAST) -> YaccGrammar {
         // The user is expected to have called validate before calling this function.
         debug_assert!(ast.validate().is_ok());
 
-        // First of all generate guaranteed unique start nonterm and end term names. We simply keep
-        // making the string longer until we've hit something unique (at the very worst, this will
-        // require looping for as many times as there are nonterminals / terminals).
+        let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
 
+        // Generate a guaranteed unique start nonterm name. We simply keep making the string longer
+        // until we've hit something unique (at the very worst, this will require looping for as
+        // many times as there are nonterminals). We use the same technique later for unique end
+        // term and whitespace names.
         let mut start_nonterm = START_NONTERM.to_string();
         while ast.rules.get(&start_nonterm).is_some() {
             start_nonterm = start_nonterm + START_NONTERM;
         }
-
-        let mut end_term = END_TERM.to_string();
-        while ast.tokens.iter().any(|x| x == &end_term) {
-            end_term = end_term + END_TERM;
-        }
-
-        let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
         nonterm_names.push(start_nonterm.clone());
-        for k in ast.rules.keys() { nonterm_names.push(k.clone()); }
+
+        let implicit_nonterm;
+        let implicit_start_nonterm;
+        match yacc_kind {
+            YaccKind::Original => {
+                implicit_nonterm = None;
+                implicit_start_nonterm = None;
+            },
+            YaccKind::Eco => {
+                if let Some(_) = ast.implicit_tokens {
+                    let mut n1 = IMPLICIT_NONTERM.to_string();
+                    while ast.rules.get(&n1).is_some() {
+                        n1 = n1 + IMPLICIT_NONTERM;
+                    }
+                    nonterm_names.push(n1.clone());
+                    implicit_nonterm = Some(n1);
+                    let mut n2 = IMPLICIT_START_NONTERM.to_string();
+                    while ast.rules.get(&n2).is_some() {
+                        n2 = n2 + IMPLICIT_START_NONTERM;
+                    }
+                    nonterm_names.push(n2.clone());
+                    implicit_start_nonterm = Some(n2);
+                }
+                else {
+                    implicit_nonterm = None;
+                    implicit_start_nonterm = None;
+                }
+            }
+        };
+
+        for k in ast.rules.keys() {
+            nonterm_names.push(k.clone());
+        }
         nonterm_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
         let mut rules_prods:Vec<Vec<PIdx>> = Vec::with_capacity(nonterm_names.len());
         let mut nonterm_map = HashMap::<String, NTIdx>::new();
         for (i, v) in nonterm_names.iter().enumerate() {
             rules_prods.push(Vec::new());
             nonterm_map.insert(v.clone(), NTIdx(i));
+        }
+
+        let mut end_term = END_TERM.to_string();
+        while ast.tokens.iter().any(|x| x == &end_term) {
+            end_term = end_term + END_TERM;
         }
         let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
@@ -136,31 +174,75 @@ impl YaccGrammar {
             terminal_map.insert(v.clone(), TIdx(i));
         }
 
-        let mut prods                               = Vec::new();
+        let mut prods = Vec::new();
         let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
         let mut prods_rules = Vec::new();
         for astrulename in &nonterm_names {
             let rule_idx = nonterm_map[astrulename];
             if astrulename == &start_nonterm {
-                rules_prods.get_mut(usize::from(nonterm_map[&start_nonterm])).unwrap().push(prods.len().into());
-                let start_prod = vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])];
+                // Add the special start rule
+                rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
+                           .unwrap()
+                           .push(prods.len().into());
+                let start_prod = match implicit_start_nonterm {
+                    Some(ref s) => {
+                        // Add S': implicit_start_nonterm;
+                        vec![Symbol::Nonterminal(nonterm_map[s])]
+                    }
+                    None => {
+                        // Add S': S;
+                        vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])]
+                    }
+                };
                 prods.push(start_prod);
                 prod_precs.push(None);
                 prods_rules.push(rule_idx);
                 continue;
             }
+            else if implicit_start_nonterm.as_ref().map_or(false, |s| s == astrulename) {
+                rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
+                           .unwrap()
+                           .push(prods.len().into());
+                prods.push(vec![Symbol::Nonterminal(nonterm_map[implicit_nonterm.as_ref().unwrap()]),
+                                Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])]);
+                prod_precs.push(None);
+                prods_rules.push(rule_idx);
+                continue;
+            }
+            else if implicit_nonterm.as_ref().map_or(false, |s| s == astrulename) {
+                // Add the implicit rule: ~: "IMPLICIT_TERM1" | ... | "IMPLICIT_TERMN";
+                let implicit_prods = rules_prods.get_mut(usize::from(nonterm_map[astrulename])).unwrap();
+                // Add a production for each implicit terminal
+                for t in ast.implicit_tokens.as_ref().unwrap().iter() {
+                    implicit_prods.push(prods.len().into());
+                    prods.push(vec![Symbol::Terminal(terminal_map[t])]);
+                    prod_precs.push(None);
+                    prods_rules.push(rule_idx);
+                }
+                // Add an empty production
+                implicit_prods.push(prods.len().into());
+                prods.push(vec![]);
+                prod_precs.push(None);
+                prods_rules.push(rule_idx);
+                continue;
+            }
+
             let astrule = &ast.rules[astrulename];
             let mut rule = &mut rules_prods[usize::from(rule_idx)];
             for astprod in &astrule.productions {
                 let mut prod = Vec::with_capacity(astprod.symbols.len());
                 for astsym in &astprod.symbols {
-                    let sym = match *astsym {
-                        ast::Symbol::Nonterminal(ref n) =>
-                            Symbol::Nonterminal(nonterm_map[n]),
-                        ast::Symbol::Terminal(ref n) =>
-                            Symbol::Terminal(terminal_map[n])
+                    match *astsym {
+                        ast::Symbol::Nonterminal(ref n) => {
+                            prod.push(Symbol::Nonterminal(nonterm_map[n]));
+                        },
+                        ast::Symbol::Terminal(ref n) => {
+                            prod.push(Symbol::Terminal(terminal_map[n]));
+                            if implicit_nonterm.is_some() {
+                                prod.push(Symbol::Nonterminal(nonterm_map[&implicit_nonterm.clone().unwrap()]));
+                            }
+                        }
                     };
-                    prod.push(sym);
                 }
                 let mut prec = None;
                 if let Some(ref n) = astprod.precedence {
@@ -183,18 +265,19 @@ impl YaccGrammar {
         }
 
         YaccGrammar{
-            nonterms_len:      nonterm_names.len(),
-            nonterminal_names: nonterm_names,
-            terms_len:         term_names.len(),
-            end_term:          terminal_map[&end_term],
-            terminal_names:    term_names,
-            terminal_precs:    term_precs,
-            prods_len:         prods.len(),
-            start_prod:        rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
-            rules_prods:       rules_prods,
-            prods_rules:       prods_rules,
-            prods:             prods,
-            prod_precs:        prod_precs
+            nonterms_len:       nonterm_names.len(),
+            nonterminal_names:  nonterm_names,
+            terms_len:          term_names.len(),
+            end_term:           terminal_map[&end_term],
+            terminal_names:     term_names,
+            terminal_precs:     term_precs,
+            prods_len:          prods.len(),
+            start_prod:         rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
+            rules_prods:        rules_prods,
+            prods_rules:        prods_rules,
+            prods:              prods,
+            prod_precs:         prod_precs,
+            implicit_nonterm:   implicit_nonterm.map_or(None, |x| Some(nonterm_map[&x]))
         }
     }
 
@@ -252,6 +335,10 @@ impl YaccGrammar {
     /// start rule is defined to have precisely one production).
     pub fn start_prod(&self) -> PIdx {
         self.start_prod
+    }
+
+    pub fn implicit_nonterm(&self) -> Option<NTIdx> {
+        self.implicit_nonterm
     }
 }
 
@@ -320,6 +407,7 @@ impl fmt::Display for YaccGrammarError {
 
 #[cfg(test)]
 mod test {
+    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM};
     use {NTIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, yacc_grm, YaccKind};
 
@@ -329,6 +417,7 @@ mod test {
                            &"%start R %token T %% R: 'T';".to_string()).unwrap();
 
         assert_eq!(grm.start_prod, PIdx(0));
+        assert_eq!(grm.implicit_nonterm(), None);
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
         grm.terminal_off("$");
@@ -461,5 +550,72 @@ mod test {
         assert_eq!(grm.prod_precs[4].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[5].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert!(grm.prod_precs[6].is_none());
+    }
+
+    #[test]
+    fn test_implicit_tokens_rewrite() {
+        let grm = yacc_grm(YaccKind::Eco, &"
+          %implicit_tokens ws1 ws2
+          %start S
+          %%
+          S: 'a' | T;
+          T: 'c' |;
+          ").unwrap();
+
+        // Check that the above grammar has been rewritten to:
+        //   ^ : ^~;
+        //   ^~: ~ S;
+        //   ~ : ws1 | ws2 | ;
+        //   S : 'a' ~ | T;
+        //   T : 'c' ~ | ;
+
+        assert_eq!(grm.prod_precs.len(), 9);
+
+        let itfs_rule_idx = grm.nonterminal_off(IMPLICIT_START_NONTERM);
+        assert_eq!(grm.rules_prods[usize::from(itfs_rule_idx)].len(), 1);
+
+        let itfs_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(itfs_rule_idx)][0])];
+        assert_eq!(itfs_prod1.len(), 2);
+        assert_eq!(itfs_prod1[0], Symbol::Nonterminal(grm.nonterminal_off(IMPLICIT_NONTERM)));
+        assert_eq!(itfs_prod1[1], Symbol::Nonterminal(grm.nonterminal_off(&"S")));
+
+        let s_rule_idx = grm.nonterminal_off(&"S");
+        assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
+
+        let s_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][0])];
+        assert_eq!(s_prod1.len(), 2);
+        assert_eq!(s_prod1[0], Symbol::Terminal(grm.terminal_off("a")));
+        assert_eq!(s_prod1[1], Symbol::Nonterminal(grm.nonterminal_off(IMPLICIT_NONTERM)));
+
+        let s_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][1])];
+        assert_eq!(s_prod2.len(), 1);
+        assert_eq!(s_prod2[0], Symbol::Nonterminal(grm.nonterminal_off("T")));
+
+        let t_rule_idx = grm.nonterminal_off(&"T");
+        assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
+
+        let t_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][0])];
+        assert_eq!(t_prod1.len(), 2);
+        assert_eq!(t_prod1[0], Symbol::Terminal(grm.terminal_off("c")));
+        assert_eq!(t_prod1[1], Symbol::Nonterminal(grm.nonterminal_off(IMPLICIT_NONTERM)));
+
+        let t_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][1])];
+        assert_eq!(t_prod2.len(), 0);
+
+        assert_eq!(Some(grm.nonterminal_off(IMPLICIT_NONTERM)), grm.implicit_nonterm());
+        let i_rule_idx = grm.nonterminal_off(IMPLICIT_NONTERM);
+        assert_eq!(grm.rules_prods[usize::from(i_rule_idx)].len(), 3);
+        let i_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][0])];
+        let i_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][1])];
+        assert_eq!(i_prod1.len(), 1);
+        assert_eq!(i_prod2.len(), 1);
+        // We don't know what order the implicit nonterminal will contain our tokens in,
+        // hence the awkward dance below.
+        assert!((i_prod1[0] == Symbol::Terminal(grm.terminal_off("ws1"))
+                 && (i_prod2[0] == Symbol::Terminal(grm.terminal_off("ws2"))))
+             || (i_prod1[0] == Symbol::Terminal(grm.terminal_off("ws2"))
+                 && (i_prod2[0] == Symbol::Terminal(grm.terminal_off("ws1")))));
+        let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];
+        assert_eq!(i_prod3.len(), 0);
     }
 }
