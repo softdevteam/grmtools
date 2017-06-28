@@ -37,7 +37,7 @@ use {Grammar, NTIdx, PIdx, Symbol, TIdx};
 use super::YaccKind;
 
 const START_NONTERM         : &'static str = "^";
-const END_TERM              : &'static str = "$";
+const EOF_TERM              : &'static str = "$";
 const IMPLICIT_NONTERM      : &'static str = "~";
 const IMPLICIT_START_NONTERM: &'static str = "^~";
 
@@ -63,15 +63,15 @@ pub struct YaccGrammar {
     /// How many nonterminals does this grammar have?
     nonterms_len: usize,
     /// A mapping from `NTIdx` -> `String`.
-    nonterminal_names: Vec<String>,
+    nonterm_names: Vec<String>,
     /// A mapping from `TIdx` -> `String`.
-    terminal_names: Vec<String>,
+    term_names: Vec<String>,
     /// A mapping from `TIdx` -> `Option<Precedence>`
-    terminal_precs: Vec<Option<Precedence>>,
+    term_precs: Vec<Option<Precedence>>,
     /// How many terminals does this grammar have?
     terms_len: usize,
     /// The offset of the EOF terminal.
-    end_term: TIdx,
+    eof_term: TIdx,
     /// How many productions does this grammar have?
     prods_len: usize,
     /// Which production is the sole production of the start rule?
@@ -79,7 +79,7 @@ pub struct YaccGrammar {
     /// A list of all productions.
     prods: Vec<Vec<Symbol>>,
     /// A mapping from rules to their productions. Note that 1) the order of rules is identical to
-    /// that of `nonterminal_names` 2) every rule will have at least 1 production 3) productions
+    /// that of `nonterm_names` 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
     rules_prods: Vec<Vec<PIdx>>,
     /// A mapping from productions to their corresponding rule indexes.
@@ -113,7 +113,7 @@ impl YaccGrammar {
         // term and whitespace names.
         let mut start_nonterm = START_NONTERM.to_string();
         while ast.rules.get(&start_nonterm).is_some() {
-            start_nonterm = start_nonterm + START_NONTERM;
+            start_nonterm += START_NONTERM;
         }
         nonterm_names.push(start_nonterm.clone());
 
@@ -125,16 +125,16 @@ impl YaccGrammar {
                 implicit_start_nonterm = None;
             },
             YaccKind::Eco => {
-                if let Some(_) = ast.implicit_tokens {
+                if ast.implicit_tokens.is_some() {
                     let mut n1 = IMPLICIT_NONTERM.to_string();
                     while ast.rules.get(&n1).is_some() {
-                        n1 = n1 + IMPLICIT_NONTERM;
+                        n1 += IMPLICIT_NONTERM;
                     }
                     nonterm_names.push(n1.clone());
                     implicit_nonterm = Some(n1);
                     let mut n2 = IMPLICIT_START_NONTERM.to_string();
                     while ast.rules.get(&n2).is_some() {
-                        n2 = n2 + IMPLICIT_START_NONTERM;
+                        n2 += IMPLICIT_START_NONTERM;
                     }
                     nonterm_names.push(n2.clone());
                     implicit_start_nonterm = Some(n2);
@@ -157,21 +157,21 @@ impl YaccGrammar {
             nonterm_map.insert(v.clone(), NTIdx(i));
         }
 
-        let mut end_term = END_TERM.to_string();
-        while ast.tokens.iter().any(|x| x == &end_term) {
-            end_term = end_term + END_TERM;
+        let mut eof_term = EOF_TERM.to_string();
+        while ast.tokens.iter().any(|x| x == &eof_term) {
+            eof_term += EOF_TERM;
         }
         let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
-        term_names.push(end_term.clone());
+        term_names.push(eof_term.clone());
         term_precs.push(None);
         for k in &ast.tokens {
             term_names.push(k.clone());
             term_precs.push(ast.precs.get(k).cloned());
         }
-        let mut terminal_map = HashMap::<String, TIdx>::new();
+        let mut term_map = HashMap::<String, TIdx>::new();
         for (i, v) in term_names.iter().enumerate() {
-            terminal_map.insert(v.clone(), TIdx(i));
+            term_map.insert(v.clone(), TIdx(i));
         }
 
         let mut prods = Vec::new();
@@ -180,18 +180,21 @@ impl YaccGrammar {
         for astrulename in &nonterm_names {
             let rule_idx = nonterm_map[astrulename];
             if astrulename == &start_nonterm {
-                // Add the special start rule
+                // Add the special start rule which has a single production which references a
+                // single nonterminal.
                 rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
                            .unwrap()
                            .push(prods.len().into());
                 let start_prod = match implicit_start_nonterm {
-                    Some(ref s) => {
-                        // Add S': implicit_start_nonterm;
-                        vec![Symbol::Nonterminal(nonterm_map[s])]
-                    }
                     None => {
-                        // Add S': S;
-                        vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])]
+                        // Add ^: S;
+                        vec![Symbol::Nonterm(nonterm_map[ast.start.as_ref().unwrap()])]
+                    }
+                    Some(ref s) => {
+                        // An implicit rule has been specified, so the special start rule
+                        // needs to reference the intermediate start rule required. Therefore add:
+                        //   ^: ^~;
+                        vec![Symbol::Nonterm(nonterm_map[s])]
                     }
                 };
                 prods.push(start_prod);
@@ -200,11 +203,14 @@ impl YaccGrammar {
                 continue;
             }
             else if implicit_start_nonterm.as_ref().map_or(false, |s| s == astrulename) {
+                // Add the intermediate start rule (handling implicit tokens at the beginning of
+                // the file):
+                //   ^~: ~ S;
                 rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
                            .unwrap()
                            .push(prods.len().into());
-                prods.push(vec![Symbol::Nonterminal(nonterm_map[implicit_nonterm.as_ref().unwrap()]),
-                                Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])]);
+                prods.push(vec![Symbol::Nonterm(nonterm_map[implicit_nonterm.as_ref().unwrap()]),
+                                Symbol::Nonterm(nonterm_map[ast.start.as_ref().unwrap()])]);
                 prod_precs.push(None);
                 prods_rules.push(rule_idx);
                 continue;
@@ -215,7 +221,7 @@ impl YaccGrammar {
                 // Add a production for each implicit terminal
                 for t in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(prods.len().into());
-                    prods.push(vec![Symbol::Terminal(terminal_map[t])]);
+                    prods.push(vec![Symbol::Term(term_map[t])]);
                     prod_precs.push(None);
                     prods_rules.push(rule_idx);
                 }
@@ -233,13 +239,13 @@ impl YaccGrammar {
                 let mut prod = Vec::with_capacity(astprod.symbols.len());
                 for astsym in &astprod.symbols {
                     match *astsym {
-                        ast::Symbol::Nonterminal(ref n) => {
-                            prod.push(Symbol::Nonterminal(nonterm_map[n]));
+                        ast::Symbol::Nonterm(ref n) => {
+                            prod.push(Symbol::Nonterm(nonterm_map[n]));
                         },
-                        ast::Symbol::Terminal(ref n) => {
-                            prod.push(Symbol::Terminal(terminal_map[n]));
+                        ast::Symbol::Term(ref n) => {
+                            prod.push(Symbol::Term(term_map[n]));
                             if implicit_nonterm.is_some() {
-                                prod.push(Symbol::Nonterminal(nonterm_map[&implicit_nonterm.clone().unwrap()]));
+                                prod.push(Symbol::Nonterm(nonterm_map[&implicit_nonterm.clone().unwrap()]));
                             }
                         }
                     };
@@ -249,7 +255,7 @@ impl YaccGrammar {
                     prec = Some(ast.precs[n]);
                 } else {
                     for astsym in astprod.symbols.iter().rev() {
-                        if let ast::Symbol::Terminal(ref n) = *astsym {
+                        if let ast::Symbol::Term(ref n) = *astsym {
                             if let Some(p) = ast.precs.get(n) {
                                 prec = Some(*p);
                             }
@@ -265,25 +271,25 @@ impl YaccGrammar {
         }
 
         YaccGrammar{
-            nonterms_len:       nonterm_names.len(),
-            nonterminal_names:  nonterm_names,
-            terms_len:          term_names.len(),
-            end_term:           terminal_map[&end_term],
-            terminal_names:     term_names,
-            terminal_precs:     term_precs,
-            prods_len:          prods.len(),
-            start_prod:         rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
-            rules_prods:        rules_prods,
-            prods_rules:        prods_rules,
-            prods:              prods,
-            prod_precs:         prod_precs,
-            implicit_nonterm:   implicit_nonterm.map_or(None, |x| Some(nonterm_map[&x]))
+            nonterms_len:     nonterm_names.len(),
+            nonterm_names,
+            terms_len:        term_names.len(),
+            eof_term:         term_map[&eof_term],
+            term_names,
+            term_precs,
+            prods_len:        prods.len(),
+            start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
+            rules_prods,
+            prods_rules,
+            prods,
+            prod_precs,
+            implicit_nonterm: implicit_nonterm.map_or(None, |x| Some(nonterm_map[&x]))
         }
     }
 
     /// Return the index of the end terminal.
-    pub fn end_term_idx(&self) -> TIdx {
-        self.end_term
+    pub fn eof_term_idx(&self) -> TIdx {
+        self.eof_term
     }
 
     /// Return the productions for nonterminal `i` or `None` if it doesn't exist.
@@ -293,7 +299,7 @@ impl YaccGrammar {
 
     /// Return the name of nonterminal `i` or `None` if it doesn't exist.
     pub fn nonterm_name(&self, i: NTIdx) -> Option<&str> {
-        self.nonterminal_names.get(usize::from(i)).map_or(None, |x| Some(&x))
+        self.nonterm_names.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
@@ -318,12 +324,12 @@ impl YaccGrammar {
 
     /// Return the name of terminal `i` or `None` if it doesn't exist.
     pub fn term_name(&self, i: TIdx) -> Option<&str> {
-        self.terminal_names.get(usize::from(i)).map_or(None, |x| Some(x))
+        self.term_names.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
     /// Return the precedence of terminal `i` or `None` if it doesn't exist.
     pub fn term_precedence(&self, i: TIdx) -> Option<Option<Precedence>> {
-        self.terminal_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
+        self.term_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid `TIdx`s.
@@ -337,10 +343,10 @@ impl YaccGrammar {
     pub fn lexer_map(&self) -> HashMap<&str, TIdx> {
         let mut m = HashMap::with_capacity(self.terms_len - 1);
         for i in 0..self.terms_len {
-            if TIdx(i) == self.end_term_idx() {
+            if TIdx(i) == self.eof_term_idx() {
                 continue;
             }
-            m.insert(&*self.terminal_names[i], TIdx(i));
+            m.insert(&*self.term_names[i], TIdx(i));
         }
         m
     }
@@ -379,17 +385,17 @@ impl Grammar for YaccGrammar {
 impl YaccGrammar {
     /// Map a nonterminal name to the corresponding rule offset.
     pub fn nonterminal_off(&self, n: &str) -> NTIdx {
-        NTIdx(self.nonterminal_names.iter().position(|x| x == n).unwrap())
+        NTIdx(self.nonterm_names.iter().position(|x| x == n).unwrap())
     }
 
     /// Map a terminal name to the corresponding terminal offset.
     pub fn terminal_off(&self, n: &str) -> TIdx {
-        TIdx(self.terminal_names.iter().position(|x| x == n).unwrap())
+        TIdx(self.term_names.iter().position(|x| x == n).unwrap())
     }
 
     /// Map a production number to a rule name.
     pub fn prod_to_term_name(&self, i: PIdx) -> &str {
-        &self.nonterminal_names[usize::from(self.prod_to_nonterm(i))]
+        &self.nonterm_names[usize::from(self.prod_to_nonterm(i))]
     }
 }
 
@@ -441,9 +447,9 @@ mod test {
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, [Symbol::Nonterminal(grm.nonterminal_off("R"))]);
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterminal_off("R"))]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
-        assert_eq!(*r_prod, [Symbol::Terminal(grm.terminal_off("T"))]);
+        assert_eq!(*r_prod, [Symbol::Term(grm.terminal_off("T"))]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
 
         assert_eq!(grm.iter_term_idxs().collect::<Vec<TIdx>>(), vec![TIdx(0), TIdx(1)]);
@@ -464,13 +470,13 @@ mod test {
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, [Symbol::Nonterminal(grm.nonterminal_off("R"))]);
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterminal_off("R"))]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(r_prod.len(), 1);
-        assert_eq!(r_prod[0], Symbol::Nonterminal(grm.nonterminal_off("S")));
+        assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterminal_off("S")));
         let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("S"))][0]).unwrap();
         assert_eq!(s_prod.len(), 1);
-        assert_eq!(s_prod[0], Symbol::Terminal(grm.terminal_off("T")));
+        assert_eq!(s_prod[0], Symbol::Term(grm.terminal_off("T")));
     }
 
     #[test]
@@ -488,15 +494,15 @@ mod test {
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1), NTIdx(2)]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, [Symbol::Nonterminal(grm.nonterminal_off("R"))]);
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterminal_off("R"))]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("R"))][0]).unwrap();
         assert_eq!(r_prod.len(), 3);
-        assert_eq!(r_prod[0], Symbol::Nonterminal(grm.nonterminal_off("S")));
-        assert_eq!(r_prod[1], Symbol::Terminal(grm.terminal_off("T1")));
-        assert_eq!(r_prod[2], Symbol::Nonterminal(grm.nonterminal_off("S")));
+        assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterminal_off("S")));
+        assert_eq!(r_prod[1], Symbol::Term(grm.terminal_off("T1")));
+        assert_eq!(r_prod[2], Symbol::Nonterm(grm.nonterminal_off("S")));
         let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterminal_off("S"))][0]).unwrap();
         assert_eq!(s_prod.len(), 1);
-        assert_eq!(s_prod[0], Symbol::Terminal(grm.terminal_off("T2")));
+        assert_eq!(s_prod[0], Symbol::Term(grm.terminal_off("T2")));
     }
 
 
@@ -593,28 +599,28 @@ mod test {
 
         let itfs_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(itfs_rule_idx)][0])];
         assert_eq!(itfs_prod1.len(), 2);
-        assert_eq!(itfs_prod1[0], Symbol::Nonterminal(grm.nonterminal_off(IMPLICIT_NONTERM)));
-        assert_eq!(itfs_prod1[1], Symbol::Nonterminal(grm.nonterminal_off(&"S")));
+        assert_eq!(itfs_prod1[0], Symbol::Nonterm(grm.nonterminal_off(IMPLICIT_NONTERM)));
+        assert_eq!(itfs_prod1[1], Symbol::Nonterm(grm.nonterminal_off(&"S")));
 
         let s_rule_idx = grm.nonterminal_off(&"S");
         assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
 
         let s_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][0])];
         assert_eq!(s_prod1.len(), 2);
-        assert_eq!(s_prod1[0], Symbol::Terminal(grm.terminal_off("a")));
-        assert_eq!(s_prod1[1], Symbol::Nonterminal(grm.nonterminal_off(IMPLICIT_NONTERM)));
+        assert_eq!(s_prod1[0], Symbol::Term(grm.terminal_off("a")));
+        assert_eq!(s_prod1[1], Symbol::Nonterm(grm.nonterminal_off(IMPLICIT_NONTERM)));
 
         let s_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][1])];
         assert_eq!(s_prod2.len(), 1);
-        assert_eq!(s_prod2[0], Symbol::Nonterminal(grm.nonterminal_off("T")));
+        assert_eq!(s_prod2[0], Symbol::Nonterm(grm.nonterminal_off("T")));
 
         let t_rule_idx = grm.nonterminal_off(&"T");
         assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
 
         let t_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][0])];
         assert_eq!(t_prod1.len(), 2);
-        assert_eq!(t_prod1[0], Symbol::Terminal(grm.terminal_off("c")));
-        assert_eq!(t_prod1[1], Symbol::Nonterminal(grm.nonterminal_off(IMPLICIT_NONTERM)));
+        assert_eq!(t_prod1[0], Symbol::Term(grm.terminal_off("c")));
+        assert_eq!(t_prod1[1], Symbol::Nonterm(grm.nonterminal_off(IMPLICIT_NONTERM)));
 
         let t_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][1])];
         assert_eq!(t_prod2.len(), 0);
@@ -628,10 +634,10 @@ mod test {
         assert_eq!(i_prod2.len(), 1);
         // We don't know what order the implicit nonterminal will contain our tokens in,
         // hence the awkward dance below.
-        assert!((i_prod1[0] == Symbol::Terminal(grm.terminal_off("ws1"))
-                 && (i_prod2[0] == Symbol::Terminal(grm.terminal_off("ws2"))))
-             || (i_prod1[0] == Symbol::Terminal(grm.terminal_off("ws2"))
-                 && (i_prod2[0] == Symbol::Terminal(grm.terminal_off("ws1")))));
+        assert!((i_prod1[0] == Symbol::Term(grm.terminal_off("ws1"))
+                 && (i_prod2[0] == Symbol::Term(grm.terminal_off("ws2"))))
+             || (i_prod1[0] == Symbol::Term(grm.terminal_off("ws2"))
+                 && (i_prod2[0] == Symbol::Term(grm.terminal_off("ws1")))));
         let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];
         assert_eq!(i_prod3.len(), 0);
     }

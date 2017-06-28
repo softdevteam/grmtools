@@ -73,8 +73,8 @@ macro_attr! {
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
-    Nonterminal(NTIdx),
-    Terminal(TIdx)
+    Nonterm(NTIdx),
+    Term(TIdx)
 }
 
 pub trait Grammar {

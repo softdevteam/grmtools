@@ -57,8 +57,8 @@ pub struct Production {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
-    Nonterminal(String),
-    Terminal(String)
+    Nonterm(String),
+    Term(String)
 }
 
 /// The various different possible grammar validation errors.
@@ -103,8 +103,8 @@ impl fmt::Display for GrammarValidationError {
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Symbol::Nonterminal(ref s) => write!(f, "{}", s),
-            Symbol::Terminal(ref s)    => write!(f, "{}", s)
+            Symbol::Nonterm(ref s) => write!(f, "{}", s),
+            Symbol::Term(ref s)    => write!(f, "{}", s)
         }
     }
 }
@@ -145,7 +145,7 @@ impl GrammarAST {
             Some(ref s) => {
                 if !self.rules.contains_key(s) {
                     return Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule,
-                                               sym: Some(Symbol::Nonterminal(s.clone()))});
+                                               sym: Some(Symbol::Nonterm(s.clone()))});
                 }
             }
         }
@@ -154,22 +154,22 @@ impl GrammarAST {
                 if let Some(ref n) = prod.precedence {
                     if !self.tokens.contains(n) {
                         return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
-                            sym: Some(Symbol::Terminal(n.clone()))});
+                            sym: Some(Symbol::Term(n.clone()))});
                     }
                     if !self.precs.contains_key(n) {
                         return Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoPrecForToken,
-                            sym: Some(Symbol::Terminal(n.clone()))});
+                            sym: Some(Symbol::Term(n.clone()))});
                     }
                 }
                 for sym in &prod.symbols {
                     match *sym {
-                        Symbol::Nonterminal(ref name) => {
+                        Symbol::Nonterm(ref name) => {
                             if !self.rules.contains_key(name) {
                                 return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
                             }
                         }
-                        Symbol::Terminal(ref name) => {
+                        Symbol::Term(ref name) => {
                             if !self.tokens.contains(name) {
                                 return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
                                     sym: Some(sym.clone())});
@@ -211,11 +211,11 @@ mod test {
     use yacc::{AssocKind, Precedence};
 
     fn nonterminal(n: &str) -> Symbol {
-        Symbol::Nonterminal(n.to_string())
+        Symbol::Nonterm(n.to_string())
     }
 
     fn terminal(n: &str) -> Symbol {
-        Symbol::Terminal(n.to_string())
+        Symbol::Term(n.to_string())
     }
 
     #[test]
