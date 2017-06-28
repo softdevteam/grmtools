@@ -56,8 +56,8 @@ pub enum Minimiser {
 pub fn yacc_to_statetable(grm: &YaccGrammar, m: Minimiser) -> Result<StateTable, StateTableError> {
     let st = match m {
         Minimiser::Pager => {
-            let sg = pager::pager_stategraph(&grm);
-            try!(StateTable::new(&grm, &sg))
+            let sg = pager::pager_stategraph(grm);
+            try!(StateTable::new(grm, &sg))
         }
     };
     Ok(st)
