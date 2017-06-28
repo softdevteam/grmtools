@@ -31,7 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::slice::Iter;
@@ -81,16 +81,73 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
     }
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
-    /// to synchronise a parser's notion of token IDs with the lexers.
-    pub fn set_rule_ids(&mut self, map: &HashMap<&str, TokId>) {
-        for r in self.rules.iter_mut() {
+    /// to synchronise a parser's notion of token IDs with the lexers. While doing this, it keeps
+    /// track of which tokens:
+    ///   1) are defined in the lexer but not referenced by the parser
+    ///   2) and referenced by the parser but not defined in the lexer
+    /// and returns them as a tuple `(Option<HashSet<&str>>, Option<HashSet<&str>>)` in the order
+    /// (*defined_in_lexer_missing_from_parser*, *referenced_in_parser_missing_from_lexer*). Since
+    /// in most cases both sets are expected to be empty, `None` is returned to avoid a `HashSet`
+    /// allocation.
+    ///
+    /// Lexing and parsing can continue if either set is non-empty, so it is up to the caller as to
+    /// what action they take if either return set is non-empty. A non-empty set #1 is often
+    /// benign: some lexers deliberately define tokens which are not used (e.g. reserving future
+    /// keywords). A non-empty set #2 is more likely to be an error since there are parts of the
+    /// grammar where nothing the user can input will be parseable.
+    pub fn set_rule_ids<'a>(&'a mut self, map: &HashMap<&'a str, TokId>)
+                            -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
+        // Because we have to iter_mut over self.rules, we can't easily store a reference to the
+        // rule's name at the same time. Instead, we store the index of each such rule and
+        // recover the names later.
+        let mut missing_from_parser_idxs = Vec::new();
+        let mut rules_with_names = 0;
+        for (i, r) in self.rules.iter_mut().enumerate() {
             match r.name.as_ref() {
                 None => (),
                 Some(n) => {
-                    r.tok_id = map[&**n]
+                    let nr = &**n;
+                    match map.get(nr) {
+                        Some(tok_id) => {
+                            r.tok_id = *tok_id;
+                        }
+                        None => {
+                            missing_from_parser_idxs.push(i);
+                        }
+                    }
+                    rules_with_names += 1;
                 }
-            };
+            }
         }
+
+        let missing_from_parser;
+        if missing_from_parser_idxs.len() == 0 {
+            missing_from_parser = None;
+        } else {
+            let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
+            for i in missing_from_parser_idxs.iter() {
+                mfp.insert(self.rules[*i].name.as_ref().unwrap().as_str());
+            }
+            missing_from_parser = Some(mfp);
+        };
+
+        let missing_from_lexer;
+        if rules_with_names - missing_from_parser_idxs.len() == map.len() {
+            missing_from_lexer = None
+        } else {
+            missing_from_lexer = Some(map.keys()
+                                         .cloned()
+                                         .collect::<HashSet<&str>>()
+                                         .difference(&self.rules
+                                                          .iter()
+                                                          .filter(|x| x.name.is_some())
+                                                          .map(|x| &**x.name.as_ref().unwrap())
+                                                          .collect::<HashSet<&str>>())
+                                         .cloned()
+                                         .collect::<HashSet<&str>>());
+        }
+
+        (missing_from_lexer, missing_from_parser)
     }
 
     /// Returns an iterator over all rules in this AST.
@@ -223,7 +280,7 @@ mod test {
         let mut map = HashMap::new();
         map.insert("int", 0);
         map.insert("id", 1);
-        lexer.set_rule_ids(&map);
+        assert_eq!(lexer.set_rule_ids(&map), (None, None));
 
         let lexemes = lexer.lexer(&"abc 123").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
@@ -261,7 +318,7 @@ if IF
         let mut map = HashMap::new();
         map.insert("IF", 0);
         map.insert("ID", 1);
-        lexer.set_rule_ids(&map);
+        assert_eq!(lexer.set_rule_ids(&map), (None, None));
 
         let lexemes = lexer.lexer(&"iff if").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
@@ -283,7 +340,7 @@ if IF
         let mut lexer = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0);
-        lexer.set_rule_ids(&map);
+        assert_eq!(lexer.set_rule_ids(&map), (None, None));
 
         let stream = " a\nb\n  c";
         let lexer = lexer.lexer(&stream);
@@ -296,5 +353,20 @@ if IF
         if let Ok(_) = lexer.line_and_col(&fake_lexeme) {
             panic!("line_and_col returned Ok(_) when it should have returned Err.");
         }
+    }
+
+    #[test]
+    fn test_missing_from_lexer_and_parser() {
+        let src = "%%
+[a-z]+ ID
+[ \\n] ;".to_string();
+        let mut lexer = parse_lex(&src).unwrap();
+        let mut map = HashMap::new();
+        map.insert("INT", 0);
+        let mut missing_from_lexer = HashSet::new();
+        missing_from_lexer.insert("INT");
+        let mut missing_from_parser = HashSet::new();
+        missing_from_parser.insert("ID");
+        assert_eq!(lexer.set_rule_ids(&map), (Some(missing_from_lexer), Some(missing_from_parser)));
     }
 }
