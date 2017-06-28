@@ -37,7 +37,7 @@ use {Grammar, NTIdx, PIdx, Symbol, TIdx};
 use super::YaccKind;
 
 const START_NONTERM         : &'static str = "^";
-const END_TERM              : &'static str = "$";
+const EOF_TERM              : &'static str = "$";
 const IMPLICIT_NONTERM      : &'static str = "~";
 const IMPLICIT_START_NONTERM: &'static str = "^~";
 
@@ -71,7 +71,7 @@ pub struct YaccGrammar {
     /// How many terminals does this grammar have?
     terms_len: usize,
     /// The offset of the EOF terminal.
-    end_term: TIdx,
+    eof_term: TIdx,
     /// How many productions does this grammar have?
     prods_len: usize,
     /// Which production is the sole production of the start rule?
@@ -157,13 +157,13 @@ impl YaccGrammar {
             nonterm_map.insert(v.clone(), NTIdx(i));
         }
 
-        let mut end_term = END_TERM.to_string();
-        while ast.tokens.iter().any(|x| x == &end_term) {
-            end_term = end_term + END_TERM;
+        let mut eof_term = EOF_TERM.to_string();
+        while ast.tokens.iter().any(|x| x == &eof_term) {
+            eof_term = eof_term + EOF_TERM;
         }
         let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
-        term_names.push(end_term.clone());
+        term_names.push(eof_term.clone());
         term_precs.push(None);
         for k in &ast.tokens {
             term_names.push(k.clone());
@@ -274,7 +274,7 @@ impl YaccGrammar {
             nonterms_len:     nonterm_names.len(),
             nonterm_names:    nonterm_names,
             terms_len:        term_names.len(),
-            end_term:         term_map[&end_term],
+            eof_term:         term_map[&eof_term],
             term_names:       term_names,
             term_precs:       term_precs,
             prods_len:        prods.len(),
@@ -288,8 +288,8 @@ impl YaccGrammar {
     }
 
     /// Return the index of the end terminal.
-    pub fn end_term_idx(&self) -> TIdx {
-        self.end_term
+    pub fn eof_term_idx(&self) -> TIdx {
+        self.eof_term
     }
 
     /// Return the productions for nonterminal `i` or `None` if it doesn't exist.
@@ -343,7 +343,7 @@ impl YaccGrammar {
     pub fn lexer_map(&self) -> HashMap<&str, TIdx> {
         let mut m = HashMap::with_capacity(self.terms_len - 1);
         for i in 0..self.terms_len {
-            if TIdx(i) == self.end_term_idx() {
+            if TIdx(i) == self.eof_term_idx() {
                 continue;
             }
             m.insert(&*self.term_names[i], TIdx(i));
