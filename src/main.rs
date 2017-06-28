@@ -33,7 +33,6 @@
 #![feature(try_from)]
 
 use std::convert::TryFrom;
-use std::collections::HashMap;
 use std::{env, process};
 use std::fs::File;
 use std::io::{Read, stderr, Write};
@@ -138,15 +137,35 @@ fn main() {
     };
     println!("reduce/reduce: {}\nshift/reduce: {}", stable.reduce_reduce, stable.shift_reduce);
 
-    // Sync up the IDs of terminals in the lexer and parser
-    let mut rule_ids = HashMap::<&str, u16>::new();
-    for term_idx in grm.iter_term_idxs() {
-        rule_ids.insert(grm.term_name(term_idx).unwrap(), u16::try_from(usize::from(term_idx)).unwrap());
+    {
+        let rule_ids = grm.lexer_map().iter()
+                                      .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
+                                      .collect();
+        let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
+        if let Some(tokens) = missing_from_parser {
+            writeln!(&mut stderr(), "Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:").ok();
+            let mut sorted = tokens.iter()
+                                   .cloned()
+                                   .collect::<Vec<&str>>();
+            sorted.sort();
+            for n in sorted {
+                writeln!(&mut stderr(), "  {}", n).ok();
+            }
+        }
+        if let Some(tokens) = missing_from_lexer {
+            writeln!(&mut stderr(), "Error: these tokens are referenced in the grammar but not defined in the lexer:").ok();
+            let mut sorted = tokens.iter()
+                                   .cloned()
+                                   .collect::<Vec<&str>>();
+            sorted.sort();
+            for n in sorted {
+                writeln!(&mut stderr(), "  {}", n).ok();
+            }
+            process::exit(1);
+        }
     }
-    lexerdef.set_rule_ids(&rule_ids);
 
     let input = read_file(&matches.free[2]);
-
     let mut lexemes = lexerdef.lexer(&input).lexemes().unwrap();
     lexemes.push(Lexeme::new(u16::try_from(usize::from(grm.end_term_idx())).unwrap(), input.len(), 0));
     let pt = parse::<u16>(&grm, &stable, &lexemes).unwrap();
