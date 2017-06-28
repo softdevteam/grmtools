@@ -125,7 +125,7 @@ impl Itemset {
             }
             let prod = grm.prod(prod_i).unwrap();
             if dot == prod.len().into() { continue; }
-            if let Symbol::Nonterminal(nonterm_i) = prod[usize::from(dot)] {
+            if let Symbol::Nonterm(nonterm_i) = prod[usize::from(dot)] {
                 // This if statement is, in essence, a fast version of what's called getContext in
                 // Chen's dissertation, folding in getTHeads at the same time. The particular
                 // formulation here is based as much on
@@ -136,12 +136,12 @@ impl Itemset {
                 let mut nullable = true;
                 for sym in prod.iter().skip(usize::from(dot) + 1) {
                     match *sym {
-                        Symbol::Terminal(term_j) => {
+                        Symbol::Term(term_j) => {
                             new_ctx.set(usize::from(term_j), true);
                             nullable = false;
                             break;
                         },
-                        Symbol::Nonterminal(nonterm_j) => {
+                        Symbol::Nonterm(nonterm_j) => {
                             new_ctx.union(firsts.prod_firsts(nonterm_j));
                             if !firsts.is_epsilon_set(nonterm_j) {
                                 nullable = false;
@@ -320,16 +320,16 @@ mod test {
         is.add(grm.nonterm_to_prods(grm.nonterminal_off("^")).unwrap()[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);
 
-        let goto1 = cls_is.goto(&grm, &Symbol::Nonterminal(grm.nonterminal_off("S")));
+        let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.nonterminal_off("S")));
         state_exists(&grm, &goto1, "^", 0, 1, vec!["$"]);
         state_exists(&grm, &goto1, "S", 0, 1, vec!["$", "b"]);
 
         // follow 'b' from start set
-        let goto2 = cls_is.goto(&grm, &Symbol::Terminal(grm.terminal_off("b")));
+        let goto2 = cls_is.goto(&grm, &Symbol::Term(grm.terminal_off("b")));
         state_exists(&grm, &goto2, "S", 1, 1, vec!["$", "b"]);
 
         // continue by following 'a' from last goto, after it's been closed
-        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Terminal(grm.terminal_off("a")));
+        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Term(grm.terminal_off("a")));
         state_exists(&grm, &goto3, "A", 1, 1, vec!["a"]);
         state_exists(&grm, &goto3, "A", 2, 1, vec!["a"]);
     }
