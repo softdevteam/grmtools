@@ -54,7 +54,7 @@ pub enum YaccParserErrorKind {
     ProgramsNotSupported,
     UnknownDeclaration,
     DuplicatePrecedence,
-    PrecNotFollowedByTerminal,
+    PrecNotFollowedByTerm,
     DuplicateImplicitTokensDeclaration
 }
 
@@ -77,7 +77,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccParserErrorKind::UnknownDeclaration   => "Unknown declaration",
             YaccParserErrorKind::DuplicatePrecedence  => "Token already has a precedence",
-            YaccParserErrorKind::PrecNotFollowedByTerminal
+            YaccParserErrorKind::PrecNotFollowedByTerm
                                                       => "%prec not followed by token name",
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration
                                                       => "Duplicate %implicit_tokens declaration",
@@ -274,22 +274,22 @@ impl YaccParser {
                 let (j, sym) = try!(self.parse_terminal(i));
                 i = try!(self.parse_ws(j));
                 self.grammar.tokens.insert(sym.clone());
-                syms.push(Symbol::Terminal(sym));
+                syms.push(Symbol::Term(sym));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = try!(self.parse_ws(j));
                 let (k, sym) = try!(self.parse_terminal(i));
                 if self.grammar.tokens.contains(&sym) {
                     prec = Some(sym);
                 } else {
-                    return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByTerminal, i));
+                    return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByTerm, i));
                 }
                 i = k;
             } else {
                 let (j, sym) = try!(self.parse_terminal(i));
                 if self.grammar.tokens.contains(&sym) {
-                    syms.push(Symbol::Terminal(sym));
+                    syms.push(Symbol::Term(sym));
                 } else {
-                    syms.push(Symbol::Nonterminal(sym));
+                    syms.push(Symbol::Nonterm(sym));
                 }
                 i = j;
             }
@@ -365,16 +365,16 @@ mod test {
     use yacc::ast::{Rule, Symbol};
 
     fn nonterminal(n: &str) -> Symbol {
-        Symbol::Nonterminal(n.to_string())
+        Symbol::Nonterm(n.to_string())
     }
 
     fn terminal(n: &str) -> Symbol {
-        Symbol::Terminal(n.to_string())
+        Symbol::Term(n.to_string())
     }
 
     #[test]
     fn test_macro() {
-        assert_eq!(Symbol::Terminal("A".to_string()), terminal("A"));
+        assert_eq!(Symbol::Term("A".to_string()), terminal("A"));
     }
 
     #[test]
@@ -536,8 +536,8 @@ mod test {
         let grm = yacc_ast(YaccKind::Original, &src).unwrap();
         assert!(grm.has_token("T"));
         match grm.rules["A"].productions[0].symbols[0] {
-            Symbol::Nonterminal(_) => panic!("Should be terminal"),
-            Symbol::Terminal(_)    => ()
+            Symbol::Nonterm(_) => panic!("Should be terminal"),
+            Symbol::Term(_)    => ()
         }
     }
 
@@ -770,7 +770,7 @@ x".to_string();
           B: ;
           ") {
                 Ok(_) => panic!("Incorrect %prec parsed"),
-                Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByTerminal, line: 3, ..}) => (),
+                Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByTerm, line: 3, ..}) => (),
                 Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
