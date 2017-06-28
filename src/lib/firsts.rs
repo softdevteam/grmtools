@@ -100,15 +100,15 @@ impl Firsts {
                     }
                     for (sym_i, sym) in prod.iter().enumerate() {
                         match *sym {
-                            Symbol::Terminal(term_i) => {
-                                // if symbol is a Terminal, add to FIRSTS
+                            Symbol::Term(term_i) => {
+                                // if symbol is a Term, add to FIRSTS
                                 if !firsts.set(rul_i, term_i) {
                                     changed = true;
                                 }
                                 break;
                             },
-                            Symbol::Nonterminal(nonterm_i) => {
-                                // if we're dealing with another Nonterminal, union its FIRSTs
+                            Symbol::Nonterm(nonterm_i) => {
+                                // if we're dealing with another Nonterm, union its FIRSTs
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
