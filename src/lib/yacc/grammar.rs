@@ -113,7 +113,7 @@ impl YaccGrammar {
         // term and whitespace names.
         let mut start_nonterm = START_NONTERM.to_string();
         while ast.rules.get(&start_nonterm).is_some() {
-            start_nonterm = start_nonterm + START_NONTERM;
+            start_nonterm += START_NONTERM;
         }
         nonterm_names.push(start_nonterm.clone());
 
@@ -125,16 +125,16 @@ impl YaccGrammar {
                 implicit_start_nonterm = None;
             },
             YaccKind::Eco => {
-                if let Some(_) = ast.implicit_tokens {
+                if ast.implicit_tokens.is_some() {
                     let mut n1 = IMPLICIT_NONTERM.to_string();
                     while ast.rules.get(&n1).is_some() {
-                        n1 = n1 + IMPLICIT_NONTERM;
+                        n1 += IMPLICIT_NONTERM;
                     }
                     nonterm_names.push(n1.clone());
                     implicit_nonterm = Some(n1);
                     let mut n2 = IMPLICIT_START_NONTERM.to_string();
                     while ast.rules.get(&n2).is_some() {
-                        n2 = n2 + IMPLICIT_START_NONTERM;
+                        n2 += IMPLICIT_START_NONTERM;
                     }
                     nonterm_names.push(n2.clone());
                     implicit_start_nonterm = Some(n2);
@@ -159,7 +159,7 @@ impl YaccGrammar {
 
         let mut eof_term = EOF_TERM.to_string();
         while ast.tokens.iter().any(|x| x == &eof_term) {
-            eof_term = eof_term + EOF_TERM;
+            eof_term += EOF_TERM;
         }
         let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
@@ -272,17 +272,17 @@ impl YaccGrammar {
 
         YaccGrammar{
             nonterms_len:     nonterm_names.len(),
-            nonterm_names:    nonterm_names,
+            nonterm_names,
             terms_len:        term_names.len(),
             eof_term:         term_map[&eof_term],
-            term_names:       term_names,
-            term_precs:       term_precs,
+            term_names,
+            term_precs,
             prods_len:        prods.len(),
             start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
-            rules_prods:      rules_prods,
-            prods_rules:      prods_rules,
-            prods:            prods,
-            prod_precs:       prod_precs,
+            rules_prods,
+            prods_rules,
+            prods,
+            prod_precs,
             implicit_nonterm: implicit_nonterm.map_or(None, |x| Some(nonterm_map[&x]))
         }
     }
@@ -299,7 +299,7 @@ impl YaccGrammar {
 
     /// Return the name of nonterminal `i` or `None` if it doesn't exist.
     pub fn nonterm_name(&self, i: NTIdx) -> Option<&str> {
-        self.nonterm_names.get(usize::from(i)).map_or(None, |x| Some(&x))
+        self.nonterm_names.get(usize::from(i)).map_or(None, |x| Some(x))
     }
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
