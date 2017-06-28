@@ -180,18 +180,21 @@ impl YaccGrammar {
         for astrulename in &nonterm_names {
             let rule_idx = nonterm_map[astrulename];
             if astrulename == &start_nonterm {
-                // Add the special start rule
+                // Add the special start rule which has a single production which references a
+                // single non-terminal.
                 rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
                            .unwrap()
                            .push(prods.len().into());
                 let start_prod = match implicit_start_nonterm {
-                    Some(ref s) => {
-                        // Add S': implicit_start_nonterm;
-                        vec![Symbol::Nonterminal(nonterm_map[s])]
-                    }
                     None => {
-                        // Add S': S;
+                        // Add ^: S;
                         vec![Symbol::Nonterminal(nonterm_map[ast.start.as_ref().unwrap()])]
+                    }
+                    Some(ref s) => {
+                        // An implicit rule has been specified, so the special start rule
+                        // needs to reference the intermediate start rule required. Therefore add:
+                        //   ^: ^~;
+                        vec![Symbol::Nonterminal(nonterm_map[s])]
                     }
                 };
                 prods.push(start_prod);
@@ -200,6 +203,9 @@ impl YaccGrammar {
                 continue;
             }
             else if implicit_start_nonterm.as_ref().map_or(false, |s| s == astrulename) {
+                // Add the intermediate start rule (handling implicit tokens at the beginning of
+                // the file):
+                //   ^~: ~ S;
                 rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
                            .unwrap()
                            .push(prods.len().into());
