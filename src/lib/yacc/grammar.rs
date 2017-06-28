@@ -331,12 +331,27 @@ impl YaccGrammar {
         Box::new((0..self.terms_len).map(TIdx))
     }
 
+    /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
+    /// inputs from this grammar (note: this explicitly excludes the end terminal, which should not
+    /// be generated as part of the standard lexing process).
+    pub fn lexer_map(&self) -> HashMap<&str, TIdx> {
+        let mut m = HashMap::with_capacity(self.terms_len - 1);
+        for i in 0..self.terms_len {
+            if TIdx(i) == self.end_term_idx() {
+                continue;
+            }
+            m.insert(&*self.terminal_names[i], TIdx(i));
+        }
+        m
+    }
+
     /// Return the production index of the start rule's sole production (for Yacc grammars the
     /// start rule is defined to have precisely one production).
     pub fn start_prod(&self) -> PIdx {
         self.start_prod
     }
 
+    /// Return the `NTIdx` of the implict nonterm if it exists, or `None` otherwise.
     pub fn implicit_nonterm(&self) -> Option<NTIdx> {
         self.implicit_nonterm
     }
@@ -407,6 +422,7 @@ impl fmt::Display for YaccGrammarError {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
     use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM};
     use {NTIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, yacc_grm, YaccKind};
@@ -431,6 +447,7 @@ mod test {
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
 
         assert_eq!(grm.iter_term_idxs().collect::<Vec<TIdx>>(), vec![TIdx(0), TIdx(1)]);
+        assert_eq!(grm.lexer_map(), [("T", TIdx(1))].iter().cloned().collect::<HashMap<&str, TIdx>>());
         assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(), vec![NTIdx(0), NTIdx(1)]);
     }
 
