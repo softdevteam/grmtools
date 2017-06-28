@@ -38,8 +38,8 @@ use lrlex::Lexeme;
 use lrtable::{Action, StateTable, StIdx};
 
 pub enum Node<TokId> {
-    Terminal{lexeme: Lexeme<TokId>},
-    Nonterminal{nonterm_idx: NTIdx, nodes: Vec<Node<TokId>>}
+    Term{lexeme: Lexeme<TokId>},
+    Nonterm{nonterm_idx: NTIdx, nodes: Vec<Node<TokId>>}
 }
 
 #[derive(Debug)]
@@ -56,12 +56,12 @@ impl<TokId: Copy + TryInto<usize>> Node<TokId> {
                 s.push_str(" ");
             }
             match e {
-                &Node::Terminal{lexeme} => {
+                &Node::Term{lexeme} => {
                     let tn = grm.term_name(TIdx::from(lexeme.tok_id().try_into().ok().unwrap())).unwrap();
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
-                &Node::Nonterminal{nonterm_idx, ref nodes} => {
+                &Node::Nonterm{nonterm_idx, ref nodes} => {
                     s.push_str(&format!("{}\n", grm.nonterm_name(nonterm_idx).unwrap()));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
@@ -86,24 +86,24 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
     let mut la = lexemes_iter.next().unwrap();
     loop {
         let st = *pstack.last().unwrap();
-        match stable.action(st, Symbol::Terminal(TIdx::from(la.tok_id().try_into().ok().unwrap()))) {
+        match stable.action(st, Symbol::Term(TIdx::from(la.tok_id().try_into().ok().unwrap()))) {
             Some(Action::Reduce(prod_id)) => {
                 let nonterm_idx = grm.prod_to_nonterm(prod_id);
                 let pop_idx = pstack.len() - grm.prod(prod_id).unwrap().len();
                 let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<TokId>>>();
-                tstack.push(Node::Nonterminal{nonterm_idx: nonterm_idx, nodes: nodes});
+                tstack.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
 
                 pstack.drain(pop_idx..);
                 let prior = *pstack.last().unwrap();
                 pstack.push(stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
             },
             Some(Action::Shift(state_id)) => {
-                tstack.push(Node::Terminal{lexeme: *la});
+                tstack.push(Node::Term{lexeme: *la});
                 la = lexemes_iter.next().unwrap();
                 pstack.push(state_id);
             },
             Some(Action::Accept) => {
-                debug_assert_eq!(TIdx::from(la.tok_id().try_into().ok().unwrap()), grm.end_term_idx());
+                debug_assert_eq!(TIdx::from(la.tok_id().try_into().ok().unwrap()), grm.eof_term_idx());
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
@@ -132,7 +132,7 @@ mod test {
         }
         lexerdef.set_rule_ids(&rule_ids);
         let mut lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-        lexemes.push(Lexeme::new(usize::from(grm.end_term_idx()), input.len(), 0));
+        lexemes.push(Lexeme::new(usize::from(grm.eof_term_idx()), input.len(), 0));
         let pt = parse(&grm, &stable, &lexemes).unwrap();
         assert_eq!(expected, pt.pp(&grm, &input));
     }

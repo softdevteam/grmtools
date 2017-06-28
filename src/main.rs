@@ -167,7 +167,7 @@ fn main() {
 
     let input = read_file(&matches.free[2]);
     let mut lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-    lexemes.push(Lexeme::new(u16::try_from(usize::from(grm.end_term_idx())).unwrap(), input.len(), 0));
+    lexemes.push(Lexeme::new(u16::try_from(usize::from(grm.eof_term_idx())).unwrap(), input.len(), 0));
     let pt = parse::<u16>(&grm, &stable, &lexemes).unwrap();
     println!("{}", pt.pp(&grm, &input));
 }
