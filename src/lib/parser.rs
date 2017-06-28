@@ -79,7 +79,7 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
                         .char_indices()
                         .position(|(c_off, _)| c_off == off - line_off)
                         .unwrap();
-        return (line_m1 + 1, c_off + 1);
+        (line_m1 + 1, c_off + 1)
     }
 
     fn parse(&mut self) -> LexBuildResult<usize> {
@@ -136,11 +136,11 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
         if orig_name == ";" {
             name = None;
         }
-        else if self.rules.iter().find(|&r| r.name.as_ref().map_or(false, |n| n == orig_name)).is_some() {
+        else if self.rules.iter().any(|r| r.name.as_ref().map_or(false, |n| n == orig_name)) {
             return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1))
         }
         else {
-            if !RE_NAME.is_match(&orig_name) {
+            if !RE_NAME.is_match(orig_name) {
                 return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1))
             }
             name = Some(orig_name.to_string());
