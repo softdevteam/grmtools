@@ -41,13 +41,13 @@ use std::path::Path;
 
 use lrlex::{build_lex, LexerDef};
 
-fn usage(prog: String, msg: &str) {
-    let path = Path::new(prog.as_str());
+fn usage(prog: &str, msg: &str) {
+    let path = Path::new(prog);
     let leaf = match path.file_name() {
         Some(m) => m.to_str().unwrap(),
         None => "lrpar"
     };
-    if msg.len() > 0 {
+    if !msg.is_empty() {
         writeln!(&mut stderr(), "{}", msg).ok();
     }
     writeln!(&mut stderr(), "Usage: {} <lexer.l> <input file>", leaf).ok();
@@ -75,12 +75,12 @@ fn main() {
                                 .parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            usage(prog, f.to_string().as_str());
+            usage(&prog, f.to_string().as_str());
             return;
         }
     };
     if matches.opt_present("h") || matches.free.len() != 2 {
-        usage(prog, "");
+        usage(&prog, "");
         return;
     }
 
@@ -90,7 +90,7 @@ fn main() {
             process::exit(1);
         });
     let input = &read_file(&matches.free[1]);
-    let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
+    let lexemes = lexerdef.lexer(input).lexemes().unwrap();
     for l in lexemes.iter() {
         println!("{} {}", lexerdef.get_rule_by_id(l.tok_id()).unwrap().name.as_ref().unwrap(), &input[l.start()..l.start() + l.len()]);
     }

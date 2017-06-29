@@ -121,7 +121,7 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
         }
 
         let missing_from_parser;
-        if missing_from_parser_idxs.len() == 0 {
+        if missing_from_parser_idxs.is_empty() {
             missing_from_parser = None;
         } else {
             let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
@@ -157,7 +157,7 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
 
     /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
     pub fn lexer<'a>(&'a self, s: &'a str) -> Lexer<'a, TokId> {
-        Lexer::new(&self, s)
+        Lexer::new(self, s)
     }
 }
 
@@ -224,7 +224,7 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
         }
         let newlines_brw = self.newlines.borrow();
         let newlines_len = newlines_brw.len();
-        return Ok((newlines_len + 1, l.start - newlines_brw[newlines_len - 1] + 1))
+        Ok((newlines_len + 1, l.start - newlines_brw[newlines_len - 1] + 1))
     }
 }
 
