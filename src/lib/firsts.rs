@@ -106,9 +106,9 @@ impl Firsts {
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
-                                for term_idx in grm.iter_term_idxs() {
-                                    if firsts.is_set(nonterm_i, term_idx)
-                                      && !firsts.set(rul_i, term_idx) {
+                                for term_idx in 0..grm.terms_len() {
+                                    if firsts.is_set(nonterm_i, TIdx::from(term_idx))
+                                      && !firsts.set(rul_i, TIdx::from(term_idx)) {
                                         changed = true;
                                     }
                                 }
