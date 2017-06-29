@@ -37,7 +37,6 @@ use {Grammar, NTIdx, PIdx, Symbol, TIdx};
 use super::YaccKind;
 
 const START_NONTERM         : &'static str = "^";
-const EOF_TERM              : &'static str = "$";
 const IMPLICIT_NONTERM      : &'static str = "~";
 const IMPLICIT_START_NONTERM: &'static str = "^~";
 
@@ -70,8 +69,6 @@ pub struct YaccGrammar {
     term_precs: Vec<Option<Precedence>>,
     /// How many terminals does this grammar have?
     terms_len: usize,
-    /// The offset of the EOF terminal.
-    eof_term: TIdx,
     /// How many productions does this grammar have?
     prods_len: usize,
     /// Which production is the sole production of the start rule?
@@ -95,12 +92,9 @@ impl YaccGrammar {
     /// Translate a `GrammarAST` into a `YaccGrammar`. This function is akin to the part a traditional
     /// compiler that takes in an AST and converts it into a binary.
     ///
-    /// As we're compiling the `GrammarAST` into a `Grammar` we do two extra things:
-    ///   1) Add a new start rule (which we'll refer to as "^", though the actual name is a fresh name
-    ///      that is guaranteed to be unique) that references the user defined start rule.
-    ///   2) Add a new end terminal (which we'll refer to as "$", though the actual name is a fresh
-    ///      name that is guaranteed to be unique).
-    /// So, if the user's start rule is S, we add a nonterminal with a single production `^ : S '$';`.
+    /// As we're compiling the `GrammarAST` into a `Grammar` we add a new start rule (which we'll
+    /// refer to as "^", though the actual name is a fresh name that is guaranteed to be unique)
+    /// that references the user defined start rule.
     pub fn new(yacc_kind: YaccKind, ast: &ast::GrammarAST) -> YaccGrammar {
         // The user is expected to have called validate before calling this function.
         debug_assert!(ast.validate().is_ok());
@@ -157,14 +151,8 @@ impl YaccGrammar {
             nonterm_map.insert(v.clone(), NTIdx(i));
         }
 
-        let mut eof_term = EOF_TERM.to_string();
-        while ast.tokens.iter().any(|x| x == &eof_term) {
-            eof_term += EOF_TERM;
-        }
         let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
-        term_names.push(eof_term.clone());
-        term_precs.push(None);
         for k in &ast.tokens {
             term_names.push(k.clone());
             term_precs.push(ast.precs.get(k).cloned());
@@ -274,7 +262,6 @@ impl YaccGrammar {
             nonterms_len:     nonterm_names.len(),
             nonterm_names,
             terms_len:        term_names.len(),
-            eof_term:         term_map[&eof_term],
             term_names,
             term_precs,
             prods_len:        prods.len(),
@@ -285,11 +272,6 @@ impl YaccGrammar {
             prod_precs,
             implicit_nonterm: implicit_nonterm.map_or(None, |x| Some(nonterm_map[&x]))
         }
-    }
-
-    /// Return the index of the end terminal.
-    pub fn eof_term_idx(&self) -> TIdx {
-        self.eof_term
     }
 
     /// Return the productions for nonterminal `i` or `None` if it doesn't exist.
@@ -338,14 +320,10 @@ impl YaccGrammar {
     }
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
-    /// inputs from this grammar (note: this explicitly excludes the end terminal, which should not
-    /// be generated as part of the standard lexing process).
+    /// inputs from this grammar.
     pub fn lexer_map(&self) -> HashMap<&str, TIdx> {
         let mut m = HashMap::with_capacity(self.terms_len - 1);
         for i in 0..self.terms_len {
-            if TIdx(i) == self.eof_term_idx() {
-                continue;
-            }
             m.insert(&*self.term_names[i], TIdx(i));
         }
         m
@@ -442,7 +420,6 @@ mod test {
         assert_eq!(grm.implicit_nonterm(), None);
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
-        grm.terminal_off("$");
         grm.terminal_off("T");
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)]]);
@@ -452,8 +429,8 @@ mod test {
         assert_eq!(*r_prod, [Symbol::Term(grm.terminal_off("T"))]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
 
-        assert_eq!(grm.iter_term_idxs().collect::<Vec<TIdx>>(), vec![TIdx(0), TIdx(1)]);
-        assert_eq!(grm.lexer_map(), [("T", TIdx(1))].iter().cloned().collect::<HashMap<&str, TIdx>>());
+        assert_eq!(grm.iter_term_idxs().collect::<Vec<TIdx>>(), [TIdx(0)]);
+        assert_eq!(grm.lexer_map(), [("T", TIdx(0))].iter().cloned().collect::<HashMap<&str, TIdx>>());
         assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(), vec![NTIdx(0), NTIdx(1)]);
     }
 
@@ -465,7 +442,6 @@ mod test {
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
         grm.nonterminal_off("S");
-        grm.terminal_off("$");
         grm.terminal_off("T");
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
@@ -487,7 +463,6 @@ mod test {
         grm.nonterminal_off("^");
         grm.nonterminal_off("R");
         grm.nonterminal_off("S");
-        grm.terminal_off("$");
         grm.terminal_off("T1");
         grm.terminal_off("T2");
 
