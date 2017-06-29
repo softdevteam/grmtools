@@ -83,10 +83,14 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
     // it's easiest to split the parse and parse tree stack into two.
     let mut pstack = vec![StIdx::from(0)]; // Parse stack
     let mut tstack: Vec<Node<TokId>> = Vec::new(); // Parse tree stack
-    let mut la = lexemes_iter.next().unwrap();
+    let mut la = lexemes_iter.next();
     loop {
         let st = *pstack.last().unwrap();
-        match stable.action(st, Symbol::Term(TIdx::from(la.tok_id().try_into().ok().unwrap()))) {
+        let la_term = match la {
+            Some(t) => Symbol::Term(TIdx::from(t.tok_id().try_into().ok().unwrap())),
+            None => Symbol::Term(TIdx::from(grm.terms_len()))
+        };
+        match stable.action(st, la_term) {
             Some(Action::Reduce(prod_id)) => {
                 let nonterm_idx = grm.prod_to_nonterm(prod_id);
                 let pop_idx = pstack.len() - grm.prod(prod_id).unwrap().len();
@@ -98,12 +102,12 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
                 pstack.push(stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
             },
             Some(Action::Shift(state_id)) => {
-                tstack.push(Node::Term{lexeme: *la});
-                la = lexemes_iter.next().unwrap();
+                tstack.push(Node::Term{lexeme: *la.unwrap()});
+                la = lexemes_iter.next();
                 pstack.push(state_id);
             },
             Some(Action::Accept) => {
-                debug_assert_eq!(TIdx::from(la.tok_id().try_into().ok().unwrap()), grm.eof_term_idx());
+                debug_assert_eq!(la_term, Symbol::Term(TIdx::from(grm.terms_len())));
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
