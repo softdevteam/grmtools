@@ -58,6 +58,9 @@ pub enum AssocKind {
     Nonassoc
 }
 
+/// Representation of a `YaccGrammar`. This struct makes one important guarantee: all of its
+/// terminals will be consecutively, monotonically numbered from `0 .. terms_len()`. In other words,
+/// if this struct has 3 terminals, they are guaranteed to have `TIDx`s of 0, 1, and 2.
 pub struct YaccGrammar {
     /// How many nonterminals does this grammar have?
     nonterms_len: usize,
@@ -96,7 +99,7 @@ impl YaccGrammar {
     /// refer to as "^", though the actual name is a fresh name that is guaranteed to be unique)
     /// that references the user defined start rule.
     pub fn new(yacc_kind: YaccKind, ast: &ast::GrammarAST) -> YaccGrammar {
-        // The user is expected to have called validate before calling this function.
+        // The caller is expected to have called validate before calling this function.
         debug_assert!(ast.validate().is_ok());
 
         let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
@@ -314,14 +317,9 @@ impl YaccGrammar {
         self.term_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
     }
 
-    /// Return an iterator which produces (in no particular order) all this grammar's valid `TIdx`s.
-    pub fn iter_term_idxs(&self) -> Box<Iterator<Item=TIdx>> {
-        Box::new((0..self.terms_len).map(TIdx))
-    }
-
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
     /// inputs from this grammar.
-    pub fn lexer_map(&self) -> HashMap<&str, TIdx> {
+    pub fn terms_map(&self) -> HashMap<&str, TIdx> {
         let mut m = HashMap::with_capacity(self.terms_len - 1);
         for i in 0..self.terms_len {
             m.insert(&*self.term_names[i], TIdx(i));
@@ -429,8 +427,7 @@ mod test {
         assert_eq!(*r_prod, [Symbol::Term(grm.term_off("T"))]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
 
-        assert_eq!(grm.iter_term_idxs().collect::<Vec<TIdx>>(), [TIdx(0)]);
-        assert_eq!(grm.lexer_map(), [("T", TIdx(0))].iter().cloned().collect::<HashMap<&str, TIdx>>());
+        assert_eq!(grm.terms_map(), [("T", TIdx(0))].iter().cloned().collect::<HashMap<&str, TIdx>>());
         assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(), vec![NTIdx(0), NTIdx(1)]);
     }
 
