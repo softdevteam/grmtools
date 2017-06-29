@@ -55,13 +55,13 @@ impl<TokId: Copy + TryInto<usize>> Node<TokId> {
             for _ in 0..indent {
                 s.push_str(" ");
             }
-            match e {
-                &Node::Term{lexeme} => {
+            match *e {
+                Node::Term{lexeme} => {
                     let tn = grm.term_name(TIdx::from(lexeme.tok_id().try_into().ok().unwrap())).unwrap();
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
-                &Node::Nonterm{nonterm_idx, ref nodes} => {
+                Node::Nonterm{nonterm_idx, ref nodes} => {
                     s.push_str(&format!("{}\n", grm.nonterm_name(nonterm_idx).unwrap()));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));

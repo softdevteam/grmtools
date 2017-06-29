@@ -53,13 +53,13 @@ use lrtable::{Minimiser, yacc_to_statetable};
 extern crate lrpar;
 use lrpar::parser::parse;
 
-fn usage(prog: String, msg: &str) -> ! {
-    let path = Path::new(prog.as_str());
+fn usage(prog: &str, msg: &str) -> ! {
+    let path = Path::new(prog);
     let leaf = match path.file_name() {
         Some(m) => m.to_str().unwrap(),
         None => "lrpar"
     };
-    if msg.len() > 0 {
+    if !msg.is_empty() {
         writeln!(&mut stderr(), "{}", msg).ok();
     }
     writeln!(&mut stderr(), "Usage: {} <lexer.l> <parser.y> <input file>", leaf).ok();
@@ -81,7 +81,7 @@ fn read_file(path: &str) -> String {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let prog = args[0].clone();
+    let prog = &args[0];
     let matches = match Options::new()
                                 .optflag("h", "help", "")
                                 .optopt("y", "yaccvariant",
@@ -89,11 +89,11 @@ fn main() {
                                         "Original|Eco")
                                 .parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => usage(prog, f.to_string().as_str())
+        Err(f) => usage(&prog, f.to_string().as_str())
     };
 
     if matches.opt_present("h") {
-        usage(prog, "");
+        usage(&prog, "");
     }
 
     let yacckind = match matches.opt_str("y") {
@@ -102,13 +102,13 @@ fn main() {
             match &*s.to_lowercase() {
                 "original" => YaccKind::Original,
                 "eco" => YaccKind::Eco,
-                _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s))
+                _ => usage(&prog, &format!("Unknown Yacc variant '{}'.", s))
             }
         }
     };
 
     if matches.free.len() != 3 {
-        usage(prog, "Too few arguments given.");
+        usage(&prog, "Too few arguments given.");
     }
 
     let lex_l_path = &matches.free[0];
