@@ -45,7 +45,7 @@ extern crate cfgrammar;
 use cfgrammar::yacc::{yacc_grm, YaccKind};
 
 extern crate lrlex;
-use lrlex::{build_lex, Lexeme};
+use lrlex::build_lex;
 
 extern crate lrtable;
 use lrtable::{Minimiser, yacc_to_statetable};
@@ -138,7 +138,7 @@ fn main() {
     println!("reduce/reduce: {}\nshift/reduce: {}", stable.reduce_reduce, stable.shift_reduce);
 
     {
-        let rule_ids = grm.lexer_map().iter()
+        let rule_ids = grm.terms_map().iter()
                                       .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
                                       .collect();
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
