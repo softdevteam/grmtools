@@ -234,7 +234,7 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
                 // of change propagation), but has a correctness aspect: there's no guarantee
                 // that the weakly compatible check is reflexive (i.e. a state may not be
                 // weakly compatible with itself).
-                for cnd in cnd_states.iter().map(|x| *x) {
+                for cnd in cnd_states.iter().cloned() {
                     if core_states[usize::from(cnd)] == nstate {
                         edges[state_i].insert(sym, cnd);
                         continue 'a;
