@@ -42,16 +42,16 @@ use cfgrammar::yacc::YaccGrammar;
 ///   let grm = yacc_grm(YaccKind::Original, "
 ///     S: A 'b';
 ///     A: 'a'
-///      | ;");
+///      | ;").unwrap();
 ///   let firsts = Firsts::new(&grm);
 /// ```
 /// then the following assertions (and only the following assertions) about the firsts set are
 /// correct:
 /// ```
-///   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("a")));
-///   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("b")));
-///   assert!(firsts.is_set(grm.nonterminal_off("A"), grm.terminal_off("a")));
-///   assert!(firsts.is_epsilon_set(grm.nonterminal_off("A")));
+///   assert!(firsts.is_set(grm.nonterm_off("S"), grm.term_off("a")));
+///   assert!(firsts.is_set(grm.nonterm_off("S"), grm.term_off("b")));
+///   assert!(firsts.is_set(grm.nonterm_off("A"), grm.term_off("a")));
+///   assert!(firsts.is_epsilon_set(grm.nonterm_off("A")));
 /// ```
 #[derive(Debug)]
 pub struct Firsts {
@@ -178,7 +178,7 @@ mod test {
     use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
 
     fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
-        let nt_i = grm.nonterminal_off(rn);
+        let nt_i = grm.nonterm_off(rn);
         for i in 0 .. grm.terms_len() {
             let n = grm.term_name(i.into()).unwrap();
             match should_be.iter().position(|&x| x == n) {
