@@ -9,7 +9,7 @@ path = "src/lib/mod.rs"
 
 [dependencies]
 getopts = "0.2.14"
-lazy_static = "0.2.2"
-regex = "0.1.80"
+lazy_static = "0.2.8"
+regex = "0.2.2"
 macro-attr = "0.2.0"
 newtype_derive = "0.1.6"
