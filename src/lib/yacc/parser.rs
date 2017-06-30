@@ -300,9 +300,9 @@ impl YaccParser {
 
     fn parse_name(&self, i: usize) -> YaccResult<(usize, String)> {
         match RE_NAME.find(&self.src[i..]) {
-            Some((s, e)) => {
-                assert_eq!(s, 0);
-                Ok((i + e, self.src[i..i + e].to_string()))
+            Some(m) => {
+                assert_eq!(m.start(), 0);
+                Ok((i + m.end(), self.src[i..i + m.end()].to_string()))
             },
             None         => {
                 Err(self.mk_error(YaccParserErrorKind::IllegalName, i))
@@ -312,14 +312,14 @@ impl YaccParser {
 
     fn parse_terminal(&self, i: usize) -> YaccResult<(usize, String)> {
         match RE_TERMINAL.find(&self.src[i..]) {
-            Some((s, e)) => {
-                assert!(s == 0 && e > 0);
+            Some(m) => {
+                assert!(m.start() == 0 && m.end() > 0);
                 match self.src[i..].chars().next().unwrap() {
                     '"' | '\'' => {
                         assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
-                        Ok((i + e, self.src[i + 1..i + e - 1].to_string()))
+                        Ok((i + m.end(), self.src[i + 1..i + m.end() - 1].to_string()))
                     },
-                    _ =>  Ok((i + e, self.src[i..i + e].to_string()))
+                    _ =>  Ok((i + m.end(), self.src[i..i + m.end()].to_string()))
                 }
             },
             None => {
