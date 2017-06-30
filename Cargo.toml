@@ -8,9 +8,8 @@ name = "lrtable"
 path = "src/lib/mod.rs"
 
 [dependencies]
-bit-vec = "0.4.3"
+bit-vec = "0.4.4"
 getopts = "0.2.14"
-regex = "0.1.80"
 fnv = "1.0.5"
 macro-attr = "0.2.0"
 newtype_derive = "0.1.6"
