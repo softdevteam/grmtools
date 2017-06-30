@@ -45,7 +45,7 @@ extern crate cfgrammar;
 use cfgrammar::yacc::{yacc_grm, YaccKind};
 
 extern crate lrlex;
-use lrlex::{build_lex, Lexeme};
+use lrlex::build_lex;
 
 extern crate lrtable;
 use lrtable::{Minimiser, yacc_to_statetable};
@@ -138,7 +138,7 @@ fn main() {
     println!("reduce/reduce: {}\nshift/reduce: {}", stable.reduce_reduce, stable.shift_reduce);
 
     {
-        let rule_ids = grm.lexer_map().iter()
+        let rule_ids = grm.terms_map().iter()
                                       .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
                                       .collect();
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
@@ -166,8 +166,7 @@ fn main() {
     }
 
     let input = read_file(&matches.free[2]);
-    let mut lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-    lexemes.push(Lexeme::new(u16::try_from(usize::from(grm.eof_term_idx())).unwrap(), input.len(), 0));
+    let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
     let pt = parse::<u16>(&grm, &stable, &lexemes).unwrap();
     println!("{}", pt.pp(&grm, &input));
 }

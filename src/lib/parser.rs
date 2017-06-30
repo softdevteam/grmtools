@@ -32,7 +32,7 @@
 
 use std::convert::TryInto;
 
-use cfgrammar::{NTIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateTable, StIdx};
@@ -83,10 +83,14 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
     // it's easiest to split the parse and parse tree stack into two.
     let mut pstack = vec![StIdx::from(0)]; // Parse stack
     let mut tstack: Vec<Node<TokId>> = Vec::new(); // Parse tree stack
-    let mut la = lexemes_iter.next().unwrap();
+    let mut la = lexemes_iter.next();
     loop {
         let st = *pstack.last().unwrap();
-        match stable.action(st, Symbol::Term(TIdx::from(la.tok_id().try_into().ok().unwrap()))) {
+        let la_term = match la {
+            Some(t) => Symbol::Term(TIdx::from(t.tok_id().try_into().ok().unwrap())),
+            None => Symbol::Term(TIdx::from(grm.terms_len()))
+        };
+        match stable.action(st, la_term) {
             Some(Action::Reduce(prod_id)) => {
                 let nonterm_idx = grm.prod_to_nonterm(prod_id);
                 let pop_idx = pstack.len() - grm.prod(prod_id).unwrap().len();
@@ -98,12 +102,12 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
                 pstack.push(stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
             },
             Some(Action::Shift(state_id)) => {
-                tstack.push(Node::Term{lexeme: *la});
-                la = lexemes_iter.next().unwrap();
+                tstack.push(Node::Term{lexeme: *la.unwrap()});
+                la = lexemes_iter.next();
                 pstack.push(state_id);
             },
             Some(Action::Accept) => {
-                debug_assert_eq!(TIdx::from(la.tok_id().try_into().ok().unwrap()), grm.eof_term_idx());
+                debug_assert_eq!(la_term, Symbol::Term(TIdx::from(grm.terms_len())));
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
@@ -116,9 +120,9 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
+    use std::convert::TryFrom;
     use cfgrammar::yacc::{yacc_grm, YaccKind};
-    use lrlex::{build_lex, Lexeme};
+    use lrlex::build_lex;
     use lrtable::{Minimiser, yacc_to_statetable};
     use super::*;
 
@@ -126,13 +130,11 @@ mod test {
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
         let stable = yacc_to_statetable(&grm, Minimiser::Pager).unwrap();
         let mut lexerdef = build_lex(lexs).unwrap();
-        let mut rule_ids = HashMap::<&str, usize>::new();
-        for term_idx in grm.iter_term_idxs() {
-            rule_ids.insert(grm.term_name(term_idx).unwrap(), usize::from(term_idx));
-        }
+        let rule_ids = grm.terms_map().iter()
+                                      .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
+                                      .collect();
         lexerdef.set_rule_ids(&rule_ids);
-        let mut lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-        lexemes.push(Lexeme::new(usize::from(grm.eof_term_idx()), input.len(), 0));
+        let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
         let pt = parse(&grm, &stable, &lexemes).unwrap();
         assert_eq!(expected, pt.pp(&grm, &input));
     }
