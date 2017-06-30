@@ -42,28 +42,23 @@ use cfgrammar::yacc::YaccGrammar;
 ///   let grm = yacc_grm(YaccKind::Original, "
 ///     S: A 'b';
 ///     A: 'a'
-///      | ;");
+///      | ;").unwrap();
 ///   let firsts = Firsts::new(&grm);
 /// ```
 /// then the following assertions (and only the following assertions) about the firsts set are
 /// correct:
 /// ```
-///   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("a")));
-///   assert!(firsts.is_set(grm.nonterminal_off("S"), grm.terminal_off("b")));
-///   assert!(firsts.is_set(grm.nonterminal_off("A"), grm.terminal_off("a")));
-///   assert!(firsts.is_epsilon_set(grm.nonterminal_off("A")));
+///   assert!(firsts.is_set(grm.nonterm_off("S"), grm.term_off("a")));
+///   assert!(firsts.is_set(grm.nonterm_off("S"), grm.term_off("b")));
+///   assert!(firsts.is_set(grm.nonterm_off("A"), grm.term_off("a")));
+///   assert!(firsts.is_epsilon_set(grm.nonterm_off("A")));
 /// ```
 #[derive(Debug)]
 pub struct Firsts {
-    // The representation is a contiguous bitfield, of (terms_len * 1) * nonterms_len. Put another
-    // way, each nonterminal has (terms_len + 1) bits, where the bit at position terms_len
-    // represents epsilon. So for the grammar given above, the bitvector would be two sequences of
-    // 3 bits where bits 0, 1, 2 represent terminals a, b, epsilon respectively.
-    //   111101
-    // Where "111" is for the nonterminal S, and 101 for A.
+    // Each production has grm.terms_len() + 1 bits: the bit at position grm.terms_len represents
+    // the EOF terminal.
     prod_firsts: Vec<BitVec>,
-    prod_epsilons: BitVec,
-    terms_len: usize
+    prod_epsilons: BitVec
 }
 
 impl Firsts {
@@ -71,12 +66,11 @@ impl Firsts {
     pub fn new(grm: &YaccGrammar) -> Firsts {
         let mut prod_firsts = Vec::with_capacity(grm.nonterms_len());
         for _ in 0..grm.nonterms_len() {
-            prod_firsts.push(BitVec::from_elem(grm.terms_len(), false));
+            prod_firsts.push(BitVec::from_elem(grm.terms_len() + 1, false));
         }
         let mut firsts = Firsts {
             prod_firsts  : prod_firsts,
             prod_epsilons: BitVec::from_elem(grm.nonterms_len(), false),
-            terms_len   : grm.terms_len()
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -112,9 +106,9 @@ impl Firsts {
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
-                                for term_idx in grm.iter_term_idxs() {
-                                    if firsts.is_set(nonterm_i, term_idx)
-                                      && !firsts.set(rul_i, term_idx) {
+                                for term_idx in 0..grm.terms_len() {
+                                    if firsts.is_set(nonterm_i, TIdx::from(term_idx))
+                                      && !firsts.set(rul_i, TIdx::from(term_idx)) {
                                         changed = true;
                                     }
                                 }
@@ -141,7 +135,9 @@ impl Firsts {
                     }
                 }
             }
-            if !changed { return firsts; }
+            if !changed {
+                return firsts;
+            }
         }
     }
 
@@ -182,7 +178,7 @@ mod test {
     use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
 
     fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
-        let nt_i = grm.nonterminal_off(rn);
+        let nt_i = grm.nonterm_off(rn);
         for i in 0 .. grm.terms_len() {
             let n = grm.term_name(i.into()).unwrap();
             match should_be.iter().position(|&x| x == n) {

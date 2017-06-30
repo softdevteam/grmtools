@@ -44,7 +44,7 @@ pub struct StateGraph {
 }
 
 #[cfg(test)]
-use cfgrammar::Grammar;
+use cfgrammar::{Grammar, TIdx};
 #[cfg(test)]
 use cfgrammar::yacc::YaccGrammar;
 
@@ -52,13 +52,18 @@ use cfgrammar::yacc::YaccGrammar;
 pub fn state_exists(grm: &YaccGrammar, is: &Itemset, nt: &str, prod_off: usize, dot: usize, la:
                     Vec<&str>) {
 
-    let ab_prod_off = grm.nonterm_to_prods(grm.nonterminal_off(nt)).unwrap()[prod_off];
+    let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_off(nt)).unwrap()[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot.into())];
-    for i in 0..grm.terms_len() {
+    for i in 0..grm.terms_len() + 1 {
         let bit = ctx[i];
         let mut found = false;
         for t in la.iter() {
-            if grm.terminal_off(t) == i.into() {
+            let off = if t == &"$" {
+                    TIdx::from(grm.terms_len())
+                } else {
+                    grm.term_off(t)
+                };
+            if off == i.into() {
                 if !bit {
                     panic!("bit for terminal {}, dot {} is not set in production {} of {} when it should be",
                            t, dot, prod_off, nt);
