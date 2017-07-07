@@ -32,7 +32,7 @@
 
 use std::convert::TryInto;
 
-use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
+use cfgrammar::{NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateTable, StIdx};
@@ -88,7 +88,7 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
         let st = *pstack.last().unwrap();
         let la_term = match la {
             Some(t) => Symbol::Term(TIdx::from(t.tok_id().try_into().ok().unwrap())),
-            None => Symbol::Term(TIdx::from(grm.terms_len()))
+            None => Symbol::Term(TIdx::from(grm.eof_term_idx()))
         };
         match stable.action(st, la_term) {
             Some(Action::Reduce(prod_id)) => {
@@ -107,7 +107,7 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
                 pstack.push(state_id);
             },
             Some(Action::Accept) => {
-                debug_assert_eq!(la_term, Symbol::Term(TIdx::from(grm.terms_len())));
+                debug_assert_eq!(la_term, Symbol::Term(TIdx::from(grm.eof_term_idx())));
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
