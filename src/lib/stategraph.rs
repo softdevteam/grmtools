@@ -54,12 +54,12 @@ pub fn state_exists(grm: &YaccGrammar, is: &Itemset, nt: &str, prod_off: usize, 
 
     let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_off(nt)).unwrap()[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot.into())];
-    for i in 0..grm.terms_len() + 1 {
+    for i in 0..grm.terms_len() {
         let bit = ctx[i];
         let mut found = false;
         for t in la.iter() {
             let off = if t == &"$" {
-                    TIdx::from(grm.terms_len())
+                    TIdx::from(grm.eof_term_idx())
                 } else {
                     grm.term_off(t)
                 };
