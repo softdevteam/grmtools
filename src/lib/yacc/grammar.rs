@@ -66,12 +66,15 @@ pub struct YaccGrammar {
     nonterms_len: usize,
     /// A mapping from `NTIdx` -> `String`.
     nonterm_names: Vec<String>,
-    /// A mapping from `TIdx` -> `String`.
-    term_names: Vec<String>,
+    /// A mapping from `TIdx` -> `Option<String>`. Every user-specified terminal will have a name,
+    /// but terminals inserted by cfgrammar (e.g. the EOF terminal) won't.
+    term_names: Vec<Option<String>>,
     /// A mapping from `TIdx` -> `Option<Precedence>`
     term_precs: Vec<Option<Precedence>>,
     /// How many terminals does this grammar have?
     terms_len: usize,
+    /// The offset of the EOF terminal.
+    eof_term_idx: TIdx,
     /// How many productions does this grammar have?
     prods_len: usize,
     /// Which production is the sole production of the start rule?
@@ -154,15 +157,20 @@ impl YaccGrammar {
             nonterm_map.insert(v.clone(), NTIdx(i));
         }
 
-        let mut term_names: Vec<String> = Vec::with_capacity(ast.tokens.len() + 1);
+        let mut term_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
         for k in &ast.tokens {
-            term_names.push(k.clone());
+            term_names.push(Some(k.clone()));
             term_precs.push(ast.precs.get(k).cloned());
         }
+        let eof_term_idx = TIdx(term_names.len());
+        term_names.push(None);
+        term_precs.push(None);
         let mut term_map = HashMap::<String, TIdx>::new();
         for (i, v) in term_names.iter().enumerate() {
-            term_map.insert(v.clone(), TIdx(i));
+            if let Some(n) = v.as_ref() {
+               term_map.insert(n.clone(), TIdx(i));
+            }
         }
 
         let mut prods = Vec::new();
@@ -265,6 +273,7 @@ impl YaccGrammar {
             nonterms_len:     nonterm_names.len(),
             nonterm_names,
             terms_len:        term_names.len(),
+            eof_term_idx:     eof_term_idx,
             term_names,
             term_precs,
             prods_len:        prods.len(),
@@ -275,6 +284,11 @@ impl YaccGrammar {
             prod_precs,
             implicit_nonterm: implicit_nonterm.map_or(None, |x| Some(nonterm_map[&x]))
         }
+    }
+
+    /// Return the index of the end terminal.
+    pub fn eof_term_idx(&self) -> TIdx {
+        self.eof_term_idx
     }
 
     /// Return the productions for nonterminal `i` or `None` if it doesn't exist.
@@ -309,7 +323,7 @@ impl YaccGrammar {
 
     /// Return the name of terminal `i` or `None` if it doesn't exist.
     pub fn term_name(&self, i: TIdx) -> Option<&str> {
-        self.term_names.get(usize::from(i)).map_or(None, |x| Some(x))
+        self.term_names.get(usize::from(i)).map_or(None, |x| x.as_ref().map_or(None, |y| Some(&y)))
     }
 
     /// Return the precedence of terminal `i` or `None` if it doesn't exist.
@@ -322,7 +336,9 @@ impl YaccGrammar {
     pub fn terms_map(&self) -> HashMap<&str, TIdx> {
         let mut m = HashMap::with_capacity(self.terms_len - 1);
         for i in 0..self.terms_len {
-            m.insert(&*self.term_names[i], TIdx(i));
+            if let Some(n) = self.term_names[i].as_ref() {
+                m.insert(&**n, TIdx(i));
+            }
         }
         m
     }
@@ -366,7 +382,7 @@ impl YaccGrammar {
 
     /// Map a terminal name to the corresponding terminal offset.
     pub fn term_off(&self, n: &str) -> TIdx {
-        TIdx(self.term_names.iter().position(|x| x == n).unwrap())
+        TIdx(self.term_names.iter().position(|x| x.as_ref().map_or(false, |x| x == n)).unwrap())
     }
 
     /// Map a production number to a rule name.
@@ -440,6 +456,7 @@ mod test {
         grm.nonterm_off("R");
         grm.nonterm_off("S");
         grm.term_off("T");
+        assert!(grm.term_name(grm.eof_term_idx()).is_none());
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("^"))][0]).unwrap();
