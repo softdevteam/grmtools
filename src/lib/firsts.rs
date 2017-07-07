@@ -55,8 +55,6 @@ use cfgrammar::yacc::YaccGrammar;
 /// ```
 #[derive(Debug)]
 pub struct Firsts {
-    // Each production has grm.terms_len() + 1 bits: the bit at position grm.terms_len represents
-    // the EOF terminal.
     prod_firsts: Vec<BitVec>,
     prod_epsilons: BitVec
 }
@@ -66,7 +64,7 @@ impl Firsts {
     pub fn new(grm: &YaccGrammar) -> Firsts {
         let mut prod_firsts = Vec::with_capacity(grm.nonterms_len());
         for _ in 0..grm.nonterms_len() {
-            prod_firsts.push(BitVec::from_elem(grm.terms_len() + 1, false));
+            prod_firsts.push(BitVec::from_elem(grm.terms_len(), false));
         }
         let mut firsts = Firsts {
             prod_firsts  : prod_firsts,
@@ -180,7 +178,10 @@ mod test {
     fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
         let nt_i = grm.nonterm_off(rn);
         for i in 0 .. grm.terms_len() {
-            let n = grm.term_name(i.into()).unwrap();
+            let n = match grm.term_name(i.into()) {
+                Some(n) => n,
+                None => &"<no name>"
+            };
             match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
                     if !firsts.is_set(nt_i, i.into()) {
