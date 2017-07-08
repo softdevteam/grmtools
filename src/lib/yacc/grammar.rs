@@ -353,6 +353,20 @@ impl YaccGrammar {
     pub fn implicit_nonterm(&self) -> Option<NTIdx> {
         self.implicit_nonterm
     }
+
+    /// Return the index of the nonterminal named `n` or `None` if it doesn't exist.
+    pub fn nonterm_idx(&self, n: &str) -> Option<NTIdx> {
+        self.nonterm_names.iter()
+                          .position(|x| x == n)
+                          .map(|x| NTIdx(x))
+    }
+
+    /// Return the index of the terminal named `n` or `None` if it doesn't exist.
+    pub fn term_idx(&self, n: &str) -> Option<TIdx> {
+        self.term_names.iter()
+                       .position(|x| x.as_ref().map_or(false, |x| x == n))
+                       .map(|x| TIdx(x))
+    }
 }
 
 impl Grammar for YaccGrammar {
@@ -371,23 +385,6 @@ impl Grammar for YaccGrammar {
     /// Return the index of the start rule.
     fn start_rule_idx(&self) -> NTIdx {
         self.prod_to_nonterm(self.start_prod)
-    }
-}
-
-impl YaccGrammar {
-    /// Map a nonterminal name to the corresponding rule offset.
-    pub fn nonterm_off(&self, n: &str) -> NTIdx {
-        NTIdx(self.nonterm_names.iter().position(|x| x == n).unwrap())
-    }
-
-    /// Map a terminal name to the corresponding terminal offset.
-    pub fn term_off(&self, n: &str) -> TIdx {
-        TIdx(self.term_names.iter().position(|x| x.as_ref().map_or(false, |x| x == n)).unwrap())
-    }
-
-    /// Map a production number to a rule name.
-    pub fn prod_to_term_name(&self, i: PIdx) -> &str {
-        &self.nonterm_names[usize::from(self.prod_to_nonterm(i))]
     }
 }
 
@@ -432,15 +429,15 @@ mod test {
 
         assert_eq!(grm.start_prod, PIdx(0));
         assert_eq!(grm.implicit_nonterm(), None);
-        grm.nonterm_off("^");
-        grm.nonterm_off("R");
-        grm.term_off("T");
+        grm.nonterm_idx("^").unwrap();
+        grm.nonterm_idx("R").unwrap();
+        grm.term_idx("T").unwrap();
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)]]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_off("R"))]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("R"))][0]).unwrap();
-        assert_eq!(*r_prod, [Symbol::Term(grm.term_off("T"))]);
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]).unwrap();
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]).unwrap();
+        assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
 
         assert_eq!(grm.terms_map(), [("T", TIdx(0))].iter().cloned().collect::<HashMap<&str, TIdx>>());
@@ -452,21 +449,21 @@ mod test {
         let grm = yacc_grm(YaccKind::Original,
                            &"%start R %token T %% R : S; S: 'T';".to_string()).unwrap();
 
-        grm.nonterm_off("^");
-        grm.nonterm_off("R");
-        grm.nonterm_off("S");
-        grm.term_off("T");
+        grm.nonterm_idx("^").unwrap();
+        grm.nonterm_idx("R").unwrap();
+        grm.nonterm_idx("S").unwrap();
+        grm.term_idx("T").unwrap();
         assert!(grm.term_name(grm.eof_term_idx()).is_none());
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_off("R"))]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("R"))][0]).unwrap();
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]).unwrap();
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]).unwrap();
         assert_eq!(r_prod.len(), 1);
-        assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterm_off("S")));
-        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("S"))][0]).unwrap();
+        assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
+        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("S").unwrap())][0]).unwrap();
         assert_eq!(s_prod.len(), 1);
-        assert_eq!(s_prod[0], Symbol::Term(grm.term_off("T")));
+        assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T").unwrap()));
     }
 
     #[test]
@@ -474,24 +471,24 @@ mod test {
         let grm = yacc_grm(YaccKind::Original,
                            &"%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';".to_string()).unwrap();
 
-        grm.nonterm_off("^");
-        grm.nonterm_off("R");
-        grm.nonterm_off("S");
-        grm.term_off("T1");
-        grm.term_off("T2");
+        grm.nonterm_idx("^").unwrap();
+        grm.nonterm_idx("R").unwrap();
+        grm.nonterm_idx("S").unwrap();
+        grm.term_idx("T1").unwrap();
+        grm.term_idx("T2").unwrap();
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1), NTIdx(2)]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("^"))][0]).unwrap();
-        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_off("R"))]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("R"))][0]).unwrap();
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]).unwrap();
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]).unwrap();
         assert_eq!(r_prod.len(), 3);
-        assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterm_off("S")));
-        assert_eq!(r_prod[1], Symbol::Term(grm.term_off("T1")));
-        assert_eq!(r_prod[2], Symbol::Nonterm(grm.nonterm_off("S")));
-        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_off("S"))][0]).unwrap();
+        assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
+        assert_eq!(r_prod[1], Symbol::Term(grm.term_idx("T1").unwrap()));
+        assert_eq!(r_prod[2], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
+        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("S").unwrap())][0]).unwrap();
         assert_eq!(s_prod.len(), 1);
-        assert_eq!(s_prod[0], Symbol::Term(grm.term_off("T2")));
+        assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T2").unwrap()));
     }
 
 
@@ -583,39 +580,39 @@ mod test {
 
         assert_eq!(grm.prod_precs.len(), 9);
 
-        let itfs_rule_idx = grm.nonterm_off(IMPLICIT_START_NONTERM);
+        let itfs_rule_idx = grm.nonterm_idx(IMPLICIT_START_NONTERM).unwrap();
         assert_eq!(grm.rules_prods[usize::from(itfs_rule_idx)].len(), 1);
 
         let itfs_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(itfs_rule_idx)][0])];
         assert_eq!(itfs_prod1.len(), 2);
-        assert_eq!(itfs_prod1[0], Symbol::Nonterm(grm.nonterm_off(IMPLICIT_NONTERM)));
-        assert_eq!(itfs_prod1[1], Symbol::Nonterm(grm.nonterm_off(&"S")));
+        assert_eq!(itfs_prod1[0], Symbol::Nonterm(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()));
+        assert_eq!(itfs_prod1[1], Symbol::Nonterm(grm.nonterm_idx(&"S").unwrap()));
 
-        let s_rule_idx = grm.nonterm_off(&"S");
+        let s_rule_idx = grm.nonterm_idx(&"S").unwrap();
         assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
 
         let s_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][0])];
         assert_eq!(s_prod1.len(), 2);
-        assert_eq!(s_prod1[0], Symbol::Term(grm.term_off("a")));
-        assert_eq!(s_prod1[1], Symbol::Nonterm(grm.nonterm_off(IMPLICIT_NONTERM)));
+        assert_eq!(s_prod1[0], Symbol::Term(grm.term_idx("a").unwrap()));
+        assert_eq!(s_prod1[1], Symbol::Nonterm(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()));
 
         let s_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][1])];
         assert_eq!(s_prod2.len(), 1);
-        assert_eq!(s_prod2[0], Symbol::Nonterm(grm.nonterm_off("T")));
+        assert_eq!(s_prod2[0], Symbol::Nonterm(grm.nonterm_idx("T").unwrap()));
 
-        let t_rule_idx = grm.nonterm_off(&"T");
+        let t_rule_idx = grm.nonterm_idx(&"T").unwrap();
         assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
 
         let t_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][0])];
         assert_eq!(t_prod1.len(), 2);
-        assert_eq!(t_prod1[0], Symbol::Term(grm.term_off("c")));
-        assert_eq!(t_prod1[1], Symbol::Nonterm(grm.nonterm_off(IMPLICIT_NONTERM)));
+        assert_eq!(t_prod1[0], Symbol::Term(grm.term_idx("c").unwrap()));
+        assert_eq!(t_prod1[1], Symbol::Nonterm(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()));
 
         let t_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][1])];
         assert_eq!(t_prod2.len(), 0);
 
-        assert_eq!(Some(grm.nonterm_off(IMPLICIT_NONTERM)), grm.implicit_nonterm());
-        let i_rule_idx = grm.nonterm_off(IMPLICIT_NONTERM);
+        assert_eq!(Some(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()), grm.implicit_nonterm());
+        let i_rule_idx = grm.nonterm_idx(IMPLICIT_NONTERM).unwrap();
         assert_eq!(grm.rules_prods[usize::from(i_rule_idx)].len(), 3);
         let i_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][0])];
         let i_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][1])];
@@ -623,10 +620,10 @@ mod test {
         assert_eq!(i_prod2.len(), 1);
         // We don't know what order the implicit nonterminal will contain our tokens in,
         // hence the awkward dance below.
-        assert!((i_prod1[0] == Symbol::Term(grm.term_off("ws1"))
-                 && (i_prod2[0] == Symbol::Term(grm.term_off("ws2"))))
-             || (i_prod1[0] == Symbol::Term(grm.term_off("ws2"))
-                 && (i_prod2[0] == Symbol::Term(grm.term_off("ws1")))));
+        assert!((i_prod1[0] == Symbol::Term(grm.term_idx("ws1").unwrap())
+                 && (i_prod2[0] == Symbol::Term(grm.term_idx("ws2").unwrap())))
+             || (i_prod1[0] == Symbol::Term(grm.term_idx("ws2").unwrap())
+                 && (i_prod2[0] == Symbol::Term(grm.term_idx("ws1").unwrap()))));
         let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];
         assert_eq!(i_prod3.len(), 0);
     }
