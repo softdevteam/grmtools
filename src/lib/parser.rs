@@ -30,20 +30,18 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use cfgrammar::{NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateTable, StIdx};
 
+#[derive(Debug)]
 pub enum Node<TokId> {
     Term{lexeme: Lexeme<TokId>},
     Nonterm{nonterm_idx: NTIdx, nodes: Vec<Node<TokId>>}
 }
-
-#[derive(Debug)]
-pub struct ParseError;
 
 impl<TokId: Copy + TryInto<usize>> Node<TokId> {
     /// Return a pretty-printed version of this node.
@@ -73,10 +71,10 @@ impl<TokId: Copy + TryInto<usize>> Node<TokId> {
     }
 }
 
-
 /// Parse the lexemes into a parse tree.
-pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTable, lexemes:
-                                        &Vec<Lexeme<TokId>>) -> Result<Node<TokId>, ParseError>
+pub fn parse<TokId: Copy + TryFrom<usize> + TryInto<usize>>
+            (grm: &YaccGrammar, stable: &StateTable, lexemes: &Vec<Lexeme<TokId>>)
+         -> Result<Node<TokId>, Vec<ParseError<TokId>>>
 {
     let mut lexemes_iter = lexemes.iter();
     // Instead of having a single stack, which we'd then have to invent a new struct / tuple for,
@@ -84,10 +82,14 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
     let mut pstack = vec![StIdx::from(0)]; // Parse stack
     let mut tstack: Vec<Node<TokId>> = Vec::new(); // Parse tree stack
     let mut la = lexemes_iter.next();
+    let mut last_la_end = 0;
     loop {
         let st = *pstack.last().unwrap();
         let la_term = match la {
-            Some(t) => Symbol::Term(TIdx::from(t.tok_id().try_into().ok().unwrap())),
+            Some(t) => {
+                last_la_end = t.start() + t.len();
+                Symbol::Term(TIdx::from(t.tok_id().try_into().ok().unwrap()))
+            }
             None => Symbol::Term(TIdx::from(grm.eof_term_idx()))
         };
         match stable.action(st, la_term) {
@@ -111,32 +113,67 @@ pub fn parse<TokId: Copy + TryInto<usize>>(grm: &YaccGrammar, stable: &StateTabl
                 debug_assert_eq!(tstack.len(), 1);
                 return Ok(tstack.drain(..).nth(0).unwrap());
             },
-            _ => {
-                return Err(ParseError);
+            None => {
+                let err_la = match la {
+                    Some(x) => *x,
+                    None => {
+                        Lexeme::new(TokId::try_from(usize::from(grm.eof_term_idx()))
+                                          .ok()
+                                          .unwrap(),
+                                    last_la_end, 0)
+                    }
+                };
+                return Err(vec![ParseError{state_idx: st, lexeme: err_la}]);
             }
         }
+    }
+}
+
+/// Records a single parse error.
+#[derive(Debug, PartialEq)]
+pub struct ParseError<TokId> {
+    state_idx: StIdx,
+    lexeme: Lexeme<TokId>
+}
+
+impl<TokId> ParseError<TokId> {
+    /// Return the state table index where this error was detected.
+    pub fn state_idx(&self) -> StIdx {
+        self.state_idx
+    }
+
+    /// Return the lexeme where this error was detected.
+    pub fn lexeme(&self) -> &Lexeme<TokId> {
+        &self.lexeme
     }
 }
 
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;
-    use cfgrammar::yacc::{yacc_grm, YaccKind};
-    use lrlex::build_lex;
+    use cfgrammar::yacc::{YaccGrammar, yacc_grm, YaccKind};
+    use lrlex::{build_lex, Lexeme};
     use lrtable::{Minimiser, yacc_to_statetable};
     use super::*;
 
-    fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
+    fn do_parse(lexs: &str, grms: &str, input: &str) -> (YaccGrammar, Result<Node<u16>, Vec<ParseError<u16>>>) {
+        let mut lexerdef = build_lex(lexs).unwrap();
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
         let stable = yacc_to_statetable(&grm, Minimiser::Pager).unwrap();
-        let mut lexerdef = build_lex(lexs).unwrap();
-        let rule_ids = grm.terms_map().iter()
-                                      .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
-                                      .collect();
-        lexerdef.set_rule_ids(&rule_ids);
+        {
+            let rule_ids = grm.terms_map().iter()
+                                          .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
+                                          .collect();
+            lexerdef.set_rule_ids(&rule_ids);
+        }
         let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-        let pt = parse(&grm, &stable, &lexemes).unwrap();
-        assert_eq!(expected, pt.pp(&grm, &input));
+        let pr = parse(&grm, &stable, &lexemes);
+        (grm, pr)
+    }
+
+    fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
+        let (grm, pt) = do_parse(lexs, grms, input);
+        assert_eq!(expected, pt.unwrap().pp(&grm, &input));
     }
 
     #[test]
@@ -229,4 +266,35 @@ Factor : 'INT';";
     INT 4
 ");
     }
+
+    #[test]
+    fn parse_error() {
+        let lexs = "%%
+[(] OPEN_BRACKET
+[)] CLOSE_BRACKET
+[a-zA-Z_][a-zA-Z_0-9]* ID
+";
+        let grms = "%start Call
+%%
+Call: 'ID' 'OPEN_BRACKET' 'CLOSE_BRACKET';";
+
+        check_parse_output(&lexs, &grms, "f()",
+"Call
+ ID f
+ OPEN_BRACKET (
+ CLOSE_BRACKET )
+");
+
+        let (grm, pr) = do_parse(&lexs, &grms, "f(");
+        let errs = pr.unwrap_err();
+        assert_eq!(errs.len(), 1);
+        let err_tok_id = u16::try_from(usize::from(grm.eof_term_idx())).ok().unwrap();
+        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
+
+        let (grm, pr) = do_parse(&lexs, &grms, "f(f(");
+        let errs = pr.unwrap_err();
+        assert_eq!(errs.len(), 1);
+        let err_tok_id = u16::try_from(usize::from(grm.term_idx("ID").unwrap())).ok().unwrap();
+        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
+     }
 }
