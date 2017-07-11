@@ -207,7 +207,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_off("^")).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap()).unwrap()[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(cls_is.items.len(), 6);
@@ -241,7 +241,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_off("^")).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap()).unwrap()[0], 0.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -250,7 +250,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        is.add(grm.nonterm_to_prods(grm.nonterm_off("F")).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap()).unwrap()[0], 0.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
         state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
@@ -283,7 +283,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_off("^")).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap()).unwrap()[0], 0.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -292,9 +292,9 @@ mod test {
 
         is = Itemset::new(&grm);
         la = BitVec::from_elem(grm.terms_len(), false);
-        la.set(usize::from(grm.term_off("b")), true);
+        la.set(usize::from(grm.term_idx("b").unwrap()), true);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_off("S")).unwrap()[1], 1.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap()).unwrap()[1], 1.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
         state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
@@ -302,8 +302,8 @@ mod test {
 
         is = Itemset::new(&grm);
         la = BitVec::from_elem(grm.terms_len(), false);
-        la.set(usize::from(grm.term_off("a")), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_off("A")).unwrap()[0], 1.into(), &la);
+        la.set(usize::from(grm.term_idx("a").unwrap()), true);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap()).unwrap()[0], 1.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
@@ -317,19 +317,19 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_off("^")).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap()).unwrap()[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);
 
-        let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.nonterm_off("S")));
+        let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
         state_exists(&grm, &goto1, "^", 0, 1, vec!["$"]);
         state_exists(&grm, &goto1, "S", 0, 1, vec!["$", "b"]);
 
         // follow 'b' from start set
-        let goto2 = cls_is.goto(&grm, &Symbol::Term(grm.term_off("b")));
+        let goto2 = cls_is.goto(&grm, &Symbol::Term(grm.term_idx("b").unwrap()));
         state_exists(&grm, &goto2, "S", 1, 1, vec!["$", "b"]);
 
         // continue by following 'a' from last goto, after it's been closed
-        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Term(grm.term_off("a")));
+        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Term(grm.term_idx("a").unwrap()));
         state_exists(&grm, &goto3, "A", 1, 1, vec!["a"]);
         state_exists(&grm, &goto3, "A", 2, 1, vec!["a"]);
     }
