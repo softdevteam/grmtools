@@ -48,10 +48,10 @@ use cfgrammar::yacc::YaccGrammar;
 /// then the following assertions (and only the following assertions) about the firsts set are
 /// correct:
 /// ```
-///   assert!(firsts.is_set(grm.nonterm_off("S"), grm.term_off("a")));
-///   assert!(firsts.is_set(grm.nonterm_off("S"), grm.term_off("b")));
-///   assert!(firsts.is_set(grm.nonterm_off("A"), grm.term_off("a")));
-///   assert!(firsts.is_epsilon_set(grm.nonterm_off("A")));
+///   assert!(firsts.is_set(grm.nonterm_idx("S").unwrap(), grm.term_idx("a").unwrap()));
+///   assert!(firsts.is_set(grm.nonterm_idx("S").unwrap(), grm.term_idx("b").unwrap()));
+///   assert!(firsts.is_set(grm.nonterm_idx("A").unwrap(), grm.term_idx("a").unwrap()));
+///   assert!(firsts.is_epsilon_set(grm.nonterm_idx("A").unwrap()));
 /// ```
 #[derive(Debug)]
 pub struct Firsts {
@@ -176,7 +176,7 @@ mod test {
     use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
 
     fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
-        let nt_i = grm.nonterm_off(rn);
+        let nt_i = grm.nonterm_idx(rn).unwrap();
         for i in 0 .. grm.terms_len() {
             let n = match grm.term_name(i.into()) {
                 Some(n) => n,
