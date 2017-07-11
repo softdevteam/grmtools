@@ -168,9 +168,36 @@ impl StateTable {
         self.actions.get(&(state_idx, sym)).map_or(None, |x| Some(*x))
     }
 
+    /// Return an iterator over the actions of `state_idx`.
+    pub fn state_actions(&self, state_idx: StIdx) -> impl Iterator<Item=Symbol> {
+        let symbols = self.actions.keys()
+                                  .filter(|& &(x, _)| x == state_idx)
+                                  .map(|&(_, x)| x)
+                                  .collect();
+        StateActionIterator{symbols, i: 0}
+    }
+
     /// Return the goto state for `state_idx` and `nonterm_idx`, or None if there isn't any.
     pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
         self.gotos.get(&(state_idx, nonterm_idx)).map_or(None, |x| Some(*x))
+    }
+}
+
+struct StateActionIterator {
+    symbols: Vec<Symbol>,
+    i: usize
+}
+
+impl Iterator for StateActionIterator {
+    type Item = Symbol;
+
+    fn next(&mut self) -> Option<Symbol> {
+        if self.i == self.symbols.len() {
+            return None;
+        }
+        let j = self.i;
+        self.i = j + 1;
+        self.symbols.get(j).cloned()
     }
 }
 
@@ -221,6 +248,7 @@ fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<(StIdx, Symbol),
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashSet;
     use StIdx;
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
     use cfgrammar::{Symbol, TIdx};
@@ -274,6 +302,12 @@ mod test {
         assert_reduce(s7, grm.eof_term_idx(), "Expr", 0);
         assert_reduce(s8, grm.term_idx("-").unwrap(), "Term", 0);
         assert_reduce(s8, grm.eof_term_idx(), "Term", 0);
+
+        let mut s4_actions = HashSet::new();
+        s4_actions.extend(&[Symbol::Term(grm.term_idx("-").unwrap()),
+                           Symbol::Term(grm.term_idx("*").unwrap()),
+                           Symbol::Term(grm.eof_term_idx())]);
+        assert_eq!(st.state_actions(s4).collect::<HashSet<Symbol>>(), s4_actions);
 
         // Gotos
         assert_eq!(st.gotos.len(), 8);
