@@ -38,33 +38,50 @@ use itemset::Itemset;
 
 #[derive(Debug)]
 pub struct StateGraph {
-    /// A vector of states
-    states: Vec<Itemset>,
+    /// A vector of `(core_states, closed_states)` tuples.
+    states: Vec<(Itemset, Itemset)>,
     /// For each state in `states`, edges is a hashmap from symbols to state offsets.
     edges: Vec<HashMap<Symbol, StIdx>>
 }
 
 impl StateGraph {
-    pub(crate) fn new(states: Vec<Itemset>, edges: Vec<HashMap<Symbol, StIdx>>) -> StateGraph {
+    pub(crate) fn new(states: Vec<(Itemset, Itemset)>, edges: Vec<HashMap<Symbol, StIdx>>)
+                   -> StateGraph {
         StateGraph{states, edges}
     }
 
-    /// Return the itemset for state `st_idx` or `None` if it doesn't exist.
-    pub fn state(&self, st_idx: StIdx) -> Option<&Itemset> {
-        self.states.get(usize::from(st_idx))
+    /// Return the itemset for closed state `st_idx` or `None` if it doesn't exist.
+    pub fn closed_state(&self, st_idx: StIdx) -> Option<&Itemset> {
+        self.states.get(usize::from(st_idx)).map(|x| &x.1)
     }
 
-    /// Return an iterator over all states in this `StateGraph`.
-    pub fn iter_states<'a>(&'a self) -> impl Iterator<Item=&Itemset> + 'a {
-        self.states.iter()
+    /// Return an iterator over all closed states in this `StateGraph`.
+    pub fn iter_closed_states<'a>(&'a self) -> impl Iterator<Item=&Itemset> + 'a {
+        self.states.iter().map(|x| &x.1)
     }
 
-    /// How many items does this `StateGraph` contain?
-    pub fn all_items_len(&self) -> usize {
-        self.states.iter().fold(0, |a, x| a + x.items.len())
+    /// How many closed items does this `StateGraph` contain?
+    pub fn all_closed_items_len(&self) -> usize {
+        self.states.iter().fold(0, |a, x| a + x.1.items.len())
     }
 
-    /// How many states does this `StateGraph` contain?
+    /// Return the itemset for core state `st_idx` or `None` if it doesn't exist.
+    pub fn core_state(&self, st_idx: StIdx) -> Option<&Itemset> {
+        self.states.get(usize::from(st_idx)).map(|x| &x.0)
+    }
+
+    /// Return an iterator over all core states in this `StateGraph`.
+    pub fn iter_core_states<'a>(&'a self) -> impl Iterator<Item=&Itemset> + 'a {
+        self.states.iter().map(|x| &x.0)
+    }
+
+    /// How many core items does this `StateGraph` contain?
+    pub fn all_core_items_len(&self) -> usize {
+        self.states.iter().fold(0, |a, x| a + x.0.items.len())
+    }
+
+    /// How many states does this `StateGraph` contain? NB: By definition the `StateGraph` contains
+    /// the same number of core and closed states.
     pub fn all_states_len(&self) -> usize {
         self.states.len()
     }
@@ -120,5 +137,41 @@ pub fn state_exists(grm: &YaccGrammar, is: &Itemset, nt: &str, prod_off: usize, 
             panic!("bit for terminal {}, dot {} is set in production {} of {} when it shouldn't be",
                    grm.term_name(i.into()).unwrap(), dot, prod_off, nt);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use cfgrammar::{Symbol};
+    use cfgrammar::yacc::{yacc_grm, YaccKind};
+    use StIdx;
+    use pager::pager_stategraph;
+
+    #[test]
+    fn test_statetable_core() {
+        // Taken from p13 of https://link.springer.com/article/10.1007/s00236-010-0115-6
+        let grm = yacc_grm(YaccKind::Original, &"
+            %start A
+            %%
+            A: 'OPEN_BRACKET' A 'CLOSE_BRACKET'
+             | 'a'
+             | 'b';
+          ").unwrap();
+        let sg = pager_stategraph(&grm);
+        assert_eq!(sg.all_states_len(), 7);
+        assert_eq!(sg.all_core_items_len(), 7);
+        assert_eq!(sg.all_edges_len(), 9);
+
+        // This follows the (not particularly logical) ordering of state numbers in the paper.
+        let s0 = StIdx(0);
+        sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap(); // s1
+        let s2 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        let s3 = sg.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s5 = sg.edge(s0, Symbol::Term(grm.term_idx("OPEN_BRACKET").unwrap())).unwrap();
+        assert_eq!(s2, sg.edge(s5, Symbol::Term(grm.term_idx("a").unwrap())).unwrap());
+        assert_eq!(s3, sg.edge(s5, Symbol::Term(grm.term_idx("b").unwrap())).unwrap());
+        assert_eq!(s5, sg.edge(s5, Symbol::Term(grm.term_idx("OPEN_BRACKET").unwrap())).unwrap());
+        let s4 = sg.edge(s5, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
+        sg.edge(s4, Symbol::Term(grm.term_idx("CLOSE_BRACKET").unwrap())).unwrap(); // s6
     }
 }

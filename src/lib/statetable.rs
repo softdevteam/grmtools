@@ -90,7 +90,7 @@ impl StateTable {
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
 
-        for (state_i, state) in sg.iter_states().enumerate().map(|(x, y)| (StIdx(x), y)) {
+        for (state_i, state) in sg.iter_closed_states().enumerate().map(|(x, y)| (StIdx(x), y)) {
             // Populate reduce and accepts
             for (&(prod_i, dot), ctx) in &state.items {
                 if dot < grm.prod(prod_i).unwrap().len().into() {
