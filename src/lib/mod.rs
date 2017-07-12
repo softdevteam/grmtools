@@ -43,6 +43,7 @@ mod stategraph;
 pub mod statetable;
 
 use cfgrammar::yacc::YaccGrammar;
+pub use stategraph::StateGraph;
 pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
 macro_attr! {
@@ -55,12 +56,12 @@ pub enum Minimiser {
     Pager
 }
 
-pub fn yacc_to_statetable(grm: &YaccGrammar, m: Minimiser) -> Result<StateTable, StateTableError> {
-    let st = match m {
+pub fn from_yacc(grm: &YaccGrammar, m: Minimiser) -> Result<(StateGraph, StateTable), StateTableError> {
+    match m {
         Minimiser::Pager => {
             let sg = pager::pager_stategraph(grm);
-            try!(StateTable::new(grm, &sg))
+            let st = try!(StateTable::new(grm, &sg));
+            Ok((sg, st))
         }
-    };
-    Ok(st)
+    }
 }
