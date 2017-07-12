@@ -36,11 +36,55 @@ use StIdx;
 use cfgrammar::Symbol;
 use itemset::Itemset;
 
+#[derive(Debug)]
 pub struct StateGraph {
     /// A vector of states
-    pub states: Vec<Itemset>,
+    states: Vec<Itemset>,
     /// For each state in `states`, edges is a hashmap from symbols to state offsets.
-    pub edges: Vec<HashMap<Symbol, StIdx>>
+    edges: Vec<HashMap<Symbol, StIdx>>
+}
+
+impl StateGraph {
+    pub(crate) fn new(states: Vec<Itemset>, edges: Vec<HashMap<Symbol, StIdx>>) -> StateGraph {
+        StateGraph{states, edges}
+    }
+
+    /// Return the itemset for state `st_idx` or `None` if it doesn't exist.
+    pub fn state(&self, st_idx: StIdx) -> Option<&Itemset> {
+        self.states.get(usize::from(st_idx))
+    }
+
+    /// Return an iterator over all states in this `StateGraph`.
+    pub fn iter_states<'a>(&'a self) -> impl Iterator<Item=&Itemset> + 'a {
+        self.states.iter()
+    }
+
+    /// How many items does this `StateGraph` contain?
+    pub fn all_items_len(&self) -> usize {
+        self.states.iter().fold(0, |a, x| a + x.items.len())
+    }
+
+    /// How many states does this `StateGraph` contain?
+    pub fn all_states_len(&self) -> usize {
+        self.states.len()
+    }
+
+    /// Return the state pointed to by `sym` from `st_idx` or `None` otherwise.
+    pub fn edge(&self, st_idx: StIdx, sym: Symbol) -> Option<StIdx> {
+        self.edges.get(usize::from(st_idx))
+                  .and_then(|x| x.get(&sym))
+                  .cloned()
+    }
+
+    /// Return the edges for state `st_idx` or `None` if it doesn't exist.
+    pub fn edges(&self, st_idx: StIdx) -> Option<&HashMap<Symbol, StIdx>> {
+        self.edges.get(usize::from(st_idx))
+    }
+
+    /// How many edges does this `StateGraph` contain?
+    pub fn all_edges_len(&self) -> usize {
+        self.edges.iter().fold(0, |a, x| a + x.len())
+    }
 }
 
 #[cfg(test)]
