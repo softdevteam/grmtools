@@ -48,7 +48,7 @@ extern crate lrlex;
 use lrlex::build_lex;
 
 extern crate lrtable;
-use lrtable::{Minimiser, yacc_to_statetable};
+use lrtable::{Minimiser, from_yacc};
 
 extern crate lrpar;
 use lrpar::parser::parse;
@@ -128,7 +128,7 @@ fn main() {
             process::exit(1);
         }
     };
-    let stable = match yacc_to_statetable(&grm, Minimiser::Pager) {
+    let (_, stable) = match from_yacc(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();

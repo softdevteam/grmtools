@@ -38,7 +38,7 @@ use lrlex::Lexeme;
 use lrtable::{Action, StateTable, StIdx};
 
 #[derive(Debug)]
-pub enum Node<TokId> {
+pub enum Node<TokId: Copy> {
     Term{lexeme: Lexeme<TokId>},
     Nonterm{nonterm_idx: NTIdx, nodes: Vec<Node<TokId>>}
 }
@@ -131,12 +131,12 @@ pub fn parse<TokId: Copy + TryFrom<usize> + TryInto<usize>>
 
 /// Records a single parse error.
 #[derive(Debug, PartialEq)]
-pub struct ParseError<TokId> {
+pub struct ParseError<TokId: Copy> {
     state_idx: StIdx,
     lexeme: Lexeme<TokId>
 }
 
-impl<TokId> ParseError<TokId> {
+impl<TokId: Copy> ParseError<TokId> {
     /// Return the state table index where this error was detected.
     pub fn state_idx(&self) -> StIdx {
         self.state_idx
@@ -153,13 +153,13 @@ mod test {
     use std::convert::TryFrom;
     use cfgrammar::yacc::{YaccGrammar, yacc_grm, YaccKind};
     use lrlex::{build_lex, Lexeme};
-    use lrtable::{Minimiser, yacc_to_statetable};
+    use lrtable::{Minimiser, from_yacc};
     use super::*;
 
     fn do_parse(lexs: &str, grms: &str, input: &str) -> (YaccGrammar, Result<Node<u16>, Vec<ParseError<u16>>>) {
         let mut lexerdef = build_lex(lexs).unwrap();
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
-        let stable = yacc_to_statetable(&grm, Minimiser::Pager).unwrap();
+        let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         {
             let rule_ids = grm.terms_map().iter()
                                           .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
