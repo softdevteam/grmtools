@@ -71,62 +71,80 @@ impl<TokId: Copy + TryInto<usize>> Node<TokId> {
     }
 }
 
+struct Parser<'a, TokId: Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
+    grm: &'a YaccGrammar,
+    stable: &'a StateTable,
+    lexemes: &'a Vec<Lexeme<TokId>>
+}
+
+impl<'a, TokId: Copy + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
+    fn parse(grm: &YaccGrammar, stable: &StateTable, lexemes: &Vec<Lexeme<TokId>>)
+         -> Result<Node<TokId>, Vec<ParseError<TokId>>>
+    {
+        let psr = Parser{grm, stable, lexemes};
+        let mut pstack = vec![StIdx::from(0)]; // Parse stack
+        let mut tstack: Vec<Node<TokId>> = Vec::new(); // Parse tree stack
+        psr.lr(&mut pstack, &mut tstack)
+    }
+
+    pub fn lr(&self, pstack: &mut Vec<StIdx>, tstack: &mut Vec<Node<TokId>>)
+         -> Result<Node<TokId>, Vec<ParseError<TokId>>>
+    {
+        let mut la_idx = 0;
+        let mut last_la_end = 0;
+        loop {
+            let st = *pstack.last().unwrap();
+            let la_term = match self.lexemes.get(la_idx) {
+                Some(t) => {
+                    last_la_end = t.start() + t.len();
+                    Symbol::Term(TIdx::from(t.tok_id().try_into().ok().unwrap()))
+                }
+                None => Symbol::Term(TIdx::from(self.grm.eof_term_idx()))
+            };
+            match self.stable.action(st, la_term) {
+                Some(Action::Reduce(prod_id)) => {
+                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
+                    let pop_idx = pstack.len() - self.grm.prod(prod_id).unwrap().len();
+                    let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<TokId>>>();
+                    tstack.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
+
+                    pstack.drain(pop_idx..);
+                    let prior = *pstack.last().unwrap();
+                    pstack.push(self.stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
+                },
+                Some(Action::Shift(state_id)) => {
+                    tstack.push(Node::Term{lexeme: self.lexemes[la_idx]});
+                    la_idx += 1;
+                    pstack.push(state_id);
+                },
+                Some(Action::Accept) => {
+                    debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
+                    debug_assert_eq!(tstack.len(), 1);
+                    return Ok(tstack.drain(..).nth(0).unwrap());
+                },
+                None => {
+                    let err_la = match self.lexemes.get(la_idx) {
+                        Some(x) => *x,
+                        None => {
+                            Lexeme::new(TokId::try_from(usize::from(self.grm.eof_term_idx()))
+                                              .ok()
+                                              .unwrap(),
+                                        last_la_end, 0)
+                        }
+                    };
+                    return Err(vec![ParseError{state_idx: st, lexeme: err_la}]);
+                }
+            }
+        }
+    }
+}
+
 /// Parse the lexemes into a parse tree.
 pub fn parse<TokId: Copy + TryFrom<usize> + TryInto<usize>>
             (grm: &YaccGrammar, stable: &StateTable, lexemes: &Vec<Lexeme<TokId>>)
          -> Result<Node<TokId>, Vec<ParseError<TokId>>>
 {
-    let mut lexemes_iter = lexemes.iter();
-    // Instead of having a single stack, which we'd then have to invent a new struct / tuple for,
-    // it's easiest to split the parse and parse tree stack into two.
-    let mut pstack = vec![StIdx::from(0)]; // Parse stack
-    let mut tstack: Vec<Node<TokId>> = Vec::new(); // Parse tree stack
-    let mut la = lexemes_iter.next();
-    let mut last_la_end = 0;
-    loop {
-        let st = *pstack.last().unwrap();
-        let la_term = match la {
-            Some(t) => {
-                last_la_end = t.start() + t.len();
-                Symbol::Term(TIdx::from(t.tok_id().try_into().ok().unwrap()))
-            }
-            None => Symbol::Term(TIdx::from(grm.eof_term_idx()))
-        };
-        match stable.action(st, la_term) {
-            Some(Action::Reduce(prod_id)) => {
-                let nonterm_idx = grm.prod_to_nonterm(prod_id);
-                let pop_idx = pstack.len() - grm.prod(prod_id).unwrap().len();
-                let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<TokId>>>();
-                tstack.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
-
-                pstack.drain(pop_idx..);
-                let prior = *pstack.last().unwrap();
-                pstack.push(stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
-            },
-            Some(Action::Shift(state_id)) => {
-                tstack.push(Node::Term{lexeme: *la.unwrap()});
-                la = lexemes_iter.next();
-                pstack.push(state_id);
-            },
-            Some(Action::Accept) => {
-                debug_assert_eq!(la_term, Symbol::Term(TIdx::from(grm.eof_term_idx())));
-                debug_assert_eq!(tstack.len(), 1);
-                return Ok(tstack.drain(..).nth(0).unwrap());
-            },
-            None => {
-                let err_la = match la {
-                    Some(x) => *x,
-                    None => {
-                        Lexeme::new(TokId::try_from(usize::from(grm.eof_term_idx()))
-                                          .ok()
-                                          .unwrap(),
-                                    last_la_end, 0)
-                    }
-                };
-                return Err(vec![ParseError{state_idx: st, lexeme: err_la}]);
-            }
-        }
-    }
+    Parser::parse(grm, stable, lexemes)
 }
 
 /// Records a single parse error.
