@@ -77,18 +77,27 @@ struct Parser<'a, TokId: Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a
     lexemes: &'a Vec<Lexeme<TokId>>
 }
 
+type PStack = Vec<StIdx>;
+type TStack<TokId> = Vec<Node<TokId>>;
+type Errors<TokId> = Vec<ParseError<TokId>>;
+
 impl<'a, TokId: Copy + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
     fn parse(grm: &YaccGrammar, stable: &StateTable, lexemes: &Vec<Lexeme<TokId>>)
          -> Result<Node<TokId>, Vec<ParseError<TokId>>>
     {
-        let psr = Parser{grm, stable, lexemes};
+        let mut psr = Parser{grm, stable, lexemes};
         let mut pstack = vec![StIdx::from(0)]; // Parse stack
         let mut tstack: Vec<Node<TokId>> = Vec::new(); // Parse tree stack
-        psr.lr(&mut pstack, &mut tstack)
+        let mut errors: Vec<ParseError<TokId>> = Vec::new();
+        psr.lr(&mut pstack, &mut tstack, &mut errors);
+        if !errors.is_empty() {
+            Err(errors)
+        } else {
+            Ok(tstack.drain(..).nth(0).unwrap())
+        }
     }
 
-    pub fn lr(&self, pstack: &mut Vec<StIdx>, tstack: &mut Vec<Node<TokId>>)
-         -> Result<Node<TokId>, Vec<ParseError<TokId>>>
+    pub fn lr(&mut self, pstack: &mut PStack, tstack: &mut TStack<TokId>, errors: &mut Errors<TokId>)
     {
         let mut la_idx = 0;
         let mut last_la_end = 0;
@@ -120,7 +129,7 @@ impl<'a, TokId: Copy + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
                 Some(Action::Accept) => {
                     debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
                     debug_assert_eq!(tstack.len(), 1);
-                    return Ok(tstack.drain(..).nth(0).unwrap());
+                    return;
                 },
                 None => {
                     let err_la = match self.lexemes.get(la_idx) {
@@ -132,7 +141,8 @@ impl<'a, TokId: Copy + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
                                         last_la_end, 0)
                         }
                     };
-                    return Err(vec![ParseError{state_idx: st, lexeme: err_la}]);
+                    errors.push(ParseError{state_idx: st, lexeme: err_la});
+                    return;
                 }
             }
         }
