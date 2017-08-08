@@ -33,11 +33,13 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use linked_hash_map::LinkedHashMap;
+
 use yacc::Precedence;
 
 pub struct GrammarAST {
     pub start: Option<String>,
-    pub rules: HashMap<String, Rule>,
+    pub rules: LinkedHashMap<String, Rule>,
     pub tokens: HashSet<String>,
     pub precs: HashMap<String, Precedence>,
     pub implicit_tokens: Option<HashSet<String>>
@@ -113,7 +115,12 @@ impl GrammarAST {
     pub fn new() -> GrammarAST {
         GrammarAST {
             start:  None,
-            rules:  HashMap::new(),
+            rules:  LinkedHashMap::new(), // Using a LinkedHashMap means that we retain the order
+                                          // of rules as they're found in the input file. However,
+                                          // this library isn't actively maintained, and there are
+                                          // faster ways of maintaining order, so it would be
+                                          // preferable to move to another library when such is
+                                          // available.
             tokens: HashSet::new(),
             precs:  HashMap::new(),
             implicit_tokens: None

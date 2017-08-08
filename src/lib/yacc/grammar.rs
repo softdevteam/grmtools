@@ -149,7 +149,6 @@ impl YaccGrammar {
         for k in ast.rules.keys() {
             nonterm_names.push(k.clone());
         }
-        nonterm_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
         let mut rules_prods:Vec<Vec<PIdx>> = Vec::with_capacity(nonterm_names.len());
         let mut nonterm_map = HashMap::<String, NTIdx>::new();
         for (i, v) in nonterm_names.iter().enumerate() {
