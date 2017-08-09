@@ -33,6 +33,7 @@
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate macro_attr;
 #[macro_use] extern crate newtype_derive;
+extern crate linked_hash_map;
 
 pub mod yacc;
 
