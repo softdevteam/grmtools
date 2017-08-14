@@ -62,7 +62,7 @@ fn usage(prog: &str, msg: &str) -> ! {
     if !msg.is_empty() {
         writeln!(&mut stderr(), "{}", msg).ok();
     }
-    writeln!(&mut stderr(), "Usage: {} <lexer.l> <parser.y> <input file>", leaf).ok();
+    writeln!(&mut stderr(), "Usage: {} [-y <yaccvariant>] <lexer.l> <parser.y> <input file>", leaf).ok();
     process::exit(1);
 }
 
