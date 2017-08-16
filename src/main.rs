@@ -51,7 +51,7 @@ extern crate lrtable;
 use lrtable::{Minimiser, from_yacc};
 
 extern crate lrpar;
-use lrpar::parser::parse;
+use lrpar::parser::{parse, ParseRepair};
 
 fn usage(prog: &str, msg: &str) -> ! {
     let path = Path::new(prog);
@@ -135,7 +135,6 @@ fn main() {
             process::exit(1);
         }
     };
-    println!("reduce/reduce: {}\nshift/reduce: {}", stable.reduce_reduce, stable.shift_reduce);
 
     {
         let rule_ids = grm.terms_map().iter()
@@ -166,7 +165,34 @@ fn main() {
     }
 
     let input = read_file(&matches.free[2]);
-    let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-    let pt = parse::<u16>(&grm, &stable, &lexemes).unwrap();
-    println!("{}", pt.pp(&grm, &input));
+    let lexer = lexerdef.lexer(&input);
+    let lexemes = lexer.lexemes().unwrap();
+    match parse::<u16>(&grm, &stable, &lexemes) {
+        Ok(pt) => println!("{}", pt.pp(&grm, &input)),
+        Err(errs) => {
+            for e in errs {
+                let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
+                println!("Error detected at line {} col {}. Amongst the valid repairs are:", line, col);
+                for repair in e.repairs() {
+                    let mut lex_idx = e.lexeme_idx();
+                    let mut out = vec![];
+                    for &r in repair {
+                        if let ParseRepair::Insert{term_idx} = r {
+                            out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap()));
+                        } else {
+                            let l = lexemes[lex_idx];
+                            let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
+                            if let ParseRepair::Delete = r {
+                                out.push(format!("Delete \"{}\"", t));
+                            } else {
+                                out.push(format!("Keep \"{}\"", t));
+                            }
+                            lex_idx += 1;
+                        }
+                    }
+                    println!("  {}", out.join(", "));
+                }
+            }
+        }
+    }
 }
