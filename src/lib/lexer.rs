@@ -217,14 +217,18 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
         if l.start > self.s.len() {
             return Err(());
         }
-        for (i, n) in self.newlines.borrow().iter().enumerate() {
-            if *n > l.start {
-                return Ok((i + 1, *n - l.start));
+
+        let newlines = self.newlines.borrow();
+        if newlines.len() == 0 || l.start < newlines[0] {
+            return Ok((1, l.start + 1));
+        }
+
+        for i in 0..newlines.len() - 1 {
+            if newlines[i + 1] > l.start {
+                return Ok((i + 2, l.start - newlines[i] + 1));
             }
         }
-        let newlines_brw = self.newlines.borrow();
-        let newlines_len = newlines_brw.len();
-        Ok((newlines_len + 1, l.start - newlines_brw[newlines_len - 1] + 1))
+        Ok((newlines.len() + 1, l.start - newlines[newlines.len() - 1] + 1))
     }
 }
 
@@ -337,18 +341,29 @@ if IF
         let src = "%%
 [a-z]+ ID
 [ \\n] ;".to_string();
-        let mut lexer = parse_lex(&src).unwrap();
+        let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0);
-        assert_eq!(lexer.set_rule_ids(&map), (None, None));
+        assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
-        let stream = " a\nb\n  c";
-        let lexer = lexer.lexer(&stream);
+        let lexer = lexerdef.lexer("a b c");
         let lexemes = lexer.lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
+        assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (1, 3));
+
+        let lexer = lexerdef.lexer("a b c\n");
+        let lexemes = lexer.lexemes().unwrap();
+        assert_eq!(lexemes.len(), 3);
+        assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (1, 3));
+
+        let lexer = lexerdef.lexer(" a\nb\n  c d");
+        let lexemes = lexer.lexemes().unwrap();
+        assert_eq!(lexemes.len(), 4);
         assert_eq!(lexer.line_and_col(&lexemes[0]).unwrap(), (1, 2));
-        assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (2, 2));
+        assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (2, 1));
         assert_eq!(lexer.line_and_col(&lexemes[2]).unwrap(), (3, 3));
+        assert_eq!(lexer.line_and_col(&lexemes[3]).unwrap(), (3, 5));
+
         let fake_lexeme = Lexeme{start: 100, len: 1, tok_id: 0};
         if let Ok(_) = lexer.line_and_col(&fake_lexeme) {
             panic!("line_and_col returned Ok(_) when it should have returned Err.");
