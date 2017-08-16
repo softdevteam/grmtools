@@ -33,7 +33,8 @@
 use std::collections::hash_map::HashMap;
 
 use StIdx;
-use cfgrammar::Symbol;
+use cfgrammar::{Symbol, TIdx};
+use cfgrammar::yacc::YaccGrammar;
 use itemset::Itemset;
 
 #[derive(Debug)]
@@ -102,12 +103,96 @@ impl StateGraph {
     pub fn all_edges_len(&self) -> usize {
         self.edges.iter().fold(0, |a, x| a + x.len())
     }
+
+    fn pp(&self, grm: &YaccGrammar, core_states: bool) -> String {
+        fn num_digits(i: usize) -> usize {
+            // In an ideal world, we'd do ((i as f64).log10() as usize) + 1, but we then hit
+            // floating point rounding errors (e.g. 1000.0.log10() == 2.999999999ish, not
+            // 3). So we do the lazy thing, convert the number to a string and do things that way.
+            i.to_string().len()
+        }
+
+        fn fmt_sym(grm: &YaccGrammar, sym: Symbol) -> String {
+            match sym {
+                Symbol::Nonterm(ntidx) => grm.nonterm_name(ntidx).unwrap().to_string(),
+                Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap())
+            }
+        }
+
+        let mut o = String::new();
+        for (st_idx, &(ref core_st, ref closed_st)) in self.states.iter().enumerate() {
+            if st_idx > 0 {
+                o.push_str(&"\n");
+            }
+            {
+                let padding = num_digits(self.all_states_len()) - num_digits(st_idx);
+                o.push_str(&format!("{}:{}", st_idx, " ".repeat(padding)));
+            }
+
+            let st = if core_states {
+                core_st
+            } else {
+                closed_st
+            };
+            for (i, (&(p_idx, s_idx), ref ctx)) in st.items.iter().enumerate() {
+                let padding = if i == 0 {
+                    0
+                } else {
+                    o.push_str("\n "); // Extra space to compensate for ":" printed above
+                    num_digits(self.all_states_len())
+                };
+                o.push_str(&format!("{} [{} ->",
+                                    " ".repeat(padding),
+                                    grm.nonterm_name(grm.prod_to_nonterm(p_idx)).unwrap()));
+                for (is_idx, is_sym) in grm.prod(p_idx).unwrap().iter().enumerate() {
+                    if is_idx == usize::from(s_idx) {
+                        o.push_str(" .");
+                    }
+                    o.push_str(&format!(" {}", fmt_sym(&grm, *is_sym)));
+                }
+                if usize::from(s_idx) == grm.prod(p_idx).unwrap().len() {
+                    o.push_str(" .");
+                }
+                o.push_str(", {");
+                let mut seen_b = false;
+                for (b_idx, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
+                    if seen_b {
+                        o.push_str(", ");
+                    } else {
+                        seen_b = true;
+                    }
+                    let tidx = TIdx::from(b_idx);
+                    if tidx == grm.eof_term_idx() {
+                        o.push_str("'$'");
+                    } else {
+                        o.push_str(&format!("'{}'", grm.term_name(tidx).unwrap()));
+                    }
+                }
+                o.push_str("}]");
+            }
+            for (esym, e_st_idx) in self.edges(StIdx::from(st_idx)).unwrap().iter() {
+                o.push_str(&format!("\n{}{} -> {}",
+                                   " ".repeat(num_digits(self.all_states_len()) + 2),
+                                   fmt_sym(&grm, *esym),
+                                   usize::from(*e_st_idx)));
+            }
+        }
+        o
+    }
+
+    /// Return a pretty printed version of the core states, and all edges.
+    pub fn pp_core_states(&self, grm: &YaccGrammar) -> String {
+        self.pp(grm, true)
+    }
+
+    /// Return a pretty printed version of the closed states, and all edges.
+    pub fn pp_closed_states(&self, grm: &YaccGrammar) -> String {
+        self.pp(grm, false)
+    }
 }
 
 #[cfg(test)]
-use cfgrammar::{Grammar, TIdx};
-#[cfg(test)]
-use cfgrammar::yacc::YaccGrammar;
+use cfgrammar::{Grammar};
 
 #[cfg(test)]
 pub fn state_exists(grm: &YaccGrammar, is: &Itemset, nt: &str, prod_off: usize, dot: usize, la:
