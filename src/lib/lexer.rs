@@ -234,8 +234,8 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
 
 /// A lexeme has a starting position in a string, a length, and a token id. It is a deliberately
 /// small data-structure to large input files to be stored efficiently.
-#[derive(Clone, Copy, Debug)]
-pub struct Lexeme<TokId> {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lexeme<TokId: Copy> {
     start: usize,
     len: u32,
     tok_id: TokId
