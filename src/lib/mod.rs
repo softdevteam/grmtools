@@ -36,4 +36,6 @@ extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrtable;
 
+mod corchuelo;
 pub mod parser;
+pub use parser::ParseRepair;
