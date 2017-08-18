@@ -93,7 +93,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         let mut pstack = vec![StIdx::from(0)];
         let mut tstack: Vec<Node<TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
-        psr.lr(None, 0, None, &mut pstack, &mut tstack, &mut errors);
+        psr.lr(0, &mut pstack, &mut tstack, &mut errors);
         if !errors.is_empty() {
             Err(errors)
         } else {
@@ -110,16 +110,13 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
     /// Note that if `lexeme_prefix` is specified, `la_idx` will still be incremented, and thus
     /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
     /// lexeme at position `la_idx`.
-    pub(crate) fn lr(&self, lexeme_prefix: Option<Lexeme<TokId>>, mut la_idx: usize,
-                     end_la_idx: Option<usize>, pstack: &mut PStack, tstack: &mut TStack<TokId>,
+    pub(crate) fn lr(&self, mut la_idx: usize, pstack: &mut PStack, tstack: &mut TStack<TokId>,
                      errors: &mut Errors<TokId>)
                   -> usize
     {
-        debug_assert!(lexeme_prefix.is_none() || end_la_idx.unwrap() == la_idx + 1);
-
-        while Some(la_idx) != end_la_idx {
+        loop {
             let st = *pstack.last().unwrap();
-            let (la_lexeme, la_term) = self.next_lexeme(lexeme_prefix, la_idx);
+            let (la_lexeme, la_term) = self.next_lexeme(None, la_idx);
 
             match self.stable.action(st, la_term) {
                 Some(Action::Reduce(prod_id)) => {
@@ -143,16 +140,13 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     break;
                 },
                 None => {
-                    if end_la_idx.is_some() {
-                        break;
-                    }
                     let (new_la_idx, repairs) = corchuelo::recover(self, la_idx, pstack, tstack);
+                    let keep_going = repairs.len() != 0;
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
-                                           lexeme: la_lexeme, repairs: repairs.clone()});
-                    if repairs.len() == 0 {
+                                           lexeme: la_lexeme, repairs: repairs});
+                    if !keep_going {
                         break;
                     }
-
                     la_idx = new_la_idx;
                 }
             }
