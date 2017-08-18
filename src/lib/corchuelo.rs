@@ -206,14 +206,16 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
     let (mut pstack_cactus, mut tstack_cactus, new_la_idx, _) = finished.drain(..).nth(0).unwrap();
     debug_assert_eq!(in_pstack.len(), 0);
     while !pstack_cactus.is_empty() {
-        in_pstack.push(*pstack_cactus.val().unwrap());
-        pstack_cactus = pstack_cactus.parent().unwrap();
+        let p = pstack_cactus.parent().unwrap();
+        in_pstack.push(pstack_cactus.take_or_clone_val().unwrap());
+        pstack_cactus = p;
     }
     in_pstack.reverse();
     debug_assert_eq!(in_tstack.len(), 0);
     while !tstack_cactus.is_empty() {
-        in_tstack.push(tstack_cactus.val().unwrap().clone());
-        tstack_cactus = tstack_cactus.parent().unwrap();
+        let p = tstack_cactus.parent().unwrap();
+        in_tstack.push(tstack_cactus.take_or_clone_val().unwrap());
+        tstack_cactus = p;
     }
     in_tstack.reverse();
 
@@ -241,10 +243,11 @@ fn lr_cactus<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
             Some(Action::Reduce(prod_id)) => {
                 let nonterm_idx = parser.grm.prod_to_nonterm(prod_id);
                 let pop_num = parser.grm.prod(prod_id).unwrap().len();
-                let mut nodes = Vec::new();
+                let mut nodes = Vec::with_capacity(pop_num);
                 for _ in 0..pop_num {
-                    nodes.push(tstack.val().unwrap().clone());
-                    tstack = tstack.parent().unwrap();
+                    let p = tstack.parent().unwrap();
+                    nodes.push(tstack.take_or_clone_val().unwrap());
+                    tstack = p;
                 }
                 nodes.reverse();
                 tstack = tstack.child(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
