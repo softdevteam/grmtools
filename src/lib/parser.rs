@@ -146,21 +146,14 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     if end_la_idx.is_some() {
                         break;
                     }
-                    let recovery = corchuelo::recover(self, la_idx, pstack, tstack);
-                    let repairs = recovery.iter()
-                                          .map(|x| &x.3)
-                                          .cloned()
-                                          .collect::<Vec<Vec<ParseRepair>>>();
+                    let (new_la_idx, repairs) = corchuelo::recover(self, la_idx, pstack, tstack);
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
-                                           lexeme: la_lexeme, repairs});
-                    if recovery.len() == 0 {
+                                           lexeme: la_lexeme, repairs: repairs.clone()});
+                    if repairs.len() == 0 {
                         break;
                     }
-                    pstack.clear();
-                    pstack.extend_from_slice(&recovery[0].0);
-                    tstack.clear();
-                    tstack.extend_from_slice(&recovery[0].1);
-                    la_idx = recovery[0].2;
+
+                    la_idx = new_la_idx;
                 }
             }
         }
