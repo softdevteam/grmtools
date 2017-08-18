@@ -71,10 +71,6 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
         let pstack = cur.1;
         let tstack = cur.2;
         let repairs: Cactus<ParseRepair> = cur.3;
-        let sc = cur.4;
-        if finished_score.is_some() && finished_score.unwrap() < sc {
-            continue;
-        }
 
         // Insertion rule (ER1)
         match repairs.val() {
@@ -113,7 +109,9 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                                 debug_assert_eq!(new_la_idx, la_idx + 1);
                                 let n_repairs = repairs.child(ParseRepair::Insert{term_idx});
                                 let sc = score(&n_repairs);
-                                todo.push((la_idx, n_pstack, n_tstack, n_repairs, sc));
+                                if finished_score.is_none() || sc <= finished_score.unwrap() {
+                                    todo.push((la_idx, n_pstack, n_tstack, n_repairs, sc));
+                                }
                             }
                         }
                     }
@@ -133,7 +131,9 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
             if num_deletes <= DELETE_THRESHOLD {
                 let n_repairs = repairs.child(ParseRepair::Delete);
                 let sc = score(&n_repairs);
-                todo.push((la_idx + 1, pstack.clone(), tstack.clone(), n_repairs, sc));
+                if finished_score.is_none() || sc <= finished_score.unwrap() {
+                    todo.push((la_idx + 1, pstack.clone(), tstack.clone(), n_repairs, sc));
+                }
             }
         }
 
@@ -179,15 +179,18 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                 }
 
                 if finisher {
-                    let s = score(&n_repairs);
-                    if finished_score.is_none() || s < finished_score.unwrap() {
-                        finished_score = Some(s);
+                    let sc = score(&n_repairs);
+                    if finished_score.is_none() || sc < finished_score.unwrap() {
+                        finished_score = Some(sc);
                         finished.clear();
+                        todo.retain(|x| score(&x.3) <= sc);
                     }
                     finished.push((n_pstack, n_tstack, new_la_idx, n_repairs));
                 } else if new_la_idx > la_idx {
                     let sc = score(&n_repairs);
-                    todo.push((new_la_idx, n_pstack, n_tstack, n_repairs, sc));
+                    if finished_score.is_none() || sc <= finished_score.unwrap() {
+                        todo.push((new_la_idx, n_pstack, n_tstack, n_repairs, sc));
+                    }
                 }
             }
         }
