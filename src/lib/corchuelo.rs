@@ -47,30 +47,35 @@ const DELETE_THRESHOLD: usize = 3; // N_d in Corchuelo et al.
 
 pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                      (parser: &Parser<TokId>, in_la_idx: usize, in_pstack: &mut Vec<StIdx>,
-                      in_tstack: &mut Vec<Node<TokId>>)
+                      tstack: &mut Vec<Node<TokId>>)
                   -> (usize, Vec<Vec<ParseRepair>>)
 {
     // This function implements the algorithm from "Repairing syntax errors in LR parsers" by
     // Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
+    //
+    // Because we want to create a parse tree even when error recovery has happened, we can be a
+    // bit clever. In our first stage, we try and find repair sequences using a cactus stack to
+    // represent the parse stack, but we don't try and create/alter the parse tree. Once we've
+    // found valid repairs, we select one arbitrarily (as do Corchuelo) and then replay it, this
+    // time turning on parse tree creation/alteration. Thus we only pay the costs of creating the
+    // parse tree for the one parse that we need it. This has a vaguely similar flavour to part of
+    // the ALL(*) algorithm (where, when the LL parser gets to a point of ambiguity, it fires up
+    // non-LL sub-parsers, which then tell the LL parser which path it should take).
 
     let mut cactus_pstack = Cactus::new();
     for st in in_pstack.drain(..) {
         cactus_pstack = cactus_pstack.child(st);
     }
-    let mut cactus_tstack = Cactus::new();
-    for n in in_tstack.drain(..) {
-        cactus_tstack = cactus_tstack.child(n);
-    }
+    let start_cactus_pstack = cactus_pstack.clone();
 
-    let mut todo = vec![(in_la_idx, cactus_pstack, cactus_tstack, Cactus::new(), 0)];
+    let mut todo = vec![(in_la_idx, cactus_pstack, Cactus::new(), 0)];
     let mut finished = vec![];
     let mut finished_score: Option<usize> = None;
     while todo.len() > 0 {
         let cur = todo.remove(0);
         let la_idx = cur.0;
         let pstack = cur.1;
-        let tstack = cur.2;
-        let repairs: Cactus<ParseRepair> = cur.3;
+        let repairs: Cactus<ParseRepair> = cur.2;
 
         // Insertion rule (ER1)
         match repairs.val() {
@@ -102,15 +107,15 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                                                                         .ok()
                                                                         .unwrap(),
                                                          next_lexeme.start(), 0);
-                            let (new_la_idx, n_pstack, n_tstack) =
+                            let (new_la_idx, n_pstack) =
                                 lr_cactus(parser, Some(new_lexeme), la_idx, la_idx + 1,
-                                          pstack.clone(), tstack.clone());
+                                          pstack.clone(), None);
                             if new_la_idx > la_idx {
                                 debug_assert_eq!(new_la_idx, la_idx + 1);
                                 let n_repairs = repairs.child(ParseRepair::Insert{term_idx});
                                 let sc = score(&n_repairs);
                                 if finished_score.is_none() || sc <= finished_score.unwrap() {
-                                    todo.push((la_idx, n_pstack, n_tstack, n_repairs, sc));
+                                    todo.push((la_idx, n_pstack, n_repairs, sc));
                                 }
                             }
                         }
@@ -132,7 +137,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                 let n_repairs = repairs.child(ParseRepair::Delete);
                 let sc = score(&n_repairs);
                 if finished_score.is_none() || sc <= finished_score.unwrap() {
-                    todo.push((la_idx + 1, pstack.clone(), tstack.clone(), n_repairs, sc));
+                    todo.push((la_idx + 1, pstack.clone(), n_repairs, sc));
                 }
             }
         }
@@ -153,8 +158,8 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
         //   (S, I) \rightarrow_{LR*} (S', I')
         //   \wedge (j = N \vee (0 <= j < N \wedge f(q_r, t_{j + 1} \in {accept, error}))
         {
-            let (new_la_idx, n_pstack, n_tstack)
-                = lr_cactus(parser, None, la_idx, la_idx + PARSE_AT_LEAST, pstack.clone(), tstack.clone());
+            let (new_la_idx, n_pstack)
+                = lr_cactus(parser, None, la_idx, la_idx + PARSE_AT_LEAST, pstack.clone(), None);
             if new_la_idx < in_la_idx + PORTION_THRESHOLD {
                 let mut n_repairs = repairs.clone();
                 for _ in la_idx..new_la_idx {
@@ -183,13 +188,13 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                     if finished_score.is_none() || sc < finished_score.unwrap() {
                         finished_score = Some(sc);
                         finished.clear();
-                        todo.retain(|x| score(&x.3) <= sc);
+                        todo.retain(|x| score(&x.2) <= sc);
                     }
-                    finished.push((n_pstack, n_tstack, new_la_idx, n_repairs));
+                    finished.push((n_pstack, new_la_idx, n_repairs));
                 } else if new_la_idx > la_idx {
                     let sc = score(&n_repairs);
                     if finished_score.is_none() || sc <= finished_score.unwrap() {
-                        todo.push((new_la_idx, n_pstack, n_tstack, n_repairs, sc));
+                        todo.push((new_la_idx, n_pstack, n_repairs, sc));
                     }
                 }
             }
@@ -197,29 +202,51 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
     }
 
     let repairs = finished.iter()
-                          .map(|x| { let mut v = x.3.vals().cloned().collect::<Vec<ParseRepair>>();
+                          .map(|x| { let mut v = x.2.vals().cloned().collect::<Vec<ParseRepair>>();
                                      v.reverse();
                                      v
                            })
                           .collect::<Vec<Vec<ParseRepair>>>();
 
-    let (mut pstack_cactus, mut tstack_cactus, new_la_idx, _) = finished.drain(..).nth(0).unwrap();
-    debug_assert_eq!(in_pstack.len(), 0);
-    while !pstack_cactus.is_empty() {
-        let p = pstack_cactus.parent().unwrap();
-        in_pstack.push(pstack_cactus.take_or_clone_val().unwrap());
-        pstack_cactus = p;
-    }
-    in_pstack.reverse();
-    debug_assert_eq!(in_tstack.len(), 0);
-    while !tstack_cactus.is_empty() {
-        let p = tstack_cactus.parent().unwrap();
-        in_tstack.push(tstack_cactus.take_or_clone_val().unwrap());
-        tstack_cactus = p;
-    }
-    in_tstack.reverse();
+    // Arbitrarily select one of the repairs and replay it against the original starting pstack,
+    // this time also creating a parse tree.
 
-    (new_la_idx, repairs)
+    let mut la_idx = in_la_idx;
+    {
+        let mut pstack = start_cactus_pstack;
+        for r in repairs[0].iter() {
+            match *r {
+                ParseRepair::Insert{term_idx} => {
+                    let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
+                    let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
+                                                                .ok()
+                                                                .unwrap(),
+                                                 next_lexeme.start(), 0);
+                    pstack = lr_cactus(parser, Some(new_lexeme), la_idx, la_idx + 1,
+                                       pstack, Some(tstack)).1;
+                },
+                ParseRepair::Delete => {
+                    la_idx += 1;
+                }
+                ParseRepair::Shift => {
+                    let (new_la_idx, n_pstack)
+                        = lr_cactus(parser, None, la_idx, la_idx + PARSE_AT_LEAST, pstack, Some(tstack));
+                    la_idx = new_la_idx;
+                    pstack = n_pstack;
+                }
+            }
+        }
+
+        in_pstack.clear();
+        while !pstack.is_empty() {
+            let p = pstack.parent().unwrap();
+            in_pstack.push(pstack.take_or_clone_val().unwrap());
+            pstack = p;
+        }
+        in_pstack.reverse();
+    }
+
+    (la_idx, repairs)
 }
 
 /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
@@ -231,8 +258,8 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
 /// lexeme at position `la_idx`.
 fn lr_cactus<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
     (parser: &Parser<TokId>, lexeme_prefix: Option<Lexeme<TokId>>, mut la_idx: usize, end_la_idx: usize,
-     mut pstack: Cactus<StIdx>, mut tstack: Cactus<Node<TokId>>)
-  -> (usize, Cactus<StIdx>, Cactus<Node<TokId>>)
+     mut pstack: Cactus<StIdx>, mut tstack: Option<&mut Vec<Node<TokId>>>)
+  -> (usize, Cactus<StIdx>)
 {
     assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
     while la_idx != end_la_idx {
@@ -243,14 +270,11 @@ fn lr_cactus<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
             Some(Action::Reduce(prod_id)) => {
                 let nonterm_idx = parser.grm.prod_to_nonterm(prod_id);
                 let pop_num = parser.grm.prod(prod_id).unwrap().len();
-                let mut nodes = Vec::with_capacity(pop_num);
-                for _ in 0..pop_num {
-                    let p = tstack.parent().unwrap();
-                    nodes.push(tstack.take_or_clone_val().unwrap());
-                    tstack = p;
+                if let Some(ref mut tstack_uw) = tstack {
+                    let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
+                                         .collect::<Vec<Node<TokId>>>();
+                    tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
                 }
-                nodes.reverse();
-                tstack = tstack.child(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
 
                 for _ in 0..pop_num {
                     pstack = pstack.parent().unwrap();
@@ -259,13 +283,17 @@ fn lr_cactus<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
                 pstack = pstack.child(parser.stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
             },
             Some(Action::Shift(state_id)) => {
-                tstack = tstack.child(Node::Term{lexeme: la_lexeme});
+                if let Some(ref mut tstack_uw) = tstack {
+                    tstack_uw.push(Node::Term{lexeme: la_lexeme});
+                }
                 pstack = pstack.child(state_id);
                 la_idx += 1;
             },
             Some(Action::Accept) => {
                 debug_assert_eq!(la_term, Symbol::Term(TIdx::from(parser.grm.eof_term_idx())));
-                debug_assert_eq!(tstack.len(), 1);
+                if let Some(ref mut tstack_uw) = tstack {
+                    debug_assert_eq!(tstack_uw.len(), 1);
+                }
                 break;
             },
             None => {
@@ -273,7 +301,7 @@ fn lr_cactus<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
             }
         }
     }
-    (la_idx, pstack, tstack)
+    (la_idx, pstack)
 }
 
 fn score(repairs: &Cactus<ParseRepair>) -> usize {
@@ -314,7 +342,6 @@ mod test {
             for j in i + 1..repairs.len() {
                 assert_ne!(repairs[i], repairs[j]);
             }
-            println!("{}", pp_repairs(&grm, &repairs[i]));
             expected.iter().find(|x| **x == pp_repairs(&grm, &repairs[i])).unwrap();
         }
     }
