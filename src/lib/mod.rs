@@ -32,6 +32,7 @@
 
 #![feature(try_from)]
 
+extern crate cactus;
 extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrtable;
