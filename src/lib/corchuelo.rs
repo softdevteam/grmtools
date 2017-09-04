@@ -190,7 +190,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                         finished.clear();
                         todo.retain(|x| score(&x.2) <= sc);
                     }
-                    finished.push((n_pstack, new_la_idx, n_repairs));
+                    finished.push(n_repairs);
                 } else if new_la_idx > la_idx {
                     let sc = score(&n_repairs);
                     if finished_score.is_none() || sc <= finished_score.unwrap() {
@@ -202,7 +202,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
     }
 
     let repairs = finished.iter()
-                          .map(|x| { let mut v = x.2.vals().cloned().collect::<Vec<ParseRepair>>();
+                          .map(|x| { let mut v = x.vals().cloned().collect::<Vec<ParseRepair>>();
                                      v.reverse();
                                      v
                            })
