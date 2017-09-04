@@ -330,7 +330,7 @@ mod test {
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>
-                    out.push(format!("Delete"))
+                    out.push(format!("Shift"))
             }
         }
         out.join(", ")
@@ -371,16 +371,16 @@ E : 'N'
         assert_eq!(errs[0].repairs().len(), 3);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\", Delete",
+                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\", Shift",
                             "Insert \"CLOSE_BRACKET\", Delete",
-                            "Insert \"PLUS\", Delete, Insert \"CLOSE_BRACKET\""]);
+                            "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
         let (grm, pr) = do_parse(&lexs, &grms, "n)+n+n+n)");
         let errs = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Delete, Delete, Delete, Delete"]);
+                      &vec!["Delete, Shift, Shift, Shift"]);
         check_repairs(&grm,
                       errs[1].repairs(),
                       &vec!["Delete, Delete, Delete, Delete",
@@ -391,8 +391,8 @@ E : 'N'
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Insert \"N\", Delete, Delete, Delete",
-                            "Delete, Delete, Delete, Delete"]);
+                      &vec!["Insert \"N\", Shift, Shift, Shift",
+                            "Delete, Shift, Shift, Shift"]);
         check_repairs(&grm,
                       errs[1].repairs(),
                       &vec!["Insert \"CLOSE_BRACKET\""]);
