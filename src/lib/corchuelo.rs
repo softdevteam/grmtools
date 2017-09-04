@@ -184,13 +184,16 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                 }
 
                 if finisher {
+                    // We can make Corhuelo's algorithm a little nicer by not adding shifts to the
+                    // end of a repair sequence: they're confusing to the user and they'll be
+                    // handled by the normal parser anyway (and done somewhat faster!).
                     let sc = score(&n_repairs);
                     if finished_score.is_none() || sc < finished_score.unwrap() {
                         finished_score = Some(sc);
                         finished.clear();
                         todo.retain(|x| score(&x.2) <= sc);
                     }
-                    finished.push(n_repairs);
+                    finished.push(repairs);
                 } else if new_la_idx > la_idx {
                     let sc = score(&n_repairs);
                     if finished_score.is_none() || sc <= finished_score.unwrap() {
@@ -372,7 +375,7 @@ E : 'N'
         assert_eq!(errs[0].repairs().len(), 3);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\", Shift",
+                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
                             "Insert \"CLOSE_BRACKET\", Delete",
                             "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
@@ -381,7 +384,7 @@ E : 'N'
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Delete, Shift, Shift, Shift"]);
+                      &vec!["Delete"]);
         check_repairs(&grm,
                       errs[1].repairs(),
                       &vec!["Delete, Delete, Delete, Delete",
@@ -392,8 +395,8 @@ E : 'N'
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Insert \"N\", Shift, Shift, Shift",
-                            "Delete, Shift, Shift, Shift"]);
+                      &vec!["Insert \"N\"",
+                            "Delete"]);
         check_repairs(&grm,
                       errs[1].repairs(),
                       &vec!["Insert \"CLOSE_BRACKET\""]);
