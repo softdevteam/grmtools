@@ -230,7 +230,8 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                 }
                 ParseRepair::Shift => {
                     let (new_la_idx, n_pstack)
-                        = lr_cactus(parser, None, la_idx, la_idx + PARSE_AT_LEAST, pstack, Some(tstack));
+                        = lr_cactus(parser, None, la_idx, la_idx + 1, pstack, Some(tstack));
+                    assert_eq!(new_la_idx, la_idx + 1);
                     la_idx = new_la_idx;
                     pstack = n_pstack;
                 }
