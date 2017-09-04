@@ -161,11 +161,6 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
             let (new_la_idx, n_pstack)
                 = lr_cactus(parser, None, la_idx, la_idx + PARSE_AT_LEAST, pstack.clone(), None);
             if new_la_idx < in_la_idx + PORTION_THRESHOLD {
-                let mut n_repairs = repairs.clone();
-                for _ in la_idx..new_la_idx {
-                    n_repairs = n_repairs.child(ParseRepair::Shift);
-                }
-
                 // A repair is a "finisher" (i.e. can be considered complete and doesn't need to be
                 // added to the todo list) if it's parsed at least N symbols or parsing ends in
                 // an Accept action.
@@ -183,22 +178,28 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                     }
                 }
 
+                // As described, at this point we should add (new_la_idx - la_idx) Shifts to the
+                // repair sequence. However, there's no point in doing this if they're added to a
+                // finisher: Shifts at the end of a repair sequence confuse users and slow down
+                // parsing. We thus only add Shifts if this is a non-finisher.
+
+                let sc = score(&repairs); // Since Shifts don't count to the score, this isn't
+                                          // affected by the presence or absence of finisher Shifts.
                 if finisher {
-                    // We can make Corhuelo's algorithm a little nicer by not adding shifts to the
-                    // end of a repair sequence: they're confusing to the user and they'll be
-                    // handled by the normal parser anyway (and done somewhat faster!).
-                    let sc = score(&n_repairs);
                     if finished_score.is_none() || sc < finished_score.unwrap() {
                         finished_score = Some(sc);
                         finished.clear();
                         todo.retain(|x| score(&x.2) <= sc);
                     }
                     finished.push(repairs);
-                } else if new_la_idx > la_idx {
-                    let sc = score(&n_repairs);
-                    if finished_score.is_none() || sc <= finished_score.unwrap() {
-                        todo.push((new_la_idx, n_pstack, n_repairs, sc));
+                } else if new_la_idx > la_idx &&
+                          (finished_score.is_none() || sc <= finished_score.unwrap()) {
+                    let mut n_repairs = repairs.clone();
+                    debug_assert_eq!(score(&repairs), score(&n_repairs));
+                    for _ in la_idx..new_la_idx {
+                        n_repairs = n_repairs.child(ParseRepair::Shift);
                     }
+                    todo.push((new_la_idx, n_pstack, n_repairs, sc));
                 }
             }
         }
