@@ -31,11 +31,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
+use std::hash::BuildHasherDefault;
 use std::fmt;
 
-use StIdx;
 use cfgrammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
+use fnv::FnvHasher;
+
+use StIdx;
 use stategraph::StateGraph;
 
 /// The various different possible Yacc parser errors.
@@ -72,7 +75,7 @@ pub struct StateTable {
     //   0  shift 1
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
-    actions          : HashMap<usize, Action>,
+    actions          : HashMap<usize, Action, BuildHasherDefault<FnvHasher>>,
     gotos            : HashMap<(StIdx, NTIdx), StIdx>,
     terms_len        : usize,
     /// The number of reduce/reduce errors encountered.
@@ -93,8 +96,8 @@ pub enum Action {
 
 impl StateTable {
     pub fn new(grm: &YaccGrammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
-        let mut actions: HashMap<usize, Action> = HashMap::new();
-        let mut gotos  : HashMap<(StIdx, NTIdx), StIdx>   = HashMap::new();
+        let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
+        let mut gotos   = HashMap::new();
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
 

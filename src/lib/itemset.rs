@@ -36,12 +36,11 @@ use std::hash::BuildHasherDefault;
 extern crate bit_vec;
 use self::bit_vec::{BitBlock, BitVec};
 
-extern crate fnv;
-use self::fnv::FnvHasher;
-
-use firsts::Firsts;
 use cfgrammar::{Grammar, PIdx, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
+use fnv::FnvHasher;
+
+use firsts::Firsts;
 
 /// The type of "context" (also known as "lookaheads")
 pub type Ctx = BitVec;
