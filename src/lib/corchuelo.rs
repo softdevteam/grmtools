@@ -342,6 +342,7 @@ mod test {
     }
 
     fn check_repairs(grm: &YaccGrammar, repairs: &Vec<Vec<ParseRepair>>, expected: &[&str]) {
+        assert_eq!(repairs.len(), expected.len());
         for i in 0..repairs.len() {
             // First of all check that all the repairs are unique
             for j in i + 1..repairs.len() {
@@ -369,7 +370,17 @@ E : 'N'
 ";
 
         let (grm, pr) = do_parse(&lexs, &grms, "(nn");
-        let errs = pr.unwrap_err();
+        let (pt, errs) = pr.unwrap_err();
+        assert_eq!(pt.pp(&grm, "(nn"),
+"E
+ E
+  OPEN_BRACKET (
+  E
+   N n
+  CLOSE_BRACKET 
+ PLUS 
+ N n
+");
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.term_idx("N").unwrap())).ok().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
@@ -381,18 +392,17 @@ E : 'N'
                             "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
         let (grm, pr) = do_parse(&lexs, &grms, "n)+n+n+n)");
-        let errs = pr.unwrap_err();
+        let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
                       &vec!["Delete"]);
         check_repairs(&grm,
                       errs[1].repairs(),
-                      &vec!["Delete, Delete, Delete, Delete",
-                            "Delete"]);
+                      &vec!["Delete"]);
 
         let (grm, pr) = do_parse(&lexs, &grms, "(((+n)+n+n+n)");
-        let errs = pr.unwrap_err();
+        let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
