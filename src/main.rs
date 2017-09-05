@@ -169,7 +169,8 @@ fn main() {
     let lexemes = lexer.lexemes().unwrap();
     match parse::<u16>(&grm, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
-        Err(errs) => {
+        Err((pt, errs)) => {
+            println!("{}", pt.pp(&grm, &input));
             for e in errs {
                 let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
                 println!("Error detected at line {} col {}. Amongst the valid repairs are:", line, col);

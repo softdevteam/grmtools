@@ -87,17 +87,18 @@ pub(crate) struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usiz
 use std::fmt::Debug;
 impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
     fn parse(grm: &YaccGrammar, stable: &StateTable, lexemes: &Lexemes<TokId>)
-         -> Result<Node<TokId>, Vec<ParseError<TokId>>>
+         -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
     {
         let psr = Parser{grm, stable, lexemes};
         let mut pstack = vec![StIdx::from(0)];
         let mut tstack: Vec<Node<TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
         psr.lr(0, &mut pstack, &mut tstack, &mut errors);
+        let t = tstack.drain(..).nth(0).unwrap();
         if !errors.is_empty() {
-            Err(errors)
+            Err((t, errors))
         } else {
-            Ok(tstack.drain(..).nth(0).unwrap())
+            Ok(t)
         }
     }
 
@@ -188,7 +189,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
 /// Parse the lexemes, returning either a parse tree or a vector of `ParseError`s.
 pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
             (grm: &YaccGrammar, stable: &StateTable, lexemes: &Vec<Lexeme<TokId>>)
-         -> Result<Node<TokId>, Vec<ParseError<TokId>>>
+         -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
 {
     Parser::parse(grm, stable, lexemes)
 }
@@ -245,7 +246,7 @@ pub(crate) mod test {
     use lrtable::{Minimiser, from_yacc};
     use super::*;
 
-    pub(crate) fn do_parse(lexs: &str, grms: &str, input: &str) -> (YaccGrammar, Result<Node<u16>, Vec<ParseError<u16>>>) {
+    pub(crate) fn do_parse(lexs: &str, grms: &str, input: &str) -> (YaccGrammar, Result<Node<u16>, (Node<u16>, Vec<ParseError<u16>>)>) {
         let mut lexerdef = build_lex(lexs).unwrap();
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
         let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
@@ -375,13 +376,13 @@ Call: 'ID' 'OPEN_BRACKET' 'CLOSE_BRACKET';";
 ");
 
         let (grm, pr) = do_parse(&lexs, &grms, "f(");
-        let errs = pr.unwrap_err();
+        let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.eof_term_idx())).ok().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
 
         let (grm, pr) = do_parse(&lexs, &grms, "f(f(");
-        let errs = pr.unwrap_err();
+        let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.term_idx("ID").unwrap())).ok().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
