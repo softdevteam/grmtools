@@ -34,7 +34,7 @@ use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
 use std::fmt;
 
 use StIdx;
-use cfgrammar::{PIdx, NTIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use stategraph::StateGraph;
 
@@ -65,8 +65,16 @@ impl fmt::Display for StateTableError {
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[derive(Debug)]
 pub struct StateTable {
-    actions          : HashMap<(StIdx, Symbol), Action>,
+    // For actions, we use a HashMap as a quick representation of a sparse table. We use the normal
+    // statetable representation where rows represent states and columns represent terminals. Thus
+    // the statetable:
+    //        A         B
+    //   0  shift 1
+    //   1  shift 0  reduce B
+    // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
+    actions          : HashMap<usize, Action>,
     gotos            : HashMap<(StIdx, NTIdx), StIdx>,
+    terms_len        : usize,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
     /// The number of shift/reduce errors encountered.
@@ -85,7 +93,7 @@ pub enum Action {
 
 impl StateTable {
     pub fn new(grm: &YaccGrammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
-        let mut actions: HashMap<(StIdx, Symbol), Action> = HashMap::new();
+        let mut actions: HashMap<usize, Action> = HashMap::new();
         let mut gotos  : HashMap<(StIdx, NTIdx), StIdx>   = HashMap::new();
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
@@ -97,8 +105,10 @@ impl StateTable {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
-                    let sym = Symbol::Term(term_i.into());
-                    match actions.entry((state_i, sym)) {
+                    let off = StateTable::actions_offset(grm.terms_len(),
+                                                         state_i,
+                                                         TIdx::from(term_i));
+                    match actions.entry(off) {
                         Entry::Occupied(mut e) => {
                             match *e.get_mut() {
                                 Action::Reduce(prod_j) => {
@@ -113,7 +123,10 @@ impl StateTable {
                                     }
                                 },
                                 Action::Accept => {
-                                    return Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, prod_idx: prod_i})
+                                    return Err(StateTableError{
+                                        kind: StateTableErrorKind::AcceptReduceConflict,
+                                        prod_idx: prod_i
+                                    })
                                 }
                                 _ => panic!("Internal error")
                             }
@@ -139,7 +152,8 @@ impl StateTable {
                     },
                     Symbol::Term(term_k) => {
                         // Populate shifts
-                        match actions.entry((state_i, sym)) {
+                        let off = StateTable::actions_offset(grm.terms_len(), state_i, term_k);
+                        match actions.entry(off) {
                             Entry::Occupied(mut e) => {
                                 match *e.get_mut() {
                                     Action::Shift(x) => assert_eq!(*state_j, x),
@@ -159,27 +173,40 @@ impl StateTable {
             }
         }
 
-        Ok(StateTable { actions: actions, gotos: gotos, reduce_reduce: reduce_reduce,
-                     shift_reduce: shift_reduce })
+        Ok(StateTable { actions: actions, gotos: gotos, terms_len: grm.terms_len(), reduce_reduce:
+            reduce_reduce, shift_reduce: shift_reduce })
     }
+
 
     /// Return the action for `state_idx` and `sym`, or None if there isn't any.
     pub fn action(&self, state_idx: StIdx, sym: Symbol) -> Option<Action> {
-        self.actions.get(&(state_idx, sym)).map_or(None, |x| Some(*x))
+        if let Symbol::Term(term_idx) = sym {
+            let off = StateTable::actions_offset(self.terms_len, state_idx, term_idx);
+            self.actions.get(&off).map_or(None, |x| Some(*x))
+        } else {
+            None
+        }
     }
 
     /// Return an iterator over the actions of `state_idx`.
     pub fn state_actions(&self, state_idx: StIdx) -> impl Iterator<Item=Symbol> {
-        let symbols = self.actions.keys()
-                                  .filter(|& &(x, _)| x == state_idx)
-                                  .map(|&(_, x)| x)
-                                  .collect();
-        StateActionIterator{symbols, i: 0}
+        let mut syms = Vec::new();
+        for term_idx in 0..self.terms_len {
+            let off = StateTable::actions_offset(self.terms_len, state_idx, TIdx::from(term_idx));
+            if let Some(_) = self.actions.get(&off) {
+                syms.push(Symbol::Term(TIdx::from(term_idx)))
+            }
+        }
+        StateActionIterator{symbols: syms, i: 0}
     }
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or None if there isn't any.
     pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
         self.gotos.get(&(state_idx, nonterm_idx)).map_or(None, |x| Some(*x))
+    }
+
+    fn actions_offset(terms_len: usize, state_idx: StIdx, term_idx: TIdx) -> usize {
+        usize::from(state_idx) * terms_len + usize::from(term_idx)
     }
 }
 
@@ -201,7 +228,7 @@ impl Iterator for StateActionIterator {
     }
 }
 
-fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<(StIdx, Symbol), Action>, term_k: TIdx,
+fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<usize, Action>, term_k: TIdx,
                         prod_k: PIdx, state_j: StIdx) -> u64 {
     let mut shift_reduce = 0;
     let term_k_prec = grm.term_precedence(term_k).unwrap();
