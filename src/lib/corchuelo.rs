@@ -342,6 +342,7 @@ mod test {
     }
 
     fn check_repairs(grm: &YaccGrammar, repairs: &Vec<Vec<ParseRepair>>, expected: &[&str]) {
+        assert_eq!(repairs.len(), expected.len());
         for i in 0..repairs.len() {
             // First of all check that all the repairs are unique
             for j in i + 1..repairs.len() {
@@ -388,8 +389,7 @@ E : 'N'
                       &vec!["Delete"]);
         check_repairs(&grm,
                       errs[1].repairs(),
-                      &vec!["Delete, Delete, Delete, Delete",
-                            "Delete"]);
+                      &vec!["Delete"]);
 
         let (grm, pr) = do_parse(&lexs, &grms, "(((+n)+n+n+n)");
         let errs = pr.unwrap_err();
