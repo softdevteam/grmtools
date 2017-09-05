@@ -161,11 +161,6 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
             let (new_la_idx, n_pstack)
                 = lr_cactus(parser, None, la_idx, la_idx + PARSE_AT_LEAST, pstack.clone(), None);
             if new_la_idx < in_la_idx + PORTION_THRESHOLD {
-                let mut n_repairs = repairs.clone();
-                for _ in la_idx..new_la_idx {
-                    n_repairs = n_repairs.child(ParseRepair::Shift);
-                }
-
                 // A repair is a "finisher" (i.e. can be considered complete and doesn't need to be
                 // added to the todo list) if it's parsed at least N symbols or parsing ends in
                 // an Accept action.
@@ -183,26 +178,35 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                     }
                 }
 
+                // As described, at this point we should add (new_la_idx - la_idx) Shifts to the
+                // repair sequence. However, there's no point in doing this if they're added to a
+                // finisher: Shifts at the end of a repair sequence confuse users and slow down
+                // parsing. We thus only add Shifts if this is a non-finisher.
+
+                let sc = score(&repairs); // Since Shifts don't count to the score, this isn't
+                                          // affected by the presence or absence of finisher Shifts.
                 if finisher {
-                    let sc = score(&n_repairs);
                     if finished_score.is_none() || sc < finished_score.unwrap() {
                         finished_score = Some(sc);
                         finished.clear();
                         todo.retain(|x| score(&x.2) <= sc);
                     }
-                    finished.push((n_pstack, new_la_idx, n_repairs));
-                } else if new_la_idx > la_idx {
-                    let sc = score(&n_repairs);
-                    if finished_score.is_none() || sc <= finished_score.unwrap() {
-                        todo.push((new_la_idx, n_pstack, n_repairs, sc));
+                    finished.push(repairs);
+                } else if new_la_idx > la_idx &&
+                          (finished_score.is_none() || sc <= finished_score.unwrap()) {
+                    let mut n_repairs = repairs.clone();
+                    debug_assert_eq!(score(&repairs), score(&n_repairs));
+                    for _ in la_idx..new_la_idx {
+                        n_repairs = n_repairs.child(ParseRepair::Shift);
                     }
+                    todo.push((new_la_idx, n_pstack, n_repairs, sc));
                 }
             }
         }
     }
 
     let repairs = finished.iter()
-                          .map(|x| { let mut v = x.2.vals().cloned().collect::<Vec<ParseRepair>>();
+                          .map(|x| { let mut v = x.vals().cloned().collect::<Vec<ParseRepair>>();
                                      v.reverse();
                                      v
                            })
@@ -230,7 +234,8 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                 }
                 ParseRepair::Shift => {
                     let (new_la_idx, n_pstack)
-                        = lr_cactus(parser, None, la_idx, la_idx + PARSE_AT_LEAST, pstack, Some(tstack));
+                        = lr_cactus(parser, None, la_idx, la_idx + 1, pstack, Some(tstack));
+                    assert_eq!(new_la_idx, la_idx + 1);
                     la_idx = new_la_idx;
                     pstack = n_pstack;
                 }
@@ -371,7 +376,7 @@ E : 'N'
         assert_eq!(errs[0].repairs().len(), 3);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\", Shift",
+                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
                             "Insert \"CLOSE_BRACKET\", Delete",
                             "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
@@ -380,7 +385,7 @@ E : 'N'
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Delete, Shift, Shift, Shift"]);
+                      &vec!["Delete"]);
         check_repairs(&grm,
                       errs[1].repairs(),
                       &vec!["Delete, Delete, Delete, Delete",
@@ -391,8 +396,8 @@ E : 'N'
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["Insert \"N\", Shift, Shift, Shift",
-                            "Delete, Shift, Shift, Shift"]);
+                      &vec!["Insert \"N\"",
+                            "Delete"]);
         check_repairs(&grm,
                       errs[1].repairs(),
                       &vec!["Insert \"CLOSE_BRACKET\""]);
