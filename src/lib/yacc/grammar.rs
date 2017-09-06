@@ -214,12 +214,12 @@ impl YaccGrammar {
                 continue;
             }
             else if implicit_nonterm.as_ref().map_or(false, |s| s == astrulename) {
-                // Add the implicit rule: ~: "IMPLICIT_TERM1" | ... | "IMPLICIT_TERMN";
+                // Add the implicit rule: ~: "IMPLICIT_TERM1" ~ | ... | "IMPLICIT_TERMN" ~ | ;
                 let implicit_prods = rules_prods.get_mut(usize::from(nonterm_map[astrulename])).unwrap();
                 // Add a production for each implicit terminal
                 for t in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(prods.len().into());
-                    prods.push(vec![Symbol::Term(term_map[t])]);
+                    prods.push(vec![Symbol::Term(term_map[t]), Symbol::Nonterm(rule_idx)]);
                     prod_precs.push(None);
                     prods_rules.push(rule_idx);
                 }
@@ -615,14 +615,15 @@ mod test {
         assert_eq!(grm.rules_prods[usize::from(i_rule_idx)].len(), 3);
         let i_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][0])];
         let i_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][1])];
-        assert_eq!(i_prod1.len(), 1);
-        assert_eq!(i_prod2.len(), 1);
+        assert_eq!(i_prod1.len(), 2);
+        assert_eq!(i_prod2.len(), 2);
         // We don't know what order the implicit nonterminal will contain our tokens in,
         // hence the awkward dance below.
-        assert!((i_prod1[0] == Symbol::Term(grm.term_idx("ws1").unwrap())
-                 && (i_prod2[0] == Symbol::Term(grm.term_idx("ws2").unwrap())))
-             || (i_prod1[0] == Symbol::Term(grm.term_idx("ws2").unwrap())
-                 && (i_prod2[0] == Symbol::Term(grm.term_idx("ws1").unwrap()))));
+        let cnd1 = vec![Symbol::Term(grm.term_idx("ws1").unwrap()),
+                        Symbol::Nonterm(grm.implicit_nonterm().unwrap())];
+        let cnd2 = vec![Symbol::Term(grm.term_idx("ws2").unwrap()),
+                        Symbol::Nonterm(grm.implicit_nonterm().unwrap())];
+        assert!((*i_prod1 == cnd1 && *i_prod2 == cnd2) || (*i_prod1 == cnd2 && *i_prod2 == cnd1));
         let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];
         assert_eq!(i_prod3.len(), 0);
     }
