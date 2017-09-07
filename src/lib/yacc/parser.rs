@@ -55,7 +55,8 @@ pub enum YaccParserErrorKind {
     UnknownDeclaration,
     DuplicatePrecedence,
     PrecNotFollowedByTerm,
-    DuplicateImplicitTokensDeclaration
+    DuplicateImplicitTokensDeclaration,
+    DuplicateStartDeclaration
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -81,6 +82,8 @@ impl fmt::Display for YaccParserError {
                                                       => "%prec not followed by token name",
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration
                                                       => "Duplicate %implicit_tokens declaration",
+            YaccParserErrorKind::DuplicateStartDeclaration
+                                                      => "Duplicate %start declaration",
         };
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -172,6 +175,9 @@ impl YaccParser {
                 continue;
             }
             if let Some(j) = self.lookahead_is("%start", i) {
+                if self.grammar.start.is_some() {
+                    return Err(self.mk_error(YaccParserErrorKind::DuplicateStartDeclaration, i));
+                }
                 i = try!(self.parse_ws(j));
                 let (j, n) = try!(self.parse_name(i));
                 self.grammar.start = Some(n);
@@ -809,6 +815,19 @@ x".to_string();
           ") {
             Ok(_) => panic!(),
             Err(YaccParserError{kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration, line: 3, ..}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_duplicate_start() {
+        match yacc_ast(YaccKind::Eco, &"
+          %start X
+          %start X
+          %%
+          ") {
+            Ok(_) => panic!(),
+            Err(YaccParserError{kind: YaccParserErrorKind::DuplicateStartDeclaration, line: 3, ..}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
