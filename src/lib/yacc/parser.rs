@@ -89,7 +89,7 @@ impl fmt::Display for YaccParserError {
     }
 }
 
-struct YaccParser {
+pub(crate) struct YaccParser {
     yacc_kind: YaccKind,
     src: String,
     newlines: Vec<usize>,
@@ -107,7 +107,7 @@ lazy_static! {
 
 /// The actual parser is intended to be entirely opaque from outside users.
 impl YaccParser {
-    fn new(yacc_kind: YaccKind, src: String) -> YaccParser {
+    pub (crate) fn new(yacc_kind: YaccKind, src: String) -> YaccParser {
         YaccParser {
             yacc_kind,
             src,
@@ -116,29 +116,7 @@ impl YaccParser {
         }
     }
 
-    fn mk_error(&self, k: YaccParserErrorKind, off: usize) -> YaccParserError {
-        let (line, col) = self.off_to_line_col(off);
-        YaccParserError{kind: k, line: line, col: col}
-    }
-
-    fn off_to_line_col(&self, off: usize) -> (usize, usize) {
-        if off == self.src.len() {
-            let line_off = *self.newlines.iter().last().unwrap();
-            return (self.newlines.len(), self.src[line_off..].chars().count() + 1);
-        }
-        let (line_m1, &line_off) = self.newlines.iter()
-                                                .enumerate()
-                                                .rev()
-                                                .find(|&(_, &line_off)| line_off <= off)
-                                                .unwrap();
-        let c_off = self.src[line_off..]
-                        .char_indices()
-                        .position(|(c_off, _)| c_off == off - line_off)
-                        .unwrap();
-        (line_m1 + 1, c_off + 1)
-    }
-
-    fn parse(&mut self) -> YaccResult<usize> {
+    pub(crate) fn parse(&mut self) -> YaccResult<usize> {
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
@@ -155,6 +133,10 @@ impl YaccParser {
             }
             None    => Ok(i)
         }
+    }
+
+    pub(crate) fn ast(self) -> GrammarAST {
+        self.grammar
     }
 
     fn parse_declarations(&mut self, mut i: usize) -> YaccResult<usize> {
@@ -354,21 +336,41 @@ impl YaccParser {
             None
         }
     }
-}
 
-pub(crate) fn yacc_ast(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, YaccParserError> {
-    let mut yp = YaccParser::new(yacc_kind, s.to_string());
-    match yp.parse() {
-        Ok(_) => Ok(yp.grammar),
-        Err(e) => Err(e)
+    fn mk_error(&self, k: YaccParserErrorKind, off: usize) -> YaccParserError {
+        let (line, col) = self.off_to_line_col(off);
+        YaccParserError{kind: k, line: line, col: col}
+    }
+
+    fn off_to_line_col(&self, off: usize) -> (usize, usize) {
+        if off == self.src.len() {
+            let line_off = *self.newlines.iter().last().unwrap();
+            return (self.newlines.len(), self.src[line_off..].chars().count() + 1);
+        }
+        let (line_m1, &line_off) = self.newlines.iter()
+                                                .enumerate()
+                                                .rev()
+                                                .find(|&(_, &line_off)| line_off <= off)
+                                                .unwrap();
+        let c_off = self.src[line_off..]
+                        .char_indices()
+                        .position(|(c_off, _)| c_off == off - line_off)
+                        .unwrap();
+        (line_m1 + 1, c_off + 1)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{yacc_ast, YaccParserError, YaccParserErrorKind};
+    use super::{YaccParser, YaccParserError, YaccParserErrorKind};
     use yacc::{AssocKind, Precedence, YaccKind};
-    use yacc::ast::{Rule, Symbol};
+    use yacc::ast::{GrammarAST, Rule, Symbol};
+
+    fn yacc_ast(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, YaccParserError> {
+        let mut yp = YaccParser::new(yacc_kind, s.to_string());
+        try!(yp.parse());
+        Ok(yp.ast())
+    }
 
     fn nonterminal(n: &str) -> Symbol {
         Symbol::Nonterm(n.to_string())
