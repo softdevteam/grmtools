@@ -35,7 +35,7 @@ use std::convert::{TryFrom, TryInto};
 use cfgrammar::{NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
-use lrtable::{Action, StateTable, StIdx};
+use lrtable::{Action, StateGraph, StateTable, StIdx};
 
 use corchuelo;
 
@@ -80,16 +80,17 @@ pub(crate) type Errors<TokId> = Vec<ParseError<TokId>>;
 
 pub(crate) struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
     pub grm: &'a YaccGrammar,
+    pub sgraph: &'a StateGraph,
     pub stable: &'a StateTable,
     pub lexemes: &'a Lexemes<TokId>
 }
 
 use std::fmt::Debug;
 impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
-    fn parse(grm: &YaccGrammar, stable: &StateTable, lexemes: &Lexemes<TokId>)
+    fn parse(grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable, lexemes: &Lexemes<TokId>)
          -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
     {
-        let psr = Parser{grm, stable, lexemes};
+        let psr = Parser{grm, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0)];
         let mut tstack: Vec<Node<TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
@@ -188,10 +189,11 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
 
 /// Parse the lexemes, returning either a parse tree or a vector of `ParseError`s.
 pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
-            (grm: &YaccGrammar, stable: &StateTable, lexemes: &Vec<Lexeme<TokId>>)
+            (grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable,
+             lexemes: &Vec<Lexeme<TokId>>)
          -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
 {
-    Parser::parse(grm, stable, lexemes)
+    Parser::parse(grm, sgraph, stable, lexemes)
 }
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
@@ -249,7 +251,7 @@ pub(crate) mod test {
     pub(crate) fn do_parse(lexs: &str, grms: &str, input: &str) -> (YaccGrammar, Result<Node<u16>, (Node<u16>, Vec<ParseError<u16>>)>) {
         let mut lexerdef = build_lex(lexs).unwrap();
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
-        let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         {
             let rule_ids = grm.terms_map().iter()
                                           .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
@@ -257,7 +259,7 @@ pub(crate) mod test {
             lexerdef.set_rule_ids(&rule_ids);
         }
         let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-        let pr = parse(&grm, &stable, &lexemes);
+        let pr = parse(&grm, &sgraph, &stable, &lexemes);
         (grm, pr)
     }
 

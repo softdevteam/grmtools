@@ -128,7 +128,7 @@ fn main() {
             process::exit(1);
         }
     };
-    let (_, stable) = match from_yacc(&grm, Minimiser::Pager) {
+    let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
@@ -167,7 +167,7 @@ fn main() {
     let input = read_file(&matches.free[2]);
     let lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
-    match parse::<u16>(&grm, &stable, &lexemes) {
+    match parse::<u16>(&grm, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err((pt, errs)) => {
             println!("{}", pt.pp(&grm, &input));
