@@ -236,6 +236,9 @@ impl YaccParser {
 
     fn parse_rule(&mut self, mut i: usize) -> YaccResult<usize> {
         let (j, rn) = try!(self.parse_name(i));
+        if self.ast.start.is_none() {
+            self.ast.start = Some(rn.clone());
+        }
         i = try!(self.parse_ws(j));
         match self.lookahead_is(":", i) {
             Some(j) => i = j,
@@ -832,5 +835,16 @@ x".to_string();
             Err(YaccParserError{kind: YaccParserErrorKind::DuplicateStartDeclaration, line: 3, ..}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
+    }
+
+    #[test]
+    fn test_implicit_start() {
+        let ast = parse(YaccKind::Eco, &"
+          %%
+          R: ;
+          R2: ;
+          R3: ;
+          ").unwrap();
+        assert_eq!(ast.start, Some("R".to_string()));
     }
 }
