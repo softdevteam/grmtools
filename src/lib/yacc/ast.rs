@@ -37,6 +37,9 @@ use linked_hash_map::LinkedHashMap;
 
 use yacc::Precedence;
 
+/// An AST representing a grammar. This is built up gradually: when it is finished, the
+/// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
+/// point, any further mutations made to the struct lead to undefined behaviour.
 pub struct GrammarAST {
     pub start: Option<String>,
     pub rules: LinkedHashMap<String, Rule>,
@@ -140,15 +143,19 @@ impl GrammarAST {
         self.tokens.contains(s)
     }
 
-    /// Perform basic validation on the grammar, namely:
+    /// After the AST has been populated, perform any final operations, and validate the grammar
+    /// checking that:
     ///   1) The start rule references a rule in the grammar
     ///   2) Every nonterminal reference references a rule in the grammar
     ///   3) Every terminal reference references a declared token
     ///   4) If a production has a precedence terminal, then it references a declared token
     /// If the validation succeeds, None is returned.
-    pub fn validate(&self) -> Result<(), GrammarValidationError> {
+    pub(crate) fn complete_and_validate(&mut self) -> Result<(), GrammarValidationError> {
         match self.start {
-            None => return Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoStartRule, sym: None}),
+            None => {
+                return Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoStartRule,
+                                                  sym: None})
+            },
             Some(ref s) => {
                 if !self.rules.contains_key(s) {
                     return Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule,
@@ -227,8 +234,8 @@ mod test {
 
     #[test]
     fn test_empty_grammar(){
-        let grm = GrammarAST::new();
-        match grm.validate() {
+        let mut grm = GrammarAST::new();
+        match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoStartRule, ..}) => (),
             _ => panic!("Validation error")
         }
@@ -239,7 +246,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
         grm.add_prod("B".to_string(), vec!(), None);
-        match grm.validate() {
+        match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule, ..}) => (),
             _ => panic!("Validation error")
         }
@@ -250,7 +257,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(), None);
-        assert!(grm.validate().is_ok());
+        assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
@@ -259,7 +266,7 @@ mod test {
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(nonterminal("B")), None);
         grm.add_prod("B".to_string(), vec!(), None);
-        assert!(grm.validate().is_ok());
+        assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
@@ -267,7 +274,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(nonterminal("B")), None);
-        match grm.validate() {
+        match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
         }
@@ -279,7 +286,7 @@ mod test {
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(terminal("b")), None);
-        assert!(grm.validate().is_ok());
+        assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
@@ -291,7 +298,7 @@ mod test {
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(nonterminal("b")), None);
-        assert!(grm.validate().is_ok());
+        assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
@@ -299,7 +306,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(terminal("b")), None);
-        match grm.validate() {
+        match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
             _ => panic!("Validation error")
         }
@@ -310,7 +317,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(nonterminal("b"), terminal("b")), None);
-        match grm.validate() {
+        match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
         }
@@ -323,7 +330,7 @@ mod test {
         grm.start = Some("A".to_string());
         grm.tokens.insert("b".to_string());
         grm.add_prod("A".to_string(), vec!(terminal("b")), Some("b".to_string()));
-        assert!(grm.validate().is_ok());
+        assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
@@ -331,12 +338,12 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(terminal("b")), Some("b".to_string()));
-        match grm.validate() {
+        match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
             _ => panic!("Validation error")
         }
         grm.tokens.insert("b".to_string());
-        match grm.validate() {
+        match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoPrecForToken, ..}) => (),
             _ => panic!("Validation error")
         }

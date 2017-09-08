@@ -102,9 +102,6 @@ impl YaccGrammar {
     /// refer to as "^", though the actual name is a fresh name that is guaranteed to be unique)
     /// that references the user defined start rule.
     pub fn new(yacc_kind: YaccKind, ast: &ast::GrammarAST) -> YaccGrammar {
-        // The caller is expected to have called validate before calling this function.
-        debug_assert!(ast.validate().is_ok());
-
         let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
 
         // Generate a guaranteed unique start nonterm name. We simply keep making the string longer

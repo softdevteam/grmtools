@@ -35,6 +35,7 @@ pub mod grammar;
 pub mod parser;
 pub use self::ast::{GrammarValidationError, GrammarValidationErrorKind};
 pub use self::parser::{YaccParserError, YaccParserErrorKind};
+use self::parser::YaccParser;
 pub use self::grammar::{AssocKind, Precedence, YaccGrammar, YaccGrammarError};
 
 #[derive(Clone, Copy)]
@@ -46,8 +47,10 @@ pub enum YaccKind {
 pub fn yacc_grm(yacc_kind: YaccKind, s: &str) -> Result<YaccGrammar, YaccGrammarError> {
     match yacc_kind {
         YaccKind::Original | YaccKind::Eco => {
-            let ast = try!(parser::yacc_ast(yacc_kind, s));
-            try!(ast.validate());
+            let mut yp = YaccParser::new(yacc_kind, s.to_string());
+            try!(yp.parse());
+            let mut ast = yp.ast();
+            try!(ast.complete_and_validate());
             Ok(YaccGrammar::new(yacc_kind, &ast))
         }
     }
