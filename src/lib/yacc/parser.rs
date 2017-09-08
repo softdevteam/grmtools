@@ -93,7 +93,7 @@ pub(crate) struct YaccParser {
     yacc_kind: YaccKind,
     src: String,
     newlines: Vec<usize>,
-    grammar: GrammarAST
+    ast: GrammarAST
 }
 
 lazy_static! {
@@ -112,7 +112,7 @@ impl YaccParser {
             yacc_kind,
             src,
             newlines: vec![0],
-            grammar : GrammarAST::new()
+            ast : GrammarAST::new()
         }
     }
 
@@ -136,7 +136,7 @@ impl YaccParser {
     }
 
     pub(crate) fn ast(self) -> GrammarAST {
-        self.grammar
+        self.ast
     }
 
     fn parse_declarations(&mut self, mut i: usize) -> YaccResult<usize> {
@@ -151,24 +151,24 @@ impl YaccParser {
                         break;
                     }
                     let (j, n) = try!(self.parse_terminal(i));
-                    self.grammar.tokens.insert(n);
+                    self.ast.tokens.insert(n);
                     i = try!(self.parse_ws(j));
                 }
                 continue;
             }
             if let Some(j) = self.lookahead_is("%start", i) {
-                if self.grammar.start.is_some() {
+                if self.ast.start.is_some() {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateStartDeclaration, i));
                 }
                 i = try!(self.parse_ws(j));
                 let (j, n) = try!(self.parse_name(i));
-                self.grammar.start = Some(n);
+                self.ast.start = Some(n);
                 i = try!(self.parse_ws(j));
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
-                    if self.grammar.implicit_tokens.is_some() {
+                    if self.ast.implicit_tokens.is_some() {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicateImplicitTokensDeclaration, i));
                     }
                     let mut implicit_terms = HashSet::new();
@@ -178,11 +178,11 @@ impl YaccParser {
                             break;
                         }
                         let (j, n) = try!(self.parse_terminal(i));
-                        self.grammar.tokens.insert(n.clone());
+                        self.ast.tokens.insert(n.clone());
                         implicit_terms.insert(n);
                         i = try!(self.parse_ws(j));
                     }
-                    self.grammar.implicit_tokens = Some(implicit_terms);
+                    self.ast.implicit_tokens = Some(implicit_terms);
                     continue;
                 }
             }
@@ -206,11 +206,11 @@ impl YaccParser {
                 while i < self.src.len() {
                     if self.lookahead_is("%", i).is_some() { break; }
                     let (j, n) = try!(self.parse_terminal(i));
-                    if self.grammar.precs.contains_key(&n) {
+                    if self.ast.precs.contains_key(&n) {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
                     }
                     let prec = Precedence{level: prec_level, kind: kind};
-                    self.grammar.precs.insert(n, prec);
+                    self.ast.precs.insert(n, prec);
                     i = try!(self.parse_ws(j));
                 }
                 prec_level += 1;
@@ -248,25 +248,25 @@ impl YaccParser {
         i = try!(self.parse_ws(i));
         while i < self.src.len() {
             if let Some(j) = self.lookahead_is("|", i) {
-                self.grammar.add_prod(rn.clone(), syms, prec);
+                self.ast.add_prod(rn.clone(), syms, prec);
                 syms = Vec::new();
                 prec = None;
                 i = try!(self.parse_ws(j));
                 continue;
             } else if let Some(j) = self.lookahead_is(";", i) {
-                self.grammar.add_prod(rn.clone(), syms, prec);
+                self.ast.add_prod(rn.clone(), syms, prec);
                 return Ok(j);
             }
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
                 let (j, sym) = try!(self.parse_terminal(i));
                 i = try!(self.parse_ws(j));
-                self.grammar.tokens.insert(sym.clone());
+                self.ast.tokens.insert(sym.clone());
                 syms.push(Symbol::Term(sym));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = try!(self.parse_ws(j));
                 let (k, sym) = try!(self.parse_terminal(i));
-                if self.grammar.tokens.contains(&sym) {
+                if self.ast.tokens.contains(&sym) {
                     prec = Some(sym);
                 } else {
                     return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByTerm, i));
@@ -274,7 +274,7 @@ impl YaccParser {
                 i = k;
             } else {
                 let (j, sym) = try!(self.parse_terminal(i));
-                if self.grammar.tokens.contains(&sym) {
+                if self.ast.tokens.contains(&sym) {
                     syms.push(Symbol::Term(sym));
                 } else {
                     syms.push(Symbol::Nonterm(sym));
