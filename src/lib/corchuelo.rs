@@ -30,6 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::collections::VecDeque;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 
@@ -68,11 +69,12 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
     }
     let start_cactus_pstack = cactus_pstack.clone();
 
-    let mut todo = vec![(in_la_idx, cactus_pstack, Cactus::new(), 0)];
+    let mut todo = VecDeque::new();
+    todo.push_back((in_la_idx, cactus_pstack, Cactus::new(), 0));
     let mut finished = vec![];
     let mut finished_score: Option<usize> = None;
     while todo.len() > 0 {
-        let cur = todo.remove(0);
+        let cur = todo.pop_front().unwrap();
         let la_idx = cur.0;
         let pstack = cur.1;
         let repairs: Cactus<ParseRepair> = cur.2;
@@ -115,7 +117,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                                 let n_repairs = repairs.child(ParseRepair::Insert{term_idx});
                                 let sc = score(&n_repairs);
                                 if finished_score.is_none() || sc <= finished_score.unwrap() {
-                                    todo.push((la_idx, n_pstack, n_repairs, sc));
+                                    todo.push_back((la_idx, n_pstack, n_repairs, sc));
                                 }
                             }
                         }
@@ -137,7 +139,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                 let n_repairs = repairs.child(ParseRepair::Delete);
                 let sc = score(&n_repairs);
                 if finished_score.is_none() || sc <= finished_score.unwrap() {
-                    todo.push((la_idx + 1, pstack.clone(), n_repairs, sc));
+                    todo.push_back((la_idx + 1, pstack.clone(), n_repairs, sc));
                 }
             }
         }
@@ -199,7 +201,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                     for _ in la_idx..new_la_idx {
                         n_repairs = n_repairs.child(ParseRepair::Shift);
                     }
-                    todo.push((new_la_idx, n_pstack, n_repairs, sc));
+                    todo.push_back((new_la_idx, n_pstack, n_repairs, sc));
                 }
             }
         }
