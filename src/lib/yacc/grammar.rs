@@ -363,6 +363,42 @@ impl YaccGrammar {
                        .position(|x| x.as_ref().map_or(false, |x| x == n))
                        .map(|x| TIdx(x))
     }
+
+    /// Is there a path from the `from` non-term to the `to` non-term? Note that recursive rules
+    /// return `true` for a path from themselves to themselves.
+    pub fn has_path(&self, from: NTIdx, to: NTIdx) -> bool {
+        let mut seen = vec![];
+        seen.resize(self.nonterms_len(), false);
+        let mut todo = vec![];
+        todo.resize(self.nonterms_len(), false);
+        todo[usize::from(from)] = true;
+        loop {
+            let mut empty = true;
+            for i in 0..self.nonterms_len() {
+                if !todo[i] {
+                    continue;
+                }
+                seen[i] = true;
+                todo[i] = false;
+                empty = false;
+                for p_idx in self.nonterm_to_prods(NTIdx::from(i)).unwrap().iter() {
+                    for sym in self.prod(*p_idx).unwrap() {
+                        if let Symbol::Nonterm(nt_idx) = *sym {
+                            if nt_idx == to {
+                                return true;
+                            }
+                            if !seen[usize::from(nt_idx)] {
+                                todo[usize::from(nt_idx)] = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if empty {
+                return false;
+            }
+        }
+    }
 }
 
 impl Grammar for YaccGrammar {
@@ -623,5 +659,28 @@ mod test {
         assert!((*i_prod1 == cnd1 && *i_prod2 == cnd2) || (*i_prod1 == cnd2 && *i_prod2 == cnd1));
         let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];
         assert_eq!(i_prod3.len(), 0);
+    }
+
+    #[test]
+    fn test_has_path() {
+        let grm = yacc_grm(YaccKind::Original, &"
+            %start A
+            %%
+            A: B;
+            B: 'x' B | C;
+            C: 'y' C | ;
+          ".to_string()).unwrap();
+
+        let a_nt_idx = grm.nonterm_idx(&"A").unwrap();
+        let b_nt_idx = grm.nonterm_idx(&"B").unwrap();
+        let c_nt_idx = grm.nonterm_idx(&"C").unwrap();
+        assert!(grm.has_path(a_nt_idx, b_nt_idx));
+        assert!(grm.has_path(a_nt_idx, c_nt_idx));
+        assert!(grm.has_path(b_nt_idx, b_nt_idx));
+        assert!(grm.has_path(b_nt_idx, c_nt_idx));
+        assert!(grm.has_path(c_nt_idx, c_nt_idx));
+        assert!(!grm.has_path(a_nt_idx, a_nt_idx));
+        assert!(!grm.has_path(b_nt_idx, a_nt_idx));
+        assert!(!grm.has_path(c_nt_idx, a_nt_idx));
     }
 }
