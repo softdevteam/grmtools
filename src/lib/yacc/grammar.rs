@@ -229,7 +229,7 @@ impl YaccGrammar {
             }
 
             let astrule = &ast.rules[astrulename];
-            let mut rule = &mut rules_prods[usize::from(rule_idx)];
+            let rule = &mut rules_prods[usize::from(rule_idx)];
             for astprod in &astrule.productions {
                 let mut prod = Vec::with_capacity(astprod.symbols.len());
                 for astsym in &astprod.symbols {
@@ -399,6 +399,17 @@ impl YaccGrammar {
             }
         }
     }
+
+    /// Return a `SentenceGenerator` which can then generate minimal sentences for any non-term
+    /// based on the user-defined `term_cost` function which gives the associated cost for
+    /// generating each terminal (where the cost must be greater than 0). Note that multiple
+    /// terminals can have the same score. The simplest cost function is thus `|_| 1`.
+    pub fn sentence_generator<F>(&self, term_cost: F) -> SentenceGenerator
+                        where F: Fn(TIdx) -> u64
+    {
+        SentenceGenerator::new(self, term_cost)
+    }
+
 }
 
 impl Grammar for YaccGrammar {
@@ -418,6 +429,170 @@ impl Grammar for YaccGrammar {
     fn start_rule_idx(&self) -> NTIdx {
         self.prod_to_nonterm(self.start_prod)
     }
+}
+
+/// A `SentenceGenerator` can generate minimal sentences for any given non-terminal. e.g. for the
+/// grammar:
+///
+/// ```text
+/// %start A
+/// %%
+/// A: A B | ;
+/// B: C | D;
+/// C: 'x' B | 'x';
+/// D: 'y' B | 'y' 'z';
+/// ```
+///
+/// the following are valid minimal sentences:
+///
+/// ```text
+/// A: []
+/// B: [x]
+/// C: [x]
+/// D: [y, x] or [y, z]
+/// ```
+pub struct SentenceGenerator<'a> {
+    grm: &'a YaccGrammar,
+    nonterm_costs: Vec<u64>,
+    term_costs: Vec<u64>
+}
+
+impl<'a> SentenceGenerator<'a> {
+    fn new<F>(grm: &YaccGrammar, term_cost: F) -> SentenceGenerator
+        where F: Fn(TIdx) -> u64
+    {
+        let nt_costs = nonterm_costs(grm, &term_cost);
+        let mut term_costs = Vec::with_capacity(grm.terms_len());
+        for i in 0..grm.terms_len() {
+            term_costs.push(term_cost(TIdx::from(i)));
+        }
+        SentenceGenerator{grm, term_costs, nonterm_costs: nt_costs}
+    }
+
+    /// What is the cost of a minimal sentence for the non-terminal `nonterm_idx`. Note that,
+    /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
+    /// much faster.
+    pub fn min_sentence_cost(&self, nonterm_idx:NTIdx) -> u64 {
+        self.nonterm_costs[usize::from(nonterm_idx)]
+    }
+
+    /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
+    /// non-terminal `nonterm_idx`.
+    pub fn min_sentence(&self, nonterm_idx: NTIdx) -> Vec<TIdx> {
+        let cheapest_prod = |nt_idx: NTIdx| -> PIdx {
+            let mut low_sc = None;
+            let mut low_idx = None;
+            for &pidx in self.grm.nonterm_to_prods(nt_idx).unwrap().iter() {
+                let mut sc = 0;
+                for sym in self.grm.prod(pidx).unwrap().iter() {
+                    sc += match *sym {
+                        Symbol::Nonterm(i) => self.nonterm_costs[usize::from(i)],
+                        Symbol::Term(i)    => self.term_costs[usize::from(i)]
+                    };
+                }
+                if low_sc.is_none() || sc < low_sc.unwrap() {
+                    low_sc = Some(sc);
+                    low_idx = Some(pidx);
+                }
+            }
+            low_idx.unwrap()
+        };
+
+        let mut s = vec![];
+        let mut st = vec![(cheapest_prod(nonterm_idx), 0)];
+        while st.len() > 0 {
+            let (p_idx, sym_idx) = st.pop().unwrap();
+            let prod = self.grm.prod(p_idx).unwrap();
+            for i in sym_idx..prod.len() {
+                match prod[i] {
+                    Symbol::Nonterm(j) => {
+                        st.push((p_idx, i + 1));
+                        st.push((cheapest_prod(j), 0));
+                    },
+                    Symbol::Term(j) => {
+                        s.push(j);
+                    }
+                }
+            }
+        }
+        s
+    }
+}
+
+/// Return the cost of a minimal string for each nonterminal in this grammar. The cost of a
+/// terminal is specified by the user-defined `term_cost` function.
+fn nonterm_costs<F>(grm: &YaccGrammar, term_cost: F) -> Vec<u64>
+               where F: Fn(TIdx) -> u64
+{
+    // We use a simple(ish) fixed-point algorithm to determine costs. We maintain two lists
+    // "costs" and "done". An integer costs[i] starts at 0 and monotonically increments
+    // until done[i] is true, at which point costs[i] value is fixed. We also use the done
+    // list as a simple "todo" list: whilst there is at least one false value in done, there is
+    // still work to do.
+    //
+    // On each iteration of the loop, we examine each non-terminal in the todo list to see if
+    // we can get a better idea of its true cost. Some are trivial:
+    //   * A non-terminal with an empty production immediately has a cost of 0.
+    //   * Non-terminals whose productions don't reference any non-terminals (i.e. only contain
+    //     terminals) can be immediately given a cost by calculating the lowest-cost production.
+    // However if a non-terminal A references another non-terminal B, we may need to wait until
+    // we've fully analysed B before we can cost A. This might seem to cause problems with
+    // recursive rules, so we introduce the concept of "incomplete costs" i.e. if a production
+    // references a non-terminal we can work out its minimum possible cost simply by counting
+    // the production's terminal costs. Since non-terminals can have a mix of complete and
+    // incomplete productions, this is sometimes enough to allow us to assign a final cost to
+    // a non-terminal (if the lowest complete production's cost is lower than or equal to all
+    // the lowest incomplete production's cost). This allows us to make progress, since it
+    // means that we can iteratively improve our knowledge of a terminal's minimum cost:
+    // eventually we will reach a point where we can determine it definitively.
+
+    let mut costs = vec![];
+    costs.resize(grm.nonterms_len(), 0);
+    let mut done = vec![];
+    done.resize(grm.nonterms_len(), false);
+    loop {
+        let mut all_done = true;
+        for (i, _) in done.clone().iter().enumerate().filter(|&(_, d)| !d) {
+            all_done = false;
+            let mut ls_cmplt = None; // lowest completed cost
+            let mut ls_noncmplt = None; // lowest non-completed cost
+            for p_idx in grm.nonterm_to_prods(NTIdx::from(i)).unwrap().iter() {
+                let mut c: u64 = 0; // production cost
+                let mut cmplt = true;
+                for sym in grm.prod(*p_idx).unwrap() {
+                    let sc = match *sym {
+                                 Symbol::Term(term_idx) => term_cost(term_idx),
+                                 Symbol::Nonterm(nt_idx) => {
+                                     if !done[usize::from(nt_idx)] {
+                                         cmplt = false;
+                                     }
+                                     costs[usize::from(nt_idx)]
+                                 }
+                             };
+                    c = c.checked_add(sc).expect(
+                            "Overflow occurred when calculating non-term costs");
+                }
+                if cmplt && (ls_cmplt.is_none() || c < ls_cmplt.unwrap()) {
+                    ls_cmplt = Some(c);
+                } else if !cmplt && (ls_noncmplt.is_none() || c < ls_noncmplt.unwrap()) {
+                    ls_noncmplt = Some(c);
+                }
+            }
+            if ls_cmplt.is_some() && (ls_noncmplt.is_none() || ls_cmplt < ls_noncmplt) {
+                debug_assert!(ls_cmplt.unwrap() >= costs[i]);
+                costs[i] = ls_cmplt.unwrap();
+                done[i] = true;
+            } else if ls_noncmplt.is_some() {
+                debug_assert!(ls_noncmplt.unwrap() >= costs[i]);
+                costs[i] = ls_noncmplt.unwrap();
+            }
+        }
+        if all_done {
+            debug_assert!(done.iter().all(|x| *x));
+            break;
+        }
+    }
+    costs
 }
 
 #[derive(Debug)]
@@ -450,7 +625,7 @@ impl fmt::Display for YaccGrammarError {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM};
+    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_costs};
     use {NTIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, yacc_grm, YaccKind};
 
@@ -667,8 +842,8 @@ mod test {
             %start A
             %%
             A: B;
-            B: 'x' B | C;
-            C: 'y' C | ;
+            B: B 'x' | C;
+            C: C 'y' | ;
           ".to_string()).unwrap();
 
         let a_nt_idx = grm.nonterm_idx(&"A").unwrap();
@@ -682,5 +857,72 @@ mod test {
         assert!(!grm.has_path(a_nt_idx, a_nt_idx));
         assert!(!grm.has_path(b_nt_idx, a_nt_idx));
         assert!(!grm.has_path(c_nt_idx, a_nt_idx));
+    }
+
+    #[test]
+    fn test_nonterm_costs() {
+        let grm = yacc_grm(YaccKind::Original, &"
+            %start A
+            %%
+            A: A B | ;
+            B: C | D | E;
+            C: 'x' B | 'x';
+            D: 'y' B | 'y' 'z';
+            E: 'x' A | 'x' 'y';
+          ".to_string()).unwrap();
+
+        let scores = nonterm_costs(&grm, |_| 1);
+        assert_eq!(scores[usize::from(grm.nonterm_idx(&"A").unwrap())], 0);
+        assert_eq!(scores[usize::from(grm.nonterm_idx(&"B").unwrap())], 1);
+        assert_eq!(scores[usize::from(grm.nonterm_idx(&"C").unwrap())], 1);
+        assert_eq!(scores[usize::from(grm.nonterm_idx(&"D").unwrap())], 2);
+        assert_eq!(scores[usize::from(grm.nonterm_idx(&"E").unwrap())], 1);
+    }
+
+    #[test]
+    #[should_panic(expected="Overflow occurred")]
+    fn test_nonterm_costs_overflow() {
+        let grm = yacc_grm(YaccKind::Original, &"
+            %start A
+            %%
+            A: 'a' 'b';
+          ".to_string()).unwrap();
+
+        nonterm_costs(&grm, |_| u64::max_value());
+    }
+
+    #[test]
+    fn test_min_sentence() {
+        let grm = yacc_grm(YaccKind::Original, &"
+            %start A
+            %%
+            A: A B | ;
+            B: C | D;
+            C: 'x' B | 'x';
+            D: 'y' B | 'y' 'z';
+          ".to_string()).unwrap();
+
+        let sg = grm.sentence_generator(|_| 1);
+
+        let find = |nt_name: &str, str_cnds: Vec<Vec<&str>>| {
+            let cnds = str_cnds.iter()
+                               .map(|x| x.iter()
+                                         .map(|y| grm.term_idx(y)
+                                                     .unwrap())
+                                         .collect::<Vec<TIdx>>())
+                               .collect::<Vec<Vec<TIdx>>>();
+            let ms = sg.min_sentence(grm.nonterm_idx(nt_name).unwrap());
+            if !cnds.iter()
+                    .any(|x| x == &ms)
+            {
+                panic!("{:?} doesn't have any matches in {:?}", ms, str_cnds);
+            }
+        };
+
+        find("A", vec![vec![]]);
+        find("B", vec![vec!["x"]]);
+        find("C", vec![vec!["x"]]);
+        find("D", vec![vec!["y", "x"], vec!["y", "z"]]);
+
     }
 }
