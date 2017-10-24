@@ -517,6 +517,107 @@ impl<'a> SentenceGenerator<'a> {
         }
         s
     }
+
+    /// Return (in arbitrary order) all the minimal sentences for the non-terminal `nonterm_idx`.
+    pub fn min_sentences(&self, nonterm_idx: NTIdx) -> Vec<Vec<TIdx>> {
+        let cheapest_prods = |nt_idx: NTIdx| -> Vec<PIdx> {
+            let mut low_sc = None;
+            let mut low_idxs = vec![];
+            for &pidx in self.grm.nonterm_to_prods(nt_idx).unwrap().iter() {
+                let mut sc = 0;
+                for sym in self.grm.prod(pidx).unwrap().iter() {
+                    sc += match *sym {
+                        Symbol::Nonterm(i) => self.nonterm_costs[usize::from(i)],
+                        Symbol::Term(i)    => self.term_costs[usize::from(i)]
+                    };
+                }
+                if low_sc.is_none() || sc <= low_sc.unwrap() {
+                    if low_sc.is_some() && sc < low_sc.unwrap() {
+                        low_idxs.clear();
+                    }
+                    low_sc = Some(sc);
+                    low_idxs.push(pidx);
+                }
+            }
+            low_idxs
+        };
+
+        let mut sts = Vec::new(); // Output sentences
+        for p_idx in cheapest_prods(nonterm_idx) {
+            let prod = self.grm.prod(p_idx).unwrap();
+            if prod.len() == 0 {
+                sts.push(vec![]);
+                continue;
+            }
+
+            // We construct the minimal sentences in two phases.
+            //
+            // First, for each symbol in the production, we gather all the possible minimal
+            // sentences for it. If, for the grammar:
+            //   X: 'a' Y
+            //   Y: 'b' | 'c'
+            // we ask for the minimal sentences of X's only production we'll end up with a vec of
+            // vecs as follows:
+            //   [[['a']], [['b'], ['c']]]
+
+            let mut ms = Vec::with_capacity(prod.len());
+            for sym in prod {
+                match *sym {
+                    Symbol::Nonterm(nt_idx) => ms.push(self.min_sentences(nt_idx)),
+                    Symbol::Term(t_idx) => ms.push(vec![vec![t_idx]])
+                }
+            }
+
+            // Second, we need to generate all combinations of the gathered sentences. We do this
+            // by writing our own simple numeric incrementing scheme. If we rewrite the list from
+            // above as follows:
+            //
+            //      0 1 <- call this axis "i"
+            //   0: a b
+            //   1:   c
+            //   ^
+            //   |
+            //   call this axis "todo"
+            //
+            // this hopefully becomes easier to see. Let's call the list "ms": the combinations we
+            // need to generate are thus:
+            //
+            //   ms[0][0] + ms[1][0]  (i.e. 'ab')
+            //   ms[0][0] + ms[1][1]  (i.e. 'ac')
+            //
+            // The easiest way to model this is to have a list (todo) with each entry starting at
+            // 0. After each iteration around the loop (i) we add 1 to the last todo column's
+            // entry: if that spills over the length of the corresponding ms entry, then we reset
+            // that column to zero, and try adding 1 to the previous column (as many times as
+            // needed). If the first column spills, then we're done. This is basically normal
+            // arithmetic but with each digit having an arbitrary base.
+
+            let mut todo = Vec::new();
+            todo.resize(prod.len(), 0);
+            let mut cur = Vec::new();
+            'b: loop {
+                for i in 0..todo.len() {
+                    cur.extend(&ms[i][todo[i]]);
+                }
+                sts.push(cur.drain(..).collect::<Vec<TIdx>>());
+
+                let mut j = todo.len() - 1;
+                loop {
+                    if todo[j] + 1 == ms[j].len() {
+                        if j == 0 {
+                            break 'b;
+                        }
+                        todo[j] = 0;
+                        j -= 1;
+                    } else {
+                        todo[j] += 1;
+                        break;
+                    }
+                }
+            }
+        }
+        sts
+    }
 }
 
 /// Return the cost of a minimal string for each nonterminal in this grammar. The cost of a
@@ -892,7 +993,7 @@ mod test {
     }
 
     #[test]
-    fn test_min_sentence() {
+    fn test_min_sentences() {
         let grm = yacc_grm(YaccKind::Original, &"
             %start A
             %%
@@ -911,11 +1012,18 @@ mod test {
                                                      .unwrap())
                                          .collect::<Vec<TIdx>>())
                                .collect::<Vec<Vec<TIdx>>>();
+
             let ms = sg.min_sentence(grm.nonterm_idx(nt_name).unwrap());
-            if !cnds.iter()
-                    .any(|x| x == &ms)
-            {
+            if !cnds.iter().any(|x| x == &ms) {
                 panic!("{:?} doesn't have any matches in {:?}", ms, str_cnds);
+            }
+
+            let min_sts = sg.min_sentences(grm.nonterm_idx(nt_name).unwrap());
+            assert_eq!(cnds.len(), min_sts.len());
+            for ms in min_sts {
+                if !cnds.iter().any(|x| x == &ms) {
+                    panic!("{:?} doesn't have any matches in {:?}", ms, str_cnds);
+                }
             }
         };
 
@@ -923,6 +1031,5 @@ mod test {
         find("B", vec![vec!["x"]]);
         find("C", vec![vec!["x"]]);
         find("D", vec![vec!["y", "x"], vec!["y", "z"]]);
-
     }
 }
