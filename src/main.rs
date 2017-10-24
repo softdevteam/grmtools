@@ -178,7 +178,7 @@ fn main() {
                     let mut lex_idx = e.lexeme_idx();
                     let mut out = vec![];
                     for &r in repair {
-                        if let ParseRepair::Insert{term_idx} = r {
+                        if let ParseRepair::InsertTerm{term_idx} = r {
                             out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap()));
                         } else {
                             let l = lexemes[lex_idx];

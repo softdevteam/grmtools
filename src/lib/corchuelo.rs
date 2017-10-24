@@ -88,7 +88,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
             },
             _ => {
                 let num_inserts = repairs.vals()
-                                         .filter(|r| if let ParseRepair::Insert{..} = **r {
+                                         .filter(|r| if let ParseRepair::InsertTerm{..} = **r {
                                                          true
                                                      } else {
                                                          false
@@ -114,7 +114,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
                                                  pstack.clone(), &mut None);
                             if new_la_idx > la_idx {
                                 debug_assert_eq!(new_la_idx, la_idx + 1);
-                                let n_repairs = repairs.child(ParseRepair::Insert{term_idx});
+                                let n_repairs = repairs.child(ParseRepair::InsertTerm{term_idx});
                                 let sc = score(&n_repairs);
                                 if finished_score.is_none() || sc <= finished_score.unwrap() {
                                     todo.push_back((la_idx, n_pstack, n_repairs, sc));
@@ -222,7 +222,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
         let mut pstack = start_cactus_pstack;
         for r in repairs[0].iter() {
             match *r {
-                ParseRepair::Insert{term_idx} => {
+                ParseRepair::InsertTerm{term_idx} => {
                     let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
                     let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
                                                                 .ok()
@@ -259,7 +259,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
 fn score(repairs: &Cactus<ParseRepair>) -> usize {
     repairs.vals()
            .filter(|x| match *x {
-                           &ParseRepair::Insert{..} | &ParseRepair::Delete => true,
+                           &ParseRepair::InsertTerm{..} | &ParseRepair::Delete => true,
                            &ParseRepair::Shift => false
                        })
            .count()
@@ -277,7 +277,7 @@ mod test {
         let mut out = vec![];
         for &r in repairs {
             match r {
-                ParseRepair::Insert{term_idx} =>
+                ParseRepair::InsertTerm{term_idx} =>
                     out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),

@@ -260,7 +260,7 @@ pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ParseRepair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
-    Insert{term_idx: TIdx},
+    InsertTerm{term_idx: TIdx},
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.
