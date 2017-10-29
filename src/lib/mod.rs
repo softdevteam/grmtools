@@ -36,7 +36,9 @@ extern crate cactus;
 extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrtable;
+extern crate pathfinding;
 
 mod corchuelo;
 pub mod parser;
-pub use parser::ParseRepair;
+pub use parser::{ParseRepair, RecoveryKind};
+mod kimyi;

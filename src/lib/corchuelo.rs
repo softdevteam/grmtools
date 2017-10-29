@@ -222,6 +222,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
         let mut pstack = start_cactus_pstack;
         for r in repairs[0].iter() {
             match *r {
+                ParseRepair::InsertNonterm{..} => panic!("Internal error"),
                 ParseRepair::InsertTerm{term_idx} => {
                     let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
                     let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
@@ -259,6 +260,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
 fn score(repairs: &Cactus<ParseRepair>) -> usize {
     repairs.vals()
            .filter(|x| match *x {
+                           &ParseRepair::InsertNonterm{..} => panic!("Internal error"),
                            &ParseRepair::InsertTerm{..} | &ParseRepair::Delete => true,
                            &ParseRepair::Shift => false
                        })
@@ -270,13 +272,14 @@ mod test {
     use cfgrammar::yacc::YaccGrammar;
     use std::convert::TryFrom;
     use lrlex::Lexeme;
-    use parser::ParseRepair;
+    use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
 
     fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
         let mut out = vec![];
         for &r in repairs {
             match r {
+                ParseRepair::InsertNonterm{..} => panic!("Internal error"),
                 ParseRepair::InsertTerm{term_idx} =>
                     out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
@@ -316,7 +319,7 @@ E : 'N'
   ;
 ";
 
-        let (grm, pr) = do_parse(&lexs, &grms, "(nn");
+        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "(nn");
         let (pt, errs) = pr.unwrap_err();
         assert_eq!(pt.pp(&grm, "(nn"),
 "E
@@ -338,7 +341,7 @@ E : 'N'
                             "Insert \"CLOSE_BRACKET\", Delete",
                             "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
-        let (grm, pr) = do_parse(&lexs, &grms, "n)+n+n+n)");
+        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
@@ -348,7 +351,7 @@ E : 'N'
                       errs[1].repairs(),
                       &vec!["Delete"]);
 
-        let (grm, pr) = do_parse(&lexs, &grms, "(((+n)+n+n+n)");
+        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
