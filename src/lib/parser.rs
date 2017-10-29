@@ -32,6 +32,7 @@
 
 use std::convert::{TryFrom, TryInto};
 
+use cactus::Cactus;
 use cfgrammar::{NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
@@ -184,6 +185,64 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
 
             (la_lexeme, Symbol::Term(TIdx::from(self.grm.eof_term_idx())))
         }
+    }
+
+    /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
+    /// as the first lexeme) up to (but excluding) `end_la_idx`. If an error is encountered, parsing
+    /// immediately terminates (without recovery).
+    ///
+    /// Note that if `lexeme_prefix` is specified, `la_idx` will still be incremented, and thus
+    /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
+    /// lexeme at position `la_idx`.
+    pub(crate) fn lr_cactus(&self,
+                            lexeme_prefix: Option<Lexeme<TokId>>,
+                            mut la_idx: usize,
+                            end_la_idx: usize,
+                            mut pstack: Cactus<StIdx>,
+                            tstack: &mut Option<&mut Vec<Node<TokId>>>)
+      -> (usize, Cactus<StIdx>)
+    {
+        assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
+        while la_idx != end_la_idx {
+            let st = *pstack.val().unwrap();
+            let (la_lexeme, la_term) = self.next_lexeme(lexeme_prefix, la_idx);
+
+            match self.stable.action(st, la_term) {
+                Some(Action::Reduce(prod_id)) => {
+                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
+                    let pop_num = self.grm.prod(prod_id).unwrap().len();
+                    if let &mut Some(ref mut tstack_uw) = tstack {
+                        let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
+                                             .collect::<Vec<Node<TokId>>>();
+                        tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
+                    }
+
+                    for _ in 0..pop_num {
+                        pstack = pstack.parent().unwrap();
+                    }
+                    let prior = *pstack.val().unwrap();
+                    pstack = pstack.child(self.stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
+                },
+                Some(Action::Shift(state_id)) => {
+                    if let &mut Some(ref mut tstack_uw) = tstack {
+                        tstack_uw.push(Node::Term{lexeme: la_lexeme});
+                    }
+                    pstack = pstack.child(state_id);
+                    la_idx += 1;
+                },
+                Some(Action::Accept) => {
+                    debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
+                    if let &mut Some(ref mut tstack_uw) = tstack {
+                        debug_assert_eq!(tstack_uw.len(), 1);
+                    }
+                    break;
+                },
+                None => {
+                    break;
+                }
+            }
+        }
+        (la_idx, pstack)
     }
 }
 
