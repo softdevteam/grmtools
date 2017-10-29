@@ -247,7 +247,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
         in_pstack.clear();
         while !pstack.is_empty() {
             let p = pstack.parent().unwrap();
-            in_pstack.push(pstack.take_or_clone_val().unwrap());
+            in_pstack.push(pstack.try_unwrap().unwrap_or_else(|c| c.val().unwrap().clone()));
             pstack = p;
         }
         in_pstack.reverse();
