@@ -32,11 +32,13 @@
 
 use std::convert::{TryFrom, TryInto};
 
+use cactus::Cactus;
 use cfgrammar::{NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
-use lrtable::{Action, StateTable, StIdx};
+use lrtable::{Action, StateGraph, StateTable, StIdx};
 
+use kimyi;
 use corchuelo;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -79,17 +81,29 @@ pub(crate) type TStack<TokId> = Vec<Node<TokId>>; // Parse tree stack
 pub(crate) type Errors<TokId> = Vec<ParseError<TokId>>;
 
 pub(crate) struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
+    pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar,
+    pub ic: &'a Fn(TIdx) -> u64,
+    pub dc: &'a Fn(TIdx) -> u64,
+    pub sgraph: &'a StateGraph,
     pub stable: &'a StateTable,
-    pub lexemes: &'a Lexemes<TokId>
+    pub lexemes: &'a Lexemes<TokId>,
 }
 
 use std::fmt::Debug;
 impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
-    fn parse(grm: &YaccGrammar, stable: &StateTable, lexemes: &Lexemes<TokId>)
-         -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
+    fn parse<F, G>(rcvry_kind: RecoveryKind,
+             grm: &YaccGrammar,
+             ic: F,
+             dc: G,
+             sgraph: &StateGraph,
+             stable: &StateTable,
+             lexemes: &Lexemes<TokId>)
+          -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
+      where F: Fn(TIdx) -> u64,
+            G: Fn(TIdx) -> u64
     {
-        let psr = Parser{grm, stable, lexemes};
+        let psr = Parser{rcvry_kind, grm, ic: &ic, dc: &dc, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0)];
         let mut tstack: Vec<Node<TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
@@ -141,7 +155,12 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     break;
                 },
                 None => {
-                    let (new_la_idx, repairs) = corchuelo::recover(self, la_idx, pstack, tstack);
+                    let (new_la_idx, repairs) = match self.rcvry_kind {
+                        RecoveryKind::Corchuelo =>
+                            corchuelo::recover(self, la_idx, pstack, tstack),
+                        RecoveryKind::KimYi =>
+                            kimyi::recover(self, la_idx, pstack, tstack)
+                    };
                     let keep_going = repairs.len() != 0;
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
                                            lexeme: la_lexeme, repairs: repairs});
@@ -184,22 +203,119 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
             (la_lexeme, Symbol::Term(TIdx::from(self.grm.eof_term_idx())))
         }
     }
+
+    /// What is the deletion cost of `sym`?
+    pub(crate) fn dc(&self, sym: Symbol) -> u64 {
+        match sym {
+            Symbol::Term(t_idx) => (self.dc)(t_idx),
+            _ => panic!("Internal error")
+        }
+    }
+
+    /// What is the insertion cost of `sym`?
+    pub(crate) fn ic(&self, _: Symbol) -> u64 {
+        1
+    }
+
+
+    /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
+    /// as the first lexeme) up to (but excluding) `end_la_idx`. If an error is encountered, parsing
+    /// immediately terminates (without recovery).
+    ///
+    /// Note that if `lexeme_prefix` is specified, `la_idx` will still be incremented, and thus
+    /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
+    /// lexeme at position `la_idx`.
+    pub(crate) fn lr_cactus(&self,
+                            lexeme_prefix: Option<Lexeme<TokId>>,
+                            mut la_idx: usize,
+                            end_la_idx: usize,
+                            mut pstack: Cactus<StIdx>,
+                            tstack: &mut Option<&mut Vec<Node<TokId>>>)
+      -> (usize, Cactus<StIdx>)
+    {
+        assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
+        while la_idx != end_la_idx {
+            let st = *pstack.val().unwrap();
+            let (la_lexeme, la_term) = self.next_lexeme(lexeme_prefix, la_idx);
+
+            match self.stable.action(st, la_term) {
+                Some(Action::Reduce(prod_id)) => {
+                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
+                    let pop_num = self.grm.prod(prod_id).unwrap().len();
+                    if let &mut Some(ref mut tstack_uw) = tstack {
+                        let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
+                                             .collect::<Vec<Node<TokId>>>();
+                        tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
+                    }
+
+                    for _ in 0..pop_num {
+                        pstack = pstack.parent().unwrap();
+                    }
+                    let prior = *pstack.val().unwrap();
+                    pstack = pstack.child(self.stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
+                },
+                Some(Action::Shift(state_id)) => {
+                    if let &mut Some(ref mut tstack_uw) = tstack {
+                        tstack_uw.push(Node::Term{lexeme: la_lexeme});
+                    }
+                    pstack = pstack.child(state_id);
+                    la_idx += 1;
+                },
+                Some(Action::Accept) => {
+                    debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
+                    if let &mut Some(ref mut tstack_uw) = tstack {
+                        debug_assert_eq!(tstack_uw.len(), 1);
+                    }
+                    break;
+                },
+                None => {
+                    break;
+                }
+            }
+        }
+        (la_idx, pstack)
+    }
+}
+
+pub enum RecoveryKind {
+    Corchuelo,
+    KimYi
 }
 
 /// Parse the lexemes, returning either a parse tree or a vector of `ParseError`s.
 pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
-            (grm: &YaccGrammar, stable: &StateTable, lexemes: &Vec<Lexeme<TokId>>)
-         -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
+       (grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable,
+        lexemes: &Vec<Lexeme<TokId>>)
+    -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
 {
-    Parser::parse(grm, stable, lexemes)
+    parse_rcvry(RecoveryKind::KimYi, grm, |_| 1, |_| 1, sgraph, stable, lexemes)
+}
+
+/// Parse the lexemes, specifying a particularly type of error recovery, returning either a parse
+/// tree or a vector of `ParseError`s.
+pub fn parse_rcvry
+       <TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>, F, G>
+       (rcvry_kind: RecoveryKind,
+        grm: &YaccGrammar,
+        ic: F,
+        dc: G,
+        sgraph: &StateGraph,
+        stable: &StateTable,
+        lexemes: &Vec<Lexeme<TokId>>)
+    -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
+    where F: Fn(TIdx) -> u64, G: Fn(TIdx) -> u64
+{
+    Parser::parse(rcvry_kind, grm, ic, dc, sgraph, stable, lexemes)
 }
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
 /// in the sequence of repairs is represented by a `ParseRepair`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ParseRepair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
-    Insert{term_idx: TIdx},
+    InsertTerm{term_idx: TIdx},
+    /// Insert a `Symbol::Nonterm` with idx `nonterm_idx`.
+    InsertNonterm{nonterm_idx: NTIdx},
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.
@@ -246,10 +362,12 @@ pub(crate) mod test {
     use lrtable::{Minimiser, from_yacc};
     use super::*;
 
-    pub(crate) fn do_parse(lexs: &str, grms: &str, input: &str) -> (YaccGrammar, Result<Node<u16>, (Node<u16>, Vec<ParseError<u16>>)>) {
+    pub(crate) fn do_parse(rcvry_kind: RecoveryKind, lexs: &str, grms: &str, input: &str)
+                       -> (YaccGrammar, Result<Node<u16>, (Node<u16>, Vec<ParseError<u16>>)>)
+    {
         let mut lexerdef = build_lex(lexs).unwrap();
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
-        let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         {
             let rule_ids = grm.terms_map().iter()
                                           .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
@@ -257,12 +375,12 @@ pub(crate) mod test {
             lexerdef.set_rule_ids(&rule_ids);
         }
         let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-        let pr = parse(&grm, &stable, &lexemes);
+        let pr = parse_rcvry(rcvry_kind, &grm, |_| 1, |_| 1, &sgraph, &stable, &lexemes);
         (grm, pr)
     }
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
-        let (grm, pt) = do_parse(lexs, grms, input);
+        let (grm, pt) = do_parse(RecoveryKind::KimYi, lexs, grms, input);
         assert_eq!(expected, pt.unwrap().pp(&grm, &input));
     }
 
@@ -375,13 +493,13 @@ Call: 'ID' 'OPEN_BRACKET' 'CLOSE_BRACKET';";
  CLOSE_BRACKET )
 ");
 
-        let (grm, pr) = do_parse(&lexs, &grms, "f(");
+        let (grm, pr) = do_parse(RecoveryKind::KimYi, &lexs, &grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.eof_term_idx())).ok().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
 
-        let (grm, pr) = do_parse(&lexs, &grms, "f(f(");
+        let (grm, pr) = do_parse(RecoveryKind::KimYi, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.term_idx("ID").unwrap())).ok().unwrap();

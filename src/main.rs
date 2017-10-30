@@ -51,7 +51,7 @@ extern crate lrtable;
 use lrtable::{Minimiser, from_yacc};
 
 extern crate lrpar;
-use lrpar::parser::{parse, ParseRepair};
+use lrpar::parser::{parse_rcvry, ParseRepair, RecoveryKind};
 
 fn usage(prog: &str, msg: &str) -> ! {
     let path = Path::new(prog);
@@ -128,7 +128,7 @@ fn main() {
             process::exit(1);
         }
     };
-    let (_, stable) = match from_yacc(&grm, Minimiser::Pager) {
+    let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
@@ -167,10 +167,13 @@ fn main() {
     let input = read_file(&matches.free[2]);
     let lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
-    match parse::<u16>(&grm, &stable, &lexemes) {
+    let ic = |_| 1; // Cost of inserting a terminal
+    let dc = |_| 1; // Cost of deleting a terminal
+    match parse_rcvry::<u16, _, _>(RecoveryKind::KimYi, &grm, &ic, dc, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err((pt, errs)) => {
             println!("{}", pt.pp(&grm, &input));
+            let sg = grm.sentence_generator(&ic);
             for e in errs {
                 let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
                 println!("Error detected at line {} col {}. Amongst the valid repairs are:", line, col);
@@ -178,17 +181,36 @@ fn main() {
                     let mut lex_idx = e.lexeme_idx();
                     let mut out = vec![];
                     for &r in repair {
-                        if let ParseRepair::Insert{term_idx} = r {
-                            out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap()));
-                        } else {
-                            let l = lexemes[lex_idx];
-                            let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
-                            if let ParseRepair::Delete = r {
-                                out.push(format!("Delete \"{}\"", t));
-                            } else {
-                                out.push(format!("Keep \"{}\"", t));
+                        match r {
+                            ParseRepair::InsertNonterm{nonterm_idx} => {
+                                let mut s = String::new();
+                                s.push_str("Insert {");
+                                for (i, snt) in sg.min_sentences(nonterm_idx).iter().enumerate() {
+                                    if i > 0 {
+                                        s.push_str(", ");
+                                    }
+                                    for (j, t_idx) in snt.iter().enumerate() {
+                                        if j > 0 {
+                                            s.push_str(" ");
+                                        }
+                                        s.push_str(grm.term_name(*t_idx).unwrap());
+                                    }
+                                }
+                                s.push_str("}");
+                                out.push(s);
+                            },
+                            ParseRepair::InsertTerm{term_idx} =>
+                                out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
+                            ParseRepair::Delete | ParseRepair::Shift => {
+                                let l = lexemes[lex_idx];
+                                let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
+                                if let ParseRepair::Delete = r {
+                                    out.push(format!("Delete \"{}\"", t));
+                                } else {
+                                    out.push(format!("Keep \"{}\"", t));
+                                }
+                                lex_idx += 1;
                             }
-                            lex_idx += 1;
                         }
                     }
                     println!("  {}", out.join(", "));
