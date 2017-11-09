@@ -341,15 +341,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
                     mut rprs: Vec<ParseRepair>)
                  -> Vec<ParseRepair>
 {
-    // Remove shifts from the end of repairs
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
-    while rprs.len() > 0 {
-        if let ParseRepair::Shift = rprs[rprs.len() - 1] {
-            rprs.pop();
-        } else {
-            break;
-        }
-    }
 
     // Remove all inserts of nonterms which have a minimal sentence cost of 0.
     let mut j = 0;
@@ -362,6 +354,15 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             }
         } else {
             j += 1;
+        }
+    }
+
+    // Remove shifts from the end of repairs
+    while rprs.len() > 0 {
+        if let ParseRepair::Shift = rprs[rprs.len() - 1] {
+            rprs.pop();
+        } else {
+            break;
         }
     }
 
