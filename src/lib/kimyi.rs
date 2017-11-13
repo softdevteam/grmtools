@@ -66,7 +66,7 @@ impl Hash for PathFNode {
 
 impl PartialEq for PathFNode {
     fn eq(&self, other: &PathFNode) -> bool {
-        self.pstack == other.pstack && self.repairs == other.repairs && self.la_idx == other.la_idx
+        self.pstack == other.pstack && self.la_idx == other.la_idx
     }
 }
 
@@ -609,7 +609,9 @@ E : 'N'
 
     #[test]
     fn kimyi_example() {
-        // The example from the Corchuelo paper
+        // The example from the KimYi paper, with a bit of alpha-renaming to make it clearer. The
+        // paper uses "A" as a nonterminal name and "a" as a terminal name, which are then easily
+        // confused. Here we use "E" as the nonterminal name, and keep "a" as the terminal name.
         let lexs = "%%
 [(] OPEN_BRACKET
 [)] CLOSE_BRACKET
@@ -655,8 +657,7 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         assert_eq!(errs[0].repairs().len(), 1);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertTerm \"A\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\"",
-                            "InsertTerm \"B\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["InsertNonterm \"E\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\""]);
     }
 
     #[test]
