@@ -241,7 +241,7 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
 
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
     let top_pstack = *n.pstack.val().unwrap();
-    for &(p_idx, sym_off) in parser.sgraph.closed_state(top_pstack).unwrap().items.keys() {
+    for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).unwrap().items.keys() {
         let nt_idx = parser.grm.prod_to_nonterm(p_idx);
         let mut qi_minus_alpha = n.pstack.clone();
         for _ in 0..usize::from(sym_off) {
