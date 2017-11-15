@@ -66,7 +66,7 @@ impl Hash for PathFNode {
 
 impl PartialEq for PathFNode {
     fn eq(&self, other: &PathFNode) -> bool {
-        self.pstack == other.pstack && self.repairs == other.repairs && self.la_idx == other.la_idx
+        self.pstack == other.pstack && self.la_idx == other.la_idx
     }
 }
 
@@ -241,7 +241,7 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
 
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
     let top_pstack = *n.pstack.val().unwrap();
-    for &(p_idx, sym_off) in parser.sgraph.closed_state(top_pstack).unwrap().items.keys() {
+    for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).unwrap().items.keys() {
         let nt_idx = parser.grm.prod_to_nonterm(p_idx);
         let mut qi_minus_alpha = n.pstack.clone();
         for _ in 0..usize::from(sym_off) {
@@ -341,15 +341,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
                     mut rprs: Vec<ParseRepair>)
                  -> Vec<ParseRepair>
 {
-    // Remove shifts from the end of repairs
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
-    while rprs.len() > 0 {
-        if let ParseRepair::Shift = rprs[rprs.len() - 1] {
-            rprs.pop();
-        } else {
-            break;
-        }
-    }
 
     // Remove all inserts of nonterms which have a minimal sentence cost of 0.
     let mut j = 0;
@@ -362,6 +354,15 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             }
         } else {
             j += 1;
+        }
+    }
+
+    // Remove shifts from the end of repairs
+    while rprs.len() > 0 {
+        if let ParseRepair::Shift = rprs[rprs.len() - 1] {
+            rprs.pop();
+        } else {
+            break;
         }
     }
 
@@ -608,7 +609,9 @@ E : 'N'
 
     #[test]
     fn kimyi_example() {
-        // The example from the Corchuelo paper
+        // The example from the KimYi paper, with a bit of alpha-renaming to make it clearer. The
+        // paper uses "A" as a nonterminal name and "a" as a terminal name, which are then easily
+        // confused. Here we use "E" as the nonterminal name, and keep "a" as the terminal name.
         let lexs = "%%
 [(] OPEN_BRACKET
 [)] CLOSE_BRACKET
@@ -654,8 +657,7 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         assert_eq!(errs[0].repairs().len(), 1);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertTerm \"A\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\"",
-                            "InsertTerm \"B\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["InsertNonterm \"E\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\""]);
     }
 
     #[test]
