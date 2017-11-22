@@ -57,8 +57,8 @@ impl StateGraph {
     }
 
     /// Return an iterator over all closed states in this `StateGraph`.
-    pub fn iter_closed_states<'a>(&'a self) -> impl Iterator<Item=&Itemset> + 'a {
-        self.states.iter().map(|x| &x.1)
+    pub fn iter_closed_states<'a>(&'a self) -> Box<Iterator<Item=&'a Itemset> + 'a> {
+        Box::new(self.states.iter().map(|x| &x.1))
     }
 
     /// How many closed items does this `StateGraph` contain?
@@ -72,8 +72,8 @@ impl StateGraph {
     }
 
     /// Return an iterator over all core states in this `StateGraph`.
-    pub fn iter_core_states<'a>(&'a self) -> impl Iterator<Item=&Itemset> + 'a {
-        self.states.iter().map(|x| &x.0)
+    pub fn iter_core_states<'a>(&'a self) -> Box<Iterator<Item=&'a Itemset> + 'a> {
+        Box::new(self.states.iter().map(|x| &x.0))
     }
 
     /// How many core items does this `StateGraph` contain?
