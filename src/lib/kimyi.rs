@@ -217,15 +217,26 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
                     continue;
                 }
 
-                if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
+                if n.t == 1 {
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
                         t: n.t + 1,
                         repairs: n.repairs.child(ParseRepair::InsertTerm{term_idx}),
                         cf: n.cf + parser.ic(Symbol::Term(term_idx)),
-                        cg: d};
+                        cg: 0};
                     nbrs.insert(nn);
+                } else {
+                    if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
+                        let nn = PathFNode{
+                            pstack: n.pstack.child(sym_st_idx),
+                            la_idx: n.la_idx,
+                            t: n.t + 1,
+                            repairs: n.repairs.child(ParseRepair::InsertTerm{term_idx}),
+                            cf: n.cf + parser.ic(Symbol::Term(term_idx)),
+                            cg: d};
+                        nbrs.insert(nn);
+                    }
                 }
             }
         }
