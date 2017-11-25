@@ -39,6 +39,7 @@ use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
 
 use kimyi;
+use kimyi_plus;
 use corchuelo;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -159,7 +160,9 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                         RecoveryKind::Corchuelo =>
                             corchuelo::recover(self, la_idx, pstack, tstack),
                         RecoveryKind::KimYi =>
-                            kimyi::recover(self, la_idx, pstack, tstack)
+                            kimyi::recover(self, la_idx, pstack, tstack),
+                        RecoveryKind::KimYiPlus =>
+                            kimyi_plus::recover(self, la_idx, pstack, tstack)
                     };
                     let keep_going = repairs.len() != 0;
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
@@ -279,7 +282,8 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
 
 pub enum RecoveryKind {
     Corchuelo,
-    KimYi
+    KimYi,
+    KimYiPlus
 }
 
 /// Parse the lexemes, returning either a parse tree or a vector of `ParseError`s.

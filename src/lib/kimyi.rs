@@ -48,25 +48,27 @@ const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 
 #[derive(Clone, Debug, Eq)]
-struct PathFNode {
-    pstack: Cactus<StIdx>,
-    la_idx: usize,
-    t: u64,
-    repairs: Cactus<ParseRepair>,
-    cf: u64,
-    cg: u64
+pub(crate) struct PathFNode {
+    pub(crate) pstack: Cactus<StIdx>,
+    pub(crate) la_idx: usize,
+    pub(crate) t: u64,
+    pub(crate) repairs: Cactus<ParseRepair>,
+    pub(crate) cf: u64,
+    pub(crate) cg: u64
 }
 
 impl Hash for PathFNode {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.pstack.hash(state);
         self.la_idx.hash(state);
+        self.cf.hash(state);
+        self.cg.hash(state);
     }
 }
 
 impl PartialEq for PathFNode {
     fn eq(&self, other: &PathFNode) -> bool {
-        self.pstack == other.pstack && self.la_idx == other.la_idx
+        self.pstack == other.pstack && self.la_idx == other.la_idx && self.cf == other.cf && self.cg == other.cg
     }
 }
 
@@ -205,8 +207,11 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
 // The following 4 functions implement the operational semantics presented on pages 11 and 12 of
 // the paper.
 
-fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-       (parser: &Parser<TokId>, dist: &Dist, n: &PathFNode, nbrs: &mut HashSet<PathFNode>)
+pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                  (parser: &Parser<TokId>,
+                   dist: &Dist,
+                   n: &PathFNode,
+                   nbrs: &mut HashSet<PathFNode>)
 {
     let top_pstack = *n.pstack.val().unwrap();
     let (_, la_term) = parser.next_lexeme(None, n.la_idx);
@@ -243,8 +248,10 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
     }
 }
 
-fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-       (parser: &Parser<TokId>, n: &PathFNode, nbrs: &mut HashSet<PathFNode>)
+pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                  (parser: &Parser<TokId>,
+                   n: &PathFNode,
+                   nbrs: &mut HashSet<PathFNode>)
 {
     if n.t != 1 {
         return;
@@ -291,8 +298,10 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
     }
 }
 
-fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-      (parser: &Parser<TokId>, n: &PathFNode, nbrs: &mut HashSet<PathFNode>)
+pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                 (parser: &Parser<TokId>,
+                  n: &PathFNode,
+                  nbrs: &mut HashSet<PathFNode>)
 {
     if n.t != 1 || n.la_idx == parser.lexemes.len() {
         return;
@@ -311,8 +320,10 @@ fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq
 // Note that we implement R3S-n (on page 12), *not* R3S (on page 11), since the latter rule clearly
 // doesn't work properly in the context of the overall algorithm.
 
-fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-      (parser: &Parser<TokId>, n: &PathFNode, nbrs: &mut HashSet<PathFNode>)
+pub(crate) fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                   (parser: &Parser<TokId>,
+                    n: &PathFNode,
+                    nbrs: &mut HashSet<PathFNode>)
 {
     let (new_la_idx, n_pstack) = parser.lr_cactus(None,
                                                   n.la_idx,
@@ -382,13 +393,13 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
-fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                (parser: &Parser<TokId>,
-                 mut la_idx: usize,
-                 mut pstack: Cactus<StIdx>,
-                 tstack: &mut Option<&mut Vec<Node<TokId>>>,
-                 repairs: &Vec<ParseRepair>)
-              -> (usize, Cactus<StIdx>)
+pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                           (parser: &Parser<TokId>,
+                            mut la_idx: usize,
+                            mut pstack: Cactus<StIdx>,
+                            tstack: &mut Option<&mut Vec<Node<TokId>>>,
+                            repairs: &Vec<ParseRepair>)
+                         -> (usize, Cactus<StIdx>)
 {
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
     for r in repairs.iter() {
@@ -431,13 +442,13 @@ fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> +
     (la_idx, pstack)
 }
 
-struct Dist {
+pub(crate) struct Dist {
     terms_len: usize,
     table: Vec<u64>
 }
 
 impl Dist {
-    fn new<F>(grm: &YaccGrammar, sgraph: &StateGraph, term_cost: F) -> Dist
+    pub(crate) fn new<F>(grm: &YaccGrammar, sgraph: &StateGraph, term_cost: F) -> Dist
               where F: Fn(TIdx) -> u64
     {
         // This is a very simple, and not very efficient, implementation of dist: one could,
@@ -496,7 +507,7 @@ impl Dist {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use std::convert::TryFrom;
 
     use cfgrammar::Symbol;
@@ -508,7 +519,7 @@ mod test {
     use parser::test::do_parse;
     use super::*;
 
-    fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
+    pub(crate) fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
         let mut out = vec![];
         for &r in repairs {
             match r {
@@ -525,7 +536,7 @@ mod test {
         out.join(", ")
     }
 
-    fn check_repairs(grm: &YaccGrammar, repairs: &Vec<Vec<ParseRepair>>, expected: &[&str]) {
+    pub(crate) fn check_repairs(grm: &YaccGrammar, repairs: &Vec<Vec<ParseRepair>>, expected: &[&str]) {
         for i in 0..repairs.len() {
             // First of all check that all the repairs are unique
             for j in i + 1..repairs.len() {
@@ -554,9 +565,10 @@ E : 'N'
   ;
 ";
 
-        let (grm, pr) = do_parse(RecoveryKind::KimYi, &lexs, &grms, "(nn");
+        let (grm, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, "(nn");
         let (pt, errs) = pr.unwrap_err();
         let pp = pt.pp(&grm, "(nn");
+        println!("{}", pp);
         if !vec![
 "E
  OPEN_BRACKET (

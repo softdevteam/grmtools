@@ -42,3 +42,4 @@ mod corchuelo;
 pub mod parser;
 pub use parser::{ParseRepair, RecoveryKind};
 mod kimyi;
+mod kimyi_plus;
