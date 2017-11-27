@@ -318,9 +318,10 @@ impl YaccGrammar {
         self.prod_precs[usize::from(i)]
     }
 
-    /// Return the name of terminal `i` or `None` if it doesn't exist.
+    /// Return the name of terminal `i` (where `None` indicates "the rule has no name"). Panics if
+    /// `i` doesn't exist.
     pub fn term_name(&self, i: TIdx) -> Option<&str> {
-        self.term_names.get(usize::from(i)).map_or(None, |x| x.as_ref().map_or(None, |y| Some(&y)))
+        self.term_names[usize::from(i)].as_ref().map_or(None, |x| Some(&x))
     }
 
     /// Return the precedence of terminal `i` or `None` if it doesn't exist.
