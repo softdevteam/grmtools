@@ -292,9 +292,9 @@ impl YaccGrammar {
         &self.rules_prods[usize::from(i)]
     }
 
-    /// Return the name of nonterminal `i` or `None` if it doesn't exist.
-    pub fn nonterm_name(&self, i: NTIdx) -> Option<&str> {
-        self.nonterm_names.get(usize::from(i)).map_or(None, |x| Some(x))
+    /// Return the name of nonterminal `i`. Panics if `i` doesn't exist.
+    pub fn nonterm_name(&self, i: NTIdx) -> &str {
+        &self.nonterm_names[usize::from(i)]
     }
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
