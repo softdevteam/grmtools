@@ -312,9 +312,10 @@ impl YaccGrammar {
         self.prods_rules[usize::from(i)]
     }
 
-    /// Return the precedence of production `i` or `None` if it doesn't exist.
-    pub fn prod_precedence(&self, i: PIdx) -> Option<Option<Precedence>> {
-        self.prod_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
+    /// Return the precedence of production `i` (where `None` indicates "no precedence specified").
+    /// Panics if `i` doesn't exist.
+    pub fn prod_precedence(&self, i: PIdx) -> Option<Precedence> {
+        self.prod_precs[usize::from(i)]
     }
 
     /// Return the name of terminal `i` or `None` if it doesn't exist.
