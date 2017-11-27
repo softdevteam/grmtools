@@ -324,9 +324,10 @@ impl YaccGrammar {
         self.term_names[usize::from(i)].as_ref().map_or(None, |x| Some(&x))
     }
 
-    /// Return the precedence of terminal `i` or `None` if it doesn't exist.
-    pub fn term_precedence(&self, i: TIdx) -> Option<Option<Precedence>> {
-        self.term_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
+    /// Return the precedence of terminal `i` (where `None` indicates "no precedence specified").
+    /// Panics if `i` doesn't exist.
+    pub fn term_precedence(&self, i: TIdx) -> Option<Precedence> {
+        self.term_precs[usize::from(i)]
     }
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
