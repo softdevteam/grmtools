@@ -287,9 +287,9 @@ impl YaccGrammar {
         self.eof_term_idx
     }
 
-    /// Return the productions for nonterminal `i` or `None` if it doesn't exist.
-    pub fn nonterm_to_prods(&self, i: NTIdx) -> Option<&[PIdx]> {
-        self.rules_prods.get(usize::from(i)).map_or(None, |x| Some(x))
+    /// Return the productions for nonterminal `i`. Panics if `i` doesn't exist.
+    pub fn nonterm_to_prods(&self, i: NTIdx) -> &[PIdx] {
+        &self.rules_prods[usize::from(i)]
     }
 
     /// Return the name of nonterminal `i` or `None` if it doesn't exist.
@@ -381,7 +381,7 @@ impl YaccGrammar {
                 seen[i] = true;
                 todo[i] = false;
                 empty = false;
-                for p_idx in self.nonterm_to_prods(NTIdx::from(i)).unwrap().iter() {
+                for p_idx in self.nonterm_to_prods(NTIdx::from(i)).iter() {
                     for sym in self.prod(*p_idx).unwrap() {
                         if let Symbol::Nonterm(nt_idx) = *sym {
                             if nt_idx == to {
@@ -482,7 +482,7 @@ impl<'a> SentenceGenerator<'a> {
         let cheapest_prod = |nt_idx: NTIdx| -> PIdx {
             let mut low_sc = None;
             let mut low_idx = None;
-            for &pidx in self.grm.nonterm_to_prods(nt_idx).unwrap().iter() {
+            for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
                 let mut sc = 0;
                 for sym in self.grm.prod(pidx).unwrap().iter() {
                     sc += match *sym {
@@ -523,7 +523,7 @@ impl<'a> SentenceGenerator<'a> {
         let cheapest_prods = |nt_idx: NTIdx| -> Vec<PIdx> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
-            for &pidx in self.grm.nonterm_to_prods(nt_idx).unwrap().iter() {
+            for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
                 let mut sc = 0;
                 for sym in self.grm.prod(pidx).unwrap().iter() {
                     sc += match *sym {
@@ -657,7 +657,7 @@ fn nonterm_costs<F>(grm: &YaccGrammar, term_cost: F) -> Vec<u64>
             all_done = false;
             let mut ls_cmplt = None; // lowest completed cost
             let mut ls_noncmplt = None; // lowest non-completed cost
-            for p_idx in grm.nonterm_to_prods(NTIdx::from(i)).unwrap().iter() {
+            for p_idx in grm.nonterm_to_prods(NTIdx::from(i)).iter() {
                 let mut c: u64 = 0; // production cost
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx).unwrap() {
