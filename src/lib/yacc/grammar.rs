@@ -307,7 +307,7 @@ impl YaccGrammar {
         &self.prods[usize::from(i)]
     }
 
-    /// Return the nonterm index of the production `i` or `None` if it doesn't exist.
+    /// Return the nonterm index of the production `i`. Panics if `i` doesn't exist.
     pub fn prod_to_nonterm(&self, i: PIdx) -> NTIdx {
         self.prods_rules[usize::from(i)]
     }
