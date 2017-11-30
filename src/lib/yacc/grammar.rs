@@ -287,14 +287,14 @@ impl YaccGrammar {
         self.eof_term_idx
     }
 
-    /// Return the productions for nonterminal `i` or `None` if it doesn't exist.
-    pub fn nonterm_to_prods(&self, i: NTIdx) -> Option<&[PIdx]> {
-        self.rules_prods.get(usize::from(i)).map_or(None, |x| Some(x))
+    /// Return the productions for nonterminal `i`. Panics if `i` doesn't exist.
+    pub fn nonterm_to_prods(&self, i: NTIdx) -> &[PIdx] {
+        &self.rules_prods[usize::from(i)]
     }
 
-    /// Return the name of nonterminal `i` or `None` if it doesn't exist.
-    pub fn nonterm_name(&self, i: NTIdx) -> Option<&str> {
-        self.nonterm_names.get(usize::from(i)).map_or(None, |x| Some(x))
+    /// Return the name of nonterminal `i`. Panics if `i` doesn't exist.
+    pub fn nonterm_name(&self, i: NTIdx) -> &str {
+        &self.nonterm_names[usize::from(i)]
     }
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
@@ -302,29 +302,32 @@ impl YaccGrammar {
         Box::new((0..self.nonterms_len).map(NTIdx))
     }
 
-    /// Get the sequence of symbols for production `i` or `None` if it doesn't exist.
-    pub fn prod(&self, i: PIdx) -> Option<&[Symbol]> {
-        self.prods.get(usize::from(i)).map_or(None, |x| Some(x))
+    /// Get the sequence of symbols for production `i`. Panics if `i` doesn't exist.
+    pub fn prod(&self, i: PIdx) -> &[Symbol] {
+        &self.prods[usize::from(i)]
     }
 
-    /// Return the nonterm index of the production `i` or `None` if it doesn't exist.
+    /// Return the nonterm index of the production `i`. Panics if `i` doesn't exist.
     pub fn prod_to_nonterm(&self, i: PIdx) -> NTIdx {
         self.prods_rules[usize::from(i)]
     }
 
-    /// Return the precedence of production `i` or `None` if it doesn't exist.
-    pub fn prod_precedence(&self, i: PIdx) -> Option<Option<Precedence>> {
-        self.prod_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
+    /// Return the precedence of production `i` (where `None` indicates "no precedence specified").
+    /// Panics if `i` doesn't exist.
+    pub fn prod_precedence(&self, i: PIdx) -> Option<Precedence> {
+        self.prod_precs[usize::from(i)]
     }
 
-    /// Return the name of terminal `i` or `None` if it doesn't exist.
+    /// Return the name of terminal `i` (where `None` indicates "the rule has no name"). Panics if
+    /// `i` doesn't exist.
     pub fn term_name(&self, i: TIdx) -> Option<&str> {
-        self.term_names.get(usize::from(i)).map_or(None, |x| x.as_ref().map_or(None, |y| Some(&y)))
+        self.term_names[usize::from(i)].as_ref().map_or(None, |x| Some(&x))
     }
 
-    /// Return the precedence of terminal `i` or `None` if it doesn't exist.
-    pub fn term_precedence(&self, i: TIdx) -> Option<Option<Precedence>> {
-        self.term_precs.get(usize::from(i)).map_or(None, |x| Some(*x))
+    /// Return the precedence of terminal `i` (where `None` indicates "no precedence specified").
+    /// Panics if `i` doesn't exist.
+    pub fn term_precedence(&self, i: TIdx) -> Option<Precedence> {
+        self.term_precs[usize::from(i)]
     }
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
@@ -381,8 +384,8 @@ impl YaccGrammar {
                 seen[i] = true;
                 todo[i] = false;
                 empty = false;
-                for p_idx in self.nonterm_to_prods(NTIdx::from(i)).unwrap().iter() {
-                    for sym in self.prod(*p_idx).unwrap() {
+                for p_idx in self.nonterm_to_prods(NTIdx::from(i)).iter() {
+                    for sym in self.prod(*p_idx) {
                         if let Symbol::Nonterm(nt_idx) = *sym {
                             if nt_idx == to {
                                 return true;
@@ -482,9 +485,9 @@ impl<'a> SentenceGenerator<'a> {
         let cheapest_prod = |nt_idx: NTIdx| -> PIdx {
             let mut low_sc = None;
             let mut low_idx = None;
-            for &pidx in self.grm.nonterm_to_prods(nt_idx).unwrap().iter() {
+            for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
                 let mut sc = 0;
-                for sym in self.grm.prod(pidx).unwrap().iter() {
+                for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Nonterm(i) => self.nonterm_costs[usize::from(i)],
                         Symbol::Term(i)    => self.term_costs[usize::from(i)]
@@ -502,7 +505,7 @@ impl<'a> SentenceGenerator<'a> {
         let mut st = vec![(cheapest_prod(nonterm_idx), 0)];
         while st.len() > 0 {
             let (p_idx, sym_idx) = st.pop().unwrap();
-            let prod = self.grm.prod(p_idx).unwrap();
+            let prod = self.grm.prod(p_idx);
             for i in sym_idx..prod.len() {
                 match prod[i] {
                     Symbol::Nonterm(j) => {
@@ -523,9 +526,9 @@ impl<'a> SentenceGenerator<'a> {
         let cheapest_prods = |nt_idx: NTIdx| -> Vec<PIdx> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
-            for &pidx in self.grm.nonterm_to_prods(nt_idx).unwrap().iter() {
+            for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
                 let mut sc = 0;
-                for sym in self.grm.prod(pidx).unwrap().iter() {
+                for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Nonterm(i) => self.nonterm_costs[usize::from(i)],
                         Symbol::Term(i)    => self.term_costs[usize::from(i)]
@@ -544,7 +547,7 @@ impl<'a> SentenceGenerator<'a> {
 
         let mut sts = Vec::new(); // Output sentences
         for p_idx in cheapest_prods(nonterm_idx) {
-            let prod = self.grm.prod(p_idx).unwrap();
+            let prod = self.grm.prod(p_idx);
             if prod.len() == 0 {
                 sts.push(vec![]);
                 continue;
@@ -657,10 +660,10 @@ fn nonterm_costs<F>(grm: &YaccGrammar, term_cost: F) -> Vec<u64>
             all_done = false;
             let mut ls_cmplt = None; // lowest completed cost
             let mut ls_noncmplt = None; // lowest non-completed cost
-            for p_idx in grm.nonterm_to_prods(NTIdx::from(i)).unwrap().iter() {
+            for p_idx in grm.nonterm_to_prods(NTIdx::from(i)).iter() {
                 let mut c: u64 = 0; // production cost
                 let mut cmplt = true;
-                for sym in grm.prod(*p_idx).unwrap() {
+                for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
                                  Symbol::Term(term_idx) => term_cost(term_idx),
                                  Symbol::Nonterm(nt_idx) => {
@@ -742,9 +745,9 @@ mod test {
         grm.term_idx("T").unwrap();
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)]]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]).unwrap();
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]).unwrap();
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
 
@@ -764,12 +767,12 @@ mod test {
         assert!(grm.term_name(grm.eof_term_idx()).is_none());
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]).unwrap();
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]).unwrap();
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
         assert_eq!(r_prod.len(), 1);
         assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
-        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("S").unwrap())][0]).unwrap();
+        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("S").unwrap())][0]);
         assert_eq!(s_prod.len(), 1);
         assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T").unwrap()));
     }
@@ -787,14 +790,14 @@ mod test {
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
         assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1), NTIdx(2)]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]).unwrap();
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]).unwrap();
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
         assert_eq!(r_prod.len(), 3);
         assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
         assert_eq!(r_prod[1], Symbol::Term(grm.term_idx("T1").unwrap()));
         assert_eq!(r_prod[2], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
-        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("S").unwrap())][0]).unwrap();
+        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("S").unwrap())][0]);
         assert_eq!(s_prod.len(), 1);
         assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T2").unwrap()));
     }
