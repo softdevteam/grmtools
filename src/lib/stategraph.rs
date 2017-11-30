@@ -94,9 +94,9 @@ impl StateGraph {
                   .cloned()
     }
 
-    /// Return the edges for state `st_idx` or `None` if it doesn't exist.
-    pub fn edges(&self, st_idx: StIdx) -> Option<&HashMap<Symbol, StIdx>> {
-        self.edges.get(usize::from(st_idx))
+    /// Return the edges for state `st_idx`. Panics if `st_idx` doesn't exist.
+    pub fn edges(&self, st_idx: StIdx) -> &HashMap<Symbol, StIdx> {
+        &self.edges[usize::from(st_idx)]
     }
 
     /// How many edges does this `StateGraph` contain?
@@ -170,7 +170,7 @@ impl StateGraph {
                 }
                 o.push_str("}]");
             }
-            for (esym, e_st_idx) in self.edges(StIdx::from(st_idx)).unwrap().iter() {
+            for (esym, e_st_idx) in self.edges(StIdx::from(st_idx)).iter() {
                 o.push_str(&format!("\n{}{} -> {}",
                                    " ".repeat(num_digits(self.all_states_len()) + 2),
                                    fmt_sym(&grm, *esym),

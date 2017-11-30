@@ -146,7 +146,7 @@ impl StateTable {
                 }
             }
 
-            for (&sym, state_j) in sg.edges(state_i).unwrap() {
+            for (&sym, state_j) in sg.edges(state_i) {
                 match sym {
                     Symbol::Nonterm(nonterm_i) => {
                         // Populate gotos
