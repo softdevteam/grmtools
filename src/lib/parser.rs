@@ -65,7 +65,7 @@ impl<TokId: Copy + TryInto<usize>> Node<TokId> {
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
                 Node::Nonterm{nonterm_idx, ref nodes} => {
-                    s.push_str(&format!("{}\n", grm.nonterm_name(nonterm_idx).unwrap()));
+                    s.push_str(&format!("{}\n", grm.nonterm_name(nonterm_idx)));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }
@@ -137,7 +137,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
             match self.stable.action(st, la_term) {
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
-                    let pop_idx = pstack.len() - self.grm.prod(prod_id).unwrap().len();
+                    let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<TokId>>>();
                     tstack.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
 
@@ -244,7 +244,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
             match self.stable.action(st, la_term) {
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
-                    let pop_num = self.grm.prod(prod_id).unwrap().len();
+                    let pop_num = self.grm.prod(prod_id).len();
                     if let &mut Some(ref mut tstack_uw) = tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
                                              .collect::<Vec<Node<TokId>>>();

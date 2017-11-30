@@ -216,7 +216,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
     let top_pstack = *n.pstack.val().unwrap();
     let (_, la_term) = parser.next_lexeme(None, n.la_idx);
     if let Symbol::Term(la_term_idx) = la_term {
-        for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).unwrap().iter() {
+        for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
             if let Symbol::Term(term_idx) = sym {
                 if term_idx == parser.grm.eof_term_idx() {
                     continue;
@@ -259,7 +259,7 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
 
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
     let top_pstack = *n.pstack.val().unwrap();
-    for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).unwrap().items.keys() {
+    for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).items.keys() {
         let nt_idx = parser.grm.prod_to_nonterm(p_idx);
         let mut qi_minus_alpha = n.pstack.clone();
         for _ in 0..usize::from(sym_off) {
@@ -272,7 +272,6 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
             let mut n_repairs = n.repairs.clone();
             let mut cost = 0;
             for sym in parser.grm.prod(p_idx)
-                                 .unwrap()
                                  .iter()
                                  .skip(sym_off.into()) {
                 match sym {
@@ -462,7 +461,7 @@ impl Dist {
         loop {
             let mut chgd = false; // Has anything changed?
             for i in 0..states_len {
-                let edges = sgraph.edges(StIdx::from(i)).unwrap();
+                let edges = sgraph.edges(StIdx::from(i));
                 for (&sym, &sym_st_idx) in edges.iter() {
                     let d = match sym {
                         Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
@@ -524,7 +523,7 @@ pub(crate) mod test {
         for &r in repairs {
             match r {
                 ParseRepair::InsertNonterm{nonterm_idx} =>
-                    out.push(format!("InsertNonterm \"{}\"", grm.nonterm_name(nonterm_idx).unwrap())),
+                    out.push(format!("InsertNonterm \"{}\"", grm.nonterm_name(nonterm_idx))),
                 ParseRepair::InsertTerm{term_idx} =>
                     out.push(format!("InsertTerm \"{}\"", grm.term_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
