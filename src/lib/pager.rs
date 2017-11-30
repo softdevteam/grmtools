@@ -198,7 +198,7 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
             seen_nonterms.clear();
             seen_terms.clear();
             for &(prod_i, dot) in cl_state.items.keys() {
-                let prod = grm.prod(prod_i).unwrap();
+                let prod = grm.prod(prod_i);
                 if dot == prod.len().into() { continue; }
                 let sym = prod[usize::from(dot)];
                 match sym {
