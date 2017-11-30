@@ -122,7 +122,7 @@ impl Itemset {
                     zero_todos.set(prod_i.into(), false);
                 }
             }
-            let prod = grm.prod(prod_i).unwrap();
+            let prod = grm.prod(prod_i);
             if dot == prod.len().into() { continue; }
             if let Symbol::Nonterm(nonterm_i) = prod[usize::from(dot)] {
                 // This if statement is, in essence, a fast version of what's called getContext in
@@ -153,7 +153,7 @@ impl Itemset {
                     new_ctx.union(&new_is.items[&(prod_i, dot)]);
                 }
 
-                for ref_prod_i in grm.nonterm_to_prods(nonterm_i).unwrap().iter() {
+                for ref_prod_i in grm.nonterm_to_prods(nonterm_i).iter() {
                     if new_is.add(*ref_prod_i, 0.into(), &new_ctx) {
                         zero_todos.set(usize::from(*ref_prod_i), true);
                     }
@@ -169,7 +169,7 @@ impl Itemset {
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(grm);
         for (&(prod_i, dot), ctx) in &self.items {
-            let prod = grm.prod(prod_i).unwrap();
+            let prod = grm.prod(prod_i);
             if dot == SIdx::from(prod.len()) { continue; }
             if sym == &prod[usize::from(dot)] {
                 newis.add(prod_i, (usize::from(dot) + 1).into(), ctx);
@@ -178,7 +178,6 @@ impl Itemset {
         newis
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -206,7 +205,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap()).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(cls_is.items.len(), 6);
@@ -240,7 +239,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap()).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -249,7 +248,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap()).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap())[0], 0.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
         state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
@@ -282,7 +281,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap()).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -293,7 +292,7 @@ mod test {
         la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.term_idx("b").unwrap()), true);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap()).unwrap()[1], 1.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap())[1], 1.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
         state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
@@ -302,7 +301,7 @@ mod test {
         is = Itemset::new(&grm);
         la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.term_idx("a").unwrap()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap()).unwrap()[0], 1.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0], 1.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
@@ -316,7 +315,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = BitVec::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap()).unwrap()[0], 0.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);
 
         let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));

@@ -51,9 +51,9 @@ impl StateGraph {
         StateGraph{states, edges}
     }
 
-    /// Return the itemset for closed state `st_idx` or `None` if it doesn't exist.
-    pub fn closed_state(&self, st_idx: StIdx) -> Option<&Itemset> {
-        self.states.get(usize::from(st_idx)).map(|x| &x.1)
+    /// Return the itemset for closed state `st_idx`. Panics if `st_idx` doesn't exist.
+    pub fn closed_state(&self, st_idx: StIdx) -> &Itemset {
+        &self.states[usize::from(st_idx)].1
     }
 
     /// Return an iterator over all closed states in this `StateGraph`.
@@ -67,8 +67,8 @@ impl StateGraph {
     }
 
     /// Return the itemset for core state `st_idx` or `None` if it doesn't exist.
-    pub fn core_state(&self, st_idx: StIdx) -> Option<&Itemset> {
-        self.states.get(usize::from(st_idx)).map(|x| &x.0)
+    pub fn core_state(&self, st_idx: StIdx) -> &Itemset {
+        &self.states[usize::from(st_idx)].0
     }
 
     /// Return an iterator over all core states in this `StateGraph`.
@@ -94,9 +94,9 @@ impl StateGraph {
                   .cloned()
     }
 
-    /// Return the edges for state `st_idx` or `None` if it doesn't exist.
-    pub fn edges(&self, st_idx: StIdx) -> Option<&HashMap<Symbol, StIdx>> {
-        self.edges.get(usize::from(st_idx))
+    /// Return the edges for state `st_idx`. Panics if `st_idx` doesn't exist.
+    pub fn edges(&self, st_idx: StIdx) -> &HashMap<Symbol, StIdx> {
+        &self.edges[usize::from(st_idx)]
     }
 
     /// How many edges does this `StateGraph` contain?
@@ -114,8 +114,8 @@ impl StateGraph {
 
         fn fmt_sym(grm: &YaccGrammar, sym: Symbol) -> String {
             match sym {
-                Symbol::Nonterm(ntidx) => grm.nonterm_name(ntidx).unwrap().to_string(),
-                Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap())
+                Symbol::Nonterm(ntidx) => grm.nonterm_name(ntidx).to_string(),
+                Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap_or(""))
             }
         }
 
@@ -143,14 +143,14 @@ impl StateGraph {
                 };
                 o.push_str(&format!("{} [{} ->",
                                     " ".repeat(padding),
-                                    grm.nonterm_name(grm.prod_to_nonterm(p_idx)).unwrap()));
-                for (is_idx, is_sym) in grm.prod(p_idx).unwrap().iter().enumerate() {
+                                    grm.nonterm_name(grm.prod_to_nonterm(p_idx))));
+                for (is_idx, is_sym) in grm.prod(p_idx).iter().enumerate() {
                     if is_idx == usize::from(s_idx) {
                         o.push_str(" .");
                     }
                     o.push_str(&format!(" {}", fmt_sym(&grm, *is_sym)));
                 }
-                if usize::from(s_idx) == grm.prod(p_idx).unwrap().len() {
+                if usize::from(s_idx) == grm.prod(p_idx).len() {
                     o.push_str(" .");
                 }
                 o.push_str(", {");
@@ -170,7 +170,7 @@ impl StateGraph {
                 }
                 o.push_str("}]");
             }
-            for (esym, e_st_idx) in self.edges(StIdx::from(st_idx)).unwrap().iter() {
+            for (esym, e_st_idx) in self.edges(StIdx::from(st_idx)).iter() {
                 o.push_str(&format!("\n{}{} -> {}",
                                    " ".repeat(num_digits(self.all_states_len()) + 2),
                                    fmt_sym(&grm, *esym),
@@ -198,7 +198,7 @@ use cfgrammar::{Grammar};
 pub fn state_exists(grm: &YaccGrammar, is: &Itemset, nt: &str, prod_off: usize, dot: usize, la:
                     Vec<&str>) {
 
-    let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap()).unwrap()[prod_off];
+    let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot.into())];
     for i in 0..grm.terms_len() {
         let bit = ctx[i];

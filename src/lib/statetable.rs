@@ -104,7 +104,7 @@ impl StateTable {
         for (state_i, state) in sg.iter_closed_states().enumerate().map(|(x, y)| (StIdx(x), y)) {
             // Populate reduce and accepts
             for (&(prod_i, dot), ctx) in &state.items {
-                if dot < grm.prod(prod_i).unwrap().len().into() {
+                if dot < grm.prod(prod_i).len().into() {
                     continue;
                 }
                 for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
@@ -146,7 +146,7 @@ impl StateTable {
                 }
             }
 
-            for (&sym, state_j) in sg.edges(state_i).unwrap() {
+            for (&sym, state_j) in sg.edges(state_i) {
                 match sym {
                     Symbol::Nonterm(nonterm_i) => {
                         // Populate gotos
@@ -181,7 +181,7 @@ impl StateTable {
     }
 
 
-    /// Return the action for `state_idx` and `sym`, or None if there isn't any.
+    /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
     pub fn action(&self, state_idx: StIdx, sym: Symbol) -> Option<Action> {
         if let Symbol::Term(term_idx) = sym {
             let off = StateTable::actions_offset(self.terms_len, state_idx, term_idx);
@@ -203,7 +203,7 @@ impl StateTable {
         StateActionIterator{symbols: syms, i: 0}
     }
 
-    /// Return the goto state for `state_idx` and `nonterm_idx`, or None if there isn't any.
+    /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
     pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
         self.gotos.get(&(state_idx, nonterm_idx)).map_or(None, |x| Some(*x))
     }
@@ -234,8 +234,8 @@ impl Iterator for StateActionIterator {
 fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<usize, Action>, term_k: TIdx,
                         prod_k: PIdx, state_j: StIdx) -> u64 {
     let mut shift_reduce = 0;
-    let term_k_prec = grm.term_precedence(term_k).unwrap();
-    let prod_k_prec = grm.prod_precedence(prod_k).unwrap();
+    let term_k_prec = grm.term_precedence(term_k);
+    let prod_k_prec = grm.prod_precedence(prod_k);
     match (term_k_prec, prod_k_prec) {
         (_, None) | (None, _) => {
             // If the terminal and production don't both have precedences, we use Yacc's default
@@ -313,7 +313,7 @@ mod test {
         // Actions
         assert_eq!(st.actions.len(), 15);
         let assert_reduce = |state_i: StIdx, term_i: TIdx, rule: &str, prod_off: usize| {
-            let prod_i = grm.nonterm_to_prods(grm.nonterm_idx(rule).unwrap()).unwrap()[prod_off];
+            let prod_i = grm.nonterm_to_prods(grm.nonterm_idx(rule).unwrap())[prod_off];
             assert_eq!(st.action(state_i, Symbol::Term(term_i)).unwrap(), Action::Reduce(prod_i.into()));
         };
 

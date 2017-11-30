@@ -78,9 +78,9 @@ impl Firsts {
             let mut changed = false;
             for rul_i in grm.iter_nonterm_idxs() {
                 // For each rule E
-                for prod_i in grm.nonterm_to_prods(rul_i).unwrap().iter() {
+                for prod_i in grm.nonterm_to_prods(rul_i).iter() {
                     // ...and each production A
-                    let prod = grm.prod(*prod_i).unwrap();
+                    let prod = grm.prod(*prod_i);
                     if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
@@ -157,7 +157,7 @@ impl Firsts {
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
     pub fn set(&mut self, nidx: NTIdx, tidx: TIdx) -> bool {
-        let mut prod = &mut self.prod_firsts[usize::from(nidx)];
+        let prod = &mut self.prod_firsts[usize::from(nidx)];
         if prod[usize::from(tidx)] {
             true
         }
