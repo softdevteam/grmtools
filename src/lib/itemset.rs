@@ -179,7 +179,6 @@ impl Itemset {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     extern crate bit_vec;

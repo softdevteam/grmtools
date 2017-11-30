@@ -181,7 +181,7 @@ impl StateTable {
     }
 
 
-    /// Return the action for `state_idx` and `sym`, or None if there isn't any.
+    /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
     pub fn action(&self, state_idx: StIdx, sym: Symbol) -> Option<Action> {
         if let Symbol::Term(term_idx) = sym {
             let off = StateTable::actions_offset(self.terms_len, state_idx, term_idx);
@@ -203,7 +203,7 @@ impl StateTable {
         StateActionIterator{symbols: syms, i: 0}
     }
 
-    /// Return the goto state for `state_idx` and `nonterm_idx`, or None if there isn't any.
+    /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
     pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
         self.gotos.get(&(state_idx, nonterm_idx)).map_or(None, |x| Some(*x))
     }
