@@ -640,4 +640,14 @@ mod test {
             test_pager_graph(&grm);
         }
     }
+
+    #[test]
+    fn test_pager_graph_core_states() {
+        let grm = grammar_pager();
+        let sg = pager_stategraph(&grm);
+
+        // State 0
+        assert_eq!(sg.core_state(StIdx::from(0)).items.len(), 1);
+        state_exists(&grm, &sg.core_state(StIdx::from(0)), "^", 0, 0, vec!["$"]);
+    }
 }

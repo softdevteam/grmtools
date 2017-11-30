@@ -67,8 +67,8 @@ impl StateGraph {
     }
 
     /// Return the itemset for core state `st_idx` or `None` if it doesn't exist.
-    pub fn core_state(&self, st_idx: StIdx) -> Option<&Itemset> {
-        self.states.get(usize::from(st_idx)).map(|x| &x.0)
+    pub fn core_state(&self, st_idx: StIdx) -> &Itemset {
+        &self.states[usize::from(st_idx)].0
     }
 
     /// Return an iterator over all core states in this `StateGraph`.
