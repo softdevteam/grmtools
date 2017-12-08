@@ -39,9 +39,11 @@ use std::slice::Iter;
 use regex::Regex;
 
 pub struct Rule<TokId> {
-    /// The ID that tokens created against this rule will be given. It is initially given a
-    /// guaranteed unique value; that value can be overridden by clients.
-    pub tok_id: TokId,
+    /// If `Some`, the ID that tokens created against this rule will be given (lrlex gives such
+    /// rules a guaranteed unique value, though that value can be overridden by clients who need to
+    /// control the ID). If `None`, then this rule specifies lexemes which should not appear in the
+    /// user's input.
+    pub tok_id: Option<TokId>,
     /// This rule's name. If None, then text which matches this rule will be skipped (i.e. will not
     /// create a lexeme).
     pub name: Option<String>,
@@ -70,9 +72,10 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
         self.rules.get(idx)
     }
 
-    /// Get the `Rule` instance associated with a particular token ID.
-    pub fn get_rule_by_id(&self, tok_id: TokId) -> Option<&Rule<TokId>> {
-        self.rules.iter().find(|r| r.tok_id == tok_id)
+    /// Get the `Rule` instance associated with a particular token ID. Panics if no such rule
+    /// exists.
+    pub fn get_rule_by_id(&self, tok_id: TokId) -> &Rule<TokId> {
+        &self.rules.iter().find(|r| r.tok_id == Some(tok_id)).unwrap()
     }
 
     /// Get the `Rule` instance associated with a particular name.
@@ -109,9 +112,10 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
                     let nr = &**n;
                     match map.get(nr) {
                         Some(tok_id) => {
-                            r.tok_id = *tok_id;
+                            r.tok_id = Some(*tok_id);
                         }
                         None => {
+                            r.tok_id = None;
                             missing_from_parser_idxs.push(i);
                         }
                     }
@@ -201,7 +205,10 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
                                                       .map(|(j, _)| i + j + 1));
                 let r = &self.lexerdef.get_rule(longest_ridx).unwrap();
                 if r.name.is_some() {
-                    lxs.push(Lexeme::new(r.tok_id, i, longest));
+                    match r.tok_id {
+                        Some(tok_id) => lxs.push(Lexeme::new(tok_id, i, longest)),
+                        None => return Err(LexError{idx: i})
+                    }
                 }
                 i += longest;
             } else {
@@ -375,13 +382,19 @@ if IF
         let src = "%%
 [a-z]+ ID
 [ \\n] ;".to_string();
-        let mut lexer = parse_lex(&src).unwrap();
+        let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("INT", 0);
         let mut missing_from_lexer = HashSet::new();
         missing_from_lexer.insert("INT");
         let mut missing_from_parser = HashSet::new();
         missing_from_parser.insert("ID");
-        assert_eq!(lexer.set_rule_ids(&map), (Some(missing_from_lexer), Some(missing_from_parser)));
+        assert_eq!(lexerdef.set_rule_ids(&map), (Some(missing_from_lexer), Some(missing_from_parser)));
+
+        match lexerdef.lexer(&" a ").lexemes() {
+            Ok(_)  => panic!("Invalid input lexed"),
+            Err(LexError{idx: 1}) => (),
+            Err(e) => panic!("Incorrect error returned {:?}", e)
+        };
     }
 }

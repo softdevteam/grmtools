@@ -157,7 +157,7 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
         let rules_len = self.rules.len();
         let tok_id = TokId::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("TokId::try_from failed on {} (if TokId is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
-        self.rules.push(Rule{tok_id: tok_id,
+        self.rules.push(Rule{tok_id: Some(tok_id),
                              name: name,
                              re: re,
                              re_str: re_str});
