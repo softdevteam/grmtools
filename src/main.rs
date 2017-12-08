@@ -171,8 +171,11 @@ fn main() {
     let dc = |_| 1; // Cost of deleting a terminal
     match parse_rcvry::<u16, _, _>(RecoveryKind::KimYiPlus, &grm, &ic, dc, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
-        Err((pt, errs)) => {
-            println!("{}", pt.pp(&grm, &input));
+        Err((o_pt, errs)) => {
+            match o_pt {
+                Some(pt) => println!("{}", pt.pp(&grm, &input)),
+                None     => println!("Unable to repair input sufficiently to produce parse tree.\n")
+            }
             let sg = grm.sentence_generator(&ic);
             for e in errs {
                 let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();

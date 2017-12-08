@@ -100,7 +100,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
              sgraph: &StateGraph,
              stable: &StateTable,
              lexemes: &Lexemes<TokId>)
-          -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
+          -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
       where F: Fn(TIdx) -> u64,
             G: Fn(TIdx) -> u64
     {
@@ -108,12 +108,13 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         let mut pstack = vec![StIdx::from(0)];
         let mut tstack: Vec<Node<TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
-        psr.lr(0, &mut pstack, &mut tstack, &mut errors);
+        let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors);
         let t = tstack.drain(..).nth(0).unwrap();
-        if !errors.is_empty() {
-            Err((t, errors))
-        } else {
-            Ok(t)
+        match (accpt, errors.is_empty()) {
+            (true, true)   => Ok(t),
+            (true, false)  => Err((Some(t), errors)),
+            (false, false) => Err((None, errors)),
+            (false, true)  => panic!("Internal error")
         }
     }
 
@@ -126,9 +127,13 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
     /// Note that if `lexeme_prefix` is specified, `la_idx` will still be incremented, and thus
     /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
     /// lexeme at position `la_idx`.
-    pub(crate) fn lr(&self, mut la_idx: usize, pstack: &mut PStack, tstack: &mut TStack<TokId>,
-                     errors: &mut Errors<TokId>)
-                  -> usize
+    ///
+    /// Return `true` if the parse reached an accept state (i.e. all the input was consumed,
+    /// possibly after making repairs) or `false` (i.e. some of the input was not consumed, even
+    /// after possibly making repairs) otherwise.
+    pub fn lr(&self, mut la_idx: usize, pstack: &mut PStack, tstack: &mut TStack<TokId>,
+              errors: &mut Errors<TokId>)
+           -> bool
     {
         loop {
             let st = *pstack.last().unwrap();
@@ -153,7 +158,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                 Some(Action::Accept) => {
                     debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
                     debug_assert_eq!(tstack.len(), 1);
-                    break;
+                    return true;
                 },
                 None => {
                     let (new_la_idx, repairs) = match self.rcvry_kind {
@@ -168,13 +173,12 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
                                            lexeme: la_lexeme, repairs: repairs});
                     if !keep_going {
-                        break;
+                        return false;
                     }
                     la_idx = new_la_idx;
                 }
             }
         }
-        la_idx
     }
 
     /// Return a (`Lexeme`, `Symbol::Term`) pair of the next lemexe. When `lexeme_prefix` is not
@@ -219,7 +223,6 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
     pub(crate) fn ic(&self, _: Symbol) -> u64 {
         1
     }
-
 
     /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
     /// as the first lexeme) up to (but excluding) `end_la_idx`. If an error is encountered, parsing
@@ -286,17 +289,19 @@ pub enum RecoveryKind {
     KimYiPlus
 }
 
-/// Parse the lexemes, returning either a parse tree or a vector of `ParseError`s.
+/// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the
+/// input was consumed) or `None` otherwise, and a vector of `ParseError`s.
 pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
        (grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable,
         lexemes: &Vec<Lexeme<TokId>>)
-    -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
+    -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
 {
     parse_rcvry(RecoveryKind::KimYi, grm, |_| 1, |_| 1, sgraph, stable, lexemes)
 }
 
-/// Parse the lexemes, specifying a particularly type of error recovery, returning either a parse
-/// tree or a vector of `ParseError`s.
+/// Parse the lexemes, specifying a particularly type of error recovery. On success return a parse
+/// tree. On failure, return a parse tree (if all the input was consumed) or `None` otherwise, and
+/// a vector of `ParseError`s.
 pub fn parse_rcvry
        <TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>, F, G>
        (rcvry_kind: RecoveryKind,
@@ -306,7 +311,7 @@ pub fn parse_rcvry
         sgraph: &StateGraph,
         stable: &StateTable,
         lexemes: &Vec<Lexeme<TokId>>)
-    -> Result<Node<TokId>, (Node<TokId>, Vec<ParseError<TokId>>)>
+    -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
     where F: Fn(TIdx) -> u64, G: Fn(TIdx) -> u64
 {
     Parser::parse(rcvry_kind, grm, ic, dc, sgraph, stable, lexemes)
@@ -367,7 +372,7 @@ pub(crate) mod test {
     use super::*;
 
     pub(crate) fn do_parse(rcvry_kind: RecoveryKind, lexs: &str, grms: &str, input: &str)
-                       -> (YaccGrammar, Result<Node<u16>, (Node<u16>, Vec<ParseError<u16>>)>)
+                       -> (YaccGrammar, Result<Node<u16>, (Option<Node<u16>>, Vec<ParseError<u16>>)>)
     {
         let mut lexerdef = build_lex(lexs).unwrap();
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
@@ -509,4 +514,20 @@ Call: 'ID' 'OPEN_BRACKET' 'CLOSE_BRACKET';";
         let err_tok_id = u16::try_from(usize::from(grm.term_idx("ID").unwrap())).ok().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
      }
+
+    #[test]
+    fn no_tree_if_cant_be_repaired() {
+        let lexs = "%%
+a A
+b B
+";
+        let grms = "%start S
+%%
+S: 'A' 'A' 'B';
+";
+
+        let us = "aaaaaaaaaaaaaab";
+        let (_, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, &us);
+        assert!(pr.is_err() && pr.unwrap_err().0.is_none());
+    }
 }

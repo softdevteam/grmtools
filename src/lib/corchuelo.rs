@@ -321,7 +321,7 @@ E : 'N'
 
         let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "(nn");
         let (pt, errs) = pr.unwrap_err();
-        assert_eq!(pt.pp(&grm, "(nn"),
+        assert_eq!(pt.unwrap().pp(&grm, "(nn"),
 "E
  E
   OPEN_BRACKET (
