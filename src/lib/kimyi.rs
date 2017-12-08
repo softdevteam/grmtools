@@ -566,8 +566,7 @@ E : 'N'
 
         let (grm, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, "(nn");
         let (pt, errs) = pr.unwrap_err();
-        let pp = pt.pp(&grm, "(nn");
-        println!("{}", pp);
+        let pp = pt.unwrap().pp(&grm, "(nn");
         if !vec![
 "E
  OPEN_BRACKET (
@@ -649,7 +648,7 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
 
         let (grm, pr) = do_parse(RecoveryKind::KimYi, &lexs, &grms, "((");
         let (pt, errs) = pr.unwrap_err();
-        let pp = pt.pp(&grm, "((");
+        let pp = pt.unwrap().pp(&grm, "((");
         if !vec![
 "E
  OPEN_BRACKET (
