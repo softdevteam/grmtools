@@ -81,14 +81,14 @@ pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TStack<TokId> = Vec<Node<TokId>>; // Parse tree stack
 pub(crate) type Errors<TokId> = Vec<ParseError<TokId>>;
 
-pub(crate) struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
+pub struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
     pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar,
     pub ic: &'a Fn(TIdx) -> u64,
     pub dc: &'a Fn(TIdx) -> u64,
     pub sgraph: &'a StateGraph,
     pub stable: &'a StateTable,
-    pub lexemes: &'a Lexemes<TokId>,
+    pub lexemes: &'a Lexemes<TokId>
 }
 
 use std::fmt::Debug;
@@ -135,6 +135,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
               errors: &mut Errors<TokId>)
            -> bool
     {
+        let mut recoverer = None;
         loop {
             let st = *pstack.last().unwrap();
             let (la_lexeme, la_term) = self.next_lexeme(None, la_idx);
@@ -161,14 +162,18 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     return true;
                 },
                 None => {
-                    let (new_la_idx, repairs) = match self.rcvry_kind {
-                        RecoveryKind::Corchuelo =>
-                            corchuelo::recover(self, la_idx, pstack, tstack),
-                        RecoveryKind::KimYi =>
-                            kimyi::recover(self, la_idx, pstack, tstack),
-                        RecoveryKind::KimYiPlus =>
-                            kimyi_plus::recover(self, la_idx, pstack, tstack)
-                    };
+                    if recoverer.is_none() {
+                        recoverer = Some(match self.rcvry_kind {
+                                             RecoveryKind::Corchuelo => corchuelo::recoverer(),
+                                             RecoveryKind::KimYi => kimyi::recoverer(),
+                                             RecoveryKind::KimYiPlus => kimyi_plus::recoverer(),
+                                         });
+                    }
+
+                    let (new_la_idx, repairs) = recoverer.as_ref()
+                                                         .unwrap()
+                                                         .as_ref()
+                                                         .recover(&self, la_idx, pstack, tstack);
                     let keep_going = repairs.len() != 0;
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
                                            lexeme: la_lexeme, repairs: repairs});
@@ -281,6 +286,10 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         }
         (la_idx, pstack)
     }
+}
+
+pub trait Recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> {
+    fn recover(&self, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>) -> (usize, Vec<Vec<ParseRepair>>);
 }
 
 pub enum RecoveryKind {

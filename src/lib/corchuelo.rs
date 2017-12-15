@@ -39,15 +39,26 @@ use cfgrammar::Symbol;
 use lrlex::Lexeme;
 use lrtable::{Action, StIdx};
 
-use parser::{Node, Parser, ParseRepair};
+use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const INSERT_THRESHOLD: usize = 4; // N_i in Corchuelo et al.
 const DELETE_THRESHOLD: usize = 3; // N_d in Corchuelo et al.
 
-pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                     (parser: &Parser<TokId>, in_la_idx: usize, in_pstack: &mut Vec<StIdx>,
+pub(crate) struct Corchuelo;
+
+pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                       ()
+                     -> Box<Recoverer<TokId>> {
+    Box::new(Corchuelo)
+}
+
+impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId> for Corchuelo {
+fn recover           (&self,
+                      parser: &Parser<TokId>,
+                      in_la_idx: usize,
+                      in_pstack: &mut Vec<StIdx>,
                       tstack: &mut Vec<Node<TokId>>)
                   -> (usize, Vec<Vec<ParseRepair>>)
 {
@@ -255,6 +266,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
     }
 
     (la_idx, repairs)
+}
 }
 
 fn score(repairs: &Cactus<ParseRepair>) -> usize {

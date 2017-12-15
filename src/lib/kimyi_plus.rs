@@ -41,14 +41,25 @@ use lrtable::{Action, StIdx};
 use pathfinding::astar_bag;
 
 use kimyi::{apply_repairs, Dist, PathFNode, r3is, r3ir, r3d, r3s_n};
-use parser::{Node, Parser, ParseRepair};
+use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
-pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                     (parser: &Parser<TokId>, in_la_idx: usize, in_pstack: &mut Vec<StIdx>,
+pub(crate) struct KimYiPlus;
+
+pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                       ()
+                     -> Box<Recoverer<TokId>> {
+    Box::new(KimYiPlus)
+}
+
+impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId> for KimYiPlus {
+fn recover           (&self,
+                      parser: &Parser<TokId>,
+                      in_la_idx: usize,
+                      in_pstack: &mut Vec<StIdx>,
                       mut tstack: &mut Vec<Node<TokId>>)
                   -> (usize, Vec<Vec<ParseRepair>>)
 {
@@ -162,6 +173,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
     in_pstack.reverse();
 
     (la_idx, rnk_rprs)
+}
 }
 
 /// Convert the output from `astar_bag` into something more usable.

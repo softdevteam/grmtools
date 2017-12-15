@@ -42,7 +42,7 @@ use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StIdx};
 use pathfinding::astar;
 
-use parser::{Node, Parser, ParseRepair};
+use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
@@ -72,8 +72,19 @@ impl PartialEq for PathFNode {
     }
 }
 
-pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                     (parser: &Parser<TokId>, in_la_idx: usize, in_pstack: &mut Vec<StIdx>,
+pub(crate) struct KimYi;
+
+pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                       ()
+                     -> Box<Recoverer<TokId>> {
+    Box::new(KimYi)
+}
+
+impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId> for KimYi {
+fn recover           (&self,
+                      parser: &Parser<TokId>,
+                      in_la_idx: usize,
+                      in_pstack: &mut Vec<StIdx>,
                       mut tstack: &mut Vec<Node<TokId>>)
                   -> (usize, Vec<Vec<ParseRepair>>)
 {
@@ -182,7 +193,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
         return (in_la_idx, vec![]);
     }
 
-    let full_rprs = collect_repairs(astar_opt.unwrap().0);
+    let full_rprs = collect_repairs::<TokId>(astar_opt.unwrap().0);
     let smpl_rprs = simplify_repairs(parser, full_rprs);
     let (la_idx, mut rpr_pstack) = apply_repairs(parser,
                                                  in_la_idx,
@@ -202,6 +213,7 @@ pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usi
     in_pstack.reverse();
 
     (la_idx, vec![smpl_rprs])
+}
 }
 
 // The following 4 functions implement the operational semantics presented on pages 11 and 12 of
@@ -342,7 +354,9 @@ pub(crate) fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 }
 
 /// Convert the output from `astar` into something more usable.
-fn collect_repairs(mut rprs: Vec<PathFNode>) -> Vec<ParseRepair>
+fn collect_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                  (mut rprs: Vec<PathFNode>)
+                -> Vec<ParseRepair>
 {
     let mut y = rprs.pop()
                     .unwrap()
