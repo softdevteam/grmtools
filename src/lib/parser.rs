@@ -165,8 +165,10 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
                                              RecoveryKind::Corchuelo => corchuelo::recoverer(),
-                                             RecoveryKind::KimYi => kimyi::recoverer(),
-                                             RecoveryKind::KimYiPlus => kimyi_plus::recoverer(),
+                                             RecoveryKind::KimYi =>
+                                                 kimyi::recoverer(&self),
+                                             RecoveryKind::KimYiPlus =>
+                                                 kimyi_plus::recoverer(&self),
                                          });
                     }
 

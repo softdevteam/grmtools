@@ -72,16 +72,20 @@ impl PartialEq for PathFNode {
     }
 }
 
-pub(crate) struct KimYi;
-
-pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                       ()
-                     -> Box<Recoverer<TokId>> {
-    Box::new(KimYi)
+pub(crate) struct KimYi {
+    dist: Dist
 }
 
-impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId>
-                                                                                for KimYi
+pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                       (parser: &Parser<TokId>)
+                     -> Box<Recoverer<TokId>>
+{
+    let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
+    Box::new(KimYi{dist})
+}
+
+impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+     Recoverer<TokId> for KimYi
 {
     fn recover(&self,
                parser: &Parser<TokId>,
@@ -126,7 +130,6 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
             start_cactus_pstack = start_cactus_pstack.child(st);
         }
 
-        let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
                                    la_idx: in_la_idx,
                                    t: 1,
@@ -149,7 +152,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                         // Inserts.
                     },
                     _ => {
-                        r3is(parser, &dist, &n, &mut nbrs);
+                        r3is(parser, &self.dist, &n, &mut nbrs);
                         r3ir(parser, &n, &mut nbrs);
                     }
                 }

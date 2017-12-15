@@ -47,12 +47,16 @@ const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
-pub(crate) struct KimYiPlus;
+pub(crate) struct KimYiPlus {
+    dist: Dist
+}
 
 pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                       ()
-                     -> Box<Recoverer<TokId>> {
-    Box::new(KimYiPlus)
+                       (parser: &Parser<TokId>)
+                     -> Box<Recoverer<TokId>>
+{
+    let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
+    Box::new(KimYiPlus{dist})
 }
 
 impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId>
@@ -80,7 +84,6 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
             start_cactus_pstack = start_cactus_pstack.child(st);
         }
 
-        let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
                                    la_idx: in_la_idx,
                                    t: 1,
@@ -103,7 +106,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                         // Inserts.
                     },
                     _ => {
-                        r3is(parser, &dist, &n, &mut nbrs);
+                        r3is(parser, &self.dist, &n, &mut nbrs);
                         r3ir(parser, &n, &mut nbrs);
                     }
                 }
