@@ -36,7 +36,7 @@ pub mod parser;
 pub use self::ast::{GrammarValidationError, GrammarValidationErrorKind};
 pub use self::parser::{YaccParserError, YaccParserErrorKind};
 use self::parser::YaccParser;
-pub use self::grammar::{AssocKind, Precedence, YaccGrammar, YaccGrammarError};
+pub use self::grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar, YaccGrammarError};
 
 #[derive(Clone, Copy)]
 pub enum YaccKind {
