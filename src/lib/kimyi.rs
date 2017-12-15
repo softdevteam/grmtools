@@ -80,140 +80,144 @@ pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<u
     Box::new(KimYi)
 }
 
-impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId> for KimYi {
-fn recover           (&self,
-                      parser: &Parser<TokId>,
-                      in_la_idx: usize,
-                      in_pstack: &mut Vec<StIdx>,
-                      mut tstack: &mut Vec<Node<TokId>>)
-                  -> (usize, Vec<Vec<ParseRepair>>)
+impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId>
+                                                                                for KimYi
 {
-    // This function implements the algorithm from "LR error repair using the A* algorithm" by
-    // Ik-Soon Kim and Kwangkeun Yi
-    //
-    // The basic idea is to define the problem of finding repairs as a graph-walking problem: we
-    // find the shortest route through the graph to a success node using the standard A* algorithm.
-    // Unfortunately, the paper is a hard read: it's sometimes incomplete, often vague, and
-    // frequently contains errors. Notably, the example on p13 is absolutely crucial to
-    // understanding how the algorithm works, but it is so riddled with errors as to be thoroughly
-    // misleading. Fortunately, however, the ideas underlying the paper are worth the effort.
-    //
-    // This function is, I hope, a fairly faithful implementation. The basic idea behind this
-    // implementation is to use the transition rules from Fig 9 (along with the altered version of
-    // R3S presented on p12) as a mechanism for dynamically calculating the neighbours of the
-    // current node under investigation. As the paper suggests, this only finds a single minimal
-    // cost solution to each parser error, so it's highly non-deterministic: sometimes the minimal
-    // cost solution it comes up with is good, and sometimes it isn't. It is, however, pretty fast,
-    // certainly compared to the Corchuelo et al. algorithm. The biggest extension relative to the
-    // paper is that they really only care about finding a repair: they don't seem to care about
-    // reporting that to the user. The repairs thus reference non-terminals in the grammar which,
-    // to most users, are completely incomprehensible. This commit uses cfgrammar's
-    // SentenceGenerator to turn a non-terminal repair into a (possible set) of terminal inserts,
-    // which is infinitely easier to understand. Thus whilst KimYi might say a repair is:
-    //
-    //   InsertNonterm expr
-    //
-    // this commit will say something like:
-    //
-    //  InsertTerm {Var, Identifier}, InsertTerm{+, -, *}, InsertTerm {Var, Identifier}
+    fn recover(&self,
+               parser: &Parser<TokId>,
+               in_la_idx: usize,
+               in_pstack: &mut Vec<StIdx>,
+               mut tstack: &mut Vec<Node<TokId>>)
+           -> (usize, Vec<Vec<ParseRepair>>)
+    {
+        // This function implements the algorithm from "LR error repair using the A* algorithm" by
+        // Ik-Soon Kim and Kwangkeun Yi
+        //
+        // The basic idea is to define the problem of finding repairs as a graph-walking problem:
+        // we find the shortest route through the graph to a success node using the standard A*
+        // algorithm. Unfortunately, the paper is a hard read: it's sometimes incomplete, often
+        // vague, and frequently contains errors. Notably, the example on p13 is absolutely crucial
+        // to understanding how the algorithm works, but it is so riddled with errors as to be
+        // thoroughly misleading. Fortunately, however, the ideas underlying the paper are worth
+        // the effort.
+        //
+        // This function is, I hope, a fairly faithful implementation. The basic idea behind this
+        // implementation is to use the transition rules from Fig 9 (along with the altered version
+        // of R3S presented on p12) as a mechanism for dynamically calculating the neighbours of
+        // the current node under investigation. As the paper suggests, this only finds a single
+        // minimal cost solution to each parser error, so it's highly non-deterministic: sometimes
+        // the minimal cost solution it comes up with is good, and sometimes it isn't. It is,
+        // however, pretty fast, certainly compared to the Corchuelo et al. algorithm. The biggest
+        // extension relative to the paper is that they really only care about finding a repair:
+        // they don't seem to care about reporting that to the user. The repairs thus reference
+        // non-terminals in the grammar which, to most users, are completely incomprehensible. This
+        // commit uses cfgrammar's SentenceGenerator to turn a non-terminal repair into a (possible
+        // set) of terminal inserts, which is infinitely easier to understand. Thus whilst KimYi
+        // might say a repair is:
+        //
+        //   InsertNonterm expr
+        //
+        // this commit will say something like:
+        //
+        //  InsertTerm {Var, Identifier}, InsertTerm{+, -, *}, InsertTerm {Var, Identifier}
 
-    let mut start_cactus_pstack = Cactus::new();
-    for st in in_pstack.drain(..) {
-        start_cactus_pstack = start_cactus_pstack.child(st);
-    }
+        let mut start_cactus_pstack = Cactus::new();
+        for st in in_pstack.drain(..) {
+            start_cactus_pstack = start_cactus_pstack.child(st);
+        }
 
-    let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
-    let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
-                               la_idx: in_la_idx,
-                               t: 1,
-                               repairs: Cactus::new(),
-                               cf: 0,
-                               cg: 0};
-    let astar_opt = astar(
-        &start_node,
-        |n| {
-            // Calculate n's neighbours.
+        let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
+        let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
+                                   la_idx: in_la_idx,
+                                   t: 1,
+                                   repairs: Cactus::new(),
+                                   cf: 0,
+                                   cg: 0};
+        let astar_opt = astar(
+            &start_node,
+            |n| {
+                // Calculate n's neighbours.
 
-            if n.la_idx > in_la_idx + PORTION_THRESHOLD {
-                return vec![];
-            }
-
-            let mut nbrs = HashSet::new();
-            match n.repairs.val() {
-                Some(&ParseRepair::Delete) => {
-                    // We follow Corcheulo et al.'s suggestions and never follow Deletes with
-                    // Inserts.
-                },
-                _ => {
-                    r3is(parser, &dist, &n, &mut nbrs);
-                    r3ir(parser, &n, &mut nbrs);
+                if n.la_idx > in_la_idx + PORTION_THRESHOLD {
+                    return vec![];
                 }
-            }
-            r3d(parser, &n, &mut nbrs);
-            r3s_n(parser, &n, &mut nbrs);
-            let v = nbrs.into_iter()
-                        .map(|x| {
-                                let t = x.cf - n.cf;
-                                (x, t)
-                             })
-                        .collect::<Vec<(PathFNode, _)>>();
-            v
-        },
-        |n| n.cg,
-        |n| {
-            // Is n a success node?
 
-            // As presented in both Corchuelo et al. and Kim Yi, one type of success is if N
-            // symbols are parsed in one go. Indeed, without such a check, the search space quickly
-            // becomes too big. There isn't a way of encoding this check in r3s_n, so we check
-            // instead for its result: if the last N ('PARSE_AT_LEAST' in this library) repairs are
-            // shifts, then we've found a success node.
-            if n.repairs.len() > PARSE_AT_LEAST {
-                let mut all_shfts = true;
-                for x in n.repairs.vals().take(PARSE_AT_LEAST) {
-                    if let ParseRepair::Shift = *x {
-                        continue;
+                let mut nbrs = HashSet::new();
+                match n.repairs.val() {
+                    Some(&ParseRepair::Delete) => {
+                        // We follow Corcheulo et al.'s suggestions and never follow Deletes with
+                        // Inserts.
+                    },
+                    _ => {
+                        r3is(parser, &dist, &n, &mut nbrs);
+                        r3ir(parser, &n, &mut nbrs);
                     }
-                    all_shfts = false;
-                    break;
                 }
-                if all_shfts {
-                    return true;
+                r3d(parser, &n, &mut nbrs);
+                r3s_n(parser, &n, &mut nbrs);
+                let v = nbrs.into_iter()
+                            .map(|x| {
+                                    let t = x.cf - n.cf;
+                                    (x, t)
+                                 })
+                            .collect::<Vec<(PathFNode, _)>>();
+                v
+            },
+            |n| n.cg,
+            |n| {
+                // Is n a success node?
+
+                // As presented in both Corchuelo et al. and Kim Yi, one type of success is if N
+                // symbols are parsed in one go. Indeed, without such a check, the search space
+                // quickly becomes too big. There isn't a way of encoding this check in r3s_n, so
+                // we check instead for its result: if the last N ('PARSE_AT_LEAST' in this
+                // library) repairs are shifts, then we've found a success node.
+                if n.repairs.len() > PARSE_AT_LEAST {
+                    let mut all_shfts = true;
+                    for x in n.repairs.vals().take(PARSE_AT_LEAST) {
+                        if let ParseRepair::Shift = *x {
+                            continue;
+                        }
+                        all_shfts = false;
+                        break;
+                    }
+                    if all_shfts {
+                        return true;
+                    }
                 }
-            }
 
-            let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-            match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
-                Some(Action::Accept) => true,
-                _ => false,
-            }
-        });
+                let (_, la_term) = parser.next_lexeme(None, n.la_idx);
+                match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
+                    Some(Action::Accept) => true,
+                    _ => false,
+                }
+            });
 
-    if astar_opt.is_none() {
-        return (in_la_idx, vec![]);
+        if astar_opt.is_none() {
+            return (in_la_idx, vec![]);
+        }
+
+        let full_rprs = collect_repairs::<TokId>(astar_opt.unwrap().0);
+        let smpl_rprs = simplify_repairs(parser, full_rprs);
+        let (la_idx, mut rpr_pstack) = apply_repairs(parser,
+                                                     in_la_idx,
+                                                     start_cactus_pstack,
+                                                     &mut Some(&mut tstack),
+                                                     &smpl_rprs);
+
+        in_pstack.clear();
+        while !rpr_pstack.is_empty() {
+            let p = rpr_pstack.parent().unwrap();
+            in_pstack.push(rpr_pstack.try_unwrap()
+                                     .unwrap_or_else(|c| c.val()
+                                                          .unwrap()
+                                                          .clone()));
+            rpr_pstack = p;
+        }
+        in_pstack.reverse();
+
+        (la_idx, vec![smpl_rprs])
     }
-
-    let full_rprs = collect_repairs::<TokId>(astar_opt.unwrap().0);
-    let smpl_rprs = simplify_repairs(parser, full_rprs);
-    let (la_idx, mut rpr_pstack) = apply_repairs(parser,
-                                                 in_la_idx,
-                                                 start_cactus_pstack,
-                                                 &mut Some(&mut tstack),
-                                                 &smpl_rprs);
-
-    in_pstack.clear();
-    while !rpr_pstack.is_empty() {
-        let p = rpr_pstack.parent().unwrap();
-        in_pstack.push(rpr_pstack.try_unwrap()
-                                 .unwrap_or_else(|c| c.val()
-                                                      .unwrap()
-                                                      .clone()));
-        rpr_pstack = p;
-    }
-    in_pstack.reverse();
-
-    (la_idx, vec![smpl_rprs])
-}
 }
 
 // The following 4 functions implement the operational semantics presented on pages 11 and 12 of
