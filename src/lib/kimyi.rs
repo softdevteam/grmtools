@@ -37,7 +37,7 @@ use std::hash::{Hash, Hasher};
 
 use cactus::Cactus;
 use cfgrammar::{Grammar, Symbol, TIdx};
-use cfgrammar::yacc::YaccGrammar;
+use cfgrammar::yacc::{SentenceGenerator, YaccGrammar};
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StIdx};
 use pathfinding::astar;
@@ -72,20 +72,22 @@ impl PartialEq for PathFNode {
     }
 }
 
-pub(crate) struct KimYi {
-    dist: Dist
+pub(crate) struct KimYi<'a> {
+    dist: Dist,
+    sg: SentenceGenerator<'a>
 }
 
-pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                       (parser: &Parser<TokId>)
-                     -> Box<Recoverer<TokId>>
+pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                       (parser: &'a Parser<TokId>)
+                     -> Box<Recoverer<TokId> + 'a>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
-    Box::new(KimYi{dist})
+    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
+    Box::new(KimYi{dist, sg})
 }
 
 impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-     Recoverer<TokId> for KimYi
+     Recoverer<TokId> for KimYi<'a>
 {
     fn recover(&self,
                parser: &Parser<TokId>,
@@ -153,7 +155,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     },
                     _ => {
                         r3is(parser, &self.dist, &n, &mut nbrs);
-                        r3ir(parser, &n, &mut nbrs);
+                        r3ir(parser, &self.sg, &n, &mut nbrs);
                     }
                 }
                 r3d(parser, &n, &mut nbrs);
@@ -201,8 +203,9 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         }
 
         let full_rprs = collect_repairs::<TokId>(astar_opt.unwrap().0);
-        let smpl_rprs = simplify_repairs(parser, full_rprs);
+        let smpl_rprs = simplify_repairs(parser, &self.sg, full_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
+                                                     &self.sg,
                                                      in_la_idx,
                                                      start_cactus_pstack,
                                                      &mut Some(&mut tstack),
@@ -269,6 +272,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
 
 pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                   (parser: &Parser<TokId>,
+                   sg: &SentenceGenerator,
                    n: &PathFNode,
                    nbrs: &mut HashSet<PathFNode>)
 {
@@ -276,7 +280,6 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
         return;
     }
 
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
     let top_pstack = *n.pstack.val().unwrap();
     for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).items.keys() {
         let nt_idx = parser.grm.prod_to_nonterm(p_idx);
@@ -379,12 +382,11 @@ fn collect_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
 /// no assumptions about the size or contents of the output: this function might delete, expand, or
 /// do other things to repairs.
 fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                   (parser: &Parser<TokId>,
+                   (_: &Parser<TokId>,
+                    sg: &SentenceGenerator,
                     mut rprs: Vec<ParseRepair>)
                  -> Vec<ParseRepair>
 {
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
-
     // Remove all inserts of nonterms which have a minimal sentence cost of 0.
     let mut j = 0;
     while j < rprs.len() {
@@ -415,13 +417,13 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 /// distance and a new pstack.
 pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                            (parser: &Parser<TokId>,
+                            sg: &SentenceGenerator,
                             mut la_idx: usize,
                             mut pstack: Cactus<StIdx>,
                             tstack: &mut Option<&mut Vec<Node<TokId>>>,
                             repairs: &Vec<ParseRepair>)
                          -> (usize, Cactus<StIdx>)
 {
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
     for r in repairs.iter() {
         match *r {
             ParseRepair::InsertNonterm{nonterm_idx} => {

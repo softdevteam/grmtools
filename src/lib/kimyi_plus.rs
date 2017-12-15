@@ -37,6 +37,7 @@ use std::fmt::Debug;
 
 use cactus::Cactus;
 use cfgrammar::Symbol;
+use cfgrammar::yacc::SentenceGenerator;
 use lrtable::{Action, StIdx};
 use pathfinding::astar_bag;
 
@@ -47,20 +48,22 @@ const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
-pub(crate) struct KimYiPlus {
-    dist: Dist
+pub(crate) struct KimYiPlus<'a> {
+    dist: Dist,
+    sg: SentenceGenerator<'a>
 }
 
-pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                       (parser: &Parser<TokId>)
-                     -> Box<Recoverer<TokId>>
+pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                       (parser: &'a Parser<TokId>)
+                     -> Box<Recoverer<TokId> + 'a>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
-    Box::new(KimYiPlus{dist})
+    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
+    Box::new(KimYiPlus{dist, sg})
 }
 
-impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId>
-                                                                                for KimYiPlus
+impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+    Recoverer<TokId> for KimYiPlus<'a>
 {
     fn recover(&self,
                parser: &Parser<TokId>,
@@ -107,7 +110,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                     },
                     _ => {
                         r3is(parser, &self.dist, &n, &mut nbrs);
-                        r3ir(parser, &n, &mut nbrs);
+                        r3ir(parser, &self.sg, &n, &mut nbrs);
                     }
                 }
                 r3d(parser, &n, &mut nbrs);
@@ -157,10 +160,12 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
         let full_rprs = collect_repairs(astar_cnds);
         let smpl_rprs = simplify_repairs(parser, full_rprs);
         let rnk_rprs = rank_cnds(parser,
+                                 &self.sg,
                                  in_la_idx,
                                  start_cactus_pstack.clone(),
                                  smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
+                                                     &self.sg,
                                                      in_la_idx,
                                                      start_cactus_pstack,
                                                      &mut Some(&mut tstack),
@@ -264,6 +269,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 /// ordering is non-deterministic.
 fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
             (parser: &Parser<TokId>,
+             sg: &SentenceGenerator,
              in_la_idx: usize,
              start_pstack: Cactus<StIdx>,
              in_cnds: Vec<Vec<ParseRepair>>)
@@ -272,6 +278,7 @@ fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
     let mut cnds = in_cnds.into_iter()
                           .map(|rprs| {
                                let (la_idx, pstack) = apply_repairs(parser,
+                                                                    sg,
                                                                     in_la_idx,
                                                                     start_pstack.clone(),
                                                                     &mut None,
