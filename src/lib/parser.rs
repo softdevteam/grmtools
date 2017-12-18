@@ -291,7 +291,8 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
 }
 
 pub trait Recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> {
-    fn recover(&self, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>) -> (usize, Vec<Vec<ParseRepair>>);
+    fn recover(&self, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>)
+           -> (usize, Vec<Vec<ParseRepair>>);
 }
 
 pub enum RecoveryKind {

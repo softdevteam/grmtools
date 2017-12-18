@@ -41,7 +41,7 @@ use cfgrammar::yacc::SentenceGenerator;
 use lrtable::{Action, StIdx};
 use pathfinding::astar_bag;
 
-use kimyi::{apply_repairs, Dist, PathFNode, r3is, r3ir, r3d, r3s_n};
+use kimyi::{apply_repairs, Dist, PathFNode, Repair, r3is, r3ir, r3d, r3s_n};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
@@ -104,7 +104,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
                 let mut nbrs = HashSet::new();
                 match n.repairs.val() {
-                    Some(&ParseRepair::Delete) => {
+                    Some(&Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
                         // Inserts.
                     },
@@ -135,7 +135,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                 if n.repairs.len() > PARSE_AT_LEAST {
                     let mut all_shfts = true;
                     for x in n.repairs.vals().take(PARSE_AT_LEAST) {
-                        if let ParseRepair::Shift = *x {
+                        if let Repair::Shift = *x {
                             continue;
                         }
                         all_shfts = false;
@@ -187,7 +187,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 }
 
 /// Convert the output from `astar_bag` into something more usable.
-fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<ParseRepair>>
+fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<Repair>>
 {
     let mut all_rprs = Vec::new();
     for mut rprs in cnds.into_iter() {
@@ -196,7 +196,7 @@ fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<ParseRepair>>
                         .repairs
                         .vals()
                         .cloned()
-                        .collect::<Vec<ParseRepair>>();
+                        .collect::<Vec<Repair>>();
         y.reverse();
         all_rprs.push(y);
     }
@@ -208,7 +208,7 @@ fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<ParseRepair>>
 /// set: this function might delete, expand, or do other things to repairs.
 fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                    (parser: &Parser<TokId>,
-                    mut all_rprs: Vec<Vec<ParseRepair>>)
+                    mut all_rprs: Vec<Vec<Repair>>)
                  -> Vec<Vec<ParseRepair>>
 {
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
@@ -218,7 +218,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             let mut rprs = all_rprs.get_mut(i).unwrap();
             let mut j = 0;
             while j < rprs.len() {
-                if let ParseRepair::InsertNonterm{nonterm_idx} = rprs[j] {
+                if let Repair::InsertNonterm{nonterm_idx} = rprs[j] {
                     if sg.min_sentence_cost(nonterm_idx) == 0 {
                         rprs.remove(j);
                     } else {
@@ -234,7 +234,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             // Remove shifts from the end of repairs
             let mut rprs = all_rprs.get_mut(i).unwrap();
             while rprs.len() > 0 {
-                if let ParseRepair::Shift = rprs[rprs.len() - 1] {
+                if let Repair::Shift = rprs[rprs.len() - 1] {
                     rprs.pop();
                 } else {
                     break;
@@ -259,7 +259,20 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
         i += 1;
     }
 
-    all_rprs
+    all_rprs.iter()
+            .map(|x| x.iter()
+                      .map(|y| {
+                                    match *y {
+                                        Repair::InsertTerm{term_idx} =>
+                                            ParseRepair::InsertTerm{term_idx},
+                                        Repair::InsertNonterm{nonterm_idx} =>
+                                            ParseRepair::InsertNonterm{nonterm_idx},
+                                        Repair::Delete => ParseRepair::Delete,
+                                        Repair::Shift => ParseRepair::Shift,
+                                    }
+                           })
+                      .collect())
+                  .collect()
 }
 
 /// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
