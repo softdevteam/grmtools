@@ -37,131 +37,153 @@ use std::fmt::Debug;
 
 use cactus::Cactus;
 use cfgrammar::Symbol;
+use cfgrammar::yacc::SentenceGenerator;
 use lrtable::{Action, StIdx};
 use pathfinding::astar_bag;
 
 use kimyi::{apply_repairs, Dist, PathFNode, r3is, r3ir, r3d, r3s_n};
-use parser::{Node, Parser, ParseRepair};
+use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
-pub(crate) fn recover<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                     (parser: &Parser<TokId>, in_la_idx: usize, in_pstack: &mut Vec<StIdx>,
-                      mut tstack: &mut Vec<Node<TokId>>)
-                  -> (usize, Vec<Vec<ParseRepair>>)
+pub(crate) struct KimYiPlus<'a> {
+    dist: Dist,
+    sg: SentenceGenerator<'a>
+}
+
+pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                       (parser: &'a Parser<TokId>)
+                     -> Box<Recoverer<TokId> + 'a>
 {
-    // This function implements an algorithm whose core is based on that from "LR error repair
-    // using the A* algorithm" by Ik-Soon Kim and Kwangkeun Yi. However, we extend it in several
-    // ways.
-    //
-    // The basic idea behind this implementation is to use the transition rules from Fig 9 (along
-    // with the altered version of R3S presented on p12) as a mechanism for dynamically calculating
-    // the neighbours of the current node under investigation. Unlike KimYi, who
-    // non-deterministically return a single repair, this variant evaluates all minimal cost
-    // repairs.
-
-    let mut start_cactus_pstack = Cactus::new();
-    for st in in_pstack.drain(..) {
-        start_cactus_pstack = start_cactus_pstack.child(st);
-    }
-
     let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
-    let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
-                               la_idx: in_la_idx,
-                               t: 1,
-                               repairs: Cactus::new(),
-                               cf: 0,
-                               cg: 0};
-    let (astar_cnds, _) = astar_bag(
-        &start_node,
-        |n| {
-            // Calculate n's neighbours.
+    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
+    Box::new(KimYiPlus{dist, sg})
+}
 
-            if n.la_idx > in_la_idx + PORTION_THRESHOLD {
-                return vec![];
-            }
+impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+    Recoverer<TokId> for KimYiPlus<'a>
+{
+    fn recover(&self,
+               parser: &Parser<TokId>,
+               in_la_idx: usize,
+               in_pstack: &mut Vec<StIdx>,
+               mut tstack: &mut Vec<Node<TokId>>)
+           -> (usize, Vec<Vec<ParseRepair>>)
+    {
+        // This function implements an algorithm whose core is based on that from "LR error repair
+        // using the A* algorithm" by Ik-Soon Kim and Kwangkeun Yi. However, we extend it in
+        // several ways.
+        //
+        // The basic idea behind this implementation is to use the transition rules from Fig 9
+        // (along with the altered version of R3S presented on p12) as a mechanism for dynamically
+        // calculating the neighbours of the current node under investigation. Unlike KimYi, who
+        // non-deterministically return a single repair, this variant evaluates all minimal cost
+        // repairs.
 
-            let mut nbrs = HashSet::new();
-            match n.repairs.val() {
-                Some(&ParseRepair::Delete) => {
-                    // We follow Corcheulo et al.'s suggestions and never follow Deletes with
-                    // Inserts.
-                },
-                _ => {
-                    r3is(parser, &dist, &n, &mut nbrs);
-                    r3ir(parser, &n, &mut nbrs);
+        let mut start_cactus_pstack = Cactus::new();
+        for st in in_pstack.drain(..) {
+            start_cactus_pstack = start_cactus_pstack.child(st);
+        }
+
+        let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
+                                   la_idx: in_la_idx,
+                                   t: 1,
+                                   repairs: Cactus::new(),
+                                   cf: 0,
+                                   cg: 0};
+        let (astar_cnds, _) = astar_bag(
+            &start_node,
+            |n| {
+                // Calculate n's neighbours.
+
+                if n.la_idx > in_la_idx + PORTION_THRESHOLD {
+                    return vec![];
                 }
-            }
-            r3d(parser, &n, &mut nbrs);
-            r3s_n(parser, &n, &mut nbrs);
-            let v = nbrs.into_iter()
-                        .map(|x| {
-                                let t = x.cf - n.cf;
-                                (x, t)
-                             })
-                        .collect::<Vec<(PathFNode, _)>>();
-            v
-        },
-        |n| n.cg,
-        |n| {
-            // Is n a success node?
 
-            // As presented in both Corchuelo et al. and Kim Yi, one type of success is if N
-            // symbols are parsed in one go. Indeed, without such a check, the search space quickly
-            // becomes too big. There isn't a way of encoding this check in r3s_n, so we check
-            // instead for its result: if the last N ('PARSE_AT_LEAST' in this library) repairs are
-            // shifts, then we've found a success node.
-            if n.repairs.len() > PARSE_AT_LEAST {
-                let mut all_shfts = true;
-                for x in n.repairs.vals().take(PARSE_AT_LEAST) {
-                    if let ParseRepair::Shift = *x {
-                        continue;
+                let mut nbrs = HashSet::new();
+                match n.repairs.val() {
+                    Some(&ParseRepair::Delete) => {
+                        // We follow Corcheulo et al.'s suggestions and never follow Deletes with
+                        // Inserts.
+                    },
+                    _ => {
+                        r3is(parser, &self.dist, &n, &mut nbrs);
+                        r3ir(parser, &self.sg, &n, &mut nbrs);
                     }
-                    all_shfts = false;
-                    break;
                 }
-                if all_shfts {
-                    return true;
+                r3d(parser, &n, &mut nbrs);
+                r3s_n(parser, &n, &mut nbrs);
+                let v = nbrs.into_iter()
+                            .map(|x| {
+                                    let t = x.cf - n.cf;
+                                    (x, t)
+                                 })
+                            .collect::<Vec<(PathFNode, _)>>();
+                v
+            },
+            |n| n.cg,
+            |n| {
+                // Is n a success node?
+
+                // As presented in both Corchuelo et al. and Kim Yi, one type of success is if N
+                // symbols are parsed in one go. Indeed, without such a check, the search space
+                // quickly becomes too big. There isn't a way of encoding this check in r3s_n, so
+                // we check instead for its result: if the last N ('PARSE_AT_LEAST' in this
+                // library) repairs are shifts, then we've found a success node.
+                if n.repairs.len() > PARSE_AT_LEAST {
+                    let mut all_shfts = true;
+                    for x in n.repairs.vals().take(PARSE_AT_LEAST) {
+                        if let ParseRepair::Shift = *x {
+                            continue;
+                        }
+                        all_shfts = false;
+                        break;
+                    }
+                    if all_shfts {
+                        return true;
+                    }
                 }
-            }
 
-            let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-            match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
-                Some(Action::Accept) => true,
-                _ => false,
-            }
-        });
+                let (_, la_term) = parser.next_lexeme(None, n.la_idx);
+                match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
+                    Some(Action::Accept) => true,
+                    _ => false,
+                }
+            });
 
-    if astar_cnds.is_empty() {
-        return (in_la_idx, vec![]);
+        if astar_cnds.is_empty() {
+            return (in_la_idx, vec![]);
+        }
+
+        let full_rprs = collect_repairs(astar_cnds);
+        let smpl_rprs = simplify_repairs(parser, full_rprs);
+        let rnk_rprs = rank_cnds(parser,
+                                 &self.sg,
+                                 in_la_idx,
+                                 start_cactus_pstack.clone(),
+                                 smpl_rprs);
+        let (la_idx, mut rpr_pstack) = apply_repairs(parser,
+                                                     &self.sg,
+                                                     in_la_idx,
+                                                     start_cactus_pstack,
+                                                     &mut Some(&mut tstack),
+                                                     &rnk_rprs[0]);
+
+        in_pstack.clear();
+        while !rpr_pstack.is_empty() {
+            let p = rpr_pstack.parent().unwrap();
+            in_pstack.push(rpr_pstack.try_unwrap()
+                                     .unwrap_or_else(|c| c.val()
+                                                          .unwrap()
+                                                          .clone()));
+            rpr_pstack = p;
+        }
+        in_pstack.reverse();
+
+        (la_idx, rnk_rprs)
     }
-
-    let full_rprs = collect_repairs(astar_cnds);
-    let smpl_rprs = simplify_repairs(parser, full_rprs);
-    let rnk_rprs = rank_cnds(parser,
-                             in_la_idx,
-                             start_cactus_pstack.clone(),
-                             smpl_rprs);
-    let (la_idx, mut rpr_pstack) = apply_repairs(parser,
-                                                 in_la_idx,
-                                                 start_cactus_pstack,
-                                                 &mut Some(&mut tstack),
-                                                 &rnk_rprs[0]);
-
-    in_pstack.clear();
-    while !rpr_pstack.is_empty() {
-        let p = rpr_pstack.parent().unwrap();
-        in_pstack.push(rpr_pstack.try_unwrap()
-                                 .unwrap_or_else(|c| c.val()
-                                                      .unwrap()
-                                                      .clone()));
-        rpr_pstack = p;
-    }
-    in_pstack.reverse();
-
-    (la_idx, rnk_rprs)
 }
 
 /// Convert the output from `astar_bag` into something more usable.
@@ -247,6 +269,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 /// ordering is non-deterministic.
 fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
             (parser: &Parser<TokId>,
+             sg: &SentenceGenerator,
              in_la_idx: usize,
              start_pstack: Cactus<StIdx>,
              in_cnds: Vec<Vec<ParseRepair>>)
@@ -255,6 +278,7 @@ fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
     let mut cnds = in_cnds.into_iter()
                           .map(|rprs| {
                                let (la_idx, pstack) = apply_repairs(parser,
+                                                                    sg,
                                                                     in_la_idx,
                                                                     start_pstack.clone(),
                                                                     &mut None,
