@@ -35,7 +35,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 
 use cactus::Cactus;
-use cfgrammar::Symbol;
+use cfgrammar::{Symbol, TIdx};
 use lrlex::Lexeme;
 use lrtable::{Action, StIdx};
 
@@ -45,6 +45,16 @@ const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const INSERT_THRESHOLD: usize = 4; // N_i in Corchuelo et al.
 const DELETE_THRESHOLD: usize = 3; // N_d in Corchuelo et al.
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Repair {
+    /// Insert a `Symbol::Term` with idx `term_idx`.
+    InsertTerm{term_idx: TIdx},
+    /// Delete a symbol.
+    Delete,
+    /// Shift a symbol.
+    Shift
+}
 
 pub(crate) struct Corchuelo;
 
@@ -91,18 +101,18 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
             let cur = todo.pop_front().unwrap();
             let la_idx = cur.0;
             let pstack = cur.1;
-            let repairs: Cactus<ParseRepair> = cur.2;
+            let repairs: Cactus<Repair> = cur.2;
 
             // Insertion rule (ER1)
             match repairs.val() {
-                Some(&ParseRepair::Delete) => {
+                Some(&Repair::Delete) => {
                     // In order to avoid adding both [Del, Ins x] and [Ins x, Del] (which are
                     // equivalent), we follow Corcheulo et al.'s suggestion and never add an Ins
                     // after a Del.
                 },
                 _ => {
                     let num_inserts = repairs.vals()
-                                             .filter(|r| if let ParseRepair::InsertTerm{..} = **r {
+                                             .filter(|r| if let Repair::InsertTerm{..} = **r {
                                                              true
                                                          } else {
                                                              false
@@ -129,7 +139,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                                 if new_la_idx > la_idx {
                                     debug_assert_eq!(new_la_idx, la_idx + 1);
                                     let n_repairs =
-                                        repairs.child(ParseRepair::InsertTerm{term_idx});
+                                        repairs.child(Repair::InsertTerm{term_idx});
                                     let sc = score(&n_repairs);
                                     if finished_score.is_none() || sc <= finished_score.unwrap() {
                                         todo.push_back((la_idx, n_pstack, n_repairs, sc));
@@ -144,14 +154,14 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
             // Delete rule (ER2)
             if la_idx < parser.lexemes.len() {
                 let num_deletes = repairs.vals()
-                                         .filter(|r| if let ParseRepair::Delete = **r {
+                                         .filter(|r| if let Repair::Delete = **r {
                                                          true
                                                      } else {
                                                          false
                                                      })
                                          .count();
                 if num_deletes <= DELETE_THRESHOLD {
-                    let n_repairs = repairs.child(ParseRepair::Delete);
+                    let n_repairs = repairs.child(Repair::Delete);
                     let sc = score(&n_repairs);
                     if finished_score.is_none() || sc <= finished_score.unwrap() {
                         todo.push_back((la_idx + 1, pstack.clone(), n_repairs, sc));
@@ -219,7 +229,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                         let mut n_repairs = repairs.clone();
                         debug_assert_eq!(score(&repairs), score(&n_repairs));
                         for _ in la_idx..new_la_idx {
-                            n_repairs = n_repairs.child(ParseRepair::Shift);
+                            n_repairs = n_repairs.child(Repair::Shift);
                         }
                         todo.push_back((new_la_idx, n_pstack, n_repairs, sc));
                     }
@@ -228,11 +238,11 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
         }
 
         let repairs = finished.iter()
-                              .map(|x| { let mut v = x.vals().cloned().collect::<Vec<ParseRepair>>();
+                              .map(|x| { let mut v = x.vals().cloned().collect::<Vec<Repair>>();
                                          v.reverse();
                                          v
                                })
-                              .collect::<Vec<Vec<ParseRepair>>>();
+                              .collect::<Vec<Vec<Repair>>>();
 
         // Arbitrarily select one of the repairs and replay it against the original starting
         // pstack, this time also creating a parse tree.
@@ -242,8 +252,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
             let mut pstack = start_cactus_pstack;
             for r in repairs[0].iter() {
                 match *r {
-                    ParseRepair::InsertNonterm{..} => panic!("Internal error"),
-                    ParseRepair::InsertTerm{term_idx} => {
+                    Repair::InsertTerm{term_idx} => {
                         let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
                         let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
                                                                     .ok()
@@ -252,10 +261,10 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                         pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
                                                   pstack, &mut Some(tstack)).1;
                     },
-                    ParseRepair::Delete => {
+                    Repair::Delete => {
                         la_idx += 1;
                     }
-                    ParseRepair::Shift => {
+                    Repair::Shift => {
                         let (new_la_idx, n_pstack)
                             = parser.lr_cactus(None, la_idx, la_idx + 1, pstack, &mut Some(tstack));
                         assert_eq!(new_la_idx, la_idx + 1);
@@ -274,18 +283,36 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
             in_pstack.reverse();
         }
 
-        (la_idx, repairs)
+        let prepairs = convert_to_parser_repairs(repairs);
+
+        (la_idx, prepairs)
     }
 }
 
-fn score(repairs: &Cactus<ParseRepair>) -> usize {
+fn score(repairs: &Cactus<Repair>) -> usize {
     repairs.vals()
            .filter(|x| match *x {
-                           &ParseRepair::InsertNonterm{..} => panic!("Internal error"),
-                           &ParseRepair::InsertTerm{..} | &ParseRepair::Delete => true,
-                           &ParseRepair::Shift => false
+                           &Repair::InsertTerm{..} | &Repair::Delete => true,
+                           &Repair::Shift => false
                        })
            .count()
+}
+
+fn convert_to_parser_repairs(all_rprs: Vec<Vec<Repair>>) -> Vec<Vec<ParseRepair>>
+{
+      all_rprs.iter()
+              .map(|x| x.iter()
+                        .map(|y|
+                             {
+                                  match *y {
+                                      Repair::InsertTerm{term_idx} =>
+                                          ParseRepair::InsertTerm{term_idx},
+                                      Repair::Delete => ParseRepair::Delete,
+                                      Repair::Shift => ParseRepair::Shift,
+                                  }
+                             })
+                        .collect())
+                    .collect()
 }
 
 #[cfg(test)]
