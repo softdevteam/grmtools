@@ -183,8 +183,8 @@ fn main() {
                 for repair in e.repairs() {
                     let mut lex_idx = e.lexeme_idx();
                     let mut out = vec![];
-                    for &r in repair {
-                        match r {
+                    for r in repair.iter() {
+                        match *r {
                             ParseRepair::InsertNonterm{nonterm_idx} => {
                                 let mut s = String::new();
                                 s.push_str("Insert {");
@@ -207,7 +207,7 @@ fn main() {
                             ParseRepair::Delete | ParseRepair::Shift => {
                                 let l = lexemes[lex_idx];
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
-                                if let ParseRepair::Delete = r {
+                                if let ParseRepair::Delete = *r {
                                     out.push(format!("Delete \"{}\"", t));
                                 } else {
                                     out.push(format!("Keep \"{}\"", t));

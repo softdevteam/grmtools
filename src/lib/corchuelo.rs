@@ -325,8 +325,8 @@ mod test {
 
     fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
         let mut out = vec![];
-        for &r in repairs {
-            match r {
+        for r in repairs.iter() {
+            match *r {
                 ParseRepair::InsertNonterm{..} => panic!("Internal error"),
                 ParseRepair::InsertTerm{term_idx} =>
                     out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),

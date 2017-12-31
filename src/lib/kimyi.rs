@@ -47,7 +47,7 @@ use parser::{Node, Parser, ParseRepair, Recoverer};
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Repair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
     InsertTerm{term_idx: TIdx},
@@ -565,9 +565,9 @@ pub(crate) mod test {
 
     pub(crate) fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
         let mut out = vec![];
-        for &r in repairs {
-            match r {
                 ParseRepair::InsertNonterm{nonterm_idx} =>
+        for r in repairs.iter() {
+            match *r {
                     out.push(format!("InsertNonterm \"{}\"", grm.nonterm_name(nonterm_idx))),
                 ParseRepair::InsertTerm{term_idx} =>
                     out.push(format!("InsertTerm \"{}\"", grm.term_name(term_idx).unwrap())),
