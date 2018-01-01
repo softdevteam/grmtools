@@ -50,9 +50,9 @@ const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Repair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
-    InsertTerm{term_idx: TIdx},
+    InsertTerm(TIdx),
     /// Insert a `Symbol::Nonterm` with idx `nonterm_idx`.
-    InsertNonterm{nonterm_idx: NTIdx},
+    InsertNonterm(NTIdx),
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.
@@ -261,7 +261,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
                         t: n.t + 1,
-                        repairs: n.repairs.child(Repair::InsertTerm{term_idx}),
+                        repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                         cf: n.cf + parser.ic(Symbol::Term(term_idx)),
                         cg: 0};
                     nbrs.insert(nn);
@@ -271,7 +271,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                             pstack: n.pstack.child(sym_st_idx),
                             la_idx: n.la_idx,
                             t: n.t + 1,
-                            repairs: n.repairs.child(Repair::InsertTerm{term_idx}),
+                            repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                             cf: n.cf + parser.ic(Symbol::Term(term_idx)),
                             cg: d};
                         nbrs.insert(nn);
@@ -310,11 +310,11 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                                  .skip(sym_off.into()) {
                 match sym {
                     &Symbol::Nonterm(nonterm_idx) => {
-                        n_repairs = n_repairs.child(Repair::InsertNonterm{nonterm_idx});
+                        n_repairs = n_repairs.child(Repair::InsertNonterm(nonterm_idx));
                         cost += sg.min_sentence_cost(nonterm_idx);
                     },
                     &Symbol::Term(term_idx) => {
-                        n_repairs = n_repairs.child(Repair::InsertTerm{term_idx});
+                        n_repairs = n_repairs.child(Repair::InsertTerm(term_idx));
                         cost += parser.ic(*sym);
                     }
                 }
@@ -402,7 +402,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
     // Remove all inserts of nonterms which have a minimal sentence cost of 0.
     let mut j = 0;
     while j < rprs.len() {
-        if let Repair::InsertNonterm{nonterm_idx} = rprs[j] {
+        if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
             if sg.min_sentence_cost(nonterm_idx) == 0 {
                 rprs.remove(j);
             } else {
@@ -424,10 +424,10 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 
     rprs.iter().map(|x| {
                         match *x {
-                            Repair::InsertTerm{term_idx} =>
-                                ParseRepair::InsertTerm{term_idx},
-                            Repair::InsertNonterm{nonterm_idx} =>
-                                ParseRepair::InsertNonterm{nonterm_idx},
+                            Repair::InsertTerm(term_idx) =>
+                                ParseRepair::InsertTerm(term_idx),
+                            Repair::InsertNonterm(nonterm_idx) =>
+                                ParseRepair::InsertNonterm(nonterm_idx),
                             Repair::Delete => ParseRepair::Delete,
                             Repair::Shift => ParseRepair::Shift,
                         }
@@ -448,7 +448,7 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
 {
     for r in repairs.iter() {
         match *r {
-            ParseRepair::InsertNonterm{nonterm_idx} => {
+            ParseRepair::InsertNonterm(nonterm_idx) => {
                 let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
                 for t_idx in sg.min_sentence(nonterm_idx) {
                     let new_lexeme = Lexeme::new(TokId::try_from(usize::from(t_idx))
@@ -459,7 +459,7 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                                               pstack, tstack).1;
                 }
             }
-            ParseRepair::InsertTerm{term_idx} => {
+            ParseRepair::InsertTerm(term_idx) => {
                 let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
                 let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
                                                             .ok()
@@ -565,11 +565,11 @@ pub(crate) mod test {
 
     pub(crate) fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
         let mut out = vec![];
-                ParseRepair::InsertNonterm{nonterm_idx} =>
         for r in repairs.iter() {
             match *r {
+                ParseRepair::InsertNonterm(nonterm_idx) =>
                     out.push(format!("InsertNonterm \"{}\"", grm.nonterm_name(nonterm_idx))),
-                ParseRepair::InsertTerm{term_idx} =>
+                ParseRepair::InsertTerm(term_idx) =>
                     out.push(format!("InsertTerm \"{}\"", grm.term_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),

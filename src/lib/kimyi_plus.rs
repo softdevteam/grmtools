@@ -218,7 +218,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             let mut rprs = all_rprs.get_mut(i).unwrap();
             let mut j = 0;
             while j < rprs.len() {
-                if let Repair::InsertNonterm{nonterm_idx} = rprs[j] {
+                if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
                     if sg.min_sentence_cost(nonterm_idx) == 0 {
                         rprs.remove(j);
                     } else {
@@ -263,10 +263,10 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             .map(|x| x.iter()
                       .map(|y| {
                                     match *y {
-                                        Repair::InsertTerm{term_idx} =>
-                                            ParseRepair::InsertTerm{term_idx},
-                                        Repair::InsertNonterm{nonterm_idx} =>
-                                            ParseRepair::InsertNonterm{nonterm_idx},
+                                        Repair::InsertTerm(term_idx) =>
+                                            ParseRepair::InsertTerm(term_idx),
+                                        Repair::InsertNonterm(nonterm_idx) =>
+                                            ParseRepair::InsertNonterm(nonterm_idx),
                                         Repair::Delete => ParseRepair::Delete,
                                         Repair::Shift => ParseRepair::Shift,
                                     }

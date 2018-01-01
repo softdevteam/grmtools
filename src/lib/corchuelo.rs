@@ -306,7 +306,7 @@ fn convert_to_parser_repairs(all_rprs: Vec<Vec<Repair>>) -> Vec<Vec<ParseRepair>
                              {
                                   match *y {
                                       Repair::InsertTerm{term_idx} =>
-                                          ParseRepair::InsertTerm{term_idx},
+                                          ParseRepair::InsertTerm(term_idx),
                                       Repair::Delete => ParseRepair::Delete,
                                       Repair::Shift => ParseRepair::Shift,
                                   }
@@ -328,7 +328,7 @@ mod test {
         for r in repairs.iter() {
             match *r {
                 ParseRepair::InsertNonterm{..} => panic!("Internal error"),
-                ParseRepair::InsertTerm{term_idx} =>
+                ParseRepair::InsertTerm(term_idx) =>
                     out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),

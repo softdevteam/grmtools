@@ -185,7 +185,7 @@ fn main() {
                     let mut out = vec![];
                     for r in repair.iter() {
                         match *r {
-                            ParseRepair::InsertNonterm{nonterm_idx} => {
+                            ParseRepair::InsertNonterm(nonterm_idx) => {
                                 let mut s = String::new();
                                 s.push_str("Insert {");
                                 for (i, snt) in sg.min_sentences(nonterm_idx).iter().enumerate() {
@@ -202,7 +202,7 @@ fn main() {
                                 s.push_str("}");
                                 out.push(s);
                             },
-                            ParseRepair::InsertTerm{term_idx} =>
+                            ParseRepair::InsertTerm(term_idx) =>
                                 out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
                             ParseRepair::Delete | ParseRepair::Shift => {
                                 let l = lexemes[lex_idx];

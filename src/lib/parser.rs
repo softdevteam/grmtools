@@ -334,9 +334,9 @@ pub fn parse_rcvry
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ParseRepair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
-    InsertTerm{term_idx: TIdx},
+    InsertTerm(TIdx),
     /// Insert a `Symbol::Nonterm` with idx `nonterm_idx`.
-    InsertNonterm{nonterm_idx: NTIdx},
+    InsertNonterm(NTIdx),
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.
