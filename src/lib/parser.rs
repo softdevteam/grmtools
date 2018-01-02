@@ -333,10 +333,10 @@ pub fn parse_rcvry
 /// in the sequence of repairs is represented by a `ParseRepair`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ParseRepair {
-    /// Insert a `Symbol::Term` with idx `term_idx`.
-    InsertTerm(TIdx),
-    /// Insert a `Symbol::Nonterm` with idx `nonterm_idx`.
-    InsertNonterm(NTIdx),
+    /// Insert a `Symbol::Term`.
+    Insert(TIdx),
+    /// Insert one of the sequences of `Symbol::Term`s.
+    InsertSeq(Vec<Vec<TIdx>>),
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.

@@ -217,7 +217,6 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         let full_rprs = collect_repairs::<TokId>(astar_opt.unwrap().0);
         let smpl_rprs = simplify_repairs(parser, &self.sg, full_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
-                                                     &self.sg,
                                                      in_la_idx,
                                                      start_cactus_pstack,
                                                      &mut Some(&mut tstack),
@@ -425,9 +424,9 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
     rprs.iter().map(|x| {
                         match *x {
                             Repair::InsertTerm(term_idx) =>
-                                ParseRepair::InsertTerm(term_idx),
+                                ParseRepair::Insert(term_idx),
                             Repair::InsertNonterm(nonterm_idx) =>
-                                ParseRepair::InsertNonterm(nonterm_idx),
+                                ParseRepair::InsertSeq(sg.min_sentences(nonterm_idx)),
                             Repair::Delete => ParseRepair::Delete,
                             Repair::Shift => ParseRepair::Shift,
                         }
@@ -439,7 +438,6 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 /// distance and a new pstack.
 pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                            (parser: &Parser<TokId>,
-                            sg: &SentenceGenerator,
                             mut la_idx: usize,
                             mut pstack: Cactus<StIdx>,
                             tstack: &mut Option<&mut Vec<Node<TokId>>>,
@@ -448,9 +446,9 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
 {
     for r in repairs.iter() {
         match *r {
-            ParseRepair::InsertNonterm(nonterm_idx) => {
+            ParseRepair::InsertSeq(ref seqs) => {
                 let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
-                for t_idx in sg.min_sentence(nonterm_idx) {
+                for &t_idx in seqs[0].iter() {
                     let new_lexeme = Lexeme::new(TokId::try_from(usize::from(t_idx))
                                                                 .ok()
                                                                 .unwrap(),
@@ -458,8 +456,8 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                     pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
                                               pstack, tstack).1;
                 }
-            }
-            ParseRepair::InsertTerm(term_idx) => {
+            },
+            ParseRepair::Insert(term_idx) => {
                 let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
                 let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
                                                             .ok()
@@ -567,10 +565,25 @@ pub(crate) mod test {
         let mut out = vec![];
         for r in repairs.iter() {
             match *r {
-                ParseRepair::InsertNonterm(nonterm_idx) =>
-                    out.push(format!("InsertNonterm \"{}\"", grm.nonterm_name(nonterm_idx))),
-                ParseRepair::InsertTerm(term_idx) =>
-                    out.push(format!("InsertTerm \"{}\"", grm.term_name(term_idx).unwrap())),
+                ParseRepair::InsertSeq(ref seqs) => {
+                    let mut s = String::new();
+                    s.push_str("Insert {");
+                    for (i, seq) in seqs.iter().enumerate() {
+                        if i > 0 {
+                            s.push_str(", ");
+                        }
+                        for (j, t_idx) in seq.iter().enumerate() {
+                            if j > 0 {
+                                s.push_str(" ");
+                            }
+                            s.push_str(&format!("\"{}\"", grm.term_name(*t_idx).unwrap()));
+                        }
+                    }
+                    s.push_str("}");
+                    out.push(s);
+                },
+                ParseRepair::Insert(term_idx) =>
+                    out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>
@@ -647,9 +660,9 @@ E : 'N'
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertTerm \"CLOSE_BRACKET\", InsertTerm \"PLUS\"",
-                            "InsertTerm \"CLOSE_BRACKET\", Delete",
-                            "InsertTerm \"PLUS\", Shift, InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
+                            "Insert \"CLOSE_BRACKET\", Delete",
+                            "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
         let (grm, pr) = do_parse(RecoveryKind::KimYi, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
@@ -666,11 +679,11 @@ E : 'N'
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertTerm \"N\"",
+                      &vec!["Insert \"N\"",
                             "Delete"]);
         check_repairs(&grm,
                       errs[1].repairs(),
-                      &vec!["InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["Insert \"CLOSE_BRACKET\""]);
     }
 
     #[test]
@@ -723,7 +736,8 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         assert_eq!(errs[0].repairs().len(), 1);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertNonterm \"E\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["Insert {\"A\", \"B\"}, Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\"",
+                            "Insert \"CLOSE_BRACKET\", Delete"]);
     }
 
     #[test]

@@ -176,7 +176,6 @@ fn main() {
                 Some(pt) => println!("{}", pt.pp(&grm, &input)),
                 None     => println!("Unable to repair input sufficiently to produce parse tree.\n")
             }
-            let sg = grm.sentence_generator(&ic);
             for e in errs {
                 let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
                 println!("Error detected at line {} col {}. Amongst the valid repairs are:", line, col);
@@ -185,14 +184,14 @@ fn main() {
                     let mut out = vec![];
                     for r in repair.iter() {
                         match *r {
-                            ParseRepair::InsertNonterm(nonterm_idx) => {
+                            ParseRepair::InsertSeq(ref seqs) => {
                                 let mut s = String::new();
                                 s.push_str("Insert {");
-                                for (i, snt) in sg.min_sentences(nonterm_idx).iter().enumerate() {
+                                for (i, seq) in seqs.iter().enumerate() {
                                     if i > 0 {
                                         s.push_str(", ");
                                     }
-                                    for (j, t_idx) in snt.iter().enumerate() {
+                                    for (j, t_idx) in seq.iter().enumerate() {
                                         if j > 0 {
                                             s.push_str(" ");
                                         }
@@ -202,7 +201,7 @@ fn main() {
                                 s.push_str("}");
                                 out.push(s);
                             },
-                            ParseRepair::InsertTerm(term_idx) =>
+                            ParseRepair::Insert(term_idx) =>
                                 out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
                             ParseRepair::Delete | ParseRepair::Shift => {
                                 let l = lexemes[lex_idx];
