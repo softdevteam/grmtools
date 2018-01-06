@@ -109,10 +109,9 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         let mut tstack: Vec<Node<TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors);
-        let t = tstack.drain(..).nth(0).unwrap();
         match (accpt, errors.is_empty()) {
-            (true, true)   => Ok(t),
-            (true, false)  => Err((Some(t), errors)),
+            (true, true)   => Ok(tstack.drain(..).nth(0).unwrap()),
+            (true, false)  => Err((Some(tstack.drain(..).nth(0).unwrap()), errors)),
             (false, false) => Err((None, errors)),
             (false, true)  => panic!("Internal error")
         }
