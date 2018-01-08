@@ -40,6 +40,7 @@ use lrtable::{Action, StateGraph, StateTable, StIdx};
 
 use kimyi;
 use kimyi_plus;
+use mf;
 use corchuelo;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -168,6 +169,8 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                                                  kimyi::recoverer(&self),
                                              RecoveryKind::KimYiPlus =>
                                                  kimyi_plus::recoverer(&self),
+                                             RecoveryKind::MF =>
+                                                 mf::recoverer(&self),
                                          });
                     }
 
@@ -297,7 +300,8 @@ pub trait Recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 pub enum RecoveryKind {
     Corchuelo,
     KimYi,
-    KimYiPlus
+    KimYiPlus,
+    MF
 }
 
 /// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the
