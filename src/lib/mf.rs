@@ -34,6 +34,7 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 
 use cactus::Cactus;
 use cfgrammar::Symbol;
@@ -41,12 +42,37 @@ use cfgrammar::yacc::SentenceGenerator;
 use lrtable::{Action, StIdx};
 use pathfinding::astar_bag;
 
-use kimyi::{apply_repairs, Dist, PathFNode, Repair, r3is, r3ir, r3d, r3s_n};
+use kimyi::{apply_repairs, Dist, Repair};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
+
+#[derive(Clone, Debug, Eq)]
+struct PathFNode {
+    pstack: Cactus<StIdx>,
+    la_idx: usize,
+    t: u64,
+    repairs: Cactus<Repair>,
+    cf: u64,
+    cg: u64
+}
+
+impl Hash for PathFNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.pstack.hash(state);
+        self.la_idx.hash(state);
+        self.cf.hash(state);
+        self.cg.hash(state);
+    }
+}
+
+impl PartialEq for PathFNode {
+    fn eq(&self, other: &PathFNode) -> bool {
+        self.pstack == other.pstack && self.la_idx == other.la_idx && self.cf == other.cf && self.cg == other.cg
+    }
+}
 
 pub(crate) struct MF<'a> {
     dist: Dist,
@@ -181,6 +207,140 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         in_pstack.reverse();
 
         (la_idx, rnk_rprs)
+    }
+}
+
+fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+       (parser: &Parser<TokId>,
+        dist: &Dist,
+        n: &PathFNode,
+        nbrs: &mut HashSet<PathFNode>)
+{
+    let top_pstack = *n.pstack.val().unwrap();
+    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
+    if let Symbol::Term(la_term_idx) = la_term {
+        for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
+            if let Symbol::Term(term_idx) = sym {
+                if term_idx == parser.grm.eof_term_idx() {
+                    continue;
+                }
+
+                if n.t == 1 {
+                    let nn = PathFNode{
+                        pstack: n.pstack.child(sym_st_idx),
+                        la_idx: n.la_idx,
+                        t: n.t + 1,
+                        repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
+                        cf: n.cf + parser.ic(Symbol::Term(term_idx)),
+                        cg: 0};
+                    nbrs.insert(nn);
+                } else {
+                    if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
+                        let nn = PathFNode{
+                            pstack: n.pstack.child(sym_st_idx),
+                            la_idx: n.la_idx,
+                            t: n.t + 1,
+                            repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
+                            cf: n.cf + parser.ic(Symbol::Term(term_idx)),
+                            cg: d};
+                        nbrs.insert(nn);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+       (parser: &Parser<TokId>,
+        sg: &SentenceGenerator,
+        n: &PathFNode,
+        nbrs: &mut HashSet<PathFNode>)
+{
+    if n.t != 1 {
+        return;
+    }
+
+    let top_pstack = *n.pstack.val().unwrap();
+    for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).items.keys() {
+        let nt_idx = parser.grm.prod_to_nonterm(p_idx);
+        let mut qi_minus_alpha = n.pstack.clone();
+        for _ in 0..usize::from(sym_off) {
+            qi_minus_alpha = qi_minus_alpha.parent().unwrap();
+        }
+
+        if let Some(goto_st_idx) = parser.stable
+                                         .goto(*qi_minus_alpha.val().unwrap(),
+                                               nt_idx) {
+            let mut n_repairs = n.repairs.clone();
+            let mut cost = 0;
+            for sym in parser.grm.prod(p_idx)
+                                 .iter()
+                                 .skip(sym_off.into()) {
+                match sym {
+                    &Symbol::Nonterm(nonterm_idx) => {
+                        n_repairs = n_repairs.child(Repair::InsertNonterm(nonterm_idx));
+                        cost += sg.min_sentence_cost(nonterm_idx);
+                    },
+                    &Symbol::Term(term_idx) => {
+                        n_repairs = n_repairs.child(Repair::InsertTerm(term_idx));
+                        cost += parser.ic(*sym);
+                    }
+                }
+            }
+            let nn = PathFNode{
+                pstack: qi_minus_alpha.child(goto_st_idx),
+                la_idx: n.la_idx,
+                t: 1,
+                repairs: n_repairs,
+                cf: n.cf + cost,
+                cg: 0};
+            nbrs.insert(nn);
+        }
+    }
+}
+
+fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+      (parser: &Parser<TokId>,
+       n: &PathFNode,
+       nbrs: &mut HashSet<PathFNode>)
+{
+    if n.t != 1 || n.la_idx == parser.lexemes.len() {
+        return;
+    }
+
+    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
+    let nn = PathFNode{pstack: n.pstack.clone(),
+                       la_idx: n.la_idx + 1,
+                       t: 1,
+                       repairs: n.repairs.child(Repair::Delete),
+                       cf: n.cf + parser.dc(la_term),
+                       cg: 0};
+    nbrs.insert(nn);
+}
+
+// Note that we implement R3S-n (on page 12), *not* R3S (on page 11), since the latter rule clearly
+// doesn't work properly in the context of the overall algorithm.
+
+fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+        (parser: &Parser<TokId>,
+         n: &PathFNode,
+         nbrs: &mut HashSet<PathFNode>)
+{
+    let (new_la_idx, n_pstack) = parser.lr_cactus(None,
+                                                  n.la_idx,
+                                                  n.la_idx + 1,
+                                                  n.pstack.clone(),
+                                                  &mut None);
+    if new_la_idx == n.la_idx + 1 {
+        let nn = PathFNode{
+            pstack: n_pstack,
+            la_idx: new_la_idx,
+            t: 1,
+            repairs: n.repairs.child(Repair::Shift),
+            cf: n.cf,
+            cg: 0};
+        nbrs.insert(nn);
     }
 }
 
