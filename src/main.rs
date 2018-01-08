@@ -176,23 +176,22 @@ fn main() {
                 Some(pt) => println!("{}", pt.pp(&grm, &input)),
                 None     => println!("Unable to repair input sufficiently to produce parse tree.\n")
             }
-            let sg = grm.sentence_generator(&ic);
             for e in errs {
                 let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
                 println!("Error detected at line {} col {}. Amongst the valid repairs are:", line, col);
                 for repair in e.repairs() {
                     let mut lex_idx = e.lexeme_idx();
                     let mut out = vec![];
-                    for &r in repair {
-                        match r {
-                            ParseRepair::InsertNonterm{nonterm_idx} => {
+                    for r in repair.iter() {
+                        match *r {
+                            ParseRepair::InsertSeq(ref seqs) => {
                                 let mut s = String::new();
                                 s.push_str("Insert {");
-                                for (i, snt) in sg.min_sentences(nonterm_idx).iter().enumerate() {
+                                for (i, seq) in seqs.iter().enumerate() {
                                     if i > 0 {
                                         s.push_str(", ");
                                     }
-                                    for (j, t_idx) in snt.iter().enumerate() {
+                                    for (j, t_idx) in seq.iter().enumerate() {
                                         if j > 0 {
                                             s.push_str(" ");
                                         }
@@ -202,12 +201,12 @@ fn main() {
                                 s.push_str("}");
                                 out.push(s);
                             },
-                            ParseRepair::InsertTerm{term_idx} =>
+                            ParseRepair::Insert(term_idx) =>
                                 out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
                             ParseRepair::Delete | ParseRepair::Shift => {
                                 let l = lexemes[lex_idx];
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
-                                if let ParseRepair::Delete = r {
+                                if let ParseRepair::Delete = *r {
                                     out.push(format!("Delete \"{}\"", t));
                                 } else {
                                     out.push(format!("Keep \"{}\"", t));

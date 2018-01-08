@@ -36,7 +36,7 @@ use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, Symbol, TIdx};
+use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::{SentenceGenerator, YaccGrammar};
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StIdx};
@@ -47,12 +47,24 @@ use parser::{Node, Parser, ParseRepair, Recoverer};
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Repair {
+    /// Insert a `Symbol::Term` with idx `term_idx`.
+    InsertTerm(TIdx),
+    /// Insert a `Symbol::Nonterm` with idx `nonterm_idx`.
+    InsertNonterm(NTIdx),
+    /// Delete a symbol.
+    Delete,
+    /// Shift a symbol.
+    Shift
+}
+
 #[derive(Clone, Debug, Eq)]
 pub(crate) struct PathFNode {
     pub(crate) pstack: Cactus<StIdx>,
     pub(crate) la_idx: usize,
     pub(crate) t: u64,
-    pub(crate) repairs: Cactus<ParseRepair>,
+    pub(crate) repairs: Cactus<Repair>,
     pub(crate) cf: u64,
     pub(crate) cg: u64
 }
@@ -149,7 +161,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
                 let mut nbrs = HashSet::new();
                 match n.repairs.val() {
-                    Some(&ParseRepair::Delete) => {
+                    Some(&Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
                         // Inserts.
                     },
@@ -180,7 +192,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                 if n.repairs.len() > PARSE_AT_LEAST {
                     let mut all_shfts = true;
                     for x in n.repairs.vals().take(PARSE_AT_LEAST) {
-                        if let ParseRepair::Shift = *x {
+                        if let Repair::Shift = *x {
                             continue;
                         }
                         all_shfts = false;
@@ -205,7 +217,6 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         let full_rprs = collect_repairs::<TokId>(astar_opt.unwrap().0);
         let smpl_rprs = simplify_repairs(parser, &self.sg, full_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
-                                                     &self.sg,
                                                      in_la_idx,
                                                      start_cactus_pstack,
                                                      &mut Some(&mut tstack),
@@ -249,7 +260,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
                         t: n.t + 1,
-                        repairs: n.repairs.child(ParseRepair::InsertTerm{term_idx}),
+                        repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                         cf: n.cf + parser.ic(Symbol::Term(term_idx)),
                         cg: 0};
                     nbrs.insert(nn);
@@ -259,7 +270,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                             pstack: n.pstack.child(sym_st_idx),
                             la_idx: n.la_idx,
                             t: n.t + 1,
-                            repairs: n.repairs.child(ParseRepair::InsertTerm{term_idx}),
+                            repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                             cf: n.cf + parser.ic(Symbol::Term(term_idx)),
                             cg: d};
                         nbrs.insert(nn);
@@ -298,11 +309,11 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                                  .skip(sym_off.into()) {
                 match sym {
                     &Symbol::Nonterm(nonterm_idx) => {
-                        n_repairs = n_repairs.child(ParseRepair::InsertNonterm{nonterm_idx});
+                        n_repairs = n_repairs.child(Repair::InsertNonterm(nonterm_idx));
                         cost += sg.min_sentence_cost(nonterm_idx);
                     },
                     &Symbol::Term(term_idx) => {
-                        n_repairs = n_repairs.child(ParseRepair::InsertTerm{term_idx});
+                        n_repairs = n_repairs.child(Repair::InsertTerm(term_idx));
                         cost += parser.ic(*sym);
                     }
                 }
@@ -332,7 +343,7 @@ pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> 
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        t: 1,
-                       repairs: n.repairs.child(ParseRepair::Delete),
+                       repairs: n.repairs.child(Repair::Delete),
                        cf: n.cf + parser.dc(la_term),
                        cg: 0};
     nbrs.insert(nn);
@@ -356,7 +367,7 @@ pub(crate) fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             pstack: n_pstack,
             la_idx: new_la_idx,
             t: 1,
-            repairs: n.repairs.child(ParseRepair::Shift),
+            repairs: n.repairs.child(Repair::Shift),
             cf: n.cf,
             cg: 0};
         nbrs.insert(nn);
@@ -366,14 +377,14 @@ pub(crate) fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 /// Convert the output from `astar` into something more usable.
 fn collect_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                   (mut rprs: Vec<PathFNode>)
-                -> Vec<ParseRepair>
+                -> Vec<Repair>
 {
     let mut y = rprs.pop()
                     .unwrap()
                     .repairs
                     .vals()
                     .cloned()
-                    .collect::<Vec<ParseRepair>>();
+                    .collect::<Vec<Repair>>();
     y.reverse();
     y
 }
@@ -384,13 +395,13 @@ fn collect_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
 fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                    (_: &Parser<TokId>,
                     sg: &SentenceGenerator,
-                    mut rprs: Vec<ParseRepair>)
+                    mut rprs: Vec<Repair>)
                  -> Vec<ParseRepair>
 {
     // Remove all inserts of nonterms which have a minimal sentence cost of 0.
     let mut j = 0;
     while j < rprs.len() {
-        if let ParseRepair::InsertNonterm{nonterm_idx} = rprs[j] {
+        if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
             if sg.min_sentence_cost(nonterm_idx) == 0 {
                 rprs.remove(j);
             } else {
@@ -403,21 +414,30 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 
     // Remove shifts from the end of repairs
     while rprs.len() > 0 {
-        if let ParseRepair::Shift = rprs[rprs.len() - 1] {
+        if let Repair::Shift = rprs[rprs.len() - 1] {
             rprs.pop();
         } else {
             break;
         }
     }
 
-    rprs
+    rprs.iter().map(|x| {
+                        match *x {
+                            Repair::InsertTerm(term_idx) =>
+                                ParseRepair::Insert(term_idx),
+                            Repair::InsertNonterm(nonterm_idx) =>
+                                ParseRepair::InsertSeq(sg.min_sentences(nonterm_idx)),
+                            Repair::Delete => ParseRepair::Delete,
+                            Repair::Shift => ParseRepair::Shift,
+                        }
+                    })
+               .collect()
 }
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
 pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                            (parser: &Parser<TokId>,
-                            sg: &SentenceGenerator,
                             mut la_idx: usize,
                             mut pstack: Cactus<StIdx>,
                             tstack: &mut Option<&mut Vec<Node<TokId>>>,
@@ -426,9 +446,9 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
 {
     for r in repairs.iter() {
         match *r {
-            ParseRepair::InsertNonterm{nonterm_idx} => {
+            ParseRepair::InsertSeq(ref seqs) => {
                 let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
-                for t_idx in sg.min_sentence(nonterm_idx) {
+                for &t_idx in seqs[0].iter() {
                     let new_lexeme = Lexeme::new(TokId::try_from(usize::from(t_idx))
                                                                 .ok()
                                                                 .unwrap(),
@@ -436,8 +456,8 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                     pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
                                               pstack, tstack).1;
                 }
-            }
-            ParseRepair::InsertTerm{term_idx} => {
+            },
+            ParseRepair::Insert(term_idx) => {
                 let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
                 let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
                                                             .ok()
@@ -543,12 +563,27 @@ pub(crate) mod test {
 
     pub(crate) fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
         let mut out = vec![];
-        for &r in repairs {
-            match r {
-                ParseRepair::InsertNonterm{nonterm_idx} =>
-                    out.push(format!("InsertNonterm \"{}\"", grm.nonterm_name(nonterm_idx))),
-                ParseRepair::InsertTerm{term_idx} =>
-                    out.push(format!("InsertTerm \"{}\"", grm.term_name(term_idx).unwrap())),
+        for r in repairs.iter() {
+            match *r {
+                ParseRepair::InsertSeq(ref seqs) => {
+                    let mut s = String::new();
+                    s.push_str("Insert {");
+                    for (i, seq) in seqs.iter().enumerate() {
+                        if i > 0 {
+                            s.push_str(", ");
+                        }
+                        for (j, t_idx) in seq.iter().enumerate() {
+                            if j > 0 {
+                                s.push_str(" ");
+                            }
+                            s.push_str(&format!("\"{}\"", grm.term_name(*t_idx).unwrap()));
+                        }
+                    }
+                    s.push_str("}");
+                    out.push(s);
+                },
+                ParseRepair::Insert(term_idx) =>
+                    out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>
@@ -625,9 +660,9 @@ E : 'N'
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertTerm \"CLOSE_BRACKET\", InsertTerm \"PLUS\"",
-                            "InsertTerm \"CLOSE_BRACKET\", Delete",
-                            "InsertTerm \"PLUS\", Shift, InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
+                            "Insert \"CLOSE_BRACKET\", Delete",
+                            "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
         let (grm, pr) = do_parse(RecoveryKind::KimYi, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
@@ -644,11 +679,11 @@ E : 'N'
         assert_eq!(errs.len(), 2);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertTerm \"N\"",
+                      &vec!["Insert \"N\"",
                             "Delete"]);
         check_repairs(&grm,
                       errs[1].repairs(),
-                      &vec!["InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["Insert \"CLOSE_BRACKET\""]);
     }
 
     #[test]
@@ -701,7 +736,8 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         assert_eq!(errs[0].repairs().len(), 1);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertNonterm \"E\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["Insert {\"A\", \"B\"}, Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\"",
+                            "Insert \"CLOSE_BRACKET\", Delete"]);
     }
 
     #[test]

@@ -291,7 +291,8 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
 }
 
 pub trait Recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> {
-    fn recover(&self, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>) -> (usize, Vec<Vec<ParseRepair>>);
+    fn recover(&self, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>)
+           -> (usize, Vec<Vec<ParseRepair>>);
 }
 
 pub enum RecoveryKind {
@@ -330,12 +331,12 @@ pub fn parse_rcvry
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
 /// in the sequence of repairs is represented by a `ParseRepair`.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ParseRepair {
-    /// Insert a `Symbol::Term` with idx `term_idx`.
-    InsertTerm{term_idx: TIdx},
-    /// Insert a `Symbol::Nonterm` with idx `nonterm_idx`.
-    InsertNonterm{nonterm_idx: NTIdx},
+    /// Insert a `Symbol::Term`.
+    Insert(TIdx),
+    /// Insert one of the sequences of `Symbol::Term`s.
+    InsertSeq(Vec<Vec<TIdx>>),
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.

@@ -41,7 +41,7 @@ use cfgrammar::yacc::SentenceGenerator;
 use lrtable::{Action, StIdx};
 use pathfinding::astar_bag;
 
-use kimyi::{apply_repairs, Dist, PathFNode, r3is, r3ir, r3d, r3s_n};
+use kimyi::{apply_repairs, Dist, PathFNode, Repair, r3is, r3ir, r3d, r3s_n};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
@@ -104,7 +104,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
                 let mut nbrs = HashSet::new();
                 match n.repairs.val() {
-                    Some(&ParseRepair::Delete) => {
+                    Some(&Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
                         // Inserts.
                     },
@@ -135,7 +135,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                 if n.repairs.len() > PARSE_AT_LEAST {
                     let mut all_shfts = true;
                     for x in n.repairs.vals().take(PARSE_AT_LEAST) {
-                        if let ParseRepair::Shift = *x {
+                        if let Repair::Shift = *x {
                             continue;
                         }
                         all_shfts = false;
@@ -160,12 +160,10 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         let full_rprs = collect_repairs(astar_cnds);
         let smpl_rprs = simplify_repairs(parser, full_rprs);
         let rnk_rprs = rank_cnds(parser,
-                                 &self.sg,
                                  in_la_idx,
                                  start_cactus_pstack.clone(),
                                  smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
-                                                     &self.sg,
                                                      in_la_idx,
                                                      start_cactus_pstack,
                                                      &mut Some(&mut tstack),
@@ -187,7 +185,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 }
 
 /// Convert the output from `astar_bag` into something more usable.
-fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<ParseRepair>>
+fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<Repair>>
 {
     let mut all_rprs = Vec::new();
     for mut rprs in cnds.into_iter() {
@@ -196,7 +194,7 @@ fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<ParseRepair>>
                         .repairs
                         .vals()
                         .cloned()
-                        .collect::<Vec<ParseRepair>>();
+                        .collect::<Vec<Repair>>();
         y.reverse();
         all_rprs.push(y);
     }
@@ -208,7 +206,7 @@ fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<ParseRepair>>
 /// set: this function might delete, expand, or do other things to repairs.
 fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                    (parser: &Parser<TokId>,
-                    mut all_rprs: Vec<Vec<ParseRepair>>)
+                    mut all_rprs: Vec<Vec<Repair>>)
                  -> Vec<Vec<ParseRepair>>
 {
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
@@ -218,7 +216,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             let mut rprs = all_rprs.get_mut(i).unwrap();
             let mut j = 0;
             while j < rprs.len() {
-                if let ParseRepair::InsertNonterm{nonterm_idx} = rprs[j] {
+                if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
                     if sg.min_sentence_cost(nonterm_idx) == 0 {
                         rprs.remove(j);
                     } else {
@@ -234,7 +232,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             // Remove shifts from the end of repairs
             let mut rprs = all_rprs.get_mut(i).unwrap();
             while rprs.len() > 0 {
-                if let ParseRepair::Shift = rprs[rprs.len() - 1] {
+                if let Repair::Shift = rprs[rprs.len() - 1] {
                     rprs.pop();
                 } else {
                     break;
@@ -259,7 +257,20 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
         i += 1;
     }
 
-    all_rprs
+    all_rprs.iter()
+            .map(|x| x.iter()
+                      .map(|y| {
+                                    match *y {
+                                        Repair::InsertTerm(term_idx) =>
+                                            ParseRepair::Insert(term_idx),
+                                        Repair::InsertNonterm(nonterm_idx) =>
+                                            ParseRepair::InsertSeq(sg.min_sentences(nonterm_idx)),
+                                        Repair::Delete => ParseRepair::Delete,
+                                        Repair::Shift => ParseRepair::Shift,
+                                    }
+                           })
+                      .collect())
+                  .collect()
 }
 
 /// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
@@ -269,7 +280,6 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 /// ordering is non-deterministic.
 fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
             (parser: &Parser<TokId>,
-             sg: &SentenceGenerator,
              in_la_idx: usize,
              start_pstack: Cactus<StIdx>,
              in_cnds: Vec<Vec<ParseRepair>>)
@@ -278,7 +288,6 @@ fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
     let mut cnds = in_cnds.into_iter()
                           .map(|rprs| {
                                let (la_idx, pstack) = apply_repairs(parser,
-                                                                    sg,
                                                                     in_la_idx,
                                                                     start_pstack.clone(),
                                                                     &mut None,
@@ -410,9 +419,9 @@ E : 'N'
         assert_eq!(errs[0].repairs().len(), 3);
         check_repairs(&grm,
                       errs[0].repairs(),
-                      &vec!["InsertTerm \"CLOSE_BRACKET\", InsertTerm \"PLUS\"",
-                            "InsertTerm \"CLOSE_BRACKET\", Delete",
-                            "InsertTerm \"PLUS\", Shift, InsertTerm \"CLOSE_BRACKET\""]);
+                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
+                            "Insert \"CLOSE_BRACKET\", Delete",
+                            "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
         let (grm, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
@@ -429,11 +438,11 @@ E : 'N'
         assert_eq!(errs.len(), 2);
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["InsertTerm \"N\"",
+                          &vec!["Insert \"N\"",
                                 "Delete"]);
         check_all_repairs(&grm,
                           errs[1].repairs(),
-                          &vec!["InsertTerm \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \"CLOSE_BRACKET\""]);
     }
 
 
@@ -487,7 +496,7 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         assert_eq!(errs[0].repairs().len(), 1);
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["InsertNonterm \"E\", InsertTerm \"CLOSE_BRACKET\", InsertTerm \"CLOSE_BRACKET\""]);
+                          &vec!["Insert {\"A\", \"B\"}, Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\""]);
     }
 
     #[test]
@@ -518,10 +527,10 @@ Factor: 'OPEN_BRACKET' Expr 'CLOSE_BRACKET'
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["InsertTerm \"CLOSE_BRACKET\", InsertTerm \"PLUS\"",
-                                "InsertTerm \"CLOSE_BRACKET\", InsertTerm \"MULT\"",
-                                "InsertTerm \"CLOSE_BRACKET\", Delete",
-                                "InsertTerm \"PLUS\", Shift, InsertTerm \"CLOSE_BRACKET\"",
-                                "InsertTerm \"MULT\", Shift, InsertTerm \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
+                                "Insert \"CLOSE_BRACKET\", Insert \"MULT\"",
+                                "Insert \"CLOSE_BRACKET\", Delete",
+                                "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\"",
+                                "Insert \"MULT\", Shift, Insert \"CLOSE_BRACKET\""]);
     }
 }
