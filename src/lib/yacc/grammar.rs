@@ -656,7 +656,10 @@ fn nonterm_costs<F>(grm: &YaccGrammar, term_cost: F) -> Vec<u64>
     done.resize(grm.nonterms_len(), false);
     loop {
         let mut all_done = true;
-        for (i, _) in done.clone().iter().enumerate().filter(|&(_, d)| !d) {
+        for i in 0..done.len() {
+            if done[i] {
+                continue;
+            }
             all_done = false;
             let mut ls_cmplt = None; // lowest completed cost
             let mut ls_noncmplt = None; // lowest non-completed cost
