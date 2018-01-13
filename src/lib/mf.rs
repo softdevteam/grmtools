@@ -31,18 +31,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
 use cactus::Cactus;
-use cfgrammar::Symbol;
-use cfgrammar::yacc::SentenceGenerator;
-use lrtable::{Action, StIdx};
+use cfgrammar::{Grammar, Symbol, TIdx};
+use cfgrammar::yacc::{SentenceGenerator, YaccGrammar};
+use lrtable::{Action, StateGraph, StateTable, StIdx};
 use pathfinding::astar_bag;
 
-use kimyi::{apply_repairs, Dist, Repair};
+use kimyi::{apply_repairs, Repair};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
@@ -53,7 +53,6 @@ const TRY_PARSE_AT_MOST: usize = 250;
 struct PathFNode {
     pstack: Cactus<StIdx>,
     la_idx: usize,
-    t: u64,
     repairs: Cactus<Repair>,
     cf: u64,
     cg: u64
@@ -83,7 +82,7 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, |x| parser.ic(Symbol::Term(x)));
     let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
     Box::new(MF{dist, sg})
 }
@@ -98,16 +97,6 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                mut tstack: &mut Vec<Node<TokId>>)
            -> (usize, Vec<Vec<ParseRepair>>)
     {
-        // This function implements an algorithm whose core is based on that from "LR error repair
-        // using the A* algorithm" by Ik-Soon Kim and Kwangkeun Yi. However, we extend it in
-        // several ways.
-        //
-        // The basic idea behind this implementation is to use the transition rules from Fig 9
-        // (along with the altered version of R3S presented on p12) as a mechanism for dynamically
-        // calculating the neighbours of the current node under investigation. Unlike KimYi, who
-        // non-deterministically return a single repair, this variant evaluates all minimal cost
-        // repairs.
-
         let mut start_cactus_pstack = Cactus::new();
         for st in in_pstack.drain(..) {
             start_cactus_pstack = start_cactus_pstack.child(st);
@@ -115,7 +104,6 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
                                    la_idx: in_la_idx,
-                                   t: 1,
                                    repairs: Cactus::new(),
                                    cf: 0,
                                    cg: 0};
@@ -141,6 +129,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                 }
                 r3d(parser, &n, &mut nbrs);
                 r3s_n(parser, &n, &mut nbrs);
+
                 let v = nbrs.into_iter()
                             .map(|x| {
                                     let t = x.cf - n.cf;
@@ -225,26 +214,14 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
                     continue;
                 }
 
-                if n.t == 1 {
+                if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
-                        t: n.t + 1,
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                         cf: n.cf + parser.ic(Symbol::Term(term_idx)),
-                        cg: 0};
+                        cg: d};
                     nbrs.insert(nn);
-                } else {
-                    if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
-                        let nn = PathFNode{
-                            pstack: n.pstack.child(sym_st_idx),
-                            la_idx: n.la_idx,
-                            t: n.t + 1,
-                            repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                            cf: n.cf + parser.ic(Symbol::Term(term_idx)),
-                            cg: d};
-                        nbrs.insert(nn);
-                    }
                 }
             }
         }
@@ -257,10 +234,6 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
         n: &PathFNode,
         nbrs: &mut HashSet<PathFNode>)
 {
-    if n.t != 1 {
-        return;
-    }
-
     let top_pstack = *n.pstack.val().unwrap();
     for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).items.keys() {
         let nt_idx = parser.grm.prod_to_nonterm(p_idx);
@@ -291,7 +264,6 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
             let nn = PathFNode{
                 pstack: qi_minus_alpha.child(goto_st_idx),
                 la_idx: n.la_idx,
-                t: 1,
                 repairs: n_repairs,
                 cf: n.cf + cost,
                 cg: 0};
@@ -305,22 +277,18 @@ fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq
        n: &PathFNode,
        nbrs: &mut HashSet<PathFNode>)
 {
-    if n.t != 1 || n.la_idx == parser.lexemes.len() {
+    if n.la_idx == parser.lexemes.len() {
         return;
     }
 
     let (_, la_term) = parser.next_lexeme(None, n.la_idx);
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
-                       t: 1,
                        repairs: n.repairs.child(Repair::Delete),
                        cf: n.cf + parser.dc(la_term),
                        cg: 0};
     nbrs.insert(nn);
 }
-
-// Note that we implement R3S-n (on page 12), *not* R3S (on page 11), since the latter rule clearly
-// doesn't work properly in the context of the overall algorithm.
 
 fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
         (parser: &Parser<TokId>,
@@ -336,7 +304,6 @@ fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         let nn = PathFNode{
             pstack: n_pstack,
             la_idx: new_la_idx,
-            t: 1,
             repairs: n.repairs.child(Repair::Shift),
             cf: n.cf,
             cg: 0};
@@ -509,16 +476,363 @@ fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
         .collect::<Vec<Vec<ParseRepair>>>()
 }
 
+pub(crate) struct Dist {
+    terms_len: usize,
+    table: Vec<u64>
+}
+
+impl Dist {
+    pub(crate) fn new<F>(grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable, term_cost: F) -> Dist
+              where F: Fn(TIdx) -> u64
+    {
+        // This is an extension of dist from the KimYi paper: it also takes into account reductions
+        // and gotos in the distances it reports back. Note that it is conservative, sometimes
+        // undercounting the distance. Consider the KimYi paper, Figure 10: from state 0 it is
+        // clearly the case that the distance to ')' is 2 since we would need to encounter the
+        // tokens "(", {"a", "b"} before encountering a ')'. However, this algorithm gives the
+        // distance as 1. This is because state 0 is a reduction target of state 3, but state 3
+        // also has a reduction target of state 5: thus state state 0 ends up with the minimum
+        // distances of itself and state 5. Put another way, state 0 and state 5 end up with the
+        // same set of distances, even though a more clever algorithm could work out that this
+        // needn't be so. That's for another day...
+
+        let terms_len = grm.terms_len();
+        let states_len = sgraph.all_states_len();
+        let sengen = grm.sentence_generator(&term_cost);
+        let mut table = Vec::new();
+        table.resize(states_len * terms_len, u64::max_value());
+
+        // rev_edges allows us to walk backwards over the stategraph
+        let mut rev_edges = Vec::with_capacity(states_len);
+        rev_edges.resize(states_len, HashSet::new());
+        for i in 0..states_len {
+            for (_, &sym_st_idx) in sgraph.edges(StIdx::from(i)).iter() {
+                rev_edges[usize::from(sym_st_idx)].insert(StIdx::from(i));
+            }
+        }
+
+        // goto_edges is a map from a core state ready for reduction (i.e. where the dot is at the
+        // end of the production and thus sym_off == prod.len()) represented as a tuple
+        // (state_index, production_index) to a set of state indexes. The latter represents all the
+        // states which after (possibly recursive and intertwined) reductions and gotos the parser
+        // might end up in.
+        //
+        // We calculate this for a state i, production p_idx, by iterating backwards over the
+        // stategraph (using rev_edges) finding all routes of length grm.prod(p_idx).len() which
+        // could lead back to i, and then storing their goto state indexes. Since further
+        // reductions and gotos could then happen, we then have to recursively search those goto
+        // state indexes from scratch.
+        //
+        // This loop is currently comically inefficient, but it is relatively straightforward.
+        let mut goto_edges = HashMap::new();
+        for i in 0..states_len {
+            for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
+                let prod = grm.prod(p_idx);
+                if usize::from(sym_off) == prod.len() {
+                    let mut todo = HashSet::new(); // (StIdx, PIdx)
+                    let mut done = HashSet::new(); // Which (StIdx, PIdx) pairs have we processed?
+                    let mut ge = HashSet::new();   // Which StIdx's can we eventually goto?
+                    todo.insert((i, p_idx));
+                    while todo.len() > 0 {
+                        let &(i, p) = todo.iter().nth(0).unwrap();
+                        todo.remove(&(i, p));
+                        if done.contains(&(i, p)) {
+                            continue;
+                        }
+                        done.insert((i, p));
+                        let mut cur = rev_edges[i].clone();
+                        let mut next;
+                        for _ in 0..grm.prod(p).len() - 1 {
+                            next = HashSet::new();
+                            for st_idx in cur {
+                                next.extend(&rev_edges[usize::from(st_idx)]);
+                            }
+                            cur = next;
+                        }
+                        for st_idx in cur {
+                            for &(sub_p_idx, sub_sym_off) in sgraph.core_state(StIdx::from(st_idx))
+                                                                   .items
+                                                                   .keys() {
+                                let sub_prod = grm.prod(sub_p_idx);
+                                if usize::from(sub_sym_off) == sub_prod.len() {
+                                    todo.insert((usize::from(st_idx), sub_p_idx));
+                                }
+                            }
+                            let n = grm.prod_to_nonterm(p);
+                            if let Some(goto_idx) = stable.goto(st_idx, n) {
+                                ge.insert(goto_idx);
+                            }
+                        }
+                    }
+                    goto_edges.insert((i, p_idx), ge);
+                }
+            }
+        }
+
+        // We can now interleave KimYi's original dist algorithm with our addition which takes into
+        // account goto_edges.
+        loop {
+            let mut chgd = false; // Has anything changed?
+
+            for i in 0..states_len {
+                // The first phase is KimYi's dist algorithm.
+                let edges = sgraph.edges(StIdx::from(i));
+                for (&sym, &sym_st_idx) in edges.iter() {
+                    let d = match sym {
+                        Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
+                        Symbol::Term(t_idx) => {
+                            let off = usize::from(i) * terms_len + usize::from(t_idx);
+                            if table[off] != 0 {
+                                table[off] = 0;
+                                chgd = true;
+                            }
+                            term_cost(t_idx)
+                        }
+                    };
+
+                    for j in 0..terms_len {
+                        let this_off = usize::from(i) * terms_len + usize::from(j);
+                        let other_off = usize::from(sym_st_idx) * terms_len + usize::from(j);
+
+                        if table[other_off] != u64::max_value()
+                           && table[other_off] + d < table[this_off]
+                        {
+                            table[this_off] = table[other_off] + d;
+                            chgd = true;
+                        }
+                    }
+                }
+
+                // The second phase takes into account gotos.
+                for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
+                    let prod = grm.prod(p_idx);
+                    if usize::from(sym_off) == prod.len() {
+                        for goto_idx in goto_edges.get(&(i, p_idx)).unwrap() {
+                            for j in 0..terms_len {
+                                let this_off = usize::from(i) * terms_len + usize::from(j);
+                                let other_off = usize::from(*goto_idx) * terms_len + usize::from(j);
+
+                                if table[other_off] != u64::max_value() &&
+                                    table[other_off] < table[this_off] {
+                                    table[this_off] = table[other_off];
+                                    chgd = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !chgd {
+                break;
+            }
+        }
+
+        Dist{terms_len, table}
+    }
+
+    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u64> {
+        let e = self.table[usize::from(st_idx) * self.terms_len + usize::from(t_idx)];
+        if e == u64::max_value() {
+            None
+        } else {
+            Some(e as u64)
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;
+    use test::{Bencher, black_box};
 
-    use cfgrammar::yacc::YaccGrammar;
+    use cfgrammar::Symbol;
+    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
     use lrlex::Lexeme;
+    use lrtable::{Minimiser, from_yacc, StIdx};
 
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
-    use kimyi::test::{check_repairs, pp_repairs};
+    use kimyi::test::pp_repairs;
+
+    use super::Dist;
+
+    #[test]
+    fn dist_kimyi() {
+        let grms = "%start A
+%%
+A: '(' A ')'
+ | 'a'
+ | 'b'
+ ;
+";
+
+        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
+        let s0 = StIdx::from(0);
+        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), Some(0));
+        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), Some(1));
+        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), Some(0));
+        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), Some(0));
+
+        let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), None);
+        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), None);
+        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), None);
+        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), None);
+
+        let s2 = sgraph.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), None);
+        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), Some(0));
+        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), None);
+        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), None);
+
+        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), None);
+        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), Some(0));
+        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), None);
+        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), None);
+
+        let s5 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
+        assert_eq!(d.dist(s5, grm.term_idx("(").unwrap()), Some(0));
+        assert_eq!(d.dist(s5, grm.term_idx(")").unwrap()), Some(1));
+        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), Some(0));
+        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), Some(0));
+        assert_eq!(d.dist(s5, grm.eof_term_idx()), None);
+
+        let s6 = sgraph.edge(s5, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
+        assert_eq!(d.dist(s6, grm.term_idx("(").unwrap()), None);
+        assert_eq!(d.dist(s6, grm.term_idx(")").unwrap()), Some(0));
+        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), None);
+        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), None);
+        assert_eq!(d.dist(s6, grm.eof_term_idx()), None);
+
+        let s4 = sgraph.edge(s6, Symbol::Term(grm.term_idx(")").unwrap())).unwrap();
+        assert_eq!(d.dist(s4, grm.term_idx("(").unwrap()), None);
+        assert_eq!(d.dist(s4, grm.term_idx(")").unwrap()), Some(0));
+        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), None);
+        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), None);
+    }
+
+    #[test]
+    fn dist_short() {
+        let grms = "%start S
+%%
+S: T U 'C';
+T: 'A';
+U: 'B';
+";
+
+        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
+
+        // This only tests a subset of all the states and distances but, I believe, it tests all
+        // more interesting edge cases that the example from the Kim/Yi paper.
+
+        let s0 = StIdx::from(0);
+        assert_eq!(d.dist(s0, grm.term_idx("A").unwrap()), Some(0));
+        assert_eq!(d.dist(s0, grm.term_idx("B").unwrap()), Some(1));
+        assert_eq!(d.dist(s0, grm.term_idx("C").unwrap()), Some(2));
+
+        let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.term_idx("A").unwrap()), None);
+        assert_eq!(d.dist(s1, grm.term_idx("B").unwrap()), Some(0));
+        assert_eq!(d.dist(s1, grm.term_idx("C").unwrap()), Some(1));
+
+        let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.term_idx("A").unwrap()), None);
+        assert_eq!(d.dist(s2, grm.term_idx("B").unwrap()), None);
+        assert_eq!(d.dist(s2, grm.term_idx("C").unwrap()), None);
+
+        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("A").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.term_idx("A").unwrap()), None);
+        assert_eq!(d.dist(s3, grm.term_idx("B").unwrap()), Some(0));
+        assert_eq!(d.dist(s3, grm.term_idx("C").unwrap()), Some(1));
+
+        let s4 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("U").unwrap())).unwrap();
+        assert_eq!(d.dist(s4, grm.term_idx("A").unwrap()), None);
+        assert_eq!(d.dist(s4, grm.term_idx("B").unwrap()), None);
+        assert_eq!(d.dist(s4, grm.term_idx("C").unwrap()), Some(0));
+
+        let s5 = sgraph.edge(s1, Symbol::Term(grm.term_idx("B").unwrap())).unwrap();
+        assert_eq!(d.dist(s5, grm.term_idx("A").unwrap()), None);
+        assert_eq!(d.dist(s5, grm.term_idx("B").unwrap()), None);
+        assert_eq!(d.dist(s5, grm.term_idx("C").unwrap()), Some(0));
+
+        let s6 = sgraph.edge(s4, Symbol::Term(grm.term_idx("C").unwrap())).unwrap();
+        assert_eq!(d.dist(s6, grm.term_idx("A").unwrap()), None);
+        assert_eq!(d.dist(s6, grm.term_idx("B").unwrap()), None);
+        assert_eq!(d.dist(s6, grm.term_idx("C").unwrap()), None);
+    }
+
+    #[test]
+    fn dist_large() {
+        let grms = "%start Expr
+%%
+Expr: Term '+' Expr
+    | Term ;
+
+Term: Factor '*' Term
+    | Factor ;
+
+Factor: '(' Expr ')'
+      | 'INT' ;
+";
+
+        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
+
+        // This only tests a subset of all the states and distances but, I believe, it tests all
+        // more interesting edge cases that the example from the Kim/Yi paper.
+
+        let s0 = StIdx::from(0);
+        assert_eq!(d.dist(s0, grm.term_idx("+").unwrap()), Some(1));
+        assert_eq!(d.dist(s0, grm.term_idx("*").unwrap()), Some(1));
+        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), Some(0));
+        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), Some(1));
+        assert_eq!(d.dist(s0, grm.term_idx("INT").unwrap()), Some(0));
+
+        let s1 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.term_idx("+").unwrap()), Some(1));
+        assert_eq!(d.dist(s1, grm.term_idx("*").unwrap()), Some(1));
+        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), Some(0));
+        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), Some(1));
+        assert_eq!(d.dist(s1, grm.term_idx("INT").unwrap()), Some(0));
+
+        let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Factor").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.term_idx("+").unwrap()), Some(0));
+        assert_eq!(d.dist(s2, grm.term_idx("*").unwrap()), Some(0));
+        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), Some(1));
+        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), Some(0));
+        assert_eq!(d.dist(s2, grm.term_idx("INT").unwrap()), Some(1));
+
+        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("INT").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.term_idx("+").unwrap()), Some(0));
+        assert_eq!(d.dist(s3, grm.term_idx("*").unwrap()), Some(0));
+        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), Some(1));
+        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), Some(0));
+        assert_eq!(d.dist(s3, grm.term_idx("INT").unwrap()), Some(1));
+    }
+
+    #[bench]
+    fn bench_dist(b: &mut Bencher) {
+        let grms = "%start A
+%%
+A: '(' A ')'
+ | 'a'
+ | 'b'
+ ;
+";
+        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        b.iter(|| {
+            for _ in 0..10000 {
+                black_box(Dist::new(&grm, &sgraph, &stable, |_| 1));
+            }
+        });
+    }
 
     pub(crate) fn check_all_repairs(grm: &YaccGrammar,
                                     repairs: &Vec<Vec<ParseRepair>>,
@@ -549,9 +863,10 @@ E : 'N'
   ;
 ";
 
-        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "(nn");
+        let us = "(nn";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, us);
         let (pt, errs) = pr.unwrap_err();
-        let pp = pt.unwrap().pp(&grm, "(nn");
+        let pp = pt.unwrap().pp(&grm, us);
         if !vec![
 "E
  OPEN_BRACKET (
@@ -576,12 +891,11 @@ E : 'N'
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.term_idx("N").unwrap())).ok().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
-        assert_eq!(errs[0].repairs().len(), 3);
-        check_repairs(&grm,
-                      errs[0].repairs(),
-                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
-                            "Insert \"CLOSE_BRACKET\", Delete",
-                            "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
+                                "Insert \"CLOSE_BRACKET\", Delete",
+                                "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
@@ -692,5 +1006,64 @@ Factor: 'OPEN_BRACKET' Expr 'CLOSE_BRACKET'
                                 "Insert \"CLOSE_BRACKET\", Delete",
                                 "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\"",
                                 "Insert \"MULT\", Shift, Insert \"CLOSE_BRACKET\""]);
+    }
+
+    #[test]
+    fn find_shortest() {
+        let lexs = "%%
+a A
+b B
+c C
+";
+
+        let grms = "%start S
+%%
+S: T U 'C';
+T: 'A';
+U: 'B';
+";
+
+        // We expect this example not to find any repairs with KimYi
+        let us = "c";
+        let (_, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        assert_eq!(errs[0].repairs().len(), 0);
+
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"A\", Insert \"B\""]);
+    }
+
+    #[test]
+    fn deletes_after_inserts() {
+        let lexs = "%%
+a A
+b B
+c C
+d D
+";
+
+        let grms = "%start S
+%%
+S:  'A' 'B' 'D' | 'A' 'B' 'C' 'A' 'A' 'D';
+";
+
+        // KimYiPlus incorrectly finds a long repair when a shorter one exists
+
+        let us = "acd";
+        let (grm, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"B\", Shift, Insert \"A\", Insert \"A\""]);
+
+        let us = "acd";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"B\", Delete"]);
     }
 }
