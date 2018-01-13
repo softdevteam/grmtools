@@ -457,6 +457,7 @@ impl Grammar for YaccGrammar {
 pub struct SentenceGenerator<'a> {
     grm: &'a YaccGrammar,
     nonterm_min_costs: Vec<u64>,
+    nonterm_max_costs: Vec<u64>,
     term_costs: Vec<u64>
 }
 
@@ -465,18 +466,34 @@ impl<'a> SentenceGenerator<'a> {
         where F: Fn(TIdx) -> u64
     {
         let nt_min_costs = nonterm_min_costs(grm, &term_cost);
+        let nt_max_costs = nonterm_max_costs(grm, &term_cost);
         let mut term_costs = Vec::with_capacity(grm.terms_len());
         for i in 0..grm.terms_len() {
             term_costs.push(term_cost(TIdx::from(i)));
         }
-        SentenceGenerator{grm, term_costs, nonterm_min_costs: nt_min_costs}
+        SentenceGenerator{grm,
+                          term_costs,
+                          nonterm_min_costs: nt_min_costs,
+                          nonterm_max_costs: nt_max_costs}
     }
 
-    /// What is the cost of a minimal sentence for the non-terminal `nonterm_idx`. Note that,
+    /// What is the cost of a minimal sentence for the non-terminal `nonterm_idx`? Note that,
     /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
     /// much faster.
     pub fn min_sentence_cost(&self, nonterm_idx:NTIdx) -> u64 {
         self.nonterm_min_costs[usize::from(nonterm_idx)]
+    }
+
+    /// What is the cost of a maximal sentence for the non-terminal `nonterm_idx`? Non-terminals
+    /// which can generate sentences of unbounded length return None; non-terminals which can only
+    /// generate maximal strings of a finite length return a `Some(u64)`.
+    pub fn max_sentence_cost(&self, nonterm_idx:NTIdx) -> Option<u64> {
+        let v = self.nonterm_max_costs[usize::from(nonterm_idx)];
+        if v == u64::max_value() {
+            None
+        } else {
+            Some(v)
+        }
     }
 
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
@@ -623,7 +640,7 @@ impl<'a> SentenceGenerator<'a> {
     }
 }
 
-/// Return the cost of a minimal string for each nonterminal in this grammar. The cost of a
+/// Return the cost of a minimal string for each non-terminal in this grammar. The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
 fn nonterm_min_costs<F>(grm: &YaccGrammar, term_cost: F) -> Vec<u64>
                where F: Fn(TIdx) -> u64
@@ -702,6 +719,84 @@ fn nonterm_min_costs<F>(grm: &YaccGrammar, term_cost: F) -> Vec<u64>
     costs
 }
 
+
+/// Return the cost of the maximal string for each non-terminal in this grammar (u64::max_val()
+/// representing "this non-terminal can generate strings of infinite length"). The cost of a
+/// terminal is specified by the user-defined `term_cost` function.
+fn nonterm_max_costs<F>(grm: &YaccGrammar, term_cost: F) -> Vec<u64>
+               where F: Fn(TIdx) -> u64
+{
+    let mut done = vec![];
+    done.resize(grm.nonterms_len(), false);
+    let mut costs = vec![];
+    costs.resize(grm.nonterms_len(), 0);
+
+    // First mark all recursive non-terminals.
+    for i in 0..grm.nonterms_len() {
+        // Calling has_path so frequently is not exactly efficient...
+        if grm.has_path(NTIdx::from(i), NTIdx::from(i)) {
+            costs[i] = u64::max_value();
+            done[i] = true;
+        }
+    }
+
+    loop {
+        let mut all_done = true;
+        for i in 0..done.len() {
+            if done[i] {
+                continue;
+            }
+            all_done = false;
+            let mut hs_cmplt = None; // highest completed cost
+            let mut hs_noncmplt = None; // highest non-completed cost
+            'a: for p_idx in grm.nonterm_to_prods(NTIdx::from(i)).iter() {
+                let mut c: u64 = 0; // production cost
+                let mut cmplt = true;
+                for sym in grm.prod(*p_idx) {
+                    let sc = match *sym {
+                                 Symbol::Term(term_idx) => term_cost(term_idx),
+                                 Symbol::Nonterm(nt_idx) => {
+                                     if costs[usize::from(nt_idx)] == u64::max_value() {
+                                         // As soon as we find reference to an infinite
+                                         // non-terminal, we can stop looking.
+                                         hs_cmplt = Some(u64::max_value());
+                                         break 'a;
+                                     }
+                                     if !done[usize::from(nt_idx)] {
+                                         cmplt = false;
+                                     }
+                                     costs[usize::from(nt_idx)]
+                                 }
+                             };
+                    c = c.checked_add(sc).expect(
+                            "Overflow occurred when calculating non-term costs");
+                    if c == u64::max_value() {
+                        panic!("Unable to represent cost in 64 bits.");
+                    }
+                }
+                if cmplt && (hs_cmplt.is_none() || c > hs_cmplt.unwrap()) {
+                    hs_cmplt = Some(c);
+                } else if !cmplt && (hs_noncmplt.is_none() || c > hs_noncmplt.unwrap()) {
+                    hs_noncmplt = Some(c);
+                }
+            }
+            if hs_cmplt.is_some() && (hs_noncmplt.is_none() || hs_cmplt > hs_noncmplt) {
+                debug_assert!(hs_cmplt.unwrap() >= costs[i]);
+                costs[i] = hs_cmplt.unwrap();
+                done[i] = true;
+            } else if hs_noncmplt.is_some() {
+                debug_assert!(hs_noncmplt.unwrap() >= costs[i]);
+                costs[i] = hs_noncmplt.unwrap();
+            }
+        }
+        if all_done {
+            debug_assert!(done.iter().all(|x| *x));
+            break;
+        }
+    }
+    costs
+}
+
 #[derive(Debug)]
 pub enum YaccGrammarError {
     YaccParserError(YaccParserError),
@@ -732,7 +827,7 @@ impl fmt::Display for YaccGrammarError {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_min_costs};
+    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_max_costs, nonterm_min_costs};
     use {NTIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, yacc_grm, YaccKind};
 
@@ -1037,5 +1132,43 @@ mod test {
         find("B", vec![vec!["x"]]);
         find("C", vec![vec!["x"]]);
         find("D", vec![vec!["y", "x"], vec!["y", "z"]]);
+    }
+
+    #[test]
+    fn test_nonterm_max_costs1() {
+        let grm = yacc_grm(YaccKind::Original, "
+            %start A
+            %%
+            A: A B | ;
+            B: C | D | E;
+            C: 'x' B | 'x';
+            D: 'y' B | 'y' 'z';
+            E: 'x' A | 'x' 'y';
+          ").unwrap();
+
+        let scores = nonterm_max_costs(&grm, |_| 1);
+        assert_eq!(scores[usize::from(grm.nonterm_idx("A").unwrap())], u64::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("B").unwrap())], u64::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("C").unwrap())], u64::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("D").unwrap())], u64::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("E").unwrap())], u64::max_value());
+    }
+
+    #[test]
+    fn test_nonterm_max_costs2() {
+        let grm = yacc_grm(YaccKind::Original, "
+            %start A
+            %%
+            A: A B | B;
+            B: C | D;
+            C: 'x' 'y' | 'x';
+            D: 'y' 'x' | 'y' 'x' 'z';
+          ").unwrap();
+
+        let scores = nonterm_max_costs(&grm, |_| 1);
+        assert_eq!(scores[usize::from(grm.nonterm_idx("A").unwrap())], u64::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("B").unwrap())], 3);
+        assert_eq!(scores[usize::from(grm.nonterm_idx("C").unwrap())], 2);
+        assert_eq!(scores[usize::from(grm.nonterm_idx("D").unwrap())], 3);
     }
 }
