@@ -501,6 +501,7 @@ impl Dist {
         let sengen = grm.sentence_generator(&term_cost);
         let mut table = Vec::new();
         table.resize(states_len * terms_len, u64::max_value());
+        table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
 
         // rev_edges allows us to walk backwards over the stategraph
         let mut rev_edges = Vec::with_capacity(states_len);
@@ -674,44 +675,49 @@ A: '(' A ')'
         assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), Some(1));
         assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), Some(0));
         assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), Some(0));
+        assert_eq!(d.dist(s0, grm.eof_term_idx()), Some(1));
 
         let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
         assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), None);
         assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), None);
         assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), None);
         assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), None);
+        assert_eq!(d.dist(s1, grm.eof_term_idx()), Some(0));
 
         let s2 = sgraph.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
         assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), None);
         assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), Some(0));
         assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), None);
         assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), None);
+        assert_eq!(d.dist(s2, grm.eof_term_idx()), Some(0));
 
         let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
         assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), None);
         assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), Some(0));
         assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), None);
         assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), None);
+        assert_eq!(d.dist(s3, grm.eof_term_idx()), Some(0));
 
         let s5 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
         assert_eq!(d.dist(s5, grm.term_idx("(").unwrap()), Some(0));
         assert_eq!(d.dist(s5, grm.term_idx(")").unwrap()), Some(1));
         assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), Some(0));
         assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), Some(0));
-        assert_eq!(d.dist(s5, grm.eof_term_idx()), None);
+        assert_eq!(d.dist(s5, grm.eof_term_idx()), Some(1));
 
         let s6 = sgraph.edge(s5, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
         assert_eq!(d.dist(s6, grm.term_idx("(").unwrap()), None);
         assert_eq!(d.dist(s6, grm.term_idx(")").unwrap()), Some(0));
         assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), None);
         assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), None);
-        assert_eq!(d.dist(s6, grm.eof_term_idx()), None);
+        assert_eq!(d.dist(s6, grm.eof_term_idx()), Some(1));
 
         let s4 = sgraph.edge(s6, Symbol::Term(grm.term_idx(")").unwrap())).unwrap();
         assert_eq!(d.dist(s4, grm.term_idx("(").unwrap()), None);
         assert_eq!(d.dist(s4, grm.term_idx(")").unwrap()), Some(0));
         assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), None);
         assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), None);
+        assert_eq!(d.dist(s4, grm.eof_term_idx()), Some(0));
     }
 
     #[test]
@@ -967,10 +973,11 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.eof_term_idx())).ok().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
-        assert_eq!(errs[0].repairs().len(), 1);
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["Insert {\"A\", \"B\"}, Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \"A\", Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\"",
+                                "Insert \"B\", Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\"",
+                                "Insert {\"A\", \"B\"}, Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\""]);
     }
 
     #[test]
@@ -1065,5 +1072,24 @@ S:  'A' 'B' 'D' | 'A' 'B' 'C' 'A' 'A' 'D';
         check_all_repairs(&grm,
                           errs[0].repairs(),
                           &vec!["Insert \"B\", Delete"]);
+    }
+
+    #[test]
+    fn repair_empty_string() {
+        let lexs = "%%
+a A
+";
+
+        let grms = "%start S
+%%
+S: 'A';
+";
+
+        let us = "";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"A\""]);
     }
 }
