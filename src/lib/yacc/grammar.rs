@@ -30,6 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -456,8 +457,8 @@ impl Grammar for YaccGrammar {
 /// ```
 pub struct SentenceGenerator<'a> {
     grm: &'a YaccGrammar,
-    nonterm_min_costs: Vec<u64>,
-    nonterm_max_costs: Vec<u64>,
+    nonterm_min_costs: RefCell<Option<Vec<u64>>>,
+    nonterm_max_costs: RefCell<Option<Vec<u64>>>,
     term_costs: Vec<u64>
 }
 
@@ -469,26 +470,30 @@ impl<'a> SentenceGenerator<'a> {
         for i in 0..grm.terms_len() {
             term_costs.push(term_cost(TIdx::from(i)));
         }
-        let nt_min_costs = nonterm_min_costs(grm, &term_costs);
-        let nt_max_costs = nonterm_max_costs(grm, &term_costs);
         SentenceGenerator{grm,
                           term_costs,
-                          nonterm_min_costs: nt_min_costs,
-                          nonterm_max_costs: nt_max_costs}
+                          nonterm_min_costs: RefCell::new(None),
+                          nonterm_max_costs: RefCell::new(None)}
     }
 
     /// What is the cost of a minimal sentence for the non-terminal `nonterm_idx`? Note that,
     /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
     /// much faster.
-    pub fn min_sentence_cost(&self, nonterm_idx:NTIdx) -> u64 {
-        self.nonterm_min_costs[usize::from(nonterm_idx)]
+    pub fn min_sentence_cost(&self, nonterm_idx: NTIdx) -> u64 {
+        self.nonterm_min_costs.borrow_mut()
+                              .get_or_insert_with(|| nonterm_min_costs(self.grm,
+                                                                       &self.term_costs))
+                              [usize::from(nonterm_idx)]
     }
 
     /// What is the cost of a maximal sentence for the non-terminal `nonterm_idx`? Non-terminals
     /// which can generate sentences of unbounded length return None; non-terminals which can only
     /// generate maximal strings of a finite length return a `Some(u64)`.
-    pub fn max_sentence_cost(&self, nonterm_idx:NTIdx) -> Option<u64> {
-        let v = self.nonterm_max_costs[usize::from(nonterm_idx)];
+    pub fn max_sentence_cost(&self, nonterm_idx: NTIdx) -> Option<u64> {
+        let v = self.nonterm_max_costs.borrow_mut()
+                                      .get_or_insert_with(||
+                                           nonterm_max_costs(self.grm, &self.term_costs))
+                                      [usize::from(nonterm_idx)];
         if v == u64::max_value() {
             None
         } else {
@@ -642,7 +647,7 @@ impl<'a> SentenceGenerator<'a> {
 
 /// Return the cost of a minimal string for each non-terminal in this grammar. The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
-fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &Vec<u64>) -> Vec<u64>
+fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &[u64]) -> Vec<u64>
 {
     // We use a simple(ish) fixed-point algorithm to determine costs. We maintain two lists
     // "costs" and "done". An integer costs[i] starts at 0 and monotonically increments
@@ -722,7 +727,7 @@ fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &Vec<u64>) -> Vec<u64>
 /// Return the cost of the maximal string for each non-terminal in this grammar (u64::max_val()
 /// representing "this non-terminal can generate strings of infinite length"). The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
-fn nonterm_max_costs(grm: &YaccGrammar, term_costs: &Vec<u64>) -> Vec<u64>
+fn nonterm_max_costs(grm: &YaccGrammar, term_costs: &[u64]) -> Vec<u64>
 {
     let mut done = vec![];
     done.resize(grm.nonterms_len(), false);
