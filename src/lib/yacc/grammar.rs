@@ -506,7 +506,7 @@ impl<'a> SentenceGenerator<'a> {
                 let mut sc = 0;
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
-                        Symbol::Nonterm(i) => self.nonterm_min_costs[usize::from(i)],
+                        Symbol::Nonterm(i) => self.min_sentence_cost(i),
                         Symbol::Term(i)    => self.term_costs[usize::from(i)]
                     };
                 }
@@ -547,7 +547,7 @@ impl<'a> SentenceGenerator<'a> {
                 let mut sc = 0;
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
-                        Symbol::Nonterm(i) => self.nonterm_min_costs[usize::from(i)],
+                        Symbol::Nonterm(i) => self.min_sentence_cost(i),
                         Symbol::Term(i)    => self.term_costs[usize::from(i)]
                     };
                 }
