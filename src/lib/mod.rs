@@ -30,6 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#![feature(step_trait)]
 #![feature(test)]
 #![feature(try_from)]
 
@@ -37,9 +38,12 @@ extern crate cactus;
 extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrtable;
+extern crate num_traits;
+#[macro_use] extern crate ordermap;
 extern crate pathfinding;
 extern crate test;
 
+mod astar;
 mod corchuelo;
 pub mod parser;
 pub use parser::{ParseRepair, RecoveryKind};

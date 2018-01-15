@@ -40,7 +40,7 @@ use cactus::Cactus;
 use cfgrammar::{Grammar, Symbol, TIdx};
 use cfgrammar::yacc::{SentenceGenerator, YaccGrammar};
 use lrtable::{Action, StateGraph, StateTable, StIdx};
-use pathfinding::astar_bag;
+use astar::astar_all;
 
 use kimyi::{apply_repairs, Repair};
 use parser::{Node, Parser, ParseRepair, Recoverer};
@@ -62,6 +62,7 @@ impl Hash for PathFNode {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.pstack.hash(state);
         self.la_idx.hash(state);
+        self.repairs.hash(state);
         self.cf.hash(state);
         self.cg.hash(state);
     }
@@ -69,7 +70,7 @@ impl Hash for PathFNode {
 
 impl PartialEq for PathFNode {
     fn eq(&self, other: &PathFNode) -> bool {
-        self.pstack == other.pstack && self.la_idx == other.la_idx && self.cf == other.cf && self.cg == other.cg
+        self.pstack == other.pstack && self.repairs == other.repairs && self.la_idx == other.la_idx && self.cf == other.cf && self.cg == other.cg
     }
 }
 
@@ -107,8 +108,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                                    repairs: Cactus::new(),
                                    cf: 0,
                                    cg: 0};
-        let (astar_cnds, _) = astar_bag(
-            &start_node,
+        let astar_cnds = astar_all(
+            start_node,
             |n| {
                 // Calculate n's neighbours.
 
@@ -132,13 +133,13 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
                 let v = nbrs.into_iter()
                             .map(|x| {
-                                    let t = x.cf - n.cf;
-                                    (x, t)
+                                    let cf = x.cf;
+                                    let cg = x.cg;
+                                    (cf, cg, x)
                                  })
-                            .collect::<Vec<(PathFNode, _)>>();
+                            .collect::<Vec<(_, _, PathFNode)>>();
                 v
             },
-            |n| n.cg,
             |n| {
                 // Is n a success node?
 
@@ -215,6 +216,7 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
                 }
 
                 if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
+                    assert!(n.cg == 0 || d >= n.cg - parser.ic(Symbol::Term(term_idx)));
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
@@ -266,7 +268,7 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
                 la_idx: n.la_idx,
                 repairs: n_repairs,
                 cf: n.cf + cost,
-                cg: 0};
+                cg: n.cg.checked_sub(cost).unwrap_or(0)};
             nbrs.insert(nn);
         }
     }
@@ -282,11 +284,12 @@ fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq
     }
 
     let (_, la_term) = parser.next_lexeme(None, n.la_idx);
+    let cost = parser.dc(la_term);
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        repairs: n.repairs.child(Repair::Delete),
-                       cf: n.cf + parser.dc(la_term),
-                       cg: 0};
+                       cf: n.cf + cost,
+                       cg: n.cg.checked_sub(cost).unwrap_or(0)};
     nbrs.insert(nn);
 }
 
@@ -306,26 +309,24 @@ fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
             la_idx: new_la_idx,
             repairs: n.repairs.child(Repair::Shift),
             cf: n.cf,
-            cg: 0};
+            cg: n.cg};
         nbrs.insert(nn);
     }
 }
 
 /// Convert the output from `astar_bag` into something more usable.
-fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<Repair>>
+fn collect_repairs(cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
 {
-    let mut all_rprs = Vec::new();
-    for mut rprs in cnds.into_iter() {
-        let mut y = rprs.pop()
-                        .unwrap()
-                        .repairs
-                        .vals()
-                        .cloned()
-                        .collect::<Vec<Repair>>();
-        y.reverse();
-        all_rprs.push(y);
-    }
-    all_rprs
+    cnds.into_iter()
+        .map(|x| {
+            let mut rprs = x.repairs
+                            .vals()
+                            .cloned()
+                            .collect::<Vec<Repair>>();
+            rprs.reverse();
+            rprs
+        })
+        .collect::<Vec<Vec<Repair>>>()
 }
 
 /// Take an (unordered) set of parse repairs and return a simplified (unordered) set of parse
