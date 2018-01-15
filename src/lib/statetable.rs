@@ -81,7 +81,8 @@ pub struct StateTable {
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
     /// The number of shift/reduce errors encountered.
-    pub shift_reduce : u64
+    pub shift_reduce : u64,
+    pub final_state  : StIdx
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -100,6 +101,7 @@ impl StateTable {
         let mut gotos   = HashMap::new();
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
+        let mut final_state = None;
 
         for (state_i, state) in sg.iter_closed_states().enumerate().map(|(x, y)| (StIdx(x), y)) {
             // Populate reduce and accepts
@@ -136,6 +138,8 @@ impl StateTable {
                         }
                         Entry::Vacant(e) => {
                             if prod_i == grm.start_prod() && term_i == usize::from(grm.eof_term_idx()) {
+                                assert!(final_state.is_none());
+                                final_state = Some(state_i);
                                 e.insert(Action::Accept);
                             }
                             else {
@@ -175,9 +179,14 @@ impl StateTable {
                 }
             }
         }
+        assert!(final_state.is_some());
 
-        Ok(StateTable { actions: actions, gotos: gotos, terms_len: grm.terms_len(), reduce_reduce:
-            reduce_reduce, shift_reduce: shift_reduce })
+        Ok(StateTable {actions: actions,
+                       gotos: gotos,
+                       terms_len: grm.terms_len(),
+                       reduce_reduce: reduce_reduce,
+                       shift_reduce: shift_reduce,
+                       final_state: final_state.unwrap()})
     }
 
 
@@ -319,6 +328,7 @@ mod test {
 
         assert_eq!(st.action(s0, Symbol::Term(grm.term_idx("id").unwrap())).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s1, Symbol::Term(grm.eof_term_idx())).unwrap(), Action::Accept);
+        assert_eq!(st.final_state, s1);
         assert_eq!(st.action(s2, Symbol::Term(grm.term_idx("-").unwrap())).unwrap(), Action::Shift(s5));
         assert_reduce(s2, grm.eof_term_idx(), "Expr", 1);
         assert_reduce(s3, grm.term_idx("-").unwrap(), "Term", 1);
