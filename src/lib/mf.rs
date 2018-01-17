@@ -38,7 +38,7 @@ use std::hash::{Hash, Hasher};
 
 use cactus::Cactus;
 use cfgrammar::{Grammar, Symbol, TIdx};
-use cfgrammar::yacc::{SentenceGenerator, YaccGrammar};
+use cfgrammar::yacc::YaccGrammar;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
 use astar::astar_all;
 
@@ -72,9 +72,8 @@ impl PartialEq for PathFNode {
     }
 }
 
-pub(crate) struct MF<'a> {
-    dist: Dist,
-    sg: SentenceGenerator<'a>
+pub(crate) struct MF {
+    dist: Dist
 }
 
 pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
@@ -82,12 +81,11 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                      -> Box<Recoverer<TokId> + 'a>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, |x| parser.ic(Symbol::Term(x)));
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
-    Box::new(MF{dist, sg})
+    Box::new(MF{dist})
 }
 
-impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-    Recoverer<TokId> for MF<'a>
+impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+    Recoverer<TokId> for MF
 {
     fn recover(&self,
                parser: &Parser<TokId>,
@@ -123,7 +121,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     },
                     _ => {
                         r3is(parser, &self.dist, &n, &mut nbrs);
-                        r3ir(parser, &self.sg, &n, &mut nbrs);
+                        r3ir(parser, &n, &mut nbrs);
                     }
                 }
                 r3d(parser, &n, &mut nbrs);
@@ -230,12 +228,19 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
 
 fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
        (parser: &Parser<TokId>,
-        sg: &SentenceGenerator,
         n: &PathFNode,
         nbrs: &mut Vec<PathFNode>)
 {
+    // This is different than KimYi's r3ir: their r3ir inserts symbols if the dot in a state is not
+    // at the end. This is unneeded in our setup (indeed, doing so causes duplicates): all we need
+    // to do is reduce states where the dot is at the end.
+
     let top_pstack = *n.pstack.val().unwrap();
     for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).items.keys() {
+        if usize::from(sym_off) != parser.grm.prod(p_idx).len() {
+            continue;
+        }
+
         let nt_idx = parser.grm.prod_to_nonterm(p_idx);
         let mut qi_minus_alpha = n.pstack.clone();
         for _ in 0..usize::from(sym_off) {
@@ -245,28 +250,12 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
         if let Some(goto_st_idx) = parser.stable
                                          .goto(*qi_minus_alpha.val().unwrap(),
                                                nt_idx) {
-            let mut n_repairs = n.repairs.clone();
-            let mut cost = 0;
-            for sym in parser.grm.prod(p_idx)
-                                 .iter()
-                                 .skip(sym_off.into()) {
-                match sym {
-                    &Symbol::Nonterm(nonterm_idx) => {
-                        n_repairs = n_repairs.child(Repair::InsertNonterm(nonterm_idx));
-                        cost += sg.min_sentence_cost(nonterm_idx);
-                    },
-                    &Symbol::Term(term_idx) => {
-                        n_repairs = n_repairs.child(Repair::InsertTerm(term_idx));
-                        cost += parser.ic(*sym);
-                    }
-                }
-            }
             let nn = PathFNode{
                 pstack: qi_minus_alpha.child(goto_st_idx),
                 la_idx: n.la_idx,
-                repairs: n_repairs,
-                cf: n.cf + cost,
-                cg: n.cg.checked_sub(cost).unwrap_or(0)};
+                repairs: n.repairs.clone(),
+                cf: n.cf,
+                cg: n.cg};
             nbrs.push(nn);
         }
     }
@@ -975,8 +964,7 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         check_all_repairs(&grm,
                           errs[0].repairs(),
                           &vec!["Insert \"A\", Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\"",
-                                "Insert \"B\", Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\"",
-                                "Insert {\"A\", \"B\"}, Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\""]);
+                                "Insert \"B\", Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\""]);
     }
 
     #[test]
