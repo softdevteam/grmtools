@@ -63,14 +63,12 @@ impl Hash for PathFNode {
         self.pstack.hash(state);
         self.la_idx.hash(state);
         self.repairs.hash(state);
-        self.cf.hash(state);
-        self.cg.hash(state);
     }
 }
 
 impl PartialEq for PathFNode {
     fn eq(&self, other: &PathFNode) -> bool {
-        self.pstack == other.pstack && self.repairs == other.repairs && self.la_idx == other.la_idx && self.cf == other.cf && self.cg == other.cg
+        self.pstack == other.pstack && self.repairs == other.repairs && self.la_idx == other.la_idx
     }
 }
 
@@ -117,7 +115,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     return vec![];
                 }
 
-                let mut nbrs = HashSet::new();
+                let mut nbrs = Vec::new();
                 match n.repairs.val() {
                     Some(&Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
@@ -204,7 +202,7 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
        (parser: &Parser<TokId>,
         dist: &Dist,
         n: &PathFNode,
-        nbrs: &mut HashSet<PathFNode>)
+        nbrs: &mut Vec<PathFNode>)
 {
     let top_pstack = *n.pstack.val().unwrap();
     let (_, la_term) = parser.next_lexeme(None, n.la_idx);
@@ -223,7 +221,7 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                         cf: n.cf + parser.ic(Symbol::Term(term_idx)),
                         cg: d};
-                    nbrs.insert(nn);
+                    nbrs.push(nn);
                 }
             }
         }
@@ -234,7 +232,7 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
        (parser: &Parser<TokId>,
         sg: &SentenceGenerator,
         n: &PathFNode,
-        nbrs: &mut HashSet<PathFNode>)
+        nbrs: &mut Vec<PathFNode>)
 {
     let top_pstack = *n.pstack.val().unwrap();
     for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).items.keys() {
@@ -269,7 +267,7 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
                 repairs: n_repairs,
                 cf: n.cf + cost,
                 cg: n.cg.checked_sub(cost).unwrap_or(0)};
-            nbrs.insert(nn);
+            nbrs.push(nn);
         }
     }
 }
@@ -277,7 +275,7 @@ fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
 fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
       (parser: &Parser<TokId>,
        n: &PathFNode,
-       nbrs: &mut HashSet<PathFNode>)
+       nbrs: &mut Vec<PathFNode>)
 {
     if n.la_idx == parser.lexemes.len() {
         return;
@@ -290,13 +288,13 @@ fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq
                        repairs: n.repairs.child(Repair::Delete),
                        cf: n.cf + cost,
                        cg: n.cg.checked_sub(cost).unwrap_or(0)};
-    nbrs.insert(nn);
+    nbrs.push(nn);
 }
 
 fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
         (parser: &Parser<TokId>,
          n: &PathFNode,
-         nbrs: &mut HashSet<PathFNode>)
+         nbrs: &mut Vec<PathFNode>)
 {
     let (new_la_idx, n_pstack) = parser.lr_cactus(None,
                                                   n.la_idx,
@@ -310,7 +308,7 @@ fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
             repairs: n.repairs.child(Repair::Shift),
             cf: n.cf,
             cg: n.cg};
-        nbrs.insert(nn);
+        nbrs.push(nn);
     }
 }
 
