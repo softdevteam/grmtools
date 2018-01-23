@@ -40,6 +40,7 @@ use lrtable::{Action, StateGraph, StateTable, StIdx};
 
 use kimyi;
 use kimyi_plus;
+use mf;
 use corchuelo;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,10 +110,9 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         let mut tstack: Vec<Node<TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors);
-        let t = tstack.drain(..).nth(0).unwrap();
         match (accpt, errors.is_empty()) {
-            (true, true)   => Ok(t),
-            (true, false)  => Err((Some(t), errors)),
+            (true, true)   => Ok(tstack.drain(..).nth(0).unwrap()),
+            (true, false)  => Err((Some(tstack.drain(..).nth(0).unwrap()), errors)),
             (false, false) => Err((None, errors)),
             (false, true)  => panic!("Internal error")
         }
@@ -169,6 +169,8 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                                                  kimyi::recoverer(&self),
                                              RecoveryKind::KimYiPlus =>
                                                  kimyi_plus::recoverer(&self),
+                                             RecoveryKind::MF =>
+                                                 mf::recoverer(&self),
                                          });
                     }
 
@@ -298,7 +300,8 @@ pub trait Recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 pub enum RecoveryKind {
     Corchuelo,
     KimYi,
-    KimYiPlus
+    KimYiPlus,
+    MF
 }
 
 /// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the

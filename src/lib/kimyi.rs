@@ -30,7 +30,6 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
@@ -73,14 +72,12 @@ impl Hash for PathFNode {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.pstack.hash(state);
         self.la_idx.hash(state);
-        self.cf.hash(state);
-        self.cg.hash(state);
     }
 }
 
 impl PartialEq for PathFNode {
     fn eq(&self, other: &PathFNode) -> bool {
-        self.pstack == other.pstack && self.la_idx == other.la_idx && self.cf == other.cf && self.cg == other.cg
+        self.pstack == other.pstack && self.la_idx == other.la_idx
     }
 }
 
@@ -159,7 +156,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     return vec![];
                 }
 
-                let mut nbrs = HashSet::new();
+                let mut nbrs = Vec::new();
                 match n.repairs.val() {
                     Some(&Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
@@ -244,7 +241,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                   (parser: &Parser<TokId>,
                    dist: &Dist,
                    n: &PathFNode,
-                   nbrs: &mut HashSet<PathFNode>)
+                   nbrs: &mut Vec<PathFNode>)
 {
     let top_pstack = *n.pstack.val().unwrap();
     let (_, la_term) = parser.next_lexeme(None, n.la_idx);
@@ -263,7 +260,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                         cf: n.cf + parser.ic(Symbol::Term(term_idx)),
                         cg: 0};
-                    nbrs.insert(nn);
+                    nbrs.push(nn);
                 } else {
                     if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
                         let nn = PathFNode{
@@ -273,7 +270,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                             repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                             cf: n.cf + parser.ic(Symbol::Term(term_idx)),
                             cg: d};
-                        nbrs.insert(nn);
+                        nbrs.push(nn);
                     }
                 }
             }
@@ -285,7 +282,7 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                   (parser: &Parser<TokId>,
                    sg: &SentenceGenerator,
                    n: &PathFNode,
-                   nbrs: &mut HashSet<PathFNode>)
+                   nbrs: &mut Vec<PathFNode>)
 {
     if n.t != 1 {
         return;
@@ -325,7 +322,7 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                 repairs: n_repairs,
                 cf: n.cf + cost,
                 cg: 0};
-            nbrs.insert(nn);
+            nbrs.push(nn);
         }
     }
 }
@@ -333,7 +330,7 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
 pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                  (parser: &Parser<TokId>,
                   n: &PathFNode,
-                  nbrs: &mut HashSet<PathFNode>)
+                  nbrs: &mut Vec<PathFNode>)
 {
     if n.t != 1 || n.la_idx == parser.lexemes.len() {
         return;
@@ -346,7 +343,7 @@ pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> 
                        repairs: n.repairs.child(Repair::Delete),
                        cf: n.cf + parser.dc(la_term),
                        cg: 0};
-    nbrs.insert(nn);
+    nbrs.push(nn);
 }
 
 // Note that we implement R3S-n (on page 12), *not* R3S (on page 11), since the latter rule clearly
@@ -355,7 +352,7 @@ pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> 
 pub(crate) fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                    (parser: &Parser<TokId>,
                     n: &PathFNode,
-                    nbrs: &mut HashSet<PathFNode>)
+                    nbrs: &mut Vec<PathFNode>)
 {
     let (new_la_idx, n_pstack) = parser.lr_cactus(None,
                                                   n.la_idx,
@@ -370,7 +367,7 @@ pub(crate) fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
             repairs: n.repairs.child(Repair::Shift),
             cf: n.cf,
             cg: 0};
-        nbrs.insert(nn);
+        nbrs.push(nn);
     }
 }
 

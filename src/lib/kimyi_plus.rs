@@ -31,7 +31,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 
@@ -102,7 +101,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     return vec![];
                 }
 
-                let mut nbrs = HashSet::new();
+                let mut nbrs = Vec::new();
                 match n.repairs.val() {
                     Some(&Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
