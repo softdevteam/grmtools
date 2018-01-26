@@ -36,6 +36,7 @@
 #[macro_use] extern crate newtype_derive;
 extern crate cfgrammar;
 extern crate fnv;
+extern crate vob;
 
 mod firsts;
 mod itemset;

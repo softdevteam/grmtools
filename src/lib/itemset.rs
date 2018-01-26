@@ -33,17 +33,15 @@
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::BuildHasherDefault;
 
-extern crate bit_vec;
-use self::bit_vec::{BitBlock, BitVec};
-
 use cfgrammar::{Grammar, PIdx, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 use fnv::FnvHasher;
+use vob::Vob;
 
 use firsts::Firsts;
 
 /// The type of "context" (also known as "lookaheads")
-pub type Ctx = BitVec;
+pub type Ctx = Vob;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Itemset {
@@ -62,7 +60,7 @@ impl Itemset {
         let entry = self.items.entry((prod, dot));
         match entry {
             Entry::Occupied(mut e) => {
-                e.get_mut().union(ctx)
+                e.get_mut().or(ctx)
             }
             Entry::Vacant(e)       => {
                 e.insert(ctx.clone());
@@ -95,9 +93,8 @@ impl Itemset {
         // continually iterate over the bitfield from 2 until no new items have been added.
 
         let mut keys_iter = self.items.keys(); // The initial todo list
-        type BitVecBitSize = u32; // As of 0.4.3, BitVec only supports u32 blocks
-        let mut zero_todos = BitVec::<BitVecBitSize>::from_elem(grm.prods_len(), false); // Subsequent todos
-        let mut new_ctx = BitVec::from_elem(grm.terms_len(), false);
+        let mut zero_todos = Vob::from_elem(grm.prods_len(), false); // Subsequent todos
+        let mut new_ctx = Vob::from_elem(grm.terms_len(), false);
         loop {
             let prod_i;
             let dot;
@@ -110,12 +107,8 @@ impl Itemset {
                     dot = y;
                 }
                 None => {
-                    // Quickly iterate over the BitVec looking for the first non-zero word.
-                    match zero_todos.blocks().enumerate().find(|&(_, b)| b != 0) {
-                        Some((b_off, b)) => {
-                            // prod_i is the block offset plus the index of the first bit set.
-                            prod_i = (b_off * BitVecBitSize::bits() + (b.trailing_zeros() as usize)).into();
-                        },
+                    match zero_todos.iter_set_bits().next() {
+                        Some(i) => prod_i = PIdx::from(i),
                         None => break
                     }
                     dot = 0.into();
@@ -131,7 +124,7 @@ impl Itemset {
                 // http://binarysculpting.com/2012/02/04/computing-lr1-closure/ as it is any of the
                 // several versions of getTHeads in Chen's dissertation. Nevertheless, the mapping
                 // between the two different formulations is fairly straight-forward.
-                new_ctx.clear();
+                new_ctx.set_all(false);
                 let mut nullable = true;
                 for sym in prod.iter().skip(usize::from(dot) + 1) {
                     match *sym {
@@ -141,7 +134,7 @@ impl Itemset {
                             break;
                         },
                         Symbol::Nonterm(nonterm_j) => {
-                            new_ctx.union(firsts.prod_firsts(nonterm_j));
+                            new_ctx.or(firsts.prod_firsts(nonterm_j));
                             if !firsts.is_epsilon_set(nonterm_j) {
                                 nullable = false;
                                 break;
@@ -150,7 +143,7 @@ impl Itemset {
                     }
                 }
                 if nullable {
-                    new_ctx.union(&new_is.items[&(prod_i, dot)]);
+                    new_ctx.or(&new_is.items[&(prod_i, dot)]);
                 }
 
                 for ref_prod_i in grm.nonterm_to_prods(nonterm_i).iter() {
@@ -181,9 +174,7 @@ impl Itemset {
 
 #[cfg(test)]
 mod test {
-    extern crate bit_vec;
-    use self::bit_vec::BitVec;
-
+    use vob::Vob;
     use super::Itemset;
     use firsts::Firsts;
     use cfgrammar::{Grammar, Symbol};
@@ -203,7 +194,7 @@ mod test {
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len(), false);
+        let mut la = Vob::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);
@@ -237,7 +228,7 @@ mod test {
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len(), false);
+        let mut la = Vob::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
@@ -279,7 +270,7 @@ mod test {
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len(), false);
+        let mut la = Vob::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
@@ -289,7 +280,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        la = BitVec::from_elem(grm.terms_len(), false);
+        la = Vob::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.term_idx("b").unwrap()), true);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap())[1], 1.into(), &la);
@@ -299,7 +290,7 @@ mod test {
         state_exists(&grm, &cls_is, "A", 2, 0, vec!["a"]);
 
         is = Itemset::new(&grm);
-        la = BitVec::from_elem(grm.terms_len(), false);
+        la = Vob::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.term_idx("a").unwrap()), true);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0], 1.into(), &la);
         cls_is = is.close(&grm, &firsts);
@@ -313,7 +304,7 @@ mod test {
         let firsts = Firsts::new(&grm);
 
         let mut is = Itemset::new(&grm);
-        let mut la = BitVec::from_elem(grm.terms_len(), false);
+        let mut la = Vob::from_elem(grm.terms_len(), false);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0.into(), &la);
         let cls_is = is.close(&grm, &firsts);

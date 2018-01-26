@@ -30,8 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-extern crate bit_vec;
-use self::bit_vec::BitVec;
+use vob::Vob;
 
 use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
@@ -55,8 +54,8 @@ use cfgrammar::yacc::YaccGrammar;
 /// ```
 #[derive(Debug)]
 pub struct Firsts {
-    prod_firsts: Vec<BitVec>,
-    prod_epsilons: BitVec
+    prod_firsts: Vec<Vob>,
+    prod_epsilons: Vob
 }
 
 impl Firsts {
@@ -64,11 +63,11 @@ impl Firsts {
     pub fn new(grm: &YaccGrammar) -> Firsts {
         let mut prod_firsts = Vec::with_capacity(grm.nonterms_len());
         for _ in 0..grm.nonterms_len() {
-            prod_firsts.push(BitVec::from_elem(grm.terms_len(), false));
+            prod_firsts.push(Vob::from_elem(grm.terms_len(), false));
         }
         let mut firsts = Firsts {
             prod_firsts  : prod_firsts,
-            prod_epsilons: BitVec::from_elem(grm.nonterms_len(), false),
+            prod_epsilons: Vob::from_elem(grm.nonterms_len(), false),
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -145,7 +144,7 @@ impl Firsts {
     }
 
     /// Get all the firsts for production `nidx`.
-    pub fn prod_firsts(&self, nidx: NTIdx) -> &BitVec {
+    pub fn prod_firsts(&self, nidx: NTIdx) -> &Vob {
         &self.prod_firsts[usize::from(usize::from(nidx))]
     }
 
