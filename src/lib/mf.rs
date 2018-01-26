@@ -491,14 +491,7 @@ impl Dist {
         table.resize(states_len * terms_len, u64::max_value());
         table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
 
-        // rev_edges allows us to walk backwards over the stategraph
-        let mut rev_edges = Vec::with_capacity(states_len);
-        rev_edges.resize(states_len, HashSet::new());
-        for i in 0..states_len {
-            for (_, &sym_st_idx) in sgraph.edges(StIdx::from(i)).iter() {
-                rev_edges[usize::from(sym_st_idx)].insert(StIdx::from(i));
-            }
-        }
+        let rev_edges = Dist::rev_edges(&sgraph);
 
         // goto_edges is a map from a core state ready for reduction (i.e. where the dot is at the
         // end of the production and thus sym_off == prod.len()) represented as a tuple
@@ -626,6 +619,19 @@ impl Dist {
         } else {
             Some(e as u64)
         }
+    }
+
+    /// rev_edges allows us to walk backwards over the stategraph
+    fn rev_edges(sgraph: &StateGraph) -> Vec<HashSet<StIdx>> {
+        let states_len = sgraph.all_states_len();
+        let mut rev_edges = Vec::with_capacity(states_len);
+        rev_edges.resize(states_len, HashSet::new());
+        for i in 0..states_len {
+            for (_, &sym_st_idx) in sgraph.edges(StIdx::from(i)).iter() {
+                rev_edges[usize::from(sym_st_idx)].insert(StIdx::from(i));
+            }
+        }
+        rev_edges
     }
 }
 
