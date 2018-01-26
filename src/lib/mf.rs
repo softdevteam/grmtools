@@ -37,7 +37,7 @@ use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, Symbol, TIdx};
+use cfgrammar::{Grammar, PIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
 use astar::astar_all;
@@ -492,64 +492,7 @@ impl Dist {
         table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
 
         let rev_edges = Dist::rev_edges(&sgraph);
-
-        // goto_edges is a map from a core state ready for reduction (i.e. where the dot is at the
-        // end of the production and thus sym_off == prod.len()) represented as a tuple
-        // (state_index, production_index) to a set of state indexes. The latter represents all the
-        // states which after (possibly recursive and intertwined) reductions and gotos the parser
-        // might end up in.
-        //
-        // We calculate this for a state i, production p_idx, by iterating backwards over the
-        // stategraph (using rev_edges) finding all routes of length grm.prod(p_idx).len() which
-        // could lead back to i, and then storing their goto state indexes. Since further
-        // reductions and gotos could then happen, we then have to recursively search those goto
-        // state indexes from scratch.
-        //
-        // This loop is currently comically inefficient, but it is relatively straightforward.
-        let mut goto_edges = HashMap::new();
-        for i in 0..states_len {
-            for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
-                let prod = grm.prod(p_idx);
-                if usize::from(sym_off) == prod.len() {
-                    let mut todo = HashSet::new(); // (StIdx, PIdx)
-                    let mut done = HashSet::new(); // Which (StIdx, PIdx) pairs have we processed?
-                    let mut ge = HashSet::new();   // Which StIdx's can we eventually goto?
-                    todo.insert((i, p_idx));
-                    while todo.len() > 0 {
-                        let &(i, p) = todo.iter().nth(0).unwrap();
-                        todo.remove(&(i, p));
-                        if done.contains(&(i, p)) {
-                            continue;
-                        }
-                        done.insert((i, p));
-                        let mut cur = rev_edges[i].clone();
-                        let mut next;
-                        for _ in 0..grm.prod(p).len() - 1 {
-                            next = HashSet::new();
-                            for st_idx in cur {
-                                next.extend(&rev_edges[usize::from(st_idx)]);
-                            }
-                            cur = next;
-                        }
-                        for st_idx in cur {
-                            for &(sub_p_idx, sub_sym_off) in sgraph.core_state(StIdx::from(st_idx))
-                                                                   .items
-                                                                   .keys() {
-                                let sub_prod = grm.prod(sub_p_idx);
-                                if usize::from(sub_sym_off) == sub_prod.len() {
-                                    todo.insert((usize::from(st_idx), sub_p_idx));
-                                }
-                            }
-                            let n = grm.prod_to_nonterm(p);
-                            if let Some(goto_idx) = stable.goto(st_idx, n) {
-                                ge.insert(goto_idx);
-                            }
-                        }
-                    }
-                    goto_edges.insert((i, p_idx), ge);
-                }
-            }
-        }
+        let goto_edges = Dist::goto_edges(grm, sgraph, stable, &rev_edges);
 
         // We can now interleave KimYi's original dist algorithm with our addition which takes into
         // account goto_edges.
@@ -589,7 +532,7 @@ impl Dist {
                 for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
                     let prod = grm.prod(p_idx);
                     if usize::from(sym_off) == prod.len() {
-                        for goto_idx in goto_edges.get(&(i, p_idx)).unwrap() {
+                        for goto_idx in goto_edges.get(&(StIdx::from(i), p_idx)).unwrap() {
                             for j in 0..terms_len {
                                 let this_off = usize::from(i) * terms_len + usize::from(j);
                                 let other_off = usize::from(*goto_idx) * terms_len + usize::from(j);
@@ -632,6 +575,71 @@ impl Dist {
             }
         }
         rev_edges
+    }
+
+    /// goto_edges is a map from a core state ready for reduction (i.e. where the dot is at the
+    /// end of the production and thus sym_off == prod.len()) represented as a tuple
+    /// (state_index, production_index) to a set of state indexes. The latter represents all the
+    /// states which after (possibly recursive and intertwined) reductions and gotos the parser
+    /// might end up in.
+    fn goto_edges(grm: &YaccGrammar,
+                  sgraph: &StateGraph,
+                  stable: &StateTable,
+                  rev_edges: &Vec<HashSet<StIdx>>)
+               -> HashMap<(StIdx, PIdx), HashSet<StIdx>>
+    {
+        // We calculate this for a state i, production p_idx, by iterating backwards over the
+        // stategraph (using rev_edges) finding all routes of length grm.prod(p_idx).len() which
+        // could lead back to i, and then storing their goto state indexes. Since further
+        // reductions and gotos could then happen, we then have to recursively search those goto
+        // state indexes from scratch.
+        //
+        // This loop is currently comically inefficient, but it is relatively straightforward.
+        let mut goto_edges = HashMap::new();
+        for i in 0..sgraph.all_states_len() {
+            for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
+                let prod = grm.prod(p_idx);
+                if usize::from(sym_off) == prod.len() {
+                    let mut todo = HashSet::new(); // (StIdx, PIdx)
+                    let mut done = HashSet::new(); // Which (StIdx, PIdx) pairs have we processed?
+                    let mut ge = HashSet::new();   // Which StIdx's can we eventually goto?
+                    todo.insert((i, p_idx));
+                    while todo.len() > 0 {
+                        let &(i, p) = todo.iter().nth(0).unwrap();
+                        todo.remove(&(i, p));
+                        if done.contains(&(i, p)) {
+                            continue;
+                        }
+                        done.insert((i, p));
+                        let mut cur = rev_edges[i].clone();
+                        let mut next;
+                        for _ in 0..grm.prod(p).len() - 1 {
+                            next = HashSet::new();
+                            for st_idx in cur {
+                                next.extend(&rev_edges[usize::from(st_idx)]);
+                            }
+                            cur = next;
+                        }
+                        for st_idx in cur {
+                            for &(sub_p_idx, sub_sym_off) in sgraph.core_state(StIdx::from(st_idx))
+                                                                   .items
+                                                                   .keys() {
+                                let sub_prod = grm.prod(sub_p_idx);
+                                if usize::from(sub_sym_off) == sub_prod.len() {
+                                    todo.insert((usize::from(st_idx), sub_p_idx));
+                                }
+                            }
+                            let n = grm.prod_to_nonterm(p);
+                            if let Some(goto_idx) = stable.goto(st_idx, n) {
+                                ge.insert(goto_idx);
+                            }
+                        }
+                    }
+                    goto_edges.insert((StIdx::from(i), p_idx), ge);
+                }
+            }
+        }
+        goto_edges
     }
 }
 
