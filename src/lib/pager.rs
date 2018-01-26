@@ -102,13 +102,13 @@ impl Itemset {
         for (i, i_key) in keys.iter().enumerate().take(len - 1) {
             for j_key in keys.iter().take(len).skip(i + 1) {
                 // Condition 1 in the Pager paper
-                if !(bitvec_intersect(&self.items[*i_key], &other.items[*j_key])
-                    || bitvec_intersect(&self.items[*j_key], &other.items[*i_key])) {
+                if !(vob_intersect(&self.items[*i_key], &other.items[*j_key])
+                    || vob_intersect(&self.items[*j_key], &other.items[*i_key])) {
                     continue;
                 }
                 // Conditions 2 and 3 in the Pager paper
-                if bitvec_intersect(&self.items[*i_key], &self.items[*j_key])
-                   || bitvec_intersect(&other.items[*i_key], &other.items[*j_key]) {
+                if vob_intersect(&self.items[*i_key], &self.items[*j_key])
+                   || vob_intersect(&other.items[*i_key], &other.items[*j_key]) {
                     continue;
                 }
                 return false;
@@ -132,7 +132,7 @@ impl Itemset {
 }
 
 /// Returns true if two identically sized bitvecs intersect.
-fn bitvec_intersect(v1: &Vob, v2: &Vob) -> bool {
+fn vob_intersect(v1: &Vob, v2: &Vob) -> bool {
     // Iterating over integer sized blocks allows us to do this operation very quickly. Note that
     // the Vob implementation guarantees that the last block's unused bits will be zeroed out.
     for (b1, b2) in v1.iter_storage().zip(v2.iter_storage()) {
@@ -369,21 +369,21 @@ mod test {
     use stategraph::state_exists;
 
     use StIdx;
-    use super::bitvec_intersect;
+    use super::vob_intersect;
 
     #[test]
-    fn test_bitvec_intersect() {
+    fn test_vob_intersect() {
         let mut b1 = Vob::from_elem(8, false);
         let mut b2 = Vob::from_elem(8, false);
-        assert!(!bitvec_intersect(&b1, &b2));
+        assert!(!vob_intersect(&b1, &b2));
         // Check that partial blocks (i.e. when only part of a word is used in the bitvec for
         // storage) maintain the expected guarantees.
         b1.push(false);
         b2.push(false);
-        assert!(!bitvec_intersect(&b1, &b2));
+        assert!(!vob_intersect(&b1, &b2));
         b1.push(true);
         b2.push(true);
-        assert!(bitvec_intersect(&b1, &b2));
+        assert!(vob_intersect(&b1, &b2));
 
         b1 = Vob::from_elem(64, false);
         b2 = Vob::from_elem(64, false);
@@ -393,7 +393,7 @@ mod test {
             b1.push(false);
             b2.push(false);
         }
-        assert!(bitvec_intersect(&b1, &b2));
+        assert!(vob_intersect(&b1, &b2));
     }
 
     // GrammarAST from 'LR(k) Analyse fuer Pragmatiker'
