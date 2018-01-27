@@ -54,8 +54,8 @@ struct PathFNode {
     pstack: Cactus<StIdx>,
     la_idx: usize,
     repairs: Cactus<Repair>,
-    cf: u64,
-    cg: u64
+    cf: u32,
+    cg: u32
 }
 
 impl Hash for PathFNode {
@@ -80,7 +80,7 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, |x| parser.ic(Symbol::Term(x)));
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, |x| parser.term_cost(Symbol::Term(x)));
     Box::new(MF{dist})
 }
 
@@ -212,12 +212,12 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
                 }
 
                 if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
-                    assert!(n.cg == 0 || d >= n.cg - parser.ic(Symbol::Term(term_idx)));
+                    assert!(n.cg == 0 || d >= n.cg - parser.term_cost(Symbol::Term(term_idx)) as u32);
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                        cf: n.cf + parser.ic(Symbol::Term(term_idx)),
+                        cf: n.cf.checked_add(parser.term_cost(Symbol::Term(term_idx)) as u32).unwrap(),
                         cg: d};
                     nbrs.push(nn);
                 }
@@ -271,12 +271,12 @@ fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq
     }
 
     let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-    let cost = parser.dc(la_term);
+    let cost = parser.term_cost(la_term);
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        repairs: n.repairs.child(Repair::Delete),
-                       cf: n.cf + cost,
-                       cg: n.cg.checked_sub(cost).unwrap_or(0)};
+                       cf: n.cf.checked_add(cost as u32).unwrap(),
+                       cg: n.cg.checked_sub(cost as u32).unwrap_or(0)};
     nbrs.push(nn);
 }
 
@@ -324,7 +324,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
                     mut all_rprs: Vec<Vec<Repair>>)
                  -> Vec<Vec<ParseRepair>>
 {
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
+    let sg = parser.grm.sentence_generator(|x| parser.term_cost(Symbol::Term(x)));
     for i in 0..all_rprs.len() {
         {
             // Remove all inserts of nonterms which have a minimal sentence cost of 0.
@@ -466,12 +466,12 @@ fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
 
 pub(crate) struct Dist {
     terms_len: usize,
-    table: Vec<u64>
+    table: Vec<u32>
 }
 
 impl Dist {
     pub(crate) fn new<F>(grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable, term_cost: F) -> Dist
-              where F: Fn(TIdx) -> u64
+              where F: Fn(TIdx) -> u8
     {
         // This is an extension of dist from the KimYi paper: it also takes into account reductions
         // and gotos in the distances it reports back. Note that it is conservative, sometimes
@@ -488,7 +488,7 @@ impl Dist {
         let states_len = sgraph.all_states_len();
         let sengen = grm.sentence_generator(&term_cost);
         let mut table = Vec::new();
-        table.resize(states_len * terms_len, u64::max_value());
+        table.resize(states_len * terms_len, u32::max_value());
         table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
 
         let rev_edges = Dist::rev_edges(&sgraph);
@@ -511,7 +511,7 @@ impl Dist {
                                 table[off] = 0;
                                 chgd = true;
                             }
-                            term_cost(t_idx)
+                            term_cost(t_idx) as u32
                         }
                     };
 
@@ -519,7 +519,7 @@ impl Dist {
                         let this_off = usize::from(i) * terms_len + usize::from(j);
                         let other_off = usize::from(sym_st_idx) * terms_len + usize::from(j);
 
-                        if table[other_off] != u64::max_value()
+                        if table[other_off] != u32::max_value()
                            && table[other_off] + d < table[this_off]
                         {
                             table[this_off] = table[other_off] + d;
@@ -537,7 +537,7 @@ impl Dist {
                                 let this_off = usize::from(i) * terms_len + usize::from(j);
                                 let other_off = usize::from(*goto_idx) * terms_len + usize::from(j);
 
-                                if table[other_off] != u64::max_value() &&
+                                if table[other_off] != u32::max_value() &&
                                     table[other_off] < table[this_off] {
                                     table[this_off] = table[other_off];
                                     chgd = true;
@@ -555,12 +555,12 @@ impl Dist {
         Dist{terms_len, table}
     }
 
-    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u64> {
+    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u32> {
         let e = self.table[usize::from(st_idx) * self.terms_len + usize::from(t_idx)];
-        if e == u64::max_value() {
+        if e == u32::max_value() {
             None
         } else {
-            Some(e as u64)
+            Some(e as u32)
         }
     }
 
