@@ -80,7 +80,7 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, |x| parser.term_cost(Symbol::Term(x)));
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
     Box::new(MF{dist})
 }
 
@@ -212,12 +212,12 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
                 }
 
                 if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
-                    assert!(n.cg == 0 || d >= n.cg - parser.term_cost(Symbol::Term(term_idx)) as u32);
+                    assert!(n.cg == 0 || d >= n.cg - (parser.term_cost)(term_idx) as u32);
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                        cf: n.cf.checked_add(parser.term_cost(Symbol::Term(term_idx)) as u32).unwrap(),
+                        cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
                         cg: d};
                     nbrs.push(nn);
                 }
@@ -270,8 +270,11 @@ fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq
         return;
     }
 
-    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-    let cost = parser.term_cost(la_term);
+    let la_tidx = match parser.next_lexeme(None, n.la_idx) {
+        (_, Symbol::Term(t)) => t,
+        _ => unreachable!()
+    };
+    let cost = (parser.term_cost)(la_tidx);
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        repairs: n.repairs.child(Repair::Delete),
@@ -324,7 +327,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
                     mut all_rprs: Vec<Vec<Repair>>)
                  -> Vec<Vec<ParseRepair>>
 {
-    let sg = parser.grm.sentence_generator(|x| parser.term_cost(Symbol::Term(x)));
+    let sg = parser.grm.sentence_generator(parser.term_cost);
     for i in 0..all_rprs.len() {
         {
             // Remove all inserts of nonterms which have a minimal sentence cost of 0.

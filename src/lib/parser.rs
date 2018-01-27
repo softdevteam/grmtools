@@ -217,14 +217,6 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         }
     }
 
-    /// What is the cost of inserting / deleting `sym`?
-    pub(crate) fn term_cost(&self, sym: Symbol) -> u8 {
-        match sym {
-            Symbol::Term(t_idx) => (self.term_cost)(t_idx),
-            _ => panic!("Internal error")
-        }
-    }
-
     /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
     /// as the first lexeme) up to (but excluding) `end_la_idx`. If an error is encountered, parsing
     /// immediately terminates (without recovery).

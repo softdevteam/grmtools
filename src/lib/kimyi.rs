@@ -90,8 +90,8 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.term_cost(Symbol::Term(x)));
-    let sg = parser.grm.sentence_generator(|x| parser.term_cost(Symbol::Term(x)));
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.term_cost);
+    let sg = parser.grm.sentence_generator(parser.term_cost);
     Box::new(KimYi{dist, sg})
 }
 
@@ -258,7 +258,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                         la_idx: n.la_idx,
                         t: n.t + 1,
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                        cf: n.cf.checked_add(parser.term_cost(Symbol::Term(term_idx)) as u32).unwrap(),
+                        cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
                         cg: 0};
                     nbrs.push(nn);
                 } else {
@@ -268,7 +268,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                             la_idx: n.la_idx,
                             t: n.t + 1,
                             repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                            cf: n.cf.checked_add(parser.term_cost(Symbol::Term(term_idx)) as u32).unwrap(),
+                            cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
                             cg: d};
                         nbrs.push(nn);
                     }
@@ -311,7 +311,7 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                     },
                     &Symbol::Term(term_idx) => {
                         n_repairs = n_repairs.child(Repair::InsertTerm(term_idx));
-                        cost = cost.checked_add(parser.term_cost(*sym) as u32).unwrap();
+                        cost = cost.checked_add((parser.term_cost)(term_idx) as u32).unwrap();
                     }
                 }
             }
@@ -336,12 +336,15 @@ pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> 
         return;
     }
 
-    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
+    let la_tidx = match parser.next_lexeme(None, n.la_idx) {
+        (_, Symbol::Term(t)) => t,
+        _ => unreachable!()
+    };
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        t: 1,
                        repairs: n.repairs.child(Repair::Delete),
-                       cf: n.cf.checked_add(parser.term_cost(la_term) as u32).unwrap(),
+                       cf: n.cf.checked_add((parser.term_cost)(la_tidx) as u32).unwrap(),
                        cg: 0};
     nbrs.push(nn);
 }
