@@ -135,9 +135,9 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         let mut recoverer = None;
         loop {
             let st = *pstack.last().unwrap();
-            let (la_lexeme, la_term) = self.next_lexeme(None, la_idx);
+            let (la_lexeme, la_tidx) = self.next_lexeme(None, la_idx);
 
-            match self.stable.action(st, la_term) {
+            match self.stable.action(st, Symbol::Term(la_tidx)) {
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
@@ -154,7 +154,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     la_idx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
+                    debug_assert_eq!(la_tidx, TIdx::from(self.grm.eof_term_idx()));
                     debug_assert_eq!(tstack.len(), 1);
                     return true;
                 },
@@ -191,12 +191,12 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
     /// `None`, that is the next lexeme. Otherwise it will be the next lexeme in `self.lexemes` or
     /// a specially constructed lexeme representing EOF.
     pub(crate) fn next_lexeme(&self, lexemes_prefix: Option<Lexeme<TokId>>, la_idx: usize)
-                          -> (Lexeme<TokId>, Symbol)
+                          -> (Lexeme<TokId>, TIdx)
     {
         if let Some(l) = lexemes_prefix {
-            (l, Symbol::Term(TIdx::from(l.tok_id().try_into().ok().unwrap())))
+            (l, TIdx::from(l.tok_id().try_into().ok().unwrap()))
         } else if let Some(l) = self.lexemes.get(la_idx) {
-            (*l, Symbol::Term(TIdx::from(l.tok_id().try_into().ok().unwrap())))
+            (*l, TIdx::from(l.tok_id().try_into().ok().unwrap()))
         } else {
             // We have to artificially construct a Lexeme for the EOF lexeme.
             debug_assert_eq!(la_idx, self.lexemes.len());
@@ -213,7 +213,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                                               .unwrap(),
                                         last_la_end, 0);
 
-            (la_lexeme, Symbol::Term(TIdx::from(self.grm.eof_term_idx())))
+            (la_lexeme, TIdx::from(self.grm.eof_term_idx()))
         }
     }
 
@@ -235,9 +235,9 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
         while la_idx != end_la_idx {
             let st = *pstack.val().unwrap();
-            let (la_lexeme, la_term) = self.next_lexeme(lexeme_prefix, la_idx);
+            let (la_lexeme, la_tidx) = self.next_lexeme(lexeme_prefix, la_idx);
 
-            match self.stable.action(st, la_term) {
+            match self.stable.action(st, Symbol::Term(la_tidx)) {
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_num = self.grm.prod(prod_id).len();
@@ -261,7 +261,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     la_idx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
+                    debug_assert_eq!(la_tidx, TIdx::from(self.grm.eof_term_idx()));
                     if let &mut Some(ref mut tstack_uw) = tstack {
                         debug_assert_eq!(tstack_uw.len(), 1);
                     }

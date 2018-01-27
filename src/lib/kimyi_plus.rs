@@ -35,6 +35,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 
 use cactus::Cactus;
+use cfgrammar::Symbol;
 use cfgrammar::yacc::SentenceGenerator;
 use lrtable::{Action, StIdx};
 use pathfinding::astar_bag;
@@ -144,8 +145,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     }
                 }
 
-                let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-                match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
+                let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+                match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }

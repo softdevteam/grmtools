@@ -200,8 +200,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     }
                 }
 
-                let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-                match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
+                let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+                match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }
@@ -244,34 +244,32 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                    nbrs: &mut Vec<PathFNode>)
 {
     let top_pstack = *n.pstack.val().unwrap();
-    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-    if let Symbol::Term(la_term_idx) = la_term {
-        for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
-            if let Symbol::Term(term_idx) = sym {
-                if term_idx == parser.grm.eof_term_idx() {
-                    continue;
-                }
+    let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+    for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
+        if let Symbol::Term(term_idx) = sym {
+            if term_idx == parser.grm.eof_term_idx() {
+                continue;
+            }
 
-                if n.t == 1 {
+            if n.t == 1 {
+                let nn = PathFNode{
+                    pstack: n.pstack.child(sym_st_idx),
+                    la_idx: n.la_idx,
+                    t: n.t + 1,
+                    repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
+                    cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
+                    cg: 0};
+                nbrs.push(nn);
+            } else {
+                if let Some(d) = dist.dist(sym_st_idx, la_tidx) {
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
                         t: n.t + 1,
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
                         cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
-                        cg: 0};
+                        cg: d};
                     nbrs.push(nn);
-                } else {
-                    if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
-                        let nn = PathFNode{
-                            pstack: n.pstack.child(sym_st_idx),
-                            la_idx: n.la_idx,
-                            t: n.t + 1,
-                            repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                            cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
-                            cg: d};
-                        nbrs.push(nn);
-                    }
                 }
             }
         }
@@ -336,10 +334,7 @@ pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> 
         return;
     }
 
-    let la_tidx = match parser.next_lexeme(None, n.la_idx) {
-        (_, Symbol::Term(t)) => t,
-        _ => unreachable!()
-    };
+    let la_tidx = parser.next_lexeme(None, n.la_idx).1;
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        t: 1,
