@@ -121,12 +121,12 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                         // Inserts.
                     },
                     _ => {
-                        self.r3is(parser, &self.dist, &n, &mut nbrs);
-                        self.r3ir(parser, &n, &mut nbrs);
+                        self.r3is(&self.dist, &n, &mut nbrs);
+                        self.r3ir(&n, &mut nbrs);
                     }
                 }
-                self.r3d(parser, &n, &mut nbrs);
-                self.r3s_n(parser, &n, &mut nbrs);
+                self.r3d(&n, &mut nbrs);
+                self.r3s_n(&n, &mut nbrs);
 
                 let v = nbrs.into_iter()
                             .map(|x| {
@@ -171,9 +171,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         }
 
         let full_rprs = self.collect_repairs(astar_cnds);
-        let smpl_rprs = self.simplify_repairs(parser, full_rprs);
-        let rnk_rprs = self.rank_cnds(parser,
-                                      in_la_idx,
+        let smpl_rprs = self.simplify_repairs(full_rprs);
+        let rnk_rprs = self.rank_cnds(in_la_idx,
                                       start_cactus_pstack.clone(),
                                       smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
@@ -199,26 +198,25 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
 impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> MF<'a, TokId> {
     fn r3is(&self,
-            parser: &Parser<TokId>,
             dist: &Dist,
             n: &PathFNode,
             nbrs: &mut Vec<PathFNode>)
     {
         let top_pstack = *n.pstack.val().unwrap();
-        let (_, la_tidx) = parser.next_lexeme(None, n.la_idx);
-        for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
+        let (_, la_tidx) = self.parser.next_lexeme(None, n.la_idx);
+        for (&sym, &sym_st_idx) in self.parser.sgraph.edges(top_pstack).iter() {
             if let Symbol::Term(term_idx) = sym {
-                if term_idx == parser.grm.eof_term_idx() {
+                if term_idx == self.parser.grm.eof_term_idx() {
                     continue;
                 }
 
                 if let Some(d) = dist.dist(sym_st_idx, la_tidx) {
-                    assert!(n.cg == 0 || d >= n.cg - (parser.term_cost)(term_idx) as u32);
+                    assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(term_idx) as u32);
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                        cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
+                        cf: n.cf.checked_add((self.parser.term_cost)(term_idx) as u32).unwrap(),
                         cg: d};
                     nbrs.push(nn);
                 }
@@ -227,7 +225,6 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
     }
 
     fn r3ir(&self,
-            parser: &Parser<TokId>,
             n: &PathFNode,
             nbrs: &mut Vec<PathFNode>)
     {
@@ -236,20 +233,20 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         // to do is reduce states where the dot is at the end.
 
         let top_pstack = *n.pstack.val().unwrap();
-        for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).items.keys() {
-            if usize::from(sym_off) != parser.grm.prod(p_idx).len() {
+        for &(p_idx, sym_off) in self.parser.sgraph.core_state(top_pstack).items.keys() {
+            if usize::from(sym_off) != self.parser.grm.prod(p_idx).len() {
                 continue;
             }
 
-            let nt_idx = parser.grm.prod_to_nonterm(p_idx);
+            let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
             let mut qi_minus_alpha = n.pstack.clone();
             for _ in 0..usize::from(sym_off) {
                 qi_minus_alpha = qi_minus_alpha.parent().unwrap();
             }
 
-            if let Some(goto_st_idx) = parser.stable
-                                             .goto(*qi_minus_alpha.val().unwrap(),
-                                                   nt_idx) {
+            if let Some(goto_st_idx) = self.parser.stable
+                                                  .goto(*qi_minus_alpha.val().unwrap(),
+                                                        nt_idx) {
                 let nn = PathFNode{
                     pstack: qi_minus_alpha.child(goto_st_idx),
                     la_idx: n.la_idx,
@@ -262,16 +259,15 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
     }
 
     fn r3d(&self,
-           parser: &Parser<TokId>,
            n: &PathFNode,
            nbrs: &mut Vec<PathFNode>)
     {
-        if n.la_idx == parser.lexemes.len() {
+        if n.la_idx == self.parser.lexemes.len() {
             return;
         }
 
-        let la_tidx = parser.next_lexeme(None, n.la_idx).1;
-        let cost = (parser.term_cost)(la_tidx);
+        let la_tidx = self.parser.next_lexeme(None, n.la_idx).1;
+        let cost = (self.parser.term_cost)(la_tidx);
         let nn = PathFNode{pstack: n.pstack.clone(),
                            la_idx: n.la_idx + 1,
                            repairs: n.repairs.child(Repair::Delete),
@@ -281,15 +277,14 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
     }
 
     fn r3s_n(&self,
-             parser: &Parser<TokId>,
              n: &PathFNode,
              nbrs: &mut Vec<PathFNode>)
     {
-        let (new_la_idx, n_pstack) = parser.lr_cactus(None,
-                                                      n.la_idx,
-                                                      n.la_idx + 1,
-                                                      n.pstack.clone(),
-                                                      &mut None);
+        let (new_la_idx, n_pstack) = self.parser.lr_cactus(None,
+                                                           n.la_idx,
+                                                           n.la_idx + 1,
+                                                           n.pstack.clone(),
+                                                           &mut None);
         if new_la_idx == n.la_idx + 1 {
             let nn = PathFNode{
                 pstack: n_pstack,
@@ -321,11 +316,10 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
     /// repairs. Note that the caller must make no assumptions about the size or contents of the output
     /// set: this function might delete, expand, or do other things to repairs.
     fn simplify_repairs(&self,
-                        parser: &Parser<TokId>,
                         mut all_rprs: Vec<Vec<Repair>>)
                      -> Vec<Vec<ParseRepair>>
     {
-        let sg = parser.grm.sentence_generator(parser.term_cost);
+        let sg = self.parser.grm.sentence_generator(self.parser.term_cost);
         for i in 0..all_rprs.len() {
             {
                 // Remove all inserts of nonterms which have a minimal sentence cost of 0.
@@ -395,7 +389,6 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
     /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
     /// ordering is non-deterministic.
     fn rank_cnds(&self,
-                 parser: &Parser<TokId>,
                  in_la_idx: usize,
                  start_pstack: Cactus<StIdx>,
                  in_cnds: Vec<Vec<ParseRepair>>)
@@ -403,7 +396,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
     {
         let mut cnds = in_cnds.into_iter()
                               .map(|rprs| {
-                                   let (la_idx, pstack) = apply_repairs(parser,
+                                   let (la_idx, pstack) = apply_repairs(self.parser,
                                                                         in_la_idx,
                                                                         start_pstack.clone(),
                                                                         &mut None,
@@ -431,11 +424,11 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     j += 1;
                     continue;
                 }
-                let (new_la_idx, new_pstack) = parser.lr_cactus(None,
-                                                                in_la_idx + i,
-                                                                in_la_idx + i + 1,
-                                                                cnd.0.clone(),
-                                                                &mut None);
+                let (new_la_idx, new_pstack) = self.parser.lr_cactus(None,
+                                                                     in_la_idx + i,
+                                                                     in_la_idx + i + 1,
+                                                                     cnd.0.clone(),
+                                                                     &mut None);
                 if new_la_idx == in_la_idx + i {
                     todo[j] = false;
                     remng -= 1;
