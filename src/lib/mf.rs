@@ -121,7 +121,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                         // Inserts.
                     },
                     _ => {
-                        self.r3is(&self.dist, &n, &mut nbrs);
+                        self.r3is(&n, &mut nbrs);
                         self.r3ir(&n, &mut nbrs);
                     }
                 }
@@ -198,24 +198,23 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
 impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> MF<'a, TokId> {
     fn r3is(&self,
-            dist: &Dist,
             n: &PathFNode,
             nbrs: &mut Vec<PathFNode>)
     {
         let top_pstack = *n.pstack.val().unwrap();
-        let (_, la_tidx) = self.parser.next_lexeme(None, n.la_idx);
         for (&sym, &sym_st_idx) in self.parser.sgraph.edges(top_pstack).iter() {
             if let Symbol::Term(term_idx) = sym {
                 if term_idx == self.parser.grm.eof_term_idx() {
                     continue;
                 }
 
-                if let Some(d) = dist.dist(sym_st_idx, la_tidx) {
+                let n_repairs = n.repairs.child(Repair::InsertTerm(term_idx));
+                if let Some(d) = self.dyn_dist(&n_repairs, sym_st_idx, n.la_idx) {
                     assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(term_idx) as u32);
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
-                        repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
+                        repairs: n_repairs,
                         cf: n.cf.checked_add((self.parser.term_cost)(term_idx) as u32).unwrap(),
                         cg: d};
                     nbrs.push(nn);
@@ -247,13 +246,15 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
             if let Some(goto_st_idx) = self.parser.stable
                                                   .goto(*qi_minus_alpha.val().unwrap(),
                                                         nt_idx) {
-                let nn = PathFNode{
-                    pstack: qi_minus_alpha.child(goto_st_idx),
-                    la_idx: n.la_idx,
-                    repairs: n.repairs.clone(),
-                    cf: n.cf,
-                    cg: n.cg};
-                nbrs.push(nn);
+                if let Some(d) = self.dyn_dist(&n.repairs, goto_st_idx, n.la_idx) {
+                    let nn = PathFNode{
+                        pstack: qi_minus_alpha.child(goto_st_idx),
+                        la_idx: n.la_idx,
+                        repairs: n.repairs.clone(),
+                        cf: n.cf,
+                        cg: d};
+                    nbrs.push(nn);
+                }
             }
         }
     }
@@ -266,14 +267,17 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
             return;
         }
 
-        let la_tidx = self.parser.next_lexeme(None, n.la_idx).1;
-        let cost = (self.parser.term_cost)(la_tidx);
-        let nn = PathFNode{pstack: n.pstack.clone(),
-                           la_idx: n.la_idx + 1,
-                           repairs: n.repairs.child(Repair::Delete),
-                           cf: n.cf.checked_add(cost as u32).unwrap(),
-                           cg: n.cg.checked_sub(cost as u32).unwrap_or(0)};
-        nbrs.push(nn);
+        let n_repairs = n.repairs.child(Repair::Delete);
+        if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.la_idx + 1) {
+            let la_tidx = self.parser.next_lexeme(None, n.la_idx).1;
+            let cost = (self.parser.term_cost)(la_tidx);
+            let nn = PathFNode{pstack: n.pstack.clone(),
+                               la_idx: n.la_idx + 1,
+                               repairs: n_repairs,
+                               cf: n.cf.checked_add(cost as u32).unwrap(),
+                               cg: d};
+            nbrs.push(nn);
+        }
     }
 
     fn r3s_n(&self,
@@ -286,16 +290,18 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                                                            n.pstack.clone(),
                                                            &mut None);
         if new_la_idx == n.la_idx + 1 {
-            let nn = PathFNode{
-                pstack: n_pstack,
-                la_idx: new_la_idx,
-                repairs: n.repairs.child(Repair::Shift),
-                cf: n.cf,
-                cg: n.cg};
-            nbrs.push(nn);
+            let n_repairs = n.repairs.child(Repair::Shift);
+            if let Some(d) = self.dyn_dist(&n_repairs, *n_pstack.val().unwrap(), new_la_idx) {
+                let nn = PathFNode{
+                    pstack: n_pstack,
+                    la_idx: new_la_idx,
+                    repairs: n_repairs,
+                    cf: n.cf,
+                    cg: d};
+                nbrs.push(nn);
+            }
         }
     }
-
 
     /// Convert the output from `astar_bag` into something more usable.
     fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
@@ -457,6 +463,79 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
             .map(|x| x.2)
             .collect::<Vec<Vec<ParseRepair>>>()
     }
+
+    /// Return the distance from `st_idx` at input position `la_idx`, given the current `repairs`.
+    /// Returns `None` if no route can be found.
+    fn dyn_dist(&self,
+                repairs: &Cactus<Repair>,
+                st_idx: StIdx,
+                la_idx: usize)
+              -> Option<u32>
+    {
+        // This function is very different than anything in KimYi: it estimates the distance to a
+        // success node based in part on dynamic properties of the input as well as static
+        // properties of the grammar.
+
+        // We first deal with a subtle case: one way of a sequence of repairs succeeding is if it
+        // shifts PARSE_AT_LEAST lexemes (in other words: we've found a sequence of repairs
+        // successful enough to allow us to parse at least PARSE_AT_LEAST lexemes without hitting
+        // another error). We have to catch this explicitly and return a distance of 0 so that the
+        // resulting node can be checked for success [if we were to leave this to chance, it's
+        // possible that the PARSE_AT_LEAST+1 symbol is something which has a distance > 0 (or,
+        // worse, no route!), which would then confuse the astar function, since a success node
+        // would have a distance > 0.]
+        if repairs.len() >= PARSE_AT_LEAST {
+            let mut all_shfts = true;
+            for x in repairs.vals().take(PARSE_AT_LEAST - 1) {
+                if let Repair::Shift = *x {
+                    continue;
+                }
+                all_shfts = false;
+                break;
+            }
+            if all_shfts {
+                return Some(0);
+            }
+        }
+
+        // Now we deal with the "main" case: dealing with distances in the face of possible
+        // deletions. Imagine that there are two lexemes starting at position la_idx: (in order) T
+        // and U, both with a term_cost of 1. Assume the dist() from st_idx to T is 2 and the
+        // dist() from st_idx to U is 0. If we delete T then the distance to U is 1, which is a
+        // shorter distance than T. We therefore need to return a distance of 1, even though that
+        // is the distance to the second lexeme.
+        //
+        // Imagine we have the Java input "x = } y;". The distance from "=" to "}" is 2 (at a
+        // minimum you need an int/string/etc followed by a semi-colon); however the distance from
+        // "=" to "y" is 0. Assuming the deletion cost of "}" is 1, it's therefore cheaper to
+        // delete "}" and add that to the distance from "=" to "y". Thus the cheapest distance is
+        // 1.
+        let frst_tidx = self.parser.next_lexeme(None, la_idx).1;
+        let mut ld = self.dist.dist(st_idx, frst_tidx)
+                              .unwrap_or(u32::max_value()); // ld == Current least distance
+        let mut dc = (self.parser.term_cost)(frst_tidx) as u32; // Cumulative deletion cost
+        for i in la_idx + 1..self.parser.lexemes.len() + 1 {
+            if dc >= ld {
+                // Once the cumulative cost of deleting lexemes is bigger than the current least
+                // distance, there is no chance of finding a subsequent lexeme which could produce
+                // a lower cost.
+                break;
+            }
+            let t_idx = self.parser.next_lexeme(None, i).1;
+            if let Some(d) = self.dist.dist(st_idx, t_idx) {
+                if dc.checked_add(d).unwrap() < ld {
+                    ld = dc + d;
+                }
+            }
+            dc = dc.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap();
+        }
+        if ld == u32::max_value() {
+            None
+        } else {
+            Some(ld)
+        }
+    }
+
 }
 
 pub(crate) struct Dist {
