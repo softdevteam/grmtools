@@ -62,10 +62,10 @@ pub enum Repair {
 pub(crate) struct PathFNode {
     pub(crate) pstack: Cactus<StIdx>,
     pub(crate) la_idx: usize,
-    pub(crate) t: u64,
+    pub(crate) t: u32,
     pub(crate) repairs: Cactus<Repair>,
-    pub(crate) cf: u64,
-    pub(crate) cg: u64
+    pub(crate) cf: u32,
+    pub(crate) cg: u32
 }
 
 impl Hash for PathFNode {
@@ -90,8 +90,8 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.term_cost);
+    let sg = parser.grm.sentence_generator(parser.term_cost);
     Box::new(KimYi{dist, sg})
 }
 
@@ -200,8 +200,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     }
                 }
 
-                let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-                match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
+                let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+                match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }
@@ -244,34 +244,32 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                    nbrs: &mut Vec<PathFNode>)
 {
     let top_pstack = *n.pstack.val().unwrap();
-    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-    if let Symbol::Term(la_term_idx) = la_term {
-        for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
-            if let Symbol::Term(term_idx) = sym {
-                if term_idx == parser.grm.eof_term_idx() {
-                    continue;
-                }
+    let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+    for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
+        if let Symbol::Term(term_idx) = sym {
+            if term_idx == parser.grm.eof_term_idx() {
+                continue;
+            }
 
-                if n.t == 1 {
+            if n.t == 1 {
+                let nn = PathFNode{
+                    pstack: n.pstack.child(sym_st_idx),
+                    la_idx: n.la_idx,
+                    t: n.t + 1,
+                    repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
+                    cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
+                    cg: 0};
+                nbrs.push(nn);
+            } else {
+                if let Some(d) = dist.dist(sym_st_idx, la_tidx) {
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
                         la_idx: n.la_idx,
                         t: n.t + 1,
                         repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                        cf: n.cf + parser.ic(Symbol::Term(term_idx)),
-                        cg: 0};
+                        cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
+                        cg: d};
                     nbrs.push(nn);
-                } else {
-                    if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
-                        let nn = PathFNode{
-                            pstack: n.pstack.child(sym_st_idx),
-                            la_idx: n.la_idx,
-                            t: n.t + 1,
-                            repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                            cf: n.cf + parser.ic(Symbol::Term(term_idx)),
-                            cg: d};
-                        nbrs.push(nn);
-                    }
                 }
             }
         }
@@ -311,7 +309,7 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                     },
                     &Symbol::Term(term_idx) => {
                         n_repairs = n_repairs.child(Repair::InsertTerm(term_idx));
-                        cost += parser.ic(*sym);
+                        cost = cost.checked_add((parser.term_cost)(term_idx) as u32).unwrap();
                     }
                 }
             }
@@ -336,12 +334,12 @@ pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> 
         return;
     }
 
-    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
+    let la_tidx = parser.next_lexeme(None, n.la_idx).1;
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        t: 1,
                        repairs: n.repairs.child(Repair::Delete),
-                       cf: n.cf + parser.dc(la_term),
+                       cf: n.cf.checked_add((parser.term_cost)(la_tidx) as u32).unwrap(),
                        cg: 0};
     nbrs.push(nn);
 }
@@ -483,12 +481,12 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
 
 pub(crate) struct Dist {
     terms_len: usize,
-    table: Vec<u64>
+    table: Vec<u32>
 }
 
 impl Dist {
     pub(crate) fn new<F>(grm: &YaccGrammar, sgraph: &StateGraph, term_cost: F) -> Dist
-              where F: Fn(TIdx) -> u64
+              where F: Fn(TIdx) -> u8
     {
         // This is a very simple, and not very efficient, implementation of dist: one could,
         // for example, cache results of already-seen states.
@@ -497,7 +495,7 @@ impl Dist {
         let states_len = sgraph.all_states_len();
         let sengen = grm.sentence_generator(&term_cost);
         let mut table = Vec::new();
-        table.resize(states_len * terms_len, u64::max_value());
+        table.resize(states_len * terms_len, u32::max_value());
         loop {
             let mut chgd = false; // Has anything changed?
             for i in 0..states_len {
@@ -511,14 +509,14 @@ impl Dist {
                                 table[off] = 0;
                                 chgd = true;
                             }
-                            term_cost(t_idx)
+                            term_cost(t_idx) as u32
                         }
                     };
 
                     for j in 0..terms_len {
                         let this_off = usize::from(i) * terms_len + usize::from(j);
                         let other_off = usize::from(sym_st_idx) * terms_len + usize::from(j);
-                        if table[other_off] != u64::max_value()
+                        if table[other_off] != u32::max_value()
                            && table[other_off] + d < table[this_off]
                         {
                             table[this_off] = table[other_off] + d;
@@ -535,12 +533,12 @@ impl Dist {
         Dist{terms_len, table}
     }
 
-    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u64> {
+    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u32> {
         let e = self.table[usize::from(st_idx) * self.terms_len + usize::from(t_idx)];
-        if e == u64::max_value() {
+        if e == u32::max_value() {
             None
         } else {
-            Some(e as u64)
+            Some(e as u32)
         }
     }
 }

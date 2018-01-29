@@ -167,9 +167,8 @@ fn main() {
     let input = read_file(&matches.free[2]);
     let lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
-    let ic = |_| 1; // Cost of inserting a terminal
-    let dc = |_| 1; // Cost of deleting a terminal
-    match parse_rcvry::<u16, _, _>(RecoveryKind::MF, &grm, &ic, dc, &sgraph, &stable, &lexemes) {
+    let term_cost = |_| 1; // Cost of inserting/deleting a terminal
+    match parse_rcvry::<u16, _>(RecoveryKind::MF, &grm, &term_cost, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err((o_pt, errs)) => {
             match o_pt {

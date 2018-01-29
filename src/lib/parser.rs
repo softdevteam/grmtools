@@ -85,8 +85,7 @@ pub(crate) type Errors<TokId> = Vec<ParseError<TokId>>;
 pub struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
     pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar,
-    pub ic: &'a Fn(TIdx) -> u64,
-    pub dc: &'a Fn(TIdx) -> u64,
+    pub term_cost: &'a Fn(TIdx) -> u8,
     pub sgraph: &'a StateGraph,
     pub stable: &'a StateTable,
     pub lexemes: &'a Lexemes<TokId>
@@ -94,18 +93,16 @@ pub struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> whe
 
 use std::fmt::Debug;
 impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
-    fn parse<F, G>(rcvry_kind: RecoveryKind,
+    fn parse<F>(rcvry_kind: RecoveryKind,
              grm: &YaccGrammar,
-             ic: F,
-             dc: G,
+             term_cost: F,
              sgraph: &StateGraph,
              stable: &StateTable,
              lexemes: &Lexemes<TokId>)
           -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
-      where F: Fn(TIdx) -> u64,
-            G: Fn(TIdx) -> u64
+      where F: Fn(TIdx) -> u8
     {
-        let psr = Parser{rcvry_kind, grm, ic: &ic, dc: &dc, sgraph, stable, lexemes};
+        let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0)];
         let mut tstack: Vec<Node<TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
@@ -138,9 +135,9 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         let mut recoverer = None;
         loop {
             let st = *pstack.last().unwrap();
-            let (la_lexeme, la_term) = self.next_lexeme(None, la_idx);
+            let (la_lexeme, la_tidx) = self.next_lexeme(None, la_idx);
 
-            match self.stable.action(st, la_term) {
+            match self.stable.action(st, Symbol::Term(la_tidx)) {
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
@@ -157,7 +154,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     la_idx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
+                    debug_assert_eq!(la_tidx, TIdx::from(self.grm.eof_term_idx()));
                     debug_assert_eq!(tstack.len(), 1);
                     return true;
                 },
@@ -194,12 +191,12 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
     /// `None`, that is the next lexeme. Otherwise it will be the next lexeme in `self.lexemes` or
     /// a specially constructed lexeme representing EOF.
     pub(crate) fn next_lexeme(&self, lexemes_prefix: Option<Lexeme<TokId>>, la_idx: usize)
-                          -> (Lexeme<TokId>, Symbol)
+                          -> (Lexeme<TokId>, TIdx)
     {
         if let Some(l) = lexemes_prefix {
-            (l, Symbol::Term(TIdx::from(l.tok_id().try_into().ok().unwrap())))
+            (l, TIdx::from(l.tok_id().try_into().ok().unwrap()))
         } else if let Some(l) = self.lexemes.get(la_idx) {
-            (*l, Symbol::Term(TIdx::from(l.tok_id().try_into().ok().unwrap())))
+            (*l, TIdx::from(l.tok_id().try_into().ok().unwrap()))
         } else {
             // We have to artificially construct a Lexeme for the EOF lexeme.
             debug_assert_eq!(la_idx, self.lexemes.len());
@@ -216,21 +213,8 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                                               .unwrap(),
                                         last_la_end, 0);
 
-            (la_lexeme, Symbol::Term(TIdx::from(self.grm.eof_term_idx())))
+            (la_lexeme, TIdx::from(self.grm.eof_term_idx()))
         }
-    }
-
-    /// What is the deletion cost of `sym`?
-    pub(crate) fn dc(&self, sym: Symbol) -> u64 {
-        match sym {
-            Symbol::Term(t_idx) => (self.dc)(t_idx),
-            _ => panic!("Internal error")
-        }
-    }
-
-    /// What is the insertion cost of `sym`?
-    pub(crate) fn ic(&self, _: Symbol) -> u64 {
-        1
     }
 
     /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
@@ -251,9 +235,9 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
         while la_idx != end_la_idx {
             let st = *pstack.val().unwrap();
-            let (la_lexeme, la_term) = self.next_lexeme(lexeme_prefix, la_idx);
+            let (la_lexeme, la_tidx) = self.next_lexeme(lexeme_prefix, la_idx);
 
-            match self.stable.action(st, la_term) {
+            match self.stable.action(st, Symbol::Term(la_tidx)) {
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_num = self.grm.prod(prod_id).len();
@@ -277,7 +261,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     la_idx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_term, Symbol::Term(TIdx::from(self.grm.eof_term_idx())));
+                    debug_assert_eq!(la_tidx, TIdx::from(self.grm.eof_term_idx()));
                     if let &mut Some(ref mut tstack_uw) = tstack {
                         debug_assert_eq!(tstack_uw.len(), 1);
                     }
@@ -311,25 +295,24 @@ pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
         lexemes: &Vec<Lexeme<TokId>>)
     -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
 {
-    parse_rcvry(RecoveryKind::KimYi, grm, |_| 1, |_| 1, sgraph, stable, lexemes)
+    parse_rcvry(RecoveryKind::KimYi, grm, |_| 1, sgraph, stable, lexemes)
 }
 
 /// Parse the lexemes, specifying a particularly type of error recovery. On success return a parse
 /// tree. On failure, return a parse tree (if all the input was consumed) or `None` otherwise, and
 /// a vector of `ParseError`s.
 pub fn parse_rcvry
-       <TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>, F, G>
+       <TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>, F>
        (rcvry_kind: RecoveryKind,
         grm: &YaccGrammar,
-        ic: F,
-        dc: G,
+        term_cost: F,
         sgraph: &StateGraph,
         stable: &StateTable,
         lexemes: &Vec<Lexeme<TokId>>)
     -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
-    where F: Fn(TIdx) -> u64, G: Fn(TIdx) -> u64
+    where F: Fn(TIdx) -> u8
 {
-    Parser::parse(rcvry_kind, grm, ic, dc, sgraph, stable, lexemes)
+    Parser::parse(rcvry_kind, grm, term_cost, sgraph, stable, lexemes)
 }
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
@@ -399,7 +382,7 @@ pub(crate) mod test {
             lexerdef.set_rule_ids(&rule_ids);
         }
         let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-        let pr = parse_rcvry(rcvry_kind, &grm, |_| 1, |_| 1, &sgraph, &stable, &lexemes);
+        let pr = parse_rcvry(rcvry_kind, &grm, |_| 1, &sgraph, &stable, &lexemes);
         (grm, pr)
     }
 

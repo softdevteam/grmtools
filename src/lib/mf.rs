@@ -37,7 +37,7 @@ use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, Symbol, TIdx};
+use cfgrammar::{Grammar, PIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
 use astar::astar_all;
@@ -54,8 +54,8 @@ struct PathFNode {
     pstack: Cactus<StIdx>,
     la_idx: usize,
     repairs: Cactus<Repair>,
-    cf: u64,
-    cg: u64
+    cf: u32,
+    cg: u32
 }
 
 impl Hash for PathFNode {
@@ -80,7 +80,7 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, |x| parser.ic(Symbol::Term(x)));
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
     Box::new(MF{dist})
 }
 
@@ -158,8 +158,8 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                     }
                 }
 
-                let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-                match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
+                let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+                match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }
@@ -203,24 +203,22 @@ fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialE
         nbrs: &mut Vec<PathFNode>)
 {
     let top_pstack = *n.pstack.val().unwrap();
-    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-    if let Symbol::Term(la_term_idx) = la_term {
-        for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
-            if let Symbol::Term(term_idx) = sym {
-                if term_idx == parser.grm.eof_term_idx() {
-                    continue;
-                }
+    let (_, la_tidx) = parser.next_lexeme(None, n.la_idx);
+    for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
+        if let Symbol::Term(term_idx) = sym {
+            if term_idx == parser.grm.eof_term_idx() {
+                continue;
+            }
 
-                if let Some(d) = dist.dist(sym_st_idx, la_term_idx) {
-                    assert!(n.cg == 0 || d >= n.cg - parser.ic(Symbol::Term(term_idx)));
-                    let nn = PathFNode{
-                        pstack: n.pstack.child(sym_st_idx),
-                        la_idx: n.la_idx,
-                        repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                        cf: n.cf + parser.ic(Symbol::Term(term_idx)),
-                        cg: d};
-                    nbrs.push(nn);
-                }
+            if let Some(d) = dist.dist(sym_st_idx, la_tidx) {
+                assert!(n.cg == 0 || d >= n.cg - (parser.term_cost)(term_idx) as u32);
+                let nn = PathFNode{
+                    pstack: n.pstack.child(sym_st_idx),
+                    la_idx: n.la_idx,
+                    repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
+                    cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
+                    cg: d};
+                nbrs.push(nn);
             }
         }
     }
@@ -270,13 +268,13 @@ fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq
         return;
     }
 
-    let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-    let cost = parser.dc(la_term);
+    let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+    let cost = (parser.term_cost)(la_tidx);
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        repairs: n.repairs.child(Repair::Delete),
-                       cf: n.cf + cost,
-                       cg: n.cg.checked_sub(cost).unwrap_or(0)};
+                       cf: n.cf.checked_add(cost as u32).unwrap(),
+                       cg: n.cg.checked_sub(cost as u32).unwrap_or(0)};
     nbrs.push(nn);
 }
 
@@ -324,7 +322,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
                     mut all_rprs: Vec<Vec<Repair>>)
                  -> Vec<Vec<ParseRepair>>
 {
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
+    let sg = parser.grm.sentence_generator(parser.term_cost);
     for i in 0..all_rprs.len() {
         {
             // Remove all inserts of nonterms which have a minimal sentence cost of 0.
@@ -466,12 +464,12 @@ fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
 
 pub(crate) struct Dist {
     terms_len: usize,
-    table: Vec<u64>
+    table: Vec<u32>
 }
 
 impl Dist {
     pub(crate) fn new<F>(grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable, term_cost: F) -> Dist
-              where F: Fn(TIdx) -> u64
+              where F: Fn(TIdx) -> u8
     {
         // This is an extension of dist from the KimYi paper: it also takes into account reductions
         // and gotos in the distances it reports back. Note that it is conservative, sometimes
@@ -488,10 +486,85 @@ impl Dist {
         let states_len = sgraph.all_states_len();
         let sengen = grm.sentence_generator(&term_cost);
         let mut table = Vec::new();
-        table.resize(states_len * terms_len, u64::max_value());
+        table.resize(states_len * terms_len, u32::max_value());
         table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
 
-        // rev_edges allows us to walk backwards over the stategraph
+        let rev_edges = Dist::rev_edges(&sgraph);
+        let goto_edges = Dist::goto_edges(grm, sgraph, stable, &rev_edges);
+
+        // We can now interleave KimYi's original dist algorithm with our addition which takes into
+        // account goto_edges.
+        loop {
+            let mut chgd = false; // Has anything changed?
+
+            for i in 0..states_len {
+                // The first phase is KimYi's dist algorithm.
+                let edges = sgraph.edges(StIdx::from(i));
+                for (&sym, &sym_st_idx) in edges.iter() {
+                    let d = match sym {
+                        Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
+                        Symbol::Term(t_idx) => {
+                            let off = usize::from(i) * terms_len + usize::from(t_idx);
+                            if table[off] != 0 {
+                                table[off] = 0;
+                                chgd = true;
+                            }
+                            term_cost(t_idx) as u32
+                        }
+                    };
+
+                    for j in 0..terms_len {
+                        let this_off = usize::from(i) * terms_len + usize::from(j);
+                        let other_off = usize::from(sym_st_idx) * terms_len + usize::from(j);
+
+                        if table[other_off] != u32::max_value()
+                           && table[other_off] + d < table[this_off]
+                        {
+                            table[this_off] = table[other_off] + d;
+                            chgd = true;
+                        }
+                    }
+                }
+
+                // The second phase takes into account gotos.
+                for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
+                    let prod = grm.prod(p_idx);
+                    if usize::from(sym_off) == prod.len() {
+                        for goto_idx in goto_edges.get(&(StIdx::from(i), p_idx)).unwrap() {
+                            for j in 0..terms_len {
+                                let this_off = usize::from(i) * terms_len + usize::from(j);
+                                let other_off = usize::from(*goto_idx) * terms_len + usize::from(j);
+
+                                if table[other_off] != u32::max_value() &&
+                                    table[other_off] < table[this_off] {
+                                    table[this_off] = table[other_off];
+                                    chgd = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !chgd {
+                break;
+            }
+        }
+
+        Dist{terms_len, table}
+    }
+
+    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u32> {
+        let e = self.table[usize::from(st_idx) * self.terms_len + usize::from(t_idx)];
+        if e == u32::max_value() {
+            None
+        } else {
+            Some(e as u32)
+        }
+    }
+
+    /// rev_edges allows us to walk backwards over the stategraph
+    fn rev_edges(sgraph: &StateGraph) -> Vec<HashSet<StIdx>> {
+        let states_len = sgraph.all_states_len();
         let mut rev_edges = Vec::with_capacity(states_len);
         rev_edges.resize(states_len, HashSet::new());
         for i in 0..states_len {
@@ -499,13 +572,20 @@ impl Dist {
                 rev_edges[usize::from(sym_st_idx)].insert(StIdx::from(i));
             }
         }
+        rev_edges
+    }
 
-        // goto_edges is a map from a core state ready for reduction (i.e. where the dot is at the
-        // end of the production and thus sym_off == prod.len()) represented as a tuple
-        // (state_index, production_index) to a set of state indexes. The latter represents all the
-        // states which after (possibly recursive and intertwined) reductions and gotos the parser
-        // might end up in.
-        //
+    /// goto_edges is a map from a core state ready for reduction (i.e. where the dot is at the
+    /// end of the production and thus sym_off == prod.len()) represented as a tuple
+    /// (state_index, production_index) to a set of state indexes. The latter represents all the
+    /// states which after (possibly recursive and intertwined) reductions and gotos the parser
+    /// might end up in.
+    fn goto_edges(grm: &YaccGrammar,
+                  sgraph: &StateGraph,
+                  stable: &StateTable,
+                  rev_edges: &Vec<HashSet<StIdx>>)
+               -> HashMap<(StIdx, PIdx), HashSet<StIdx>>
+    {
         // We calculate this for a state i, production p_idx, by iterating backwards over the
         // stategraph (using rev_edges) finding all routes of length grm.prod(p_idx).len() which
         // could lead back to i, and then storing their goto state indexes. Since further
@@ -514,7 +594,7 @@ impl Dist {
         //
         // This loop is currently comically inefficient, but it is relatively straightforward.
         let mut goto_edges = HashMap::new();
-        for i in 0..states_len {
+        for i in 0..sgraph.all_states_len() {
             for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
                 let prod = grm.prod(p_idx);
                 if usize::from(sym_off) == prod.len() {
@@ -553,79 +633,11 @@ impl Dist {
                             }
                         }
                     }
-                    goto_edges.insert((i, p_idx), ge);
+                    goto_edges.insert((StIdx::from(i), p_idx), ge);
                 }
             }
         }
-
-        // We can now interleave KimYi's original dist algorithm with our addition which takes into
-        // account goto_edges.
-        loop {
-            let mut chgd = false; // Has anything changed?
-
-            for i in 0..states_len {
-                // The first phase is KimYi's dist algorithm.
-                let edges = sgraph.edges(StIdx::from(i));
-                for (&sym, &sym_st_idx) in edges.iter() {
-                    let d = match sym {
-                        Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
-                        Symbol::Term(t_idx) => {
-                            let off = usize::from(i) * terms_len + usize::from(t_idx);
-                            if table[off] != 0 {
-                                table[off] = 0;
-                                chgd = true;
-                            }
-                            term_cost(t_idx)
-                        }
-                    };
-
-                    for j in 0..terms_len {
-                        let this_off = usize::from(i) * terms_len + usize::from(j);
-                        let other_off = usize::from(sym_st_idx) * terms_len + usize::from(j);
-
-                        if table[other_off] != u64::max_value()
-                           && table[other_off] + d < table[this_off]
-                        {
-                            table[this_off] = table[other_off] + d;
-                            chgd = true;
-                        }
-                    }
-                }
-
-                // The second phase takes into account gotos.
-                for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
-                    let prod = grm.prod(p_idx);
-                    if usize::from(sym_off) == prod.len() {
-                        for goto_idx in goto_edges.get(&(i, p_idx)).unwrap() {
-                            for j in 0..terms_len {
-                                let this_off = usize::from(i) * terms_len + usize::from(j);
-                                let other_off = usize::from(*goto_idx) * terms_len + usize::from(j);
-
-                                if table[other_off] != u64::max_value() &&
-                                    table[other_off] < table[this_off] {
-                                    table[this_off] = table[other_off];
-                                    chgd = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if !chgd {
-                break;
-            }
-        }
-
-        Dist{terms_len, table}
-    }
-
-    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u64> {
-        let e = self.table[usize::from(st_idx) * self.terms_len + usize::from(t_idx)];
-        if e == u64::max_value() {
-            None
-        } else {
-            Some(e as u64)
-        }
+        goto_edges
     }
 }
 

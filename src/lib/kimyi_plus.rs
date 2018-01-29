@@ -56,8 +56,8 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, |x| parser.ic(Symbol::Term(x)));
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.term_cost);
+    let sg = parser.grm.sentence_generator(parser.term_cost);
     Box::new(KimYiPlus{dist, sg})
 }
 
@@ -145,8 +145,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     }
                 }
 
-                let (_, la_term) = parser.next_lexeme(None, n.la_idx);
-                match parser.stable.action(*n.pstack.val().unwrap(), la_term) {
+                let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+                match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }
@@ -208,7 +208,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
                     mut all_rprs: Vec<Vec<Repair>>)
                  -> Vec<Vec<ParseRepair>>
 {
-    let sg = parser.grm.sentence_generator(|x| parser.ic(Symbol::Term(x)));
+    let sg = parser.grm.sentence_generator(parser.term_cost);
     for i in 0..all_rprs.len() {
         {
             // Remove all inserts of nonterms which have a minimal sentence cost of 0.
