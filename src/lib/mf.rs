@@ -72,8 +72,9 @@ impl PartialEq for PathFNode {
     }
 }
 
-pub(crate) struct MF {
-    dist: Dist
+pub(crate) struct MF<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
+    dist: Dist,
+    parser: &'a Parser<'a, TokId>
 }
 
 pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
@@ -81,11 +82,11 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                      -> Box<Recoverer<TokId> + 'a>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
-    Box::new(MF{dist})
+    Box::new(MF{dist, parser: &parser})
 }
 
-impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-    Recoverer<TokId> for MF
+impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+    Recoverer<TokId> for MF<'a, TokId>
 {
     fn recover(&self,
                parser: &Parser<TokId>,
@@ -120,12 +121,12 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
                         // Inserts.
                     },
                     _ => {
-                        r3is(parser, &self.dist, &n, &mut nbrs);
-                        r3ir(parser, &n, &mut nbrs);
+                        self.r3is(&n, &mut nbrs);
+                        self.r3ir(&n, &mut nbrs);
                     }
                 }
-                r3d(parser, &n, &mut nbrs);
-                r3s_n(parser, &n, &mut nbrs);
+                self.r3d(&n, &mut nbrs);
+                self.r3s_n(&n, &mut nbrs);
 
                 let v = nbrs.into_iter()
                             .map(|x| {
@@ -169,12 +170,11 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
             return (in_la_idx, vec![]);
         }
 
-        let full_rprs = collect_repairs(astar_cnds);
-        let smpl_rprs = simplify_repairs(parser, full_rprs);
-        let rnk_rprs = rank_cnds(parser,
-                                 in_la_idx,
-                                 start_cactus_pstack.clone(),
-                                 smpl_rprs);
+        let full_rprs = self.collect_repairs(astar_cnds);
+        let smpl_rprs = self.simplify_repairs(full_rprs);
+        let rnk_rprs = self.rank_cnds(in_la_idx,
+                                      start_cactus_pstack.clone(),
+                                      smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
                                                      in_la_idx,
                                                      start_cactus_pstack,
@@ -196,270 +196,346 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
     }
 }
 
-fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-       (parser: &Parser<TokId>,
-        dist: &Dist,
-        n: &PathFNode,
-        nbrs: &mut Vec<PathFNode>)
-{
-    let top_pstack = *n.pstack.val().unwrap();
-    let (_, la_tidx) = parser.next_lexeme(None, n.la_idx);
-    for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
-        if let Symbol::Term(term_idx) = sym {
-            if term_idx == parser.grm.eof_term_idx() {
+impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> MF<'a, TokId> {
+    fn r3is(&self,
+            n: &PathFNode,
+            nbrs: &mut Vec<PathFNode>)
+    {
+        let top_pstack = *n.pstack.val().unwrap();
+        for (&sym, &sym_st_idx) in self.parser.sgraph.edges(top_pstack).iter() {
+            if let Symbol::Term(term_idx) = sym {
+                if term_idx == self.parser.grm.eof_term_idx() {
+                    continue;
+                }
+
+                let n_repairs = n.repairs.child(Repair::InsertTerm(term_idx));
+                if let Some(d) = self.dyn_dist(&n_repairs, sym_st_idx, n.la_idx) {
+                    assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(term_idx) as u32);
+                    let nn = PathFNode{
+                        pstack: n.pstack.child(sym_st_idx),
+                        la_idx: n.la_idx,
+                        repairs: n_repairs,
+                        cf: n.cf.checked_add((self.parser.term_cost)(term_idx) as u32).unwrap(),
+                        cg: d};
+                    nbrs.push(nn);
+                }
+            }
+        }
+    }
+
+    fn r3ir(&self,
+            n: &PathFNode,
+            nbrs: &mut Vec<PathFNode>)
+    {
+        // This is different than KimYi's r3ir: their r3ir inserts symbols if the dot in a state is not
+        // at the end. This is unneeded in our setup (indeed, doing so causes duplicates): all we need
+        // to do is reduce states where the dot is at the end.
+
+        let top_pstack = *n.pstack.val().unwrap();
+        for &(p_idx, sym_off) in self.parser.sgraph.core_state(top_pstack).items.keys() {
+            if usize::from(sym_off) != self.parser.grm.prod(p_idx).len() {
                 continue;
             }
 
-            if let Some(d) = dist.dist(sym_st_idx, la_tidx) {
-                assert!(n.cg == 0 || d >= n.cg - (parser.term_cost)(term_idx) as u32);
+            let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
+            let mut qi_minus_alpha = n.pstack.clone();
+            for _ in 0..usize::from(sym_off) {
+                qi_minus_alpha = qi_minus_alpha.parent().unwrap();
+            }
+
+            if let Some(goto_st_idx) = self.parser.stable
+                                                  .goto(*qi_minus_alpha.val().unwrap(),
+                                                        nt_idx) {
+                if let Some(d) = self.dyn_dist(&n.repairs, goto_st_idx, n.la_idx) {
+                    let nn = PathFNode{
+                        pstack: qi_minus_alpha.child(goto_st_idx),
+                        la_idx: n.la_idx,
+                        repairs: n.repairs.clone(),
+                        cf: n.cf,
+                        cg: d};
+                    nbrs.push(nn);
+                }
+            }
+        }
+    }
+
+    fn r3d(&self,
+           n: &PathFNode,
+           nbrs: &mut Vec<PathFNode>)
+    {
+        if n.la_idx == self.parser.lexemes.len() {
+            return;
+        }
+
+        let n_repairs = n.repairs.child(Repair::Delete);
+        if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.la_idx + 1) {
+            let la_tidx = self.parser.next_lexeme(None, n.la_idx).1;
+            let cost = (self.parser.term_cost)(la_tidx);
+            let nn = PathFNode{pstack: n.pstack.clone(),
+                               la_idx: n.la_idx + 1,
+                               repairs: n_repairs,
+                               cf: n.cf.checked_add(cost as u32).unwrap(),
+                               cg: d};
+            nbrs.push(nn);
+        }
+    }
+
+    fn r3s_n(&self,
+             n: &PathFNode,
+             nbrs: &mut Vec<PathFNode>)
+    {
+        let (new_la_idx, n_pstack) = self.parser.lr_cactus(None,
+                                                           n.la_idx,
+                                                           n.la_idx + 1,
+                                                           n.pstack.clone(),
+                                                           &mut None);
+        if new_la_idx == n.la_idx + 1 {
+            let n_repairs = n.repairs.child(Repair::Shift);
+            if let Some(d) = self.dyn_dist(&n_repairs, *n_pstack.val().unwrap(), new_la_idx) {
                 let nn = PathFNode{
-                    pstack: n.pstack.child(sym_st_idx),
-                    la_idx: n.la_idx,
-                    repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                    cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
+                    pstack: n_pstack,
+                    la_idx: new_la_idx,
+                    repairs: n_repairs,
+                    cf: n.cf,
                     cg: d};
                 nbrs.push(nn);
             }
         }
     }
-}
 
-fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-       (parser: &Parser<TokId>,
-        n: &PathFNode,
-        nbrs: &mut Vec<PathFNode>)
-{
-    // This is different than KimYi's r3ir: their r3ir inserts symbols if the dot in a state is not
-    // at the end. This is unneeded in our setup (indeed, doing so causes duplicates): all we need
-    // to do is reduce states where the dot is at the end.
-
-    let top_pstack = *n.pstack.val().unwrap();
-    for &(p_idx, sym_off) in parser.sgraph.core_state(top_pstack).items.keys() {
-        if usize::from(sym_off) != parser.grm.prod(p_idx).len() {
-            continue;
-        }
-
-        let nt_idx = parser.grm.prod_to_nonterm(p_idx);
-        let mut qi_minus_alpha = n.pstack.clone();
-        for _ in 0..usize::from(sym_off) {
-            qi_minus_alpha = qi_minus_alpha.parent().unwrap();
-        }
-
-        if let Some(goto_st_idx) = parser.stable
-                                         .goto(*qi_minus_alpha.val().unwrap(),
-                                               nt_idx) {
-            let nn = PathFNode{
-                pstack: qi_minus_alpha.child(goto_st_idx),
-                la_idx: n.la_idx,
-                repairs: n.repairs.clone(),
-                cf: n.cf,
-                cg: n.cg};
-            nbrs.push(nn);
-        }
-    }
-}
-
-fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-      (parser: &Parser<TokId>,
-       n: &PathFNode,
-       nbrs: &mut Vec<PathFNode>)
-{
-    if n.la_idx == parser.lexemes.len() {
-        return;
+    /// Convert the output from `astar_bag` into something more usable.
+    fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
+    {
+        cnds.into_iter()
+            .map(|x| {
+                let mut rprs = x.repairs
+                                .vals()
+                                .cloned()
+                                .collect::<Vec<Repair>>();
+                rprs.reverse();
+                rprs
+            })
+            .collect::<Vec<Vec<Repair>>>()
     }
 
-    let la_tidx = parser.next_lexeme(None, n.la_idx).1;
-    let cost = (parser.term_cost)(la_tidx);
-    let nn = PathFNode{pstack: n.pstack.clone(),
-                       la_idx: n.la_idx + 1,
-                       repairs: n.repairs.child(Repair::Delete),
-                       cf: n.cf.checked_add(cost as u32).unwrap(),
-                       cg: n.cg.checked_sub(cost as u32).unwrap_or(0)};
-    nbrs.push(nn);
-}
-
-fn r3s_n<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-        (parser: &Parser<TokId>,
-         n: &PathFNode,
-         nbrs: &mut Vec<PathFNode>)
-{
-    let (new_la_idx, n_pstack) = parser.lr_cactus(None,
-                                                  n.la_idx,
-                                                  n.la_idx + 1,
-                                                  n.pstack.clone(),
-                                                  &mut None);
-    if new_la_idx == n.la_idx + 1 {
-        let nn = PathFNode{
-            pstack: n_pstack,
-            la_idx: new_la_idx,
-            repairs: n.repairs.child(Repair::Shift),
-            cf: n.cf,
-            cg: n.cg};
-        nbrs.push(nn);
-    }
-}
-
-/// Convert the output from `astar_bag` into something more usable.
-fn collect_repairs(cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
-{
-    cnds.into_iter()
-        .map(|x| {
-            let mut rprs = x.repairs
-                            .vals()
-                            .cloned()
-                            .collect::<Vec<Repair>>();
-            rprs.reverse();
-            rprs
-        })
-        .collect::<Vec<Vec<Repair>>>()
-}
-
-/// Take an (unordered) set of parse repairs and return a simplified (unordered) set of parse
-/// repairs. Note that the caller must make no assumptions about the size or contents of the output
-/// set: this function might delete, expand, or do other things to repairs.
-fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-                   (parser: &Parser<TokId>,
-                    mut all_rprs: Vec<Vec<Repair>>)
-                 -> Vec<Vec<ParseRepair>>
-{
-    let sg = parser.grm.sentence_generator(parser.term_cost);
-    for i in 0..all_rprs.len() {
-        {
-            // Remove all inserts of nonterms which have a minimal sentence cost of 0.
-            let mut rprs = all_rprs.get_mut(i).unwrap();
-            let mut j = 0;
-            while j < rprs.len() {
-                if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
-                    if sg.min_sentence_cost(nonterm_idx) == 0 {
-                        rprs.remove(j);
+    /// Take an (unordered) set of parse repairs and return a simplified (unordered) set of parse
+    /// repairs. Note that the caller must make no assumptions about the size or contents of the output
+    /// set: this function might delete, expand, or do other things to repairs.
+    fn simplify_repairs(&self,
+                        mut all_rprs: Vec<Vec<Repair>>)
+                     -> Vec<Vec<ParseRepair>>
+    {
+        let sg = self.parser.grm.sentence_generator(self.parser.term_cost);
+        for i in 0..all_rprs.len() {
+            {
+                // Remove all inserts of nonterms which have a minimal sentence cost of 0.
+                let mut rprs = all_rprs.get_mut(i).unwrap();
+                let mut j = 0;
+                while j < rprs.len() {
+                    if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
+                        if sg.min_sentence_cost(nonterm_idx) == 0 {
+                            rprs.remove(j);
+                        } else {
+                            j += 1;
+                        }
                     } else {
                         j += 1;
                     }
+                }
+            }
+
+            {
+                // Remove shifts from the end of repairs
+                let mut rprs = all_rprs.get_mut(i).unwrap();
+                while rprs.len() > 0 {
+                    if let Repair::Shift = rprs[rprs.len() - 1] {
+                        rprs.pop();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // The simplifications above can mean that we now end up with equivalent repairs. Remove
+        // duplicates.
+
+        let mut i = 0;
+        while i < all_rprs.len() {
+            let mut j = i + 1;
+            while j < all_rprs.len() {
+                if all_rprs[i] == all_rprs[j] {
+                    all_rprs.remove(j);
                 } else {
                     j += 1;
                 }
             }
+            i += 1;
         }
 
-        {
-            // Remove shifts from the end of repairs
-            let mut rprs = all_rprs.get_mut(i).unwrap();
-            while rprs.len() > 0 {
-                if let Repair::Shift = rprs[rprs.len() - 1] {
-                    rprs.pop();
+        all_rprs.iter()
+                .map(|x| x.iter()
+                          .map(|y| {
+                                        match *y {
+                                            Repair::InsertTerm(term_idx) =>
+                                                ParseRepair::Insert(term_idx),
+                                            Repair::InsertNonterm(nonterm_idx) =>
+                                                ParseRepair::InsertSeq(sg.min_sentences(nonterm_idx)),
+                                            Repair::Delete => ParseRepair::Delete,
+                                            Repair::Shift => ParseRepair::Shift,
+                                        }
+                               })
+                          .collect())
+                      .collect()
+    }
+
+    /// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
+    /// highest to lowest) by the distance they allow parsing to continue without error. If two or more
+    /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
+    /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
+    /// ordering is non-deterministic.
+    fn rank_cnds(&self,
+                 in_la_idx: usize,
+                 start_pstack: Cactus<StIdx>,
+                 in_cnds: Vec<Vec<ParseRepair>>)
+              -> Vec<Vec<ParseRepair>>
+    {
+        let mut cnds = in_cnds.into_iter()
+                              .map(|rprs| {
+                                   let (la_idx, pstack) = apply_repairs(self.parser,
+                                                                        in_la_idx,
+                                                                        start_pstack.clone(),
+                                                                        &mut None,
+                                                                        &rprs);
+                                   (pstack, la_idx, rprs)
+                               })
+                              .collect::<Vec<(Cactus<StIdx>, usize, Vec<ParseRepair>)>>();
+
+        // First try parsing each candidate repair until it hits an error or exceeds TRY_PARSE_AT_MOST
+        // lexemes.
+
+        let mut todo = Vec::new();
+        todo.resize(cnds.len(), true);
+        let mut remng = cnds.len(); // Remaining items in todo
+        let mut i = 0;
+        while i < TRY_PARSE_AT_MOST && remng > 1 {
+            let mut j = 0;
+            while j < todo.len() {
+                if !todo[j] {
+                    j += 1;
+                    continue;
+                }
+                let cnd = cnds.get_mut(j).unwrap();
+                if cnd.1 > in_la_idx + i {
+                    j += 1;
+                    continue;
+                }
+                let (new_la_idx, new_pstack) = self.parser.lr_cactus(None,
+                                                                     in_la_idx + i,
+                                                                     in_la_idx + i + 1,
+                                                                     cnd.0.clone(),
+                                                                     &mut None);
+                if new_la_idx == in_la_idx + i {
+                    todo[j] = false;
+                    remng -= 1;
                 } else {
-                    break;
+                    cnd.0 = new_pstack;
+                    cnd.1 += 1;
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+
+        // Now rank the candidates into descending order, first by how far they are able to parse, then
+        // by the number of actions in the repairs (the latter is somewhat arbitrary, but matches the
+        // intuition that "repairs which affect the shortest part of the string are preferable").
+        cnds.sort_unstable_by(|x, y| {
+            match y.1.cmp(&x.1) {
+                Ordering::Equal => {
+                    x.2.len().cmp(&y.2.len())
+                },
+                a => a
+            }
+        });
+
+        cnds.into_iter()
+            .map(|x| x.2)
+            .collect::<Vec<Vec<ParseRepair>>>()
+    }
+
+    /// Return the distance from `st_idx` at input position `la_idx`, given the current `repairs`.
+    /// Returns `None` if no route can be found.
+    fn dyn_dist(&self,
+                repairs: &Cactus<Repair>,
+                st_idx: StIdx,
+                la_idx: usize)
+              -> Option<u32>
+    {
+        // This function is very different than anything in KimYi: it estimates the distance to a
+        // success node based in part on dynamic properties of the input as well as static
+        // properties of the grammar.
+
+        // We first deal with a subtle case: one way of a sequence of repairs succeeding is if it
+        // shifts PARSE_AT_LEAST lexemes (in other words: we've found a sequence of repairs
+        // successful enough to allow us to parse at least PARSE_AT_LEAST lexemes without hitting
+        // another error). We have to catch this explicitly and return a distance of 0 so that the
+        // resulting node can be checked for success [if we were to leave this to chance, it's
+        // possible that the PARSE_AT_LEAST+1 symbol is something which has a distance > 0 (or,
+        // worse, no route!), which would then confuse the astar function, since a success node
+        // would have a distance > 0.]
+        if repairs.len() >= PARSE_AT_LEAST {
+            let mut all_shfts = true;
+            for x in repairs.vals().take(PARSE_AT_LEAST - 1) {
+                if let Repair::Shift = *x {
+                    continue;
+                }
+                all_shfts = false;
+                break;
+            }
+            if all_shfts {
+                return Some(0);
+            }
+        }
+
+        // Now we deal with the "main" case: dealing with distances in the face of possible
+        // deletions. Imagine that there are two lexemes starting at position la_idx: (in order) T
+        // and U, both with a term_cost of 1. Assume the dist() from st_idx to T is 2 and the
+        // dist() from st_idx to U is 0. If we delete T then the distance to U is 1, which is a
+        // shorter distance than T. We therefore need to return a distance of 1, even though that
+        // is the distance to the second lexeme.
+        //
+        // Imagine we have the Java input "x = } y;". The distance from "=" to "}" is 2 (at a
+        // minimum you need an int/string/etc followed by a semi-colon); however the distance from
+        // "=" to "y" is 0. Assuming the deletion cost of "}" is 1, it's therefore cheaper to
+        // delete "}" and add that to the distance from "=" to "y". Thus the cheapest distance is
+        // 1.
+        let frst_tidx = self.parser.next_lexeme(None, la_idx).1;
+        let mut ld = self.dist.dist(st_idx, frst_tidx)
+                              .unwrap_or(u32::max_value()); // ld == Current least distance
+        let mut dc = (self.parser.term_cost)(frst_tidx) as u32; // Cumulative deletion cost
+        for i in la_idx + 1..self.parser.lexemes.len() + 1 {
+            if dc >= ld {
+                // Once the cumulative cost of deleting lexemes is bigger than the current least
+                // distance, there is no chance of finding a subsequent lexeme which could produce
+                // a lower cost.
+                break;
+            }
+            let t_idx = self.parser.next_lexeme(None, i).1;
+            if let Some(d) = self.dist.dist(st_idx, t_idx) {
+                if dc.checked_add(d).unwrap() < ld {
+                    ld = dc + d;
                 }
             }
+            dc = dc.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap();
+        }
+        if ld == u32::max_value() {
+            None
+        } else {
+            Some(ld)
         }
     }
 
-    // The simplifications above can mean that we now end up with equivalent repairs. Remove
-    // duplicates.
-
-    let mut i = 0;
-    while i < all_rprs.len() {
-        let mut j = i + 1;
-        while j < all_rprs.len() {
-            if all_rprs[i] == all_rprs[j] {
-                all_rprs.remove(j);
-            } else {
-                j += 1;
-            }
-        }
-        i += 1;
-    }
-
-    all_rprs.iter()
-            .map(|x| x.iter()
-                      .map(|y| {
-                                    match *y {
-                                        Repair::InsertTerm(term_idx) =>
-                                            ParseRepair::Insert(term_idx),
-                                        Repair::InsertNonterm(nonterm_idx) =>
-                                            ParseRepair::InsertSeq(sg.min_sentences(nonterm_idx)),
-                                        Repair::Delete => ParseRepair::Delete,
-                                        Repair::Shift => ParseRepair::Shift,
-                                    }
-                           })
-                      .collect())
-                  .collect()
-}
-
-/// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
-/// highest to lowest) by the distance they allow parsing to continue without error. If two or more
-/// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
-/// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
-/// ordering is non-deterministic.
-fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-            (parser: &Parser<TokId>,
-             in_la_idx: usize,
-             start_pstack: Cactus<StIdx>,
-             in_cnds: Vec<Vec<ParseRepair>>)
-          -> Vec<Vec<ParseRepair>>
-{
-    let mut cnds = in_cnds.into_iter()
-                          .map(|rprs| {
-                               let (la_idx, pstack) = apply_repairs(parser,
-                                                                    in_la_idx,
-                                                                    start_pstack.clone(),
-                                                                    &mut None,
-                                                                    &rprs);
-                               (pstack, la_idx, rprs)
-                           })
-                          .collect::<Vec<(Cactus<StIdx>, usize, Vec<ParseRepair>)>>();
-
-    // First try parsing each candidate repair until it hits an error or exceeds TRY_PARSE_AT_MOST
-    // lexemes.
-
-    let mut todo = Vec::new();
-    todo.resize(cnds.len(), true);
-    let mut remng = cnds.len(); // Remaining items in todo
-    let mut i = 0;
-    while i < TRY_PARSE_AT_MOST && remng > 1 {
-        let mut j = 0;
-        while j < todo.len() {
-            if !todo[j] {
-                j += 1;
-                continue;
-            }
-            let cnd = cnds.get_mut(j).unwrap();
-            if cnd.1 > in_la_idx + i {
-                j += 1;
-                continue;
-            }
-            let (new_la_idx, new_pstack) = parser.lr_cactus(None,
-                                                            in_la_idx + i,
-                                                            in_la_idx + i + 1,
-                                                            cnd.0.clone(),
-                                                            &mut None);
-            if new_la_idx == in_la_idx + i {
-                todo[j] = false;
-                remng -= 1;
-            } else {
-                cnd.0 = new_pstack;
-                cnd.1 += 1;
-            }
-            j += 1;
-        }
-        i += 1;
-    }
-
-    // Now rank the candidates into descending order, first by how far they are able to parse, then
-    // by the number of actions in the repairs (the latter is somewhat arbitrary, but matches the
-    // intuition that "repairs which affect the shortest part of the string are preferable").
-    cnds.sort_unstable_by(|x, y| {
-        match y.1.cmp(&x.1) {
-            Ordering::Equal => {
-                x.2.len().cmp(&y.2.len())
-            },
-            a => a
-        }
-    });
-
-    cnds.into_iter()
-        .map(|x| x.2)
-        .collect::<Vec<Vec<ParseRepair>>>()
 }
 
 pub(crate) struct Dist {
