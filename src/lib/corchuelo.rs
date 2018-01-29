@@ -201,7 +201,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                     } else {
                         debug_assert!(new_la_idx < la_idx + PARSE_AT_LEAST);
                         let st = *n_pstack.val().unwrap();
-                        let la_tidx = parser.next_lexeme(None, new_la_idx).1;
+                        let la_tidx = parser.next_tidx(new_la_idx);
                         match parser.stable.action(st, Symbol::Term(la_tidx)) {
                             Some(Action::Accept) => finisher = true,
                             None => (),

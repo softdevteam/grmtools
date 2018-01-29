@@ -135,7 +135,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         let mut recoverer = None;
         loop {
             let st = *pstack.last().unwrap();
-            let (la_lexeme, la_tidx) = self.next_lexeme(None, la_idx);
+            let la_tidx = self.next_tidx(la_idx);
 
             match self.stable.action(st, Symbol::Term(la_tidx)) {
                 Some(Action::Reduce(prod_id)) => {
@@ -149,6 +149,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     pstack.push(self.stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
+                    let (la_lexeme, _) = self.next_lexeme(None, la_idx);
                     tstack.push(Node::Term{lexeme: la_lexeme});
                     pstack.push(state_id);
                     la_idx += 1;
@@ -176,6 +177,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                                                          .as_ref()
                                                          .recover(&self, la_idx, pstack, tstack);
                     let keep_going = repairs.len() != 0;
+                    let (la_lexeme, _) = self.next_lexeme(None, la_idx);
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
                                            lexeme: la_lexeme, repairs: repairs});
                     if !keep_going {
@@ -187,7 +189,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         }
     }
 
-    /// Return a (`Lexeme`, `Symbol::Term`) pair of the next lemexe. When `lexeme_prefix` is not
+    /// Return a (`Lexeme`, `TIdx`) pair of the next lemexe. When `lexeme_prefix` is not
     /// `None`, that is the next lexeme. Otherwise it will be the next lexeme in `self.lexemes` or
     /// a specially constructed lexeme representing EOF.
     pub(crate) fn next_lexeme(&self, lexemes_prefix: Option<Lexeme<TokId>>, la_idx: usize)
@@ -214,6 +216,18 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                                         last_la_end, 0);
 
             (la_lexeme, TIdx::from(self.grm.eof_term_idx()))
+        }
+    }
+
+    /// Return the `TIdx` of the next lexeme (if `la_idx` == `self.lexemes.len()` this will be the
+    /// EOF `TIdx`).
+    pub(crate) fn next_tidx(&self, la_idx: usize) -> TIdx {
+        let ll = self.lexemes.len();
+        debug_assert!(la_idx <= ll);
+        if la_idx < ll {
+            TIdx::from(self.lexemes[la_idx].tok_id().try_into().ok().unwrap())
+        } else {
+            self.grm.eof_term_idx()
         }
     }
 

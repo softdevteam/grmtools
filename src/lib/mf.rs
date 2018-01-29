@@ -159,7 +159,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     }
                 }
 
-                let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+                let la_tidx = parser.next_tidx(n.la_idx);
                 match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
@@ -269,7 +269,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
         let n_repairs = n.repairs.child(Repair::Delete);
         if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.la_idx + 1) {
-            let la_tidx = self.parser.next_lexeme(None, n.la_idx).1;
+            let la_tidx = self.parser.next_tidx(n.la_idx);
             let cost = (self.parser.term_cost)(la_tidx);
             let nn = PathFNode{pstack: n.pstack.clone(),
                                la_idx: n.la_idx + 1,
@@ -510,7 +510,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         // "=" to "y" is 0. Assuming the deletion cost of "}" is 1, it's therefore cheaper to
         // delete "}" and add that to the distance from "=" to "y". Thus the cheapest distance is
         // 1.
-        let frst_tidx = self.parser.next_lexeme(None, la_idx).1;
+        let frst_tidx = self.parser.next_tidx(la_idx);
         let mut ld = self.dist.dist(st_idx, frst_tidx)
                               .unwrap_or(u32::max_value()); // ld == Current least distance
         let mut dc = (self.parser.term_cost)(frst_tidx) as u32; // Cumulative deletion cost
@@ -521,7 +521,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                 // a lower cost.
                 break;
             }
-            let t_idx = self.parser.next_lexeme(None, i).1;
+            let t_idx = self.parser.next_tidx(i);
             if let Some(d) = self.dist.dist(st_idx, t_idx) {
                 if dc.checked_add(d).unwrap() < ld {
                     ld = dc + d;
