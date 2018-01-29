@@ -128,7 +128,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                                 // We make the artificially inserted lexeme appear to start at the
                                 // same position as the real next lexeme, but have zero length (so
                                 // that it's clear it's not really something the user created).
-                                let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
+                                let next_lexeme = parser.next_lexeme(la_idx);
                                 let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
                                                                             .ok()
                                                                             .unwrap(),
@@ -253,7 +253,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
             for r in repairs[0].iter() {
                 match *r {
                     Repair::InsertTerm{term_idx} => {
-                        let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
+                        let next_lexeme = parser.next_lexeme(la_idx);
                         let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
                                                                     .ok()
                                                                     .unwrap(),
