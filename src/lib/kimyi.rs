@@ -200,7 +200,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     }
                 }
 
-                let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+                let la_tidx = parser.next_tidx(n.la_idx);
                 match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
@@ -244,7 +244,7 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                    nbrs: &mut Vec<PathFNode>)
 {
     let top_pstack = *n.pstack.val().unwrap();
-    let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+    let la_tidx = parser.next_tidx(n.la_idx);
     for (&sym, &sym_st_idx) in parser.sgraph.edges(top_pstack).iter() {
         if let Symbol::Term(term_idx) = sym {
             if term_idx == parser.grm.eof_term_idx() {
@@ -334,7 +334,7 @@ pub(crate) fn r3d<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> 
         return;
     }
 
-    let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+    let la_tidx = parser.next_tidx(n.la_idx);
     let nn = PathFNode{pstack: n.pstack.clone(),
                        la_idx: n.la_idx + 1,
                        t: 1,
@@ -442,7 +442,7 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
     for r in repairs.iter() {
         match *r {
             ParseRepair::InsertSeq(ref seqs) => {
-                let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
+                let next_lexeme = parser.next_lexeme(la_idx);
                 for &t_idx in seqs[0].iter() {
                     let new_lexeme = Lexeme::new(TokId::try_from(usize::from(t_idx))
                                                                 .ok()
@@ -453,7 +453,7 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                 }
             },
             ParseRepair::Insert(term_idx) => {
-                let (next_lexeme, _) = parser.next_lexeme(None, la_idx);
+                let next_lexeme = parser.next_lexeme(la_idx);
                 let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
                                                             .ok()
                                                             .unwrap(),

@@ -145,7 +145,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     }
                 }
 
-                let la_tidx = parser.next_lexeme(None, n.la_idx).1;
+                let la_tidx = parser.next_tidx(n.la_idx);
                 match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
