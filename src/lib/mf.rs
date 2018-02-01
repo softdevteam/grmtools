@@ -222,7 +222,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         // to do is reduce states where the dot is at the end.
 
         let top_pstack = *n.pstack.val().unwrap();
-        for &(p_idx, sym_off) in self.parser.sgraph.core_state(top_pstack).items.keys() {
+        for &(p_idx, sym_off) in self.parser.sgraph.closed_state(top_pstack).items.keys() {
             if usize::from(sym_off) != self.parser.grm.prod(p_idx).len() {
                 continue;
             }
@@ -274,16 +274,15 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
              n: &PathFNode,
              nbrs: &mut Vec<PathFNode>)
     {
-        let (new_la_idx, n_pstack) = self.parser.lr_cactus(None,
-                                                           n.la_idx,
-                                                           n.la_idx + 1,
-                                                           n.pstack.clone(),
-                                                           &mut None);
-        if new_la_idx == n.la_idx + 1 {
+        let la_tidx = self.parser.next_tidx(n.la_idx);
+        let top_pstack = *n.pstack.val().unwrap();
+        if let Some(Action::Shift(state_id)) = self.parser.stable.action(top_pstack,
+                                                                         Symbol::Term(la_tidx)) {
             let n_repairs = n.repairs.child(Repair::Shift);
-            if let Some(d) = self.dyn_dist(&n_repairs, *n_pstack.val().unwrap(), new_la_idx) {
+            let new_la_idx = n.la_idx + 1;
+            if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_la_idx) {
                 let nn = PathFNode{
-                    pstack: n_pstack,
+                    pstack: n.pstack.child(state_id),
                     la_idx: new_la_idx,
                     repairs: n_repairs,
                     cf: n.cf,
