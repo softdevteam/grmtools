@@ -126,6 +126,10 @@ pub(crate) fn astar_all<N, C, FN, IN, FS>(start_node: N,
             if success(&n) {
                 assert!(h == Zero::zero());
                 scs_nodes.push(n.clone());
+                // There's no point in searching the neighbours of success nodes: they can only
+                // contain extra (zero-cost, by definition) shifts, which are uninteresting.
+                j += 1;
+                continue;
             }
             for (nbr_cost, nbr_hrstc, nbr) in neighbours(n) {
                 assert!(nbr_cost + nbr_hrstc >= scs_cost);
