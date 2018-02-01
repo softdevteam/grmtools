@@ -18,5 +18,4 @@ cfgrammar = { git = "https://github.com/softdevteam/cfgrammar" }
 lrtable = { git = "http://github.com/softdevteam/lrtable" }
 lrlex = { git = "http://github.com/softdevteam/lrlex" }
 num-traits = "0.1.41"
-ordermap = "0.3.5"
 pathfinding = "0.2.4"

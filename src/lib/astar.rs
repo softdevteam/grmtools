@@ -36,7 +36,6 @@ use std::hash::Hash;
 use std::iter::FromIterator;
 
 use num_traits::{CheckedAdd, Zero};
-use ordermap::OrderSet;
 
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
 ///
@@ -70,10 +69,9 @@ pub(crate) fn astar_all<N, C, FN, IN, FS>(start_node: N,
 
     // First phase: search for the first success node.
 
-    let mut scs_nodes = OrderSet::new(); // Store success nodes
+    let mut scs_nodes = Vec::new(); // Store success nodes
     let scs_cost: C;  // What is the cost of a success node?
-    let mut todo: Vec<(usize, OrderSet<(C, C, N)>)> = Vec::new();
-    todo.push((0, orderset![(Zero::zero(), Zero::zero(), start_node)]));
+    let mut todo: Vec<(usize, Vec<(C, C, N)>)> = vec![(0, vec![(Zero::zero(), Zero::zero(), start_node)])];
     let mut next_todo = Vec::new(); // An intermediate list to help todo
     let mut i = 0; // How far through the todo list are we?
     loop {
@@ -93,7 +91,7 @@ pub(crate) fn astar_all<N, C, FN, IN, FS>(start_node: N,
                 continue;
             }
 
-            let &(c, h, ref n) = todo[i].1.get_index(j).unwrap();
+            let (c, h, ref n) = todo[i].1[j];
             if success(&n) {
                 assert!(h == Zero::zero());
                 scs_cost = c;
@@ -109,9 +107,9 @@ pub(crate) fn astar_all<N, C, FN, IN, FS>(start_node: N,
 
         for (off, tup) in next_todo.drain(..) {
             for _ in todo.len()..off + 1 {
-                todo.push((0, OrderSet::new()));
+                todo.push((0, Vec::new()));
             }
-            todo[off].1.insert(tup);
+            todo[off].1.push(tup);
         }
         todo[i].0 += 1;
     }
@@ -124,10 +122,10 @@ pub(crate) fn astar_all<N, C, FN, IN, FS>(start_node: N,
     while j < scs_todo.len() {
         next_todo.clear();
         {
-            let &(_, h, ref n) = scs_todo.get_index(j).unwrap();
+            let (_, h, ref n) = scs_todo[j];
             if success(&n) {
                 assert!(h == Zero::zero());
-                scs_nodes.insert(n.clone());
+                scs_nodes.push(n.clone());
             }
             for (nbr_cost, nbr_hrstc, nbr) in neighbours(n) {
                 assert!(nbr_cost + nbr_hrstc >= scs_cost);

@@ -39,7 +39,6 @@ extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrtable;
 extern crate num_traits;
-#[macro_use] extern crate ordermap;
 extern crate pathfinding;
 extern crate test;
 
