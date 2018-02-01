@@ -145,18 +145,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                 // quickly becomes too big. There isn't a way of encoding this check in r3s_n, so
                 // we check instead for its result: if the last N ('PARSE_AT_LEAST' in this
                 // library) repairs are shifts, then we've found a success node.
-                if n.repairs.len() > PARSE_AT_LEAST {
-                    let mut all_shfts = true;
-                    for x in n.repairs.vals().take(PARSE_AT_LEAST) {
-                        if let Repair::Shift = *x {
-                            continue;
-                        }
-                        all_shfts = false;
-                        break;
-                    }
-                    if all_shfts {
-                        return true;
-                    }
+                if ends_with_parse_at_least_shifts(&n.repairs) {
+                    return true;
                 }
 
                 let la_tidx = parser.next_tidx(n.la_idx);
@@ -484,18 +474,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         // possible that the PARSE_AT_LEAST+1 symbol is something which has a distance > 0 (or,
         // worse, no route!), which would then confuse the astar function, since a success node
         // would have a distance > 0.]
-        if repairs.len() >= PARSE_AT_LEAST {
-            let mut all_shfts = true;
-            for x in repairs.vals().take(PARSE_AT_LEAST - 1) {
-                if let Repair::Shift = *x {
-                    continue;
-                }
-                all_shfts = false;
-                break;
-            }
-            if all_shfts {
-                return Some(0);
-            }
+        if ends_with_parse_at_least_shifts(repairs) {
+            return Some(0);
         }
 
         // Now we deal with the "main" case: dealing with distances in the face of possible
@@ -535,7 +515,21 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
             Some(ld)
         }
     }
+}
 
+/// Do `repairs` end with enough Shift repairs to be considered a success node?
+fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
+    if repairs.len() > PARSE_AT_LEAST {
+        for x in repairs.vals().take(PARSE_AT_LEAST) {
+            if let Repair::Shift = *x {
+                continue;
+            }
+            return false;
+        }
+        true
+    } else {
+       false
+    }
 }
 
 pub(crate) struct Dist {
