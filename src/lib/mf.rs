@@ -200,6 +200,24 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
                 let n_repairs = n.repairs.child(Repair::InsertTerm(term_idx));
                 if let Some(d) = self.dyn_dist(&n_repairs, sym_st_idx, n.la_idx) {
+                    if let Some(&Repair::Shift) = n.repairs.val() {
+                        debug_assert!(n.la_idx > 0);
+                        // If we're about to insert term T and the next terminal in the user's
+                        // input is T, we could potentially end up with two similar repair
+                        // sequences:
+                        //   Insert T, Shift
+                        //   Shift, Insert T
+                        // From a user's perspective, both of those are equivalent. From our point
+                        // of view, the duplication is inefficient. We prefer the former sequence
+                        // because we want to find PARSE_AT_LEAST consecutive shifts. At this
+                        // point, we see if we're about to Insert T after a Shift of T and, if so,
+                        // avoid doing so.
+                        let prev_tidx = self.parser.next_tidx(n.la_idx - 1);
+                        if prev_tidx == term_idx {
+                            continue;
+                        }
+                    }
+
                     assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(term_idx) as u32);
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
@@ -994,9 +1012,7 @@ E : 'N'
                           &vec!["Insert \"CLOSE_BRACKET\""]);
     }
 
-
-    #[test]
-    fn kimyi_example() {
+    fn kimyi_lex_grm() -> (&'static str, &'static str) {
         // The example from the KimYi paper, with a bit of alpha-renaming to make it clearer. The
         // paper uses "A" as a nonterminal name and "a" as a terminal name, which are then easily
         // confused. Here we use "E" as the nonterminal name, and keep "a" as the terminal name.
@@ -1013,9 +1029,16 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
  | 'B' ;
 ";
 
-        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "((");
+        (lexs, grms)
+    }
+
+    #[test]
+    fn kimyi_example() {
+        let (lexs, grms) = kimyi_lex_grm();
+        let us = "((";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (pt, errs) = pr.unwrap_err();
-        let pp = pt.unwrap().pp(&grm, "((");
+        let pp = pt.unwrap().pp(&grm, &us);
         if !vec![
 "E
  OPEN_BRACKET (
@@ -1159,5 +1182,17 @@ S: 'A';
         check_all_repairs(&grm,
                           errs[0].repairs(),
                           &vec!["Insert \"A\""]);
+    }
+
+    #[test]
+    fn dont_shift_and_insert_the_same_terminal() {
+        let (lexs, grms) = kimyi_lex_grm();
+        let us = "(()";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"A\", Insert \"CLOSE_BRACKET\"",
+                                "Insert \"B\", Insert \"CLOSE_BRACKET\""]);
     }
 }
