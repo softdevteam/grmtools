@@ -33,8 +33,7 @@
 use std::collections::HashSet;
 use std::collections::hash_map::HashMap;
 
-extern crate bit_vec;
-use self::bit_vec::BitVec;
+use vob::Vob;
 
 use StIdx;
 use firsts::Firsts;
@@ -103,13 +102,13 @@ impl Itemset {
         for (i, i_key) in keys.iter().enumerate().take(len - 1) {
             for j_key in keys.iter().take(len).skip(i + 1) {
                 // Condition 1 in the Pager paper
-                if !(bitvec_intersect(&self.items[*i_key], &other.items[*j_key])
-                    || bitvec_intersect(&self.items[*j_key], &other.items[*i_key])) {
+                if !(vob_intersect(&self.items[*i_key], &other.items[*j_key])
+                    || vob_intersect(&self.items[*j_key], &other.items[*i_key])) {
                     continue;
                 }
                 // Conditions 2 and 3 in the Pager paper
-                if bitvec_intersect(&self.items[*i_key], &self.items[*j_key])
-                   || bitvec_intersect(&other.items[*i_key], &other.items[*j_key]) {
+                if vob_intersect(&self.items[*i_key], &self.items[*j_key])
+                   || vob_intersect(&other.items[*i_key], &other.items[*j_key]) {
                     continue;
                 }
                 return false;
@@ -124,7 +123,7 @@ impl Itemset {
     fn weakly_merge(&mut self, other: &Itemset) -> bool {
         let mut changed = false;
         for (&(prod_i, dot), ctx) in &mut self.items {
-            if ctx.union(&other.items[&(prod_i, dot)]) {
+            if ctx.or(&other.items[&(prod_i, dot)]) {
                 changed = true;
             }
         }
@@ -133,10 +132,10 @@ impl Itemset {
 }
 
 /// Returns true if two identically sized bitvecs intersect.
-fn bitvec_intersect(v1: &BitVec, v2: &BitVec) -> bool {
+fn vob_intersect(v1: &Vob, v2: &Vob) -> bool {
     // Iterating over integer sized blocks allows us to do this operation very quickly. Note that
-    // the BitVec implementation guarantees that the last block's unused bits will be zeroed out.
-    for (b1, b2) in v1.blocks().zip(v2.blocks()) {
+    // the Vob implementation guarantees that the last block's unused bits will be zeroed out.
+    for (b1, b2) in v1.iter_storage().zip(v2.iter_storage()) {
         if b1 & b2 != 0 { return true; }
     }
     false
@@ -156,7 +155,7 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
     let mut edges: Vec<HashMap<Symbol, StIdx>> = Vec::new();
 
     let mut state0 = Itemset::new(grm);
-    let mut ctx = BitVec::from_elem(grm.terms_len(), false);
+    let mut ctx = Vob::from_elem(grm.terms_len(), false);
     ctx.set(usize::from(grm.eof_term_idx()), true);
     state0.add(grm.start_prod(), SIdx::from(0), &ctx);
     closed_states.push(None);
@@ -165,8 +164,8 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
 
     // We maintain two lists of which nonterms and terms we've seen; when processing a given
     // state there's no point processing a nonterm or term more than once.
-    let mut seen_nonterms = BitVec::from_elem(grm.nonterms_len(), false);
-    let mut seen_terms = BitVec::from_elem(grm.terms_len(), false);
+    let mut seen_nonterms = Vob::from_elem(grm.nonterms_len(), false);
+    let mut seen_terms = Vob::from_elem(grm.terms_len(), false);
     // new_states is used to separate out iterating over states vs. mutating it
     let mut new_states = Vec::new();
     // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
@@ -195,8 +194,8 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
         {
             closed_states[state_i] = Some(core_states[state_i].close(grm, &firsts));
             let cl_state = &closed_states[state_i].as_ref().unwrap();
-            seen_nonterms.clear();
-            seen_terms.clear();
+            seen_nonterms.set_all(false);
+            seen_terms.set_all(false);
             for &(prod_i, dot) in cl_state.items.keys() {
                 let prod = grm.prod(prod_i);
                 if dot == prod.len().into() { continue; }
@@ -362,8 +361,7 @@ fn gc(mut states: Vec<(Itemset, Itemset)>, mut edges: Vec<HashMap<Symbol, StIdx>
 
 #[cfg(test)]
 mod test {
-    extern crate bit_vec;
-    use self::bit_vec::BitVec;
+    use vob::Vob;
 
     use cfgrammar::Symbol;
     use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
@@ -371,31 +369,31 @@ mod test {
     use stategraph::state_exists;
 
     use StIdx;
-    use super::bitvec_intersect;
+    use super::vob_intersect;
 
     #[test]
-    fn test_bitvec_intersect() {
-        let mut b1 = BitVec::from_elem(8, false);
-        let mut b2 = BitVec::from_elem(8, false);
-        assert!(!bitvec_intersect(&b1, &b2));
+    fn test_vob_intersect() {
+        let mut b1 = Vob::from_elem(8, false);
+        let mut b2 = Vob::from_elem(8, false);
+        assert!(!vob_intersect(&b1, &b2));
         // Check that partial blocks (i.e. when only part of a word is used in the bitvec for
         // storage) maintain the expected guarantees.
         b1.push(false);
         b2.push(false);
-        assert!(!bitvec_intersect(&b1, &b2));
+        assert!(!vob_intersect(&b1, &b2));
         b1.push(true);
         b2.push(true);
-        assert!(bitvec_intersect(&b1, &b2));
+        assert!(vob_intersect(&b1, &b2));
 
-        b1 = BitVec::from_elem(64, false);
-        b2 = BitVec::from_elem(64, false);
+        b1 = Vob::from_elem(64, false);
+        b2 = Vob::from_elem(64, false);
         b1.push(true);
         b2.push(true);
         for _ in 0..63 {
             b1.push(false);
             b2.push(false);
         }
-        assert!(bitvec_intersect(&b1, &b2));
+        assert!(vob_intersect(&b1, &b2));
     }
 
     // GrammarAST from 'LR(k) Analyse fuer Pragmatiker'

@@ -8,9 +8,9 @@ name = "lrtable"
 path = "src/lib/mod.rs"
 
 [dependencies]
-bit-vec = "0.4.4"
 getopts = "0.2.15"
 fnv = "1.0.5"
 macro-attr = "0.2.0"
 newtype_derive = "0.1.6"
 cfgrammar = { git = "https://github.com/softdevteam/cfgrammar" }
+vob = "0.1.0"
