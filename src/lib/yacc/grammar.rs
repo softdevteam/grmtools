@@ -60,9 +60,8 @@ pub enum AssocKind {
     Nonassoc
 }
 
-/// Representation of a `YaccGrammar`. This struct makes one important guarantee: all of its
-/// terminals will be consecutively, monotonically numbered from `0 .. terms_len()`. In other words,
-/// if this struct has 3 terminals, they are guaranteed to have `TIDx`s of 0, 1, and 2.
+/// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
+/// guarantees this struct makes about nonterminals, terminals, productions, and symbols.
 pub struct YaccGrammar {
     /// How many nonterminals does this grammar have?
     nonterms_len: u32,
@@ -96,12 +95,15 @@ pub struct YaccGrammar {
     implicit_nonterm: Option<NTIdx>
 }
 
+// Internally, we assume that a grammar's start rule has a single production. Since we manually
+// create the start rule ourselves (without relying on user input), this is a safe assumption.
+
 impl YaccGrammar {
     /// Translate a `GrammarAST` into a `YaccGrammar`. This function is akin to the part a traditional
     /// compiler that takes in an AST and converts it into a binary.
     ///
     /// As we're compiling the `GrammarAST` into a `Grammar` we add a new start rule (which we'll
-    /// refer to as "^", though the actual name is a fresh name that is guaranteed to be unique)
+    /// refer to as `^`, though the actual name is a fresh name that is guaranteed to be unique)
     /// that references the user defined start rule.
     pub fn new(yacc_kind: YaccKind, ast: &ast::GrammarAST) -> YaccGrammar {
         let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);

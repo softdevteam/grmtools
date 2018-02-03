@@ -30,6 +30,40 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+//! A library for manipulating Context Free Grammars (CFG). At the moment it only really supports
+//! Yacc-style grammars (albeit several variants of Yacc grammars), but the long-term aim is to
+//! provide an API that, when possible, is agnostic about the type of grammar being manipulated.
+//!
+//! A note on the terminology we use, since there's no universal standard (and EBNF, which is
+//! perhaps the closest we've got, uses terminology that now seems partially anachronistic):
+//!
+//!   * A rule is a mapping from a nonterminal name to 1 or more productions (the latter of which
+//!     is often called 'alternatives').
+//!   * A symbol is either a nonterminal or a terminal.
+//!   * A production is a (possibly empty) ordered sequence of symbols.
+//!
+//! Every nonterminal has a corresponding rule (and thus the two concepts are interchangeable);
+//! however, terminals are not required to appear in any production (such terminals can be used to
+//! catch error conditions).
+//!
+//! We make the following guarantees about grammars:
+//!
+//!   * The grammar has a single start rule accessed by `start_rule_idx`.
+//!   * The non-terminals are numbered from `0` to `nonterms_len() - 1` (inclusive).
+//!   * The productions are numbered from `0` to `prods_len() - 1` (inclusive).
+//!   * The terminals are numbered from `0` to `terms_len() - 1` (inclusive).
+//!
+//! This means that it is safe to write code such as:
+//!
+//! ```text
+//! for i in 0..grm.nonterms_len() as usize {
+//!   println!("{}", grm.nonterm_name(NTIdx::from(i)));
+//! }
+//! ```
+//!
+//! For most current uses, the main function to investigate is [`yacc_grm`](yacc/fn.yacc_grm.html)
+//! which takes as input a Yacc grammar.
+
 #![feature(try_from)]
 
 #[macro_use] extern crate lazy_static;
@@ -38,20 +72,9 @@ extern crate linked_hash_map;
 mod u32struct;
 pub mod yacc;
 
-// A note on the terminology we use, since there's no universal standard (and EBNF, which is
-// perhaps the closest we've got, uses terminology that now seems partially anachronistic):
-//   A rule is a mapping from a nonterminal name to 1 or more productions (the latter of which is
-//     often called 'alternatives').
-//   A symbol is either a nonterminal or a terminal.
-//   A production is a (possibly empty) ordered sequence of symbols.
-//
-// Every nonterminal has a corresponding rule; however, terminals are not required to appear in any
-// production (such terminals can be used to catch error conditions).
-//
-// Internally, we assume that a grammar's start rule has a single production. Since we manually
-// create the start rule ourselves (without relying on user input), this is a safe assumption.
-
-pub use u32struct::{NTIdx, PIdx, SIdx, TIdx};
+/// A type specifically for nonterminal indices.
+pub use u32struct::NTIdx;
+pub use u32struct::{PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
