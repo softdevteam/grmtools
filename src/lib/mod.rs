@@ -32,8 +32,6 @@
 
 #![feature(conservative_impl_trait)]
 
-#[macro_use] extern crate macro_attr;
-#[macro_use] extern crate newtype_derive;
 extern crate cfgrammar;
 extern crate fnv;
 extern crate vob;
@@ -48,10 +46,44 @@ use cfgrammar::yacc::YaccGrammar;
 pub use stategraph::StateGraph;
 pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
-macro_attr! {
-    /// A type specifically for state indexes.
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq)]
-    pub struct StIdx(usize);
+/// StIdx is a wrapper for a 32-bit state index.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct StIdx {
+    // The biggest grammars I'm currently aware of have just over 1000 states, so in practise it
+    // looks like a u16 is always big enough to store state indexes. So, for as long as we can get
+    // away with it, we only store u16. Nevertheless, we tell the world we only deal in u32 so that
+    // we can change our storage to u32 later transparently.
+    v: u16
+}
+
+impl From<u32> for StIdx {
+    fn from(v: u32) -> Self {
+        if v > u16::max_value() as u32 {
+            panic!("Overflow");
+        }
+        StIdx{v: v as u16}
+    }
+}
+
+impl From<usize> for StIdx {
+    fn from(v: usize) -> Self {
+        if v > u16::max_value() as usize {
+            panic!("Overflow");
+        }
+        StIdx{v: v as u16}
+    }
+}
+
+impl From<StIdx> for usize {
+    fn from(st: StIdx) -> Self {
+        st.v as usize
+    }
+}
+
+impl From<StIdx> for u32 {
+    fn from(st: StIdx) -> Self {
+        st.v as u32
+    }
 }
 
 pub enum Minimiser {

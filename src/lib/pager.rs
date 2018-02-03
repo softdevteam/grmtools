@@ -270,11 +270,11 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
                 None    => {
                     match sym {
                         Symbol::Nonterm(nonterm_i) =>
-                            cnd_nonterm_weaklies[usize::from(nonterm_i)].push(StIdx(core_states.len())),
+                            cnd_nonterm_weaklies[usize::from(nonterm_i)].push(core_states.len().into()),
                         Symbol::Term(term_i) =>
-                            cnd_term_weaklies[usize::from(term_i)].push(StIdx(core_states.len())),
+                            cnd_term_weaklies[usize::from(term_i)].push(core_states.len().into())
                     }
-                    edges[state_i].insert(sym, StIdx(core_states.len()));
+                    edges[state_i].insert(sym, core_states.len().into());
                     edges.push(HashMap::new());
                     closed_states.push(None);
                     core_states.push(nstate);
@@ -304,7 +304,7 @@ fn gc(mut states: Vec<(Itemset, Itemset)>, mut edges: Vec<HashMap<Symbol, StIdx>
     // First of all, do a simple pass over all states. All state indexes reachable from the
     // start state will be inserted into the 'seen' set.
     let mut todo = HashSet::new();
-    todo.insert(StIdx(0));
+    todo.insert(StIdx::from(0 as u32));
     let mut seen = HashSet::new();
     while !todo.is_empty() {
         // XXX This is the clumsy way we're forced to do what we'd prefer to be:
@@ -337,8 +337,10 @@ fn gc(mut states: Vec<(Itemset, Itemset)>, mut edges: Vec<HashMap<Symbol, StIdx>
     let mut gc_states = Vec::with_capacity(seen.len());
     let mut offsets   = Vec::with_capacity(states.len());
     let mut offset    = 0;
-    for (state_i, zstate) in states.drain(..).enumerate().map(|(x, y)| (StIdx(x), y)) {
-        offsets.push(StIdx(usize::from(state_i) - offset));
+    for (state_i, zstate) in states.drain(..)
+                                   .enumerate()
+                                   .map(|(x, y)| (StIdx::from(x), y)) {
+        offsets.push(StIdx::from(usize::from(state_i) - offset));
         if !seen.contains(&state_i) {
             offset += 1;
             continue;
@@ -349,7 +351,9 @@ fn gc(mut states: Vec<(Itemset, Itemset)>, mut edges: Vec<HashMap<Symbol, StIdx>
     // At this point the offsets list will be [0, 1, 1]. We now create new edges where each
     // offset is corrected by looking it up in the offsets list.
     let mut gc_edges = Vec::with_capacity(seen.len());
-    for (st_edge_i, st_edges) in edges.drain(..).enumerate().map(|(x, y)| (StIdx(x), y)) {
+    for (st_edge_i, st_edges) in edges.drain(..)
+                                      .enumerate()
+                                      .map(|(x, y)| (StIdx::from(x), y)) {
         if !seen.contains(&st_edge_i) {
             continue;
         }
@@ -421,12 +425,12 @@ mod test {
         assert_eq!(sg.all_states_len(), 10);
         assert_eq!(sg.all_edges_len(), 10);
 
-        assert_eq!(sg.closed_state(StIdx::from(0)).items.len(), 3);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "^", 0, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "S", 0, 0, vec!["$", "b"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "S", 1, 0, vec!["$", "b"]);
+        assert_eq!(sg.closed_state(StIdx::from(0 as u32)).items.len(), 3);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "^", 0, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "S", 0, 0, vec!["$", "b"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "S", 1, 0, vec!["$", "b"]);
 
-        let s1 = sg.edge(StIdx::from(0), Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
+        let s1 = sg.edge(StIdx::from(0 as u32), Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s1).items.len(), 2);
         state_exists(&grm, &sg.closed_state(s1), "^", 0, 1, vec!["$"]);
         state_exists(&grm, &sg.closed_state(s1), "S", 0, 1, vec!["$", "b"]);
@@ -435,7 +439,7 @@ mod test {
         assert_eq!(sg.closed_state(s2).items.len(), 1);
         state_exists(&grm, &sg.closed_state(s2), "S", 0, 2, vec!["$", "b"]);
 
-        let s3 = sg.edge(StIdx::from(0), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s3 = sg.edge(StIdx::from(0 as u32), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s3).items.len(), 4);
         state_exists(&grm, &sg.closed_state(s3), "S", 1, 1, vec!["$", "b", "c"]);
         state_exists(&grm, &sg.closed_state(s3), "A", 0, 0, vec!["a"]);
@@ -497,16 +501,16 @@ mod test {
         assert_eq!(sg.all_edges_len(), 27);
 
         // State 0
-        assert_eq!(sg.closed_state(StIdx::from(0)).items.len(), 7);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "^", 0, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "X", 0, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "X", 1, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "X", 2, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "X", 3, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "X", 4, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0)), "X", 5, 0, vec!["$"]);
+        assert_eq!(sg.closed_state(StIdx::from(0 as u32)).items.len(), 7);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "^", 0, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 0, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 1, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 2, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 3, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 4, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 5, 0, vec!["$"]);
 
-        let s1 = sg.edge(StIdx::from(0), Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        let s1 = sg.edge(StIdx::from(0 as u32), Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s1).items.len(), 7);
         state_exists(&grm, &sg.closed_state(s1), "X", 0, 1, vec!["a", "d", "e", "$"]);
         state_exists(&grm, &sg.closed_state(s1), "X", 1, 1, vec!["a", "d", "e", "$"]);
@@ -516,7 +520,7 @@ mod test {
         state_exists(&grm, &sg.closed_state(s1), "Z", 0, 0, vec!["c"]);
         state_exists(&grm, &sg.closed_state(s1), "T", 0, 0, vec!["a", "d", "e", "$"]);
 
-        let s7 = sg.edge(StIdx::from(0), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s7 = sg.edge(StIdx::from(0 as u32), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s7).items.len(), 7);
         state_exists(&grm, &sg.closed_state(s7), "X", 3, 1, vec!["a", "d", "e", "$"]);
         state_exists(&grm, &sg.closed_state(s7), "X", 4, 1, vec!["a", "d", "e", "$"]);
@@ -577,7 +581,7 @@ mod test {
         // Ommitted successors from the graph in Fig.3
 
         // X-successor of S0
-        let s0x = sg.edge(StIdx::from(0), Symbol::Nonterm(grm.nonterm_idx("X").unwrap())).unwrap();
+        let s0x = sg.edge(StIdx::from(0 as u32), Symbol::Nonterm(grm.nonterm_idx("X").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s0x), "^", 0, 1, vec!["$"]);
 
         // Y-successor of S1 (and it's d-successor)
@@ -645,7 +649,7 @@ mod test {
         let sg = pager_stategraph(&grm);
 
         // State 0
-        assert_eq!(sg.core_state(StIdx::from(0)).items.len(), 1);
-        state_exists(&grm, &sg.core_state(StIdx::from(0)), "^", 0, 0, vec!["$"]);
+        assert_eq!(sg.core_state(StIdx::from(0 as u32)).items.len(), 1);
+        state_exists(&grm, &sg.core_state(StIdx::from(0 as u32)), "^", 0, 0, vec!["$"]);
     }
 }
