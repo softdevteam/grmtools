@@ -31,10 +31,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #[macro_use] extern crate lazy_static;
-#[macro_use] extern crate macro_attr;
-#[macro_use] extern crate newtype_derive;
 extern crate linked_hash_map;
 
+mod u32struct;
 pub mod yacc;
 
 // A note on the terminology we use, since there's no universal standard (and EBNF, which is
@@ -50,27 +49,7 @@ pub mod yacc;
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
-macro_attr! {
-    /// A type specifically for nonterminal indices.
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq)]
-    pub struct NTIdx(usize);
-}
-macro_attr! {
-    /// A type specifically for production indices (e.g. a rule "E::=A|B" would
-    /// have two productions for the single rule E).
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq, PartialOrd)]
-    pub struct PIdx(usize);
-}
-macro_attr! {
-    /// A type specifically for symbol indices (within a production).
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq, PartialOrd)]
-    pub struct SIdx(usize);
-}
-macro_attr! {
-    /// A type specifically for token indices.
-    #[derive(Clone, Copy, Debug, Eq, Hash, NewtypeFrom!, PartialEq)]
-    pub struct TIdx(usize);
-}
+pub use u32struct::{NTIdx, PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {

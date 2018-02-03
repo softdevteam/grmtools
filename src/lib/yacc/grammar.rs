@@ -151,7 +151,7 @@ impl YaccGrammar {
         let mut nonterm_map = HashMap::<String, NTIdx>::new();
         for (i, v) in nonterm_names.iter().enumerate() {
             rules_prods.push(Vec::new());
-            nonterm_map.insert(v.clone(), NTIdx(i));
+            nonterm_map.insert(v.clone(), NTIdx::from(i));
         }
 
         let mut term_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
@@ -160,13 +160,13 @@ impl YaccGrammar {
             term_names.push(Some(k.clone()));
             term_precs.push(ast.precs.get(k).cloned());
         }
-        let eof_term_idx = TIdx(term_names.len());
+        let eof_term_idx = TIdx::from(term_names.len());
         term_names.push(None);
         term_precs.push(None);
         let mut term_map = HashMap::<String, TIdx>::new();
         for (i, v) in term_names.iter().enumerate() {
             if let Some(n) = v.as_ref() {
-               term_map.insert(n.clone(), TIdx(i));
+               term_map.insert(n.clone(), TIdx::from(i));
             }
         }
 
@@ -300,7 +300,7 @@ impl YaccGrammar {
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
     pub fn iter_nonterm_idxs(&self) -> Box<Iterator<Item=NTIdx>> {
-        Box::new((0..self.nonterms_len).map(NTIdx))
+        Box::new((0..self.nonterms_len).map(NTIdx::from))
     }
 
     /// Get the sequence of symbols for production `i`. Panics if `i` doesn't exist.
@@ -337,7 +337,7 @@ impl YaccGrammar {
         let mut m = HashMap::with_capacity(self.terms_len - 1);
         for i in 0..self.terms_len {
             if let Some(n) = self.term_names[i].as_ref() {
-                m.insert(&**n, TIdx(i));
+                m.insert(&**n, TIdx::from(i));
             }
         }
         m
@@ -358,14 +358,14 @@ impl YaccGrammar {
     pub fn nonterm_idx(&self, n: &str) -> Option<NTIdx> {
         self.nonterm_names.iter()
                           .position(|x| x == n)
-                          .map(|x| NTIdx(x))
+                          .map(|x| NTIdx::from(x))
     }
 
     /// Return the index of the terminal named `n` or `None` if it doesn't exist.
     pub fn term_idx(&self, n: &str) -> Option<TIdx> {
         self.term_names.iter()
                        .position(|x| x.as_ref().map_or(false, |x| x == n))
-                       .map(|x| TIdx(x))
+                       .map(|x| TIdx::from(x))
     }
 
     /// Is there a path from the `from` non-term to the `to` non-term? Note that recursive rules
@@ -841,21 +841,24 @@ mod test {
         let grm = yacc_grm(YaccKind::Original,
                            &"%start R %token T %% R: 'T';".to_string()).unwrap();
 
-        assert_eq!(grm.start_prod, PIdx(0));
+        assert_eq!(grm.start_prod, PIdx::from(0 as u32));
         assert_eq!(grm.implicit_nonterm(), None);
         grm.nonterm_idx("^").unwrap();
         grm.nonterm_idx("R").unwrap();
         grm.term_idx("T").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)], vec![PIdx::from(1 as u32)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
-        assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32), NTIdx::from(1 as u32)]);
 
-        assert_eq!(grm.terms_map(), [("T", TIdx(0))].iter().cloned().collect::<HashMap<&str, TIdx>>());
-        assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(), vec![NTIdx(0), NTIdx(1)]);
+        assert_eq!(grm.terms_map(), [("T", TIdx::from(0 as u32))].iter()
+                                                                 .cloned()
+                                                                 .collect::<HashMap<&str, TIdx>>());
+        assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(),
+                   vec![NTIdx::from(0 as u32), NTIdx::from(1 as u32)]);
     }
 
     #[test]
@@ -869,7 +872,9 @@ mod test {
         grm.term_idx("T").unwrap();
         assert!(grm.term_name(grm.eof_term_idx()).is_none());
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)],
+                                         vec![PIdx::from(1 as u32)],
+                                         vec![PIdx::from(2 as u32)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -891,8 +896,12 @@ mod test {
         grm.term_idx("T1").unwrap();
         grm.term_idx("T2").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
-        assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1), NTIdx(2)]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)],
+                                         vec![PIdx::from(1 as u32)],
+                                         vec![PIdx::from(2 as u32)]]);
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32),
+                                         NTIdx::from(1 as u32),
+                                         NTIdx::from(2 as u32)]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -918,7 +927,12 @@ mod test {
              | 'z';
           ".to_string()).unwrap();
 
-        assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1), NTIdx(1), NTIdx(2), NTIdx(3), NTIdx(3)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32),
+                                         NTIdx::from(1 as u32),
+                                         NTIdx::from(1 as u32),
+                                         NTIdx::from(2 as u32),
+                                         NTIdx::from(3 as u32),
+                                         NTIdx::from(3 as u32)]);
     }
 
     #[test]
