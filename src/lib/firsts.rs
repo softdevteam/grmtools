@@ -61,13 +61,13 @@ pub struct Firsts {
 impl Firsts {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar) -> Firsts {
-        let mut prod_firsts = Vec::with_capacity(grm.nonterms_len());
+        let mut prod_firsts = Vec::with_capacity(grm.nonterms_len() as usize);
         for _ in 0..grm.nonterms_len() {
-            prod_firsts.push(Vob::from_elem(grm.terms_len(), false));
+            prod_firsts.push(Vob::from_elem(grm.terms_len() as usize, false));
         }
         let mut firsts = Firsts {
             prod_firsts  : prod_firsts,
-            prod_epsilons: Vob::from_elem(grm.nonterms_len(), false),
+            prod_epsilons: Vob::from_elem(grm.nonterms_len() as usize, false),
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we

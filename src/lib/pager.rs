@@ -155,23 +155,23 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
     let mut edges: Vec<HashMap<Symbol, StIdx>> = Vec::new();
 
     let mut state0 = Itemset::new(grm);
-    let mut ctx = Vob::from_elem(grm.terms_len(), false);
+    let mut ctx = Vob::from_elem(grm.terms_len() as usize, false);
     ctx.set(usize::from(grm.eof_term_idx()), true);
-    state0.add(grm.start_prod(), SIdx::from(0), &ctx);
+    state0.add(grm.start_prod(), SIdx::from(0 as u32), &ctx);
     closed_states.push(None);
     core_states.push(state0);
     edges.push(HashMap::new());
 
     // We maintain two lists of which nonterms and terms we've seen; when processing a given
     // state there's no point processing a nonterm or term more than once.
-    let mut seen_nonterms = Vob::from_elem(grm.nonterms_len(), false);
-    let mut seen_terms = Vob::from_elem(grm.terms_len(), false);
+    let mut seen_nonterms = Vob::from_elem(grm.nonterms_len() as usize, false);
+    let mut seen_terms = Vob::from_elem(grm.terms_len() as usize, false);
     // new_states is used to separate out iterating over states vs. mutating it
     let mut new_states = Vec::new();
     // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
     // matches for a given symbol.
-    let mut cnd_nonterm_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.nonterms_len());
-    let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.terms_len());
+    let mut cnd_nonterm_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.nonterms_len() as usize);
+    let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(grm.terms_len() as usize);
     for _ in 0..grm.terms_len() + 1 { cnd_term_weaklies.push(Vec::new()); }
     for _ in 0..grm.nonterms_len() { cnd_nonterm_weaklies.push(Vec::new()); }
 
