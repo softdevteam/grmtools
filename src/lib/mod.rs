@@ -30,6 +30,8 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#![feature(try_from)]
+
 #[macro_use] extern crate lazy_static;
 extern crate linked_hash_map;
 
@@ -59,11 +61,11 @@ pub enum Symbol {
 
 pub trait Grammar {
     /// How many terminals does this grammar have?
-    fn terms_len(&self) -> usize;
+    fn terms_len(&self) -> u32;
     /// How many productions does this grammar have?
-    fn prods_len(&self) -> usize;
+    fn prods_len(&self) -> u32;
     /// How many nonterminals does this grammar have?
-    fn nonterms_len(&self) -> usize;
+    fn nonterms_len(&self) -> u32;
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> NTIdx;
 }

@@ -32,6 +32,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fmt;
 
 use {Grammar, NTIdx, PIdx, Symbol, TIdx};
@@ -64,7 +65,7 @@ pub enum AssocKind {
 /// if this struct has 3 terminals, they are guaranteed to have `TIDx`s of 0, 1, and 2.
 pub struct YaccGrammar {
     /// How many nonterminals does this grammar have?
-    nonterms_len: usize,
+    nonterms_len: u32,
     /// A mapping from `NTIdx` -> `String`.
     nonterm_names: Vec<String>,
     /// A mapping from `TIdx` -> `Option<String>`. Every user-specified terminal will have a name,
@@ -73,11 +74,11 @@ pub struct YaccGrammar {
     /// A mapping from `TIdx` -> `Option<Precedence>`
     term_precs: Vec<Option<Precedence>>,
     /// How many terminals does this grammar have?
-    terms_len: usize,
+    terms_len: u32,
     /// The offset of the EOF terminal.
     eof_term_idx: TIdx,
     /// How many productions does this grammar have?
-    prods_len: usize,
+    prods_len: u32,
     /// Which production is the sole production of the start rule?
     start_prod: PIdx,
     /// A list of all productions.
@@ -267,13 +268,13 @@ impl YaccGrammar {
         }
 
         YaccGrammar{
-            nonterms_len:     nonterm_names.len(),
+            nonterms_len:     u32::try_from(nonterm_names.len()).unwrap(),
             nonterm_names,
-            terms_len:        term_names.len(),
+            terms_len:        u32::try_from(term_names.len()).unwrap(),
             eof_term_idx:     eof_term_idx,
             term_names,
             term_precs,
-            prods_len:        prods.len(),
+            prods_len:        u32::try_from(prods.len()).unwrap(),
             start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
             rules_prods,
             prods_rules,
@@ -334,8 +335,8 @@ impl YaccGrammar {
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
     /// inputs from this grammar.
     pub fn terms_map(&self) -> HashMap<&str, TIdx> {
-        let mut m = HashMap::with_capacity(self.terms_len - 1);
-        for i in 0..self.terms_len {
+        let mut m = HashMap::with_capacity(self.terms_len as usize - 1);
+        for i in 0..self.terms_len as usize {
             if let Some(n) = self.term_names[i].as_ref() {
                 m.insert(&**n, TIdx::from(i));
             }
@@ -372,13 +373,13 @@ impl YaccGrammar {
     /// return `true` for a path from themselves to themselves.
     pub fn has_path(&self, from: NTIdx, to: NTIdx) -> bool {
         let mut seen = vec![];
-        seen.resize(self.nonterms_len(), false);
+        seen.resize(self.nonterms_len() as usize, false);
         let mut todo = vec![];
-        todo.resize(self.nonterms_len(), false);
+        todo.resize(self.nonterms_len() as usize, false);
         todo[usize::from(from)] = true;
         loop {
             let mut empty = true;
-            for i in 0..self.nonterms_len() {
+            for i in 0..self.nonterms_len() as usize {
                 if !todo[i] {
                     continue;
                 }
@@ -417,15 +418,15 @@ impl YaccGrammar {
 }
 
 impl Grammar for YaccGrammar {
-    fn prods_len(&self) -> usize {
+    fn prods_len(&self) -> u32 {
         self.prods_len
     }
 
-    fn terms_len(&self) -> usize {
+    fn terms_len(&self) -> u32 {
         self.terms_len
     }
 
-    fn nonterms_len(&self) -> usize {
+    fn nonterms_len(&self) -> u32 {
         self.nonterms_len
     }
 
@@ -466,7 +467,7 @@ impl<'a> SentenceGenerator<'a> {
     fn new<F>(grm: &YaccGrammar, term_cost: F) -> SentenceGenerator
         where F: Fn(TIdx) -> u8
     {
-        let mut term_costs = Vec::with_capacity(grm.terms_len());
+        let mut term_costs = Vec::with_capacity(grm.terms_len() as usize);
         for i in 0..grm.terms_len() {
             term_costs.push(term_cost(TIdx::from(i)));
         }
@@ -672,9 +673,9 @@ fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
     // eventually we will reach a point where we can determine it definitively.
 
     let mut costs = vec![];
-    costs.resize(grm.nonterms_len(), 0);
+    costs.resize(grm.nonterms_len() as usize, 0);
     let mut done = vec![];
-    done.resize(grm.nonterms_len(), false);
+    done.resize(grm.nonterms_len() as usize, false);
     loop {
         let mut all_done = true;
         for i in 0..done.len() {
@@ -731,12 +732,12 @@ fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
 fn nonterm_max_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
 {
     let mut done = vec![];
-    done.resize(grm.nonterms_len(), false);
+    done.resize(grm.nonterms_len() as usize, false);
     let mut costs = vec![];
-    costs.resize(grm.nonterms_len(), 0);
+    costs.resize(grm.nonterms_len() as usize, 0);
 
     // First mark all recursive non-terminals.
-    for i in 0..grm.nonterms_len() {
+    for i in 0..grm.nonterms_len() as usize {
         // Calling has_path so frequently is not exactly efficient...
         if grm.has_path(NTIdx::from(i), NTIdx::from(i)) {
             costs[i] = u32::max_value();
