@@ -61,11 +61,6 @@ impl StateGraph {
         Box::new(self.states.iter().map(|x| &x.1))
     }
 
-    /// How many closed items does this `StateGraph` contain?
-    pub fn all_closed_items_len(&self) -> usize {
-        self.states.iter().fold(0, |a, x| a + x.1.items.len())
-    }
-
     /// Return the itemset for core state `st_idx` or `None` if it doesn't exist.
     pub fn core_state(&self, st_idx: StIdx) -> &Itemset {
         &self.states[usize::from(st_idx)].0
@@ -76,15 +71,11 @@ impl StateGraph {
         Box::new(self.states.iter().map(|x| &x.0))
     }
 
-    /// How many core items does this `StateGraph` contain?
-    pub fn all_core_items_len(&self) -> usize {
-        self.states.iter().fold(0, |a, x| a + x.0.items.len())
-    }
-
     /// How many states does this `StateGraph` contain? NB: By definition the `StateGraph` contains
     /// the same number of core and closed states.
-    pub fn all_states_len(&self) -> usize {
-        self.states.len()
+    pub fn all_states_len(&self) -> u32 {
+        debug_assert!(self.states.len() <= u32::max_value() as usize);
+        self.states.len() as u32
     }
 
     /// Return the state pointed to by `sym` from `st_idx` or `None` otherwise.
@@ -105,7 +96,7 @@ impl StateGraph {
     }
 
     fn pp(&self, grm: &YaccGrammar, core_states: bool) -> String {
-        fn num_digits(i: usize) -> usize {
+        fn num_digits(i: u32) -> usize {
             // In an ideal world, we'd do ((i as f64).log10() as usize) + 1, but we then hit
             // floating point rounding errors (e.g. 1000.0.log10() == 2.999999999ish, not
             // 3). So we do the lazy thing, convert the number to a string and do things that way.
@@ -125,7 +116,7 @@ impl StateGraph {
                 o.push_str(&"\n");
             }
             {
-                let padding = num_digits(self.all_states_len()) - num_digits(st_idx);
+                let padding = num_digits(self.all_states_len()) - num_digits(st_idx as u32);
                 o.push_str(&format!("{}:{}", st_idx, " ".repeat(padding)));
             }
 
@@ -244,7 +235,7 @@ mod test {
           ").unwrap();
         let sg = pager_stategraph(&grm);
         assert_eq!(sg.all_states_len(), 7);
-        assert_eq!(sg.all_core_items_len(), 7);
+        assert_eq!(sg.states.iter().fold(0, |a, x| a + x.0.items.len()), 7);
         assert_eq!(sg.all_edges_len(), 9);
 
         // This follows the (not particularly logical) ordering of state numbers in the paper.
