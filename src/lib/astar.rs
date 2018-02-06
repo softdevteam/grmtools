@@ -33,10 +33,8 @@
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::iter::FromIterator;
 
 use num_traits::{CheckedAdd, Zero};
-use ordermap::OrderSet;
 
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
 ///
@@ -70,77 +68,63 @@ pub(crate) fn astar_all<N, C, FN, IN, FS>(start_node: N,
 
     // First phase: search for the first success node.
 
-    let mut scs_nodes = OrderSet::new(); // Store success nodes
+    let mut scs_nodes = Vec::new(); // Store success nodes
     let scs_cost: C;  // What is the cost of a success node?
-    let mut todo: Vec<(usize, OrderSet<(C, C, N)>)> = Vec::new();
-    todo.push((0, orderset![(Zero::zero(), Zero::zero(), start_node)]));
-    let mut next_todo = Vec::new(); // An intermediate list to help todo
+    let mut todo: Vec<Vec<(C, C, N)>> = vec![vec![(Zero::zero(), Zero::zero(), start_node)]];
     let mut i = 0; // How far through the todo list are we?
     loop {
-        next_todo.clear();
-        {
-            let j = todo[i].0;
-            if j == todo[i].1.len() {
-                // We'll never need the lower cost node information again, so clear the associated
-                // memory.
-                todo[i].1.clear();
-
-                i += 1;
-                if i == todo.len() {
-                    // No success node found and search exhausted.
-                    return Vec::new();
-                }
-                continue;
+        if todo[i].is_empty() {
+            // We'll never need the lower cost node information again, so clear the associated
+            // memory.
+            todo[i].clear();
+            i += 1;
+            if i == todo.len() {
+                // No success node found and search exhausted.
+                return Vec::new();
             }
-
-            let &(c, h, ref n) = todo[i].1.get_index(j).unwrap();
-            if success(&n) {
-                assert!(h == Zero::zero());
-                scs_cost = c;
-                break;
-            }
-
-            for (nbr_cost, nbr_hrstc, nbr) in neighbours(n) {
-                assert!(nbr_cost >= c && nbr_cost + nbr_hrstc >= c + h);
-                let off = usize::try_from(nbr_cost.checked_add(&nbr_hrstc).unwrap()).ok().unwrap();
-                next_todo.push((off, ((nbr_cost, nbr_hrstc, nbr.clone()))));
-            }
+            continue;
         }
 
-        for (off, tup) in next_todo.drain(..) {
+        let (c, h, n) = todo[i].pop().unwrap();
+        if success(&n) {
+            assert!(h == Zero::zero());
+            scs_nodes.push(n);
+            scs_cost = c;
+            break;
+        }
+
+        for (nbr_cost, nbr_hrstc, nbr) in neighbours(&n) {
+            assert!(nbr_cost >= c && nbr_cost + nbr_hrstc >= c + h);
+            let off = usize::try_from(nbr_cost.checked_add(&nbr_hrstc).unwrap()).ok().unwrap();
             for _ in todo.len()..off + 1 {
-                todo.push((0, OrderSet::new()));
+                todo.push(Vec::new());
             }
-            todo[off].1.insert(tup);
+            todo[off].push((nbr_cost, nbr_hrstc, nbr));
         }
-        todo[i].0 += 1;
     }
 
     // Second phase: find remaining success nodes.
 
     // Free up all memory except for the cost todo that contains the first success node.
-    let (mut j, mut scs_todo) = todo.drain(i..i + 1).nth(0).unwrap();
-    let mut next_todo = Vec::new();
-    while j < scs_todo.len() {
-        next_todo.clear();
-        {
-            let &(_, h, ref n) = scs_todo.get_index(j).unwrap();
-            if success(&n) {
-                assert!(h == Zero::zero());
-                scs_nodes.insert(n.clone());
-            }
-            for (nbr_cost, nbr_hrstc, nbr) in neighbours(n) {
-                assert!(nbr_cost + nbr_hrstc >= scs_cost);
-                // We only need to consider neighbouring nodes if they have the same cost as
-                // existing success nodes and an empty heuristic.
-                if nbr_cost + nbr_hrstc == scs_cost {
-                    next_todo.push((nbr_cost, nbr_hrstc, nbr));
-                }
+    let mut scs_todo = todo.drain(i..i + 1).nth(0).unwrap();
+    while !scs_todo.is_empty() {
+        let (_, h, n) = scs_todo.pop().unwrap();
+        if success(&n) {
+            assert!(h == Zero::zero());
+            scs_nodes.push(n);
+            // There's no point in searching the neighbours of success nodes: they can only
+            // contain extra (zero-cost, by definition) shifts, which are uninteresting.
+            continue;
+        }
+        for (nbr_cost, nbr_hrstc, nbr) in neighbours(&n) {
+            assert!(nbr_cost + nbr_hrstc >= scs_cost);
+            // We only need to consider neighbouring nodes if they have the same cost as
+            // existing success nodes and an empty heuristic.
+            if nbr_cost + nbr_hrstc == scs_cost {
+                scs_todo.push((nbr_cost, nbr_hrstc, nbr));
             }
         }
-        scs_todo.extend(next_todo.drain(..));
-        j += 1;
     }
 
-    Vec::from_iter(scs_nodes)
+    scs_nodes
 }

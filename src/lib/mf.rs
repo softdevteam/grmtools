@@ -145,18 +145,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                 // quickly becomes too big. There isn't a way of encoding this check in r3s_n, so
                 // we check instead for its result: if the last N ('PARSE_AT_LEAST' in this
                 // library) repairs are shifts, then we've found a success node.
-                if n.repairs.len() > PARSE_AT_LEAST {
-                    let mut all_shfts = true;
-                    for x in n.repairs.vals().take(PARSE_AT_LEAST) {
-                        if let Repair::Shift = *x {
-                            continue;
-                        }
-                        all_shfts = false;
-                        break;
-                    }
-                    if all_shfts {
-                        return true;
-                    }
+                if ends_with_parse_at_least_shifts(&n.repairs) {
+                    return true;
                 }
 
                 let la_tidx = parser.next_tidx(n.la_idx);
@@ -210,6 +200,24 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
                 let n_repairs = n.repairs.child(Repair::InsertTerm(term_idx));
                 if let Some(d) = self.dyn_dist(&n_repairs, sym_st_idx, n.la_idx) {
+                    if let Some(&Repair::Shift) = n.repairs.val() {
+                        debug_assert!(n.la_idx > 0);
+                        // If we're about to insert term T and the next terminal in the user's
+                        // input is T, we could potentially end up with two similar repair
+                        // sequences:
+                        //   Insert T, Shift
+                        //   Shift, Insert T
+                        // From a user's perspective, both of those are equivalent. From our point
+                        // of view, the duplication is inefficient. We prefer the former sequence
+                        // because we want to find PARSE_AT_LEAST consecutive shifts. At this
+                        // point, we see if we're about to Insert T after a Shift of T and, if so,
+                        // avoid doing so.
+                        let prev_tidx = self.parser.next_tidx(n.la_idx - 1);
+                        if prev_tidx == term_idx {
+                            continue;
+                        }
+                    }
+
                     assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(term_idx) as u32);
                     let nn = PathFNode{
                         pstack: n.pstack.child(sym_st_idx),
@@ -232,7 +240,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         // to do is reduce states where the dot is at the end.
 
         let top_pstack = *n.pstack.val().unwrap();
-        for &(p_idx, sym_off) in self.parser.sgraph.core_state(top_pstack).items.keys() {
+        for &(p_idx, sym_off) in self.parser.sgraph.closed_state(top_pstack).items.keys() {
             if usize::from(sym_off) != self.parser.grm.prod(p_idx).len() {
                 continue;
             }
@@ -284,16 +292,15 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
              n: &PathFNode,
              nbrs: &mut Vec<PathFNode>)
     {
-        let (new_la_idx, n_pstack) = self.parser.lr_cactus(None,
-                                                           n.la_idx,
-                                                           n.la_idx + 1,
-                                                           n.pstack.clone(),
-                                                           &mut None);
-        if new_la_idx == n.la_idx + 1 {
+        let la_tidx = self.parser.next_tidx(n.la_idx);
+        let top_pstack = *n.pstack.val().unwrap();
+        if let Some(Action::Shift(state_id)) = self.parser.stable.action(top_pstack,
+                                                                         Symbol::Term(la_tidx)) {
             let n_repairs = n.repairs.child(Repair::Shift);
-            if let Some(d) = self.dyn_dist(&n_repairs, *n_pstack.val().unwrap(), new_la_idx) {
+            let new_la_idx = n.la_idx + 1;
+            if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_la_idx) {
                 let nn = PathFNode{
-                    pstack: n_pstack,
+                    pstack: n.pstack.child(state_id),
                     la_idx: new_la_idx,
                     repairs: n_repairs,
                     cf: n.cf,
@@ -484,18 +491,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         // possible that the PARSE_AT_LEAST+1 symbol is something which has a distance > 0 (or,
         // worse, no route!), which would then confuse the astar function, since a success node
         // would have a distance > 0.]
-        if repairs.len() >= PARSE_AT_LEAST {
-            let mut all_shfts = true;
-            for x in repairs.vals().take(PARSE_AT_LEAST - 1) {
-                if let Repair::Shift = *x {
-                    continue;
-                }
-                all_shfts = false;
-                break;
-            }
-            if all_shfts {
-                return Some(0);
-            }
+        if ends_with_parse_at_least_shifts(repairs) {
+            return Some(0);
         }
 
         // Now we deal with the "main" case: dealing with distances in the face of possible
@@ -535,7 +532,21 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
             Some(ld)
         }
     }
+}
 
+/// Do `repairs` end with enough Shift repairs to be considered a success node?
+fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
+    if repairs.len() > PARSE_AT_LEAST {
+        for x in repairs.vals().take(PARSE_AT_LEAST) {
+            if let Repair::Shift = *x {
+                continue;
+            }
+            return false;
+        }
+        true
+    } else {
+       false
+    }
 }
 
 pub(crate) struct Dist {
@@ -1001,9 +1012,7 @@ E : 'N'
                           &vec!["Insert \"CLOSE_BRACKET\""]);
     }
 
-
-    #[test]
-    fn kimyi_example() {
+    fn kimyi_lex_grm() -> (&'static str, &'static str) {
         // The example from the KimYi paper, with a bit of alpha-renaming to make it clearer. The
         // paper uses "A" as a nonterminal name and "a" as a terminal name, which are then easily
         // confused. Here we use "E" as the nonterminal name, and keep "a" as the terminal name.
@@ -1020,9 +1029,16 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
  | 'B' ;
 ";
 
-        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "((");
+        (lexs, grms)
+    }
+
+    #[test]
+    fn kimyi_example() {
+        let (lexs, grms) = kimyi_lex_grm();
+        let us = "((";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (pt, errs) = pr.unwrap_err();
-        let pp = pt.unwrap().pp(&grm, "((");
+        let pp = pt.unwrap().pp(&grm, &us);
         if !vec![
 "E
  OPEN_BRACKET (
@@ -1166,5 +1182,17 @@ S: 'A';
         check_all_repairs(&grm,
                           errs[0].repairs(),
                           &vec!["Insert \"A\""]);
+    }
+
+    #[test]
+    fn dont_shift_and_insert_the_same_terminal() {
+        let (lexs, grms) = kimyi_lex_grm();
+        let us = "(()";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"A\", Insert \"CLOSE_BRACKET\"",
+                                "Insert \"B\", Insert \"CLOSE_BRACKET\""]);
     }
 }
