@@ -32,6 +32,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fmt;
 
 use {Grammar, NTIdx, PIdx, Symbol, TIdx};
@@ -59,12 +60,11 @@ pub enum AssocKind {
     Nonassoc
 }
 
-/// Representation of a `YaccGrammar`. This struct makes one important guarantee: all of its
-/// terminals will be consecutively, monotonically numbered from `0 .. terms_len()`. In other words,
-/// if this struct has 3 terminals, they are guaranteed to have `TIDx`s of 0, 1, and 2.
+/// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
+/// guarantees this struct makes about nonterminals, terminals, productions, and symbols.
 pub struct YaccGrammar {
     /// How many nonterminals does this grammar have?
-    nonterms_len: usize,
+    nonterms_len: u32,
     /// A mapping from `NTIdx` -> `String`.
     nonterm_names: Vec<String>,
     /// A mapping from `TIdx` -> `Option<String>`. Every user-specified terminal will have a name,
@@ -73,11 +73,11 @@ pub struct YaccGrammar {
     /// A mapping from `TIdx` -> `Option<Precedence>`
     term_precs: Vec<Option<Precedence>>,
     /// How many terminals does this grammar have?
-    terms_len: usize,
+    terms_len: u32,
     /// The offset of the EOF terminal.
     eof_term_idx: TIdx,
     /// How many productions does this grammar have?
-    prods_len: usize,
+    prods_len: u32,
     /// Which production is the sole production of the start rule?
     start_prod: PIdx,
     /// A list of all productions.
@@ -95,12 +95,15 @@ pub struct YaccGrammar {
     implicit_nonterm: Option<NTIdx>
 }
 
+// Internally, we assume that a grammar's start rule has a single production. Since we manually
+// create the start rule ourselves (without relying on user input), this is a safe assumption.
+
 impl YaccGrammar {
     /// Translate a `GrammarAST` into a `YaccGrammar`. This function is akin to the part a traditional
     /// compiler that takes in an AST and converts it into a binary.
     ///
     /// As we're compiling the `GrammarAST` into a `Grammar` we add a new start rule (which we'll
-    /// refer to as "^", though the actual name is a fresh name that is guaranteed to be unique)
+    /// refer to as `^`, though the actual name is a fresh name that is guaranteed to be unique)
     /// that references the user defined start rule.
     pub fn new(yacc_kind: YaccKind, ast: &ast::GrammarAST) -> YaccGrammar {
         let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
@@ -151,7 +154,7 @@ impl YaccGrammar {
         let mut nonterm_map = HashMap::<String, NTIdx>::new();
         for (i, v) in nonterm_names.iter().enumerate() {
             rules_prods.push(Vec::new());
-            nonterm_map.insert(v.clone(), NTIdx(i));
+            nonterm_map.insert(v.clone(), NTIdx::from(i));
         }
 
         let mut term_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
@@ -160,13 +163,13 @@ impl YaccGrammar {
             term_names.push(Some(k.clone()));
             term_precs.push(ast.precs.get(k).cloned());
         }
-        let eof_term_idx = TIdx(term_names.len());
+        let eof_term_idx = TIdx::from(term_names.len());
         term_names.push(None);
         term_precs.push(None);
         let mut term_map = HashMap::<String, TIdx>::new();
         for (i, v) in term_names.iter().enumerate() {
             if let Some(n) = v.as_ref() {
-               term_map.insert(n.clone(), TIdx(i));
+               term_map.insert(n.clone(), TIdx::from(i));
             }
         }
 
@@ -267,13 +270,13 @@ impl YaccGrammar {
         }
 
         YaccGrammar{
-            nonterms_len:     nonterm_names.len(),
+            nonterms_len:     u32::try_from(nonterm_names.len()).unwrap(),
             nonterm_names,
-            terms_len:        term_names.len(),
+            terms_len:        u32::try_from(term_names.len()).unwrap(),
             eof_term_idx:     eof_term_idx,
             term_names,
             term_precs,
-            prods_len:        prods.len(),
+            prods_len:        u32::try_from(prods.len()).unwrap(),
             start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
             rules_prods,
             prods_rules,
@@ -300,7 +303,7 @@ impl YaccGrammar {
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
     pub fn iter_nonterm_idxs(&self) -> Box<Iterator<Item=NTIdx>> {
-        Box::new((0..self.nonterms_len).map(NTIdx))
+        Box::new((0..self.nonterms_len).map(NTIdx::from))
     }
 
     /// Get the sequence of symbols for production `i`. Panics if `i` doesn't exist.
@@ -334,10 +337,10 @@ impl YaccGrammar {
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
     /// inputs from this grammar.
     pub fn terms_map(&self) -> HashMap<&str, TIdx> {
-        let mut m = HashMap::with_capacity(self.terms_len - 1);
-        for i in 0..self.terms_len {
+        let mut m = HashMap::with_capacity(self.terms_len as usize - 1);
+        for i in 0..self.terms_len as usize {
             if let Some(n) = self.term_names[i].as_ref() {
-                m.insert(&**n, TIdx(i));
+                m.insert(&**n, TIdx::from(i));
             }
         }
         m
@@ -358,27 +361,27 @@ impl YaccGrammar {
     pub fn nonterm_idx(&self, n: &str) -> Option<NTIdx> {
         self.nonterm_names.iter()
                           .position(|x| x == n)
-                          .map(|x| NTIdx(x))
+                          .map(|x| NTIdx::from(x))
     }
 
     /// Return the index of the terminal named `n` or `None` if it doesn't exist.
     pub fn term_idx(&self, n: &str) -> Option<TIdx> {
         self.term_names.iter()
                        .position(|x| x.as_ref().map_or(false, |x| x == n))
-                       .map(|x| TIdx(x))
+                       .map(|x| TIdx::from(x))
     }
 
     /// Is there a path from the `from` non-term to the `to` non-term? Note that recursive rules
     /// return `true` for a path from themselves to themselves.
     pub fn has_path(&self, from: NTIdx, to: NTIdx) -> bool {
         let mut seen = vec![];
-        seen.resize(self.nonterms_len(), false);
+        seen.resize(self.nonterms_len() as usize, false);
         let mut todo = vec![];
-        todo.resize(self.nonterms_len(), false);
+        todo.resize(self.nonterms_len() as usize, false);
         todo[usize::from(from)] = true;
         loop {
             let mut empty = true;
-            for i in 0..self.nonterms_len() {
+            for i in 0..self.nonterms_len() as usize {
                 if !todo[i] {
                     continue;
                 }
@@ -417,15 +420,15 @@ impl YaccGrammar {
 }
 
 impl Grammar for YaccGrammar {
-    fn prods_len(&self) -> usize {
+    fn prods_len(&self) -> u32 {
         self.prods_len
     }
 
-    fn terms_len(&self) -> usize {
+    fn terms_len(&self) -> u32 {
         self.terms_len
     }
 
-    fn nonterms_len(&self) -> usize {
+    fn nonterms_len(&self) -> u32 {
         self.nonterms_len
     }
 
@@ -466,7 +469,7 @@ impl<'a> SentenceGenerator<'a> {
     fn new<F>(grm: &YaccGrammar, term_cost: F) -> SentenceGenerator
         where F: Fn(TIdx) -> u8
     {
-        let mut term_costs = Vec::with_capacity(grm.terms_len());
+        let mut term_costs = Vec::with_capacity(grm.terms_len() as usize);
         for i in 0..grm.terms_len() {
             term_costs.push(term_cost(TIdx::from(i)));
         }
@@ -672,9 +675,9 @@ fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
     // eventually we will reach a point where we can determine it definitively.
 
     let mut costs = vec![];
-    costs.resize(grm.nonterms_len(), 0);
+    costs.resize(grm.nonterms_len() as usize, 0);
     let mut done = vec![];
-    done.resize(grm.nonterms_len(), false);
+    done.resize(grm.nonterms_len() as usize, false);
     loop {
         let mut all_done = true;
         for i in 0..done.len() {
@@ -731,12 +734,12 @@ fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
 fn nonterm_max_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
 {
     let mut done = vec![];
-    done.resize(grm.nonterms_len(), false);
+    done.resize(grm.nonterms_len() as usize, false);
     let mut costs = vec![];
-    costs.resize(grm.nonterms_len(), 0);
+    costs.resize(grm.nonterms_len() as usize, 0);
 
     // First mark all recursive non-terminals.
-    for i in 0..grm.nonterms_len() {
+    for i in 0..grm.nonterms_len() as usize {
         // Calling has_path so frequently is not exactly efficient...
         if grm.has_path(NTIdx::from(i), NTIdx::from(i)) {
             costs[i] = u32::max_value();
@@ -841,21 +844,24 @@ mod test {
         let grm = yacc_grm(YaccKind::Original,
                            &"%start R %token T %% R: 'T';".to_string()).unwrap();
 
-        assert_eq!(grm.start_prod, PIdx(0));
+        assert_eq!(grm.start_prod, PIdx::from(0 as u32));
         assert_eq!(grm.implicit_nonterm(), None);
         grm.nonterm_idx("^").unwrap();
         grm.nonterm_idx("R").unwrap();
         grm.term_idx("T").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)], vec![PIdx::from(1 as u32)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
-        assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32), NTIdx::from(1 as u32)]);
 
-        assert_eq!(grm.terms_map(), [("T", TIdx(0))].iter().cloned().collect::<HashMap<&str, TIdx>>());
-        assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(), vec![NTIdx(0), NTIdx(1)]);
+        assert_eq!(grm.terms_map(), [("T", TIdx::from(0 as u32))].iter()
+                                                                 .cloned()
+                                                                 .collect::<HashMap<&str, TIdx>>());
+        assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(),
+                   vec![NTIdx::from(0 as u32), NTIdx::from(1 as u32)]);
     }
 
     #[test]
@@ -869,7 +875,9 @@ mod test {
         grm.term_idx("T").unwrap();
         assert!(grm.term_name(grm.eof_term_idx()).is_none());
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)],
+                                         vec![PIdx::from(1 as u32)],
+                                         vec![PIdx::from(2 as u32)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -891,8 +899,12 @@ mod test {
         grm.term_idx("T1").unwrap();
         grm.term_idx("T2").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(0)], vec![PIdx(1)], vec![PIdx(2)]]);
-        assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1), NTIdx(2)]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)],
+                                         vec![PIdx::from(1 as u32)],
+                                         vec![PIdx::from(2 as u32)]]);
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32),
+                                         NTIdx::from(1 as u32),
+                                         NTIdx::from(2 as u32)]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -918,7 +930,12 @@ mod test {
              | 'z';
           ".to_string()).unwrap();
 
-        assert_eq!(grm.prods_rules, vec![NTIdx(0), NTIdx(1), NTIdx(1), NTIdx(2), NTIdx(3), NTIdx(3)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32),
+                                         NTIdx::from(1 as u32),
+                                         NTIdx::from(1 as u32),
+                                         NTIdx::from(2 as u32),
+                                         NTIdx::from(3 as u32),
+                                         NTIdx::from(3 as u32)]);
     }
 
     #[test]

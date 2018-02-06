@@ -1,4 +1,4 @@
-// Copyright (c) 2017 King's College London
+// Copyright (c) 2018 King's College London
 // created by the Software Development Team <http://soft-dev.org/>
 //
 // The Universal Permissive License (UPL), Version 1.0
@@ -30,35 +30,69 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-pub mod ast;
-pub mod grammar;
-pub mod parser;
-pub use self::ast::{GrammarValidationError, GrammarValidationErrorKind};
-pub use self::parser::{YaccParserError, YaccParserErrorKind};
-use self::parser::YaccParser;
-pub use self::grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar, YaccGrammarError};
+// This macro generates a struct which exposes a u32 API (but which may, internally, use a smaller
+// storage size).
 
-/// The particular Yacc variant this grammar makes use of.
-#[derive(Clone, Copy)]
-pub enum YaccKind {
-    /// The original Yacc style as documented by
-    /// [Johnson](http://dinosaur.compilertools.net/yacc/index.html)
-    Original,
-    /// The variant used in the [Eco language composition editor](http://soft-dev.org/src/eco/)
-    Eco
-}
+macro_rules! u32struct {
+    ($(#[$attr:meta])* $n: ident, $t: ident) => {
+        $(#[$attr])*
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+        pub struct $n {
+            v: $t
+        }
 
-/// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
-/// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
-/// ([`YaccGrammarError`](grammar/enum.YaccGrammarError.html) on error).
-pub fn yacc_grm(yacc_kind: YaccKind, s: &str) -> Result<YaccGrammar, YaccGrammarError> {
-    match yacc_kind {
-        YaccKind::Original | YaccKind::Eco => {
-            let mut yp = YaccParser::new(yacc_kind, s.to_string());
-            try!(yp.parse());
-            let mut ast = yp.ast();
-            try!(ast.complete_and_validate());
-            Ok(YaccGrammar::new(yacc_kind, &ast))
+        impl From<u32> for $n {
+            fn from(v: u32) -> Self {
+                if v > $t::max_value() as u32 {
+                    panic!("Overflow");
+                }
+                $n{v: v as $t}
+            }
+        }
+
+        impl From<usize> for $n {
+            fn from(v: usize) -> Self {
+                if v > $t::max_value() as usize {
+                    panic!("Overflow");
+                }
+                $n{v: v as $t}
+            }
+        }
+
+        impl From<$n> for usize {
+            fn from(st: $n) -> Self {
+                st.v as usize
+            }
+        }
+
+        impl From<$n> for u32 {
+            fn from(st: $n) -> Self {
+                st.v as u32
+            }
         }
     }
 }
+
+// Will anyone create a grammar with more than 65535 non-terminals, productions, symbols within a
+// production, or terminals? Yes, now that I've said it out loud, they probably will. But all
+// practical grammars I know of are comfortably within these limits, so use narrow storage types
+// for now, knowing that we can transparently move the storage type from u16 to u32 in the future
+// without changing the user visible API.
+
+u32struct!(
+    /// A type specifically for nonterminal indices.
+    NTIdx,
+    u16);
+u32struct!(
+    /// A type specifically for production indices (e.g. a rule `E::=A|B` would
+    /// have two productions for the single rule `E`).
+    PIdx,
+    u16);
+u32struct!(
+    /// A type specifically for symbol indices (within a production).
+    SIdx,
+    u16);
+u32struct!(
+    /// A type specifically for token indices.
+    TIdx,
+    u16);
