@@ -480,7 +480,7 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
 }
 
 pub(crate) struct Dist {
-    terms_len: usize,
+    terms_len: u32,
     table: Vec<u32>
 }
 
@@ -495,7 +495,8 @@ impl Dist {
         let states_len = sgraph.all_states_len();
         let sengen = grm.sentence_generator(&term_cost);
         let mut table = Vec::new();
-        table.resize(states_len * terms_len, u32::max_value());
+        assert!((states_len * terms_len) < u32::max_value());
+        table.resize((states_len * terms_len) as usize, u32::max_value());
         loop {
             let mut chgd = false; // Has anything changed?
             for i in 0..states_len {
@@ -504,7 +505,7 @@ impl Dist {
                     let d = match sym {
                         Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
                         Symbol::Term(t_idx) => {
-                            let off = usize::from(i) * terms_len + usize::from(t_idx);
+                            let off = i as usize * terms_len as usize + usize::from(t_idx);
                             if table[off] != 0 {
                                 table[off] = 0;
                                 chgd = true;
@@ -514,8 +515,8 @@ impl Dist {
                     };
 
                     for j in 0..terms_len {
-                        let this_off = usize::from(i) * terms_len + usize::from(j);
-                        let other_off = usize::from(sym_st_idx) * terms_len + usize::from(j);
+                        let this_off = (i * terms_len + j) as usize;
+                        let other_off = (u32::from(sym_st_idx) * terms_len + j) as usize;
                         if table[other_off] != u32::max_value()
                            && table[other_off] + d < table[this_off]
                         {
@@ -534,7 +535,7 @@ impl Dist {
     }
 
     pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u32> {
-        let e = self.table[usize::from(st_idx) * self.terms_len + usize::from(t_idx)];
+        let e = self.table[usize::from(st_idx) * self.terms_len as usize + usize::from(t_idx)];
         if e == u32::max_value() {
             None
         } else {
@@ -748,7 +749,7 @@ A: '(' A ')'
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
         let (sgraph, _) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, |_| 1);
-        let s0 = StIdx::from(0);
+        let s0 = StIdx::from(0 as u32);
         assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), Some(0));
         assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), Some(2));
         assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), Some(0));
@@ -788,7 +789,7 @@ Factor: '(' Expr ')'
         // This only tests a subset of all the states and distances but, I believe, it tests all
         // more interesting edge cases that the example from the Kim/Yi paper.
 
-        let s0 = StIdx::from(0);
+        let s0 = StIdx::from(0 as u32);
         assert_eq!(d.dist(s0, grm.term_idx("+").unwrap()), Some(1));
         assert_eq!(d.dist(s0, grm.term_idx("*").unwrap()), Some(1));
         assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), Some(0));

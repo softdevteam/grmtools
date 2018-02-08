@@ -13,7 +13,7 @@ path = "src/lib/mod.rs"
 
 [dependencies]
 getopts = "0.2.15"
-cactus = "1.0.1"
+cactus = "1.0.2"
 cfgrammar = { git = "https://github.com/softdevteam/cfgrammar" }
 lrtable = { git = "http://github.com/softdevteam/lrtable" }
 lrlex = { git = "http://github.com/softdevteam/lrlex" }

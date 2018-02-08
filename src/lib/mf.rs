@@ -550,7 +550,7 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
 }
 
 pub(crate) struct Dist {
-    terms_len: usize,
+    terms_len: u32,
     table: Vec<u32>
 }
 
@@ -569,11 +569,11 @@ impl Dist {
         // same set of distances, even though a more clever algorithm could work out that this
         // needn't be so. That's for another day...
 
-        let terms_len = grm.terms_len();
+        let terms_len = grm.terms_len() as usize;
         let states_len = sgraph.all_states_len();
         let sengen = grm.sentence_generator(&term_cost);
         let mut table = Vec::new();
-        table.resize(states_len * terms_len, u32::max_value());
+        table.resize(states_len as usize * terms_len, u32::max_value());
         table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
 
         let rev_edges = Dist::rev_edges(&sgraph);
@@ -584,14 +584,14 @@ impl Dist {
         loop {
             let mut chgd = false; // Has anything changed?
 
-            for i in 0..states_len {
+            for i in 0..states_len as usize {
                 // The first phase is KimYi's dist algorithm.
                 let edges = sgraph.edges(StIdx::from(i));
                 for (&sym, &sym_st_idx) in edges.iter() {
                     let d = match sym {
                         Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
                         Symbol::Term(t_idx) => {
-                            let off = usize::from(i) * terms_len + usize::from(t_idx);
+                            let off = i * terms_len + usize::from(t_idx);
                             if table[off] != 0 {
                                 table[off] = 0;
                                 chgd = true;
@@ -601,8 +601,8 @@ impl Dist {
                     };
 
                     for j in 0..terms_len {
-                        let this_off = usize::from(i) * terms_len + usize::from(j);
-                        let other_off = usize::from(sym_st_idx) * terms_len + usize::from(j);
+                        let this_off = i * terms_len + j;
+                        let other_off = usize::from(sym_st_idx) * terms_len + j;
 
                         if table[other_off] != u32::max_value()
                            && table[other_off] + d < table[this_off]
@@ -619,8 +619,8 @@ impl Dist {
                     if usize::from(sym_off) == prod.len() {
                         for goto_idx in goto_edges.get(&(StIdx::from(i), p_idx)).unwrap() {
                             for j in 0..terms_len {
-                                let this_off = usize::from(i) * terms_len + usize::from(j);
-                                let other_off = usize::from(*goto_idx) * terms_len + usize::from(j);
+                                let this_off = i * terms_len + j;
+                                let other_off = usize::from(*goto_idx) * terms_len + j;
 
                                 if table[other_off] != u32::max_value() &&
                                     table[other_off] < table[this_off] {
@@ -637,11 +637,11 @@ impl Dist {
             }
         }
 
-        Dist{terms_len, table}
+        Dist{terms_len: grm.terms_len(), table}
     }
 
     pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u32> {
-        let e = self.table[usize::from(st_idx) * self.terms_len + usize::from(t_idx)];
+        let e = self.table[usize::from(st_idx) * self.terms_len as usize + usize::from(t_idx)];
         if e == u32::max_value() {
             None
         } else {
@@ -652,8 +652,8 @@ impl Dist {
     /// rev_edges allows us to walk backwards over the stategraph
     fn rev_edges(sgraph: &StateGraph) -> Vec<HashSet<StIdx>> {
         let states_len = sgraph.all_states_len();
-        let mut rev_edges = Vec::with_capacity(states_len);
-        rev_edges.resize(states_len, HashSet::new());
+        let mut rev_edges = Vec::with_capacity(states_len as usize);
+        rev_edges.resize(states_len as usize, HashSet::new());
         for i in 0..states_len {
             for (_, &sym_st_idx) in sgraph.edges(StIdx::from(i)).iter() {
                 rev_edges[usize::from(sym_st_idx)].insert(StIdx::from(i));
@@ -681,7 +681,7 @@ impl Dist {
         //
         // This loop is currently comically inefficient, but it is relatively straightforward.
         let mut goto_edges = HashMap::new();
-        for i in 0..sgraph.all_states_len() {
+        for i in 0..sgraph.all_states_len() as usize {
             for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
                 let prod = grm.prod(p_idx);
                 if usize::from(sym_off) == prod.len() {
@@ -757,7 +757,7 @@ A: '(' A ')'
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
-        let s0 = StIdx::from(0);
+        let s0 = StIdx::from(0 as u32);
         assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), Some(0));
         assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), Some(1));
         assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), Some(0));
@@ -823,7 +823,7 @@ U: 'B';
         // This only tests a subset of all the states and distances but, I believe, it tests all
         // more interesting edge cases that the example from the Kim/Yi paper.
 
-        let s0 = StIdx::from(0);
+        let s0 = StIdx::from(0 as u32);
         assert_eq!(d.dist(s0, grm.term_idx("A").unwrap()), Some(0));
         assert_eq!(d.dist(s0, grm.term_idx("B").unwrap()), Some(1));
         assert_eq!(d.dist(s0, grm.term_idx("C").unwrap()), Some(2));
@@ -880,7 +880,7 @@ Factor: '(' Expr ')'
         // This only tests a subset of all the states and distances but, I believe, it tests all
         // more interesting edge cases that the example from the Kim/Yi paper.
 
-        let s0 = StIdx::from(0);
+        let s0 = StIdx::from(0 as u32);
         assert_eq!(d.dist(s0, grm.term_idx("+").unwrap()), Some(1));
         assert_eq!(d.dist(s0, grm.term_idx("*").unwrap()), Some(1));
         assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), Some(0));
