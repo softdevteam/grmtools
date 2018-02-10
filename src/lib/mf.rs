@@ -45,7 +45,7 @@ use astar::astar_all;
 use kimyi::{apply_repairs, Repair};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
-const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
+const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 

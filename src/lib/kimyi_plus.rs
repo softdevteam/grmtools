@@ -43,7 +43,7 @@ use pathfinding::astar_bag;
 use kimyi::{apply_repairs, Dist, PathFNode, Repair, r3is, r3ir, r3d, r3s_n};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
-const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
+const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
