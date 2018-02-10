@@ -536,17 +536,15 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?
 fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
-    if repairs.len() >= PARSE_AT_LEAST {
-        for x in repairs.vals().take(PARSE_AT_LEAST) {
-            if let Repair::Shift = *x {
-                continue;
-            }
-            return false;
+    let mut shfts = 0;
+    for x in repairs.vals().take(PARSE_AT_LEAST) {
+        if let Repair::Shift = *x {
+            shfts += 1;
+            continue;
         }
-        true
-    } else {
-       false
+        return false;
     }
+    shfts == PARSE_AT_LEAST
 }
 
 pub(crate) struct Dist {
