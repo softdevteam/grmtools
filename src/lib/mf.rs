@@ -45,7 +45,7 @@ use astar::astar_all;
 use kimyi::{apply_repairs, Repair};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
-const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
+const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
@@ -536,17 +536,15 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?
 fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
-    if repairs.len() > PARSE_AT_LEAST {
-        for x in repairs.vals().take(PARSE_AT_LEAST) {
-            if let Repair::Shift = *x {
-                continue;
-            }
-            return false;
+    let mut shfts = 0;
+    for x in repairs.vals().take(PARSE_AT_LEAST) {
+        if let Repair::Shift = *x {
+            shfts += 1;
+            continue;
         }
-        true
-    } else {
-       false
+        return false;
     }
+    shfts == PARSE_AT_LEAST
 }
 
 pub(crate) struct Dist {
@@ -733,16 +731,18 @@ mod test {
     use std::convert::TryFrom;
     use test::{Bencher, black_box};
 
+    use cactus::Cactus;
     use cfgrammar::Symbol;
     use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
     use lrlex::Lexeme;
     use lrtable::{Minimiser, from_yacc, StIdx};
 
+    use kimyi::Repair;
+    use kimyi::test::pp_repairs;
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
-    use kimyi::test::pp_repairs;
 
-    use super::Dist;
+    use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST};
 
     #[test]
     fn dist_kimyi() {
@@ -1194,5 +1194,27 @@ S: 'A';
                           errs[0].repairs(),
                           &vec!["Insert \"A\", Insert \"CLOSE_BRACKET\"",
                                 "Insert \"B\", Insert \"CLOSE_BRACKET\""]);
+    }
+
+    #[test]
+    fn test_counting_shifts() {
+        let mut c = Cactus::new();
+        assert_eq!(ends_with_parse_at_least_shifts(&c), false);
+        for _ in 0..PARSE_AT_LEAST - 1 {
+            c = c.child(Repair::Shift);
+            assert_eq!(ends_with_parse_at_least_shifts(&c), false);
+        }
+        c = c.child(Repair::Shift);
+        assert_eq!(ends_with_parse_at_least_shifts(&c), true);
+
+        let mut c = Cactus::new();
+        assert_eq!(ends_with_parse_at_least_shifts(&c), false);
+        c = c.child(Repair::Delete);
+        for _ in 0..PARSE_AT_LEAST - 1 {
+            c = c.child(Repair::Shift);
+            assert_eq!(ends_with_parse_at_least_shifts(&c), false);
+        }
+        c = c.child(Repair::Shift);
+        assert_eq!(ends_with_parse_at_least_shifts(&c), true);
     }
 }

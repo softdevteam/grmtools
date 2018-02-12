@@ -43,7 +43,7 @@ use pathfinding::astar;
 
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
-const PARSE_AT_LEAST: usize = 4; // N in Corchuelo et al.
+const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
