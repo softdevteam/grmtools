@@ -19,3 +19,4 @@ lrtable = { git = "http://github.com/softdevteam/lrtable" }
 lrlex = { git = "http://github.com/softdevteam/lrlex" }
 num-traits = "0.1.41"
 pathfinding = "0.2.4"
+vob = "0.1.0"
