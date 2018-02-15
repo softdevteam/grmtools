@@ -43,14 +43,13 @@ use std::hash::Hash;
 /// [`astar_bag_collect`](https://docs.rs/pathfinding/0.6.8/pathfinding/fn.astar_bag.html)
 /// in the `pathfinding` crate. Unlike `astar_bag_collect`, this `astar_all` does not record the
 /// path taken to reach a success node: this allows it to be substantially faster.
-pub(crate) fn astar_all<N, FN, IN, FS>(start_node: N,
-                                       neighbours: FN,
-                                       success: FS)
-                                    -> Vec<N>
-                                 where N: Debug + Eq + Hash + Clone,
-                                       FN: Fn(&N) -> IN,
-                                       IN: IntoIterator<Item = (u32, u32, N)>,
-                                       FS: Fn(&N) -> bool,
+pub(crate) fn astar_all<N, FN, FS>(start_node: N,
+                                   neighbours: FN,
+                                   success: FS)
+                                -> Vec<N>
+                             where N: Debug + Eq + Hash + Clone,
+                                   FN: Fn(&N, &mut Vec<(u32, u32, N)>),
+                                   FS: Fn(&N) -> bool,
 {
     // We tackle the problem in two phases. In the first phase we search for a success node, with
     // the cost monotonically increasing. All neighbouring nodes are stored for future inspection,
@@ -67,6 +66,7 @@ pub(crate) fn astar_all<N, FN, IN, FS>(start_node: N,
     let scs_cost: u32;  // What is the cost of a success node?
     let mut todo: Vec<Vec<N>> = vec![vec![start_node]];
     let mut c: u32 = 0; // What cost are we currently examining?
+    let mut next = Vec::new();
     loop {
         if todo[c as usize].is_empty() {
             // We'll never need the lower cost node information again, so clear the associated
@@ -87,7 +87,8 @@ pub(crate) fn astar_all<N, FN, IN, FS>(start_node: N,
             break;
         }
 
-        for (nbr_cost, nbr_hrstc, nbr) in neighbours(&n) {
+        neighbours(&n, &mut next);
+        for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
             assert!(nbr_cost + nbr_hrstc >= c);
             let off = nbr_cost.checked_add(nbr_hrstc).unwrap() as usize;
             for _ in todo.len()..off + 1 {
@@ -109,7 +110,8 @@ pub(crate) fn astar_all<N, FN, IN, FS>(start_node: N,
             // contain extra (zero-cost, by definition) shifts, which are uninteresting.
             continue;
         }
-        for (nbr_cost, nbr_hrstc, nbr) in neighbours(&n) {
+        neighbours(&n, &mut next);
+        for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
             assert!(nbr_cost + nbr_hrstc >= scs_cost);
             // We only need to consider neighbouring nodes if they have the same cost as
             // existing success nodes and an empty heuristic.
