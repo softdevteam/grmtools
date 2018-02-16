@@ -163,19 +163,18 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                         // Inserts.
                     },
                     _ => {
-                        r3is(parser, &self.dist, &n, &mut nbrs);
-                        r3ir(parser, &self.sg, &n, &mut nbrs);
+                        r3is(parser, &self.dist, n, &mut nbrs);
+                        r3ir(parser, &self.sg, n, &mut nbrs);
                     }
                 }
-                r3d(parser, &n, &mut nbrs);
-                r3s_n(parser, &n, &mut nbrs);
-                let v = nbrs.into_iter()
-                            .map(|x| {
-                                    let t = x.cf - n.cf;
-                                    (x, t)
-                                 })
-                            .collect::<Vec<(PathFNode, _)>>();
-                v
+                r3d(parser, n, &mut nbrs);
+                r3s_n(parser, n, &mut nbrs);
+                nbrs.into_iter()
+                    .map(|x| {
+                            let t = x.cf - n.cf;
+                            (x, t)
+                         })
+                    .collect::<Vec<(PathFNode, _)>>()
             },
             |n| n.cg,
             |n| {
@@ -223,9 +222,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         while !rpr_pstack.is_empty() {
             let p = rpr_pstack.parent().unwrap();
             in_pstack.push(rpr_pstack.try_unwrap()
-                                     .unwrap_or_else(|c| c.val()
-                                                          .unwrap()
-                                                          .clone()));
+                                     .unwrap_or_else(|c| *c.val()
+                                                           .unwrap()));
             rpr_pstack = p;
         }
         in_pstack.reverse();
@@ -260,17 +258,15 @@ pub(crate) fn r3is<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
                     cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
                     cg: 0};
                 nbrs.push(nn);
-            } else {
-                if let Some(d) = dist.dist(sym_st_idx, la_tidx) {
-                    let nn = PathFNode{
-                        pstack: n.pstack.child(sym_st_idx),
-                        la_idx: n.la_idx,
-                        t: n.t + 1,
-                        repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
-                        cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
-                        cg: d};
-                    nbrs.push(nn);
-                }
+            } else if let Some(d) = dist.dist(sym_st_idx, la_tidx) {
+                let nn = PathFNode{
+                    pstack: n.pstack.child(sym_st_idx),
+                    la_idx: n.la_idx,
+                    t: n.t + 1,
+                    repairs: n.repairs.child(Repair::InsertTerm(term_idx)),
+                    cf: n.cf.checked_add((parser.term_cost)(term_idx) as u32).unwrap(),
+                    cg: d};
+                nbrs.push(nn);
             }
         }
     }
@@ -302,12 +298,12 @@ pub(crate) fn r3ir<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize>
             for sym in parser.grm.prod(p_idx)
                                  .iter()
                                  .skip(sym_off.into()) {
-                match sym {
-                    &Symbol::Nonterm(nonterm_idx) => {
+                match *sym {
+                    Symbol::Nonterm(nonterm_idx) => {
                         n_repairs = n_repairs.child(Repair::InsertNonterm(nonterm_idx));
                         cost += sg.min_sentence_cost(nonterm_idx);
                     },
-                    &Symbol::Term(term_idx) => {
+                    Symbol::Term(term_idx) => {
                         n_repairs = n_repairs.child(Repair::InsertTerm(term_idx));
                         cost = cost.checked_add((parser.term_cost)(term_idx) as u32).unwrap();
                     }
@@ -408,7 +404,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
     }
 
     // Remove shifts from the end of repairs
-    while rprs.len() > 0 {
+    while !rprs.is_empty() {
         if let Repair::Shift = rprs[rprs.len() - 1] {
             rprs.pop();
         } else {
@@ -436,14 +432,14 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                             mut la_idx: usize,
                             mut pstack: Cactus<StIdx>,
                             tstack: &mut Option<&mut Vec<Node<TokId>>>,
-                            repairs: &Vec<ParseRepair>)
+                            repairs: &[ParseRepair])
                          -> (usize, Cactus<StIdx>)
 {
     for r in repairs.iter() {
         match *r {
             ParseRepair::InsertSeq(ref seqs) => {
                 let next_lexeme = parser.next_lexeme(la_idx);
-                for &t_idx in seqs[0].iter() {
+                for &t_idx in &seqs[0] {
                     let new_lexeme = Lexeme::new(TokId::try_from(usize::from(t_idx))
                                                                 .ok()
                                                                 .unwrap(),

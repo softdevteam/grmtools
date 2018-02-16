@@ -149,7 +149,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
 
                     pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
-                    pstack.push(self.stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
+                    pstack.push(self.stable.goto(prior, nonterm_idx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     let la_lexeme = self.next_lexeme(la_idx);
@@ -158,7 +158,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     la_idx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_tidx, TIdx::from(self.grm.eof_term_idx()));
+                    debug_assert_eq!(la_tidx, self.grm.eof_term_idx());
                     debug_assert_eq!(tstack.len(), 1);
                     return true;
                 },
@@ -167,19 +167,19 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                         recoverer = Some(match self.rcvry_kind {
                                              RecoveryKind::Corchuelo => corchuelo::recoverer(),
                                              RecoveryKind::KimYi =>
-                                                 kimyi::recoverer(&self),
+                                                 kimyi::recoverer(self),
                                              RecoveryKind::KimYiPlus =>
-                                                 kimyi_plus::recoverer(&self),
+                                                 kimyi_plus::recoverer(self),
                                              RecoveryKind::MF =>
-                                                 mf::recoverer(&self),
+                                                 mf::recoverer(self),
                                          });
                     }
 
                     let (new_la_idx, repairs) = recoverer.as_ref()
                                                          .unwrap()
                                                          .as_ref()
-                                                         .recover(&self, la_idx, pstack, tstack);
-                    let keep_going = repairs.len() != 0;
+                                                         .recover(self, la_idx, pstack, tstack);
+                    let keep_going = !repairs.is_empty();
                     let la_lexeme = self.next_lexeme(la_idx);
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
                                            lexeme: la_lexeme, repairs: repairs});
@@ -202,14 +202,13 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
             self.lexemes[la_idx]
         } else {
             // We have to artificially construct a Lexeme for the EOF lexeme.
-            let last_la_end;
-            if llen == 0 {
-                last_la_end = 0;
-            } else {
-                debug_assert!(la_idx > 0);
-                let last_la = self.lexemes[la_idx - 1];
-                last_la_end = last_la.start() + last_la.len();
-            }
+            let last_la_end = if llen == 0 {
+                    0
+                } else {
+                    debug_assert!(la_idx > 0);
+                    let last_la = self.lexemes[la_idx - 1];
+                    last_la.start() + last_la.len()
+                };
             Lexeme::new(TokId::try_from(usize::from(self.grm.eof_term_idx()))
                               .ok()
                               .unwrap(),
@@ -257,7 +256,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_num = self.grm.prod(prod_id).len();
-                    if let &mut Some(ref mut tstack_uw) = tstack {
+                    if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
                                              .collect::<Vec<Node<TokId>>>();
                         tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
@@ -267,10 +266,10 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                         pstack = pstack.parent().unwrap();
                     }
                     let prior = *pstack.val().unwrap();
-                    pstack = pstack.child(self.stable.goto(prior, NTIdx::from(nonterm_idx)).unwrap());
+                    pstack = pstack.child(self.stable.goto(prior, nonterm_idx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
-                    if let &mut Some(ref mut tstack_uw) = tstack {
+                    if let Some(ref mut tstack_uw) = *tstack {
                         let la_lexeme = if let Some(l) = lexeme_prefix {
                                             l
                                         } else {
@@ -282,8 +281,8 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     la_idx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_tidx, TIdx::from(self.grm.eof_term_idx()));
-                    if let &mut Some(ref mut tstack_uw) = tstack {
+                    debug_assert_eq!(la_tidx, self.grm.eof_term_idx());
+                    if let Some(ref mut tstack_uw) = *tstack {
                         debug_assert_eq!(tstack_uw.len(), 1);
                     }
                     break;
@@ -313,7 +312,7 @@ pub enum RecoveryKind {
 /// input was consumed) or `None` otherwise, and a vector of `ParseError`s.
 pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
        (grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable,
-        lexemes: &Vec<Lexeme<TokId>>)
+        lexemes: &Lexemes<TokId>)
     -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
 {
     parse_rcvry(RecoveryKind::KimYi, grm, |_| 1, sgraph, stable, lexemes)
@@ -329,7 +328,7 @@ pub fn parse_rcvry
         term_cost: F,
         sgraph: &StateGraph,
         stable: &StateTable,
-        lexemes: &Vec<Lexeme<TokId>>)
+        lexemes: &Lexemes<TokId>)
     -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
     where F: Fn(TIdx) -> u8
 {

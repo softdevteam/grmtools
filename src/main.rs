@@ -89,11 +89,11 @@ fn main() {
                                         "Original|Eco")
                                 .parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => usage(&prog, f.to_string().as_str())
+        Err(f) => usage(prog, f.to_string().as_str())
     };
 
     if matches.opt_present("h") {
-        usage(&prog, "");
+        usage(prog, "");
     }
 
     let yacckind = match matches.opt_str("y") {
@@ -102,13 +102,13 @@ fn main() {
             match &*s.to_lowercase() {
                 "original" => YaccKind::Original,
                 "eco" => YaccKind::Eco,
-                _ => usage(&prog, &format!("Unknown Yacc variant '{}'.", s))
+                _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s))
             }
         }
     };
 
     if matches.free.len() != 3 {
-        usage(&prog, "Too few arguments given.");
+        usage(prog, "Too few arguments given.");
     }
 
     let lex_l_path = &matches.free[0];
