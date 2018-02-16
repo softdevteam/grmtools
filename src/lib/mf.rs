@@ -108,35 +108,29 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                                    cg: 0};
         let astar_cnds = astar_all(
             start_node,
-            |n| {
+            |explore_all, n, nbrs| {
                 // Calculate n's neighbours.
 
                 if n.la_idx > in_la_idx + PORTION_THRESHOLD {
-                    return vec![];
+                    return;
                 }
 
-                let mut nbrs = Vec::new();
                 match n.repairs.val() {
                     Some(&Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
                         // Inserts.
                     },
                     _ => {
-                        self.r3is(&n, &mut nbrs);
-                        self.r3ir(&n, &mut nbrs);
+                        if explore_all || n.cg > 0 {
+                            self.r3is(&n, nbrs);
+                        }
+                        self.r3ir(&n, nbrs);
                     }
                 }
-                self.r3d(&n, &mut nbrs);
-                self.r3s_n(&n, &mut nbrs);
-
-                let v = nbrs.into_iter()
-                            .map(|x| {
-                                    let cf = x.cf;
-                                    let cg = x.cg;
-                                    (cf, cg, x)
-                                 })
-                            .collect::<Vec<(_, _, PathFNode)>>();
-                v
+                if explore_all || n.cg > 0 {
+                    self.r3d(&n, nbrs);
+                }
+                self.r3s_n(&n, nbrs);
             },
             |n| {
                 // Is n a success node?
@@ -190,7 +184,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> MF<'a, TokId> {
     fn r3is(&self,
             n: &PathFNode,
-            nbrs: &mut Vec<PathFNode>)
+            nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
         for (&sym, &sym_st_idx) in self.parser.sgraph.edges(top_pstack).iter() {
@@ -226,7 +220,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                         repairs: n_repairs,
                         cf: n.cf.checked_add((self.parser.term_cost)(term_idx) as u32).unwrap(),
                         cg: d};
-                    nbrs.push(nn);
+                    nbrs.push((nn.cf, nn.cg, nn));
                 }
             }
         }
@@ -234,7 +228,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
     fn r3ir(&self,
             n: &PathFNode,
-            nbrs: &mut Vec<PathFNode>)
+            nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
         // This is different than KimYi's r3ir: their r3ir inserts symbols if the dot in a state is not
         // at the end. This is unneeded in our setup (indeed, doing so causes duplicates): all we need
@@ -262,7 +256,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                         repairs: n.repairs.clone(),
                         cf: n.cf,
                         cg: d};
-                    nbrs.push(nn);
+                    nbrs.push((nn.cf, nn.cg, nn));
                 }
             }
         }
@@ -270,7 +264,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
     fn r3d(&self,
            n: &PathFNode,
-           nbrs: &mut Vec<PathFNode>)
+           nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
         if n.la_idx == self.parser.lexemes.len() {
             return;
@@ -285,13 +279,13 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                                repairs: n_repairs,
                                cf: n.cf.checked_add(cost as u32).unwrap(),
                                cg: d};
-            nbrs.push(nn);
+            nbrs.push((nn.cf, nn.cg, nn));
         }
     }
 
     fn r3s_n(&self,
              n: &PathFNode,
-             nbrs: &mut Vec<PathFNode>)
+             nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
         let la_tidx = self.parser.next_tidx(n.la_idx);
         let top_pstack = *n.pstack.val().unwrap();
@@ -306,7 +300,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     repairs: n_repairs,
                     cf: n.cf,
                     cg: d};
-                nbrs.push(nn);
+                nbrs.push((nn.cf, nn.cg, nn));
             }
         }
     }

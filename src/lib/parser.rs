@@ -33,7 +33,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use cactus::Cactus;
-use cfgrammar::{NTIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
@@ -102,6 +102,9 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
           -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
       where F: Fn(TIdx) -> u8
     {
+        for i in 0..grm.terms_len() {
+            assert!(term_cost(TIdx::from(i)) > 0);
+        }
         let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0 as u32)];
         let mut tstack: Vec<Node<TokId>> = Vec::new();
