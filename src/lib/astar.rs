@@ -48,7 +48,7 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
                                    success: FS)
                                 -> Vec<N>
                              where N: Debug + Eq + Hash + Clone,
-                                   FN: Fn(&N, &mut Vec<(u32, u32, N)>),
+                                   FN: Fn(bool, &N, &mut Vec<(u32, u32, N)>),
                                    FS: Fn(&N) -> bool,
 {
     // We tackle the problem in two phases. In the first phase we search for a success node, with
@@ -87,7 +87,7 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
             break;
         }
 
-        neighbours(&n, &mut next);
+        neighbours(true, &n, &mut next);
         for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
             assert!(nbr_cost + nbr_hrstc >= c);
             let off = nbr_cost.checked_add(nbr_hrstc).unwrap() as usize;
@@ -110,7 +110,7 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
             // contain extra (zero-cost, by definition) shifts, which are uninteresting.
             continue;
         }
-        neighbours(&n, &mut next);
+        neighbours(false, &n, &mut next);
         for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
             assert!(nbr_cost + nbr_hrstc >= scs_cost);
             // We only need to consider neighbouring nodes if they have the same cost as

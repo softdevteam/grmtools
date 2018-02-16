@@ -108,7 +108,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                                    cg: 0};
         let astar_cnds = astar_all(
             start_node,
-            |n, nbrs| {
+            |explore_all, n, nbrs| {
                 // Calculate n's neighbours.
 
                 if n.la_idx > in_la_idx + PORTION_THRESHOLD {
@@ -121,11 +121,15 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                         // Inserts.
                     },
                     _ => {
-                        self.r3is(&n, nbrs);
+                        if explore_all || n.cg > 0 {
+                            self.r3is(&n, nbrs);
+                        }
                         self.r3ir(&n, nbrs);
                     }
                 }
-                self.r3d(&n, nbrs);
+                if explore_all || n.cg > 0 {
+                    self.r3d(&n, nbrs);
+                }
                 self.r3s_n(&n, nbrs);
             },
             |n| {
