@@ -20,3 +20,12 @@ lrlex = { git = "http://github.com/softdevteam/lrlex" }
 num-traits = "0.1.41"
 pathfinding = "0.2.4"
 vob = "0.1.0"
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'unwind'
