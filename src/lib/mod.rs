@@ -41,6 +41,7 @@ extern crate lrtable;
 extern crate num_traits;
 extern crate pathfinding;
 extern crate test;
+extern crate vob;
 
 mod astar;
 mod corchuelo;

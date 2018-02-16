@@ -31,17 +31,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use std::mem;
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, PIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
-use astar::astar_all;
+use vob::Vob;
 
+use astar::astar_all;
 use kimyi::{apply_repairs, Repair};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
@@ -563,29 +564,21 @@ impl Dist {
         // tokens "(", {"a", "b"} before encountering a ')'. However, this algorithm gives the
         // distance as 1. This is because state 0 is a reduction target of state 3, but state 3
         // also has a reduction target of state 5: thus state state 0 ends up with the minimum
-        // distances of itself and state 5. Put another way, state 0 and state 5 end up with the
-        // same set of distances, even though a more clever algorithm could work out that this
-        // needn't be so. That's for another day...
+        // distances of itself and state 5.
 
         let terms_len = grm.terms_len() as usize;
-        let states_len = sgraph.all_states_len();
+        let states_len = sgraph.all_states_len() as usize;
         let sengen = grm.sentence_generator(&term_cost);
+        let goto_states = Dist::goto_states(&grm, &sgraph, &stable);
+
         let mut table = Vec::new();
         table.resize(states_len as usize * terms_len, u32::max_value());
         table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
-
-        let rev_edges = Dist::rev_edges(&sgraph);
-        let goto_edges = Dist::goto_edges(grm, sgraph, stable, &rev_edges);
-
-        // We can now interleave KimYi's original dist algorithm with our addition which takes into
-        // account goto_edges.
         loop {
-            let mut chgd = false; // Has anything changed?
-
+            let mut chgd = false;
             for i in 0..states_len as usize {
                 // The first phase is KimYi's dist algorithm.
-                let edges = sgraph.edges(StIdx::from(i));
-                for (&sym, &sym_st_idx) in edges.iter() {
+                for (&sym, &sym_st_idx) in sgraph.edges(StIdx::from(i)).iter() {
                     let d = match sym {
                         Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
                         Symbol::Term(t_idx) => {
@@ -611,21 +604,17 @@ impl Dist {
                     }
                 }
 
-                // The second phase takes into account gotos.
-                for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
-                    let prod = grm.prod(p_idx);
-                    if usize::from(sym_off) == prod.len() {
-                        for goto_idx in goto_edges.get(&(StIdx::from(i), p_idx)).unwrap() {
-                            for j in 0..terms_len {
-                                let this_off = i * terms_len + j;
-                                let other_off = usize::from(*goto_idx) * terms_len + j;
+                // The second phase takes into account reductions and gotos.
+                for st_idx in goto_states[i].iter_set_bits() {
+                    for j in 0..terms_len {
+                        let this_off = i * terms_len + j;
+                        let other_off = st_idx * terms_len + j;
 
-                                if table[other_off] != u32::max_value() &&
-                                    table[other_off] < table[this_off] {
-                                    table[this_off] = table[other_off];
-                                    chgd = true;
-                                }
-                            }
+                        if table[other_off] != u32::max_value()
+                           && table[other_off] < table[this_off]
+                        {
+                            table[this_off] = table[other_off];
+                            chgd = true;
                         }
                     }
                 }
@@ -647,82 +636,67 @@ impl Dist {
         }
     }
 
-    /// rev_edges allows us to walk backwards over the stategraph
-    fn rev_edges(sgraph: &StateGraph) -> Vec<HashSet<StIdx>> {
+    /// rev_edges allows us to walk backwards over the stategraph.
+    fn rev_edges(sgraph: &StateGraph) -> Vec<Vob>
+    {
         let states_len = sgraph.all_states_len();
         let mut rev_edges = Vec::with_capacity(states_len as usize);
-        rev_edges.resize(states_len as usize, HashSet::new());
+        rev_edges.resize(states_len as usize, Vob::from_elem(sgraph.all_states_len() as usize, false));
         for i in 0..states_len {
             for (_, &sym_st_idx) in sgraph.edges(StIdx::from(i)).iter() {
-                rev_edges[usize::from(sym_st_idx)].insert(StIdx::from(i));
+                rev_edges[usize::from(sym_st_idx)].set(i as usize, true);
             }
         }
         rev_edges
     }
 
-    /// goto_edges is a map from a core state ready for reduction (i.e. where the dot is at the
-    /// end of the production and thus sym_off == prod.len()) represented as a tuple
-    /// (state_index, production_index) to a set of state indexes. The latter represents all the
-    /// states which after (possibly recursive and intertwined) reductions and gotos the parser
-    /// might end up in.
-    fn goto_edges(grm: &YaccGrammar,
-                  sgraph: &StateGraph,
-                  stable: &StateTable,
-                  rev_edges: &Vec<HashSet<StIdx>>)
-               -> HashMap<(StIdx, PIdx), HashSet<StIdx>>
+    /// goto_states allows us to quickly determine all the states reachable after an entry in a
+    /// given state has been reduced and performed a goto.
+    fn goto_states(grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable) -> Vec<Vob>
     {
-        // We calculate this for a state i, production p_idx, by iterating backwards over the
-        // stategraph (using rev_edges) finding all routes of length grm.prod(p_idx).len() which
-        // could lead back to i, and then storing their goto state indexes. Since further
-        // reductions and gotos could then happen, we then have to recursively search those goto
-        // state indexes from scratch.
-        //
-        // This loop is currently comically inefficient, but it is relatively straightforward.
-        let mut goto_edges = HashMap::new();
-        for i in 0..sgraph.all_states_len() as usize {
+        let rev_edges = Dist::rev_edges(sgraph);
+        let states_len = sgraph.all_states_len() as usize;
+        let mut goto_states = Vec::with_capacity(states_len as usize);
+        goto_states.resize(states_len as usize,
+                           Vob::from_elem(sgraph.all_states_len() as usize,
+                           false));
+        // prev and next are hoist here to lessen memory allocation in a core loop below.
+        let mut prev = Vob::from_elem(states_len, false);
+        let mut next = Vob::from_elem(states_len, false);
+        for i in 0..states_len {
             for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
                 let prod = grm.prod(p_idx);
-                if usize::from(sym_off) == prod.len() {
-                    let mut todo = HashSet::new(); // (StIdx, PIdx)
-                    let mut done = HashSet::new(); // Which (StIdx, PIdx) pairs have we processed?
-                    let mut ge = HashSet::new();   // Which StIdx's can we eventually goto?
-                    todo.insert((i, p_idx));
-                    while todo.len() > 0 {
-                        let &(i, p) = todo.iter().nth(0).unwrap();
-                        todo.remove(&(i, p));
-                        if done.contains(&(i, p)) {
-                            continue;
-                        }
-                        done.insert((i, p));
-                        let mut cur = rev_edges[i].clone();
-                        let mut next;
-                        for _ in 0..grm.prod(p).len() - 1 {
-                            next = HashSet::new();
-                            for st_idx in cur {
-                                next.extend(&rev_edges[usize::from(st_idx)]);
-                            }
-                            cur = next;
-                        }
-                        for st_idx in cur {
-                            for &(sub_p_idx, sub_sym_off) in sgraph.core_state(StIdx::from(st_idx))
-                                                                   .items
-                                                                   .keys() {
-                                let sub_prod = grm.prod(sub_p_idx);
-                                if usize::from(sub_sym_off) == sub_prod.len() {
-                                    todo.insert((usize::from(st_idx), sub_p_idx));
-                                }
-                            }
-                            let n = grm.prod_to_nonterm(p);
-                            if let Some(goto_idx) = stable.goto(st_idx, n) {
-                                ge.insert(goto_idx);
-                            }
-                        }
+                if usize::from(sym_off) < prod.len() {
+                    continue;
+                }
+                let nt_idx = grm.prod_to_nonterm(p_idx);
+
+                // We've found an item in a core state where the dot is at the end of the rule:
+                // what we now do is reach backwards in the stategraph to find all of the
+                // possible states the reduction and subsequent goto might reach.
+
+                // First find all the possible states the reductions might end up in. We search
+                // back prod.len() states in the stategraph to do this: the final result will end
+                // up in prev.
+                prev.set_all(false);
+                prev.set(i, true);
+                for _ in 0..prod.len() {
+                    next.set_all(false);
+                    for st_idx in prev.iter_set_bits() {
+                        next.or(&rev_edges[st_idx]);
                     }
-                    goto_edges.insert((StIdx::from(i), p_idx), ge);
+                    mem::swap(&mut prev, &mut next);
+                }
+
+                // From the reduction states, find all the goto states.
+                for st_idx in prev.iter_set_bits() {
+                    if let Some(goto_st_idx) = stable.goto(StIdx::from(st_idx), nt_idx) {
+                        goto_states[i].set(usize::from(goto_st_idx), true);
+                    }
                 }
             }
         }
-        goto_edges
+        goto_states
     }
 }
 
@@ -907,6 +881,79 @@ Factor: '(' Expr ')'
         assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), Some(1));
         assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), Some(0));
         assert_eq!(d.dist(s3, grm.term_idx("INT").unwrap()), Some(1));
+    }
+
+    #[test]
+    fn dist_nested() {
+        let grms = "%start S
+%%
+S : T;
+T : T U | ;
+U : V W;
+V: 'a' ;
+W: 'b' ;
+";
+
+        // 0: [^ -> . S, {'$'}]
+        //    T -> 1
+        //    S -> 2
+        // 1: [S -> T ., {'$'}]
+        //    [T -> T . U, {'a', '$'}]
+        //    U -> 4
+        //    'a' -> 3
+        //    V -> 5
+        // 2: [^ -> S ., {'$'}]
+        // 3: [V -> 'a' ., {'b'}]
+        // 4: [T -> T U ., {'a', '$'}]
+        // 5: [U -> V . W, {'a', '$'}]
+        //    'b' -> 7
+        //    W -> 6
+        // 6: [U -> V W ., {'a', '$'}]
+        // 7: [W -> 'b' ., {'a', '$'}]
+
+        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
+
+        let s0 = StIdx::from(0 as u32);
+        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), Some(0));
+        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), Some(1));
+        assert_eq!(d.dist(s0, grm.eof_term_idx()), Some(0));
+
+        let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), Some(0));
+        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), Some(1));
+        assert_eq!(d.dist(s1, grm.eof_term_idx()), Some(0));
+
+        let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), None);
+        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), None);
+        assert_eq!(d.dist(s2, grm.eof_term_idx()), Some(0));
+
+        let s3 = sgraph.edge(s1, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), Some(1));
+        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), Some(0));
+        assert_eq!(d.dist(s3, grm.eof_term_idx()), Some(1));
+
+        let s4 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("U").unwrap())).unwrap();
+        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), Some(0));
+        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), Some(1));
+        assert_eq!(d.dist(s4, grm.eof_term_idx()), Some(0));
+
+        let s5 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("V").unwrap())).unwrap();
+        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), Some(1));
+        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), Some(0));
+        assert_eq!(d.dist(s5, grm.eof_term_idx()), Some(1));
+
+        let s6 = sgraph.edge(s5, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), Some(0));
+        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), Some(1));
+        assert_eq!(d.dist(s6, grm.eof_term_idx()), Some(0));
+
+        let s7 = sgraph.edge(s5, Symbol::Nonterm(grm.nonterm_idx("W").unwrap())).unwrap();
+        assert_eq!(d.dist(s7, grm.term_idx("a").unwrap()), Some(0));
+        assert_eq!(d.dist(s7, grm.term_idx("b").unwrap()), Some(1));
+        assert_eq!(d.dist(s7, grm.eof_term_idx()), Some(0));
     }
 
     #[bench]
