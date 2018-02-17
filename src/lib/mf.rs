@@ -37,7 +37,7 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
@@ -54,8 +54,6 @@ const TRY_PARSE_AT_MOST: usize = 250;
 pub enum Repair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
     InsertTerm(TIdx),
-    /// Insert a `Symbol::Nonterm` with idx `nonterm_idx`.
-    InsertNonterm(NTIdx),
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.
@@ -338,25 +336,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                         mut all_rprs: Vec<Vec<Repair>>)
                      -> Vec<Vec<ParseRepair>>
     {
-        let sg = self.parser.grm.sentence_generator(self.parser.term_cost);
         for i in 0..all_rprs.len() {
-            {
-                // Remove all inserts of nonterms which have a minimal sentence cost of 0.
-                let mut rprs = &mut all_rprs[i];
-                let mut j = 0;
-                while j < rprs.len() {
-                    if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
-                        if sg.min_sentence_cost(nonterm_idx) == 0 {
-                            rprs.remove(j);
-                        } else {
-                            j += 1;
-                        }
-                    } else {
-                        j += 1;
-                    }
-                }
-            }
-
             {
                 // Remove shifts from the end of repairs
                 let mut rprs = &mut all_rprs[i];
@@ -392,8 +372,6 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                                         match *y {
                                             Repair::InsertTerm(term_idx) =>
                                                 ParseRepair::Insert(term_idx),
-                                            Repair::InsertNonterm(nonterm_idx) =>
-                                                ParseRepair::InsertSeq(sg.min_sentences(nonterm_idx)),
                                             Repair::Delete => ParseRepair::Delete,
                                             Repair::Shift => ParseRepair::Shift,
                                         }
