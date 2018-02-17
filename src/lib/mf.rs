@@ -37,18 +37,30 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, Symbol, TIdx};
+use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
+use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
 use vob::Vob;
 
 use astar::astar_all;
-use kimyi::{apply_repairs, Repair};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Repair {
+    /// Insert a `Symbol::Term` with idx `term_idx`.
+    InsertTerm(TIdx),
+    /// Insert a `Symbol::Nonterm` with idx `nonterm_idx`.
+    InsertNonterm(NTIdx),
+    /// Delete a symbol.
+    Delete,
+    /// Shift a symbol.
+    Shift
+}
 
 #[derive(Clone, Debug, Eq)]
 struct PathFNode {
@@ -541,6 +553,57 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
     shfts == PARSE_AT_LEAST
 }
 
+
+/// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
+/// distance and a new pstack.
+pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+                           (parser: &Parser<TokId>,
+                            mut la_idx: usize,
+                            mut pstack: Cactus<StIdx>,
+                            tstack: &mut Option<&mut Vec<Node<TokId>>>,
+                            repairs: &[ParseRepair])
+                         -> (usize, Cactus<StIdx>)
+{
+    for r in repairs.iter() {
+        match *r {
+            ParseRepair::InsertSeq(ref seqs) => {
+                let next_lexeme = parser.next_lexeme(la_idx);
+                for &t_idx in &seqs[0] {
+                    let new_lexeme = Lexeme::new(TokId::try_from(usize::from(t_idx))
+                                                                .ok()
+                                                                .unwrap(),
+                                                 next_lexeme.start(), 0);
+                    pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
+                                              pstack, tstack).1;
+                }
+            },
+            ParseRepair::Insert(term_idx) => {
+                let next_lexeme = parser.next_lexeme(la_idx);
+                let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
+                                                            .ok()
+                                                            .unwrap(),
+                                             next_lexeme.start(), 0);
+                pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
+                                          pstack, tstack).1;
+            },
+            ParseRepair::Delete => {
+                la_idx += 1;
+            }
+            ParseRepair::Shift => {
+                let (new_la_idx, n_pstack) = parser.lr_cactus(None,
+                                                              la_idx,
+                                                              la_idx + 1,
+                                                              pstack,
+                                                              tstack);
+                assert_eq!(new_la_idx, la_idx + 1);
+                la_idx = new_la_idx;
+                pstack = n_pstack;
+            }
+        }
+    }
+    (la_idx, pstack)
+}
+
 pub(crate) struct Dist {
     terms_len: u32,
     table: Vec<u32>
@@ -704,12 +767,42 @@ mod test {
     use lrlex::Lexeme;
     use lrtable::{Minimiser, from_yacc, StIdx};
 
-    use kimyi::Repair;
-    use kimyi::test::pp_repairs;
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
 
-    use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST};
+    use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST, Repair};
+
+    pub fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
+        let mut out = vec![];
+        for r in repairs.iter() {
+            match *r {
+                ParseRepair::InsertSeq(ref seqs) => {
+                    let mut s = String::new();
+                    s.push_str("Insert {");
+                    for (i, seq) in seqs.iter().enumerate() {
+                        if i > 0 {
+                            s.push_str(", ");
+                        }
+                        for (j, t_idx) in seq.iter().enumerate() {
+                            if j > 0 {
+                                s.push_str(" ");
+                            }
+                            s.push_str(&format!("\"{}\"", grm.term_name(*t_idx).unwrap()));
+                        }
+                    }
+                    s.push_str("}");
+                    out.push(s);
+                },
+                ParseRepair::Insert(term_idx) =>
+                    out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
+                ParseRepair::Delete =>
+                    out.push(format!("Delete")),
+                ParseRepair::Shift =>
+                    out.push(format!("Shift"))
+            }
+        }
+        out.join(", ")
+    }
 
     #[test]
     fn dist_kimyi() {
@@ -1161,12 +1254,7 @@ T: 'A';
 U: 'B';
 ";
 
-        // We expect this example not to find any repairs with KimYi
         let us = "c";
-        let (_, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, &us);
-        let (_, errs) = pr.unwrap_err();
-        assert_eq!(errs[0].repairs().len(), 0);
-
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(&grm,
@@ -1187,15 +1275,6 @@ d D
 %%
 S:  'A' 'B' 'D' | 'A' 'B' 'C' 'A' 'A' 'D';
 ";
-
-        // KimYiPlus incorrectly finds a long repair when a shorter one exists
-
-        let us = "acd";
-        let (grm, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, &us);
-        let (_, errs) = pr.unwrap_err();
-        check_all_repairs(&grm,
-                          errs[0].repairs(),
-                          &vec!["Insert \"B\", Shift, Insert \"A\", Insert \"A\""]);
 
         let us = "acd";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);

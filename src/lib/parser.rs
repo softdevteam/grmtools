@@ -38,8 +38,6 @@ use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
 
-use kimyi;
-use kimyi_plus;
 use mf;
 use corchuelo;
 
@@ -166,10 +164,6 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
                                              RecoveryKind::Corchuelo => corchuelo::recoverer(),
-                                             RecoveryKind::KimYi =>
-                                                 kimyi::recoverer(self),
-                                             RecoveryKind::KimYiPlus =>
-                                                 kimyi_plus::recoverer(self),
                                              RecoveryKind::MF =>
                                                  mf::recoverer(self),
                                          });
@@ -303,8 +297,6 @@ pub trait Recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 
 pub enum RecoveryKind {
     Corchuelo,
-    KimYi,
-    KimYiPlus,
     MF
 }
 
@@ -315,7 +307,7 @@ pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
         lexemes: &Lexemes<TokId>)
     -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
 {
-    parse_rcvry(RecoveryKind::KimYi, grm, |_| 1, sgraph, stable, lexemes)
+    parse_rcvry(RecoveryKind::MF, grm, |_| 1, sgraph, stable, lexemes)
 }
 
 /// Parse the lexemes, specifying a particularly type of error recovery. On success return a parse
@@ -407,7 +399,7 @@ pub(crate) mod test {
     }
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
-        let (grm, pt) = do_parse(RecoveryKind::KimYi, lexs, grms, input);
+        let (grm, pt) = do_parse(RecoveryKind::MF, lexs, grms, input);
         assert_eq!(expected, pt.unwrap().pp(&grm, &input));
     }
 
@@ -520,13 +512,13 @@ Call: 'ID' 'OPEN_BRACKET' 'CLOSE_BRACKET';";
  CLOSE_BRACKET )
 ");
 
-        let (grm, pr) = do_parse(RecoveryKind::KimYi, &lexs, &grms, "f(");
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.eof_term_idx())).ok().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
 
-        let (grm, pr) = do_parse(RecoveryKind::KimYi, &lexs, &grms, "f(f(");
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = u16::try_from(usize::from(grm.term_idx("ID").unwrap())).ok().unwrap();
@@ -545,7 +537,7 @@ S: 'A' 'A' 'B';
 ";
 
         let us = "aaaaaaaaaaaaaab";
-        let (_, pr) = do_parse(RecoveryKind::KimYiPlus, &lexs, &grms, &us);
+        let (_, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         assert!(pr.is_err() && pr.unwrap_err().0.is_none());
     }
 }
