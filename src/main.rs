@@ -30,28 +30,24 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#![feature(try_from)]
+extern crate cfgrammar;
+extern crate getopts;
+extern crate lrlex;
+extern crate lrtable;
+extern crate lrpar;
+extern crate num_traits;
 
-use std::convert::TryFrom;
 use std::{env, process};
 use std::fs::File;
 use std::io::{Read, stderr, Write};
 use std::path::Path;
 
-extern crate getopts;
 use getopts::Options;
-
-extern crate cfgrammar;
 use cfgrammar::yacc::{yacc_grm, YaccKind};
-
-extern crate lrlex;
 use lrlex::build_lex;
-
-extern crate lrtable;
 use lrtable::{Minimiser, from_yacc};
-
-extern crate lrpar;
 use lrpar::parser::{parse_rcvry, ParseRepair, RecoveryKind};
+use num_traits::ToPrimitive;
 
 fn usage(prog: &str, msg: &str) -> ! {
     let path = Path::new(prog);
@@ -138,7 +134,7 @@ fn main() {
 
     {
         let rule_ids = grm.terms_map().iter()
-                                      .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
+                                      .map(|(&n, &i)| (n, usize::from(i).to_u16().unwrap()))
                                       .collect();
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
         if let Some(tokens) = missing_from_parser {

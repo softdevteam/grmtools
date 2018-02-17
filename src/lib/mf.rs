@@ -31,8 +31,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cmp::Ordering;
-use std::convert::{TryFrom, TryInto};
-use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::mem;
 
@@ -41,6 +39,7 @@ use cfgrammar::{Grammar, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
+use num_traits::{PrimInt, Unsigned};
 use vob::Vob;
 
 use astar::astar_all;
@@ -83,12 +82,12 @@ impl PartialEq for PathFNode {
     }
 }
 
-pub(crate) struct MF<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
+pub(crate) struct MF<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
     dist: Dist,
     parser: &'a Parser<'a, TokId>
 }
 
-pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+pub(crate) fn recoverer<'a, TokId: PrimInt + Unsigned>
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
@@ -96,8 +95,7 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
     Box::new(MF{dist, parser: parser})
 }
 
-impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
-    Recoverer<TokId> for MF<'a, TokId>
+impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
 {
     fn recover(&self,
                parser: &Parser<TokId>,
@@ -190,7 +188,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
     }
 }
 
-impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> MF<'a, TokId> {
+impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
     fn r3is(&self,
             n: &PathFNode,
             nbrs: &mut Vec<(u32, u32, PathFNode)>)
@@ -534,7 +532,7 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
-pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+pub(crate) fn apply_repairs<TokId: PrimInt + Unsigned>
                            (parser: &Parser<TokId>,
                             mut la_idx: usize,
                             mut pstack: Cactus<StIdx>,
@@ -547,19 +545,15 @@ pub(crate) fn apply_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
             ParseRepair::InsertSeq(ref seqs) => {
                 let next_lexeme = parser.next_lexeme(la_idx);
                 for &t_idx in &seqs[0] {
-                    let new_lexeme = Lexeme::new(TokId::try_from(usize::from(t_idx))
-                                                                .ok()
-                                                                .unwrap(),
+                    let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
                                                  next_lexeme.start(), 0);
                     pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
                                               pstack, tstack).1;
                 }
             },
-            ParseRepair::Insert(term_idx) => {
+            ParseRepair::Insert(t_idx) => {
                 let next_lexeme = parser.next_lexeme(la_idx);
-                let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
-                                                            .ok()
-                                                            .unwrap(),
+                let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
                                              next_lexeme.start(), 0);
                 pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
                                           pstack, tstack).1;
@@ -736,7 +730,6 @@ impl Dist {
 
 #[cfg(test)]
 mod test {
-    use std::convert::TryFrom;
     use test::{Bencher, black_box};
 
     use cactus::Cactus;
@@ -744,6 +737,7 @@ mod test {
     use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
     use lrlex::Lexeme;
     use lrtable::{Minimiser, from_yacc, StIdx};
+    use num_traits::ToPrimitive;
 
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
@@ -1093,7 +1087,7 @@ E : 'N'
         }
 
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u16::try_from(usize::from(grm.term_idx("N").unwrap())).ok().unwrap();
+        let err_tok_id = u32::from(grm.term_idx("N").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_all_repairs(&grm,
                           errs[0].repairs(),
@@ -1174,7 +1168,7 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
             panic!("Can't find a match for {}", pp);
         }
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u16::try_from(usize::from(grm.eof_term_idx())).ok().unwrap();
+        let err_tok_id = u32::from(grm.eof_term_idx()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
         check_all_repairs(&grm,
                           errs[0].repairs(),
