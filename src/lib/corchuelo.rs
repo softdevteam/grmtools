@@ -97,7 +97,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
         todo.push_back((in_la_idx, cactus_pstack, Cactus::new(), 0));
         let mut finished = vec![];
         let mut finished_score: Option<usize> = None;
-        while todo.len() > 0 {
+        while !todo.is_empty() {
             let cur = todo.pop_front().unwrap();
             let la_idx = cur.0;
             let pstack = cur.1;
@@ -250,7 +250,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
         let mut la_idx = in_la_idx;
         {
             let mut pstack = start_cactus_pstack;
-            for r in repairs[0].iter() {
+            for r in &repairs[0] {
                 match *r {
                     Repair::InsertTerm{term_idx} => {
                         let next_lexeme = parser.next_lexeme(la_idx);
@@ -277,7 +277,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
             in_pstack.clear();
             while !pstack.is_empty() {
                 let p = pstack.parent().unwrap();
-                in_pstack.push(pstack.try_unwrap().unwrap_or_else(|c| c.val().unwrap().clone()));
+                in_pstack.push(pstack.try_unwrap().unwrap_or_else(|c| *c.val().unwrap()));
                 pstack = p;
             }
             in_pstack.reverse();
@@ -291,16 +291,16 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
 
 fn score(repairs: &Cactus<Repair>) -> usize {
     repairs.vals()
-           .filter(|x| match *x {
-                           &Repair::InsertTerm{..} | &Repair::Delete => true,
-                           &Repair::Shift => false
+           .filter(|x| match **x {
+                           Repair::InsertTerm{..} | Repair::Delete => true,
+                           Repair::Shift => false
                        })
            .count()
 }
 
 fn convert_to_parser_repairs(all_rprs: Vec<Vec<Repair>>) -> Vec<Vec<ParseRepair>>
 {
-      all_rprs.iter()
+      all_rprs.into_iter()
               .map(|x| x.iter()
                         .map(|y|
                              {

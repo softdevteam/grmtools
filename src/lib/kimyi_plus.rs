@@ -108,19 +108,18 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                         // Inserts.
                     },
                     _ => {
-                        r3is(parser, &self.dist, &n, &mut nbrs);
-                        r3ir(parser, &self.sg, &n, &mut nbrs);
+                        r3is(parser, &self.dist, n, &mut nbrs);
+                        r3ir(parser, &self.sg, n, &mut nbrs);
                     }
                 }
-                r3d(parser, &n, &mut nbrs);
-                r3s_n(parser, &n, &mut nbrs);
-                let v = nbrs.into_iter()
-                            .map(|x| {
-                                    let t = x.cf - n.cf;
-                                    (x, t)
-                                 })
-                            .collect::<Vec<(PathFNode, _)>>();
-                v
+                r3d(parser, n, &mut nbrs);
+                r3s_n(parser, n, &mut nbrs);
+                nbrs.into_iter()
+                    .map(|x| {
+                            let t = x.cf - n.cf;
+                            (x, t)
+                         })
+                    .collect::<Vec<(PathFNode, _)>>()
             },
             |n| n.cg,
             |n| {
@@ -160,7 +159,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         let smpl_rprs = simplify_repairs(parser, full_rprs);
         let rnk_rprs = rank_cnds(parser,
                                  in_la_idx,
-                                 start_cactus_pstack.clone(),
+                                 &start_cactus_pstack,
                                  smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
                                                      in_la_idx,
@@ -172,9 +171,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         while !rpr_pstack.is_empty() {
             let p = rpr_pstack.parent().unwrap();
             in_pstack.push(rpr_pstack.try_unwrap()
-                                     .unwrap_or_else(|c| c.val()
-                                                          .unwrap()
-                                                          .clone()));
+                                     .unwrap_or_else(|c| *c.val()
+                                                           .unwrap()));
             rpr_pstack = p;
         }
         in_pstack.reverse();
@@ -187,7 +185,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 fn collect_repairs(cnds: Vec<Vec<PathFNode>>) -> Vec<Vec<Repair>>
 {
     let mut all_rprs = Vec::new();
-    for mut rprs in cnds.into_iter() {
+    for mut rprs in cnds {
         let mut y = rprs.pop()
                         .unwrap()
                         .repairs
@@ -212,7 +210,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
     for i in 0..all_rprs.len() {
         {
             // Remove all inserts of nonterms which have a minimal sentence cost of 0.
-            let mut rprs = all_rprs.get_mut(i).unwrap();
+            let mut rprs = &mut all_rprs[i];
             let mut j = 0;
             while j < rprs.len() {
                 if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
@@ -229,8 +227,8 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 
         {
             // Remove shifts from the end of repairs
-            let mut rprs = all_rprs.get_mut(i).unwrap();
-            while rprs.len() > 0 {
+            let mut rprs = &mut all_rprs[i];
+            while !rprs.is_empty() {
                 if let Repair::Shift = rprs[rprs.len() - 1] {
                     rprs.pop();
                 } else {
@@ -280,7 +278,7 @@ fn simplify_repairs<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize
 fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
             (parser: &Parser<TokId>,
              in_la_idx: usize,
-             start_pstack: Cactus<StIdx>,
+             start_pstack: &Cactus<StIdx>,
              in_cnds: Vec<Vec<ParseRepair>>)
           -> Vec<Vec<ParseRepair>>
 {
@@ -309,7 +307,7 @@ fn rank_cnds<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Par
                 j += 1;
                 continue;
             }
-            let cnd = cnds.get_mut(j).unwrap();
+            let cnd = &mut cnds[j];
             if cnd.1 > in_la_idx + i {
                 j += 1;
                 continue;

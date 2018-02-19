@@ -83,7 +83,7 @@ pub(crate) fn recoverer<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryIn
                      -> Box<Recoverer<TokId> + 'a>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
-    Box::new(MF{dist, parser: &parser})
+    Box::new(MF{dist, parser: parser})
 }
 
 impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
@@ -122,15 +122,15 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     },
                     _ => {
                         if explore_all || n.cg > 0 {
-                            self.r3is(&n, nbrs);
+                            self.r3is(n, nbrs);
                         }
-                        self.r3ir(&n, nbrs);
+                        self.r3ir(n, nbrs);
                     }
                 }
                 if explore_all || n.cg > 0 {
-                    self.r3d(&n, nbrs);
+                    self.r3d(n, nbrs);
                 }
-                self.r3s_n(&n, nbrs);
+                self.r3s_n(n, nbrs);
             },
             |n| {
                 // Is n a success node?
@@ -158,7 +158,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         let full_rprs = self.collect_repairs(astar_cnds);
         let smpl_rprs = self.simplify_repairs(full_rprs);
         let rnk_rprs = self.rank_cnds(in_la_idx,
-                                      start_cactus_pstack.clone(),
+                                      &start_cactus_pstack,
                                       smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
                                                      in_la_idx,
@@ -170,9 +170,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         while !rpr_pstack.is_empty() {
             let p = rpr_pstack.parent().unwrap();
             in_pstack.push(rpr_pstack.try_unwrap()
-                                     .unwrap_or_else(|c| c.val()
-                                                          .unwrap()
-                                                          .clone()));
+                                     .unwrap_or_else(|c| *c.val()
+                                                           .unwrap()));
             rpr_pstack = p;
         }
         in_pstack.reverse();
@@ -331,7 +330,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
         for i in 0..all_rprs.len() {
             {
                 // Remove all inserts of nonterms which have a minimal sentence cost of 0.
-                let mut rprs = all_rprs.get_mut(i).unwrap();
+                let mut rprs = &mut all_rprs[i];
                 let mut j = 0;
                 while j < rprs.len() {
                     if let Repair::InsertNonterm(nonterm_idx) = rprs[j] {
@@ -348,8 +347,8 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
 
             {
                 // Remove shifts from the end of repairs
-                let mut rprs = all_rprs.get_mut(i).unwrap();
-                while rprs.len() > 0 {
+                let mut rprs = &mut all_rprs[i];
+                while !rprs.is_empty() {
                     if let Repair::Shift = rprs[rprs.len() - 1] {
                         rprs.pop();
                     } else {
@@ -398,7 +397,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
     /// ordering is non-deterministic.
     fn rank_cnds(&self,
                  in_la_idx: usize,
-                 start_pstack: Cactus<StIdx>,
+                 start_pstack: &Cactus<StIdx>,
                  in_cnds: Vec<Vec<ParseRepair>>)
               -> Vec<Vec<ParseRepair>>
     {
@@ -427,7 +426,7 @@ impl<'a, TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + Partial
                     j += 1;
                     continue;
                 }
-                let cnd = cnds.get_mut(j).unwrap();
+                let cnd = &mut cnds[j];
                 if cnd.1 > in_la_idx + i {
                     j += 1;
                     continue;
@@ -563,7 +562,7 @@ impl Dist {
         let terms_len = grm.terms_len() as usize;
         let states_len = sgraph.all_states_len() as usize;
         let sengen = grm.sentence_generator(&term_cost);
-        let goto_states = Dist::goto_states(&grm, &sgraph, &stable);
+        let goto_states = Dist::goto_states(grm, sgraph, stable);
 
         let mut table = Vec::new();
         table.resize(states_len as usize * terms_len, u32::max_value());
