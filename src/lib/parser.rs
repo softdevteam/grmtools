@@ -30,24 +30,23 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::convert::{TryFrom, TryInto};
-
 use cactus::Cactus;
 use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
+use num_traits::{PrimInt, Unsigned};
 
 use mf;
 use corchuelo;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Node<TokId: Copy> {
+pub enum Node<TokId: PrimInt + Unsigned> {
     Term{lexeme: Lexeme<TokId>},
     Nonterm{nonterm_idx: NTIdx, nodes: Vec<Node<TokId>>}
 }
 
-impl<TokId: Copy + TryInto<usize>> Node<TokId> {
+impl<TokId: PrimInt + Unsigned> Node<TokId> {
     /// Return a pretty-printed version of this node.
     pub fn pp(&self, grm: &YaccGrammar, input: &str) -> String {
         let mut st = vec![(0, self)]; // Stack of (indent level, node) pairs
@@ -59,7 +58,8 @@ impl<TokId: Copy + TryInto<usize>> Node<TokId> {
             }
             match *e {
                 Node::Term{lexeme} => {
-                    let tn = grm.term_name(TIdx::from(lexeme.tok_id().try_into().ok().unwrap())).unwrap();
+                    let t_idx = TIdx::from(lexeme.tok_id().to_u32().unwrap());
+                    let tn = grm.term_name(t_idx).unwrap();
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
@@ -80,7 +80,7 @@ pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TStack<TokId> = Vec<Node<TokId>>; // Parse tree stack
 pub(crate) type Errors<TokId> = Vec<ParseError<TokId>>;
 
-pub struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> where TokId: 'a {
+pub struct Parser<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
     pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar,
     pub term_cost: &'a Fn(TIdx) -> u8,
@@ -89,8 +89,7 @@ pub struct Parser<'a, TokId: Clone + Copy + TryFrom<usize> + TryInto<usize>> whe
     pub lexemes: &'a Lexemes<TokId>
 }
 
-use std::fmt::Debug;
-impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>> Parser<'a, TokId> {
+impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
     fn parse<F>(rcvry_kind: RecoveryKind,
              grm: &YaccGrammar,
              term_cost: F,
@@ -203,10 +202,8 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
                     let last_la = self.lexemes[la_idx - 1];
                     last_la.start() + last_la.len()
                 };
-            Lexeme::new(TokId::try_from(usize::from(self.grm.eof_term_idx()))
-                              .ok()
-                              .unwrap(),
-                        last_la_end, 0)
+
+            Lexeme::new(TokId::from(u32::from(self.grm.eof_term_idx())).unwrap(), last_la_end, 0)
         }
     }
 
@@ -216,7 +213,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         let ll = self.lexemes.len();
         debug_assert!(la_idx <= ll);
         if la_idx < ll {
-            TIdx::from(self.lexemes[la_idx].tok_id().try_into().ok().unwrap())
+            TIdx::from(self.lexemes[la_idx].tok_id().to_u32().unwrap())
         } else {
             self.grm.eof_term_idx()
         }
@@ -241,7 +238,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
         while la_idx != end_la_idx {
             let st = *pstack.val().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
-                              TIdx::from(l.tok_id().try_into().ok().unwrap())
+                              TIdx::from(l.tok_id().to_u32().unwrap())
                           } else {
                               self.next_tidx(la_idx)
                           };
@@ -290,7 +287,7 @@ impl<'a, TokId: Clone + Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usiz
     }
 }
 
-pub trait Recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> {
+pub trait Recoverer<TokId: PrimInt + Unsigned> {
     fn recover(&self, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>)
            -> (usize, Vec<Vec<ParseRepair>>);
 }
@@ -302,7 +299,7 @@ pub enum RecoveryKind {
 
 /// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the
 /// input was consumed) or `None` otherwise, and a vector of `ParseError`s.
-pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
+pub fn parse<TokId: PrimInt + Unsigned>
        (grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable,
         lexemes: &Lexemes<TokId>)
     -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
@@ -314,7 +311,7 @@ pub fn parse<TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>>
 /// tree. On failure, return a parse tree (if all the input was consumed) or `None` otherwise, and
 /// a vector of `ParseError`s.
 pub fn parse_rcvry
-       <TokId: Copy + Debug + PartialEq + TryFrom<usize> + TryInto<usize>, F>
+       <TokId: PrimInt + Unsigned, F>
        (rcvry_kind: RecoveryKind,
         grm: &YaccGrammar,
         term_cost: F,
@@ -375,10 +372,10 @@ impl<TokId: Copy> ParseError<TokId> {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::convert::TryFrom;
     use cfgrammar::yacc::{YaccGrammar, yacc_grm, YaccKind};
     use lrlex::{build_lex, Lexeme};
     use lrtable::{Minimiser, from_yacc};
+    use num_traits::ToPrimitive;
     use super::*;
 
     pub(crate) fn do_parse(rcvry_kind: RecoveryKind, lexs: &str, grms: &str, input: &str)
@@ -389,7 +386,7 @@ pub(crate) mod test {
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         {
             let rule_ids = grm.terms_map().iter()
-                                          .map(|(&n, &i)| (n, u16::try_from(usize::from(i)).unwrap()))
+                                          .map(|(&n, &i)| (n, u32::from(i).to_u16().unwrap()))
                                           .collect();
             lexerdef.set_rule_ids(&rule_ids);
         }
@@ -515,13 +512,13 @@ Call: 'ID' 'OPEN_BRACKET' 'CLOSE_BRACKET';";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u16::try_from(usize::from(grm.eof_term_idx())).ok().unwrap();
+        let err_tok_id = usize::from(grm.eof_term_idx()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u16::try_from(usize::from(grm.term_idx("ID").unwrap())).ok().unwrap();
+        let err_tok_id = usize::from(grm.term_idx("ID").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
      }
 

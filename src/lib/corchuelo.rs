@@ -31,13 +31,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::VecDeque;
-use std::convert::{TryFrom, TryInto};
-use std::fmt::Debug;
 
 use cactus::Cactus;
 use cfgrammar::{Symbol, TIdx};
 use lrlex::Lexeme;
 use lrtable::{Action, StIdx};
+use num_traits::{PrimInt, Unsigned};
 
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
@@ -58,14 +57,13 @@ pub enum Repair {
 
 pub(crate) struct Corchuelo;
 
-pub(crate) fn recoverer<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq>
+pub(crate) fn recoverer<TokId: PrimInt + Unsigned>
                        ()
                      -> Box<Recoverer<TokId>> {
     Box::new(Corchuelo)
 }
 
-impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> Recoverer<TokId>
-                                                                                for Corchuelo
+impl<TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo
 {
     fn recover(&self,
                parser: &Parser<TokId>,
@@ -120,8 +118,8 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                                              .count();
                     if num_inserts <= INSERT_THRESHOLD {
                         for sym in parser.stable.state_actions(*pstack.val().unwrap()) {
-                            if let Symbol::Term(term_idx) = sym {
-                                if term_idx == parser.grm.eof_term_idx() {
+                            if let Symbol::Term(t_idx) = sym {
+                                if t_idx == parser.grm.eof_term_idx() {
                                     continue;
                                 }
 
@@ -129,9 +127,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                                 // same position as the real next lexeme, but have zero length (so
                                 // that it's clear it's not really something the user created).
                                 let next_lexeme = parser.next_lexeme(la_idx);
-                                let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
-                                                                            .ok()
-                                                                            .unwrap(),
+                                let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
                                                              next_lexeme.start(), 0);
                                 let (new_la_idx, n_pstack) =
                                     parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
@@ -139,7 +135,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                                 if new_la_idx > la_idx {
                                     debug_assert_eq!(new_la_idx, la_idx + 1);
                                     let n_repairs =
-                                        repairs.child(Repair::InsertTerm{term_idx});
+                                        repairs.child(Repair::InsertTerm{term_idx: t_idx});
                                     let sc = score(&n_repairs);
                                     if finished_score.is_none() || sc <= finished_score.unwrap() {
                                         todo.push_back((la_idx, n_pstack, n_repairs, sc));
@@ -254,9 +250,7 @@ impl<TokId: Clone + Copy + Debug + TryFrom<usize> + TryInto<usize> + PartialEq> 
                 match *r {
                     Repair::InsertTerm{term_idx} => {
                         let next_lexeme = parser.next_lexeme(la_idx);
-                        let new_lexeme = Lexeme::new(TokId::try_from(usize::from(term_idx))
-                                                                    .ok()
-                                                                    .unwrap(),
+                        let new_lexeme = Lexeme::new(TokId::from(u32::from(term_idx)).unwrap(),
                                                      next_lexeme.start(), 0);
                         pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
                                                   pstack, &mut Some(tstack)).1;
@@ -318,8 +312,8 @@ fn convert_to_parser_repairs(all_rprs: Vec<Vec<Repair>>) -> Vec<Vec<ParseRepair>
 #[cfg(test)]
 mod test {
     use cfgrammar::yacc::YaccGrammar;
-    use std::convert::TryFrom;
     use lrlex::Lexeme;
+    use num_traits::ToPrimitive;
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
 
@@ -380,7 +374,7 @@ E : 'N'
  N n
 ");
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u16::try_from(usize::from(grm.term_idx("N").unwrap())).ok().unwrap();
+        let err_tok_id = u32::from(grm.term_idx("N").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         assert_eq!(errs[0].repairs().len(), 3);
         check_repairs(&grm,

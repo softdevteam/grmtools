@@ -12,12 +12,12 @@ name = "lrpar"
 path = "src/lib/mod.rs"
 
 [dependencies]
-getopts = "0.2.15"
 cactus = "1.0.2"
 cfgrammar = { git = "https://github.com/softdevteam/cfgrammar" }
-lrtable = { git = "http://github.com/softdevteam/lrtable" }
+getopts = "0.2.17"
 lrlex = { git = "http://github.com/softdevteam/lrlex" }
-num-traits = "0.1.41"
+lrtable = { git = "http://github.com/softdevteam/lrtable" }
+num-traits = "0.2.0"
 pathfinding = "0.2.4"
 vob = "0.1.0"
 
