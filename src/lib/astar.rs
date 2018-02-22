@@ -67,9 +67,6 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
     let mut next = Vec::new();
     loop {
         if todo[c as usize].is_empty() {
-            // We'll never need the lower cost node information again, so clear the associated
-            // memory.
-            todo[c as usize].clear();
             c = c.checked_add(1).unwrap();
             if c as usize == todo.len() {
                 // No success node found and search exhausted.
