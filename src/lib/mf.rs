@@ -31,7 +31,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
 use std::mem;
 
 use cactus::Cactus;
@@ -59,27 +58,13 @@ enum Repair {
     Shift
 }
 
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug)]
 struct PathFNode {
     pstack: Cactus<StIdx>,
     la_idx: usize,
     repairs: Cactus<Repair>,
     cf: u32,
     cg: u32
-}
-
-impl Hash for PathFNode {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.pstack.hash(state);
-        self.la_idx.hash(state);
-        self.repairs.hash(state);
-    }
-}
-
-impl PartialEq for PathFNode {
-    fn eq(&self, other: &PathFNode) -> bool {
-        self.pstack == other.pstack && self.repairs == other.repairs && self.la_idx == other.la_idx
-    }
 }
 
 struct MF<'a, TokId: PrimInt + Unsigned> where TokId: 'a {

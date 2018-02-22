@@ -31,7 +31,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::fmt::Debug;
-use std::hash::Hash;
 
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
 ///
@@ -47,7 +46,7 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
                                    neighbours: FN,
                                    success: FS)
                                 -> Vec<N>
-                             where N: Debug + Eq + Hash + Clone,
+                             where N: Debug + Clone,
                                    FN: Fn(bool, &N, &mut Vec<(u32, u32, N)>),
                                    FS: Fn(&N) -> bool,
 {
