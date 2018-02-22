@@ -489,24 +489,21 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         // "=" to "y" is 0. Assuming the deletion cost of "}" is 1, it's therefore cheaper to
         // delete "}" and add that to the distance from "=" to "y". Thus the cheapest distance is
         // 1.
-        let frst_tidx = self.parser.next_tidx(la_idx);
-        let mut ld = self.dist.dist(st_idx, frst_tidx)
-                              .unwrap_or(u32::max_value()); // ld == Current least distance
-        let mut dc = (self.parser.term_cost)(frst_tidx) as u32; // Cumulative deletion cost
-        for i in la_idx + 1..self.parser.lexemes.len() + 1 {
+        let mut ld = u32::max_value(); // ld == Current least distance
+        let mut dc = 0; // Cumulative deletion cost
+        for i in la_idx..self.parser.lexemes.len() + 1 {
+            let t_idx = self.parser.next_tidx(i);
+            let d = self.dist.dist(st_idx, t_idx);
+            if d < u32::max_value() && dc + d < ld {
+                ld = dc + d;
+            }
+            dc = dc + (self.parser.term_cost)(t_idx) as u32;
             if dc >= ld {
                 // Once the cumulative cost of deleting lexemes is bigger than the current least
                 // distance, there is no chance of finding a subsequent lexeme which could produce
                 // a lower cost.
                 break;
             }
-            let t_idx = self.parser.next_tidx(i);
-            if let Some(d) = self.dist.dist(st_idx, t_idx) {
-                if dc.checked_add(d).unwrap() < ld {
-                    ld = dc + d;
-                }
-            }
-            dc = dc.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap();
         }
         if ld == u32::max_value() {
             None
@@ -655,13 +652,8 @@ impl Dist {
         Dist{terms_len: grm.terms_len(), table}
     }
 
-    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> Option<u32> {
-        let e = self.table[usize::from(st_idx) * self.terms_len as usize + usize::from(t_idx)];
-        if e == u32::max_value() {
-            None
-        } else {
-            Some(e as u32)
-        }
+    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> u32 {
+        self.table[usize::from(st_idx) * self.terms_len as usize + usize::from(t_idx)]
     }
 
     /// rev_edges allows us to walk backwards over the stategraph.
@@ -790,53 +782,53 @@ A: '(' A ')'
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
         let s0 = StIdx::from(0 as u32);
-        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), Some(0));
-        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), Some(1));
-        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), Some(0));
-        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), Some(0));
-        assert_eq!(d.dist(s0, grm.eof_term_idx()), Some(1));
+        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.eof_term_idx()), 1);
 
         let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), None);
-        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), None);
-        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), None);
-        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), None);
-        assert_eq!(d.dist(s1, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s1, grm.eof_term_idx()), 0);
 
         let s2 = sgraph.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), None);
-        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), Some(0));
-        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), None);
-        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), None);
-        assert_eq!(d.dist(s2, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.eof_term_idx()), 0);
 
         let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), None);
-        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), Some(0));
-        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), None);
-        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), None);
-        assert_eq!(d.dist(s3, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s3, grm.eof_term_idx()), 0);
 
         let s5 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("(").unwrap()), Some(0));
-        assert_eq!(d.dist(s5, grm.term_idx(")").unwrap()), Some(1));
-        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), Some(0));
-        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), Some(0));
-        assert_eq!(d.dist(s5, grm.eof_term_idx()), Some(1));
+        assert_eq!(d.dist(s5, grm.term_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.term_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.eof_term_idx()), 1);
 
         let s6 = sgraph.edge(s5, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("(").unwrap()), None);
-        assert_eq!(d.dist(s6, grm.term_idx(")").unwrap()), Some(0));
-        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), None);
-        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), None);
-        assert_eq!(d.dist(s6, grm.eof_term_idx()), Some(1));
+        assert_eq!(d.dist(s6, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s6, grm.eof_term_idx()), 1);
 
         let s4 = sgraph.edge(s6, Symbol::Term(grm.term_idx(")").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("(").unwrap()), None);
-        assert_eq!(d.dist(s4, grm.term_idx(")").unwrap()), Some(0));
-        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), None);
-        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), None);
-        assert_eq!(d.dist(s4, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s4, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s4, grm.eof_term_idx()), 0);
     }
 
     #[test]
@@ -856,39 +848,39 @@ U: 'B';
         // more interesting edge cases that the example from the Kim/Yi paper.
 
         let s0 = StIdx::from(0 as u32);
-        assert_eq!(d.dist(s0, grm.term_idx("A").unwrap()), Some(0));
-        assert_eq!(d.dist(s0, grm.term_idx("B").unwrap()), Some(1));
-        assert_eq!(d.dist(s0, grm.term_idx("C").unwrap()), Some(2));
+        assert_eq!(d.dist(s0, grm.term_idx("A").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.term_idx("B").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.term_idx("C").unwrap()), 2);
 
         let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("A").unwrap()), None);
-        assert_eq!(d.dist(s1, grm.term_idx("B").unwrap()), Some(0));
-        assert_eq!(d.dist(s1, grm.term_idx("C").unwrap()), Some(1));
+        assert_eq!(d.dist(s1, grm.term_idx("A").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx("B").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.term_idx("C").unwrap()), 1);
 
         let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("A").unwrap()), None);
-        assert_eq!(d.dist(s2, grm.term_idx("B").unwrap()), None);
-        assert_eq!(d.dist(s2, grm.term_idx("C").unwrap()), None);
+        assert_eq!(d.dist(s2, grm.term_idx("A").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("B").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("C").unwrap()), u32::max_value());
 
         let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("A").unwrap()), None);
-        assert_eq!(d.dist(s3, grm.term_idx("B").unwrap()), Some(0));
-        assert_eq!(d.dist(s3, grm.term_idx("C").unwrap()), Some(1));
+        assert_eq!(d.dist(s3, grm.term_idx("A").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s3, grm.term_idx("B").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.term_idx("C").unwrap()), 1);
 
         let s4 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("U").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("A").unwrap()), None);
-        assert_eq!(d.dist(s4, grm.term_idx("B").unwrap()), None);
-        assert_eq!(d.dist(s4, grm.term_idx("C").unwrap()), Some(0));
+        assert_eq!(d.dist(s4, grm.term_idx("A").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx("B").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx("C").unwrap()), 0);
 
         let s5 = sgraph.edge(s1, Symbol::Term(grm.term_idx("B").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("A").unwrap()), None);
-        assert_eq!(d.dist(s5, grm.term_idx("B").unwrap()), None);
-        assert_eq!(d.dist(s5, grm.term_idx("C").unwrap()), Some(0));
+        assert_eq!(d.dist(s5, grm.term_idx("A").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s5, grm.term_idx("B").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s5, grm.term_idx("C").unwrap()), 0);
 
         let s6 = sgraph.edge(s4, Symbol::Term(grm.term_idx("C").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("A").unwrap()), None);
-        assert_eq!(d.dist(s6, grm.term_idx("B").unwrap()), None);
-        assert_eq!(d.dist(s6, grm.term_idx("C").unwrap()), None);
+        assert_eq!(d.dist(s6, grm.term_idx("A").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("B").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("C").unwrap()), u32::max_value());
     }
 
     #[test]
@@ -913,32 +905,32 @@ Factor: '(' Expr ')'
         // more interesting edge cases that the example from the Kim/Yi paper.
 
         let s0 = StIdx::from(0 as u32);
-        assert_eq!(d.dist(s0, grm.term_idx("+").unwrap()), Some(1));
-        assert_eq!(d.dist(s0, grm.term_idx("*").unwrap()), Some(1));
-        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), Some(0));
-        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), Some(1));
-        assert_eq!(d.dist(s0, grm.term_idx("INT").unwrap()), Some(0));
+        assert_eq!(d.dist(s0, grm.term_idx("+").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.term_idx("*").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.term_idx("INT").unwrap()), 0);
 
         let s1 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("+").unwrap()), Some(1));
-        assert_eq!(d.dist(s1, grm.term_idx("*").unwrap()), Some(1));
-        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), Some(0));
-        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), Some(1));
-        assert_eq!(d.dist(s1, grm.term_idx("INT").unwrap()), Some(0));
+        assert_eq!(d.dist(s1, grm.term_idx("+").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.term_idx("*").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.term_idx("INT").unwrap()), 0);
 
         let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Factor").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("+").unwrap()), Some(0));
-        assert_eq!(d.dist(s2, grm.term_idx("*").unwrap()), Some(0));
-        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), Some(1));
-        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), Some(0));
-        assert_eq!(d.dist(s2, grm.term_idx("INT").unwrap()), Some(1));
+        assert_eq!(d.dist(s2, grm.term_idx("+").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.term_idx("*").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), 1);
+        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.term_idx("INT").unwrap()), 1);
 
         let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("INT").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("+").unwrap()), Some(0));
-        assert_eq!(d.dist(s3, grm.term_idx("*").unwrap()), Some(0));
-        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), Some(1));
-        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), Some(0));
-        assert_eq!(d.dist(s3, grm.term_idx("INT").unwrap()), Some(1));
+        assert_eq!(d.dist(s3, grm.term_idx("+").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.term_idx("*").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), 1);
+        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.term_idx("INT").unwrap()), 1);
     }
 
     #[test]
@@ -974,44 +966,44 @@ W: 'b' ;
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
         let s0 = StIdx::from(0 as u32);
-        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), Some(0));
-        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), Some(1));
-        assert_eq!(d.dist(s0, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.eof_term_idx()), 0);
 
         let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), Some(0));
-        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), Some(1));
-        assert_eq!(d.dist(s1, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.eof_term_idx()), 0);
 
         let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), None);
-        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), None);
-        assert_eq!(d.dist(s2, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.eof_term_idx()), 0);
 
         let s3 = sgraph.edge(s1, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), Some(1));
-        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), Some(0));
-        assert_eq!(d.dist(s3, grm.eof_term_idx()), Some(1));
+        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), 1);
+        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.eof_term_idx()), 1);
 
         let s4 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("U").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), Some(0));
-        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), Some(1));
-        assert_eq!(d.dist(s4, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s4, grm.eof_term_idx()), 0);
 
         let s5 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("V").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), Some(1));
-        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), Some(0));
-        assert_eq!(d.dist(s5, grm.eof_term_idx()), Some(1));
+        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), 1);
+        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.eof_term_idx()), 1);
 
         let s6 = sgraph.edge(s5, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), Some(0));
-        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), Some(1));
-        assert_eq!(d.dist(s6, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s6, grm.eof_term_idx()), 0);
 
         let s7 = sgraph.edge(s5, Symbol::Nonterm(grm.nonterm_idx("W").unwrap())).unwrap();
-        assert_eq!(d.dist(s7, grm.term_idx("a").unwrap()), Some(0));
-        assert_eq!(d.dist(s7, grm.term_idx("b").unwrap()), Some(1));
-        assert_eq!(d.dist(s7, grm.eof_term_idx()), Some(0));
+        assert_eq!(d.dist(s7, grm.term_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s7, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s7, grm.eof_term_idx()), 0);
     }
 
     #[bench]
