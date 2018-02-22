@@ -93,6 +93,10 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
     }
 
     // Second phase: find remaining success nodes.
+    //
+    // Note: There's no point in searching the neighbours of success nodes: the only way they can
+    // lead to further success is if they only contain extra (zero-cost, by definition) shifts.
+    // That never leads to more interesting repairs from our perspective.
 
     // Free up all memory except for the cost todo that contains the first success node.
     let mut scs_todo = todo.drain(c as usize..c as usize + 1).nth(0).unwrap();
@@ -100,8 +104,6 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
         let n = scs_todo.pop().unwrap();
         if success(&n) {
             scs_nodes.push(n);
-            // There's no point in searching the neighbours of success nodes: they can only
-            // contain extra (zero-cost, by definition) shifts, which are uninteresting.
             continue;
         }
         neighbours(false, &n, &mut next);
