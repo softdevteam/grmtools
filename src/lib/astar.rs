@@ -62,7 +62,6 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
     // First phase: search for the first success node.
 
     let mut scs_nodes = Vec::new(); // Store success nodes
-    let scs_cost: u32;  // What is the cost of a success node?
     let mut todo: Vec<Vec<N>> = vec![vec![start_node]];
     let mut c: u32 = 0; // What cost are we currently examining?
     let mut next = Vec::new();
@@ -82,7 +81,6 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
         let n = todo[c as usize].pop().unwrap();
         if success(&n) {
             scs_nodes.push(n);
-            scs_cost = c;
             break;
         }
 
@@ -111,10 +109,10 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
         }
         neighbours(false, &n, &mut next);
         for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
-            assert!(nbr_cost + nbr_hrstc >= scs_cost);
+            assert!(nbr_cost + nbr_hrstc >= c);
             // We only need to consider neighbouring nodes if they have the same cost as
             // existing success nodes and an empty heuristic.
-            if nbr_cost + nbr_hrstc == scs_cost {
+            if nbr_cost + nbr_hrstc == c {
                 scs_todo.push(nbr);
             }
         }
