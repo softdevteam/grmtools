@@ -50,7 +50,7 @@ const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Repair {
+enum Repair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
     InsertTerm(TIdx),
     /// Delete a symbol.
@@ -82,7 +82,7 @@ impl PartialEq for PathFNode {
     }
 }
 
-pub(crate) struct MF<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
+struct MF<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
     dist: Dist,
     parser: &'a Parser<'a, TokId>
 }
@@ -529,13 +529,13 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
-pub(crate) fn apply_repairs<TokId: PrimInt + Unsigned>
-                           (parser: &Parser<TokId>,
-                            mut la_idx: usize,
-                            mut pstack: Cactus<StIdx>,
-                            tstack: &mut Option<&mut Vec<Node<TokId>>>,
-                            repairs: &[ParseRepair])
-                         -> (usize, Cactus<StIdx>)
+fn apply_repairs<TokId: PrimInt + Unsigned>
+                (parser: &Parser<TokId>,
+                 mut la_idx: usize,
+                 mut pstack: Cactus<StIdx>,
+                 tstack: &mut Option<&mut Vec<Node<TokId>>>,
+                 repairs: &[ParseRepair])
+              -> (usize, Cactus<StIdx>)
 {
     for r in repairs.iter() {
         match *r {
@@ -573,14 +573,14 @@ pub(crate) fn apply_repairs<TokId: PrimInt + Unsigned>
     (la_idx, pstack)
 }
 
-pub(crate) struct Dist {
+struct Dist {
     terms_len: u32,
     table: Vec<u32>
 }
 
 impl Dist {
-    pub(crate) fn new<F>(grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable, term_cost: F) -> Dist
-              where F: Fn(TIdx) -> u8
+    fn new<F>(grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable, term_cost: F) -> Dist
+          where F: Fn(TIdx) -> u8
     {
         // This is an extension of dist from the KimYi paper: it also takes into account reductions
         // and gotos in the distances it reports back. Note that it is conservative, sometimes
@@ -652,7 +652,7 @@ impl Dist {
         Dist{terms_len: grm.terms_len(), table}
     }
 
-    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> u32 {
+    fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> u32 {
         self.table[usize::from(st_idx) * self.terms_len as usize + usize::from(t_idx)]
     }
 
@@ -736,7 +736,7 @@ mod test {
 
     use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST, Repair};
 
-    pub fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
+    fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
         let mut out = vec![];
         for r in repairs.iter() {
             match *r {
@@ -1024,7 +1024,7 @@ A: '(' A ')'
         });
     }
 
-    pub(crate) fn check_all_repairs(grm: &YaccGrammar,
+    fn check_all_repairs(grm: &YaccGrammar,
                                     repairs: &Vec<Vec<ParseRepair>>,
                                     expected: &[&str]) {
         assert_eq!(repairs.len(), expected.len(),
