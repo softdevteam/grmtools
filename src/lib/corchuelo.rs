@@ -101,66 +101,68 @@ impl<TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo
             let pstack = cur.1;
             let repairs: Cactus<Repair> = cur.2;
 
-            // Insertion rule (ER1)
-            match repairs.val() {
-                Some(&Repair::Delete) => {
-                    // In order to avoid adding both [Del, Ins x] and [Ins x, Del] (which are
-                    // equivalent), we follow Corcheulo et al.'s suggestion and never add an Ins
-                    // after a Del.
-                },
-                _ => {
-                    let num_inserts = repairs.vals()
-                                             .filter(|r| if let Repair::InsertTerm{..} = **r {
-                                                             true
-                                                         } else {
-                                                             false
-                                                         })
-                                             .count();
-                    if num_inserts <= INSERT_THRESHOLD {
-                        for sym in parser.stable.state_actions(*pstack.val().unwrap()) {
-                            if let Symbol::Term(t_idx) = sym {
-                                if t_idx == parser.grm.eof_term_idx() {
-                                    continue;
-                                }
+            if la_idx - in_la_idx < PORTION_THRESHOLD {
+                // Insertion rule (ER1)
+                match repairs.val() {
+                    Some(&Repair::Delete) => {
+                        // In order to avoid adding both [Del, Ins x] and [Ins x, Del] (which are
+                        // equivalent), we follow Corcheulo et al.'s suggestion and never add an Ins
+                        // after a Del.
+                    },
+                    _ => {
+                        let num_inserts = repairs.vals()
+                                                 .filter(|r| if let Repair::InsertTerm{..} = **r {
+                                                                 true
+                                                             } else {
+                                                                 false
+                                                             })
+                                                 .count();
+                        if num_inserts <= INSERT_THRESHOLD {
+                            for sym in parser.stable.state_actions(*pstack.val().unwrap()) {
+                                if let Symbol::Term(t_idx) = sym {
+                                    if t_idx == parser.grm.eof_term_idx() {
+                                        continue;
+                                    }
 
-                                // We make the artificially inserted lexeme appear to start at the
-                                // same position as the real next lexeme, but have zero length (so
-                                // that it's clear it's not really something the user created).
-                                let next_lexeme = parser.next_lexeme(la_idx);
-                                let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
-                                                             next_lexeme.start(), 0);
-                                let (new_la_idx, n_pstack) =
-                                    parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
-                                                     pstack.clone(), &mut None);
-                                if new_la_idx > la_idx {
-                                    debug_assert_eq!(new_la_idx, la_idx + 1);
-                                    let n_repairs =
-                                        repairs.child(Repair::InsertTerm{term_idx: t_idx});
-                                    let sc = score(&n_repairs);
-                                    if finished_score.is_none() || sc <= finished_score.unwrap() {
-                                        todo.push_back((la_idx, n_pstack, n_repairs, sc));
+                                    // We make the artificially inserted lexeme appear to start at the
+                                    // same position as the real next lexeme, but have zero length (so
+                                    // that it's clear it's not really something the user created).
+                                    let next_lexeme = parser.next_lexeme(la_idx);
+                                    let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
+                                                                 next_lexeme.start(), 0);
+                                    let (new_la_idx, n_pstack) =
+                                        parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
+                                                         pstack.clone(), &mut None);
+                                    if new_la_idx > la_idx {
+                                        debug_assert_eq!(new_la_idx, la_idx + 1);
+                                        let n_repairs =
+                                            repairs.child(Repair::InsertTerm{term_idx: t_idx});
+                                        let sc = score(&n_repairs);
+                                        if finished_score.is_none() || sc <= finished_score.unwrap() {
+                                            todo.push_back((la_idx, n_pstack, n_repairs, sc));
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // Delete rule (ER2)
-            if la_idx < parser.lexemes.len() {
-                let num_deletes = repairs.vals()
-                                         .filter(|r| if let Repair::Delete = **r {
-                                                         true
-                                                     } else {
-                                                         false
-                                                     })
-                                         .count();
-                if num_deletes <= DELETE_THRESHOLD {
-                    let n_repairs = repairs.child(Repair::Delete);
-                    let sc = score(&n_repairs);
-                    if finished_score.is_none() || sc <= finished_score.unwrap() {
-                        todo.push_back((la_idx + 1, pstack.clone(), n_repairs, sc));
+                // Delete rule (ER2)
+                if la_idx < parser.lexemes.len() {
+                    let num_deletes = repairs.vals()
+                                             .filter(|r| if let Repair::Delete = **r {
+                                                             true
+                                                         } else {
+                                                             false
+                                                         })
+                                             .count();
+                    if num_deletes <= DELETE_THRESHOLD {
+                        let n_repairs = repairs.child(Repair::Delete);
+                        let sc = score(&n_repairs);
+                        if finished_score.is_none() || sc <= finished_score.unwrap() {
+                            todo.push_back((la_idx + 1, pstack.clone(), n_repairs, sc));
+                        }
                     }
                 }
             }
