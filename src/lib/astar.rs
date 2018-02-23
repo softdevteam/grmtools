@@ -31,7 +31,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::fmt::Debug;
-use std::hash::Hash;
 
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
 ///
@@ -47,7 +46,7 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
                                    neighbours: FN,
                                    success: FS)
                                 -> Vec<N>
-                             where N: Debug + Eq + Hash + Clone,
+                             where N: Debug + Clone,
                                    FN: Fn(bool, &N, &mut Vec<(u32, u32, N)>),
                                    FS: Fn(&N) -> bool,
 {
@@ -63,15 +62,11 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
     // First phase: search for the first success node.
 
     let mut scs_nodes = Vec::new(); // Store success nodes
-    let scs_cost: u32;  // What is the cost of a success node?
     let mut todo: Vec<Vec<N>> = vec![vec![start_node]];
     let mut c: u32 = 0; // What cost are we currently examining?
     let mut next = Vec::new();
     loop {
         if todo[c as usize].is_empty() {
-            // We'll never need the lower cost node information again, so clear the associated
-            // memory.
-            todo[c as usize].clear();
             c = c.checked_add(1).unwrap();
             if c as usize == todo.len() {
                 // No success node found and search exhausted.
@@ -83,7 +78,6 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
         let n = todo[c as usize].pop().unwrap();
         if success(&n) {
             scs_nodes.push(n);
-            scs_cost = c;
             break;
         }
 
@@ -99,6 +93,10 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
     }
 
     // Second phase: find remaining success nodes.
+    //
+    // Note: There's no point in searching the neighbours of success nodes: the only way they can
+    // lead to further success is if they only contain extra (zero-cost, by definition) shifts.
+    // That never leads to more interesting repairs from our perspective.
 
     // Free up all memory except for the cost todo that contains the first success node.
     let mut scs_todo = todo.drain(c as usize..c as usize + 1).nth(0).unwrap();
@@ -106,16 +104,14 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
         let n = scs_todo.pop().unwrap();
         if success(&n) {
             scs_nodes.push(n);
-            // There's no point in searching the neighbours of success nodes: they can only
-            // contain extra (zero-cost, by definition) shifts, which are uninteresting.
             continue;
         }
         neighbours(false, &n, &mut next);
         for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
-            assert!(nbr_cost + nbr_hrstc >= scs_cost);
+            assert!(nbr_cost + nbr_hrstc >= c);
             // We only need to consider neighbouring nodes if they have the same cost as
             // existing success nodes and an empty heuristic.
-            if nbr_cost + nbr_hrstc == scs_cost {
+            if nbr_cost + nbr_hrstc == c {
                 scs_todo.push(nbr);
             }
         }
