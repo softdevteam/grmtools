@@ -240,6 +240,10 @@ impl<TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo
                                })
                               .collect::<Vec<Vec<Repair>>>();
 
+        if repairs.is_empty() {
+            return (in_la_idx, Vec::new());
+        }
+
         // Arbitrarily select one of the repairs and replay it against the original starting
         // pstack, this time also creating a parse tree.
 
