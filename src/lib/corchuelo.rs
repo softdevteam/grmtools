@@ -187,48 +187,46 @@ impl<TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo
                                        la_idx + PARSE_AT_LEAST,
                                        pstack.clone(),
                                        &mut None);
-                if new_la_idx < in_la_idx + PORTION_THRESHOLD {
-                    // A repair is a "finisher" (i.e. can be considered complete and doesn't need
-                    // to be added to the todo list) if it's parsed at least N symbols or parsing
-                    // ends in an Accept action.
-                    let mut finisher = false;
-                    if new_la_idx == la_idx + PARSE_AT_LEAST {
-                        finisher = true;
-                    } else {
-                        debug_assert!(new_la_idx < la_idx + PARSE_AT_LEAST);
-                        let st = *n_pstack.val().unwrap();
-                        let la_tidx = parser.next_tidx(new_la_idx);
-                        match parser.stable.action(st, Symbol::Term(la_tidx)) {
-                            Some(Action::Accept) => finisher = true,
-                            None => (),
-                            _ => continue,
-                        }
+                // A repair is a "finisher" (i.e. can be considered complete and doesn't need
+                // to be added to the todo list) if it's parsed at least N symbols or parsing
+                // ends in an Accept action.
+                let mut finisher = false;
+                if new_la_idx == la_idx + PARSE_AT_LEAST {
+                    finisher = true;
+                } else {
+                    debug_assert!(new_la_idx < la_idx + PARSE_AT_LEAST);
+                    let st = *n_pstack.val().unwrap();
+                    let la_tidx = parser.next_tidx(new_la_idx);
+                    match parser.stable.action(st, Symbol::Term(la_tidx)) {
+                        Some(Action::Accept) => finisher = true,
+                        None => (),
+                        _ => continue,
                     }
+                }
 
-                    // As described, at this point we should add (new_la_idx - la_idx) Shifts to
-                    // the repair sequence. However, there's no point in doing this if they're
-                    // added to a finisher: Shifts at the end of a repair sequence confuse users
-                    // and slow down parsing. We thus only add Shifts if this is a non-finisher.
+                // As described, at this point we should add (new_la_idx - la_idx) Shifts to
+                // the repair sequence. However, there's no point in doing this if they're
+                // added to a finisher: Shifts at the end of a repair sequence confuse users
+                // and slow down parsing. We thus only add Shifts if this is a non-finisher.
 
-                    let sc = score(&repairs); // Since Shifts don't count to the score, this isn't
-                                              // affected by the presence or absence of finisher
-                                              // Shifts.
-                    if finisher {
-                        if finished_score.is_none() || sc < finished_score.unwrap() {
-                            finished_score = Some(sc);
-                            finished.clear();
-                            todo.retain(|x| score(&x.2) <= sc);
-                        }
-                        finished.push(repairs);
-                    } else if new_la_idx > la_idx &&
-                              (finished_score.is_none() || sc <= finished_score.unwrap()) {
-                        let mut n_repairs = repairs.clone();
-                        debug_assert_eq!(score(&repairs), score(&n_repairs));
-                        for _ in la_idx..new_la_idx {
-                            n_repairs = n_repairs.child(Repair::Shift);
-                        }
-                        todo.push_back((new_la_idx, n_pstack, n_repairs, sc));
+                let sc = score(&repairs); // Since Shifts don't count to the score, this isn't
+                                          // affected by the presence or absence of finisher
+                                          // Shifts.
+                if finisher {
+                    if finished_score.is_none() || sc < finished_score.unwrap() {
+                        finished_score = Some(sc);
+                        finished.clear();
+                        todo.retain(|x| score(&x.2) <= sc);
                     }
+                    finished.push(repairs);
+                } else if new_la_idx > la_idx &&
+                          (finished_score.is_none() || sc <= finished_score.unwrap()) {
+                    let mut n_repairs = repairs.clone();
+                    debug_assert_eq!(score(&repairs), score(&n_repairs));
+                    for _ in la_idx..new_la_idx {
+                        n_repairs = n_repairs.child(Repair::Shift);
+                    }
+                    todo.push_back((new_la_idx, n_pstack, n_repairs, sc));
                 }
             }
         }
