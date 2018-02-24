@@ -75,7 +75,7 @@ pub struct StateTable {
     //   0  shift 1
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
-    actions          : HashMap<usize, Action, BuildHasherDefault<FnvHasher>>,
+    actions          : HashMap<u32, Action, BuildHasherDefault<FnvHasher>>,
     gotos            : HashMap<u32, StIdx>,
     nonterms_len     : u32,
     terms_len        : u32,
@@ -104,6 +104,8 @@ impl StateTable {
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
         let mut final_state = None;
 
+        // Assert that we can fit the actions table into a u32
+        assert!(sg.all_states_len().checked_mul(grm.terms_len()).is_some());
         for (state_i, state) in sg.iter_closed_states()
                                   .enumerate()
                                   .map(|(x, y)| (StIdx::from(x), y)) {
@@ -226,8 +228,8 @@ impl StateTable {
         self.gotos.get(&off).map_or(None, |x| Some(*x))
     }
 
-    fn actions_offset(terms_len: u32, state_idx: StIdx, term_idx: TIdx) -> usize {
-        usize::from(state_idx) * terms_len as usize + usize::from(term_idx)
+    fn actions_offset(terms_len: u32, state_idx: StIdx, term_idx: TIdx) -> u32 {
+        u32::from(state_idx) * terms_len + u32::from(term_idx)
     }
 }
 
@@ -249,7 +251,7 @@ impl Iterator for StateActionIterator {
     }
 }
 
-fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<usize, Action>, term_k: TIdx,
+fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<u32, Action>, term_k: TIdx,
                         prod_k: PIdx, state_j: StIdx) -> u64 {
     let mut shift_reduce = 0;
     let term_k_prec = grm.term_precedence(term_k);
