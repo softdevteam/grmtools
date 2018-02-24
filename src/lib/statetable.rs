@@ -76,7 +76,8 @@ pub struct StateTable {
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
     actions          : HashMap<usize, Action, BuildHasherDefault<FnvHasher>>,
-    gotos            : HashMap<(StIdx, NTIdx), StIdx>,
+    gotos            : HashMap<u32, StIdx>,
+    nonterms_len     : u32,
     terms_len        : u32,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
@@ -152,12 +153,16 @@ impl StateTable {
                 }
             }
 
+            let nt_len = grm.nonterms_len();
+            // Assert that we can fit the goto table into a u32
+            assert!(sg.all_states_len().checked_mul(nt_len).is_some());
             for (&sym, state_j) in sg.edges(state_i) {
                 match sym {
                     Symbol::Nonterm(nonterm_i) => {
                         // Populate gotos
-                        debug_assert!(gotos.get(&(state_i, nonterm_i)).is_none());
-                        gotos.insert((state_i, nonterm_i), *state_j);
+                        let off = (u32::from(state_i) * nt_len) + u32::from(nonterm_i);
+                        debug_assert!(gotos.get(&off).is_none());
+                        gotos.insert(off, *state_j);
                     },
                     Symbol::Term(term_k) => {
                         // Populate shifts
@@ -185,6 +190,7 @@ impl StateTable {
 
         Ok(StateTable {actions: actions,
                        gotos: gotos,
+                       nonterms_len: grm.nonterms_len(),
                        terms_len: grm.terms_len(),
                        reduce_reduce: reduce_reduce,
                        shift_reduce: shift_reduce,
@@ -216,7 +222,8 @@ impl StateTable {
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
     pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
-        self.gotos.get(&(state_idx, nonterm_idx)).map_or(None, |x| Some(*x))
+        let off = (u32::from(state_idx) * self.nonterms_len) + u32::from(nonterm_idx);
+        self.gotos.get(&off).map_or(None, |x| Some(*x))
     }
 
     fn actions_offset(terms_len: u32, state_idx: StIdx, term_idx: TIdx) -> usize {
