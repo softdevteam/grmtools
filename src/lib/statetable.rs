@@ -76,7 +76,7 @@ pub struct StateTable {
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
     actions          : HashMap<u32, Action, BuildHasherDefault<FnvHasher>>,
-    gotos            : HashMap<u32, StIdx>,
+    gotos            : HashMap<u32, StIdx, BuildHasherDefault<FnvHasher>>,
     nonterms_len     : u32,
     terms_len        : u32,
     /// The number of reduce/reduce errors encountered.
@@ -99,7 +99,7 @@ pub enum Action {
 impl StateTable {
     pub fn new(grm: &YaccGrammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
         let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
-        let mut gotos   = HashMap::new();
+        let mut gotos   = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
         let mut final_state = None;
