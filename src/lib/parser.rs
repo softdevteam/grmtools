@@ -536,5 +536,7 @@ S: 'A' 'A' 'B';
         let us = "aaaaaaaaaaaaaab";
         let (_, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         assert!(pr.is_err() && pr.unwrap_err().0.is_none());
+        let (_, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, &us);
+        assert!(pr.is_err() && pr.unwrap_err().0.is_none());
     }
 }
