@@ -37,7 +37,7 @@ use cfgrammar::yacc::YaccGrammar;
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
 /// grammar:
-/// ```
+/// ```ignore
 ///   let grm = yacc_grm(YaccKind::Original, "
 ///     S: A 'b';
 ///     A: 'a'
@@ -46,7 +46,7 @@ use cfgrammar::yacc::YaccGrammar;
 /// ```
 /// then the following assertions (and only the following assertions) about the firsts set are
 /// correct:
-/// ```
+/// ```ignore
 ///   assert!(firsts.is_set(grm.nonterm_idx("S").unwrap(), grm.term_idx("a").unwrap()));
 ///   assert!(firsts.is_set(grm.nonterm_idx("S").unwrap(), grm.term_idx("b").unwrap()));
 ///   assert!(firsts.is_set(grm.nonterm_idx("A").unwrap(), grm.term_idx("a").unwrap()));

@@ -75,8 +75,9 @@ pub struct StateTable {
     //   0  shift 1
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
-    actions          : HashMap<usize, Action, BuildHasherDefault<FnvHasher>>,
-    gotos            : HashMap<(StIdx, NTIdx), StIdx>,
+    actions          : HashMap<u32, Action, BuildHasherDefault<FnvHasher>>,
+    gotos            : HashMap<u32, StIdx, BuildHasherDefault<FnvHasher>>,
+    nonterms_len     : u32,
     terms_len        : u32,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
@@ -98,11 +99,13 @@ pub enum Action {
 impl StateTable {
     pub fn new(grm: &YaccGrammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
         let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
-        let mut gotos   = HashMap::new();
+        let mut gotos   = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
         let mut final_state = None;
 
+        // Assert that we can fit the actions table into a u32
+        assert!(sg.all_states_len().checked_mul(grm.terms_len()).is_some());
         for (state_i, state) in sg.iter_closed_states()
                                   .enumerate()
                                   .map(|(x, y)| (StIdx::from(x), y)) {
@@ -152,12 +155,16 @@ impl StateTable {
                 }
             }
 
+            let nt_len = grm.nonterms_len();
+            // Assert that we can fit the goto table into a u32
+            assert!(sg.all_states_len().checked_mul(nt_len).is_some());
             for (&sym, state_j) in sg.edges(state_i) {
                 match sym {
                     Symbol::Nonterm(nonterm_i) => {
                         // Populate gotos
-                        debug_assert!(gotos.get(&(state_i, nonterm_i)).is_none());
-                        gotos.insert((state_i, nonterm_i), *state_j);
+                        let off = (u32::from(state_i) * nt_len) + u32::from(nonterm_i);
+                        debug_assert!(gotos.get(&off).is_none());
+                        gotos.insert(off, *state_j);
                     },
                     Symbol::Term(term_k) => {
                         // Populate shifts
@@ -185,6 +192,7 @@ impl StateTable {
 
         Ok(StateTable {actions: actions,
                        gotos: gotos,
+                       nonterms_len: grm.nonterms_len(),
                        terms_len: grm.terms_len(),
                        reduce_reduce: reduce_reduce,
                        shift_reduce: shift_reduce,
@@ -216,11 +224,12 @@ impl StateTable {
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
     pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
-        self.gotos.get(&(state_idx, nonterm_idx)).map_or(None, |x| Some(*x))
+        let off = (u32::from(state_idx) * self.nonterms_len) + u32::from(nonterm_idx);
+        self.gotos.get(&off).map_or(None, |x| Some(*x))
     }
 
-    fn actions_offset(terms_len: u32, state_idx: StIdx, term_idx: TIdx) -> usize {
-        usize::from(state_idx) * terms_len as usize + usize::from(term_idx)
+    fn actions_offset(terms_len: u32, state_idx: StIdx, term_idx: TIdx) -> u32 {
+        u32::from(state_idx) * terms_len + u32::from(term_idx)
     }
 }
 
@@ -242,7 +251,7 @@ impl Iterator for StateActionIterator {
     }
 }
 
-fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<usize, Action>, term_k: TIdx,
+fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<u32, Action>, term_k: TIdx,
                         prod_k: PIdx, state_j: StIdx) -> u64 {
     let mut shift_reduce = 0;
     let term_k_prec = grm.term_precedence(term_k);
