@@ -30,7 +30,10 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::hash::Hash;
 use std::fmt::Debug;
+
+use indexmap::IndexSet;
 
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
 ///
@@ -113,6 +116,70 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
             // existing success nodes and an empty heuristic.
             if nbr_cost + nbr_hrstc == c {
                 scs_todo.push(nbr);
+            }
+        }
+    }
+
+    scs_nodes
+}
+
+/// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
+///
+/// * `neighbours` takes a node `n` and returns an iterator consisting of all `n`'s neighbouring
+/// nodes.
+/// * `success` takes a node `n` and returns `true` if it is a success node or `false` otherwise.
+///
+/// The name of this function isn't entirely accurate: this isn't Dijkstra's original algorithm or
+/// one of its well-known variants. However, unlike the astar_all function it doesn't expect a
+/// heuristic and it also filters out some duplicates.
+pub(crate) fn dijkstra<N, FN, FS>(start_node: N,
+                                  neighbours: FN,
+                                  success: FS)
+                               -> Vec<N>
+                            where N: Debug + Clone + Hash + Eq + PartialEq,
+                                  FN: Fn(bool, &N, &mut Vec<(u32, N)>),
+                                  FS: Fn(&N) -> bool,
+{
+    let mut scs_nodes = Vec::new();
+    let mut todo: Vec<IndexSet<N>> = vec![indexset![start_node]];
+    let mut c: u32 = 0;
+    let mut next = Vec::new();
+    loop {
+        if todo[c as usize].is_empty() {
+            c = c.checked_add(1).unwrap();
+            if c as usize == todo.len() {
+                return Vec::new();
+            }
+            continue;
+        }
+
+        let n = todo[c as usize].pop().unwrap();
+        if success(&n) {
+            scs_nodes.push(n);
+            break;
+        }
+
+        neighbours(true, &n, &mut next);
+        for (nbr_cost, nbr) in next.drain(..) {
+            let off = nbr_cost as usize;
+            for _ in todo.len()..off + 1 {
+                todo.push(IndexSet::new());
+            }
+            todo[off].insert(nbr);
+        }
+    }
+
+    let mut scs_todo = todo.drain(c as usize..c as usize + 1).nth(0).unwrap();
+    while !scs_todo.is_empty() {
+        let n = scs_todo.pop().unwrap();
+        if success(&n) {
+            scs_nodes.push(n);
+            continue;
+        }
+        neighbours(false, &n, &mut next);
+        for (nbr_cost, nbr) in next.drain(..) {
+            if nbr_cost == c {
+                scs_todo.insert(nbr);
             }
         }
     }

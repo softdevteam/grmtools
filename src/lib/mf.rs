@@ -297,7 +297,7 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         }
     }
 
-    /// Convert the output from `astar_bag` into something more usable.
+    /// Convert the output from `astar_all` into something more usable.
     fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
     {
         cnds.into_iter()
@@ -514,13 +514,13 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
-fn apply_repairs<TokId: PrimInt + Unsigned>
-                (parser: &Parser<TokId>,
-                 mut la_idx: usize,
-                 mut pstack: Cactus<StIdx>,
-                 tstack: &mut Option<&mut Vec<Node<TokId>>>,
-                 repairs: &[ParseRepair])
-              -> (usize, Cactus<StIdx>)
+pub(crate) fn apply_repairs<TokId: PrimInt + Unsigned>
+                           (parser: &Parser<TokId>,
+                            mut la_idx: usize,
+                            mut pstack: Cactus<StIdx>,
+                            tstack: &mut Option<&mut Vec<Node<TokId>>>,
+                            repairs: &[ParseRepair])
+                         -> (usize, Cactus<StIdx>)
 {
     for r in repairs.iter() {
         match *r {
@@ -1042,6 +1042,17 @@ E : 'N'
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, us);
         let (pt, errs) = pr.unwrap_err();
         let pp = pt.unwrap().pp(&grm, us);
+        // Note that:
+        //   E
+        //    OPEN_BRACKET (
+        //    E
+        //     E
+        //      N n
+        //     PLUS 
+        //     N n
+        //    CLOSE_BRACKET 
+        // is also the result of a valid minimal-cost repair, but, since the repair involves a
+        // Shift, rank_cnds will always put this too low down the list for us to ever see it.
         if !vec![
 "E
  OPEN_BRACKET (
