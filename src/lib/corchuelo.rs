@@ -30,7 +30,8 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::VecDeque;
+use std::hash::{Hash, Hasher};
+use std::cmp::Ordering;
 
 use cactus::Cactus;
 use cfgrammar::{Symbol, TIdx};
@@ -38,42 +39,77 @@ use lrlex::Lexeme;
 use lrtable::{Action, StIdx};
 use num_traits::{PrimInt, Unsigned};
 
+use astar::dijkstra;
+use mf::apply_repairs;
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
-const INSERT_THRESHOLD: usize = 4; // N_i in Corchuelo et al.
-const DELETE_THRESHOLD: usize = 3; // N_d in Corchuelo et al.
+const TRY_PARSE_AT_MOST: usize = 250;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Repair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
-    InsertTerm{term_idx: TIdx},
+    InsertTerm(TIdx),
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.
     Shift
 }
 
-pub(crate) struct Corchuelo;
-
-pub(crate) fn recoverer<TokId: PrimInt + Unsigned>
-                       ()
-                     -> Box<Recoverer<TokId>> {
-    Box::new(Corchuelo)
+#[derive(Clone, Debug, Eq)]
+struct PathFNode {
+    pstack: Cactus<StIdx>,
+    la_idx: usize,
+    repairs: Cactus<Repair>,
+    cf: u32
 }
 
-impl<TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo
+impl Hash for PathFNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hashing the entire pstack is quite expensive: in practise, the top value already
+        // differentiates things quite a bit, so we can then leave it to PartialEq::eq to properly
+        // differentiate different pstacks (relying on the fact that Cactus equality checks are, in
+        // general, fast).
+        self.pstack.val().unwrap().hash(state);
+        self.la_idx.hash(state);
+        self.repairs.hash(state);
+    }
+}
+
+impl PartialEq for PathFNode {
+    fn eq(&self, other: &PathFNode) -> bool {
+        self.pstack == other.pstack && self.repairs == other.repairs && self.la_idx == other.la_idx
+    }
+}
+
+struct Corchuelo<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
+    parser: &'a Parser<'a, TokId>
+}
+
+pub(crate) fn recoverer<'a, TokId: PrimInt + Unsigned>
+                       (parser: &'a Parser<TokId>)
+                     -> Box<Recoverer<TokId> + 'a>
+{
+    Box::new(Corchuelo{parser})
+}
+
+impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
+
 {
     fn recover(&self,
                parser: &Parser<TokId>,
                in_la_idx: usize,
                in_pstack: &mut Vec<StIdx>,
-               tstack: &mut Vec<Node<TokId>>)
+               mut tstack: &mut Vec<Node<TokId>>)
            -> (usize, Vec<Vec<ParseRepair>>)
     {
-        // This function implements the algorithm from "Repairing syntax errors in LR parsers" by
-        // Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
+        // This function implements a minor variant of the algorithm from "Repairing syntax errors
+        // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
+        //
+        // The major differences are: we change the shift() function (see the comment therein)
+        // along the lines suggested by KimYi; and we simplify the criteria for a successful node
+        // (since the numbers in the Corchuelo paper don't scale well to arbitrary grammars).
         //
         // Because we want to create a parse tree even when error recovery has happened, we can be
         // a bit clever. In our first stage, we try and find repair sequences using a cactus stack
@@ -84,233 +120,356 @@ impl<TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo
         // flavour to part of the ALL(*) algorithm (where, when the LL parser gets to a point of
         // ambiguity, it fires up non-LL sub-parsers, which then tell the LL parser which path it
         // should take).
-
-        let mut cactus_pstack = Cactus::new();
+        let mut start_cactus_pstack = Cactus::new();
         for st in in_pstack.drain(..) {
-            cactus_pstack = cactus_pstack.child(st);
+            start_cactus_pstack = start_cactus_pstack.child(st);
         }
-        let start_cactus_pstack = cactus_pstack.clone();
 
-        let mut todo = VecDeque::new();
-        todo.push_back((in_la_idx, cactus_pstack, Cactus::new(), 0));
-        let mut finished = vec![];
-        let mut finished_score: Option<usize> = None;
-        while !todo.is_empty() {
-            let cur = todo.pop_front().unwrap();
-            let la_idx = cur.0;
-            let pstack = cur.1;
-            let repairs: Cactus<Repair> = cur.2;
+        let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
+                                   la_idx: in_la_idx,
+                                   repairs: Cactus::new(),
+                                   cf: 0};
+        let astar_cnds = dijkstra(
+            start_node,
+            |explore_all, n, nbrs| {
+                // Calculate n's neighbours.
 
-            if la_idx - in_la_idx < PORTION_THRESHOLD {
-                // Insertion rule (ER1)
-                match repairs.val() {
+                if n.la_idx > in_la_idx + PORTION_THRESHOLD {
+                    return;
+                }
+
+                match n.repairs.val() {
                     Some(&Repair::Delete) => {
-                        // In order to avoid adding both [Del, Ins x] and [Ins x, Del] (which are
-                        // equivalent), we follow Corcheulo et al.'s suggestion and never add an Ins
-                        // after a Del.
+                        // We follow Corcheulo et al.'s suggestions and never follow Deletes with
+                        // Inserts.
                     },
                     _ => {
-                        let num_inserts = repairs.vals()
-                                                 .filter(|r| if let Repair::InsertTerm{..} = **r {
-                                                                 true
-                                                             } else {
-                                                                 false
-                                                             })
-                                                 .count();
-                        if num_inserts <= INSERT_THRESHOLD {
-                            for sym in parser.stable.state_actions(*pstack.val().unwrap()) {
-                                if let Symbol::Term(t_idx) = sym {
-                                    if t_idx == parser.grm.eof_term_idx() {
-                                        continue;
-                                    }
-
-                                    // We make the artificially inserted lexeme appear to start at the
-                                    // same position as the real next lexeme, but have zero length (so
-                                    // that it's clear it's not really something the user created).
-                                    let next_lexeme = parser.next_lexeme(la_idx);
-                                    let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
-                                                                 next_lexeme.start(), 0);
-                                    let (new_la_idx, n_pstack) =
-                                        parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
-                                                         pstack.clone(), &mut None);
-                                    if new_la_idx > la_idx {
-                                        debug_assert_eq!(new_la_idx, la_idx + 1);
-                                        let n_repairs =
-                                            repairs.child(Repair::InsertTerm{term_idx: t_idx});
-                                        let sc = score(&n_repairs);
-                                        if finished_score.is_none() || sc <= finished_score.unwrap() {
-                                            todo.push_back((la_idx, n_pstack, n_repairs, sc));
-                                        }
-                                    }
-                                }
-                            }
+                        if explore_all {
+                            self.insert(n, nbrs);
                         }
                     }
                 }
-
-                // Delete rule (ER2)
-                if la_idx < parser.lexemes.len() {
-                    let num_deletes = repairs.vals()
-                                             .filter(|r| if let Repair::Delete = **r {
-                                                             true
-                                                         } else {
-                                                             false
-                                                         })
-                                             .count();
-                    if num_deletes <= DELETE_THRESHOLD {
-                        let n_repairs = repairs.child(Repair::Delete);
-                        let sc = score(&n_repairs);
-                        if finished_score.is_none() || sc <= finished_score.unwrap() {
-                            todo.push_back((la_idx + 1, pstack.clone(), n_repairs, sc));
-                        }
-                    }
+                if explore_all {
+                    self.delete(n, nbrs);
                 }
-            }
+                self.shift(n, nbrs);
+            },
+            |n| {
+                // Is n a success node?
 
-            // Forward move rule (ER3)
-            //
-            // Note the rule in Corchuelo et al. is confusing and, I think, wrong. It reads:
-            //   (S, I) \rightarrow_{LR*} (S', I') \wedge (j = N \vee 0 < j < N
-            //                                             \wedge f(q_r, t_{j + 1} \in {accept, error})
-            // First I think the bracketing would be clearer if written as:
-            //   j = N \vee (0 < j < N \wedge f(q_r, t_{j + 1} \in {accept, error})
-            // And I think the condition should be:
-            //   j = N \vee (0 <= j < N \wedge f(q_r, t_{j + 1} \in {accept, error})
-            // because there's no reason that any symbols need to be shifted in order for an accept
-            // (or, indeed an error) state to be reached.
-            //
-            // So the full rule should I think be:
-            //   (S, I) \rightarrow_{LR*} (S', I')
-            //   \wedge (j = N \vee (0 <= j < N \wedge f(q_r, t_{j + 1} \in {accept, error}))
-            {
-                let (new_la_idx, n_pstack)
-                    = parser.lr_cactus(None,
-                                       la_idx,
-                                       la_idx + PARSE_AT_LEAST,
-                                       pstack.clone(),
-                                       &mut None);
-                // A repair is a "finisher" (i.e. can be considered complete and doesn't need
-                // to be added to the todo list) if it's parsed at least N symbols or parsing
-                // ends in an Accept action.
-                let mut finisher = false;
-                if new_la_idx == la_idx + PARSE_AT_LEAST {
-                    finisher = true;
-                } else {
-                    debug_assert!(new_la_idx < la_idx + PARSE_AT_LEAST);
-                    let st = *n_pstack.val().unwrap();
-                    let la_tidx = parser.next_tidx(new_la_idx);
-                    match parser.stable.action(st, Symbol::Term(la_tidx)) {
-                        Some(Action::Accept) => finisher = true,
-                        None => (),
-                        _ => continue,
-                    }
+                // As presented in both Corchuelo et al. and Kim Yi, one type of success is if N
+                // symbols are parsed in one go. Indeed, without such a check, the search space
+                // quickly becomes too big. There isn't a way of encoding this check in r3s_n, so
+                // we check instead for its result: if the last N ('PARSE_AT_LEAST' in this
+                // library) repairs are shifts, then we've found a success node.
+                if ends_with_parse_at_least_shifts(&n.repairs) {
+                    return true;
                 }
 
-                // As described, at this point we should add (new_la_idx - la_idx) Shifts to
-                // the repair sequence. However, there's no point in doing this if they're
-                // added to a finisher: Shifts at the end of a repair sequence confuse users
-                // and slow down parsing. We thus only add Shifts if this is a non-finisher.
-
-                let sc = score(&repairs); // Since Shifts don't count to the score, this isn't
-                                          // affected by the presence or absence of finisher
-                                          // Shifts.
-                if finisher {
-                    if finished_score.is_none() || sc < finished_score.unwrap() {
-                        finished_score = Some(sc);
-                        finished.clear();
-                        todo.retain(|x| score(&x.2) <= sc);
-                    }
-                    finished.push(repairs);
-                } else if new_la_idx > la_idx &&
-                          (finished_score.is_none() || sc <= finished_score.unwrap()) {
-                    let mut n_repairs = repairs.clone();
-                    debug_assert_eq!(score(&repairs), score(&n_repairs));
-                    for _ in la_idx..new_la_idx {
-                        n_repairs = n_repairs.child(Repair::Shift);
-                    }
-                    todo.push_back((new_la_idx, n_pstack, n_repairs, sc));
+                let la_tidx = parser.next_tidx(n.la_idx);
+                match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
+                    Some(Action::Accept) => true,
+                    _ => false,
                 }
-            }
+            });
+
+        if astar_cnds.is_empty() {
+            return (in_la_idx, vec![]);
         }
 
-        let repairs = finished.iter()
-                              .map(|x| { let mut v = x.vals().cloned().collect::<Vec<Repair>>();
-                                         v.reverse();
-                                         v
-                               })
-                              .collect::<Vec<Vec<Repair>>>();
+        let full_rprs = self.collect_repairs(astar_cnds);
+        let smpl_rprs = self.simplify_repairs(full_rprs);
+        let rnk_rprs = self.rank_cnds(in_la_idx,
+                                      &start_cactus_pstack,
+                                      smpl_rprs);
+        let (la_idx, mut rpr_pstack) = apply_repairs(parser,
+                                                     in_la_idx,
+                                                     start_cactus_pstack,
+                                                     &mut Some(&mut tstack),
+                                                     &rnk_rprs[0]);
 
-        if repairs.is_empty() {
-            return (in_la_idx, Vec::new());
+        in_pstack.clear();
+        while !rpr_pstack.is_empty() {
+            let p = rpr_pstack.parent().unwrap();
+            in_pstack.push(rpr_pstack.try_unwrap()
+                                     .unwrap_or_else(|c| *c.val()
+                                                           .unwrap()));
+            rpr_pstack = p;
         }
+        in_pstack.reverse();
 
-        // Arbitrarily select one of the repairs and replay it against the original starting
-        // pstack, this time also creating a parse tree.
-
-        let mut la_idx = in_la_idx;
-        {
-            let mut pstack = start_cactus_pstack;
-            for r in &repairs[0] {
-                match *r {
-                    Repair::InsertTerm{term_idx} => {
-                        let next_lexeme = parser.next_lexeme(la_idx);
-                        let new_lexeme = Lexeme::new(TokId::from(u32::from(term_idx)).unwrap(),
-                                                     next_lexeme.start(), 0);
-                        pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
-                                                  pstack, &mut Some(tstack)).1;
-                    },
-                    Repair::Delete => {
-                        la_idx += 1;
-                    }
-                    Repair::Shift => {
-                        let (new_la_idx, n_pstack)
-                            = parser.lr_cactus(None, la_idx, la_idx + 1, pstack, &mut Some(tstack));
-                        assert_eq!(new_la_idx, la_idx + 1);
-                        la_idx = new_la_idx;
-                        pstack = n_pstack;
-                    }
-                }
-            }
-
-            in_pstack.clear();
-            while !pstack.is_empty() {
-                let p = pstack.parent().unwrap();
-                in_pstack.push(pstack.try_unwrap().unwrap_or_else(|c| *c.val().unwrap()));
-                pstack = p;
-            }
-            in_pstack.reverse();
-        }
-
-        let prepairs = convert_to_parser_repairs(repairs);
-
-        (la_idx, prepairs)
+        (la_idx, rnk_rprs)
     }
 }
 
-fn score(repairs: &Cactus<Repair>) -> usize {
-    repairs.vals()
-           .filter(|x| match **x {
-                           Repair::InsertTerm{..} | Repair::Delete => true,
-                           Repair::Shift => false
-                       })
-           .count()
+impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
+    fn insert(&self,
+             n: &PathFNode,
+             nbrs: &mut Vec<(u32, PathFNode)>)
+    {
+        let la_idx = n.la_idx;
+        for sym in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
+            if let Symbol::Term(t_idx) = sym {
+                if t_idx == self.parser.grm.eof_term_idx() {
+                    continue;
+                }
+
+                if let Some(&Repair::Shift) = n.repairs.val() {
+                    debug_assert!(n.la_idx > 0);
+                    // If we're about to insert term T and the next terminal in the user's
+                    // input is T, we could potentially end up with two similar repair
+                    // sequences:
+                    //   Insert T, Shift
+                    //   Shift, Insert T
+                    // From a user's perspective, both of those are equivalent. From our point
+                    // of view, the duplication is inefficient. We prefer the former sequence
+                    // because we want to find PARSE_AT_LEAST consecutive shifts. At this
+                    // point, we see if we're about to Insert T after a Shift of T and, if so,
+                    // avoid doing so.
+                    let prev_tidx = self.parser.next_tidx(la_idx - 1);
+                    if prev_tidx == t_idx {
+                        continue;
+                    }
+                }
+
+                let next_lexeme = self.parser.next_lexeme(n.la_idx);
+                let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
+                                             next_lexeme.start(), 0);
+                let (new_la_idx, n_pstack) =
+                    self.parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
+                                          n.pstack.clone(), &mut None);
+                if new_la_idx > la_idx {
+                    let n_repairs = n.repairs.child(Repair::InsertTerm(t_idx));
+                    let nn = PathFNode{
+                        pstack: n_pstack,
+                        la_idx: n.la_idx,
+                        repairs: n_repairs,
+                        cf: n.cf.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap()};
+                    nbrs.push((nn.cf, nn));
+                }
+            }
+        }
+    }
+
+    fn delete(&self,
+           n: &PathFNode,
+           nbrs: &mut Vec<(u32, PathFNode)>)
+    {
+        if n.la_idx == self.parser.lexemes.len() {
+            return;
+        }
+
+        let n_repairs = n.repairs.child(Repair::Delete);
+        let la_tidx = self.parser.next_tidx(n.la_idx);
+        let cost = (self.parser.term_cost)(la_tidx);
+        let nn = PathFNode{pstack: n.pstack.clone(),
+                           la_idx: n.la_idx + 1,
+                           repairs: n_repairs,
+                           cf: n.cf.checked_add(cost as u32).unwrap()};
+        nbrs.push((nn.cf, nn));
+    }
+
+    fn shift(&self,
+             n: &PathFNode,
+             nbrs: &mut Vec<(u32, PathFNode)>)
+    {
+        // Forward move rule (ER3)
+        //
+        // Note the rule in Corchuelo et al. is confusing and, I think, wrong. It reads:
+        //   (S, I) \rightarrow_{LR*} (S', I')
+        //   \wedge (j = N \vee 0 < j < N \wedge f(q_r, t_{j + 1} \in {accept, error})
+        // First I think the bracketing would be clearer if written as:
+        //   j = N \vee (0 < j < N \wedge f(q_r, t_{j + 1} \in {accept, error})
+        // And I think the condition should be:
+        //   j = N \vee (0 <= j < N \wedge f(q_r, t_{j + 1} \in {accept, error})
+        // because there's no reason that any symbols need to be shifted in order for an accept
+        // (or, indeed an error) state to be reached.
+        //
+        // So the full rule should, I think, be:
+        //   (S, I) \rightarrow_{LR*} (S', I')
+        //   \wedge (j = N \vee (0 <= j < N \wedge f(q_r, t_{j + 1} \in {accept, error}))
+        //
+        // That said, as KimYi somewhat obliquely mention, generating multiple shifts in one go is
+        // a bad idea: it means that we miss out on some minimal cost repairs. Instead, we should
+        // only generate one shift at a time. So the adjusted rule we implement is:
+        //
+        //   (S, I) \rightarrow_{LR*} (S', I')
+        //   \wedge 0 <= j < 1 \wedge S != S'
+
+        let la_idx = n.la_idx;
+        let (new_la_idx, n_pstack) = self.parser.lr_cactus(None,
+                                                           la_idx,
+                                                           la_idx + 1,
+                                                           n.pstack.clone(),
+                                                           &mut None);
+        if n.pstack != n_pstack {
+            let n_repairs = if new_la_idx > la_idx {
+                n.repairs.child(Repair::Shift)
+            } else {
+                n.repairs.clone()
+            };
+            let nn = PathFNode{
+                pstack: n_pstack,
+                la_idx: new_la_idx,
+                repairs: n_repairs,
+                cf: n.cf};
+            nbrs.push((nn.cf, nn));
+        }
+    }
+
+    /// Convert the output from `astar_all` into something more usable.
+    fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
+    {
+        cnds.into_iter()
+            .map(|x| {
+                let mut rprs = x.repairs
+                                .vals()
+                                .cloned()
+                                .collect::<Vec<Repair>>();
+                rprs.reverse();
+                rprs
+            })
+            .collect::<Vec<Vec<Repair>>>()
+    }
+
+    /// Take an (unordered) set of parse repairs and return a simplified (unordered) set of parse
+    /// repairs. Note that the caller must make no assumptions about the size or contents of the output
+    /// set: this function might delete, expand, or do other things to repairs.
+    fn simplify_repairs(&self,
+                        mut all_rprs: Vec<Vec<Repair>>)
+                     -> Vec<Vec<ParseRepair>>
+    {
+        for i in 0..all_rprs.len() {
+            {
+                // Remove shifts from the end of repairs
+                let mut rprs = &mut all_rprs[i];
+                while !rprs.is_empty() {
+                    if let Repair::Shift = rprs[rprs.len() - 1] {
+                        rprs.pop();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // The simplifications above can mean that we now end up with equivalent repairs. Remove
+        // duplicates.
+
+        let mut i = 0;
+        while i < all_rprs.len() {
+            let mut j = i + 1;
+            while j < all_rprs.len() {
+                if all_rprs[i] == all_rprs[j] {
+                    all_rprs.remove(j);
+                } else {
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+
+        all_rprs.iter()
+                .map(|x| x.iter()
+                          .map(|y| {
+                                        match *y {
+                                            Repair::InsertTerm(term_idx) =>
+                                                ParseRepair::Insert(term_idx),
+                                            Repair::Delete => ParseRepair::Delete,
+                                            Repair::Shift => ParseRepair::Shift,
+                                        }
+                               })
+                          .collect())
+                      .collect()
+    }
+
+    /// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
+    /// highest to lowest) by the distance they allow parsing to continue without error. If two or more
+    /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
+    /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
+    /// ordering is non-deterministic.
+    fn rank_cnds(&self,
+                 in_la_idx: usize,
+                 start_pstack: &Cactus<StIdx>,
+                 in_cnds: Vec<Vec<ParseRepair>>)
+              -> Vec<Vec<ParseRepair>>
+    {
+        let mut cnds = in_cnds.into_iter()
+                              .map(|rprs| {
+                                   let (la_idx, pstack) = apply_repairs(self.parser,
+                                                                        in_la_idx,
+                                                                        start_pstack.clone(),
+                                                                        &mut None,
+                                                                        &rprs);
+                                   (pstack, la_idx, rprs)
+                               })
+                              .collect::<Vec<(Cactus<StIdx>, usize, Vec<ParseRepair>)>>();
+
+        // First try parsing each candidate repair until it hits an error or exceeds TRY_PARSE_AT_MOST
+        // lexemes.
+
+        let mut todo = Vec::new();
+        todo.resize(cnds.len(), true);
+        let mut remng = cnds.len(); // Remaining items in todo
+        let mut i = 0;
+        while i < TRY_PARSE_AT_MOST && remng > 1 {
+            let mut j = 0;
+            while j < todo.len() {
+                if !todo[j] {
+                    j += 1;
+                    continue;
+                }
+                let cnd = &mut cnds[j];
+                if cnd.1 > in_la_idx + i {
+                    j += 1;
+                    continue;
+                }
+                let (new_la_idx, new_pstack) = self.parser.lr_cactus(None,
+                                                                     in_la_idx + i,
+                                                                     in_la_idx + i + 1,
+                                                                     cnd.0.clone(),
+                                                                     &mut None);
+                if new_la_idx == in_la_idx + i {
+                    todo[j] = false;
+                    remng -= 1;
+                } else {
+                    cnd.0 = new_pstack;
+                    cnd.1 += 1;
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+
+        // Now rank the candidates into descending order, first by how far they are able to parse, then
+        // by the number of actions in the repairs (the latter is somewhat arbitrary, but matches the
+        // intuition that "repairs which affect the shortest part of the string are preferable").
+        cnds.sort_unstable_by(|x, y| {
+            match y.1.cmp(&x.1) {
+                Ordering::Equal => {
+                    x.2.len().cmp(&y.2.len())
+                },
+                a => a
+            }
+        });
+
+        cnds.into_iter()
+            .map(|x| x.2)
+            .collect::<Vec<Vec<ParseRepair>>>()
+    }
 }
 
-fn convert_to_parser_repairs(all_rprs: Vec<Vec<Repair>>) -> Vec<Vec<ParseRepair>>
-{
-      all_rprs.into_iter()
-              .map(|x| x.iter()
-                        .map(|y|
-                             {
-                                  match *y {
-                                      Repair::InsertTerm{term_idx} =>
-                                          ParseRepair::Insert(term_idx),
-                                      Repair::Delete => ParseRepair::Delete,
-                                      Repair::Shift => ParseRepair::Shift,
-                                  }
-                             })
-                        .collect())
-                    .collect()
+/// Do `repairs` end with enough Shift repairs to be considered a success node?
+fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
+    let mut shfts = 0;
+    for x in repairs.vals().take(PARSE_AT_LEAST) {
+        if let Repair::Shift = *x {
+            shfts += 1;
+            continue;
+        }
+        return false;
+    }
+    shfts == PARSE_AT_LEAST
 }
 
 #[cfg(test)]
@@ -337,14 +496,15 @@ mod test {
         out.join(", ")
     }
 
-    fn check_repairs(grm: &YaccGrammar, repairs: &Vec<Vec<ParseRepair>>, expected: &[&str]) {
-        assert_eq!(repairs.len(), expected.len());
+    fn check_all_repairs(grm: &YaccGrammar,
+                                    repairs: &Vec<Vec<ParseRepair>>,
+                                    expected: &[&str]) {
+        assert_eq!(repairs.len(), expected.len(),
+                   "{:?}\nhas a different number of entries to:\n{:?}", repairs, expected);
         for i in 0..repairs.len() {
-            // First of all check that all the repairs are unique
-            for j in i + 1..repairs.len() {
-                assert_ne!(repairs[i], repairs[j]);
+            if expected.iter().find(|x| **x == pp_repairs(&grm, &repairs[i])).is_none() {
+                panic!("No match found for:\n  {}", pp_repairs(&grm, &repairs[i]));
             }
-            expected.iter().find(|x| **x == pp_repairs(&grm, &repairs[i])).unwrap();
         }
     }
 
@@ -365,9 +525,28 @@ E : 'N'
   ;
 ";
 
-        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "(nn");
+        let us = "(nn";
+        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, us);
         let (pt, errs) = pr.unwrap_err();
-        assert_eq!(pt.unwrap().pp(&grm, "(nn"),
+        let pp = pt.unwrap().pp(&grm, us);
+        // Note that:
+        //   E
+        //    OPEN_BRACKET (
+        //    E
+        //     E
+        //      N n
+        //     PLUS 
+        //     N n
+        //    CLOSE_BRACKET 
+        // is also the result of a valid minimal-cost repair, but, since the repair involves a
+        // Shift, rank_cnds will always put this too low down the list for us to ever see it.
+        if !vec![
+"E
+ OPEN_BRACKET (
+ E
+  N n
+ CLOSE_BRACKET 
+",
 "E
  E
   OPEN_BRACKET (
@@ -376,36 +555,40 @@ E : 'N'
   CLOSE_BRACKET 
  PLUS 
  N n
-");
+"]
+            .iter()
+            .any(|x| *x == pp) {
+            panic!("Can't find a match for {}", pp);
+        }
+
         assert_eq!(errs.len(), 1);
         let err_tok_id = u32::from(grm.term_idx("N").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
-        assert_eq!(errs[0].repairs().len(), 3);
-        check_repairs(&grm,
-                      errs[0].repairs(),
-                      &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
-                            "Insert \"CLOSE_BRACKET\", Delete",
-                            "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
+                                "Insert \"CLOSE_BRACKET\", Delete",
+                                "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
         let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_repairs(&grm,
-                      errs[0].repairs(),
-                      &vec!["Delete"]);
-        check_repairs(&grm,
-                      errs[1].repairs(),
-                      &vec!["Delete"]);
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Delete"]);
+        check_all_repairs(&grm,
+                          errs[1].repairs(),
+                          &vec!["Delete"]);
 
         let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_repairs(&grm,
-                      errs[0].repairs(),
-                      &vec!["Insert \"N\"",
-                            "Delete"]);
-        check_repairs(&grm,
-                      errs[1].repairs(),
-                      &vec!["Insert \"CLOSE_BRACKET\""]);
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"N\"",
+                                "Delete"]);
+        check_all_repairs(&grm,
+                          errs[1].repairs(),
+                          &vec!["Insert \"CLOSE_BRACKET\""]);
     }
 }

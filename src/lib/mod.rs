@@ -34,10 +34,10 @@
 
 extern crate cactus;
 extern crate cfgrammar;
+#[macro_use] extern crate indexmap;
 extern crate lrlex;
 extern crate lrtable;
 extern crate num_traits;
-extern crate pathfinding;
 extern crate test;
 extern crate vob;
 

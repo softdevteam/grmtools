@@ -162,9 +162,8 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
                 None => {
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
-                                             RecoveryKind::Corchuelo => corchuelo::recoverer(),
-                                             RecoveryKind::MF =>
-                                                 mf::recoverer(self),
+                                             RecoveryKind::Corchuelo => corchuelo::recoverer(self),
+                                             RecoveryKind::MF => mf::recoverer(self),
                                          });
                     }
 
