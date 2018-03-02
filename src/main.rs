@@ -58,7 +58,9 @@ fn usage(prog: &str, msg: &str) -> ! {
     if !msg.is_empty() {
         writeln!(&mut stderr(), "{}", msg).ok();
     }
-    writeln!(&mut stderr(), "Usage: {} [-y <eco|original>] <lexer.l> <parser.y> <input file>", leaf).ok();
+    writeln!(&mut stderr(),
+             "Usage: {} [-r <corchuelo|mf|none>] [-y <eco|original>] <lexer.l> <parser.y> <input file>",
+             leaf).ok();
     process::exit(1);
 }
 
@@ -80,6 +82,9 @@ fn main() {
     let prog = &args[0];
     let matches = match Options::new()
                                 .optflag("h", "help", "")
+                                .optopt("r", "recoverer",
+                                        "Recoverer to be used (default: MF)",
+                                        "Corchuelo|MF|None")
                                 .optopt("y", "yaccvariant",
                                         "Yacc variant to be parsed (default: Original)",
                                         "Original|Eco")
@@ -91,6 +96,18 @@ fn main() {
     if matches.opt_present("h") {
         usage(prog, "");
     }
+
+    let recoverykind = match matches.opt_str("r") {
+        None => RecoveryKind::MF,
+        Some(s) => {
+            match &*s.to_lowercase() {
+                "corchuelo" => RecoveryKind::Corchuelo,
+                "mf" => RecoveryKind::MF,
+                "none" => RecoveryKind::None,
+                _ => usage(prog, &format!("Unknown recoverer '{}'.", s))
+            }
+        }
+    };
 
     let yacckind = match matches.opt_str("y") {
         None => YaccKind::Original,
@@ -164,7 +181,7 @@ fn main() {
     let lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
     let term_cost = |_| 1; // Cost of inserting/deleting a terminal
-    match parse_rcvry::<u16, _>(RecoveryKind::MF, &grm, &term_cost, &sgraph, &stable, &lexemes) {
+    match parse_rcvry::<u16, _>(recoverykind, &grm, &term_cost, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err((o_pt, errs)) => {
             match o_pt {
