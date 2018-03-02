@@ -115,15 +115,15 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
                     },
                     _ => {
                         if explore_all || n.cg > 0 {
-                            self.r3is(n, nbrs);
+                            self.insert(n, nbrs);
                         }
-                        self.r3ir(n, nbrs);
+                        self.reduce(n, nbrs);
                     }
                 }
                 if explore_all || n.cg > 0 {
-                    self.r3d(n, nbrs);
+                    self.delete(n, nbrs);
                 }
-                self.r3s_n(n, nbrs);
+                self.shift(n, nbrs);
             },
             |n| {
                 // Is n a success node?
@@ -174,9 +174,9 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
 }
 
 impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
-    fn r3is(&self,
-            n: &PathFNode,
-            nbrs: &mut Vec<(u32, u32, PathFNode)>)
+    fn insert(&self,
+              n: &PathFNode,
+              nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
         for (&sym, &sym_st_idx) in self.parser.sgraph.edges(top_pstack).iter() {
@@ -218,9 +218,9 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         }
     }
 
-    fn r3ir(&self,
-            n: &PathFNode,
-            nbrs: &mut Vec<(u32, u32, PathFNode)>)
+    fn reduce(&self,
+              n: &PathFNode,
+              nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
         // This is different than KimYi's r3ir: their r3ir inserts symbols if the dot in a state is not
         // at the end. This is unneeded in our setup (indeed, doing so causes duplicates): all we need
@@ -254,9 +254,9 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         }
     }
 
-    fn r3d(&self,
-           n: &PathFNode,
-           nbrs: &mut Vec<(u32, u32, PathFNode)>)
+    fn delete(&self,
+              n: &PathFNode,
+              nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
         if n.la_idx == self.parser.lexemes.len() {
             return;
@@ -275,7 +275,7 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         }
     }
 
-    fn r3s_n(&self,
+    fn shift(&self,
              n: &PathFNode,
              nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
