@@ -234,6 +234,7 @@ fn main() {
                     println!("  {}", out.join(", "));
                 }
             }
+            process::exit(1);
         }
     }
 }
