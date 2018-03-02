@@ -173,6 +173,10 @@ fn main() {
             }
             for e in errs {
                 let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
+                if e.repairs().is_empty() {
+                    println!("Error detected at line {} col {}. No repairs found.", line, col);
+                    continue;
+                }
                 println!("Error detected at line {} col {}. Amongst the valid repairs are:", line, col);
                 for repair in e.repairs() {
                     let mut lex_idx = e.lexeme_idx();
