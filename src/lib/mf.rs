@@ -31,6 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cmp::Ordering;
+use std::hash::{Hash, Hasher};
 use std::mem;
 
 use cactus::Cactus;
@@ -48,7 +49,7 @@ const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum Repair {
     /// Insert a `Symbol::Term` with idx `term_idx`.
     InsertTerm(TIdx),
@@ -58,13 +59,74 @@ enum Repair {
     Shift
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum RepairMerge {
+    Repair(Repair),
+    Merge(Repair, Cactus<Cactus<RepairMerge>>),
+    Terminator
+}
+
+#[derive(Clone, Debug, Eq)]
 struct PathFNode {
     pstack: Cactus<StIdx>,
     la_idx: usize,
-    repairs: Cactus<Repair>,
+    repairs: Cactus<RepairMerge>,
     cf: u32,
     cg: u32
+}
+
+impl PathFNode {
+    fn last_repair(&self) -> Option<Repair> {
+        match self.repairs.val().unwrap() {
+            &RepairMerge::Repair(r) => Some(r),
+            &RepairMerge::Merge(x, _) => Some(x),
+            &RepairMerge::Terminator => None
+        }
+    }
+}
+
+impl Hash for PathFNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.pstack.hash(state);
+        self.la_idx.hash(state);
+    }
+}
+
+impl PartialEq for PathFNode {
+    fn eq(&self, other: &PathFNode) -> bool {
+        if self.la_idx != other.la_idx || self.pstack != other.pstack {
+            return false;
+        }
+        // The rest of this function is subtle: we're not looking for repairs which are exactly
+        // equivalent, but ones that are compatible. This is necessary so that we can merge
+        // compatible nodes. Our definition of compatible repairs is simple: they must end with
+        // exactly the same number of shifts. Ending with zero shifts is fine: so two repair
+        // sequences that end with (say) a Delete and an InsertTerm are compatible by definition.
+        for (srm, orm) in self.repairs.vals().zip(other.repairs.vals()) {
+            match (srm, orm) {
+                (&RepairMerge::Repair(sr), &RepairMerge::Repair(or))
+                | (&RepairMerge::Merge(sr, _), &RepairMerge::Repair(or))
+                | (&RepairMerge::Repair(sr), &RepairMerge::Merge(or, _))
+                | (&RepairMerge::Merge(sr, _), &RepairMerge::Merge(or, _)) => {
+                    match (sr, or) {
+                        (Repair::Shift, Repair::Shift) => (),
+                        (Repair::Shift, _) | (_, Repair::Shift) => return false,
+                        _ => {
+                            // As soon as we come across two repairs which aren't shifts, we know
+                            // that we must have satisfied the "must end with the same number of
+                            // shifts" constraint and can bail out.
+                            return true;
+                        }
+                    }
+                },
+                (&RepairMerge::Terminator, &RepairMerge::Terminator)
+                    => return true,
+                (&RepairMerge::Terminator, _) | (_, &RepairMerge::Terminator)
+                    => return false
+            }
+        }
+        unreachable!()
+    }
 }
 
 struct MF<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
@@ -96,7 +158,7 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
 
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
                                    la_idx: in_la_idx,
-                                   repairs: Cactus::new(),
+                                   repairs: Cactus::new().child(RepairMerge::Terminator),
                                    cf: 0,
                                    cg: 0};
         let astar_cnds = astar_all(
@@ -108,8 +170,8 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
                     return;
                 }
 
-                match n.repairs.val() {
-                    Some(&Repair::Delete) => {
+                match n.last_repair() {
+                    Some(Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
                         // Inserts.
                     },
@@ -124,6 +186,24 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
                     self.delete(n, nbrs);
                 }
                 self.shift(n, nbrs);
+            },
+            |old, new| {
+                // merge new_n into old_n
+
+                if old.repairs == new.repairs {
+                    // If the repair sequences are identical, then merging is pointless.
+                    return;
+                }
+                let merge = match old.repairs.val().unwrap() {
+                    &RepairMerge::Repair(r) => {
+                        RepairMerge::Merge(r, Cactus::new().child(new.repairs))
+                    },
+                    &RepairMerge::Merge(r, ref v) => {
+                        RepairMerge::Merge(r, v.child(new.repairs))
+                    },
+                    _ => unreachable!()
+                };
+                old.repairs = old.repairs.parent().unwrap().child(merge);
             },
             |n| {
                 // Is n a success node?
@@ -185,9 +265,9 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
                     continue;
                 }
 
-                let n_repairs = n.repairs.child(Repair::InsertTerm(term_idx));
+                let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(term_idx)));
                 if let Some(d) = self.dyn_dist(&n_repairs, sym_st_idx, n.la_idx) {
-                    if let Some(&Repair::Shift) = n.repairs.val() {
+                    if let Some(Repair::Shift) = n.last_repair() {
                         debug_assert!(n.la_idx > 0);
                         // If we're about to insert term T and the next terminal in the user's
                         // input is T, we could potentially end up with two similar repair
@@ -262,7 +342,7 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
             return;
         }
 
-        let n_repairs = n.repairs.child(Repair::Delete);
+        let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Delete));
         if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.la_idx + 1) {
             let la_tidx = self.parser.next_tidx(n.la_idx);
             let cost = (self.parser.term_cost)(la_tidx);
@@ -283,7 +363,7 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         let top_pstack = *n.pstack.val().unwrap();
         if let Some(Action::Shift(state_id)) = self.parser.stable.action(top_pstack,
                                                                          Symbol::Term(la_tidx)) {
-            let n_repairs = n.repairs.child(Repair::Shift);
+            let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Shift));
             let new_la_idx = n.la_idx + 1;
             if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_la_idx) {
                 let nn = PathFNode{
@@ -297,19 +377,50 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         }
     }
 
+
     /// Convert the output from `astar_all` into something more usable.
     fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
     {
-        cnds.into_iter()
-            .map(|x| {
-                let mut rprs = x.repairs
-                                .vals()
-                                .cloned()
-                                .collect::<Vec<Repair>>();
-                rprs.reverse();
-                rprs
-            })
-            .collect::<Vec<Vec<Repair>>>()
+        fn traverse(rm: &Cactus<RepairMerge>) -> Vec<Vec<Repair>> {
+            let mut out = Vec::new();
+            match rm.val().unwrap() {
+                &RepairMerge::Repair(r) => {
+                    let parents = traverse(&rm.parent().unwrap());
+                    if parents.is_empty() {
+                        out.push(vec![r]);
+                    } else {
+                        for mut pc in parents {
+                            pc.push(r);
+                            out.push(pc);
+                        }
+                    }
+                },
+                &RepairMerge::Merge(r, ref vc) => {
+                    let parents = traverse(&rm.parent().unwrap());
+                    if parents.is_empty() {
+                        out.push(vec![r]);
+                    } else {
+                        for mut pc in parents {
+                            pc.push(r);
+                            out.push(pc);
+                        }
+                    }
+                    for c in vc.vals() {
+                        for mut pc in traverse(c) {
+                            out.push(pc);
+                        }
+                    }
+                }
+                &RepairMerge::Terminator => ()
+            }
+            out
+        }
+
+        let mut all_rprs = Vec::with_capacity(cnds.len());
+        for cnd in cnds {
+            all_rprs.extend(traverse(&cnd.repairs));
+        }
+        all_rprs
     }
 
     /// Take an (unordered) set of parse repairs and return a simplified (unordered) set of parse
@@ -441,7 +552,7 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
     /// Return the distance from `st_idx` at input position `la_idx`, given the current `repairs`.
     /// Returns `None` if no route can be found.
     fn dyn_dist(&self,
-                repairs: &Cactus<Repair>,
+                repairs: &Cactus<RepairMerge>,
                 st_idx: StIdx,
                 la_idx: usize)
               -> Option<u32>
@@ -499,18 +610,17 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
 }
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?
-fn ends_with_parse_at_least_shifts(repairs: &Cactus<Repair>) -> bool {
+fn ends_with_parse_at_least_shifts(repairs: &Cactus<RepairMerge>) -> bool {
     let mut shfts = 0;
     for x in repairs.vals().take(PARSE_AT_LEAST) {
-        if let Repair::Shift = *x {
-            shfts += 1;
-            continue;
+        match x {
+            &RepairMerge::Repair(Repair::Shift) => shfts += 1,
+            &RepairMerge::Merge(Repair::Shift, _) => shfts += 1,
+            _ => return false
         }
-        return false;
     }
     shfts == PARSE_AT_LEAST
 }
-
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
@@ -719,7 +829,7 @@ mod test {
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
 
-    use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST, Repair};
+    use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST, Repair, RepairMerge};
 
     fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
         let mut out = vec![];
@@ -1264,6 +1374,34 @@ S: 'A';
     }
 
     #[test]
+    fn test_merge() {
+        let lexs = "%%
+a a
+b b
+c c
+d d
+";
+
+        let grms = "%start S
+%%
+S: T U;
+T: T1 | 'b' | T2;
+T1: 'a';
+T2: 'c' | 'a' 'b' 'c';
+U: 'd';
+";
+
+        let us = "";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"a\", Insert \"d\"",
+                                "Insert \"b\", Insert \"d\"",
+                                "Insert \"c\", Insert \"d\""]);
+    }
+
+    #[test]
     fn dont_shift_and_insert_the_same_terminal() {
         let (lexs, grms) = kimyi_lex_grm();
         let us = "(()";
@@ -1280,20 +1418,20 @@ S: 'A';
         let mut c = Cactus::new();
         assert_eq!(ends_with_parse_at_least_shifts(&c), false);
         for _ in 0..PARSE_AT_LEAST - 1 {
-            c = c.child(Repair::Shift);
+            c = c.child(RepairMerge::Repair(Repair::Shift));
             assert_eq!(ends_with_parse_at_least_shifts(&c), false);
         }
-        c = c.child(Repair::Shift);
+        c = c.child(RepairMerge::Repair(Repair::Shift));
         assert_eq!(ends_with_parse_at_least_shifts(&c), true);
 
         let mut c = Cactus::new();
         assert_eq!(ends_with_parse_at_least_shifts(&c), false);
-        c = c.child(Repair::Delete);
+        c = c.child(RepairMerge::Repair(Repair::Delete));
         for _ in 0..PARSE_AT_LEAST - 1 {
-            c = c.child(Repair::Shift);
+            c = c.child(RepairMerge::Repair(Repair::Shift));
             assert_eq!(ends_with_parse_at_least_shifts(&c), false);
         }
-        c = c.child(Repair::Shift);
+        c = c.child(RepairMerge::Repair(Repair::Shift));
         assert_eq!(ends_with_parse_at_least_shifts(&c), true);
     }
 }
