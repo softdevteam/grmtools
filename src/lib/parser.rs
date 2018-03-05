@@ -30,6 +30,8 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::time::{Duration, Instant};
+
 use cactus::Cactus;
 use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
@@ -39,6 +41,8 @@ use num_traits::{PrimInt, Unsigned};
 
 use mf;
 use corchuelo;
+
+const RECOVERY_TIME_BUDGET: u64 = 5000; // milliseconds
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node<TokId: PrimInt + Unsigned> {
@@ -133,6 +137,7 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
            -> bool
     {
         let mut recoverer = None;
+        let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
         loop {
             let st = *pstack.last().unwrap();
             let la_tidx = self.next_tidx(la_idx);
@@ -175,10 +180,19 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
                                          });
                     }
 
+                    let before = Instant::now();
+                    let finish_by = before + recovery_budget;
                     let (new_la_idx, repairs) = recoverer.as_ref()
                                                          .unwrap()
                                                          .as_ref()
-                                                         .recover(self, la_idx, pstack, tstack);
+                                                         .recover(finish_by,
+                                                                  self,
+                                                                  la_idx,
+                                                                  pstack,
+                                                                  tstack);
+                    let after = Instant::now();
+                    recovery_budget = recovery_budget.checked_sub(after - before)
+                                                     .unwrap_or_else(|| Duration::new(0, 0));
                     let keep_going = !repairs.is_empty();
                     let la_lexeme = self.next_lexeme(la_idx);
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
@@ -295,7 +309,7 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
 }
 
 pub trait Recoverer<TokId: PrimInt + Unsigned> {
-    fn recover(&self, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>)
+    fn recover(&self, Instant, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>)
            -> (usize, Vec<Vec<ParseRepair>>);
 }
 
