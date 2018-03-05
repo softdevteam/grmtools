@@ -51,7 +51,7 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
                                        success: FS)
                                     -> Vec<N>
                                  where N: Debug + Clone + Hash + Eq + PartialEq,
-                                       FN: Fn(bool, &N, &mut Vec<(u32, u32, N)>),
+                                       FN: Fn(bool, &N, &mut Vec<(u32, u32, N)>) -> bool,
                                        FM: Fn(&mut N, N),
                                        FS: Fn(&N) -> bool,
 {
@@ -89,7 +89,9 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
             break;
         }
 
-        neighbours(true, &n, &mut next);
+        if !neighbours(true, &n, &mut next) {
+            return Vec::new();
+        }
         for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
             assert!(nbr_cost + nbr_hrstc >= c);
             let off = nbr_cost.checked_add(nbr_hrstc).unwrap() as usize;
@@ -117,7 +119,9 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
             scs_nodes.push(n);
             continue;
         }
-        neighbours(false, &n, &mut next);
+        if !neighbours(false, &n, &mut next) {
+            return Vec::new();
+        }
         for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
             assert!(nbr_cost + nbr_hrstc >= c);
             // We only need to consider neighbouring nodes if they have the same cost as
@@ -149,7 +153,7 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
                                       success: FS)
                                    -> Vec<N>
                                 where N: Debug + Clone + Hash + Eq + PartialEq,
-                                      FN: Fn(bool, &N, &mut Vec<(u32, N)>),
+                                      FN: Fn(bool, &N, &mut Vec<(u32, N)>) -> bool,
                                       FM: Fn(&mut N, N),
                                       FS: Fn(&N) -> bool,
 {
@@ -172,7 +176,9 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
             break;
         }
 
-        neighbours(true, &n, &mut next);
+        if !neighbours(true, &n, &mut next) {
+            return Vec::new();
+        }
         for (nbr_cost, nbr) in next.drain(..) {
             let off = nbr_cost as usize;
             for _ in todo.len()..off + 1 {
@@ -192,7 +198,9 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
             scs_nodes.push(n);
             continue;
         }
-        neighbours(false, &n, &mut next);
+        if !neighbours(false, &n, &mut next) {
+            return Vec::new();
+        }
         for (nbr_cost, nbr) in next.drain(..) {
             if nbr_cost == c {
                 match scs_todo.entry(nbr.clone()) {

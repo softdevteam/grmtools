@@ -33,6 +33,7 @@
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::mem;
+use std::time::Instant;
 
 use cactus::Cactus;
 use cfgrammar::{Grammar, Symbol, TIdx};
@@ -145,6 +146,7 @@ pub(crate) fn recoverer<'a, TokId: PrimInt + Unsigned>
 impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
 {
     fn recover(&self,
+               finish_by: Instant,
                parser: &Parser<TokId>,
                in_la_idx: usize,
                in_pstack: &mut Vec<StIdx>,
@@ -161,13 +163,18 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
                                    repairs: Cactus::new().child(RepairMerge::Terminator),
                                    cf: 0,
                                    cg: 0};
+
         let astar_cnds = astar_all(
             start_node,
             |explore_all, n, nbrs| {
                 // Calculate n's neighbours.
 
+                if Instant::now() >= finish_by {
+                    return false;
+                }
+
                 if n.la_idx > in_la_idx + PORTION_THRESHOLD {
-                    return;
+                    return true;
                 }
 
                 match n.last_repair() {
@@ -186,6 +193,7 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
                     self.delete(n, nbrs);
                 }
                 self.shift(n, nbrs);
+                true
             },
             |old, new| {
                 // merge new_n into old_n

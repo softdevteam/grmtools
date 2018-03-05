@@ -32,6 +32,7 @@
 
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
+use std::time::Instant;
 
 use cactus::Cactus;
 use cfgrammar::{Symbol, TIdx};
@@ -141,6 +142,7 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
 
 {
     fn recover(&self,
+               finish_by: Instant,
                parser: &Parser<TokId>,
                in_la_idx: usize,
                in_pstack: &mut Vec<StIdx>,
@@ -177,8 +179,12 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
             |explore_all, n, nbrs| {
                 // Calculate n's neighbours.
 
+                if Instant::now() >= finish_by {
+                    return false;
+                }
+
                 if n.la_idx > in_la_idx + PORTION_THRESHOLD {
-                    return;
+                    return true;
                 }
 
                 match n.last_repair() {
@@ -196,6 +202,7 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
                     self.delete(n, nbrs);
                 }
                 self.shift(n, nbrs);
+                true
             },
             |old, new| {
                 // merge new_n into old_n
