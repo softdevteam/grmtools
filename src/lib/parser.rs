@@ -164,6 +164,14 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
                         recoverer = Some(match self.rcvry_kind {
                                              RecoveryKind::Corchuelo => corchuelo::recoverer(self),
                                              RecoveryKind::MF => mf::recoverer(self),
+                                             RecoveryKind::None => {
+                                                let la_lexeme = self.next_lexeme(la_idx);
+                                                errors.push(ParseError{state_idx: st,
+                                                                       lexeme_idx: la_idx,
+                                                                       lexeme: la_lexeme,
+                                                                       repairs: vec![]});
+                                                return false;
+                                             }
                                          });
                     }
 
@@ -293,7 +301,8 @@ pub trait Recoverer<TokId: PrimInt + Unsigned> {
 
 pub enum RecoveryKind {
     Corchuelo,
-    MF
+    MF,
+    None
 }
 
 /// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the
