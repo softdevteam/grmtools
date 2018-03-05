@@ -33,7 +33,7 @@
 use std::hash::Hash;
 use std::fmt::Debug;
 
-use indexmap::IndexSet;
+use indexmap::map::{Entry, IndexMap};
 
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
 ///
@@ -45,13 +45,15 @@ use indexmap::IndexSet;
 /// [`astar_bag_collect`](https://docs.rs/pathfinding/0.6.8/pathfinding/fn.astar_bag.html)
 /// in the `pathfinding` crate. Unlike `astar_bag_collect`, this `astar_all` does not record the
 /// path taken to reach a success node: this allows it to be substantially faster.
-pub(crate) fn astar_all<N, FN, FS>(start_node: N,
-                                   neighbours: FN,
-                                   success: FS)
-                                -> Vec<N>
-                             where N: Debug + Clone,
-                                   FN: Fn(bool, &N, &mut Vec<(u32, u32, N)>),
-                                   FS: Fn(&N) -> bool,
+pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
+                                       neighbours: FN,
+                                       merge: FM,
+                                       success: FS)
+                                    -> Vec<N>
+                                 where N: Debug + Clone + Hash + Eq + PartialEq,
+                                       FN: Fn(bool, &N, &mut Vec<(u32, u32, N)>),
+                                       FM: Fn(&mut N, N),
+                                       FS: Fn(&N) -> bool,
 {
     // We tackle the problem in two phases. In the first phase we search for a success node, with
     // the cost monotonically increasing. All neighbouring nodes are stored for future inspection,
@@ -65,7 +67,10 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
     // First phase: search for the first success node.
 
     let mut scs_nodes = Vec::new(); // Store success nodes
-    let mut todo: Vec<Vec<N>> = vec![vec![start_node]];
+    // todo is a map from "original node" to "merged node". We never change "original node", but,
+    // as we find compatible repairs, continually update merged node. This means that when we pop
+    // things off the todo we *must* use "merged node" as our node to work with.
+    let mut todo: Vec<IndexMap<N, N>> = vec![indexmap![start_node.clone() => start_node]];
     let mut c: u32 = 0; // What cost are we currently examining?
     let mut next = Vec::new();
     loop {
@@ -78,7 +83,7 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
             continue;
         }
 
-        let n = todo[c as usize].pop().unwrap();
+        let n = todo[c as usize].pop().unwrap().1;
         if success(&n) {
             scs_nodes.push(n);
             break;
@@ -89,9 +94,12 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
             assert!(nbr_cost + nbr_hrstc >= c);
             let off = nbr_cost.checked_add(nbr_hrstc).unwrap() as usize;
             for _ in todo.len()..off + 1 {
-                todo.push(Vec::new());
+                todo.push(IndexMap::new());
             }
-            todo[off].push(nbr);
+            match todo[off].entry(nbr.clone()) {
+                Entry::Vacant(e) => { e.insert(nbr); },
+                Entry::Occupied(mut e) => { merge(&mut e.get_mut(), nbr); }
+            }
         }
     }
 
@@ -104,7 +112,7 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
     // Free up all memory except for the cost todo that contains the first success node.
     let mut scs_todo = todo.drain(c as usize..c as usize + 1).nth(0).unwrap();
     while !scs_todo.is_empty() {
-        let n = scs_todo.pop().unwrap();
+        let n = scs_todo.pop().unwrap().1;
         if success(&n) {
             scs_nodes.push(n);
             continue;
@@ -115,7 +123,10 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
             // We only need to consider neighbouring nodes if they have the same cost as
             // existing success nodes and an empty heuristic.
             if nbr_cost + nbr_hrstc == c {
-                scs_todo.push(nbr);
+                match scs_todo.entry(nbr.clone()) {
+                    Entry::Vacant(e) => { e.insert(nbr); },
+                    Entry::Occupied(mut e) => { merge(&mut e.get_mut(), nbr); }
+                }
             }
         }
     }
@@ -132,16 +143,18 @@ pub(crate) fn astar_all<N, FN, FS>(start_node: N,
 /// The name of this function isn't entirely accurate: this isn't Dijkstra's original algorithm or
 /// one of its well-known variants. However, unlike the astar_all function it doesn't expect a
 /// heuristic and it also filters out some duplicates.
-pub(crate) fn dijkstra<N, FN, FS>(start_node: N,
-                                  neighbours: FN,
-                                  success: FS)
-                               -> Vec<N>
-                            where N: Debug + Clone + Hash + Eq + PartialEq,
-                                  FN: Fn(bool, &N, &mut Vec<(u32, N)>),
-                                  FS: Fn(&N) -> bool,
+pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
+                                      neighbours: FN,
+                                      merge: FM,
+                                      success: FS)
+                                   -> Vec<N>
+                                where N: Debug + Clone + Hash + Eq + PartialEq,
+                                      FN: Fn(bool, &N, &mut Vec<(u32, N)>),
+                                      FM: Fn(&mut N, N),
+                                      FS: Fn(&N) -> bool,
 {
     let mut scs_nodes = Vec::new();
-    let mut todo: Vec<IndexSet<N>> = vec![indexset![start_node]];
+    let mut todo: Vec<IndexMap<N, N>> = vec![indexmap![start_node.clone() => start_node]];
     let mut c: u32 = 0;
     let mut next = Vec::new();
     loop {
@@ -153,7 +166,7 @@ pub(crate) fn dijkstra<N, FN, FS>(start_node: N,
             continue;
         }
 
-        let n = todo[c as usize].pop().unwrap();
+        let n = todo[c as usize].pop().unwrap().1;
         if success(&n) {
             scs_nodes.push(n);
             break;
@@ -163,15 +176,18 @@ pub(crate) fn dijkstra<N, FN, FS>(start_node: N,
         for (nbr_cost, nbr) in next.drain(..) {
             let off = nbr_cost as usize;
             for _ in todo.len()..off + 1 {
-                todo.push(IndexSet::new());
+                todo.push(IndexMap::new());
             }
-            todo[off].insert(nbr);
+            match todo[off].entry(nbr.clone()) {
+                Entry::Vacant(e) => { e.insert(nbr); },
+                Entry::Occupied(mut e) => { merge(&mut e.get_mut(), nbr); }
+            }
         }
     }
 
     let mut scs_todo = todo.drain(c as usize..c as usize + 1).nth(0).unwrap();
     while !scs_todo.is_empty() {
-        let n = scs_todo.pop().unwrap();
+        let n = scs_todo.pop().unwrap().1;
         if success(&n) {
             scs_nodes.push(n);
             continue;
@@ -179,7 +195,10 @@ pub(crate) fn dijkstra<N, FN, FS>(start_node: N,
         neighbours(false, &n, &mut next);
         for (nbr_cost, nbr) in next.drain(..) {
             if nbr_cost == c {
-                scs_todo.insert(nbr);
+                match scs_todo.entry(nbr.clone()) {
+                    Entry::Vacant(e) => { e.insert(nbr); },
+                    Entry::Occupied(mut e) => { merge(&mut e.get_mut(), nbr); }
+                }
             }
         }
     }
