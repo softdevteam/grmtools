@@ -1453,6 +1453,38 @@ S: 'a' S 'b'
     }
 
     #[test]
+    fn test_cerecke_lr2() {
+        // Example taken from p67 of Locally least-cost error repair in LR parsers, Carl Cerecke
+        let lexs = "%%
+a a
+b b
+c c
+d d
+e e
+";
+
+        let grms = "%start S
+%%
+S: A 'c' 'd'
+ | B 'c' 'e';
+A: 'a';
+B: 'a'
+ | 'b';
+A: 'b';
+";
+
+        // If we only use a statetable, this example is unrecoverable. Because we currently use a
+        // stategraph we do find repairs, even though the parser can't recognise the resulting
+        // input...
+        let us = "ce";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"a\"", "Insert \"b\""]);
+    }
+
+    #[test]
     fn test_counting_shifts() {
         let mut c = Cactus::new();
         assert_eq!(ends_with_parse_at_least_shifts(&c), false);
