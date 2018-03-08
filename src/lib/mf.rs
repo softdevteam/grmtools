@@ -825,6 +825,8 @@ impl Dist {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use test::{Bencher, black_box};
 
     use cactus::Cactus;
@@ -835,7 +837,7 @@ mod test {
     use num_traits::ToPrimitive;
 
     use parser::{ParseRepair, RecoveryKind};
-    use parser::test::do_parse;
+    use parser::test::{do_parse, do_parse_with_costs};
 
     use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST, Repair, RepairMerge};
 
@@ -1419,6 +1421,35 @@ U: 'd';
                           errs[0].repairs(),
                           &vec!["Insert \"A\", Insert \"CLOSE_BRACKET\"",
                                 "Insert \"B\", Insert \"CLOSE_BRACKET\""]);
+    }
+
+    #[test]
+    fn test_cerecke_loop_limit() {
+        // Example taken from p57 of Locally least-cost error repair in LR parsers, Carl Cerecke
+        let lexs = "%%
+a a
+b b
+c c
+";
+
+        let grms = "%start S
+%%
+S: 'a' S 'b'
+ | 'a' 'a' S 'c'
+ | 'a';
+";
+
+        // The thesis incorrectly says that this can be repaired by inserting aaaaaa (i.e. 6 "a"s)
+        // at the beginning: but the grammar only allows odd numbers of "a"s if the input ends with
+        // a c, hence the actual repair should be aaaaaaa (i.e. 7 "a"s).
+        let us = "ccc";
+        let mut costs = HashMap::new();
+        costs.insert("c", 3);
+        let (grm, pr) = do_parse_with_costs(RecoveryKind::MF, &lexs, &grms, &us, &costs);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"a\", Insert \"a\", Insert \"a\", Insert \"a\", Insert \"a\", Insert \"a\", Insert \"a\""]);
     }
 
     #[test]
