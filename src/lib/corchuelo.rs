@@ -234,8 +234,8 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
                     return true;
                 }
 
-                let la_tidx = parser.next_tidx(n.la_idx);
-                match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
+                match parser.stable.action(*n.pstack.val().unwrap(),
+                                           parser.next_tidx(n.la_idx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }

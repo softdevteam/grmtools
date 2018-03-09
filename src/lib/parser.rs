@@ -33,7 +33,7 @@
 use std::time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, NTIdx, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
@@ -142,7 +142,7 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
             let st = *pstack.last().unwrap();
             let la_tidx = self.next_tidx(la_idx);
 
-            match self.stable.action(st, Symbol::Term(la_tidx)) {
+            match self.stable.action(st, la_tidx) {
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
@@ -264,7 +264,7 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
                               self.next_tidx(la_idx)
                           };
 
-            match self.stable.action(st, Symbol::Term(la_tidx)) {
+            match self.stable.action(st, la_tidx) {
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_num = self.grm.prod(prod_id).len();
