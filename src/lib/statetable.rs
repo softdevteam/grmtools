@@ -240,14 +240,14 @@ pub struct StateActionsIterator<'a> {
 }
 
 impl<'a> Iterator for StateActionsIterator<'a> {
-    type Item = Symbol;
+    type Item = TIdx;
 
-    fn next(&mut self) -> Option<Symbol> {
+    fn next(&mut self) -> Option<TIdx> {
         let mut i = self.i;
         while i < self.end {
             if self.stable.used_actions.get(i).unwrap() {
                 self.i = i + 1;
-                return Some(Symbol::Term(TIdx::from(i - self.start)));
+                return Some(TIdx::from(i - self.start));
             }
             i += 1;
         }
@@ -360,10 +360,10 @@ mod test {
         assert_reduce(s8, grm.eof_term_idx(), "Term", 0);
 
         let mut s4_actions = HashSet::new();
-        s4_actions.extend(&[Symbol::Term(grm.term_idx("-").unwrap()),
-                           Symbol::Term(grm.term_idx("*").unwrap()),
-                           Symbol::Term(grm.eof_term_idx())]);
-        assert_eq!(st.state_actions(s4).collect::<HashSet<Symbol>>(), s4_actions);
+        s4_actions.extend(&[grm.term_idx("-").unwrap(),
+                            grm.term_idx("*").unwrap(),
+                            grm.eof_term_idx()]);
+        assert_eq!(st.state_actions(s4).collect::<HashSet<TIdx>>(), s4_actions);
 
         // Gotos
         assert_eq!(st.gotos.len(), 8);
