@@ -207,13 +207,9 @@ impl StateTable {
 
 
     /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
-    pub fn action(&self, state_idx: StIdx, sym: Symbol) -> Option<Action> {
-        if let Symbol::Term(term_idx) = sym {
-            let off = StateTable::actions_offset(self.terms_len, state_idx, term_idx);
-            self.actions.get(&off).map_or(None, |x| Some(*x))
-        } else {
-            None
-        }
+    pub fn action(&self, state_idx: StIdx, term_idx: TIdx) -> Option<Action> {
+        let off = StateTable::actions_offset(self.terms_len, state_idx, term_idx);
+        self.actions.get(&off).map_or(None, |x| Some(*x))
     }
 
     /// Return an iterator over the actions of `state_idx`.
@@ -343,22 +339,22 @@ mod test {
         assert_eq!(st.actions.len(), 15);
         let assert_reduce = |state_i: StIdx, term_i: TIdx, rule: &str, prod_off: usize| {
             let prod_i = grm.nonterm_to_prods(grm.nonterm_idx(rule).unwrap())[prod_off];
-            assert_eq!(st.action(state_i, Symbol::Term(term_i)).unwrap(), Action::Reduce(prod_i.into()));
+            assert_eq!(st.action(state_i, term_i).unwrap(), Action::Reduce(prod_i.into()));
         };
 
-        assert_eq!(st.action(s0, Symbol::Term(grm.term_idx("id").unwrap())).unwrap(), Action::Shift(s4));
-        assert_eq!(st.action(s1, Symbol::Term(grm.eof_term_idx())).unwrap(), Action::Accept);
+        assert_eq!(st.action(s0, grm.term_idx("id").unwrap()).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s1, grm.eof_term_idx()).unwrap(), Action::Accept);
         assert_eq!(st.final_state, s1);
-        assert_eq!(st.action(s2, Symbol::Term(grm.term_idx("-").unwrap())).unwrap(), Action::Shift(s5));
+        assert_eq!(st.action(s2, grm.term_idx("-").unwrap()).unwrap(), Action::Shift(s5));
         assert_reduce(s2, grm.eof_term_idx(), "Expr", 1);
         assert_reduce(s3, grm.term_idx("-").unwrap(), "Term", 1);
-        assert_eq!(st.action(s3, Symbol::Term(grm.term_idx("*").unwrap())).unwrap(), Action::Shift(s6));
+        assert_eq!(st.action(s3, grm.term_idx("*").unwrap()).unwrap(), Action::Shift(s6));
         assert_reduce(s3, grm.eof_term_idx(), "Term", 1);
         assert_reduce(s4, grm.term_idx("-").unwrap(), "Factor", 0);
         assert_reduce(s4, grm.term_idx("*").unwrap(), "Factor", 0);
         assert_reduce(s4, grm.eof_term_idx(), "Factor", 0);
-        assert_eq!(st.action(s5, Symbol::Term(grm.term_idx("id").unwrap())).unwrap(), Action::Shift(s4));
-        assert_eq!(st.action(s6, Symbol::Term(grm.term_idx("id").unwrap())).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s5, grm.term_idx("id").unwrap()).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s6, grm.term_idx("id").unwrap()).unwrap(), Action::Shift(s4));
         assert_reduce(s7, grm.eof_term_idx(), "Expr", 0);
         assert_reduce(s8, grm.term_idx("-").unwrap(), "Term", 0);
         assert_reduce(s8, grm.eof_term_idx(), "Term", 0);
@@ -399,7 +395,7 @@ mod test {
         let s4 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
 
         assert_eq!(st.action(s4,
-                             Symbol::Term(grm.term_idx("x").unwrap())).unwrap(),
+                             grm.term_idx("x").unwrap()).unwrap(),
                              Action::Reduce((3 as u32).into()));
     }
 
@@ -423,11 +419,11 @@ mod test {
         let s5 = sg.edge(s4, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s6 = sg.edge(s3, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
 
-        assert_eq!(st.action(s5, Symbol::Term(grm.term_idx("+").unwrap())).unwrap(), Action::Shift(s3));
-        assert_eq!(st.action(s5, Symbol::Term(grm.term_idx("*").unwrap())).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s5, grm.term_idx("+").unwrap()).unwrap(), Action::Shift(s3));
+        assert_eq!(st.action(s5, grm.term_idx("*").unwrap()).unwrap(), Action::Shift(s4));
 
-        assert_eq!(st.action(s6, Symbol::Term(grm.term_idx("+").unwrap())).unwrap(), Action::Shift(s3));
-        assert_eq!(st.action(s6, Symbol::Term(grm.term_idx("*").unwrap())).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s6, grm.term_idx("+").unwrap()).unwrap(), Action::Shift(s3));
+        assert_eq!(st.action(s6, grm.term_idx("*").unwrap()).unwrap(), Action::Shift(s4));
     }
 
     #[test]
@@ -452,25 +448,19 @@ mod test {
         let s5 = sg.edge(s4, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s6 = sg.edge(s3, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
 
-        assert_eq!(st.action(s5,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
-        assert_eq!(st.action(s5,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
-        assert_eq!(st.action(s5,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s5, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s5, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s5, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
 
-        assert_eq!(st.action(s6,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Reduce((1 as u32).into()));
-        assert_eq!(st.action(s6,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Shift(s4));
-        assert_eq!(st.action(s6,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((1 as u32).into()));
+        assert_eq!(st.action(s6, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Reduce((1 as u32).into()));
+        assert_eq!(st.action(s6, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Shift(s4));
+        assert_eq!(st.action(s6, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((1 as u32).into()));
     }
 
     #[test]
@@ -499,44 +489,32 @@ mod test {
         let s7 = sg.edge(s4, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s8 = sg.edge(s3, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
 
-        assert_eq!(st.action(s6,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Shift(s3));
-        assert_eq!(st.action(s6,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Shift(s4));
-        assert_eq!(st.action(s6,
-                             Symbol::Term(grm.term_idx("=").unwrap())).unwrap(),
-                             Action::Shift(s5));
-        assert_eq!(st.action(s6,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((3 as u32).into()));
+        assert_eq!(st.action(s6, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Shift(s3));
+        assert_eq!(st.action(s6, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Shift(s4));
+        assert_eq!(st.action(s6, grm.term_idx("=").unwrap()).unwrap(),
+                   Action::Shift(s5));
+        assert_eq!(st.action(s6, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((3 as u32).into()));
 
-        assert_eq!(st.action(s7,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
-        assert_eq!(st.action(s7,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
-        assert_eq!(st.action(s7,
-                             Symbol::Term(grm.term_idx("=").unwrap())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
-        assert_eq!(st.action(s7,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s7, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s7, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s7, grm.term_idx("=").unwrap()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s7, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
 
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Reduce((1 as u32).into()));
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Shift(s4));
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.term_idx("=").unwrap())).unwrap(),
-                             Action::Reduce((1 as u32).into()));
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((1 as u32).into()));
+        assert_eq!(st.action(s8, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Reduce((1 as u32).into()));
+        assert_eq!(st.action(s8, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Shift(s4));
+        assert_eq!(st.action(s8, grm.term_idx("=").unwrap()).unwrap(),
+                   Action::Reduce((1 as u32).into()));
+        assert_eq!(st.action(s8, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((1 as u32).into()));
     }
 
     #[test]
@@ -569,66 +547,47 @@ mod test {
         let s9 = sg.edge(s4, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s10 = sg.edge(s3, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
 
-        assert_eq!(st.action(s7,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Reduce((4 as u32).into()));
-        assert_eq!(st.action(s7,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Reduce((4 as u32).into()));
-        assert_eq!(st.action(s7,
-                             Symbol::Term(grm.term_idx("=").unwrap())).unwrap(),
-                             Action::Reduce((4 as u32).into()));
-        assert_eq!(st.action(s7,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((4 as u32).into()));
+        assert_eq!(st.action(s7, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Reduce((4 as u32).into()));
+        assert_eq!(st.action(s7, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Reduce((4 as u32).into()));
+        assert_eq!(st.action(s7, grm.term_idx("=").unwrap()).unwrap(),
+                   Action::Reduce((4 as u32).into()));
+        assert_eq!(st.action(s7, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((4 as u32).into()));
 
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Shift(s3));
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Shift(s4));
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.term_idx("=").unwrap())).unwrap(),
-                             Action::Shift(s5));
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.term_idx("~").unwrap())).unwrap(),
-                             Action::Shift(s6));
-        assert_eq!(st.action(s8,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((3 as u32).into()));
+        assert_eq!(st.action(s8, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Shift(s3));
+        assert_eq!(st.action(s8, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Shift(s4));
+        assert_eq!(st.action(s8, grm.term_idx("=").unwrap()).unwrap(),
+                   Action::Shift(s5));
+        assert_eq!(st.action(s8, grm.term_idx("~").unwrap()).unwrap(),
+                   Action::Shift(s6));
+        assert_eq!(st.action(s8, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((3 as u32).into()));
 
-        assert_eq!(st.action(s9,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
-        assert_eq!(st.action(s9,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
-        assert_eq!(st.action(s9,
-                             Symbol::Term(grm.term_idx("=").unwrap())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
-        assert_eq!(st.action(s9,
-                             Symbol::Term(grm.term_idx("~").unwrap())).unwrap(),
-                             Action::Shift(s6));
-        assert_eq!(st.action(s9,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s9, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s9, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s9, grm.term_idx("=").unwrap()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
+        assert_eq!(st.action(s9, grm.term_idx("~").unwrap()).unwrap(),
+                   Action::Shift(s6));
+        assert_eq!(st.action(s9, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((2 as u32).into()));
 
-        assert_eq!(st.action(s10,
-                             Symbol::Term(grm.term_idx("+").unwrap())).unwrap(),
-                             Action::Reduce((1 as u32).into()));
-        assert_eq!(st.action(s10,
-                             Symbol::Term(grm.term_idx("*").unwrap())).unwrap(),
-                             Action::Shift(s4));
-        assert_eq!(st.action(s10,
-                             Symbol::Term(grm.term_idx("=").unwrap())).unwrap(),
-                             Action::Reduce((1 as u32).into()));
-        assert_eq!(st.action(s10,
-                             Symbol::Term(grm.term_idx("~").unwrap())).unwrap(),
-                             Action::Shift(s6));
-        assert_eq!(st.action(s10,
-                             Symbol::Term(grm.eof_term_idx())).unwrap(),
-                             Action::Reduce((1 as u32).into()));
+        assert_eq!(st.action(s10, grm.term_idx("+").unwrap()).unwrap(),
+                   Action::Reduce((1 as u32).into()));
+        assert_eq!(st.action(s10, grm.term_idx("*").unwrap()).unwrap(),
+                   Action::Shift(s4));
+        assert_eq!(st.action(s10, grm.term_idx("=").unwrap()).unwrap(),
+                   Action::Reduce((1 as u32).into()));
+        assert_eq!(st.action(s10, grm.term_idx("~").unwrap()).unwrap(),
+                   Action::Shift(s6));
+        assert_eq!(st.action(s10, grm.eof_term_idx()).unwrap(),
+                   Action::Reduce((1 as u32).into()));
     }
 
     #[test]
