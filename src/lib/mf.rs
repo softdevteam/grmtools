@@ -225,8 +225,8 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
                     return true;
                 }
 
-                let la_tidx = parser.next_tidx(n.la_idx);
-                match parser.stable.action(*n.pstack.val().unwrap(), Symbol::Term(la_tidx)) {
+                match parser.stable.action(*n.pstack.val().unwrap(),
+                                           parser.next_tidx(n.la_idx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }
@@ -370,7 +370,7 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         let la_tidx = self.parser.next_tidx(n.la_idx);
         let top_pstack = *n.pstack.val().unwrap();
         if let Some(Action::Shift(state_id)) = self.parser.stable.action(top_pstack,
-                                                                         Symbol::Term(la_tidx)) {
+                                                                         la_tidx) {
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Shift));
             let new_la_idx = n.la_idx + 1;
             if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_la_idx) {
