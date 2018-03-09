@@ -276,44 +276,42 @@ impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
              nbrs: &mut Vec<(u32, PathFNode)>)
     {
         let la_idx = n.la_idx;
-        for sym in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
-            if let Symbol::Term(t_idx) = sym {
-                if t_idx == self.parser.grm.eof_term_idx() {
+        for t_idx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
+            if t_idx == self.parser.grm.eof_term_idx() {
+                continue;
+            }
+
+            if let Some(Repair::Shift) = n.last_repair() {
+                debug_assert!(n.la_idx > 0);
+                // If we're about to insert term T and the next terminal in the user's
+                // input is T, we could potentially end up with two similar repair
+                // sequences:
+                //   Insert T, Shift
+                //   Shift, Insert T
+                // From a user's perspective, both of those are equivalent. From our point
+                // of view, the duplication is inefficient. We prefer the former sequence
+                // because we want to find PARSE_AT_LEAST consecutive shifts. At this
+                // point, we see if we're about to Insert T after a Shift of T and, if so,
+                // avoid doing so.
+                let prev_tidx = self.parser.next_tidx(la_idx - 1);
+                if prev_tidx == t_idx {
                     continue;
                 }
+            }
 
-                if let Some(Repair::Shift) = n.last_repair() {
-                    debug_assert!(n.la_idx > 0);
-                    // If we're about to insert term T and the next terminal in the user's
-                    // input is T, we could potentially end up with two similar repair
-                    // sequences:
-                    //   Insert T, Shift
-                    //   Shift, Insert T
-                    // From a user's perspective, both of those are equivalent. From our point
-                    // of view, the duplication is inefficient. We prefer the former sequence
-                    // because we want to find PARSE_AT_LEAST consecutive shifts. At this
-                    // point, we see if we're about to Insert T after a Shift of T and, if so,
-                    // avoid doing so.
-                    let prev_tidx = self.parser.next_tidx(la_idx - 1);
-                    if prev_tidx == t_idx {
-                        continue;
-                    }
-                }
-
-                let next_lexeme = self.parser.next_lexeme(n.la_idx);
-                let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
-                                             next_lexeme.start(), 0);
-                let (new_la_idx, n_pstack) =
-                    self.parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
-                                          n.pstack.clone(), &mut None);
-                if new_la_idx > la_idx {
-                    let nn = PathFNode{
-                        pstack: n_pstack,
-                        la_idx: n.la_idx,
-                        repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx))),
-                        cf: n.cf.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap()};
-                    nbrs.push((nn.cf, nn));
-                }
+            let next_lexeme = self.parser.next_lexeme(n.la_idx);
+            let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
+                                         next_lexeme.start(), 0);
+            let (new_la_idx, n_pstack) =
+                self.parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
+                                      n.pstack.clone(), &mut None);
+            if new_la_idx > la_idx {
+                let nn = PathFNode{
+                    pstack: n_pstack,
+                    la_idx: n.la_idx,
+                    repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx))),
+                    cf: n.cf.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap()};
+                nbrs.push((nn.cf, nn));
             }
         }
     }
