@@ -37,6 +37,7 @@ use std::fmt;
 use cfgrammar::{Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use fnv::FnvHasher;
+use vob::Vob;
 
 use StIdx;
 use stategraph::StateGraph;
@@ -76,6 +77,7 @@ pub struct StateTable {
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
     actions          : HashMap<u32, Action, BuildHasherDefault<FnvHasher>>,
+    used_actions     : Vob,
     gotos            : HashMap<u32, StIdx, BuildHasherDefault<FnvHasher>>,
     nonterms_len     : u32,
     terms_len        : u32,
@@ -99,6 +101,7 @@ pub enum Action {
 impl StateTable {
     pub fn new(grm: &YaccGrammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
         let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
+        let mut used_actions = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
         let mut gotos   = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
@@ -118,6 +121,7 @@ impl StateTable {
                     let off = StateTable::actions_offset(grm.terms_len(),
                                                          state_i,
                                                          TIdx::from(term_i));
+                    used_actions.set(off as usize, true);
                     match actions.entry(off) {
                         Entry::Occupied(mut e) => {
                             match *e.get_mut() {
@@ -169,6 +173,7 @@ impl StateTable {
                     Symbol::Term(term_k) => {
                         // Populate shifts
                         let off = StateTable::actions_offset(grm.terms_len(), state_i, term_k);
+                        used_actions.set(off as usize, true);
                         match actions.entry(off) {
                             Entry::Occupied(mut e) => {
                                 match *e.get_mut() {
@@ -190,12 +195,13 @@ impl StateTable {
         }
         assert!(final_state.is_some());
 
-        Ok(StateTable {actions: actions,
-                       gotos: gotos,
+        Ok(StateTable {actions,
+                       used_actions,
+                       gotos,
                        nonterms_len: grm.nonterms_len(),
                        terms_len: grm.terms_len(),
-                       reduce_reduce: reduce_reduce,
-                       shift_reduce: shift_reduce,
+                       reduce_reduce,
+                       shift_reduce,
                        final_state: final_state.unwrap()})
     }
 
@@ -211,15 +217,12 @@ impl StateTable {
     }
 
     /// Return an iterator over the actions of `state_idx`.
-    pub fn state_actions(&self, state_idx: StIdx) -> impl Iterator<Item=Symbol> {
-        let mut syms = Vec::new();
-        for term_idx in 0..self.terms_len {
-            let off = StateTable::actions_offset(self.terms_len, state_idx, TIdx::from(term_idx));
-            if let Some(_) = self.actions.get(&off) {
-                syms.push(Symbol::Term(TIdx::from(term_idx)))
-            }
-        }
-        StateActionIterator{symbols: syms, i: 0}
+    pub fn state_actions(&self, state_idx: StIdx) -> StateActionsIterator {
+        let start = usize::from(state_idx) * self.terms_len as usize;
+        StateActionsIterator{stable: &self,
+                             start,
+                             i: start,
+                             end: start + self.terms_len as usize}
     }
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
@@ -233,21 +236,27 @@ impl StateTable {
     }
 }
 
-struct StateActionIterator {
-    symbols: Vec<Symbol>,
-    i: usize
+pub struct StateActionsIterator<'a> {
+    stable: &'a StateTable,
+    start: usize,
+    i: usize,
+    end: usize
 }
 
-impl Iterator for StateActionIterator {
+impl<'a> Iterator for StateActionsIterator<'a> {
     type Item = Symbol;
 
     fn next(&mut self) -> Option<Symbol> {
-        if self.i == self.symbols.len() {
-            return None;
+        let mut i = self.i;
+        while i < self.end {
+            if self.stable.used_actions.get(i).unwrap() {
+                self.i = i + 1;
+                return Some(Symbol::Term(TIdx::from(i - self.start)));
+            }
+            i += 1;
         }
-        let j = self.i;
-        self.i = j + 1;
-        self.symbols.get(j).cloned()
+        self.i = i;
+        None
     }
 }
 
