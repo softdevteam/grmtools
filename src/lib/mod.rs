@@ -67,7 +67,7 @@
 #![feature(try_from)]
 
 #[macro_use] extern crate lazy_static;
-extern crate linked_hash_map;
+extern crate indexmap;
 
 mod u32struct;
 pub mod yacc;

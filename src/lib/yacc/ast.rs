@@ -33,7 +33,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
 
 use yacc::Precedence;
 
@@ -42,7 +42,9 @@ use yacc::Precedence;
 /// point, any further mutations made to the struct lead to undefined behaviour.
 pub struct GrammarAST {
     pub start: Option<String>,
-    pub rules: LinkedHashMap<String, Rule>,
+    // map from a rule name to indexes into prods
+    pub rules: IndexMap<String, Vec<usize>>,
+    pub prods: Vec<Production>,
     pub tokens: HashSet<String>,
     pub precs: HashMap<String, Precedence>,
     pub implicit_tokens: Option<HashSet<String>>
@@ -51,10 +53,10 @@ pub struct GrammarAST {
 #[derive(Debug)]
 pub struct Rule {
     pub name: String,
-    pub productions: Vec<Production>
+    pub prod_idxs: Vec<usize> // index into GrammarAST.prod
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Production {
     pub symbols: Vec<Symbol>,
     pub precedence: Option<String>
@@ -118,24 +120,23 @@ impl GrammarAST {
     pub fn new() -> GrammarAST {
         GrammarAST {
             start:  None,
-            rules:  LinkedHashMap::new(), // Using a LinkedHashMap means that we retain the order
-                                          // of rules as they're found in the input file. However,
-                                          // this library isn't actively maintained, and there are
-                                          // faster ways of maintaining order, so it would be
-                                          // preferable to move to another library when such is
-                                          // available.
+            rules:  IndexMap::new(), // Using an IndexMap means that we retain the order
+                                     // of rules as they're found in the input file.
+            prods:  Vec::new(),
             tokens: HashSet::new(),
             precs:  HashMap::new(),
             implicit_tokens: None
         }
     }
 
-    pub fn add_prod(&mut self, key: String, syms: Vec<Symbol>, prec: Option<String>) {
-        let rule = self.rules.entry(key.clone()).or_insert_with(|| Rule::new(key));
-        rule.add_prod(syms, prec);
+    pub fn add_prod(&mut self, key: String, symbols: Vec<Symbol>, precedence: Option<String>) {
+        self.rules.entry(key)
+                  .or_insert_with(|| Vec::new())
+                  .push(self.prods.len());
+        self.prods.push(Production{symbols, precedence});
     }
 
-    pub fn get_rule(&self, key: &str) -> Option<&Rule>{
+    pub fn get_rule(&self, key: &str) -> Option<&Vec<usize>>{
         self.rules.get(key)
     }
 
@@ -163,8 +164,9 @@ impl GrammarAST {
                 }
             }
         }
-        for rule in self.rules.values() {
-            for prod in &rule.productions {
+        for prod_idxs in self.rules.values() {
+            for &prod_idx in prod_idxs {
+                let prod = &self.prods[prod_idx];
                 if let Some(ref n) = prod.precedence {
                     if !self.tokens.contains(n) {
                         return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
@@ -194,28 +196,6 @@ impl GrammarAST {
             }
         }
         Ok(())
-    }
-}
-
-impl PartialEq for Production {
-    fn eq(&self, other: &Production) -> bool {
-        self.symbols == other.symbols
-    }
-}
-
-impl Rule {
-    pub fn new(name: String) -> Rule {
-        Rule {name: name, productions: vec![]}
-    }
-
-    pub fn add_prod(&mut self, syms: Vec<Symbol>, prec: Option<String>) {
-        self.productions.push(Production{symbols: syms, precedence: prec});
-    }
-}
-
-impl PartialEq for Rule {
-    fn eq(&self, other: &Rule) -> bool {
-        self.name == other.name && self.productions == other.productions
     }
 }
 
