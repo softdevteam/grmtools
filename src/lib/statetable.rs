@@ -126,6 +126,12 @@ impl StateTable {
                         Entry::Occupied(mut e) => {
                             match *e.get_mut() {
                                 Action::Reduce(prod_j) => {
+                                    if prod_i == grm.start_prod() && term_i == usize::from(grm.eof_term_idx()) {
+                                        return Err(StateTableError{
+                                            kind: StateTableErrorKind::AcceptReduceConflict,
+                                            prod_idx: prod_i
+                                        });
+                                    }
                                     // By default, Yacc resolves reduce/reduce conflicts in favour
                                     // of the earlier production in the grammar.
                                     if prod_i < prod_j {
