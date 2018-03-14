@@ -146,7 +146,7 @@ impl StateGraph {
                 }
                 o.push_str(", {");
                 let mut seen_b = false;
-                for (b_idx, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
+                for b_idx in ctx.iter_set_bits(..) {
                     if seen_b {
                         o.push_str(", ");
                     } else {

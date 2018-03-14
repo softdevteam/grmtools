@@ -107,7 +107,7 @@ impl Itemset {
                     dot = y;
                 }
                 None => {
-                    match zero_todos.iter_set_bits().next() {
+                    match zero_todos.iter_set_bits(..).next() {
                         Some(i) => prod_i = PIdx::from(i),
                         None => break
                     }
