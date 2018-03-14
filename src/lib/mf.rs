@@ -267,41 +267,43 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
               nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
-        for (&sym, &sym_st_idx) in self.parser.sgraph.edges(top_pstack).iter() {
-            if let Symbol::Term(term_idx) = sym {
-                if term_idx == self.parser.grm.eof_term_idx() {
-                    continue;
-                }
+        for t_idx in self.parser.stable.state_shifts(top_pstack) {
+            if t_idx == self.parser.grm.eof_term_idx() {
+                continue;
+            }
 
-                let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(term_idx)));
-                if let Some(d) = self.dyn_dist(&n_repairs, sym_st_idx, n.la_idx) {
-                    if let Some(Repair::Shift) = n.last_repair() {
-                        debug_assert!(n.la_idx > 0);
-                        // If we're about to insert term T and the next terminal in the user's
-                        // input is T, we could potentially end up with two similar repair
-                        // sequences:
-                        //   Insert T, Shift
-                        //   Shift, Insert T
-                        // From a user's perspective, both of those are equivalent. From our point
-                        // of view, the duplication is inefficient. We prefer the former sequence
-                        // because we want to find PARSE_AT_LEAST consecutive shifts. At this
-                        // point, we see if we're about to Insert T after a Shift of T and, if so,
-                        // avoid doing so.
-                        let prev_tidx = self.parser.next_tidx(n.la_idx - 1);
-                        if prev_tidx == term_idx {
-                            continue;
-                        }
+            let t_st_idx = match self.parser.stable.action(top_pstack, t_idx).unwrap() {
+                Action::Shift(s_idx) => s_idx,
+                _ => unreachable!()
+            };
+            let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx)));
+            if let Some(d) = self.dyn_dist(&n_repairs, t_st_idx, n.la_idx) {
+                if let Some(Repair::Shift) = n.last_repair() {
+                    debug_assert!(n.la_idx > 0);
+                    // If we're about to insert term T and the next terminal in the user's
+                    // input is T, we could potentially end up with two similar repair
+                    // sequences:
+                    //   Insert T, Shift
+                    //   Shift, Insert T
+                    // From a user's perspective, both of those are equivalent. From our point
+                    // of view, the duplication is inefficient. We prefer the former sequence
+                    // because we want to find PARSE_AT_LEAST consecutive shifts. At this
+                    // point, we see if we're about to Insert T after a Shift of T and, if so,
+                    // avoid doing so.
+                    let prev_tidx = self.parser.next_tidx(n.la_idx - 1);
+                    if prev_tidx == t_idx {
+                        continue;
                     }
-
-                    assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(term_idx) as u32);
-                    let nn = PathFNode{
-                        pstack: n.pstack.child(sym_st_idx),
-                        la_idx: n.la_idx,
-                        repairs: n_repairs,
-                        cf: n.cf.checked_add((self.parser.term_cost)(term_idx) as u32).unwrap(),
-                        cg: d};
-                    nbrs.push((nn.cf, nn.cg, nn));
                 }
+
+                assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(t_idx) as u32);
+                let nn = PathFNode{
+                    pstack: n.pstack.child(t_st_idx),
+                    la_idx: n.la_idx,
+                    repairs: n_repairs,
+                    cf: n.cf.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap(),
+                    cg: d};
+                nbrs.push((nn.cf, nn.cg, nn));
             }
         }
     }
@@ -310,16 +312,9 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
               n: &PathFNode,
               nbrs: &mut Vec<(u32, u32, PathFNode)>)
     {
-        // This is different than KimYi's r3ir: their r3ir inserts symbols if the dot in a state is not
-        // at the end. This is unneeded in our setup (indeed, doing so causes duplicates): all we need
-        // to do is reduce states where the dot is at the end.
-
         let top_pstack = *n.pstack.val().unwrap();
-        for &(p_idx, sym_off) in self.parser.sgraph.closed_state(top_pstack).items.keys() {
-            if usize::from(sym_off) != self.parser.grm.prod(p_idx).len() {
-                continue;
-            }
-
+        for p_idx in self.parser.stable.core_reduces(top_pstack) {
+            let sym_off = self.parser.grm.prod(p_idx).len();
             let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
             let mut qi_minus_alpha = n.pstack.clone();
             for _ in 0..usize::from(sym_off) {
@@ -733,7 +728,7 @@ impl Dist {
                 }
 
                 // The second phase takes into account reductions and gotos.
-                for st_idx in goto_states[i].iter_set_bits() {
+                for st_idx in goto_states[i].iter_set_bits(..) {
                     for j in 0..terms_len {
                         let this_off = i * terms_len + j;
                         let other_off = st_idx * terms_len + j;
@@ -805,14 +800,14 @@ impl Dist {
                 prev.set(i, true);
                 for _ in 0..prod.len() {
                     next.set_all(false);
-                    for st_idx in prev.iter_set_bits() {
+                    for st_idx in prev.iter_set_bits(..) {
                         next.or(&rev_edges[st_idx]);
                     }
                     mem::swap(&mut prev, &mut next);
                 }
 
                 // From the reduction states, find all the goto states.
-                for st_idx in prev.iter_set_bits() {
+                for st_idx in prev.iter_set_bits(..) {
                     if let Some(goto_st_idx) = stable.goto(StIdx::from(st_idx), nt_idx) {
                         goto_states[i].set(usize::from(goto_st_idx), true);
                     }
@@ -1454,7 +1449,7 @@ S: 'a' S 'b'
 
     #[test]
     fn test_cerecke_lr2() {
-        // Example taken from p67 of Locally least-cost error repair in LR parsers, Carl Cerecke
+        // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
         let lexs = "%%
 a a
 b b
@@ -1473,15 +1468,20 @@ B: 'a'
 A: 'b';
 ";
 
-        // If we only use a statetable, this example is unrecoverable. Because we currently use a
-        // stategraph we do find repairs, even though the parser can't recognise the resulting
-        // input...
+        do_parse(RecoveryKind::MF, &lexs, &grms, &"acd").1.unwrap();
+        do_parse(RecoveryKind::MF, &lexs, &grms, &"bce").1.unwrap();
         let us = "ce";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["Insert \"a\"", "Insert \"b\""]);
+                          &vec!["Insert \"b\""]);
+        let us = "cd";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"a\""]);
     }
 
     #[test]
