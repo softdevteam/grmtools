@@ -173,9 +173,12 @@ impl YaccGrammar {
             }
         }
 
-        let mut prods = Vec::new();
-        let mut prod_precs: Vec<Option<Precedence>> = Vec::new();
-        let mut prods_rules = Vec::new();
+        // In order to avoid fiddling about with production indices from the AST, we simply map
+        // them 1:1 to grammar indices. That means that any new productions are added to the *end*
+        // of the list of productions.
+        let mut prods = vec![None; ast.prods.len()];
+        let mut prod_precs: Vec<Option<Option<Precedence>>> = vec![None; ast.prods.len()];
+        let mut prods_rules = vec![None; ast.prods.len()];
         for astrulename in &nonterm_names {
             let rule_idx = nonterm_map[astrulename];
             if astrulename == &start_nonterm {
@@ -196,9 +199,9 @@ impl YaccGrammar {
                         vec![Symbol::Nonterm(nonterm_map[s])]
                     }
                 };
-                prods.push(start_prod);
-                prod_precs.push(None);
-                prods_rules.push(rule_idx);
+                prods.push(Some(start_prod));
+                prod_precs.push(Some(None));
+                prods_rules.push(Some(rule_idx));
                 continue;
             }
             else if implicit_start_nonterm.as_ref().map_or(false, |s| s == astrulename) {
@@ -208,10 +211,10 @@ impl YaccGrammar {
                 rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
                            .unwrap()
                            .push(prods.len().into());
-                prods.push(vec![Symbol::Nonterm(nonterm_map[implicit_nonterm.as_ref().unwrap()]),
-                                Symbol::Nonterm(nonterm_map[ast.start.as_ref().unwrap()])]);
-                prod_precs.push(None);
-                prods_rules.push(rule_idx);
+                prods.push(Some(vec![Symbol::Nonterm(nonterm_map[implicit_nonterm.as_ref().unwrap()]),
+                                     Symbol::Nonterm(nonterm_map[ast.start.as_ref().unwrap()])]));
+                prod_precs.push(Some(None));
+                prods_rules.push(Some(rule_idx));
                 continue;
             }
             else if implicit_nonterm.as_ref().map_or(false, |s| s == astrulename) {
@@ -220,21 +223,21 @@ impl YaccGrammar {
                 // Add a production for each implicit terminal
                 for t in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(prods.len().into());
-                    prods.push(vec![Symbol::Term(term_map[t]), Symbol::Nonterm(rule_idx)]);
-                    prod_precs.push(None);
-                    prods_rules.push(rule_idx);
+                    prods.push(Some(vec![Symbol::Term(term_map[t]), Symbol::Nonterm(rule_idx)]));
+                    prod_precs.push(Some(None));
+                    prods_rules.push(Some(rule_idx));
                 }
                 // Add an empty production
                 implicit_prods.push(prods.len().into());
-                prods.push(vec![]);
-                prod_precs.push(None);
-                prods_rules.push(rule_idx);
+                prods.push(Some(vec![]));
+                prod_precs.push(Some(None));
+                prods_rules.push(Some(rule_idx));
                 continue;
             }
 
-            let astrule = &ast.rules[astrulename];
             let rule = &mut rules_prods[usize::from(rule_idx)];
-            for astprod in &astrule.productions {
+            for &prod_idx in &ast.rules[astrulename] {
+                let astprod = &ast.prods[prod_idx];
                 let mut prod = Vec::with_capacity(astprod.symbols.len());
                 for astsym in &astprod.symbols {
                     match *astsym {
@@ -262,10 +265,10 @@ impl YaccGrammar {
                         }
                     }
                 }
-                (*rule).push(prods.len().into());
-                prods.push(prod);
-                prod_precs.push(prec);
-                prods_rules.push(rule_idx);
+                (*rule).push(prod_idx.into());
+                prods[prod_idx] = Some(prod);
+                prod_precs[prod_idx] = Some(prec);
+                prods_rules[prod_idx] = Some(rule_idx);
             }
         }
 
@@ -279,9 +282,9 @@ impl YaccGrammar {
             prods_len:        u32::try_from(prods.len()).unwrap(),
             start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
             rules_prods,
-            prods_rules,
-            prods,
-            prod_precs,
+            prods_rules:      prods_rules.into_iter().map(|x| x.unwrap()).collect(),
+            prods:            prods.into_iter().map(|x| x.unwrap()).collect(),
+            prod_precs:       prod_precs.into_iter().map(|x| x.unwrap()).collect(),
             implicit_nonterm: implicit_nonterm.map_or(None, |x| Some(nonterm_map[&x]))
         }
     }
@@ -844,18 +847,18 @@ mod test {
         let grm = yacc_grm(YaccKind::Original,
                            &"%start R %token T %% R: 'T';".to_string()).unwrap();
 
-        assert_eq!(grm.start_prod, PIdx::from(0 as u32));
+        assert_eq!(grm.start_prod, PIdx::from(1 as u32));
         assert_eq!(grm.implicit_nonterm(), None);
         grm.nonterm_idx("^").unwrap();
         grm.nonterm_idx("R").unwrap();
         grm.term_idx("T").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)], vec![PIdx::from(1 as u32)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(1 as u32)], vec![PIdx::from(0 as u32)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
-        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32), NTIdx::from(1 as u32)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32), NTIdx::from(0 as u32)]);
 
         assert_eq!(grm.terms_map(), [("T", TIdx::from(0 as u32))].iter()
                                                                  .cloned()
@@ -875,9 +878,9 @@ mod test {
         grm.term_idx("T").unwrap();
         assert!(grm.term_name(grm.eof_term_idx()).is_none());
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)],
-                                         vec![PIdx::from(1 as u32)],
-                                         vec![PIdx::from(2 as u32)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(2 as u32)],
+                                         vec![PIdx::from(0 as u32)],
+                                         vec![PIdx::from(1 as u32)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -899,12 +902,12 @@ mod test {
         grm.term_idx("T1").unwrap();
         grm.term_idx("T2").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(0 as u32)],
-                                         vec![PIdx::from(1 as u32)],
-                                         vec![PIdx::from(2 as u32)]]);
-        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32),
-                                         NTIdx::from(1 as u32),
-                                         NTIdx::from(2 as u32)]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(2 as u32)],
+                                         vec![PIdx::from(0 as u32)],
+                                         vec![PIdx::from(1 as u32)]]);
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32),
+                                         NTIdx::from(2 as u32),
+                                         NTIdx::from(0 as u32)]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -930,12 +933,12 @@ mod test {
              | 'z';
           ".to_string()).unwrap();
 
-        assert_eq!(grm.prods_rules, vec![NTIdx::from(0 as u32),
-                                         NTIdx::from(1 as u32),
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32),
                                          NTIdx::from(1 as u32),
                                          NTIdx::from(2 as u32),
                                          NTIdx::from(3 as u32),
-                                         NTIdx::from(3 as u32)]);
+                                         NTIdx::from(3 as u32),
+                                         NTIdx::from(0 as u32)]);
     }
 
     #[test]
@@ -958,14 +961,14 @@ mod test {
           ").unwrap();
 
         assert_eq!(grm.prod_precs.len(), 8);
-        assert_eq!(grm.prod_precs[0], None);
-        assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 0, kind: AssocKind::Right});
+        assert_eq!(grm.prod_precs[0].unwrap(), Precedence{level: 0, kind: AssocKind::Right});
+        assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[2].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
-        assert_eq!(grm.prod_precs[3].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
-        assert_eq!(grm.prod_precs[4].unwrap(), Precedence{level: 2, kind: AssocKind::Left});
-        assert_eq!(grm.prod_precs[5].unwrap(), Precedence{level: 3, kind: AssocKind::Left});
-        assert_eq!(grm.prod_precs[6].unwrap(), Precedence{level: 4, kind: AssocKind::Nonassoc});
-        assert!(grm.prod_precs[7].is_none());
+        assert_eq!(grm.prod_precs[3].unwrap(), Precedence{level: 2, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[4].unwrap(), Precedence{level: 3, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[5].unwrap(), Precedence{level: 4, kind: AssocKind::Nonassoc});
+        assert!(grm.prod_precs[6].is_none());
+        assert_eq!(grm.prod_precs[7], None);
     }
 
     #[test]
@@ -983,13 +986,13 @@ mod test {
                  | 'id' ;
         ").unwrap();
         assert_eq!(grm.prod_precs.len(), 7);
-        assert_eq!(grm.prod_precs[0], None);
+        assert_eq!(grm.prod_precs[0].unwrap(), Precedence{level: 0, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 0, kind: AssocKind::Left});
-        assert_eq!(grm.prod_precs[2].unwrap(), Precedence{level: 0, kind: AssocKind::Left});
+        assert_eq!(grm.prod_precs[2].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[3].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[4].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
-        assert_eq!(grm.prod_precs[5].unwrap(), Precedence{level: 1, kind: AssocKind::Left});
-        assert!(grm.prod_precs[6].is_none());
+        assert!(grm.prod_precs[5].is_none());
+        assert_eq!(grm.prod_precs[6], None);
     }
 
     #[test]
@@ -1180,5 +1183,28 @@ mod test {
         assert_eq!(scores[usize::from(grm.nonterm_idx("B").unwrap())], 3);
         assert_eq!(scores[usize::from(grm.nonterm_idx("C").unwrap())], 2);
         assert_eq!(scores[usize::from(grm.nonterm_idx("D").unwrap())], 3);
+    }
+
+    #[test]
+    fn test_out_of_order_productions() {
+        // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
+        let grm = yacc_grm(YaccKind::Original, &"
+            %start S
+            %%
+            S: A 'c' 'd'
+             | B 'c' 'e';
+            A: 'a';
+            B: 'a'
+             | 'b';
+            A: 'b';
+            ").unwrap();
+
+        assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32),
+                                         NTIdx::from(1 as u32),
+                                         NTIdx::from(2 as u32),
+                                         NTIdx::from(3 as u32),
+                                         NTIdx::from(3 as u32),
+                                         NTIdx::from(2 as u32),
+                                         NTIdx::from(0 as u32)]);
     }
 }
