@@ -37,7 +37,7 @@ use std::fmt;
 use cfgrammar::{Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use fnv::FnvHasher;
-use vob::Vob;
+use vob::{IterSetBits, Vob};
 
 use StIdx;
 use stategraph::StateGraph;
@@ -77,9 +77,12 @@ pub struct StateTable {
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
     actions          : HashMap<u32, Action, BuildHasherDefault<FnvHasher>>,
-    used_actions     : Vob,
+    state_actions    : Vob,
     gotos            : HashMap<u32, StIdx, BuildHasherDefault<FnvHasher>>,
+    core_reduces     : Vob,
+    state_shifts     : Vob,
     nonterms_len     : u32,
+    prods_len        : u32,
     terms_len        : u32,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
@@ -101,8 +104,8 @@ pub enum Action {
 impl StateTable {
     pub fn new(grm: &YaccGrammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
         let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
-        let mut used_actions = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
-        let mut gotos   = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
+        let mut state_actions = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
+        let mut gotos = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
         let mut final_state = None;
@@ -117,11 +120,11 @@ impl StateTable {
                 if dot < SIdx::from(grm.prod(prod_i).len()) {
                     continue;
                 }
-                for (term_i, _) in ctx.iter().enumerate().filter(|&(_, x)| x) {
+                for term_i in ctx.iter_set_bits(..) {
                     let off = StateTable::actions_offset(grm.terms_len(),
                                                          state_i,
                                                          TIdx::from(term_i));
-                    used_actions.set(off as usize, true);
+                    state_actions.set(off as usize, true);
                     match actions.entry(off) {
                         Entry::Occupied(mut e) => {
                             match *e.get_mut() {
@@ -179,7 +182,7 @@ impl StateTable {
                     Symbol::Term(term_k) => {
                         // Populate shifts
                         let off = StateTable::actions_offset(grm.terms_len(), state_i, term_k);
-                        used_actions.set(off as usize, true);
+                        state_actions.set(off as usize, true);
                         match actions.entry(off) {
                             Entry::Occupied(mut e) => {
                                 match *e.get_mut() {
@@ -201,10 +204,39 @@ impl StateTable {
         }
         assert!(final_state.is_some());
 
+        let mut nt_depth = HashMap::new();
+        let mut core_reduces = Vob::from_elem((sg.all_states_len() * grm.prods_len()) as usize, false);
+        let mut state_shifts = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
+        for i in 0..sg.all_states_len() {
+            nt_depth.clear();
+            for j in 0..grm.terms_len() {
+                let off = StateTable::actions_offset(grm.terms_len(), StIdx::from(i), TIdx::from(j));
+                match actions.get(&off) {
+                    Some(&Action::Reduce(p_idx)) => {
+                        let prod_len = grm.prod(p_idx).len();
+                        let nt_idx = grm.prod_to_nonterm(p_idx);
+                        nt_depth.insert((nt_idx, prod_len), p_idx);
+                    },
+                    Some(&Action::Shift(_)) => {
+                        state_shifts.set(off as usize, true);
+                    },
+                    _ => ()
+                }
+            }
+
+            for &p_idx in nt_depth.values() {
+                let off = (i * grm.prods_len() + u32::from(p_idx)) as usize;
+                core_reduces.set(off, true);
+            }
+        }
+
         Ok(StateTable {actions,
-                       used_actions,
+                       state_actions,
                        gotos,
+                       state_shifts,
+                       core_reduces,
                        nonterms_len: grm.nonterms_len(),
+                       prods_len: grm.prods_len(),
                        terms_len: grm.terms_len(),
                        reduce_reduce,
                        shift_reduce,
@@ -218,13 +250,43 @@ impl StateTable {
         self.actions.get(&off).map_or(None, |x| Some(*x))
     }
 
-    /// Return an iterator over the actions of `state_idx`.
+    /// Return an iterator over the indexes of all non-empty actions of `state_idx`.
     pub fn state_actions(&self, state_idx: StIdx) -> StateActionsIterator {
         let start = usize::from(state_idx) * self.terms_len as usize;
-        StateActionsIterator{stable: &self,
-                             start,
-                             i: start,
-                             end: start + self.terms_len as usize}
+        let end = start + self.terms_len as usize;
+        StateActionsIterator{iter: self.state_actions.iter_set_bits(start..end),
+                             start}
+    }
+
+    /// Return an iterator over the indexes of all shift actions of `state_idx`. By definition this
+    /// is a subset of the indexes produced by [`state_actions`](#method.state_actions).
+    pub fn state_shifts(&self, state_idx: StIdx) -> StateActionsIterator {
+        let start = usize::from(state_idx) * self.terms_len as usize;
+        let end = start + self.terms_len as usize;
+        StateActionsIterator{iter: self.state_shifts.iter_set_bits(start..end),
+                            start}
+    }
+
+    /// Return an iterator over a set of "core" reduces of `state_idx`. This is a minimal set of
+    /// reduce actions which explore all possible reductions from a given state. Note that these
+    /// are chosen non-deterministically from a set of equivalent reduce actions: you must not rely
+    /// on always seeing the same reduce actions. For example if a state has these three items:
+    ///
+    ///   [E -> a ., $]
+    ///   [E -> b ., $]
+    ///   [F -> c ., $]
+    ///
+    /// then the core reduces will be:
+    ///
+    ///   One of: [E -> a., $] or [E -> b., $]
+    ///   And:    [F -> c., $]
+    ///
+    /// since the two [E -> ...] items both have the same effects on a parse stack.
+    pub fn core_reduces(&self, state_idx: StIdx) -> CoreReducesIterator {
+        let start = usize::from(state_idx) * self.prods_len as usize;
+        let end = start + self.prods_len as usize;
+        CoreReducesIterator{iter: self.core_reduces.iter_set_bits(start..end),
+                            start}
     }
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
@@ -239,26 +301,28 @@ impl StateTable {
 }
 
 pub struct StateActionsIterator<'a> {
-    stable: &'a StateTable,
-    start: usize,
-    i: usize,
-    end: usize
+    iter: IterSetBits<'a, usize>,
+    start: usize
 }
 
 impl<'a> Iterator for StateActionsIterator<'a> {
     type Item = TIdx;
 
     fn next(&mut self) -> Option<TIdx> {
-        let mut i = self.i;
-        while i < self.end {
-            if self.stable.used_actions.get(i).unwrap() {
-                self.i = i + 1;
-                return Some(TIdx::from(i - self.start));
-            }
-            i += 1;
-        }
-        self.i = i;
-        None
+        self.iter.next().map(|i| TIdx::from(i - self.start))
+    }
+}
+
+pub struct CoreReducesIterator<'a> {
+    iter: IterSetBits<'a, usize>,
+    start: usize
+}
+
+impl<'a> Iterator for CoreReducesIterator<'a> {
+    type Item = PIdx;
+
+    fn next(&mut self) -> Option<PIdx> {
+        self.iter.next().map(|i| PIdx::from(i - self.start))
     }
 }
 
@@ -312,7 +376,7 @@ mod test {
     use std::collections::HashSet;
     use StIdx;
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
-    use cfgrammar::{PIdx, Symbol, TIdx};
+    use cfgrammar::{Symbol, TIdx};
     use cfgrammar::yacc::{yacc_grm, YaccKind};
     use pager::pager_stategraph;
 
@@ -370,6 +434,18 @@ mod test {
                             grm.term_idx("*").unwrap(),
                             grm.eof_term_idx()]);
         assert_eq!(st.state_actions(s4).collect::<HashSet<TIdx>>(), s4_actions);
+
+        let s2_state_shifts = &[grm.term_idx("-").unwrap()]
+                               .iter()
+                               .cloned()
+                               .collect::<HashSet<_>>();
+        assert_eq!(st.state_shifts(s2).collect::<HashSet<_>>(), *s2_state_shifts);
+
+        let s4_core_reduces = &[grm.nonterm_to_prods(grm.nonterm_idx("Factor").unwrap())[0]]
+                              .iter()
+                              .cloned()
+                              .collect::<HashSet<_>>();
+        assert_eq!(st.core_reduces(s4).collect::<HashSet<_>>(), *s4_core_reduces);
 
         // Gotos
         assert_eq!(st.gotos.len(), 8);
