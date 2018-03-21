@@ -95,13 +95,13 @@ pub struct Parser<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
 
 impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
     fn parse<F>(rcvry_kind: RecoveryKind,
-             grm: &YaccGrammar,
-             term_cost: F,
-             sgraph: &StateGraph,
-             stable: &StateTable,
-             lexemes: &Lexemes<TokId>)
-          -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
-      where F: Fn(TIdx) -> u8
+                grm: &YaccGrammar,
+                term_cost: F,
+                sgraph: &StateGraph,
+                stable: &StateTable,
+                lexemes: &Lexemes<TokId>)
+             -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
+          where F: Fn(TIdx) -> u8
     {
         for i in 0..grm.terms_len() {
             assert!(term_cost(TIdx::from(i)) > 0);
@@ -394,14 +394,33 @@ impl<TokId: Copy> ParseError<TokId> {
 
 #[cfg(test)]
 pub(crate) mod test {
+    use std::collections::HashMap;
+
     use cfgrammar::yacc::{YaccGrammar, yacc_grm, YaccKind};
     use lrlex::{build_lex, Lexeme};
     use lrtable::{Minimiser, from_yacc};
     use num_traits::ToPrimitive;
     use super::*;
 
-    pub(crate) fn do_parse(rcvry_kind: RecoveryKind, lexs: &str, grms: &str, input: &str)
-                       -> (YaccGrammar, Result<Node<u16>, (Option<Node<u16>>, Vec<ParseError<u16>>)>)
+    pub(crate) fn do_parse(rcvry_kind: RecoveryKind,
+                           lexs: &str,
+                           grms: &str,
+                           input: &str)
+                       -> (YaccGrammar,
+                           Result<Node<u16>, (Option<Node<u16>>,
+                                              Vec<ParseError<u16>>)>)
+    {
+        do_parse_with_costs(rcvry_kind, lexs, grms, input, &HashMap::new())
+    }
+
+    pub(crate) fn do_parse_with_costs(rcvry_kind: RecoveryKind,
+                                      lexs: &str,
+                                      grms: &str,
+                                      input: &str,
+                                      costs: &HashMap<&str, u8>)
+                                  -> (YaccGrammar,
+                                      Result<Node<u16>, (Option<Node<u16>>,
+                                                         Vec<ParseError<u16>>)>)
     {
         let mut lexerdef = build_lex(lexs).unwrap();
         let grm = yacc_grm(YaccKind::Original, grms).unwrap();
@@ -413,7 +432,15 @@ pub(crate) mod test {
             lexerdef.set_rule_ids(&rule_ids);
         }
         let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
-        let pr = parse_rcvry(rcvry_kind, &grm, |_| 1, &sgraph, &stable, &lexemes);
+        let costs_tidx = costs.iter()
+                              .map(|(k, v)| (grm.term_idx(k).unwrap(), v))
+                              .collect::<HashMap<_, _>>();
+        let pr = parse_rcvry(rcvry_kind,
+                             &grm,
+                             move |t_idx| **costs_tidx.get(&t_idx).unwrap_or(&&1),
+                             &sgraph,
+                             &stable,
+                             &lexemes);
         (grm, pr)
     }
 

@@ -35,7 +35,7 @@ use std::hash::{Hash, Hasher};
 use std::time::Instant;
 
 use cactus::Cactus;
-use cfgrammar::{Symbol, TIdx};
+use cfgrammar::TIdx;
 use lrlex::Lexeme;
 use lrtable::{Action, StIdx};
 use num_traits::{PrimInt, Unsigned};
