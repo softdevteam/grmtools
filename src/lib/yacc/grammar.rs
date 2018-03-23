@@ -845,7 +845,7 @@ mod test {
     #[test]
     fn test_minimal() {
         let grm = yacc_grm(YaccKind::Original,
-                           &"%start R %token T %% R: 'T';".to_string()).unwrap();
+                           "%start R %token T %% R: 'T';").unwrap();
 
         assert_eq!(grm.start_prod, PIdx::from(1 as u32));
         assert_eq!(grm.implicit_nonterm(), None);
@@ -870,7 +870,7 @@ mod test {
     #[test]
     fn test_rule_ref() {
         let grm = yacc_grm(YaccKind::Original,
-                           &"%start R %token T %% R : S; S: 'T';".to_string()).unwrap();
+                           "%start R %token T %% R : S; S: 'T';").unwrap();
 
         grm.nonterm_idx("^").unwrap();
         grm.nonterm_idx("R").unwrap();
@@ -894,7 +894,7 @@ mod test {
     #[test]
     fn test_long_prod() {
         let grm = yacc_grm(YaccKind::Original,
-                           &"%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';".to_string()).unwrap();
+                           "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';").unwrap();
 
         grm.nonterm_idx("^").unwrap();
         grm.nonterm_idx("R").unwrap();
@@ -923,7 +923,7 @@ mod test {
 
     #[test]
     fn test_prods_rules() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = yacc_grm(YaccKind::Original, "
             %start A
             %%
             A: B
@@ -931,7 +931,7 @@ mod test {
             B: 'x';
             C: 'y'
              | 'z';
-          ".to_string()).unwrap();
+          ").unwrap();
 
         assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32),
                                          NTIdx::from(1 as u32),
@@ -943,7 +943,7 @@ mod test {
 
     #[test]
     fn test_left_right_nonassoc_precs() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = yacc_grm(YaccKind::Original, "
             %start Expr
             %right '='
             %left '+' '-'
@@ -973,7 +973,7 @@ mod test {
 
     #[test]
     fn test_prec_override() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = yacc_grm(YaccKind::Original, "
             %start expr
             %left '+' '-'
             %left '*' '/'
@@ -997,7 +997,7 @@ mod test {
 
     #[test]
     fn test_implicit_tokens_rewrite() {
-        let grm = yacc_grm(YaccKind::Eco, &"
+        let grm = yacc_grm(YaccKind::Eco, "
           %implicit_tokens ws1 ws2
           %start S
           %%
@@ -1065,13 +1065,13 @@ mod test {
 
     #[test]
     fn test_has_path() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = yacc_grm(YaccKind::Original, "
             %start A
             %%
             A: B;
             B: B 'x' | C;
             C: C 'y' | ;
-          ".to_string()).unwrap();
+          ").unwrap();
 
         let a_nt_idx = grm.nonterm_idx(&"A").unwrap();
         let b_nt_idx = grm.nonterm_idx(&"B").unwrap();
@@ -1088,7 +1088,7 @@ mod test {
 
     #[test]
     fn test_nonterm_min_costs() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = yacc_grm(YaccKind::Original, "
             %start A
             %%
             A: A B | ;
@@ -1096,7 +1096,7 @@ mod test {
             C: 'x' B | 'x';
             D: 'y' B | 'y' 'z';
             E: 'x' A | 'x' 'y';
-          ".to_string()).unwrap();
+          ").unwrap();
 
         let scores = nonterm_min_costs(&grm, &vec![1, 1, 1]);
         assert_eq!(scores[usize::from(grm.nonterm_idx(&"A").unwrap())], 0);
@@ -1108,14 +1108,14 @@ mod test {
 
     #[test]
     fn test_min_sentences() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = yacc_grm(YaccKind::Original, "
             %start A
             %%
             A: A B | ;
             B: C | D;
             C: 'x' B | 'x';
             D: 'y' B | 'y' 'z';
-          ".to_string()).unwrap();
+          ").unwrap();
 
         let sg = grm.sentence_generator(|_| 1);
 
@@ -1188,7 +1188,7 @@ mod test {
     #[test]
     fn test_out_of_order_productions() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = yacc_grm(YaccKind::Original, "
             %start S
             %%
             S: A 'c' 'd'
