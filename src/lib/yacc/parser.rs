@@ -49,6 +49,7 @@ pub enum YaccParserErrorKind {
     IllegalName,
     IllegalString,
     IncompleteRule,
+    IncompleteComment,
     MissingColon,
     PrematureEnd,
     ProgramsNotSupported,
@@ -73,6 +74,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::IllegalName          => "Illegal name",
             YaccParserErrorKind::IllegalString        => "Illegal string",
             YaccParserErrorKind::IncompleteRule       => "Incomplete rule",
+            YaccParserErrorKind::IncompleteComment    => "Incomplete comment",
             YaccParserErrorKind::MissingColon         => "Missing colon",
             YaccParserErrorKind::PrematureEnd         => "File ends prematurely",
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
@@ -319,17 +321,66 @@ impl YaccParser {
         }
     }
 
-    fn parse_ws(&mut self, i: usize) -> YaccResult<usize> {
-        let mut j = i;
-        for c in self.src[i..].chars() {
+    fn parse_ws(&mut self, mut i: usize) -> YaccResult<usize> {
+        while i < self.src.len() {
+            let c = self.src[i..].chars().nth(0).unwrap();
             match c {
-                ' '  | '\t' => (),
-                '\n' | '\r' => self.newlines.push(j + 1),
-                _           => break
+                ' '  | '\t' => i += c.len_utf8(),
+                '\n' | '\r' => {
+                    self.newlines.push(i + 1);
+                    i += c.len_utf8();
+                },
+                '/' => {
+                    if i + c.len_utf8() == self.src.len() {
+                        break;
+                    } else {
+                        let j = i + c.len_utf8();
+                        let c = self.src[j..].chars().nth(0).unwrap();
+                        match c {
+                            '/' => {
+                                i = j + c.len_utf8();
+                                for c in self.src[i..].chars() {
+                                    i += c.len_utf8();
+                                    if c == '\n' || c == '\r' {
+                                        break;
+                                    }
+                                }
+                            },
+                            '*' => {
+                                // This is complicated by the fact that we need to deal with
+                                // unclosed comments (i.e. '/*' without a corresponding '*/').
+                                let mut k = j + c.len_utf8();
+                                let mut found = false;
+                                while k < self.src.len() {
+                                    let c = self.src[k..].chars().nth(0).unwrap();
+                                    k += c.len_utf8();
+                                    match c {
+                                        '\n' | '\r' => self.newlines.push(i + 1),
+                                        '*' => (),
+                                        _ => continue
+                                    }
+                                    if k < self.src.len() {
+                                        let c = self.src[k..].chars().nth(0).unwrap();
+                                        if c == '/' {
+                                            i = k + c.len_utf8();
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if !found {
+                                    return Err(self.mk_error(YaccParserErrorKind::IncompleteComment,
+                                                             i));
+                                }
+                            },
+                            _ => break
+                        }
+                    }
+                },
+                _  => break
             }
-            j += c.len_utf8();
         }
-        Ok(j)
+        Ok(i)
     }
 
     fn lookahead_is(&self, s: &'static str, i: usize) -> Option<usize> {
@@ -819,5 +870,42 @@ x".to_string();
           R3: ;
           ").unwrap();
         assert_eq!(ast.start, Some("R".to_string()));
+    }
+
+    #[test]
+    fn test_comments() {
+        let src = "
+            // A valid comment
+            %token   a
+            /* Another valid comment */
+            %%\n
+            A : a;";
+        let grm = parse(YaccKind::Original, src).unwrap();
+        assert!(grm.has_token("a"));
+
+        match parse(YaccKind::Original, &"
+            /* An invalid comment * /
+            %token   a
+            %%\n
+            A : a;")
+        {
+            Ok(_) => panic!(),
+            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteComment, line: 2, ..}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+
+        match parse(YaccKind::Original, &"
+            %token   a
+            %%
+            /* A valid
+             * multi-line comment
+             */
+            /* An invalid comment * /
+            A : a;")
+        {
+            Ok(_) => panic!(),
+            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteComment, line: 7, ..}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
     }
 }
