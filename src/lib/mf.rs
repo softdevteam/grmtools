@@ -1485,6 +1485,87 @@ A: 'b';
     }
 
     #[test]
+    fn test_bertsch_nederhof1() {
+        // Example from p5 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
+        // Repair in Shift-reduce Parsers'"
+        let lexs = "%%
+a a
+b b
+c c
+d d
+";
+
+        let grms = "%start S
+%%
+S: A A 'a' | 'b';
+A: 'c' 'd';
+";
+
+        let us = "";
+        let mut costs = HashMap::new();
+        costs.insert("a", 1);
+        costs.insert("b", 6);
+        costs.insert("c", 1);
+        costs.insert("d", 1);
+        let (grm, pr) = do_parse_with_costs(RecoveryKind::MF, &lexs, &grms, &us, &costs);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"c\", Insert \"d\", Insert \"c\", Insert \"d\", Insert \"a\""]);
+    }
+
+    #[test]
+    fn test_bertsch_nederhof2() {
+        // Example from p5 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
+        // Repair in Shift-reduce Parsers'"
+        let lexs = "%%
+a a
+c c
+d d
+";
+
+        let grms = "%start S
+%%
+S: A A 'a';
+A: 'c' 'd';
+";
+
+        let us = "";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"c\", Insert \"d\", Insert \"c\", Insert \"d\", Insert \"a\""]);
+    }
+
+    #[test]
+    fn test_bertsch_nederhof3() {
+        // Example from p8 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
+        // Repair in Shift-reduce Parsers'"
+        let lexs = "%%
+a a
+b b
+c c
+d d
+";
+
+        let grms = "%start S
+%%
+S: C D 'a' | D C 'b';
+C: 'c';
+D: 'd';
+";
+
+        let us = "";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(&grm,
+                          errs[0].repairs(),
+                          &vec!["Insert \"c\", Insert \"d\", Insert \"a\"",
+                                "Insert \"d\", Insert \"c\", Insert \"b\""]);
+    }
+
+    #[test]
     fn test_counting_shifts() {
         let mut c = Cactus::new();
         assert_eq!(ends_with_parse_at_least_shifts(&c), false);
