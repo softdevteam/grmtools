@@ -31,7 +31,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
+use std::iter::FromIterator;
 use std::mem;
 use std::time::Instant;
 
@@ -448,19 +450,12 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         }
 
         // The simplifications above can mean that we now end up with equivalent repairs. Remove
-        // duplicates.
-
-        let mut i = 0;
-        while i < all_rprs.len() {
-            let mut j = i + 1;
-            while j < all_rprs.len() {
-                if all_rprs[i] == all_rprs[j] {
-                    all_rprs.remove(j);
-                } else {
-                    j += 1;
-                }
-            }
-            i += 1;
+        // duplicates by creating a temporary HashSet. This is a hack, but since Vec<Repair> isn't
+        // sortable, this is the easiest, and fastet way we have of getting things done.
+        {
+            let tmp: HashSet<Vec<Repair>> = HashSet::from_iter(all_rprs);
+            all_rprs = tmp.into_iter()
+                          .collect::<Vec<Vec<Repair>>>();
         }
 
         all_rprs.iter()
