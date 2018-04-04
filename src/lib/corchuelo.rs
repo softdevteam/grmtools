@@ -249,7 +249,8 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
 
         let full_rprs = self.collect_repairs(astar_cnds);
         let smpl_rprs = self.simplify_repairs(full_rprs);
-        let rnk_rprs = self.rank_cnds(in_la_idx,
+        let rnk_rprs = self.rank_cnds(finish_by,
+                                      in_la_idx,
                                       &start_cactus_pstack,
                                       smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
@@ -476,6 +477,7 @@ impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
     /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
     /// ordering is non-deterministic.
     fn rank_cnds(&self,
+                 finish_by: Instant,
                  in_la_idx: usize,
                  start_pstack: &Cactus<StIdx>,
                  in_cnds: Vec<Vec<ParseRepair>>)
@@ -499,9 +501,13 @@ impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
         todo.resize(cnds.len(), true);
         let mut remng = cnds.len(); // Remaining items in todo
         let mut i = 0;
-        while i < TRY_PARSE_AT_MOST && remng > 1 {
+        'b: while i < TRY_PARSE_AT_MOST && remng > 1 {
             let mut j = 0;
             while j < todo.len() {
+                if Instant::now() >= finish_by {
+                   break 'b;
+                }
+
                 if !todo[j] {
                     j += 1;
                     continue;
