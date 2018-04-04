@@ -436,15 +436,13 @@ impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
                      -> Vec<Vec<ParseRepair>>
     {
         for i in 0..all_rprs.len() {
-            {
-                // Remove shifts from the end of repairs
-                let mut rprs = &mut all_rprs[i];
-                while !rprs.is_empty() {
-                    if let Repair::Shift = rprs[rprs.len() - 1] {
-                        rprs.pop();
-                    } else {
-                        break;
-                    }
+            // Remove shifts from the end of repairs
+            let mut rprs = &mut all_rprs[i];
+            while !rprs.is_empty() {
+                if let Repair::Shift = rprs[rprs.len() - 1] {
+                    rprs.pop();
+                } else {
+                    break;
                 }
             }
         }
