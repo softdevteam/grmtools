@@ -97,35 +97,32 @@ impl PartialEq for PathFNode {
         if self.la_idx != other.la_idx || self.pstack != other.pstack {
             return false;
         }
-        // The rest of this function is subtle: we're not looking for repairs which are exactly
-        // equivalent, but ones that are compatible. This is necessary so that we can merge
-        // compatible nodes. Our definition of compatible repairs is simple: they must end with
-        // exactly the same number of shifts. Ending with zero shifts is fine: so two repair
-        // sequences that end with (say) a Delete and an InsertTerm are compatible by definition.
-        for (srm, orm) in self.repairs.vals().zip(other.repairs.vals()) {
-            match (srm, orm) {
-                (&RepairMerge::Repair(sr), &RepairMerge::Repair(or))
-                | (&RepairMerge::Merge(sr, _), &RepairMerge::Repair(or))
-                | (&RepairMerge::Repair(sr), &RepairMerge::Merge(or, _))
-                | (&RepairMerge::Merge(sr, _), &RepairMerge::Merge(or, _)) => {
-                    match (sr, or) {
-                        (Repair::Shift, Repair::Shift) => (),
-                        (Repair::Shift, _) | (_, Repair::Shift) => return false,
-                        _ => {
-                            // As soon as we come across two repairs which aren't shifts, we know
-                            // that we must have satisfied the "must end with the same number of
-                            // shifts" constraint and can bail out.
-                            return true;
-                        }
-                    }
-                },
-                (&RepairMerge::Terminator, &RepairMerge::Terminator)
-                    => return true,
-                (&RepairMerge::Terminator, _) | (_, &RepairMerge::Terminator)
-                    => return false
-            }
+        // The rest of this function is subtle: we're not looking for repair sequences which are
+        // exactly equivalent, but ones that are compatible. This is necessary so that we can merge
+        // compatible nodes. Our definition of compatible repair sequences is: they must end with
+        // exactly the same number of shifts (ending with zero shifts is fine); and if one repair
+        // sequence ends in a delete, the other must do so as well.
+
+        match (self.last_repair(), other.last_repair()) {
+            (Some(Repair::Delete), Some(Repair::Delete)) => (),
+            (Some(Repair::Delete), _) | (_, Some(Repair::Delete)) => return false,
+            (_, _) => ()
         }
-        unreachable!()
+
+        let num_shifts = |c: &Cactus<RepairMerge>| {
+            let mut n = 0;
+            for r in c.vals() {
+                match r {
+                      &RepairMerge::Repair(Repair::Shift)
+                    | &RepairMerge::Merge(Repair::Shift, _) => n += 1,
+                    _ => break
+                }
+            }
+            n
+        };
+        let self_shifts = num_shifts(&self.repairs);
+        let other_shifts = num_shifts(&other.repairs);
+        self_shifts == other_shifts
     }
 }
 
