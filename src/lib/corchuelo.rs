@@ -31,7 +31,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
+use std::iter::FromIterator;
 use std::time::Instant;
 
 use cactus::Cactus;
@@ -247,7 +249,8 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
 
         let full_rprs = self.collect_repairs(astar_cnds);
         let smpl_rprs = self.simplify_repairs(full_rprs);
-        let rnk_rprs = self.rank_cnds(in_la_idx,
+        let rnk_rprs = self.rank_cnds(finish_by,
+                                      in_la_idx,
                                       &start_cactus_pstack,
                                       smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
@@ -416,33 +419,24 @@ impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
                      -> Vec<Vec<ParseRepair>>
     {
         for i in 0..all_rprs.len() {
-            {
-                // Remove shifts from the end of repairs
-                let mut rprs = &mut all_rprs[i];
-                while !rprs.is_empty() {
-                    if let Repair::Shift = rprs[rprs.len() - 1] {
-                        rprs.pop();
-                    } else {
-                        break;
-                    }
+            // Remove shifts from the end of repairs
+            let mut rprs = &mut all_rprs[i];
+            while !rprs.is_empty() {
+                if let Repair::Shift = rprs[rprs.len() - 1] {
+                    rprs.pop();
+                } else {
+                    break;
                 }
             }
         }
 
         // The simplifications above can mean that we now end up with equivalent repairs. Remove
-        // duplicates.
-
-        let mut i = 0;
-        while i < all_rprs.len() {
-            let mut j = i + 1;
-            while j < all_rprs.len() {
-                if all_rprs[i] == all_rprs[j] {
-                    all_rprs.remove(j);
-                } else {
-                    j += 1;
-                }
-            }
-            i += 1;
+        // duplicates by creating a temporary HashSet. This is a hack, but since Vec<Repair> isn't
+        // sortable, this is the easiest, and fastet way we have of getting things done.
+        {
+            let tmp: HashSet<Vec<Repair>> = HashSet::from_iter(all_rprs);
+            all_rprs = tmp.into_iter()
+                          .collect::<Vec<Vec<Repair>>>();
         }
 
         all_rprs.iter()
@@ -465,6 +459,7 @@ impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
     /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
     /// ordering is non-deterministic.
     fn rank_cnds(&self,
+                 finish_by: Instant,
                  in_la_idx: usize,
                  start_pstack: &Cactus<StIdx>,
                  in_cnds: Vec<Vec<ParseRepair>>)
@@ -488,9 +483,13 @@ impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
         todo.resize(cnds.len(), true);
         let mut remng = cnds.len(); // Remaining items in todo
         let mut i = 0;
-        while i < TRY_PARSE_AT_MOST && remng > 1 {
+        'b: while i < TRY_PARSE_AT_MOST && remng > 1 {
             let mut j = 0;
             while j < todo.len() {
+                if Instant::now() >= finish_by {
+                   break 'b;
+                }
+
                 if !todo[j] {
                     j += 1;
                     continue;
