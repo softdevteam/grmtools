@@ -278,24 +278,6 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
             };
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx)));
             if let Some(d) = self.dyn_dist(&n_repairs, t_st_idx, n.la_idx) {
-                if let Some(Repair::Shift) = n.last_repair() {
-                    debug_assert!(n.la_idx > 0);
-                    // If we're about to insert term T and the next terminal in the user's
-                    // input is T, we could potentially end up with two similar repair
-                    // sequences:
-                    //   Insert T, Shift
-                    //   Shift, Insert T
-                    // From a user's perspective, both of those are equivalent. From our point
-                    // of view, the duplication is inefficient. We prefer the former sequence
-                    // because we want to find PARSE_AT_LEAST consecutive shifts. At this
-                    // point, we see if we're about to Insert T after a Shift of T and, if so,
-                    // avoid doing so.
-                    let prev_tidx = self.parser.next_tidx(n.la_idx - 1);
-                    if prev_tidx == t_idx {
-                        continue;
-                    }
-                }
-
                 assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(t_idx) as u32);
                 let nn = PathFNode{
                     pstack: n.pstack.child(t_st_idx),
@@ -1404,18 +1386,6 @@ U: 'd';
                           &vec!["Insert \"a\", Insert \"d\"",
                                 "Insert \"b\", Insert \"d\"",
                                 "Insert \"c\", Insert \"d\""]);
-    }
-
-    #[test]
-    fn dont_shift_and_insert_the_same_terminal() {
-        let (lexs, grms) = kimyi_lex_grm();
-        let us = "(()";
-        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
-        let (_, errs) = pr.unwrap_err();
-        check_all_repairs(&grm,
-                          errs[0].repairs(),
-                          &vec!["Insert \"A\", Insert \"CLOSE_BRACKET\"",
-                                "Insert \"B\", Insert \"CLOSE_BRACKET\""]);
     }
 
     #[test]

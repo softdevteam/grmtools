@@ -281,24 +281,6 @@ impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
                 continue;
             }
 
-            if let Some(Repair::Shift) = n.last_repair() {
-                debug_assert!(n.la_idx > 0);
-                // If we're about to insert term T and the next terminal in the user's
-                // input is T, we could potentially end up with two similar repair
-                // sequences:
-                //   Insert T, Shift
-                //   Shift, Insert T
-                // From a user's perspective, both of those are equivalent. From our point
-                // of view, the duplication is inefficient. We prefer the former sequence
-                // because we want to find PARSE_AT_LEAST consecutive shifts. At this
-                // point, we see if we're about to Insert T after a Shift of T and, if so,
-                // avoid doing so.
-                let prev_tidx = self.parser.next_tidx(la_idx - 1);
-                if prev_tidx == t_idx {
-                    continue;
-                }
-            }
-
             let next_lexeme = self.parser.next_lexeme(n.la_idx);
             let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
                                          next_lexeme.start(), 0);
