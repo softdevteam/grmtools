@@ -36,7 +36,7 @@
 macro_rules! u32struct {
     ($(#[$attr:meta])* $n: ident, $t: ident) => {
         $(#[$attr])*
-        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         pub struct $n {
             v: $t
         }
