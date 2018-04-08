@@ -30,7 +30,6 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::iter::FromIterator;
@@ -517,12 +516,10 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         // by the number of actions in the repairs (the latter is somewhat arbitrary, but matches the
         // intuition that "repairs which affect the shortest part of the string are preferable").
         cnds.sort_unstable_by(|x, y| {
-            match y.1.cmp(&x.1) {
-                Ordering::Equal => {
-                    x.2.len().cmp(&y.2.len())
-                },
-                a => a
-            }
+            y.1.cmp(&x.1)
+               .then_with(|| x.2.len()
+                                .cmp(&y.2.len()))
+               .then_with(|| x.2.cmp(&y.2))
         });
 
         cnds.into_iter()

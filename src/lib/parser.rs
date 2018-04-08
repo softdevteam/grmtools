@@ -348,7 +348,7 @@ pub fn parse_rcvry
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
 /// in the sequence of repairs is represented by a `ParseRepair`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ParseRepair {
     /// Insert a `Symbol::Term`.
     Insert(TIdx),
