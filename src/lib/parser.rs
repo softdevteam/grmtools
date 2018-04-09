@@ -570,22 +570,4 @@ Call: 'ID' 'OPEN_BRACKET' 'CLOSE_BRACKET';";
         let err_tok_id = usize::from(grm.term_idx("ID").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
      }
-
-    #[test]
-    fn no_tree_if_cant_be_repaired() {
-        let lexs = "%%
-a A
-b B
-";
-        let grms = "%start S
-%%
-S: 'A' 'A' 'B';
-";
-
-        let us = "aaaaaaaaaaaaaab";
-        let (_, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
-        assert!(pr.is_err() && pr.unwrap_err().0.is_none());
-        let (_, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, &us);
-        assert!(pr.is_err() && pr.unwrap_err().0.is_none());
-    }
 }

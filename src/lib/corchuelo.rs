@@ -46,7 +46,6 @@ use mf::apply_repairs;
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
-const PORTION_THRESHOLD: usize = 5; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -179,10 +178,6 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
 
                 if Instant::now() >= finish_by {
                     return false;
-                }
-
-                if n.la_idx > in_la_idx + PORTION_THRESHOLD {
-                    return true;
                 }
 
                 match n.last_repair() {
