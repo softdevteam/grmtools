@@ -42,7 +42,7 @@ extern crate test;
 extern crate vob;
 
 mod astar;
-mod corchuelo;
+mod cpctplus;
 pub mod parser;
 pub use parser::{ParseRepair, RecoveryKind};
 mod mf;

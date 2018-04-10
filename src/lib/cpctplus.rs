@@ -124,7 +124,7 @@ impl PartialEq for PathFNode {
     }
 }
 
-struct Corchuelo<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
+struct CPCTPlus<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
     parser: &'a Parser<'a, TokId>
 }
 
@@ -132,10 +132,10 @@ pub(crate) fn recoverer<'a, TokId: PrimInt + Unsigned>
                        (parser: &'a Parser<TokId>)
                      -> Box<Recoverer<TokId> + 'a>
 {
-    Box::new(Corchuelo{parser})
+    Box::new(CPCTPlus{parser})
 }
 
-impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
+impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for CPCTPlus<'a, TokId>
 
 {
     fn recover(&self,
@@ -264,7 +264,7 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for Corchuelo<'a, TokId>
     }
 }
 
-impl<'a, TokId: PrimInt + Unsigned> Corchuelo<'a, TokId> {
+impl<'a, TokId: PrimInt + Unsigned> CPCTPlus<'a, TokId> {
     fn insert(&self,
              n: &PathFNode,
              nbrs: &mut Vec<(u32, PathFNode)>)
@@ -590,7 +590,7 @@ E : 'N'
 ";
 
         let us = "(nn";
-        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, us);
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, us);
         let (pt, errs) = pr.unwrap_err();
         let pp = pt.unwrap().pp(&grm, us);
         // Note that:
@@ -634,7 +634,7 @@ E : 'N'
                                 "Insert \"CLOSE_BRACKET\", Delete",
                                 "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
 
-        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "n)+n+n+n)");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_all_repairs(&grm,
@@ -644,7 +644,7 @@ E : 'N'
                           errs[1].repairs(),
                           &vec!["Delete"]);
 
-        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, "(((+n)+n+n+n)");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_all_repairs(&grm,
@@ -675,7 +675,7 @@ U: 'd';
 ";
 
         let us = "";
-        let (grm, pr) = do_parse(RecoveryKind::Corchuelo, &lexs, &grms, &us);
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(&grm,
                           errs[0].repairs(),
