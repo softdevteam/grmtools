@@ -42,7 +42,7 @@ use num_traits::{PrimInt, Unsigned};
 use mf;
 use corchuelo;
 
-const RECOVERY_TIME_BUDGET: u64 = 5000; // milliseconds
+const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node<TokId: PrimInt + Unsigned> {
