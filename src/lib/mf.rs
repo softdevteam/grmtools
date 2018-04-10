@@ -48,7 +48,6 @@ use astar::astar_all;
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
-const PORTION_THRESHOLD: usize = 10; // N_t in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -169,10 +168,6 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
 
                 if Instant::now() >= finish_by {
                     return false;
-                }
-
-                if n.la_idx > in_la_idx + PORTION_THRESHOLD {
-                    return true;
                 }
 
                 match n.last_repair() {
@@ -1099,6 +1094,16 @@ A: '(' A ')'
         });
     }
 
+    fn check_some_repairs(grm: &YaccGrammar,
+                          repairs: &Vec<Vec<ParseRepair>>,
+                          expected: &[&str]) {
+        for i in 0..expected.len() {
+            if repairs.iter().find(|x| pp_repairs(&grm, x) == expected[i]).is_none() {
+                panic!("No match found for:\n  {}", expected[i]);
+            }
+        }
+    }
+
     fn check_all_repairs(grm: &YaccGrammar,
                                     repairs: &Vec<Vec<ParseRepair>>,
                                     expected: &[&str]) {
@@ -1287,6 +1292,14 @@ Factor: 'OPEN_BRACKET' Expr 'CLOSE_BRACKET'
                                 "Insert \"CLOSE_BRACKET\", Delete",
                                 "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\"",
                                 "Insert \"MULT\", Shift, Insert \"CLOSE_BRACKET\""]);
+
+
+        let us = "(+++++)";
+        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+        let (_, errs) = pr.unwrap_err();
+        check_some_repairs(&grm,
+                           errs[0].repairs(),
+                           &vec!["Insert \"INT\", Delete, Delete, Delete, Delete, Delete"]);
     }
 
     #[test]
