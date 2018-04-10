@@ -59,7 +59,7 @@ fn usage(prog: &str, msg: &str) -> ! {
         writeln!(&mut stderr(), "{}", msg).ok();
     }
     writeln!(&mut stderr(),
-             "Usage: {} [-r <cpctplus|mf|none>] [-y <eco|original>] <lexer.l> <parser.y> <input file>",
+             "Usage: {} [-r <cpctplus|cpctplusdyndist|mf|none>] [-y <eco|original>] <lexer.l> <parser.y> <input file>",
              leaf).ok();
     process::exit(1);
 }
@@ -84,7 +84,7 @@ fn main() {
                                 .optflag("h", "help", "")
                                 .optopt("r", "recoverer",
                                         "Recoverer to be used (default: mf)",
-                                        "cpctplus|mf|none")
+                                        "cpctplus|cpctplusdyndist|mf|none")
                                 .optopt("y", "yaccvariant",
                                         "Yacc variant to be parsed (default: Original)",
                                         "Original|Eco")
@@ -102,6 +102,7 @@ fn main() {
         Some(s) => {
             match &*s.to_lowercase() {
                 "cpctplus" => RecoveryKind::CPCTPlus,
+                "cpctplusdyndist" => RecoveryKind::CPCTPlusDynDist,
                 "mf" => RecoveryKind::MF,
                 "none" => RecoveryKind::None,
                 _ => usage(prog, &format!("Unknown recoverer '{}'.", s))
