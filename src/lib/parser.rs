@@ -40,7 +40,8 @@ use lrtable::{Action, StateGraph, StateTable, StIdx};
 use num_traits::{PrimInt, Unsigned};
 
 use mf;
-use corchuelo;
+use cpctplus;
+use cpctplusdyndist;
 
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
@@ -167,7 +168,9 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
                 None => {
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
-                                             RecoveryKind::Corchuelo => corchuelo::recoverer(self),
+                                             RecoveryKind::CPCTPlus => cpctplus::recoverer(self),
+                                             RecoveryKind::CPCTPlusDynDist =>
+                                                cpctplusdyndist::recoverer(self),
                                              RecoveryKind::MF => mf::recoverer(self),
                                              RecoveryKind::None => {
                                                 let la_lexeme = self.next_lexeme(la_idx);
@@ -314,7 +317,8 @@ pub trait Recoverer<TokId: PrimInt + Unsigned> {
 }
 
 pub enum RecoveryKind {
-    Corchuelo,
+    CPCTPlus,
+    CPCTPlusDynDist,
     MF,
     None
 }
