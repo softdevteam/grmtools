@@ -209,6 +209,63 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
         }
     }
 
+    /// Parse from `la_idx` up to (but excluding) `end_la_idx` mutating `pstack` as parsing occurs.
+    /// Returns the index of the token it parsed up to (by definition <= end_la_idx: can be less if
+    /// the input is < end_la_idx, or if an error is encountered). Does not do any form of error
+    /// recovery.
+    pub fn lr_upto(&self,
+                   lexeme_prefix: Option<Lexeme<TokId>>,
+                   mut la_idx: usize,
+                   end_la_idx: usize,
+                   pstack: &mut PStack,
+                   tstack: &mut Option<&mut Vec<Node<TokId>>>)
+           -> usize
+    {
+        assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
+        while la_idx != end_la_idx && la_idx <= self.lexemes.len() {
+            let st = *pstack.last().unwrap();
+            let la_tidx = if let Some(l) = lexeme_prefix {
+                              TIdx::from(l.tok_id().to_u32().unwrap())
+                          } else {
+                              self.next_tidx(la_idx)
+                          };
+
+            match self.stable.action(st, la_tidx) {
+                Some(Action::Reduce(prod_id)) => {
+                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
+                    let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
+                    if let Some(ref mut tstack_uw) = *tstack {
+                        let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<TokId>>>();
+                        tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
+                    }
+
+                    pstack.drain(pop_idx..);
+                    let prior = *pstack.last().unwrap();
+                    pstack.push(self.stable.goto(prior, nonterm_idx).unwrap());
+                },
+                Some(Action::Shift(state_id)) => {
+                    if let Some(ref mut tstack_uw) = *tstack {
+                        let la_lexeme = if let Some(l) = lexeme_prefix {
+                                            l
+                                        } else {
+                                            self.next_lexeme(la_idx)
+                                        };
+                        tstack_uw.push(Node::Term{lexeme: la_lexeme});
+                    }
+                    pstack.push(state_id);
+                    la_idx += 1;
+                },
+                Some(Action::Accept) => {
+                    break;
+                },
+                None => {
+                    break;
+                }
+            }
+        }
+        la_idx
+    }
+
     /// Return a `Lexeme` for the next lemexe (if `la_idx` == `self.lexemes.len()` this will be
     /// a lexeme constructed to look as if contains the EOF terminal).
     pub(crate) fn next_lexeme(&self, la_idx: usize) -> Lexeme<TokId>

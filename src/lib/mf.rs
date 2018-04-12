@@ -30,9 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::iter::FromIterator;
 use std::mem;
 use std::time::Instant;
 
@@ -146,13 +144,13 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
                finish_by: Instant,
                parser: &Parser<TokId>,
                in_la_idx: usize,
-               in_pstack: &mut Vec<StIdx>,
+               mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<TokId>>)
            -> (usize, Vec<Vec<ParseRepair>>)
     {
         let mut start_cactus_pstack = Cactus::new();
-        for st in in_pstack.drain(..) {
-            start_cactus_pstack = start_cactus_pstack.child(st);
+        for st in in_pstack.iter() {
+            start_cactus_pstack = start_cactus_pstack.child(*st);
         }
 
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
@@ -230,26 +228,20 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
         }
 
         let full_rprs = self.collect_repairs(astar_cnds);
-        let smpl_rprs = self.simplify_repairs(full_rprs);
-        let rnk_rprs = self.rank_cnds(finish_by,
-                                      in_la_idx,
-                                      &start_cactus_pstack,
-                                      smpl_rprs);
-        let (la_idx, mut rpr_pstack) = apply_repairs(parser,
-                                                     in_la_idx,
-                                                     start_cactus_pstack,
-                                                     &mut Some(&mut tstack),
-                                                     &rnk_rprs[0]);
-
-        in_pstack.clear();
-        while !rpr_pstack.is_empty() {
-            let p = rpr_pstack.parent().unwrap();
-            in_pstack.push(rpr_pstack.try_unwrap()
-                                     .unwrap_or_else(|c| *c.val()
-                                                           .unwrap()));
-            rpr_pstack = p;
+        let mut rnk_rprs = rank_cnds(parser,
+                                     finish_by,
+                                     in_la_idx,
+                                     &in_pstack,
+                                     full_rprs);
+        if rnk_rprs.is_empty() {
+            return (in_la_idx, vec![]);
         }
-        in_pstack.reverse();
+        simplify_repairs(&mut rnk_rprs);
+        let la_idx = apply_repairs(parser,
+                                   in_la_idx,
+                                   &mut in_pstack,
+                                   &mut Some(&mut tstack),
+                                   &rnk_rprs[0]);
 
         (la_idx, rnk_rprs)
     }
@@ -356,9 +348,8 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
         }
     }
 
-
     /// Convert the output from `astar_all` into something more usable.
-    fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
+    fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Vec<ParseRepair>>>
     {
         fn traverse(rm: &Cactus<RepairMerge>) -> Vec<Vec<Repair>> {
             let mut out = Vec::new();
@@ -397,129 +388,26 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
 
         let mut all_rprs = Vec::with_capacity(cnds.len());
         for cnd in cnds {
-            all_rprs.extend(traverse(&cnd.repairs));
+            all_rprs.push(traverse(&cnd.repairs).into_iter()
+                                                .map(|x| self.repair_to_parse_repair(x))
+                                                .collect::<Vec<_>>());
         }
         all_rprs
     }
 
-    /// Take an (unordered) set of parse repairs and return a simplified (unordered) set of parse
-    /// repairs. Note that the caller must make no assumptions about the size or contents of the output
-    /// set: this function might delete, expand, or do other things to repairs.
-    fn simplify_repairs(&self,
-                        mut all_rprs: Vec<Vec<Repair>>)
-                     -> Vec<Vec<ParseRepair>>
-    {
-        for i in 0..all_rprs.len() {
-            // Remove shifts from the end of repairs
-            let mut rprs = &mut all_rprs[i];
-            while !rprs.is_empty() {
-                if let Repair::Shift = rprs[rprs.len() - 1] {
-                    rprs.pop();
-                } else {
-                    break;
-                }
-            }
-        }
-
-        // The simplifications above can mean that we now end up with equivalent repairs. Remove
-        // duplicates by creating a temporary HashSet. This is a hack, but since Vec<Repair> isn't
-        // sortable, this is the easiest, and fastet way we have of getting things done.
-        {
-            let tmp: HashSet<Vec<Repair>> = HashSet::from_iter(all_rprs);
-            all_rprs = tmp.into_iter()
-                          .collect::<Vec<Vec<Repair>>>();
-        }
-
-        all_rprs.iter()
-                .map(|x| x.iter()
-                          .map(|y| {
-                                        match *y {
-                                            Repair::InsertTerm(term_idx) =>
-                                                ParseRepair::Insert(term_idx),
-                                            Repair::Delete => ParseRepair::Delete,
-                                            Repair::Shift => ParseRepair::Shift,
-                                        }
-                               })
-                          .collect())
-                      .collect()
-    }
-
-    /// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
-    /// highest to lowest) by the distance they allow parsing to continue without error. If two or more
-    /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
-    /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
-    /// ordering is non-deterministic.
-    fn rank_cnds(&self,
-                 finish_by: Instant,
-                 in_la_idx: usize,
-                 start_pstack: &Cactus<StIdx>,
-                 in_cnds: Vec<Vec<ParseRepair>>)
-              -> Vec<Vec<ParseRepair>>
-    {
-        let mut cnds = in_cnds.into_iter()
-                              .map(|rprs| {
-                                   let (la_idx, pstack) = apply_repairs(self.parser,
-                                                                        in_la_idx,
-                                                                        start_pstack.clone(),
-                                                                        &mut None,
-                                                                        &rprs);
-                                   (pstack, la_idx, rprs)
-                               })
-                              .collect::<Vec<(Cactus<StIdx>, usize, Vec<ParseRepair>)>>();
-
-        // First try parsing each candidate repair until it hits an error or exceeds TRY_PARSE_AT_MOST
-        // lexemes.
-
-        let mut todo = Vec::new();
-        todo.resize(cnds.len(), true);
-        let mut remng = cnds.len(); // Remaining items in todo
-        let mut i = 0;
-        'b: while i < TRY_PARSE_AT_MOST && remng > 1 {
-            let mut j = 0;
-            while j < todo.len() {
-                if Instant::now() >= finish_by {
-                    break 'b;
-                }
-
-                if !todo[j] {
-                    j += 1;
-                    continue;
-                }
-                let cnd = &mut cnds[j];
-                if cnd.1 > in_la_idx + i {
-                    j += 1;
-                    continue;
-                }
-                let (new_la_idx, new_pstack) = self.parser.lr_cactus(None,
-                                                                     in_la_idx + i,
-                                                                     in_la_idx + i + 1,
-                                                                     cnd.0.clone(),
-                                                                     &mut None);
-                if new_la_idx == in_la_idx + i {
-                    todo[j] = false;
-                    remng -= 1;
-                } else {
-                    cnd.0 = new_pstack;
-                    cnd.1 += 1;
-                }
-                j += 1;
-            }
-            i += 1;
-        }
-
-        // Now rank the candidates into descending order, first by how far they are able to parse, then
-        // by the number of actions in the repairs (the latter is somewhat arbitrary, but matches the
-        // intuition that "repairs which affect the shortest part of the string are preferable").
-        cnds.sort_unstable_by(|x, y| {
-            y.1.cmp(&x.1)
-               .then_with(|| x.2.len()
-                                .cmp(&y.2.len()))
-               .then_with(|| x.2.cmp(&y.2))
-        });
-
-        cnds.into_iter()
-            .map(|x| x.2)
-            .collect::<Vec<Vec<ParseRepair>>>()
+    fn repair_to_parse_repair(&self,
+                              from: Vec<Repair>)
+                           -> Vec<ParseRepair> {
+        from.iter()
+            .map(|y| {
+                 match *y {
+                     Repair::InsertTerm(term_idx) =>
+                         ParseRepair::Insert(term_idx),
+                     Repair::Delete => ParseRepair::Delete,
+                     Repair::Shift => ParseRepair::Shift,
+                 }
+             })
+            .collect()
     }
 
     /// Return the distance from `st_idx` at input position `la_idx`, given the current `repairs`.
@@ -595,50 +483,109 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<RepairMerge>) -> bool {
     shfts == PARSE_AT_LEAST
 }
 
+/// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
+/// highest to lowest) by the distance they allow parsing to continue without error. If two or more
+/// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
+/// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
+/// ordering is non-deterministic.
+pub(crate) fn rank_cnds<TokId: PrimInt + Unsigned>
+                       (parser: &Parser<TokId>,
+                        finish_by: Instant,
+                        in_la_idx: usize,
+                        in_pstack: &Vec<StIdx>,
+                        in_cnds: Vec<Vec<Vec<ParseRepair>>>)
+                     -> Vec<Vec<ParseRepair>>
+{
+    let mut cnds = Vec::new();
+    let mut furthest = 0;
+    for rpr_seqs in in_cnds.into_iter() {
+        if Instant::now() >= finish_by {
+            return vec![];
+        }
+        let mut pstack = in_pstack.clone();
+        let mut la_idx = apply_repairs(parser,
+                                       in_la_idx,
+                                       &mut pstack,
+                                       &mut None,
+                                       &rpr_seqs[0]);
+        la_idx = parser.lr_upto(None,
+                                la_idx,
+                                in_la_idx + TRY_PARSE_AT_MOST,
+                                &mut pstack,
+                                &mut None);
+        if la_idx >= furthest {
+            furthest = la_idx;
+        }
+        cnds.push((pstack, la_idx, rpr_seqs));
+    }
+
+    // Remove any elements except those which parsed as far as possible.
+    cnds = cnds.into_iter().filter(|x| x.1 == furthest).collect::<Vec<_>>();
+
+    cnds.into_iter()
+        .flat_map(|x| x.2)
+        .collect::<Vec<Vec<ParseRepair>>>()
+}
+
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
 pub(crate) fn apply_repairs<TokId: PrimInt + Unsigned>
                            (parser: &Parser<TokId>,
                             mut la_idx: usize,
-                            mut pstack: Cactus<StIdx>,
-                            tstack: &mut Option<&mut Vec<Node<TokId>>>,
+                            mut pstack: &mut Vec<StIdx>,
+                            mut tstack: &mut Option<&mut Vec<Node<TokId>>>,
                             repairs: &[ParseRepair])
-                         -> (usize, Cactus<StIdx>)
+                         -> usize
 {
     for r in repairs.iter() {
         match *r {
-            ParseRepair::InsertSeq(ref seqs) => {
-                let next_lexeme = parser.next_lexeme(la_idx);
-                for &t_idx in &seqs[0] {
-                    let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
-                                                 next_lexeme.start(), 0);
-                    pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
-                                              pstack, tstack).1;
-                }
-            },
+            ParseRepair::InsertSeq(_) => unreachable!(),
             ParseRepair::Insert(t_idx) => {
                 let next_lexeme = parser.next_lexeme(la_idx);
                 let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
                                              next_lexeme.start(), 0);
-                pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
-                                          pstack, tstack).1;
+                parser.lr_upto(Some(new_lexeme),
+                               la_idx,
+                               la_idx + 1,
+                               &mut pstack,
+                               &mut tstack);
             },
             ParseRepair::Delete => {
                 la_idx += 1;
             }
             ParseRepair::Shift => {
-                let (new_la_idx, n_pstack) = parser.lr_cactus(None,
-                                                              la_idx,
-                                                              la_idx + 1,
-                                                              pstack,
-                                                              tstack);
-                assert_eq!(new_la_idx, la_idx + 1);
-                la_idx = new_la_idx;
-                pstack = n_pstack;
+                la_idx = parser.lr_upto(None,
+                                        la_idx,
+                                        la_idx + 1,
+                                        &mut pstack,
+                                        &mut tstack);
             }
         }
     }
-    (la_idx, pstack)
+    la_idx
+}
+
+/// Simplifies repair sequences, removes duplicates, and sorts them into order.
+pub(crate) fn simplify_repairs(all_rprs: &mut Vec<Vec<ParseRepair>>)
+{
+    for i in 0..all_rprs.len() {
+        // Remove shifts from the end of repairs
+        let mut rprs = &mut all_rprs[i];
+        while !rprs.is_empty() {
+            if let ParseRepair::Shift = rprs[rprs.len() - 1] {
+                rprs.pop();
+            } else {
+                break;
+            }
+        }
+    }
+
+    all_rprs.sort_unstable_by(|x, y| {
+                 x.len()
+                  .cmp(&y.len())
+                  .then_with(|| x.cmp(&y))
+            });
+    all_rprs.dedup();
 }
 
 pub(crate) struct Dist {
@@ -1296,7 +1243,6 @@ Factor: 'OPEN_BRACKET' Expr 'CLOSE_BRACKET'
                                 "Insert \"CLOSE_BRACKET\", Delete",
                                 "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\"",
                                 "Insert \"MULT\", Shift, Insert \"CLOSE_BRACKET\""]);
-
 
         let us = "(+++++)";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
