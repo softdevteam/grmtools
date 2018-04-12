@@ -30,9 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::iter::FromIterator;
 use std::time::Instant;
 
 use cactus::Cactus;
@@ -42,7 +40,7 @@ use lrtable::{Action, StIdx};
 use num_traits::{PrimInt, Unsigned};
 
 use astar::dijkstra;
-use mf::{apply_repairs, rank_cnds};
+use mf::{apply_repairs, rank_cnds, simplify_repairs};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
@@ -238,12 +236,15 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for CPCTPlus<'a, TokId>
         }
 
         let full_rprs = self.collect_repairs(astar_cnds);
-        let smpl_rprs = self.simplify_repairs(full_rprs);
-        let rnk_rprs = rank_cnds(parser,
-                                 finish_by,
-                                 in_la_idx,
-                                 &in_pstack,
-                                 smpl_rprs);
+        let mut rnk_rprs = rank_cnds(parser,
+                                     finish_by,
+                                     in_la_idx,
+                                     &in_pstack,
+                                     full_rprs);
+        if rnk_rprs.is_empty() {
+            return (in_la_idx, vec![]);
+        }
+        simplify_repairs(&mut rnk_rprs);
         let la_idx = apply_repairs(parser,
                                    in_la_idx,
                                    &mut in_pstack,
@@ -348,7 +349,7 @@ impl<'a, TokId: PrimInt + Unsigned> CPCTPlus<'a, TokId> {
     }
 
     /// Convert the output from `astar_all` into something more usable.
-    fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Repair>>
+    fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Vec<ParseRepair>>>
     {
         fn traverse(rm: &Cactus<RepairMerge>) -> Vec<Vec<Repair>> {
             let mut out = Vec::new();
@@ -387,51 +388,26 @@ impl<'a, TokId: PrimInt + Unsigned> CPCTPlus<'a, TokId> {
 
         let mut all_rprs = Vec::with_capacity(cnds.len());
         for cnd in cnds {
-            all_rprs.extend(traverse(&cnd.repairs));
+            all_rprs.push(traverse(&cnd.repairs).into_iter()
+                                                .map(|x| self.repair_to_parse_repair(x))
+                                                .collect::<Vec<_>>());
         }
         all_rprs
     }
 
-    /// Take an (unordered) set of parse repairs and return a simplified (unordered) set of parse
-    /// repairs. Note that the caller must make no assumptions about the size or contents of the output
-    /// set: this function might delete, expand, or do other things to repairs.
-    fn simplify_repairs(&self,
-                        mut all_rprs: Vec<Vec<Repair>>)
-                     -> Vec<Vec<ParseRepair>>
-    {
-        for i in 0..all_rprs.len() {
-            // Remove shifts from the end of repairs
-            let mut rprs = &mut all_rprs[i];
-            while !rprs.is_empty() {
-                if let Repair::Shift = rprs[rprs.len() - 1] {
-                    rprs.pop();
-                } else {
-                    break;
-                }
-            }
-        }
-
-        // The simplifications above can mean that we now end up with equivalent repairs. Remove
-        // duplicates by creating a temporary HashSet. This is a hack, but since Vec<Repair> isn't
-        // sortable, this is the easiest, and fastet way we have of getting things done.
-        {
-            let tmp: HashSet<Vec<Repair>> = HashSet::from_iter(all_rprs);
-            all_rprs = tmp.into_iter()
-                          .collect::<Vec<Vec<Repair>>>();
-        }
-
-        all_rprs.iter()
-                .map(|x| x.iter()
-                          .map(|y| {
-                                        match *y {
-                                            Repair::InsertTerm(term_idx) =>
-                                                ParseRepair::Insert(term_idx),
-                                            Repair::Delete => ParseRepair::Delete,
-                                            Repair::Shift => ParseRepair::Shift,
-                                        }
-                               })
-                          .collect())
-                      .collect()
+    fn repair_to_parse_repair(&self,
+                              from: Vec<Repair>)
+                           -> Vec<ParseRepair> {
+        from.iter()
+            .map(|y| {
+                 match *y {
+                     Repair::InsertTerm(term_idx) =>
+                         ParseRepair::Insert(term_idx),
+                     Repair::Delete => ParseRepair::Delete,
+                     Repair::Shift => ParseRepair::Shift,
+                 }
+             })
+            .collect()
     }
 }
 
