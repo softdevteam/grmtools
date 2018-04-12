@@ -81,6 +81,7 @@ pub struct StateTable {
     gotos            : HashMap<u32, StIdx, BuildHasherDefault<FnvHasher>>,
     core_reduces     : Vob,
     state_shifts     : Vob,
+    reduce_states    : Vob,
     nonterms_len     : u32,
     prods_len        : u32,
     terms_len        : u32,
@@ -207,8 +208,10 @@ impl StateTable {
         let mut nt_depth = HashMap::new();
         let mut core_reduces = Vob::from_elem((sg.all_states_len() * grm.prods_len()) as usize, false);
         let mut state_shifts = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
+        let mut reduce_states = Vob::from_elem(sg.all_states_len() as usize, false);
         for i in 0..sg.all_states_len() {
             nt_depth.clear();
+            let mut only_reduces = true;
             for j in 0..grm.terms_len() {
                 let off = StateTable::actions_offset(grm.terms_len(), StIdx::from(i), TIdx::from(j));
                 match actions.get(&off) {
@@ -218,15 +221,26 @@ impl StateTable {
                         nt_depth.insert((nt_idx, prod_len), p_idx);
                     },
                     Some(&Action::Shift(_)) => {
+                        only_reduces = false;
                         state_shifts.set(off as usize, true);
                     },
-                    _ => ()
+                    Some(&Action::Accept) => {
+                        only_reduces = false;
+                    },
+                    None => ()
                 }
             }
 
+            let mut distinct_reduces = 0; // How many distinct reductions do we have?
             for &p_idx in nt_depth.values() {
                 let off = (i * grm.prods_len() + u32::from(p_idx)) as usize;
-                core_reduces.set(off, true);
+                if core_reduces.set(off, true) == Some(true) {
+                    distinct_reduces += 1;
+                }
+            }
+
+            if only_reduces && distinct_reduces == 1 {
+                reduce_states.set(i as usize, true);
             }
         }
 
@@ -235,6 +249,7 @@ impl StateTable {
                        gotos,
                        state_shifts,
                        core_reduces,
+                       reduce_states,
                        nonterms_len: grm.nonterms_len(),
                        prods_len: grm.prods_len(),
                        terms_len: grm.terms_len(),
@@ -265,6 +280,12 @@ impl StateTable {
         let end = start + self.terms_len as usize;
         StateActionsIterator{iter: self.state_shifts.iter_set_bits(start..end),
                             start}
+    }
+
+    /// Does the state `state_idx` 1) only contain reduce (and error) actions 2) do those
+    /// reductions all reduce to the same production?
+    pub fn reduce_only_state(&self, state_idx: StIdx) -> bool {
+        self.reduce_states[usize::from(state_idx)]
     }
 
     /// Return an iterator over a set of "core" reduces of `state_idx`. This is a minimal set of
