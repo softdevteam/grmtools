@@ -289,9 +289,33 @@ impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
                 qi_minus_alpha = qi_minus_alpha.parent().unwrap();
             }
 
-            if let Some(goto_st_idx) = self.parser.stable
+            if let Some(mut goto_st_idx) = self.parser.stable
                                                   .goto(*qi_minus_alpha.val().unwrap(),
                                                         nt_idx) {
+                // We want to reduce/goto goto_st_idx. However if that state only contains
+                // reductions and if all reductions are the same, we can skip over it.
+                while self.parser.stable.reduce_only_state(goto_st_idx) {
+                    let p_idx = self.parser.stable.core_reduces(goto_st_idx).last().unwrap();
+                    let sym_off = self.parser.grm.prod(p_idx).len();
+                    let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
+                    // Technically we should push goto_st_idx, and then pop sym_off elements, but
+                    // we can avoid the push in cases where sym_off is greater than 0, compensating
+                    // for that by poping (sym_off - 1) elements.
+                    if sym_off == 0 {
+                        qi_minus_alpha = qi_minus_alpha.child(goto_st_idx);
+                    } else {
+                        for _ in 0..usize::from(sym_off - 1) {
+                            qi_minus_alpha = qi_minus_alpha.parent().unwrap();
+                        }
+                    }
+                    if let Some(x) = self.parser.stable.goto(*qi_minus_alpha.val().unwrap(),
+                                                             nt_idx) {
+                        goto_st_idx = x;
+                    } else {
+                        return;
+                    }
+                }
+
                 if let Some(d) = self.dyn_dist(&n.repairs, goto_st_idx, n.la_idx) {
                     let nn = PathFNode{
                         pstack: qi_minus_alpha.child(goto_st_idx),
