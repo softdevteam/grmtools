@@ -42,11 +42,10 @@ use lrtable::{Action, StIdx};
 use num_traits::{PrimInt, Unsigned};
 
 use astar::astar_all;
-use mf::{apply_repairs, Dist};
+use mf::{apply_repairs, Dist, rank_cnds};
 use parser::{Node, Parser, ParseRepair, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
-const TRY_PARSE_AT_MOST: usize = 250;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum Repair {
@@ -228,10 +227,11 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for CPCTPlusDynDist<'a, Tok
 
         let full_rprs = self.collect_repairs(astar_cnds);
         let smpl_rprs = self.simplify_repairs(full_rprs);
-        let rnk_rprs = self.rank_cnds(finish_by,
-                                      in_la_idx,
-                                      &start_cactus_pstack,
-                                      smpl_rprs);
+        let rnk_rprs = rank_cnds(parser,
+                                 finish_by,
+                                 in_la_idx,
+                                 &start_cactus_pstack,
+                                 smpl_rprs);
         let (la_idx, mut rpr_pstack) = apply_repairs(parser,
                                                      in_la_idx,
                                                      start_cactus_pstack,
@@ -418,84 +418,6 @@ impl<'a, TokId: PrimInt + Unsigned> CPCTPlusDynDist<'a, TokId> {
                                })
                           .collect())
                       .collect()
-    }
-
-    /// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
-    /// highest to lowest) by the distance they allow parsing to continue without error. If two or more
-    /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
-    /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
-    /// ordering is non-deterministic.
-    fn rank_cnds(&self,
-                 finish_by: Instant,
-                 in_la_idx: usize,
-                 start_pstack: &Cactus<StIdx>,
-                 in_cnds: Vec<Vec<ParseRepair>>)
-              -> Vec<Vec<ParseRepair>>
-    {
-        let mut cnds = in_cnds.into_iter()
-                              .map(|rprs| {
-                                   let (la_idx, pstack) = apply_repairs(self.parser,
-                                                                        in_la_idx,
-                                                                        start_pstack.clone(),
-                                                                        &mut None,
-                                                                        &rprs);
-                                   (pstack, la_idx, rprs)
-                               })
-                              .collect::<Vec<(Cactus<StIdx>, usize, Vec<ParseRepair>)>>();
-
-        // First try parsing each candidate repair until it hits an error or exceeds TRY_PARSE_AT_MOST
-        // lexemes.
-
-        let mut todo = Vec::new();
-        todo.resize(cnds.len(), true);
-        let mut remng = cnds.len(); // Remaining items in todo
-        let mut i = 0;
-        'b: while i < TRY_PARSE_AT_MOST && remng > 1 {
-            let mut j = 0;
-            while j < todo.len() {
-                if Instant::now() >= finish_by {
-                    break 'b;
-                }
-
-                if !todo[j] {
-                    j += 1;
-                    continue;
-                }
-                let cnd = &mut cnds[j];
-                if cnd.1 > in_la_idx + i {
-                    j += 1;
-                    continue;
-                }
-                let (new_la_idx, new_pstack) = self.parser.lr_cactus(None,
-                                                                     in_la_idx + i,
-                                                                     in_la_idx + i + 1,
-                                                                     cnd.0.clone(),
-                                                                     &mut None);
-                if new_la_idx == in_la_idx + i {
-                    todo[j] = false;
-                    remng -= 1;
-                } else {
-                    cnd.0 = new_pstack;
-                    cnd.1 += 1;
-                }
-                j += 1;
-            }
-            i += 1;
-        }
-
-        // Now rank the candidates into descending order, first by how far they are able to parse, then
-        // by the number of actions in the repairs (the latter is somewhat arbitrary, but matches the
-        // intuition that "repairs which affect the shortest part of the string are preferable").
-        cnds.sort_unstable_by(|x, y| {
-            y.1.cmp(&x.1)
-               .then_with(|| x.2.len()
-                                .cmp(&y.2.len()))
-               .then_with(|| x.2.cmp(&y.2))
-        });
-
-        cnds.into_iter()
-            .map(|x| x.2)
-            .collect::<Vec<Vec<ParseRepair>>>()
     }
 
     /// Return the distance from `st_idx` at input position `la_idx`, given the current `repairs`.

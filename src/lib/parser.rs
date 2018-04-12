@@ -209,6 +209,44 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
         }
     }
 
+    /// Parse from `la_idx` up to (but excluding) `end_la_idx` mutating `pstack` as parsing occurs.
+    /// Returns the index of the token it parsed up to (by definition <= end_la_idx: can be less if
+    /// the input is < end_la_idx, or if an error is encountered). Does not do any form of error
+    /// recovery.
+    pub fn lr_upto(&self,
+                   mut la_idx: usize,
+                   end_la_idx: usize,
+                   pstack: &mut PStack)
+           -> usize
+    {
+        while la_idx < end_la_idx {
+            let st = *pstack.last().unwrap();
+            let la_tidx = self.next_tidx(la_idx);
+
+            match self.stable.action(st, la_tidx) {
+                Some(Action::Reduce(prod_id)) => {
+                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
+                    let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
+
+                    pstack.drain(pop_idx..);
+                    let prior = *pstack.last().unwrap();
+                    pstack.push(self.stable.goto(prior, nonterm_idx).unwrap());
+                },
+                Some(Action::Shift(state_id)) => {
+                    pstack.push(state_id);
+                    la_idx += 1;
+                },
+                Some(Action::Accept) => {
+                    break;
+                },
+                None => {
+                    break;
+                }
+            }
+        }
+        la_idx
+    }
+
     /// Return a `Lexeme` for the next lemexe (if `la_idx` == `self.lexemes.len()` this will be
     /// a lexeme constructed to look as if contains the EOF terminal).
     pub(crate) fn next_lexeme(&self, la_idx: usize) -> Lexeme<TokId>
