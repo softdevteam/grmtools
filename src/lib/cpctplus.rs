@@ -141,7 +141,7 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for CPCTPlus<'a, TokId>
                finish_by: Instant,
                parser: &Parser<TokId>,
                in_la_idx: usize,
-               in_pstack: &mut Vec<StIdx>,
+               mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<TokId>>)
            -> (usize, Vec<Vec<ParseRepair>>)
     {
@@ -162,8 +162,8 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for CPCTPlus<'a, TokId>
         // ambiguity, it fires up non-LL sub-parsers, which then tell the LL parser which path it
         // should take).
         let mut start_cactus_pstack = Cactus::new();
-        for st in in_pstack.drain(..) {
-            start_cactus_pstack = start_cactus_pstack.child(st);
+        for st in in_pstack.iter() {
+            start_cactus_pstack = start_cactus_pstack.child(*st);
         }
 
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
@@ -242,23 +242,13 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for CPCTPlus<'a, TokId>
         let rnk_rprs = rank_cnds(parser,
                                  finish_by,
                                  in_la_idx,
-                                 &start_cactus_pstack,
+                                 &in_pstack,
                                  smpl_rprs);
-        let (la_idx, mut rpr_pstack) = apply_repairs(parser,
-                                                     in_la_idx,
-                                                     start_cactus_pstack,
-                                                     &mut Some(&mut tstack),
-                                                     &rnk_rprs[0]);
-
-        in_pstack.clear();
-        while !rpr_pstack.is_empty() {
-            let p = rpr_pstack.parent().unwrap();
-            in_pstack.push(rpr_pstack.try_unwrap()
-                                     .unwrap_or_else(|c| *c.val()
-                                                           .unwrap()));
-            rpr_pstack = p;
-        }
-        in_pstack.reverse();
+        let la_idx = apply_repairs(parser,
+                                   in_la_idx,
+                                   &mut in_pstack,
+                                   &mut Some(&mut tstack),
+                                   &rnk_rprs[0]);
 
         (la_idx, rnk_rprs)
     }

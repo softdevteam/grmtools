@@ -146,13 +146,13 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
                finish_by: Instant,
                parser: &Parser<TokId>,
                in_la_idx: usize,
-               in_pstack: &mut Vec<StIdx>,
+               mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<TokId>>)
            -> (usize, Vec<Vec<ParseRepair>>)
     {
         let mut start_cactus_pstack = Cactus::new();
-        for st in in_pstack.drain(..) {
-            start_cactus_pstack = start_cactus_pstack.child(st);
+        for st in in_pstack.iter() {
+            start_cactus_pstack = start_cactus_pstack.child(*st);
         }
 
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
@@ -234,23 +234,13 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
         let rnk_rprs = rank_cnds(parser,
                                  finish_by,
                                  in_la_idx,
-                                 &start_cactus_pstack,
+                                 &in_pstack,
                                  smpl_rprs);
-        let (la_idx, mut rpr_pstack) = apply_repairs(parser,
-                                                     in_la_idx,
-                                                     start_cactus_pstack,
-                                                     &mut Some(&mut tstack),
-                                                     &rnk_rprs[0]);
-
-        in_pstack.clear();
-        while !rpr_pstack.is_empty() {
-            let p = rpr_pstack.parent().unwrap();
-            in_pstack.push(rpr_pstack.try_unwrap()
-                                     .unwrap_or_else(|c| *c.val()
-                                                           .unwrap()));
-            rpr_pstack = p;
-        }
-        in_pstack.reverse();
+        let la_idx = apply_repairs(parser,
+                                   in_la_idx,
+                                   &mut in_pstack,
+                                   &mut Some(&mut tstack),
+                                   &rnk_rprs[0]);
 
         (la_idx, rnk_rprs)
     }
@@ -526,7 +516,7 @@ pub(crate) fn rank_cnds<TokId: PrimInt + Unsigned>
                        (parser: &Parser<TokId>,
                         finish_by: Instant,
                         in_la_idx: usize,
-                        start_pstack: &Cactus<StIdx>,
+                        in_pstack: &Vec<StIdx>,
                         in_cnds: Vec<Vec<ParseRepair>>)
                      -> Vec<Vec<ParseRepair>>
 {
@@ -535,19 +525,18 @@ pub(crate) fn rank_cnds<TokId: PrimInt + Unsigned>
         if Instant::now() >= finish_by {
             return vec![];
         }
-        let (la_idx, pstack) = apply_repairs(parser,
-                                             in_la_idx,
-                                             start_pstack.clone(),
-                                             &mut None,
-                                             &rprs);
-        let mut vec_pstack = pstack.vals()
-                                   .cloned()
-                                   .collect::<Vec<_>>();
-        vec_pstack.reverse();
-        let new_la_idx = parser.lr_upto(la_idx,
-                                        in_la_idx + TRY_PARSE_AT_MOST,
-                                        &mut vec_pstack);
-        cnds.push((vec_pstack, new_la_idx, rprs));
+        let mut pstack = in_pstack.clone();
+        let mut la_idx = apply_repairs(parser,
+                                       in_la_idx,
+                                       &mut pstack,
+                                       &mut None,
+                                       &rprs);
+        la_idx = parser.lr_upto(None,
+                                la_idx,
+                                in_la_idx + TRY_PARSE_AT_MOST,
+                                &mut pstack,
+                                &mut None);
+        cnds.push((pstack, la_idx, rprs));
     }
 
     // Now rank the candidates into descending order, first by how far they are able to parse, then
@@ -570,45 +559,37 @@ pub(crate) fn rank_cnds<TokId: PrimInt + Unsigned>
 pub(crate) fn apply_repairs<TokId: PrimInt + Unsigned>
                            (parser: &Parser<TokId>,
                             mut la_idx: usize,
-                            mut pstack: Cactus<StIdx>,
-                            tstack: &mut Option<&mut Vec<Node<TokId>>>,
+                            mut pstack: &mut Vec<StIdx>,
+                            mut tstack: &mut Option<&mut Vec<Node<TokId>>>,
                             repairs: &[ParseRepair])
-                         -> (usize, Cactus<StIdx>)
+                         -> usize
 {
     for r in repairs.iter() {
         match *r {
-            ParseRepair::InsertSeq(ref seqs) => {
-                let next_lexeme = parser.next_lexeme(la_idx);
-                for &t_idx in &seqs[0] {
-                    let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
-                                                 next_lexeme.start(), 0);
-                    pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
-                                              pstack, tstack).1;
-                }
-            },
+            ParseRepair::InsertSeq(_) => unreachable!(),
             ParseRepair::Insert(t_idx) => {
                 let next_lexeme = parser.next_lexeme(la_idx);
                 let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
                                              next_lexeme.start(), 0);
-                pstack = parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
-                                          pstack, tstack).1;
+                parser.lr_upto(Some(new_lexeme),
+                               la_idx,
+                               la_idx + 1,
+                               &mut pstack,
+                               &mut tstack);
             },
             ParseRepair::Delete => {
                 la_idx += 1;
             }
             ParseRepair::Shift => {
-                let (new_la_idx, n_pstack) = parser.lr_cactus(None,
-                                                              la_idx,
-                                                              la_idx + 1,
-                                                              pstack,
-                                                              tstack);
-                assert_eq!(new_la_idx, la_idx + 1);
-                la_idx = new_la_idx;
-                pstack = n_pstack;
+                la_idx = parser.lr_upto(None,
+                                        la_idx,
+                                        la_idx + 1,
+                                        &mut pstack,
+                                        &mut tstack);
             }
         }
     }
-    (la_idx, pstack)
+    la_idx
 }
 
 pub(crate) struct Dist {
