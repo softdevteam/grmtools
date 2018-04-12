@@ -521,6 +521,7 @@ pub(crate) fn rank_cnds<TokId: PrimInt + Unsigned>
                      -> Vec<Vec<ParseRepair>>
 {
     let mut cnds = Vec::new();
+    let mut furthest = 0;
     for rprs in in_cnds.into_iter() {
         if Instant::now() >= finish_by {
             return vec![];
@@ -536,12 +537,19 @@ pub(crate) fn rank_cnds<TokId: PrimInt + Unsigned>
                                 in_la_idx + TRY_PARSE_AT_MOST,
                                 &mut pstack,
                                 &mut None);
+        if la_idx >= furthest {
+            furthest = la_idx;
+        }
         cnds.push((pstack, la_idx, rprs));
     }
 
-    // Now rank the candidates into descending order, first by how far they are able to parse, then
-    // by the number of actions in the repairs (the latter is somewhat arbitrary, but matches the
-    // intuition that "repairs which affect the shortest part of the string are preferable").
+    // Remove any elements except those which parsed as far as possible.
+    cnds = cnds.into_iter().filter(|x| x.1 == furthest).collect::<Vec<_>>();
+
+    // Sort the candidates by the number of actions in the repairs (the latter is somewhat
+    // arbitrary, but matches the intuition that "repairs which affect the shortest part of the
+    // string are preferable") and then by the repair itself (so if you have lots of repair
+    // sequences starting "Insert x" they at least end up next to each other in the output).
     cnds.sort_unstable_by(|x, y| {
         y.1.cmp(&x.1)
            .then_with(|| x.2.len()
@@ -1247,7 +1255,6 @@ Factor: 'OPEN_BRACKET' Expr 'CLOSE_BRACKET'
                                 "Insert \"CLOSE_BRACKET\", Delete",
                                 "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\"",
                                 "Insert \"MULT\", Shift, Insert \"CLOSE_BRACKET\""]);
-
 
         let us = "(+++++)";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
