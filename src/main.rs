@@ -226,7 +226,7 @@ fn main() {
                                 if let ParseRepair::Delete = *r {
                                     out.push(format!("Delete \"{}\"", t));
                                 } else {
-                                    out.push(format!("Keep \"{}\"", t));
+                                    out.push(format!("Shift \"{}\"", t));
                                 }
                                 lex_idx += 1;
                             }
