@@ -80,7 +80,7 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
 
     /// Get the `Rule` instance associated with a particular name.
     pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<TokId>> {
-        self.rules.iter().find(|r| !r.name.is_none() && r.name.as_ref().unwrap() == n)
+        self.rules.iter().find(|r| r.name.as_ref().map(|x| x.as_str()) == Some(n))
     }
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
@@ -106,21 +106,15 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
         let mut missing_from_parser_idxs = Vec::new();
         let mut rules_with_names = 0;
         for (i, r) in self.rules.iter_mut().enumerate() {
-            match r.name.as_ref() {
-                None => (),
-                Some(n) => {
-                    let nr = &**n;
-                    match map.get(nr) {
-                        Some(tok_id) => {
-                            r.tok_id = Some(*tok_id);
-                        }
-                        None => {
-                            r.tok_id = None;
-                            missing_from_parser_idxs.push(i);
-                        }
+            if let Some(ref n) = r.name {
+                match map.get(&**n) {
+                    Some(tok_id) => r.tok_id = Some(*tok_id),
+                    None => {
+                        r.tok_id = None;
+                        missing_from_parser_idxs.push(i);
                     }
-                    rules_with_names += 1;
                 }
+                rules_with_names += 1;
             }
         }
 
@@ -198,7 +192,7 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
                 }
             }
             if longest > 0 {
-                self.newlines.borrow_mut().extend(self.s[i .. i + longest]
+                self.newlines.borrow_mut().extend(self.s[i..i + longest]
                                                       .chars()
                                                       .enumerate()
                                                       .filter(|&(_, c)| c == '\n')
