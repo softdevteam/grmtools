@@ -84,7 +84,7 @@ fn main() {
                                 .optflag("h", "help", "")
                                 .optopt("r", "recoverer",
                                         "Recoverer to be used (default: mf)",
-                                        "cpctplus|cpctplusdyndist|mf|none")
+                                        "cpctplus|mf|none")
                                 .optopt("y", "yaccvariant",
                                         "Yacc variant to be parsed (default: Original)",
                                         "Original|Eco")
@@ -102,7 +102,6 @@ fn main() {
         Some(s) => {
             match &*s.to_lowercase() {
                 "cpctplus" => RecoveryKind::CPCTPlus,
-                "cpctplusdyndist" => RecoveryKind::CPCTPlusDynDist,
                 "mf" => RecoveryKind::MF,
                 "none" => RecoveryKind::None,
                 _ => usage(prog, &format!("Unknown recoverer '{}'.", s))

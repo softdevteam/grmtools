@@ -43,7 +43,6 @@ extern crate vob;
 
 mod astar;
 mod cpctplus;
-mod cpctplusdyndist;
 pub mod parser;
 pub use parser::{ParseRepair, RecoveryKind};
 mod mf;
