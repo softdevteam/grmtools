@@ -13,5 +13,4 @@ path = "src/lib/mod.rs"
 
 [dependencies]
 getopts = "0.2.15" # only needed for src/main.rs
-lazy_static = "0.2.8"
 regex = "0.2.2"

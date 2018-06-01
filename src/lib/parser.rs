@@ -32,7 +32,7 @@
 
 use std::convert::TryFrom;
 
-use regex::{Regex, RegexBuilder};
+use regex::RegexBuilder;
 
 use {LexErrorKind, LexBuildError, LexBuildResult};
 use lexer::{LexerDef, Rule};
@@ -41,12 +41,6 @@ pub struct LexParser<TokId> {
     src: String,
     newlines: Vec<usize>,
     rules: Vec<Rule<TokId>>
-}
-
-lazy_static! {
-    static ref RE_NAME: Regex = {
-        Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap()
-    };
 }
 
 impl<TokId: TryFrom<usize>> LexParser<TokId> {
@@ -140,9 +134,6 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
             return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1))
         }
         else {
-            if !RE_NAME.is_match(orig_name) {
-                return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1))
-            }
             name = Some(orig_name.to_string());
         }
 
@@ -215,6 +206,7 @@ mod test {
         let src = "%%
 [0-9]+ int
 [a-zA-Z]+ id
+\\+ +
 ".to_string();
         let ast = parse_lex::<u8>(&src).unwrap();
         let intrule = ast.get_rule_by_name("int").unwrap();
@@ -223,6 +215,9 @@ mod test {
         let idrule = ast.get_rule_by_name("id").unwrap();
         assert_eq!("id", idrule.name.as_ref().unwrap());
         assert_eq!("[a-zA-Z]+", idrule.re_str);
+        let plusrule = ast.get_rule_by_name("+").unwrap();
+        assert_eq!("+", plusrule.name.as_ref().unwrap());
+        assert_eq!("\\+", plusrule.re_str);
     }
 
     #[test]
@@ -257,17 +252,6 @@ int".to_string();
         match parse_lex::<u8>(&src) {
             Ok(_)  => panic!("Broken rule parsed"),
             Err(LexBuildError{kind: LexErrorKind::MissingSpace, line: 2, col: 1}) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
-        }
-    }
-
-    #[test]
-    fn test_invalid_name() {
-        let src = "%%
-[0-9] int.2".to_string();
-        match parse_lex::<u8>(&src) {
-            Ok(_)  => panic!("Invalid name parsed"),
-            Err(LexBuildError{kind: LexErrorKind::InvalidName, line: 2, col: 7}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }

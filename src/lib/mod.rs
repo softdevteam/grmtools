@@ -43,9 +43,6 @@ mod parser;
 pub use lexer::{Lexeme, LexerDef, Lexer};
 use parser::parse_lex;
 
-#[macro_use]
-extern crate lazy_static;
-
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
 
 /// Any error from the Lex parser returns an instance of this struct.
@@ -63,7 +60,6 @@ pub enum LexErrorKind {
     RoutinesNotSupported,
     UnknownDeclaration,
     MissingSpace,
-    InvalidName,
     DuplicateName,
     RegexError
 }
@@ -76,7 +72,6 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::RoutinesNotSupported => s = "Routines not currently supported",
             LexErrorKind::UnknownDeclaration   => s = "Unknown declaration",
             LexErrorKind::MissingSpace         => s = "Rule is missing a space",
-            LexErrorKind::InvalidName          => s = "Invalid rule name",
             LexErrorKind::DuplicateName        => s = "Rule name already exists",
             LexErrorKind::RegexError           => s = "Invalid regular expression"
         }
