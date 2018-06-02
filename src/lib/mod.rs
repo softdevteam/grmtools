@@ -60,6 +60,7 @@ pub enum LexErrorKind {
     RoutinesNotSupported,
     UnknownDeclaration,
     MissingSpace,
+    InvalidName,
     DuplicateName,
     RegexError
 }
@@ -72,6 +73,7 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::RoutinesNotSupported => s = "Routines not currently supported",
             LexErrorKind::UnknownDeclaration   => s = "Unknown declaration",
             LexErrorKind::MissingSpace         => s = "Rule is missing a space",
+            LexErrorKind::InvalidName          => s = "Invalid rule name",
             LexErrorKind::DuplicateName        => s = "Rule name already exists",
             LexErrorKind::RegexError           => s = "Invalid regular expression"
         }

@@ -277,8 +277,8 @@ mod test {
     fn test_basic() {
         let src = r"
 %%
-[0-9]+ int
-[a-zA-Z]+ id
+[0-9]+ 'int'
+[a-zA-Z]+ 'id'
 [ \t] ;
         ".to_string();
         let mut lexer = parse_lex(&src).unwrap();
@@ -303,7 +303,7 @@ mod test {
     fn test_basic_error() {
         let src = "
 %%
-[0-9]+ int
+[0-9]+ 'int'
         ".to_string();
         let lexer = parse_lex::<u8>(&src).unwrap();
         match lexer.lexer(&"abc").lexemes() {
@@ -316,8 +316,8 @@ mod test {
     #[test]
     fn test_longest_match() {
         let src = "%%
-if IF
-[a-z]+ ID
+if 'IF'
+[a-z]+ 'ID'
 [ ] ;".to_string();
         let mut lexer = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
@@ -340,7 +340,7 @@ if IF
     #[test]
     fn test_line_and_col() {
         let src = "%%
-[a-z]+ ID
+[a-z]+ 'ID'
 [ \\n] ;".to_string();
         let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
@@ -374,7 +374,7 @@ if IF
     #[test]
     fn test_missing_from_lexer_and_parser() {
         let src = "%%
-[a-z]+ ID
+[a-z]+ 'ID'
 [ \\n] ;".to_string();
         let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
