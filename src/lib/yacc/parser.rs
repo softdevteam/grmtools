@@ -342,6 +342,7 @@ impl YaccParser {
                                 for c in self.src[i..].chars() {
                                     i += c.len_utf8();
                                     if c == '\n' || c == '\r' {
+                                        self.newlines.push(i);
                                         break;
                                     }
                                 }
@@ -905,6 +906,17 @@ x".to_string();
         {
             Ok(_) => panic!(),
             Err(YaccParserError{kind: YaccParserErrorKind::IncompleteComment, line: 7, ..}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+
+        match parse(YaccKind::Original, &"
+            %token   a
+            %%
+            // Valid comment
+            A : a")
+        {
+            Ok(_) => panic!(),
+            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteRule, line: 5, ..}) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
