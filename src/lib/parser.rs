@@ -129,12 +129,21 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
         let orig_name = &line[rspace + 1..];
         if orig_name == ";" {
             name = None;
-        }
-        else if self.rules.iter().any(|r| r.name.as_ref().map_or(false, |n| n == orig_name)) {
-            return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1))
-        }
-        else {
-            name = Some(orig_name.to_string());
+        } else {
+            debug_assert!(orig_name.len() > 0);
+            if !((orig_name.chars().nth(0).unwrap() == '\''
+                  && orig_name.chars().last().unwrap() == '\'')
+                 ||
+                 (orig_name.chars().nth(0).unwrap() == '\"'
+                  && orig_name.chars().last().unwrap() == '"')) {
+                return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1));
+            }
+            name = Some(orig_name[1..orig_name.len() - 1].to_string());
+            if self.rules.iter().any(|r| r.name
+                                          .as_ref()
+                                          .map_or(false, |n| n == name.as_ref().unwrap())) {
+                return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1));
+            }
         }
 
         let re_str = line[..rspace].trim_right().to_string();
@@ -204,9 +213,9 @@ mod test {
     #[test]
     fn test_rules() {
         let src = "%%
-[0-9]+ int
-[a-zA-Z]+ id
-\\+ +
+[0-9]+ 'int'
+[a-zA-Z]+ 'id'
+\\+ '+'
 ".to_string();
         let ast = parse_lex::<u8>(&src).unwrap();
         let intrule = ast.get_rule_by_name("int").unwrap();
@@ -235,7 +244,7 @@ mod test {
     fn test_broken_rule() {
         let src = "%%
 [0-9]
-int".to_string();
+'int'".to_string();
         assert!(parse_lex::<u8>(&src).is_err());
         match parse_lex::<u8>(&src) {
             Ok(_)  => panic!("Broken rule parsed"),
@@ -257,10 +266,34 @@ int".to_string();
     }
 
     #[test]
+    fn test_broken_rule3() {
+        let src = "%%
+[0-9] int".to_string();
+        assert!(parse_lex::<u8>(&src).is_err());
+        match parse_lex::<u8>(&src) {
+            Ok(_)  => panic!("Broken rule parsed"),
+            Err(LexBuildError{kind: LexErrorKind::InvalidName, line: 2, col: 7}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_broken_rule4() {
+        let src = "%%
+[0-9] 'int".to_string();
+        assert!(parse_lex::<u8>(&src).is_err());
+        match parse_lex::<u8>(&src) {
+            Ok(_)  => panic!("Broken rule parsed"),
+            Err(LexBuildError{kind: LexErrorKind::InvalidName, line: 2, col: 7}) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
     fn test_duplicate_rule() {
         let src = "%%
-[0-9] int
-[0-9] int".to_string();
+[0-9] 'int'
+[0-9] 'int'".to_string();
         match parse_lex::<u8>(&src) {
             Ok(_)  => panic!("Duplicate rule parsed"),
             Err(LexBuildError{kind: LexErrorKind::DuplicateName, line: 3, col: 7}) => (),
@@ -274,7 +307,7 @@ int".to_string();
         let mut src = "%%
 ".to_string();
         for i in 0..257 {
-            src.push_str(&format!("x x{}\n", i));
+            src.push_str(&format!("x 'x{}'\n", i));
         }
         parse_lex::<u8>(&src).ok();
     }
