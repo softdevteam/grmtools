@@ -464,16 +464,16 @@ mod test {
     fn corchuelo_example() {
         // The example from the Curchuelo paper
         let lexs = "%%
-[(] OPEN_BRACKET
-[)] CLOSE_BRACKET
-[+] PLUS
-n N
+\\( '('
+\\) ')'
+\\+ '+'
+n 'N'
 ";
         let grms = "%start E
 %%
 E : 'N'
-  | E 'PLUS' 'N'
-  | 'OPEN_BRACKET' E 'CLOSE_BRACKET'
+  | E '+' 'N'
+  | '(' E ')'
   ;
 ";
 
@@ -483,29 +483,29 @@ E : 'N'
         let pp = pt.unwrap().pp(&grm, us);
         // Note that:
         //   E
-        //    OPEN_BRACKET (
+        //    ( (
         //    E
         //     E
         //      N n
-        //     PLUS 
+        //     + 
         //     N n
-        //    CLOSE_BRACKET 
+        //    )
         // is also the result of a valid minimal-cost repair, but, since the repair involves a
         // Shift, rank_cnds will always put this too low down the list for us to ever see it.
         if !vec![
 "E
- OPEN_BRACKET (
+ ( (
  E
   N n
- CLOSE_BRACKET 
+ ) 
 ",
 "E
  E
-  OPEN_BRACKET (
+  ( (
   E
    N n
-  CLOSE_BRACKET 
- PLUS 
+  ) 
+ + 
  N n
 "]
             .iter()
@@ -518,9 +518,9 @@ E : 'N'
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
-                                "Insert \"CLOSE_BRACKET\", Delete",
-                                "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \")\", Insert \"+\"",
+                                "Insert \")\", Delete",
+                                "Insert \"+\", Shift, Insert \")\""]);
 
         let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
@@ -541,16 +541,16 @@ E : 'N'
                                 "Delete"]);
         check_all_repairs(&grm,
                           errs[1].repairs(),
-                          &vec!["Insert \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \")\""]);
     }
 
     #[test]
     fn test_merge() {
         let lexs = "%%
-a a
-b b
-c c
-d d
+a 'a'
+b 'b'
+c 'c'
+d 'd'
 ";
 
         let grms = "%start S

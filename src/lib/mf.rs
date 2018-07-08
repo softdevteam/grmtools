@@ -1095,16 +1095,16 @@ A: '(' A ')'
     fn corchuelo_example() {
         // The example from the Corchuelo paper
         let lexs = "%%
-[(] OPEN_BRACKET
-[)] CLOSE_BRACKET
-[+] PLUS
-n N
+\\( '('
+\\) ')'
+\\+ '+'
+n 'N'
 ";
         let grms = "%start E
 %%
 E : 'N'
-  | E 'PLUS' 'N'
-  | 'OPEN_BRACKET' E 'CLOSE_BRACKET'
+  | E '+' 'N'
+  | '(' E ')'
   ;
 ";
 
@@ -1114,29 +1114,29 @@ E : 'N'
         let pp = pt.unwrap().pp(&grm, us);
         // Note that:
         //   E
-        //    OPEN_BRACKET (
+        //    ( (
         //    E
         //     E
         //      N n
-        //     PLUS 
+        //     + 
         //     N n
-        //    CLOSE_BRACKET 
+        //    ) 
         // is also the result of a valid minimal-cost repair, but, since the repair involves a
         // Shift, rank_cnds will always put this too low down the list for us to ever see it.
         if !vec![
 "E
- OPEN_BRACKET (
+ ( (
  E
   N n
- CLOSE_BRACKET 
+ ) 
 ",
 "E
  E
-  OPEN_BRACKET (
+  ( (
   E
    N n
-  CLOSE_BRACKET 
- PLUS 
+  ) 
+ + 
  N n
 "]
             .iter()
@@ -1149,9 +1149,9 @@ E : 'N'
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
-                                "Insert \"CLOSE_BRACKET\", Delete",
-                                "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \")\", Insert \"+\"",
+                                "Insert \")\", Delete",
+                                "Insert \"+\", Shift, Insert \")\""]);
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
@@ -1172,7 +1172,7 @@ E : 'N'
                                 "Delete"]);
         check_all_repairs(&grm,
                           errs[1].repairs(),
-                          &vec!["Insert \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \")\""]);
     }
 
     fn kimyi_lex_grm() -> (&'static str, &'static str) {
@@ -1180,14 +1180,14 @@ E : 'N'
         // paper uses "A" as a nonterminal name and "a" as a terminal name, which are then easily
         // confused. Here we use "E" as the nonterminal name, and keep "a" as the terminal name.
         let lexs = "%%
-[(] OPEN_BRACKET
-[)] CLOSE_BRACKET
-a A
-b B
+\\( '('
+\\) ')'
+a 'A'
+b 'B'
 ";
         let grms = "%start E
 %%
-E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
+E: '(' E ')'
  | 'A'
  | 'B' ;
 ";
@@ -1204,22 +1204,22 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         let pp = pt.unwrap().pp(&grm, &us);
         if !vec![
 "E
- OPEN_BRACKET (
+ ( (
  E
-  OPEN_BRACKET (
+  ( (
   E
    A 
-  CLOSE_BRACKET 
- CLOSE_BRACKET 
+  ) 
+ ) 
 ",
 "E
- OPEN_BRACKET (
+ ( (
  E
-  OPEN_BRACKET (
+  ( (
   E
    B 
-  CLOSE_BRACKET 
- CLOSE_BRACKET 
+  ) 
+ ) 
 "]
             .iter()
             .any(|x| *x == pp) {
@@ -1230,30 +1230,30 @@ E: 'OPEN_BRACKET' E 'CLOSE_BRACKET'
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["Insert \"A\", Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\"",
-                                "Insert \"B\", Insert \"CLOSE_BRACKET\", Insert \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \"A\", Insert \")\", Insert \")\"",
+                                "Insert \"B\", Insert \")\", Insert \")\""]);
     }
 
     #[test]
     fn expr_grammar() {
         let lexs = "%%
-[(] OPEN_BRACKET
-[)] CLOSE_BRACKET
-[+] PLUS
-[*] MULT
-[0-9]+ INT
+\\( '('
+\\) ')'
+\\+ '+'
+\\* '*'
+[0-9]+ 'INT'
 [ ] ;
 ";
 
         let grms = "%start Expr
 %%
-Expr: Term 'PLUS' Expr
+Expr: Term '+' Expr
     | Term ;
 
-Term: Factor 'MULT' Term
+Term: Factor '*' Term
     | Factor ;
 
-Factor: 'OPEN_BRACKET' Expr 'CLOSE_BRACKET'
+Factor: '(' Expr ')'
       | 'INT' ;
 ";
 
@@ -1262,11 +1262,11 @@ Factor: 'OPEN_BRACKET' Expr 'CLOSE_BRACKET'
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(&grm,
                           errs[0].repairs(),
-                          &vec!["Insert \"CLOSE_BRACKET\", Insert \"PLUS\"",
-                                "Insert \"CLOSE_BRACKET\", Insert \"MULT\"",
-                                "Insert \"CLOSE_BRACKET\", Delete",
-                                "Insert \"PLUS\", Shift, Insert \"CLOSE_BRACKET\"",
-                                "Insert \"MULT\", Shift, Insert \"CLOSE_BRACKET\""]);
+                          &vec!["Insert \")\", Insert \"+\"",
+                                "Insert \")\", Insert \"*\"",
+                                "Insert \")\", Delete",
+                                "Insert \"+\", Shift, Insert \")\"",
+                                "Insert \"*\", Shift, Insert \")\""]);
 
         let us = "(+++++)";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
@@ -1279,9 +1279,9 @@ Factor: 'OPEN_BRACKET' Expr 'CLOSE_BRACKET'
     #[test]
     fn find_shortest() {
         let lexs = "%%
-a A
-b B
-c C
+a 'A'
+b 'B'
+c 'C'
 ";
 
         let grms = "%start S
@@ -1302,10 +1302,10 @@ U: 'B';
     #[test]
     fn deletes_after_inserts() {
         let lexs = "%%
-a A
-b B
-c C
-d D
+a 'A'
+b 'B'
+c 'C'
+d 'D'
 ";
 
         let grms = "%start S
@@ -1324,7 +1324,7 @@ S:  'A' 'B' 'D' | 'A' 'B' 'C' 'A' 'A' 'D';
     #[test]
     fn repair_empty_string() {
         let lexs = "%%
-a A
+a 'A'
 ";
 
         let grms = "%start S
@@ -1343,10 +1343,10 @@ S: 'A';
     #[test]
     fn test_merge() {
         let lexs = "%%
-a a
-b b
-c c
-d d
+a 'a'
+b 'b'
+c 'c'
+d 'd'
 ";
 
         let grms = "%start S
@@ -1372,9 +1372,9 @@ U: 'd';
     fn test_cerecke_loop_limit() {
         // Example taken from p57 of Locally least-cost error repair in LR parsers, Carl Cerecke
         let lexs = "%%
-a a
-b b
-c c
+a 'a'
+b 'b'
+c 'c'
 ";
 
         let grms = "%start S
@@ -1401,11 +1401,11 @@ S: 'a' S 'b'
     fn test_cerecke_lr2() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
         let lexs = "%%
-a a
-b b
-c c
-d d
-e e
+a 'a'
+b 'b'
+c 'c'
+d 'd'
+e 'e'
 ";
 
         let grms = "%start S
@@ -1439,10 +1439,10 @@ A: 'b';
         // Example from p5 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
         // Repair in Shift-reduce Parsers'"
         let lexs = "%%
-a a
-b b
-c c
-d d
+a 'a'
+b 'b'
+c 'c'
+d 'd'
 ";
 
         let grms = "%start S
@@ -1469,9 +1469,9 @@ A: 'c' 'd';
         // Example from p5 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
         // Repair in Shift-reduce Parsers'"
         let lexs = "%%
-a a
-c c
-d d
+a 'a'
+c 'c'
+d 'd'
 ";
 
         let grms = "%start S
@@ -1493,10 +1493,10 @@ A: 'c' 'd';
         // Example from p8 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
         // Repair in Shift-reduce Parsers'"
         let lexs = "%%
-a a
-b b
-c c
-d d
+a 'a'
+b 'b'
+c 'c'
+d 'd'
 ";
 
         let grms = "%start S
