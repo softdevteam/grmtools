@@ -510,12 +510,12 @@ pub(crate) mod test {
     fn simple_parse() {
         // From p4 of https://www.cs.umd.edu/class/spring2014/cmsc430/lectures/lec07.pdf
         check_parse_output("%%
-[a-zA-Z_] ID
-[+] PLUS",
+[a-zA-Z_] 'ID'
+\\+ '+'",
 "
 %start E
 %%
-E: T 'PLUS' E
+E: T '+' E
  | T;
 T: 'ID';
 ",
@@ -523,7 +523,7 @@ T: 'ID';
 "E
  T
   ID a
- PLUS +
+ + +
  E
   T
    ID b
@@ -533,7 +533,7 @@ T: 'ID';
     #[test]
     fn parse_empty_rules() {
         let lexs = "%%
-[a-zA-Z_] ID";
+[a-zA-Z_] 'ID'";
         let grms = "%start S
 %%
 S: L;
@@ -555,14 +555,14 @@ L: 'ID'
     #[test]
     fn recursive_parse() {
         let lexs = "%%
-[+] PLUS
-[*] MULT
-[0-9]+ INT
+\\+ '+'
+\\* '*'
+[0-9]+ 'INT'
 ";
         let grms = "%start Expr
 %%
-Expr : Term 'PLUS' Expr | Term;
-Term : Factor 'MULT' Term | Factor;
+Expr : Term '+' Expr | Term;
+Term : Factor '*' Term | Factor;
 Factor : 'INT';";
 
         check_parse_output(&lexs, &grms, "2+3*4",
@@ -570,12 +570,12 @@ Factor : 'INT';";
  Term
   Factor
    INT 2
- PLUS +
+ + +
  Expr
   Term
    Factor
     INT 3
-   MULT *
+   * *
    Term
     Factor
      INT 4
@@ -585,11 +585,11 @@ Factor : 'INT';";
  Term
   Factor
    INT 2
-  MULT *
+  * *
   Term
    Factor
     INT 3
- PLUS +
+ + +
  Expr
   Term
    Factor
@@ -600,19 +600,19 @@ Factor : 'INT';";
     #[test]
     fn parse_error() {
         let lexs = "%%
-[(] OPEN_BRACKET
-[)] CLOSE_BRACKET
-[a-zA-Z_][a-zA-Z_0-9]* ID
+\\( '('
+\\) ')'
+[a-zA-Z_][a-zA-Z_0-9]* 'ID'
 ";
         let grms = "%start Call
 %%
-Call: 'ID' 'OPEN_BRACKET' 'CLOSE_BRACKET';";
+Call: 'ID' '(' ')';";
 
         check_parse_output(&lexs, &grms, "f()",
 "Call
  ID f
- OPEN_BRACKET (
- CLOSE_BRACKET )
+ ( (
+ ) )
 ");
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(");
