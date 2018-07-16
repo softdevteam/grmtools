@@ -12,14 +12,14 @@ name = "lrpar"
 path = "src/lib/mod.rs"
 
 [dependencies]
-cactus = "1.0.2"
+cactus = "1.0"
 cfgrammar = { git = "https://github.com/softdevteam/cfgrammar" }
-getopts = "0.2.17"
-indexmap = "0.4.1"
+getopts = "0.2"
+indexmap = "1.0"
 lrlex = { git = "http://github.com/softdevteam/lrlex" }
 lrtable = { git = "http://github.com/softdevteam/lrtable" }
-num-traits = "0.2.1"
-vob = "1.0.0"
+num-traits = "0.2"
+vob = "1.3"
 
 [profile.release]
 opt-level = 3
