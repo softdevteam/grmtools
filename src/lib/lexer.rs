@@ -36,7 +36,8 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 use std::slice::Iter;
 
-use regex::Regex;
+use regex;
+use regex::{Regex, RegexBuilder};
 
 pub struct Rule<TokId> {
     /// If `Some`, the ID that tokens created against this rule will be given (lrlex gives such
@@ -49,6 +50,23 @@ pub struct Rule<TokId> {
     pub name: Option<String>,
     pub re_str: String,
     pub re: Regex
+}
+
+impl<TokId> Rule<TokId> {
+    /// Create a new `Rule`. This interface is unstable and should only be used by code generated
+    /// by lrlex itself.
+    #[doc(hidden)]
+    pub fn new(tok_id: Option<TokId>,
+           name: Option<String>,
+           re_str: String)
+        -> Result<Rule<TokId>, regex::Error>
+    {
+        let re = RegexBuilder::new(&format!("\\A(?:{})", &re_str))
+                              .multi_line(true)
+                              .dot_matches_new_line(true)
+                              .build()?;
+        Ok(Rule{tok_id, name, re_str, re})
+    }
 }
 
 #[derive(Debug)]
