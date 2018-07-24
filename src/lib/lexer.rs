@@ -77,7 +77,7 @@ pub struct LexError {
 /// This struct represents, in essence, a .l file in memory. From it one can produce a `Lexer`
 /// which actually lexes inputs.
 pub struct LexerDef<TokId> {
-    rules: Vec<Rule<TokId>>
+    pub(crate) rules: Vec<Rule<TokId>>
 }
 
 impl<TokId: Copy + Eq> LexerDef<TokId> {

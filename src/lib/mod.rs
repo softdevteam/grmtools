@@ -30,17 +30,27 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#![feature(fs_read_write)]
 #![feature(try_from)]
 
+extern crate filetime;
 extern crate regex;
+extern crate typename;
+extern crate walkdir;
 
 use std::convert::TryFrom;
-use std::fmt;
+use std::error::Error;
+use std::env::{current_dir, var};
+use std::fmt::{self, Debug};
+use std::path::Path;
 
+use typename::TypeName;
+
+mod build;
 mod lexer;
 mod parser;
 
-pub use lexer::{Lexeme, LexerDef, Lexer};
+pub use lexer::{Lexeme, LexerDef, Lexer, Rule};
 use parser::parse_lex;
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
@@ -51,6 +61,16 @@ pub struct LexBuildError {
     pub kind: LexErrorKind,
     line: usize,
     col: usize
+}
+
+impl Error for LexBuildError {
+    fn description(&self) -> &str {
+        panic!("XXX");
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
 }
 
 /// The various different possible Lex parser errors.
@@ -85,3 +105,32 @@ pub fn build_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerDef<
     parse_lex(s)
 }
 
+/// Statically compile all `.l` files in the `src` directory. A file `src/x.l` can then be used in
+/// a crate with `lrlex_mod!(x)`: it exposes a function `lexerdef()` which returns a
+/// [`LexerDef`](struct.LexerDef.html) that can then be used as normal.
+pub fn process_src_dir<TokId: Copy + fmt::Debug + Eq + TryFrom<usize> + TypeName>() -> Result<(), Box<Error>> {
+    let mut pd = current_dir()?;
+    pd.push("src");
+    build::process_dir::<TokId, _, _>(pd, var("OUT_DIR").unwrap())
+}
+
+/// Statically compile a specific `.l`. A file `/a/b/x.l` will be compiled into `/a/b/x.rs`. Note
+/// that if `/a/b` is not the `src` directory of your crate, you will have to manually `include!`
+/// the resulting `.rs` file (since [`lrlex_mod`](macro.lrlex_mod.html) only deals with `.rs` files
+/// in the `src` directory).
+pub fn process_file<TokId, P, Q>(inp: P,
+                                 outp: Q)
+                              -> Result<(), Box<Error>>
+                           where TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName,
+                                 P: AsRef<Path>,
+                                 Q: AsRef<Path>
+{
+    build::process_file::<TokId, P, Q>(inp, outp)
+}
+
+/// A convenience macro for including statically compiled `.l` files. A file `src/x.l` which is
+/// statically compiled by lrlex can then be used in a crate with `lrlex_mod!(x)`.
+#[macro_export]
+macro_rules! lrlex_mod {
+    ($n:ident) => { include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs")); };
+}
