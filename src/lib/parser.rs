@@ -32,8 +32,6 @@
 
 use std::convert::TryFrom;
 
-use regex::RegexBuilder;
-
 use {LexErrorKind, LexBuildError, LexBuildResult};
 use lexer::{LexerDef, Rule};
 
@@ -147,20 +145,13 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
         }
 
         let re_str = line[..rspace].trim_right().to_string();
-        let re = match RegexBuilder::new(&format!("\\A(?:{})", &re_str))
-                                    .multi_line(true)
-                                    .dot_matches_new_line(true)
-                                    .build() {
-            Ok(x) => x,
-            Err(_)  => return Err(self.mk_error(LexErrorKind::RegexError, i))
-        };
         let rules_len = self.rules.len();
         let tok_id = TokId::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("TokId::try_from failed on {} (if TokId is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
-        self.rules.push(Rule{tok_id: Some(tok_id),
-                             name: name,
-                             re: re,
-                             re_str: re_str});
+
+        let rule = Rule::new(Some(tok_id), name, re_str)
+                        .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
+        self.rules.push(rule);
         Ok(i + line_len)
     }
 
