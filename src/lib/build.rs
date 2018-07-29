@@ -60,19 +60,19 @@ pub(crate) fn process_file<TokId, P, Q>(inp: P,
     let lexerdef = parse_lex::<TokId>(&inc)?;
     let mut f = File::create(outp)?;
     let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
-    f.write(format!("mod {} {{", mod_name).as_bytes())?;
+    write!(f, "mod {} {{", mod_name)?;
     lexerdef.rust_pp(&mut f)?;
-    f.write(b"}")?;
+    write!(f, "}}")?;
     Ok(())
 }
 
 impl<TokId: Copy + Debug + Eq + TypeName> LexerDef<TokId> {
     pub(crate) fn rust_pp(&self, f: &mut File) -> Result<(), io::Error> {
         // Header
-        f.write(format!("use lrlex::{{LexerDef, Rule}};
+        write!(f, "use lrlex::{{LexerDef, Rule}};
 
 pub fn lexerdef() -> LexerDef<{}> {{
-    let rules = vec![", TokId::type_name()).as_bytes())?;
+    let rules = vec![", TokId::type_name())?;
 
         // Individual rules
         for r in &self.rules {
@@ -84,16 +84,16 @@ pub fn lexerdef() -> LexerDef<{}> {{
                 Some(ref n) => format!("Some({:?}.to_string())", n),
                 None => "None".to_owned()
             };
-            f.write(format!("
+            write!(f, "
 Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
-                tok_id, n, r.re_str.replace("\\", "\\\\").replace("\"", "\\\"")).as_bytes())?;
+                tok_id, n, r.re_str.replace("\\", "\\\\").replace("\"", "\\\""))?;
         }
 
         // Footer
-        f.write(b"
+        write!(f, "
 ];
     LexerDef::new(rules)
-}")?;
+}}")?;
         Ok(())
     }
 }

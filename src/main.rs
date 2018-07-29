@@ -91,7 +91,7 @@ fn main() {
         });
     let input = &read_file(&matches.free[1]);
     let lexemes = lexerdef.lexer(input).lexemes().unwrap();
-    for l in lexemes.iter() {
+    for l in &lexemes {
         println!("{} {}", lexerdef.get_rule_by_id(l.tok_id()).name.as_ref().unwrap(), &input[l.start()..l.start() + l.len()]);
     }
 }

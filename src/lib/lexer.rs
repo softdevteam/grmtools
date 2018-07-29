@@ -82,7 +82,7 @@ pub struct LexerDef<TokId> {
 
 impl<TokId: Copy + Eq> LexerDef<TokId> {
     pub fn new(rules: Vec<Rule<TokId>>) -> LexerDef<TokId> {
-        LexerDef{rules: rules}
+        LexerDef{rules}
     }
 
     /// Get the `Rule` at index `idx`.
@@ -141,7 +141,7 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
             missing_from_parser = None;
         } else {
             let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
-            for i in missing_from_parser_idxs.iter() {
+            for i in &missing_from_parser_idxs {
                 mfp.insert(self.rules[*i].name.as_ref().unwrap().as_str());
             }
             missing_from_parser = Some(mfp);
@@ -263,9 +263,9 @@ pub struct Lexeme<TokId: Copy> {
 impl<TokId: Copy> Lexeme<TokId> {
     pub fn new(tok_id: TokId, start: usize, len: usize) -> Lexeme<TokId> {
         Lexeme{
-            start: start,
+            start,
             len: u32::try_from(len).unwrap(),
-            tok_id: tok_id
+            tok_id
         }
     }
 
@@ -282,6 +282,10 @@ impl<TokId: Copy> Lexeme<TokId> {
     /// Length in bytes of the lexeme
     pub fn len(&self) -> usize {
         self.len as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
     }
 }
 
