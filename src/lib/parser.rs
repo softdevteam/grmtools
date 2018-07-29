@@ -44,7 +44,7 @@ pub struct LexParser<TokId> {
 impl<TokId: TryFrom<usize>> LexParser<TokId> {
     fn new(src: String) -> LexBuildResult<LexParser<TokId>> {
         let mut p = LexParser{
-            src     : src,
+            src,
             newlines: vec![0],
             rules   : Vec::new()
         };
@@ -52,9 +52,9 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
         Ok(p)
     }
 
-    fn mk_error(&self, k: LexErrorKind, off: usize) -> LexBuildError {
+    fn mk_error(&self, kind: LexErrorKind, off: usize) -> LexBuildError {
         let (line, col) = self.off_to_line_col(off);
-        LexBuildError{kind: k, line: line, col: col}
+        LexBuildError{kind, line, col}
     }
 
     fn off_to_line_col(&self, off: usize) -> (usize, usize) {
@@ -128,12 +128,9 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
         if orig_name == ";" {
             name = None;
         } else {
-            debug_assert!(orig_name.len() > 0);
-            if !((orig_name.chars().nth(0).unwrap() == '\''
-                  && orig_name.chars().last().unwrap() == '\'')
-                 ||
-                 (orig_name.chars().nth(0).unwrap() == '\"'
-                  && orig_name.chars().last().unwrap() == '"')) {
+            debug_assert!(!orig_name.is_empty());
+            if !(   (orig_name.starts_with('\'') && orig_name.ends_with('\''))
+                 || (orig_name.starts_with('\"') && orig_name.ends_with('"'))) {
                 return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1));
             }
             name = Some(orig_name[1..orig_name.len() - 1].to_string());
