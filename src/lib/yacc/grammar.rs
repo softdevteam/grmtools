@@ -38,9 +38,9 @@ use std::fmt;
 use {Grammar, NTIdx, PIdx, Symbol, TIdx};
 use super::YaccKind;
 
-const START_NONTERM         : &'static str = "^";
-const IMPLICIT_NONTERM      : &'static str = "~";
-const IMPLICIT_START_NONTERM: &'static str = "^~";
+const START_NONTERM         : &str = "^";
+const IMPLICIT_NONTERM      : &str = "~";
+const IMPLICIT_START_NONTERM: &str = "^~";
 
 use yacc::ast;
 use yacc::ast::GrammarValidationError;
@@ -184,9 +184,8 @@ impl YaccGrammar {
             if astrulename == &start_nonterm {
                 // Add the special start rule which has a single production which references a
                 // single nonterminal.
-                rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
-                           .unwrap()
-                           .push(prods.len().into());
+                rules_prods[usize::from(nonterm_map[astrulename])]
+                    .push(prods.len().into());
                 let start_prod = match implicit_start_nonterm {
                     None => {
                         // Add ^: S;
@@ -208,9 +207,8 @@ impl YaccGrammar {
                 // Add the intermediate start rule (handling implicit tokens at the beginning of
                 // the file):
                 //   ^~: ~ S;
-                rules_prods.get_mut(usize::from(nonterm_map[astrulename]))
-                           .unwrap()
-                           .push(prods.len().into());
+                rules_prods[usize::from(nonterm_map[astrulename])]
+                    .push(prods.len().into());
                 prods.push(Some(vec![Symbol::Nonterm(nonterm_map[implicit_nonterm.as_ref().unwrap()]),
                                      Symbol::Nonterm(nonterm_map[ast.start.as_ref().unwrap()])]));
                 prod_precs.push(Some(None));
@@ -219,7 +217,7 @@ impl YaccGrammar {
             }
             else if implicit_nonterm.as_ref().map_or(false, |s| s == astrulename) {
                 // Add the implicit rule: ~: "IMPLICIT_TERM1" ~ | ... | "IMPLICIT_TERMN" ~ | ;
-                let implicit_prods = rules_prods.get_mut(usize::from(nonterm_map[astrulename])).unwrap();
+                let implicit_prods = &mut rules_prods[usize::from(nonterm_map[astrulename])];
                 // Add a production for each implicit terminal
                 for t in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(prods.len().into());
@@ -276,7 +274,7 @@ impl YaccGrammar {
             nonterms_len:     u32::try_from(nonterm_names.len()).unwrap(),
             nonterm_names,
             terms_len:        u32::try_from(term_names.len()).unwrap(),
-            eof_term_idx:     eof_term_idx,
+            eof_term_idx,
             term_names,
             term_precs,
             prods_len:        u32::try_from(prods.len()).unwrap(),
@@ -285,7 +283,7 @@ impl YaccGrammar {
             prods_rules:      prods_rules.into_iter().map(|x| x.unwrap()).collect(),
             prods:            prods.into_iter().map(|x| x.unwrap()).collect(),
             prod_precs:       prod_precs.into_iter().map(|x| x.unwrap()).collect(),
-            implicit_nonterm: implicit_nonterm.map_or(None, |x| Some(nonterm_map[&x]))
+            implicit_nonterm: implicit_nonterm.and_then(|x| Some(nonterm_map[&x]))
         }
     }
 
@@ -328,7 +326,7 @@ impl YaccGrammar {
     /// Return the name of terminal `i` (where `None` indicates "the rule has no name"). Panics if
     /// `i` doesn't exist.
     pub fn term_name(&self, i: TIdx) -> Option<&str> {
-        self.term_names[usize::from(i)].as_ref().map_or(None, |x| Some(&x))
+        self.term_names[usize::from(i)].as_ref().and_then(|x| Some(x.as_str()))
     }
 
     /// Return the precedence of terminal `i` (where `None` indicates "no precedence specified").
@@ -364,14 +362,14 @@ impl YaccGrammar {
     pub fn nonterm_idx(&self, n: &str) -> Option<NTIdx> {
         self.nonterm_names.iter()
                           .position(|x| x == n)
-                          .map(|x| NTIdx::from(x))
+                          .map(NTIdx::from)
     }
 
     /// Return the index of the terminal named `n` or `None` if it doesn't exist.
     pub fn term_idx(&self, n: &str) -> Option<TIdx> {
         self.term_names.iter()
                        .position(|x| x.as_ref().map_or(false, |x| x == n))
-                       .map(|x| TIdx::from(x))
+                       .map(TIdx::from)
     }
 
     /// Is there a path from the `from` non-term to the `to` non-term? Note that recursive rules
@@ -518,7 +516,7 @@ impl<'a> SentenceGenerator<'a> {
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Nonterm(i) => self.min_sentence_cost(i),
-                        Symbol::Term(i)    => self.term_costs[usize::from(i)] as u32
+                        Symbol::Term(i)    => u32::from(self.term_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc < low_sc.unwrap() {
@@ -531,17 +529,17 @@ impl<'a> SentenceGenerator<'a> {
 
         let mut s = vec![];
         let mut st = vec![(cheapest_prod(nonterm_idx), 0)];
-        while st.len() > 0 {
+        while !st.is_empty() {
             let (p_idx, sym_idx) = st.pop().unwrap();
             let prod = self.grm.prod(p_idx);
-            for i in sym_idx..prod.len() {
-                match prod[i] {
+            for (i, sym) in prod.iter().enumerate().skip(sym_idx) {
+                match sym {
                     Symbol::Nonterm(j) => {
                         st.push((p_idx, i + 1));
-                        st.push((cheapest_prod(j), 0));
+                        st.push((cheapest_prod(*j), 0));
                     },
                     Symbol::Term(j) => {
-                        s.push(j);
+                        s.push(*j);
                     }
                 }
             }
@@ -559,7 +557,7 @@ impl<'a> SentenceGenerator<'a> {
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Nonterm(i) => self.min_sentence_cost(i),
-                        Symbol::Term(i)    => self.term_costs[usize::from(i)] as u32
+                        Symbol::Term(i)    => u32::from(self.term_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc <= low_sc.unwrap() {
@@ -576,7 +574,7 @@ impl<'a> SentenceGenerator<'a> {
         let mut sts = Vec::new(); // Output sentences
         for p_idx in cheapest_prods(nonterm_idx) {
             let prod = self.grm.prod(p_idx);
-            if prod.len() == 0 {
+            if prod.is_empty() {
                 sts.push(vec![]);
                 continue;
             }
@@ -696,7 +694,7 @@ fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
                                  Symbol::Term(term_idx) =>
-                                     term_costs[usize::from(term_idx)] as u32,
+                                     u32::from(term_costs[usize::from(term_idx)]),
                                  Symbol::Nonterm(nt_idx) => {
                                      if !done[usize::from(nt_idx)] {
                                          cmplt = false;
@@ -765,7 +763,7 @@ fn nonterm_max_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
                                  Symbol::Term(term_idx) =>
-                                     term_costs[usize::from(term_idx)] as u32,
+                                     u32::from(term_costs[usize::from(term_idx)]),
                                  Symbol::Nonterm(nt_idx) => {
                                      if costs[usize::from(nt_idx)] == u32::max_value() {
                                          // As soon as we find reference to an infinite

@@ -211,7 +211,7 @@ impl YaccParser {
                     if self.ast.precs.contains_key(&n) {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
                     }
-                    let prec = Precedence{level: prec_level, kind: kind};
+                    let prec = Precedence{level: prec_level, kind};
                     self.ast.precs.insert(n, prec);
                     i = try!(self.parse_ws(j));
                 }
@@ -394,7 +394,7 @@ impl YaccParser {
 
     fn mk_error(&self, k: YaccParserErrorKind, off: usize) -> YaccParserError {
         let (line, col) = self.off_to_line_col(off);
-        YaccParserError{kind: k, line: line, col: col}
+        YaccParserError{kind: k, line, col}
     }
 
     fn off_to_line_col(&self, off: usize) -> (usize, usize) {
