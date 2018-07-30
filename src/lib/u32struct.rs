@@ -37,6 +37,7 @@ macro_rules! u32struct {
     ($(#[$attr:meta])* $n: ident, $t: ident) => {
         $(#[$attr])*
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
         pub struct $n {
             v: $t
         }
