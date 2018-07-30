@@ -43,7 +43,7 @@ macro_rules! u32struct {
 
         impl From<u32> for $n {
             fn from(v: u32) -> Self {
-                if v > $t::max_value() as u32 {
+                if v > u32::from($t::max_value()) {
                     panic!("Overflow");
                 }
                 $n{v: v as $t}
@@ -52,7 +52,7 @@ macro_rules! u32struct {
 
         impl From<usize> for $n {
             fn from(v: usize) -> Self {
-                if v > $t::max_value() as usize {
+                if v > usize::from($t::max_value()) {
                     panic!("Overflow");
                 }
                 $n{v: v as $t}
@@ -67,7 +67,7 @@ macro_rules! u32struct {
 
         impl From<$n> for u32 {
             fn from(st: $n) -> Self {
-                st.v as u32
+                u32::from(st.v)
             }
         }
     }

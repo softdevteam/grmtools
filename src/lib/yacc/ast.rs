@@ -131,7 +131,7 @@ impl GrammarAST {
 
     pub fn add_prod(&mut self, key: String, symbols: Vec<Symbol>, precedence: Option<String>) {
         self.rules.entry(key)
-                  .or_insert_with(|| Vec::new())
+                  .or_insert_with(Vec::new)
                   .push(self.prods.len());
         self.prods.push(Production{symbols, precedence});
     }
