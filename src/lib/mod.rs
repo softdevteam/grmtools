@@ -68,6 +68,9 @@
 
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
+#[cfg(feature="serde")]
+#[macro_use]
+extern crate serde;
 
 mod u32struct;
 pub mod yacc;
@@ -77,6 +80,7 @@ pub use u32struct::NTIdx;
 pub use u32struct::{PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Symbol {
     Nonterm(NTIdx),
     Term(TIdx)

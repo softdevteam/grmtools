@@ -48,12 +48,14 @@ use yacc::parser::YaccParserError;
 
 pub type PrecedenceLevel = u64;
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Precedence {
     pub level: PrecedenceLevel,
     pub kind:  AssocKind
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AssocKind {
     Left,
     Right,
@@ -62,6 +64,7 @@ pub enum AssocKind {
 
 /// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
 /// guarantees this struct makes about nonterminals, terminals, productions, and symbols.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct YaccGrammar {
     /// How many nonterminals does this grammar have?
     nonterms_len: u32,
