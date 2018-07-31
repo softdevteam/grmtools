@@ -30,10 +30,11 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#![feature(conservative_impl_trait)]
-
 extern crate cfgrammar;
 extern crate fnv;
+#[cfg(feature="serde")]
+#[macro_use]
+extern crate serde;
 extern crate vob;
 
 mod firsts;
@@ -48,6 +49,7 @@ pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
 /// StIdx is a wrapper for a 32-bit state index.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StIdx {
     // The biggest grammars I'm currently aware of have just over 1000 states, so in practise it
     // looks like a u16 is always big enough to store state indexes. So, for as long as we can get
