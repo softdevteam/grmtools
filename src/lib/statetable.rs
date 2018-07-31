@@ -67,7 +67,7 @@ impl fmt::Display for StateTableError {
 
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
 /// separate hashmaps, rather than a single table, due to the different types of their values.
-#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StateTable {
     // For actions, we use a HashMap as a quick representation of a sparse table. We use the normal
     // statetable representation where rows represent states and columns represent terminals. Thus
@@ -93,6 +93,7 @@ pub struct StateTable {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Action {
     /// Shift to state X in the statetable.
     Shift(StIdx),

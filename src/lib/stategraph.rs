@@ -38,6 +38,7 @@ use cfgrammar::yacc::YaccGrammar;
 use itemset::Itemset;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StateGraph {
     /// A vector of `(core_states, closed_states)` tuples.
     states: Vec<(Itemset, Itemset)>,

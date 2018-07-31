@@ -44,6 +44,7 @@ use firsts::Firsts;
 pub type Ctx = Vob;
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Itemset {
     pub items: HashMap<(PIdx, SIdx), Ctx, BuildHasherDefault<FnvHasher>>
 }
