@@ -1,7 +1,7 @@
 extern crate lrlex;
 
-use lrlex::process_src_dir;
+use lrlex::process_file_in_src;
 
 fn main() {
-    process_src_dir::<u8>().unwrap()
+    process_file_in_src::<u8>("calc.l", None).unwrap()
 }
