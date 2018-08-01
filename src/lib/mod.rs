@@ -46,7 +46,7 @@ use std::path::Path;
 
 use typename::TypeName;
 
-mod build;
+mod builder;
 mod lexer;
 mod parser;
 
@@ -111,7 +111,7 @@ pub fn build_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerDef<
 pub fn process_src_dir<TokId: Copy + fmt::Debug + Eq + TryFrom<usize> + TypeName>() -> Result<(), Box<Error>> {
     let mut pd = current_dir()?;
     pd.push("src");
-    build::process_dir::<TokId, _, _>(pd, var("OUT_DIR").unwrap())
+    builder::process_dir::<TokId, _, _>(pd, var("OUT_DIR").unwrap())
 }
 
 /// Statically compile a specific `.l`. A file `/a/b/x.l` will be compiled into `/a/b/x.rs`. Note
@@ -125,7 +125,7 @@ pub fn process_file<TokId, P, Q>(inp: P,
                                  P: AsRef<Path>,
                                  Q: AsRef<Path>
 {
-    build::process_file::<TokId, P, Q>(inp, outp)
+    builder::process_file::<TokId, P, Q>(inp, outp)
 }
 
 /// A convenience macro for including statically compiled `.l` files. A file `src/x.l` which is
