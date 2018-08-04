@@ -33,7 +33,6 @@
 #![feature(fs_read_write)]
 #![feature(try_from)]
 
-extern crate filetime;
 extern crate regex;
 extern crate typename;
 
