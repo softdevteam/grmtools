@@ -1,4 +1,4 @@
-// Copyright (c) 2017 King's College London
+// Copyright (c) 2018 King's College London
 // created by the Software Development Team <http://soft-dev.org/>
 //
 // The Universal Permissive License (UPL), Version 1.0
@@ -30,36 +30,16 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#![feature(test)]
-#![feature(try_from)]
-
-extern crate cactus;
-extern crate cfgrammar;
-#[macro_use] extern crate indexmap;
 extern crate lrlex;
-extern crate lrtable;
-extern crate num_traits;
-extern crate rmp_serde as rmps;
-extern crate serde;
-extern crate test;
-extern crate typename;
-extern crate vob;
+extern crate lrpar;
 
-mod astar;
-mod builder;
-mod cpctplus;
-pub mod parser;
-pub use parser::{Node, parse_rcvry, ParseError, ParseRepair, RecoveryKind};
-mod mf;
+fn main() {
+    // First we create the parser, which returns a HashMap of all the tokens used, then we pass
+    // that HashMap to the lexer.
 
-pub use builder::{process_file, process_file_in_src, reconstitute};
-
-/// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
-/// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.
-#[macro_export]
-macro_rules! lrpar_mod {
-    ($n:ident) => { include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs")); };
+    // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
+    // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
+    // ".l" for lrlex).
+    let lex_rule_ids_map = lrpar::process_file_in_src::<u8>("calc.y").unwrap();
+    lrlex::process_file_in_src::<u8>("calc.l", Some(lex_rule_ids_map)).unwrap();
 }
-
-#[doc(hidden)]
-pub use cfgrammar::NTIdx;
