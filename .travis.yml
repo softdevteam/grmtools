@@ -1,0 +1,8 @@
+language: rust
+rust: nightly
+script:
+    - cargo test --all
+    - cd cfgrammar && cargo test --features "serde" ; cd ..
+    - cd lrlex/examples/calc && cargo build ; cd ..
+    - cd lrpar/examples/calc && cargo build ; cd ..
+    - cd lrtable && cargo test --features "serde" ; cd ..
