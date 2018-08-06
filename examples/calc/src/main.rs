@@ -3,11 +3,11 @@ use std::io::{self, BufRead, Write};
 #[macro_use] extern crate lrlex;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
-lrlex_mod!(calc);
+lrlex_mod!(calc_l);
 
 fn main() {
     // We need to get a `LexerDef` for the `calc` language in order that we can lex input.
-    let lexerdef = calc::lexerdef();
+    let lexerdef = calc_l::lexerdef();
     let stdin = io::stdin();
     loop {
         print!(">>> ");

@@ -40,7 +40,7 @@ use regex;
 use regex::{Regex, RegexBuilder};
 
 pub struct Rule<TokId> {
-    /// If `Some`, the ID that tokens created against this rule will be given (lrlex gives such
+    /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
     /// rules a guaranteed unique value, though that value can be overridden by clients who need to
     /// control the ID). If `None`, then this rule specifies lexemes which should not appear in the
     /// user's input.
@@ -90,7 +90,7 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
         self.rules.get(idx)
     }
 
-    /// Get the `Rule` instance associated with a particular token ID. Panics if no such rule
+    /// Get the `Rule` instance associated with a particular lexeme ID. Panics if no such rule
     /// exists.
     pub fn get_rule_by_id(&self, tok_id: TokId) -> &Rule<TokId> {
         &self.rules.iter().find(|r| r.tok_id == Some(tok_id)).unwrap()
@@ -102,8 +102,8 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
     }
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
-    /// to synchronise a parser's notion of token IDs with the lexers. While doing this, it keeps
-    /// track of which tokens:
+    /// to synchronise a parser's notion of lexeme IDs with the lexers. While doing this, it keeps
+    /// track of which lexemes:
     ///   1) are defined in the lexer but not referenced by the parser
     ///   2) and referenced by the parser but not defined in the lexer
     /// and returns them as a tuple `(Option<HashSet<&str>>, Option<HashSet<&str>>)` in the order
@@ -116,7 +116,7 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
     /// benign: some lexers deliberately define tokens which are not used (e.g. reserving future
     /// keywords). A non-empty set #2 is more likely to be an error since there are parts of the
     /// grammar where nothing the user can input will be parseable.
-    pub fn set_rule_ids<'a>(&'a mut self, map: &HashMap<&'a str, TokId>)
+    pub fn set_rule_ids<'a>(&'a mut self, rule_ids_map: &HashMap<&'a str, TokId>)
                             -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
@@ -125,7 +125,7 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
         let mut rules_with_names = 0;
         for (i, r) in self.rules.iter_mut().enumerate() {
             if let Some(ref n) = r.name {
-                match map.get(&**n) {
+                match rule_ids_map.get(&**n) {
                     Some(tok_id) => r.tok_id = Some(*tok_id),
                     None => {
                         r.tok_id = None;
@@ -148,19 +148,20 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
         };
 
         let missing_from_lexer;
-        if rules_with_names - missing_from_parser_idxs.len() == map.len() {
+        if rules_with_names - missing_from_parser_idxs.len() == rule_ids_map.len() {
             missing_from_lexer = None
         } else {
-            missing_from_lexer = Some(map.keys()
-                                         .cloned()
-                                         .collect::<HashSet<&str>>()
-                                         .difference(&self.rules
-                                                          .iter()
-                                                          .filter(|x| x.name.is_some())
-                                                          .map(|x| &**x.name.as_ref().unwrap())
-                                                          .collect::<HashSet<&str>>())
-                                         .cloned()
-                                         .collect::<HashSet<&str>>());
+            missing_from_lexer = Some(rule_ids_map.keys()
+                                                  .cloned()
+                                                  .collect::<HashSet<&str>>()
+                                                  .difference(&self.rules
+                                                                   .iter()
+                                                                   .filter(|x| x.name.is_some())
+                                                                   .map(|x| &**x.name.as_ref()
+                                                                                     .unwrap())
+                                                                   .collect::<HashSet<&str>>())
+                                                  .cloned()
+                                                  .collect::<HashSet<&str>>());
         }
 
         (missing_from_lexer, missing_from_parser)

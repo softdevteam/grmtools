@@ -12,8 +12,6 @@ name = "lrlex"
 path = "src/lib/mod.rs"
 
 [dependencies]
-filetime = "0.1"
 getopts = "0.2.15" # only needed for src/main.rs
 regex = "0.2.2"
 typename = "0.1"
-walkdir = "2"
