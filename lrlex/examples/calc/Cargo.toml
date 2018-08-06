@@ -1,0 +1,14 @@
+[package]
+name = "calc"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+
+[[bin]]
+doc = false
+name = "calc"
+
+[build-dependencies]
+lrlex = { path = "../.." }
+
+[dependencies]
+lrlex = { path = "../.." }

@@ -1,0 +1,17 @@
+[package]
+name = "lrlex"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+
+[[bin]]
+doc = false
+name = "lrlex"
+
+[lib]
+name = "lrlex"
+path = "src/lib/mod.rs"
+
+[dependencies]
+getopts = "0.2.15" # only needed for src/main.rs
+regex = "0.2.2"
+typename = "0.1"

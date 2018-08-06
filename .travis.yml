@@ -1,8 +1,0 @@
-language: rust
-rust: nightly
-env:
-    - FEATURES=""
-    - FEATURES="serde"
-script:
-    - cargo build --tests --features "$FEATURES"
-    - cargo test --features "$FEATURES"
