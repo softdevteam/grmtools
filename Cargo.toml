@@ -1,0 +1,7 @@
+[workspace]
+members=[
+    "cfgrammar",
+    "lrlex",
+    "lrpar",
+    "lrtable"
+]
