@@ -8,9 +8,9 @@ doc = false
 name = "calc"
 
 [build-dependencies]
-lrlex = { git="http://github.com/softdevteam/lrlex" }
+lrlex = { path="../../../lrlex" }
 lrpar = { path="../.." }
 
 [dependencies]
-lrlex = { git="http://github.com/softdevteam/lrlex" }
+lrlex = { path="../../../lrlex" }
 lrpar = { path="../.." }

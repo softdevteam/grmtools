@@ -13,11 +13,11 @@ path = "src/lib/mod.rs"
 
 [dependencies]
 cactus = "1.0"
-cfgrammar = { git="https://github.com/softdevteam/cfgrammar", features=["serde"] }
+cfgrammar = { path="../cfgrammar", features=["serde"] }
 getopts = "0.2"
 indexmap = "1.0"
-lrlex = { git="https://github.com/softdevteam/lrlex" }
-lrtable = { git="https://github.com/softdevteam/lrtable", features=["serde"] }
+lrlex = { path="../lrlex" }
+lrtable = { path="../lrtable", features=["serde"] }
 num-traits = "0.2"
 rmp-serde = "0.13"
 serde = { version="1.0", features=["derive"] }
