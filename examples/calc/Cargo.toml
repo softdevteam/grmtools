@@ -1,0 +1,16 @@
+[package]
+name = "calc"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+
+[[bin]]
+doc = false
+name = "calc"
+
+[build-dependencies]
+lrlex = { git="http://github.com/softdevteam/lrlex" }
+lrpar = { path="../.." }
+
+[dependencies]
+lrlex = { git="http://github.com/softdevteam/lrlex" }
+lrpar = { path="../.." }
