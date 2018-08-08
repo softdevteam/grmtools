@@ -30,6 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 use cactus::Cactus;
@@ -84,21 +85,25 @@ pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TStack<TokId> = Vec<Node<TokId>>; // Parse tree stack
 pub(crate) type Errors<TokId> = Vec<ParseError<TokId>>;
 
-pub struct Parser<'a, TokId: 'a> {
+pub struct Parser<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
     pub rcvry_kind: RecoveryKind,
-    pub grm: &'a YaccGrammar,
+    pub grm: &'a YaccGrammar<StorageT>,
     pub term_cost: &'a Fn(TIdx) -> u8,
-    pub sgraph: &'a StateGraph,
-    pub stable: &'a StateTable,
+    pub sgraph: &'a StateGraph<StorageT>,
+    pub stable: &'a StateTable<StorageT>,
     pub lexemes: &'a Lexemes<TokId>
 }
 
-impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
+impl<'a,
+     StorageT: Hash + PrimInt + Unsigned,
+     TokId: PrimInt + Unsigned>
+Parser<'a, StorageT, TokId>
+{
     fn parse<F>(rcvry_kind: RecoveryKind,
-                grm: &YaccGrammar,
+                grm: &YaccGrammar<StorageT>,
                 term_cost: F,
-                sgraph: &StateGraph,
-                stable: &StateTable,
+                sgraph: &StateGraph<StorageT>,
+                stable: &StateTable<StorageT>,
                 lexemes: &Lexemes<TokId>)
              -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
           where F: Fn(TIdx) -> u8
@@ -365,8 +370,10 @@ impl<'a, TokId: PrimInt + Unsigned> Parser<'a, TokId> {
     }
 }
 
-pub trait Recoverer<TokId: PrimInt + Unsigned> {
-    fn recover(&self, Instant, &Parser<TokId>, usize, &mut PStack, &mut TStack<TokId>)
+pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned,
+                    TokId: PrimInt + Unsigned>
+{
+    fn recover(&self, Instant, &Parser<StorageT, TokId>, usize, &mut PStack, &mut TStack<TokId>)
            -> (usize, Vec<Vec<ParseRepair>>);
 }
 
@@ -378,10 +385,13 @@ pub enum RecoveryKind {
 
 /// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the
 /// input was consumed) or `None` otherwise, and a vector of `ParseError`s.
-pub fn parse<TokId: PrimInt + Unsigned>
-       (grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable,
-        lexemes: &Lexemes<TokId>)
-    -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
+pub fn parse<StorageT: Hash + PrimInt + Unsigned,
+            TokId: PrimInt + Unsigned>
+           (grm: &YaccGrammar<StorageT>,
+            sgraph: &StateGraph<StorageT>,
+            stable: &StateTable<StorageT>,
+            lexemes: &Lexemes<TokId>)
+         -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
 {
     parse_rcvry(RecoveryKind::MF, grm, |_| 1, sgraph, stable, lexemes)
 }
@@ -390,12 +400,14 @@ pub fn parse<TokId: PrimInt + Unsigned>
 /// tree. On failure, return a parse tree (if all the input was consumed) or `None` otherwise, and
 /// a vector of `ParseError`s.
 pub fn parse_rcvry
-       <TokId: PrimInt + Unsigned, F>
+       <StorageT: Hash + PrimInt + Unsigned,
+        TokId: PrimInt + Unsigned,
+        F>
        (rcvry_kind: RecoveryKind,
-        grm: &YaccGrammar,
+        grm: &YaccGrammar<StorageT>,
         term_cost: F,
-        sgraph: &StateGraph,
-        stable: &StateTable,
+        sgraph: &StateGraph<StorageT>,
+        stable: &StateTable<StorageT>,
         lexemes: &Lexemes<TokId>)
     -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
     where F: Fn(TIdx) -> u8
@@ -453,7 +465,7 @@ impl<TokId: Copy> ParseError<TokId> {
 pub(crate) mod test {
     use std::collections::HashMap;
 
-    use cfgrammar::yacc::{YaccGrammar, yacc_grm, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use lrlex::{build_lex, Lexeme};
     use lrtable::{Minimiser, from_yacc};
     use num_traits::ToPrimitive;
@@ -480,7 +492,7 @@ pub(crate) mod test {
                                                          Vec<ParseError<u16>>)>)
     {
         let mut lexerdef = build_lex(lexs).unwrap();
-        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         {
             let rule_ids = grm.terms_map().iter()

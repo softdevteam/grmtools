@@ -68,6 +68,7 @@
 
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
+extern crate num_traits;
 #[cfg(feature="serde")]
 #[macro_use]
 extern crate serde;

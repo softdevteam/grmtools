@@ -30,6 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use num_traits::{PrimInt, Unsigned};
 use vob::Vob;
 
 use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
@@ -38,7 +39,7 @@ use cfgrammar::yacc::YaccGrammar;
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
 /// grammar:
 /// ```ignore
-///   let grm = yacc_grm(YaccKind::Original, "
+///   let grm = YaccGrammar::new(YaccKind::Original, "
 ///     S: A 'b';
 ///     A: 'a'
 ///      | ;").unwrap();
@@ -60,7 +61,7 @@ pub struct Firsts {
 
 impl Firsts {
     /// Generates and returns the firsts set for the given grammar.
-    pub fn new(grm: &YaccGrammar) -> Firsts {
+    pub fn new<StorageT: PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>) -> Firsts {
         let mut prod_firsts = Vec::with_capacity(grm.nonterms_len() as usize);
         for _ in 0..grm.nonterms_len() {
             prod_firsts.push(Vob::from_elem(grm.terms_len() as usize, false));
@@ -170,11 +171,15 @@ impl Firsts {
 
 #[cfg(test)]
 mod test {
-    use super::Firsts;
     use cfgrammar::Grammar;
-    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
+    use num_traits::{PrimInt, Unsigned};
 
-    fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
+    use super::Firsts;
+
+    fn has<StorageT: PrimInt + Unsigned>
+          (grm: &YaccGrammar<StorageT>, firsts: &Firsts, rn: &str, should_be: Vec<&str>)
+    {
         let nt_i = grm.nonterm_idx(rn).unwrap();
         for i in 0 .. grm.terms_len() {
             let n = match grm.term_name(i.into()) {
@@ -201,7 +206,7 @@ mod test {
 
     #[test]
     fn test_first(){
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start C
           %token c d
           %%
@@ -219,7 +224,7 @@ mod test {
 
     #[test]
     fn test_first_no_subsequent_nonterminals() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start C
           %token c d
           %%
@@ -233,7 +238,7 @@ mod test {
 
     #[test]
     fn test_first_epsilon() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start A
           %token a b c
           %%
@@ -250,7 +255,7 @@ mod test {
 
     #[test]
     fn test_last_epsilon() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start A
           %token b c
           %%
@@ -266,7 +271,7 @@ mod test {
 
     #[test]
     fn test_first_no_multiples() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start A
           %token b c
           %%
@@ -278,7 +283,7 @@ mod test {
     }
 
     fn eco_grammar() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
           %start S
           %token a b c d f
           %%
@@ -305,7 +310,7 @@ mod test {
 
     #[test]
     fn test_first_from_eco_bug() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start E
           %token a b c d e f
           %%

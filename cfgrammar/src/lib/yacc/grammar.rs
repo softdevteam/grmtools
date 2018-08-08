@@ -35,8 +35,11 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 
+use num_traits::{PrimInt, Unsigned};
+
 use {Grammar, NTIdx, PIdx, Symbol, TIdx};
 use super::YaccKind;
+use yacc::parser::YaccParser;
 
 const START_NONTERM         : &str = "^";
 const IMPLICIT_NONTERM      : &str = "~";
@@ -65,7 +68,7 @@ pub enum AssocKind {
 /// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
 /// guarantees this struct makes about nonterminals, terminals, productions, and symbols.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct YaccGrammar {
+pub struct YaccGrammar<StorageT=u32> {
     /// How many nonterminals does this grammar have?
     nonterms_len: u32,
     /// A mapping from `NTIdx` -> `String`.
@@ -82,13 +85,13 @@ pub struct YaccGrammar {
     /// How many productions does this grammar have?
     prods_len: u32,
     /// Which production is the sole production of the start rule?
-    start_prod: PIdx,
+    start_prod: PIdx<StorageT>,
     /// A list of all productions.
     prods: Vec<Vec<Symbol>>,
     /// A mapping from rules to their productions. Note that 1) the order of rules is identical to
     /// that of `nonterm_names` 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
-    rules_prods: Vec<Vec<PIdx>>,
+    rules_prods: Vec<Vec<PIdx<StorageT>>>,
     /// A mapping from productions to their corresponding rule indexes.
     prods_rules: Vec<NTIdx>,
     /// The precedence of each production.
@@ -101,14 +104,33 @@ pub struct YaccGrammar {
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
-impl YaccGrammar {
-    /// Translate a `GrammarAST` into a `YaccGrammar`. This function is akin to the part a traditional
-    /// compiler that takes in an AST and converts it into a binary.
+impl YaccGrammar<u32> {
+    pub fn new(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
+        YaccGrammar::new_with_storaget(yacc_kind, s)
+    }
+}
+
+impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
+    /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
+    /// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
+    /// ([`YaccGrammarError`](grammar/enum.YaccGrammarError.html) on error).
     ///
-    /// As we're compiling the `GrammarAST` into a `Grammar` we add a new start rule (which we'll
-    /// refer to as `^`, though the actual name is a fresh name that is guaranteed to be unique)
-    /// that references the user defined start rule.
-    pub fn new(yacc_kind: YaccKind, ast: &ast::GrammarAST) -> YaccGrammar {
+    /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
+    /// though the actual name is a fresh name that is guaranteed to be unique) that references the
+    /// user defined start rule.
+    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str)
+                          -> Result<Self, YaccGrammarError>
+    {
+        let ast = match yacc_kind {
+            YaccKind::Original | YaccKind::Eco => {
+                let mut yp = YaccParser::new(yacc_kind, s.to_string());
+                try!(yp.parse());
+                let mut ast = yp.ast();
+                ast.complete_and_validate()?;
+                ast
+            }
+        };
+
         let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
 
         // Generate a guaranteed unique start nonterm name. We simply keep making the string longer
@@ -153,7 +175,7 @@ impl YaccGrammar {
         for k in ast.rules.keys() {
             nonterm_names.push(k.clone());
         }
-        let mut rules_prods:Vec<Vec<PIdx>> = Vec::with_capacity(nonterm_names.len());
+        let mut rules_prods:Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(nonterm_names.len());
         let mut nonterm_map = HashMap::<String, NTIdx>::new();
         for (i, v) in nonterm_names.iter().enumerate() {
             rules_prods.push(Vec::new());
@@ -273,7 +295,7 @@ impl YaccGrammar {
             }
         }
 
-        YaccGrammar{
+        Ok(YaccGrammar{
             nonterms_len:     u32::try_from(nonterm_names.len()).unwrap(),
             nonterm_names,
             terms_len:        u32::try_from(term_names.len()).unwrap(),
@@ -287,7 +309,7 @@ impl YaccGrammar {
             prods:            prods.into_iter().map(|x| x.unwrap()).collect(),
             prod_precs:       prod_precs.into_iter().map(|x| x.unwrap()).collect(),
             implicit_nonterm: implicit_nonterm.and_then(|x| Some(nonterm_map[&x]))
-        }
+        })
     }
 
     /// Return the index of the end terminal.
@@ -296,7 +318,7 @@ impl YaccGrammar {
     }
 
     /// Return the productions for nonterminal `i`. Panics if `i` doesn't exist.
-    pub fn nonterm_to_prods(&self, i: NTIdx) -> &[PIdx] {
+    pub fn nonterm_to_prods(&self, i: NTIdx) -> &[PIdx<StorageT>] {
         &self.rules_prods[usize::from(i)]
     }
 
@@ -311,18 +333,18 @@ impl YaccGrammar {
     }
 
     /// Get the sequence of symbols for production `i`. Panics if `i` doesn't exist.
-    pub fn prod(&self, i: PIdx) -> &[Symbol] {
+    pub fn prod(&self, i: PIdx<StorageT>) -> &[Symbol] {
         &self.prods[usize::from(i)]
     }
 
     /// Return the nonterm index of the production `i`. Panics if `i` doesn't exist.
-    pub fn prod_to_nonterm(&self, i: PIdx) -> NTIdx {
+    pub fn prod_to_nonterm(&self, i: PIdx<StorageT>) -> NTIdx {
         self.prods_rules[usize::from(i)]
     }
 
     /// Return the precedence of production `i` (where `None` indicates "no precedence specified").
     /// Panics if `i` doesn't exist.
-    pub fn prod_precedence(&self, i: PIdx) -> Option<Precedence> {
+    pub fn prod_precedence(&self, i: PIdx<StorageT>) -> Option<Precedence> {
         self.prod_precs[usize::from(i)]
     }
 
@@ -352,7 +374,7 @@ impl YaccGrammar {
 
     /// Return the production index of the start rule's sole production (for Yacc grammars the
     /// start rule is defined to have precisely one production).
-    pub fn start_prod(&self) -> PIdx {
+    pub fn start_prod(&self) -> PIdx<StorageT> {
         self.start_prod
     }
 
@@ -415,7 +437,7 @@ impl YaccGrammar {
     /// based on the user-defined `term_cost` function which gives the associated cost for
     /// generating each terminal (where the cost must be greater than 0). Note that multiple
     /// terminals can have the same score. The simplest cost function is thus `|_| 1`.
-    pub fn sentence_generator<F>(&self, term_cost: F) -> SentenceGenerator
+    pub fn sentence_generator<F>(&self, term_cost: F) -> SentenceGenerator<StorageT>
                         where F: Fn(TIdx) -> u8
     {
         SentenceGenerator::new(self, term_cost)
@@ -423,7 +445,7 @@ impl YaccGrammar {
 
 }
 
-impl Grammar for YaccGrammar {
+impl<StorageT: PrimInt + Unsigned> Grammar for YaccGrammar<StorageT> {
     fn prods_len(&self) -> u32 {
         self.prods_len
     }
@@ -462,15 +484,15 @@ impl Grammar for YaccGrammar {
 /// C: [x]
 /// D: [y, x] or [y, z]
 /// ```
-pub struct SentenceGenerator<'a> {
-    grm: &'a YaccGrammar,
+pub struct SentenceGenerator<'a, StorageT: 'a> {
+    grm: &'a YaccGrammar<StorageT>,
     nonterm_min_costs: RefCell<Option<Vec<u32>>>,
     nonterm_max_costs: RefCell<Option<Vec<u32>>>,
     term_costs: Vec<u8>
 }
 
-impl<'a> SentenceGenerator<'a> {
-    fn new<F>(grm: &YaccGrammar, term_cost: F) -> SentenceGenerator
+impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
+    fn new<F>(grm: &'a YaccGrammar<StorageT>, term_cost: F) -> Self
         where F: Fn(TIdx) -> u8
     {
         let mut term_costs = Vec::with_capacity(grm.terms_len() as usize);
@@ -511,7 +533,7 @@ impl<'a> SentenceGenerator<'a> {
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
     /// non-terminal `nonterm_idx`.
     pub fn min_sentence(&self, nonterm_idx: NTIdx) -> Vec<TIdx> {
-        let cheapest_prod = |nt_idx: NTIdx| -> PIdx {
+        let cheapest_prod = |nt_idx: NTIdx| -> PIdx<StorageT> {
             let mut low_sc = None;
             let mut low_idx = None;
             for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
@@ -552,7 +574,7 @@ impl<'a> SentenceGenerator<'a> {
 
     /// Return (in arbitrary order) all the minimal sentences for the non-terminal `nonterm_idx`.
     pub fn min_sentences(&self, nonterm_idx: NTIdx) -> Vec<Vec<TIdx>> {
-        let cheapest_prods = |nt_idx: NTIdx| -> Vec<PIdx> {
+        let cheapest_prods = |nt_idx: NTIdx| -> Vec<PIdx<StorageT>> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
             for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
@@ -654,7 +676,8 @@ impl<'a> SentenceGenerator<'a> {
 
 /// Return the cost of a minimal string for each non-terminal in this grammar. The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
-fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
+fn nonterm_min_costs<StorageT: PrimInt + Unsigned>
+                    (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u32>
 {
     // We use a simple(ish) fixed-point algorithm to determine costs. We maintain two lists
     // "costs" and "done". An integer costs[i] starts at 0 and monotonically increments
@@ -735,7 +758,8 @@ fn nonterm_min_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
 /// Return the cost of the maximal string for each non-terminal in this grammar (u32::max_val()
 /// representing "this non-terminal can generate strings of infinite length"). The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
-fn nonterm_max_costs(grm: &YaccGrammar, term_costs: &[u8]) -> Vec<u32>
+fn nonterm_max_costs<StorageT: PrimInt + Unsigned>
+                    (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u32>
 {
     let mut done = vec![];
     done.resize(grm.nonterms_len() as usize, false);
@@ -841,20 +865,20 @@ mod test {
     use std::collections::HashMap;
     use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_max_costs, nonterm_min_costs};
     use {NTIdx, PIdx, Symbol, TIdx};
-    use yacc::{AssocKind, Precedence, yacc_grm, YaccKind};
+    use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
     #[test]
     fn test_minimal() {
-        let grm = yacc_grm(YaccKind::Original,
+        let grm = YaccGrammar::new(YaccKind::Original,
                            "%start R %token T %% R: 'T';").unwrap();
 
-        assert_eq!(grm.start_prod, PIdx::from(1 as u32));
+        assert_eq!(grm.start_prod, PIdx(1));
         assert_eq!(grm.implicit_nonterm(), None);
         grm.nonterm_idx("^").unwrap();
         grm.nonterm_idx("R").unwrap();
         grm.term_idx("T").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(1 as u32)], vec![PIdx::from(0 as u32)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx(1)], vec![PIdx(0)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -870,7 +894,7 @@ mod test {
 
     #[test]
     fn test_rule_ref() {
-        let grm = yacc_grm(YaccKind::Original,
+        let grm = YaccGrammar::new(YaccKind::Original,
                            "%start R %token T %% R : S; S: 'T';").unwrap();
 
         grm.nonterm_idx("^").unwrap();
@@ -879,9 +903,9 @@ mod test {
         grm.term_idx("T").unwrap();
         assert!(grm.term_name(grm.eof_term_idx()).is_none());
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(2 as u32)],
-                                         vec![PIdx::from(0 as u32)],
-                                         vec![PIdx::from(1 as u32)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
+                                         vec![PIdx(0)],
+                                         vec![PIdx(1)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -894,7 +918,7 @@ mod test {
 
     #[test]
     fn test_long_prod() {
-        let grm = yacc_grm(YaccKind::Original,
+        let grm = YaccGrammar::new(YaccKind::Original,
                            "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';").unwrap();
 
         grm.nonterm_idx("^").unwrap();
@@ -903,9 +927,9 @@ mod test {
         grm.term_idx("T1").unwrap();
         grm.term_idx("T2").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx::from(2 as u32)],
-                                         vec![PIdx::from(0 as u32)],
-                                         vec![PIdx::from(1 as u32)]]);
+        assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
+                                         vec![PIdx(0)],
+                                         vec![PIdx(1)]]);
         assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32),
                                          NTIdx::from(2 as u32),
                                          NTIdx::from(0 as u32)]);
@@ -921,10 +945,9 @@ mod test {
         assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T2").unwrap()));
     }
 
-
     #[test]
     fn test_prods_rules() {
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
             A: B
@@ -944,7 +967,7 @@ mod test {
 
     #[test]
     fn test_left_right_nonassoc_precs() {
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start Expr
             %right '='
             %left '+' '-'
@@ -974,7 +997,7 @@ mod test {
 
     #[test]
     fn test_prec_override() {
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start expr
             %left '+' '-'
             %left '*' '/'
@@ -998,7 +1021,7 @@ mod test {
 
     #[test]
     fn test_implicit_tokens_rewrite() {
-        let grm = yacc_grm(YaccKind::Eco, "
+        let grm = YaccGrammar::new(YaccKind::Eco, "
           %implicit_tokens ws1 ws2
           %start S
           %%
@@ -1066,7 +1089,7 @@ mod test {
 
     #[test]
     fn test_has_path() {
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
             A: B;
@@ -1089,7 +1112,7 @@ mod test {
 
     #[test]
     fn test_nonterm_min_costs() {
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
             A: A B | ;
@@ -1109,7 +1132,7 @@ mod test {
 
     #[test]
     fn test_min_sentences() {
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
             A: A B | ;
@@ -1150,7 +1173,7 @@ mod test {
 
     #[test]
     fn test_nonterm_max_costs1() {
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
             A: A B | ;
@@ -1170,7 +1193,7 @@ mod test {
 
     #[test]
     fn test_nonterm_max_costs2() {
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
             A: A B | B;
@@ -1189,7 +1212,7 @@ mod test {
     #[test]
     fn test_out_of_order_productions() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let grm = yacc_grm(YaccKind::Original, "
+        let grm = YaccGrammar::new(YaccKind::Original, "
             %start S
             %%
             S: A 'c' 'd'

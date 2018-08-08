@@ -36,11 +36,13 @@ use std::env::{current_dir, var};
 use std::error::Error;
 use std::fmt::Debug;
 use std::fs::{File, read_to_string};
+use std::hash::Hash;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
+use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use lrtable::{Minimiser, from_yacc, StateGraph, StateTable};
+use num_traits::{PrimInt, Unsigned};
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use typename::TypeName;
@@ -95,7 +97,7 @@ pub fn process_file<'a, TokId, P, Q>(inp: P,
 {
     let inc = read_to_string(&inp).unwrap();
 
-    let grm = match yacc_grm(YaccKind::Eco, &inc) {
+    let grm = match YaccGrammar::new(YaccKind::Eco, &inc) {
         Ok(x) => x,
         Err(s) => {
             panic!("{:?}", s);
@@ -157,8 +159,9 @@ pub fn parse(lexemes: &Vec<Lexeme<{tn}>>)
 /// This function is called by generated files; it exists so that generated files don't require a
 /// dependency on serde and rmps.
 #[doc(hidden)]
-pub fn reconstitute(grm_buf: &[u8], sgraph_buf: &[u8], stable_buf: &[u8])
-                -> (YaccGrammar, StateGraph, StateTable)
+pub fn reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>
+                   (grm_buf: &[u8], sgraph_buf: &[u8], stable_buf: &[u8])
+                -> (YaccGrammar<StorageT>, StateGraph<StorageT>, StateTable<StorageT>)
 {
     let mut grm_de = Deserializer::new(&grm_buf[..]);
     let grm = Deserialize::deserialize(&mut grm_de).unwrap();

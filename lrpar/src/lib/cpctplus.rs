@@ -121,23 +121,27 @@ impl PartialEq for PathFNode {
     }
 }
 
-struct CPCTPlus<'a, TokId: 'a> {
-    parser: &'a Parser<'a, TokId>
+struct CPCTPlus<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
+    parser: &'a Parser<'a, StorageT, TokId>
 }
 
-pub(crate) fn recoverer<'a, TokId: PrimInt + Unsigned>
-                       (parser: &'a Parser<TokId>)
-                     -> Box<Recoverer<TokId> + 'a>
+pub(crate) fn recoverer<'a,
+                        StorageT: Hash + PrimInt + Unsigned,
+                        TokId: PrimInt + Unsigned>
+                       (parser: &'a Parser<StorageT, TokId>)
+                     -> Box<Recoverer<StorageT, TokId> + 'a>
 {
     Box::new(CPCTPlus{parser})
 }
 
-impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for CPCTPlus<'a, TokId>
-
+impl<'a,
+     StorageT: Hash + PrimInt + Unsigned,
+     TokId: PrimInt + Unsigned>
+Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
 {
     fn recover(&self,
                finish_by: Instant,
-               parser: &Parser<TokId>,
+               parser: &Parser<StorageT, TokId>,
                in_la_idx: usize,
                mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<TokId>>)
@@ -255,7 +259,11 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for CPCTPlus<'a, TokId>
     }
 }
 
-impl<'a, TokId: PrimInt + Unsigned> CPCTPlus<'a, TokId> {
+impl<'a,
+     StorageT: Hash + PrimInt + Unsigned,
+     TokId: PrimInt + Unsigned>
+CPCTPlus<'a, StorageT, TokId>
+{
     fn insert(&self,
              n: &PathFNode,
              nbrs: &mut Vec<(u32, PathFNode)>)

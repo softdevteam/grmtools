@@ -32,10 +32,15 @@
 
 extern crate cfgrammar;
 extern crate fnv;
+extern crate num_traits;
 #[cfg(feature="serde")]
 #[macro_use]
 extern crate serde;
 extern crate vob;
+
+use std::hash::Hash;
+
+use num_traits::{PrimInt, Unsigned};
 
 mod firsts;
 mod itemset;
@@ -92,7 +97,10 @@ pub enum Minimiser {
     Pager
 }
 
-pub fn from_yacc(grm: &YaccGrammar, m: Minimiser) -> Result<(StateGraph, StateTable), StateTableError> {
+pub fn from_yacc<StorageT: Hash + PrimInt + Unsigned>
+                (grm: &YaccGrammar<StorageT>, m: Minimiser)
+              -> Result<(StateGraph<StorageT>, StateTable<StorageT>), StateTableError<StorageT>>
+{
     match m {
         Minimiser::Pager => {
             let sg = pager::pager_stategraph(grm);

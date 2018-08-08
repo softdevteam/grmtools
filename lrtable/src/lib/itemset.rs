@@ -31,11 +31,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::{Entry, HashMap};
-use std::hash::BuildHasherDefault;
+use std::hash::{BuildHasherDefault, Hash};
 
 use cfgrammar::{Grammar, PIdx, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 use fnv::FnvHasher;
+use num_traits::{PrimInt, Unsigned};
 use vob::Vob;
 
 use firsts::Firsts;
@@ -45,19 +46,19 @@ pub type Ctx = Vob;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Itemset {
-    pub items: HashMap<(PIdx, SIdx), Ctx, BuildHasherDefault<FnvHasher>>
+pub struct Itemset<StorageT: Eq + Hash> {
+    pub items: HashMap<(PIdx<StorageT>, SIdx), Ctx, BuildHasherDefault<FnvHasher>>
 }
 
-impl Itemset {
+impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
     /// Create a blank Itemset.
-    pub fn new(_: &YaccGrammar) -> Itemset {
+    pub fn new(_: &YaccGrammar<StorageT>) -> Self {
         Itemset {items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default())}
     }
 
     /// Add an item `(prod, dot)` with context `ctx` to this itemset. Returns true if this led to
     /// any changes in the itemset.
-    pub fn add(&mut self, prod: PIdx, dot: SIdx, ctx: &Ctx) -> bool {
+    pub fn add(&mut self, prod: PIdx<StorageT>, dot: SIdx, ctx: &Ctx) -> bool {
         let entry = self.items.entry((prod, dot));
         match entry {
             Entry::Occupied(mut e) => {
@@ -71,7 +72,7 @@ impl Itemset {
     }
 
     /// Create a new itemset which is a closed version of `self`.
-    pub fn close(&self, grm: &YaccGrammar, firsts: &Firsts) -> Itemset {
+    pub fn close(&self, grm: &YaccGrammar<StorageT>, firsts: &Firsts) -> Self {
         // This function can be seen as a merger of getClosure and getContext from Chen's
         // dissertation.
 
@@ -158,7 +159,7 @@ impl Itemset {
     }
 
     /// Create a new Itemset based on calculating the goto of 'sym' on the current Itemset.
-    pub fn goto(&self, grm: &YaccGrammar, sym: &Symbol) -> Itemset {
+    pub fn goto(&self, grm: &YaccGrammar<StorageT>, sym: &Symbol) -> Self {
         // This is called 'transition' in Chen's dissertation, though note that the definition
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(grm);
@@ -179,13 +180,13 @@ mod test {
     use super::Itemset;
     use firsts::Firsts;
     use cfgrammar::{Grammar, Symbol};
-    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use stategraph::state_exists;
 
     #[test]
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
-        let grm = &yacc_grm(YaccKind::Original, &"
+        let grm = &YaccGrammar::new(YaccKind::Original, &"
           %start S
           %%
           S: L '=' R | R;
@@ -210,7 +211,7 @@ mod test {
     }
 
     fn eco_grammar() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
           %start S
           %token a b c d f
           %%
@@ -256,7 +257,7 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
           %start S
           %token a b c d
           %%

@@ -43,7 +43,7 @@ use std::io::{Read, stderr, Write};
 use std::path::Path;
 
 use getopts::Options;
-use cfgrammar::yacc::{yacc_grm, YaccKind};
+use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use lrlex::build_lex;
 use lrtable::{Minimiser, from_yacc};
 use lrpar::parser::{parse_rcvry, ParseRepair, RecoveryKind};
@@ -134,7 +134,7 @@ fn main() {
     };
 
     let yacc_y_path = &matches.free[1];
-    let grm = match yacc_grm(yacckind, &read_file(yacc_y_path)) {
+    let grm = match YaccGrammar::new(yacckind, &read_file(yacc_y_path)) {
         Ok(x) => x,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
@@ -181,7 +181,7 @@ fn main() {
     let lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
     let term_cost = |_| 1; // Cost of inserting/deleting a terminal
-    match parse_rcvry::<u16, _>(recoverykind, &grm, &term_cost, &sgraph, &stable, &lexemes) {
+    match parse_rcvry(recoverykind, &grm, &term_cost, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err((o_pt, errs)) => {
             match o_pt {

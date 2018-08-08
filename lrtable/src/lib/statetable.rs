@@ -31,12 +31,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
-use std::hash::BuildHasherDefault;
+use std::hash::{Hash, BuildHasherDefault};
 use std::fmt;
+use std::marker::PhantomData;
 
 use cfgrammar::{Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use fnv::FnvHasher;
+use num_traits::{PrimInt, Unsigned};
 use vob::{IterSetBits, Vob};
 
 use StIdx;
@@ -50,12 +52,12 @@ pub enum StateTableErrorKind {
 
 /// Any error from the Yacc parser returns an instance of this struct.
 #[derive(Debug)]
-pub struct StateTableError {
+pub struct StateTableError<StorageT> {
     pub kind: StateTableErrorKind,
-    pub prod_idx: PIdx
+    pub prod_idx: PIdx<StorageT>
 }
 
-impl fmt::Display for StateTableError {
+impl<StorageT> fmt::Display for StateTableError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s;
         match self.kind {
@@ -68,7 +70,7 @@ impl fmt::Display for StateTableError {
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StateTable {
+pub struct StateTable<StorageT> {
     // For actions, we use a HashMap as a quick representation of a sparse table. We use the normal
     // statetable representation where rows represent states and columns represent terminals. Thus
     // the statetable:
@@ -76,7 +78,7 @@ pub struct StateTable {
     //   0  shift 1
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
-    actions          : HashMap<u32, Action, BuildHasherDefault<FnvHasher>>,
+    actions          : HashMap<u32, Action<StorageT>, BuildHasherDefault<FnvHasher>>,
     state_actions    : Vob,
     gotos            : HashMap<u32, StIdx, BuildHasherDefault<FnvHasher>>,
     core_reduces     : Vob,
@@ -94,17 +96,17 @@ pub struct StateTable {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Action {
+pub enum Action<StorageT> {
     /// Shift to state X in the statetable.
     Shift(StIdx),
     /// Reduce production X in the grammar.
-    Reduce(PIdx),
+    Reduce(PIdx<StorageT>),
     /// Accept this input.
     Accept
 }
 
-impl StateTable {
-    pub fn new(grm: &YaccGrammar, sg: &StateGraph) -> Result<StateTable, StateTableError> {
+impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
+    pub fn new(grm: &YaccGrammar<StorageT>, sg: &StateGraph<StorageT>) -> Result<Self, StateTableError<StorageT>> {
         let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut state_actions = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
         let mut gotos = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
@@ -123,9 +125,9 @@ impl StateTable {
                     continue;
                 }
                 for term_i in ctx.iter_set_bits(..) {
-                    let off = StateTable::actions_offset(grm.terms_len(),
-                                                         state_i,
-                                                         TIdx::from(term_i));
+                    let off = actions_offset(grm.terms_len(),
+                                             state_i,
+                                             TIdx::from(term_i));
                     state_actions.set(off as usize, true);
                     match actions.entry(off) {
                         Entry::Occupied(mut e) => {
@@ -183,7 +185,7 @@ impl StateTable {
                     },
                     Symbol::Term(term_k) => {
                         // Populate shifts
-                        let off = StateTable::actions_offset(grm.terms_len(), state_i, term_k);
+                        let off = actions_offset(grm.terms_len(), state_i, term_k);
                         state_actions.set(off as usize, true);
                         match actions.entry(off) {
                             Entry::Occupied(mut e) => {
@@ -214,7 +216,7 @@ impl StateTable {
             nt_depth.clear();
             let mut only_reduces = true;
             for j in 0..grm.terms_len() {
-                let off = StateTable::actions_offset(grm.terms_len(), StIdx::from(i), TIdx::from(j));
+                let off = actions_offset(grm.terms_len(), StIdx::from(i), TIdx::from(j));
                 match actions.get(&off) {
                     Some(&Action::Reduce(p_idx)) => {
                         let prod_len = grm.prod(p_idx).len();
@@ -261,8 +263,8 @@ impl StateTable {
 
 
     /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
-    pub fn action(&self, state_idx: StIdx, term_idx: TIdx) -> Option<Action> {
-        let off = StateTable::actions_offset(self.terms_len, state_idx, term_idx);
+    pub fn action(&self, state_idx: StIdx, term_idx: TIdx) -> Option<Action<StorageT>> {
+        let off = actions_offset(self.terms_len, state_idx, term_idx);
         self.actions.get(&off).map_or(None, |x| Some(*x))
     }
 
@@ -304,11 +306,12 @@ impl StateTable {
     ///   And:    [F -> c., $]
     ///
     /// since the two [E -> ...] items both have the same effects on a parse stack.
-    pub fn core_reduces(&self, state_idx: StIdx) -> CoreReducesIterator {
+    pub fn core_reduces(&self, state_idx: StIdx) -> CoreReducesIterator<StorageT> {
         let start = usize::from(state_idx) * self.prods_len as usize;
         let end = start + self.prods_len as usize;
         CoreReducesIterator{iter: self.core_reduces.iter_set_bits(start..end),
-                            start}
+                            start,
+                            phantom: PhantomData}
     }
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
@@ -316,10 +319,10 @@ impl StateTable {
         let off = (u32::from(state_idx) * self.nonterms_len) + u32::from(nonterm_idx);
         self.gotos.get(&off).map_or(None, |x| Some(*x))
     }
+}
 
-    fn actions_offset(terms_len: u32, state_idx: StIdx, term_idx: TIdx) -> u32 {
-        u32::from(state_idx) * terms_len + u32::from(term_idx)
-    }
+fn actions_offset(terms_len: u32, state_idx: StIdx, term_idx: TIdx) -> u32 {
+    u32::from(state_idx) * terms_len + u32::from(term_idx)
 }
 
 pub struct StateActionsIterator<'a> {
@@ -335,21 +338,28 @@ impl<'a> Iterator for StateActionsIterator<'a> {
     }
 }
 
-pub struct CoreReducesIterator<'a> {
+pub struct CoreReducesIterator<'a, StorageT> {
     iter: IterSetBits<'a, usize>,
-    start: usize
+    start: usize,
+    phantom: PhantomData<StorageT>
 }
 
-impl<'a> Iterator for CoreReducesIterator<'a> {
-    type Item = PIdx;
+impl<'a, StorageT: PrimInt + Unsigned> Iterator for CoreReducesIterator<'a, StorageT> {
+    type Item = PIdx<StorageT>;
 
-    fn next(&mut self) -> Option<PIdx> {
+    fn next(&mut self) -> Option<PIdx<StorageT>> {
         self.iter.next().map(|i| PIdx::from(i - self.start))
     }
 }
 
-fn resolve_shift_reduce(grm: &YaccGrammar, mut e: OccupiedEntry<u32, Action>, term_k: TIdx,
-                        prod_k: PIdx, state_j: StIdx) -> u64 {
+fn resolve_shift_reduce<StorageT: Hash + PrimInt + Unsigned>
+                       (grm: &YaccGrammar<StorageT>,
+                        mut e: OccupiedEntry<u32, Action<StorageT>>,
+                        term_k: TIdx,
+                        prod_k: PIdx<StorageT>,
+                        state_j: StIdx)
+                     -> u64
+{
     let mut shift_reduce = 0;
     let term_k_prec = grm.term_precedence(term_k);
     let prod_k_prec = grm.prod_precedence(prod_k);
@@ -398,14 +408,14 @@ mod test {
     use std::collections::HashSet;
     use StIdx;
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
-    use cfgrammar::{Symbol, TIdx};
-    use cfgrammar::yacc::{yacc_grm, YaccKind};
+    use cfgrammar::{PIdx, Symbol, TIdx};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use pager::pager_stategraph;
 
     #[test]
     fn test_statetable() {
         // Taken from p19 of www.cs.umd.edu/~mvz/cmsc430-s07/M10lr.pdf
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
             %start Expr
             %%
             Expr : Term '-' Expr | Term;
@@ -483,7 +493,7 @@ mod test {
 
     #[test]
     fn test_default_reduce_reduce() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
             %start A
             %%
             A : B 'x' | C 'x' 'x';
@@ -504,7 +514,7 @@ mod test {
 
     #[test]
     fn test_default_shift_reduce() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
             %start Expr
             %%
             Expr : Expr '+' Expr
@@ -532,7 +542,7 @@ mod test {
     #[test]
     fn test_conflict_resolution() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
             %start S
             %%
             S: A 'c' 'd'
@@ -556,7 +566,7 @@ mod test {
 
     #[test]
     fn test_left_associativity() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
             %start Expr
             %left '+'
             %left '*'
@@ -593,7 +603,7 @@ mod test {
 
     #[test]
     fn test_left_right_associativity() {
-        let grm = &yacc_grm(YaccKind::Original, &"
+        let grm = &YaccGrammar::new(YaccKind::Original, &"
             %start Expr
             %right '='
             %left '+'
@@ -647,7 +657,7 @@ mod test {
 
     #[test]
     fn test_left_right_nonassoc_associativity() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
             %start Expr
             %right '='
             %left '+'
@@ -720,7 +730,7 @@ mod test {
 
     #[test]
     fn accept_reduce_conflict() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
 %start D
 %%
 D : D;
@@ -729,8 +739,8 @@ D : D;
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
             Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, prod_idx})
-                if prod_idx == (1 as u32).into() => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+                if prod_idx == PIdx(0) => (),
+            Err(e) => panic!("Incorrect error returned {:?}", e)
         }
     }
 }

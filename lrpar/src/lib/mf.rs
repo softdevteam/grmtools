@@ -31,6 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::mem;
 use std::time::Instant;
 
@@ -125,24 +126,29 @@ impl PartialEq for PathFNode {
     }
 }
 
-struct MF<'a, TokId: 'a> {
-    dist: Dist,
-    parser: &'a Parser<'a, TokId>
+struct MF<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
+    dist: Dist<StorageT>,
+    parser: &'a Parser<'a, StorageT, TokId>
 }
 
-pub(crate) fn recoverer<'a, TokId: PrimInt + Unsigned>
-                       (parser: &'a Parser<TokId>)
-                     -> Box<Recoverer<TokId> + 'a>
+pub(crate) fn recoverer<'a,
+                        StorageT: Hash + PrimInt + Unsigned,
+                        TokId: PrimInt + Unsigned>
+                       (parser: &'a Parser<StorageT, TokId>)
+                     -> Box<Recoverer<StorageT, TokId> + 'a>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
     Box::new(MF{dist, parser: parser})
 }
 
-impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
+impl<'a,
+     StorageT: Hash + PrimInt + Unsigned,
+     TokId: PrimInt + Unsigned>
+Recoverer<StorageT, TokId> for MF<'a, StorageT, TokId>
 {
     fn recover(&self,
                finish_by: Instant,
-               parser: &Parser<TokId>,
+               parser: &Parser<StorageT, TokId>,
                in_la_idx: usize,
                mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<TokId>>)
@@ -247,7 +253,11 @@ impl<'a, TokId: PrimInt + Unsigned> Recoverer<TokId> for MF<'a, TokId>
     }
 }
 
-impl<'a, TokId: PrimInt + Unsigned> MF<'a, TokId> {
+impl<'a,
+     StorageT: Hash + PrimInt + Unsigned,
+     TokId: PrimInt + Unsigned>
+MF<'a, StorageT, TokId>
+{
     fn insert(&self,
               n: &PathFNode,
               nbrs: &mut Vec<(u32, u32, PathFNode)>)
@@ -512,8 +522,9 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<RepairMerge>) -> bool {
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-pub(crate) fn rank_cnds<TokId: PrimInt + Unsigned>
-                       (parser: &Parser<TokId>,
+pub(crate) fn rank_cnds<StorageT: Hash + PrimInt + Unsigned,
+                        TokId: PrimInt + Unsigned>
+                       (parser: &Parser<StorageT, TokId>,
                         finish_by: Instant,
                         in_la_idx: usize,
                         in_pstack: &Vec<StIdx>,
@@ -553,8 +564,9 @@ pub(crate) fn rank_cnds<TokId: PrimInt + Unsigned>
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
-pub(crate) fn apply_repairs<TokId: PrimInt + Unsigned>
-                           (parser: &Parser<TokId>,
+pub(crate) fn apply_repairs<StorageT: Hash + PrimInt + Unsigned,
+                            TokId: PrimInt + Unsigned>
+                           (parser: &Parser<StorageT, TokId>,
                             mut la_idx: usize,
                             mut pstack: &mut Vec<StIdx>,
                             mut tstack: &mut Option<&mut Vec<Node<TokId>>>,
@@ -612,17 +624,19 @@ pub(crate) fn simplify_repairs(all_rprs: &mut Vec<Vec<ParseRepair>>)
     all_rprs.dedup();
 }
 
-pub(crate) struct Dist {
+pub(crate) struct Dist<StorageT> {
     terms_len: u32,
-    table: Vec<u32>
+    table: Vec<u32>,
+    phantom: PhantomData<StorageT>
 }
 
-impl Dist {
-    pub(crate) fn new<F>(grm: &YaccGrammar,
-                         sgraph: &StateGraph,
-                         stable: &StateTable,
-                         term_cost: F)
-                      -> Dist
+impl<StorageT: Hash + PrimInt + Unsigned> Dist<StorageT> {
+    pub(crate) fn new<F>
+                     (grm: &YaccGrammar<StorageT>,
+                      sgraph: &StateGraph<StorageT>,
+                      stable: &StateTable<StorageT>,
+                      term_cost: F)
+                   -> Dist<StorageT>
                    where F: Fn(TIdx) -> u8
     {
         // This is an extension of dist from the KimYi paper: it also takes into account reductions
@@ -692,7 +706,7 @@ impl Dist {
             }
         }
 
-        Dist{terms_len: grm.terms_len(), table}
+        Dist{terms_len: grm.terms_len(), table, phantom: PhantomData}
     }
 
     pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx) -> u32 {
@@ -700,7 +714,7 @@ impl Dist {
     }
 
     /// rev_edges allows us to walk backwards over the stategraph.
-    fn rev_edges(sgraph: &StateGraph) -> Vec<Vob>
+    fn rev_edges(sgraph: &StateGraph<StorageT>) -> Vec<Vob>
     {
         let states_len = sgraph.all_states_len();
         let mut rev_edges = Vec::with_capacity(states_len as usize);
@@ -715,7 +729,10 @@ impl Dist {
 
     /// goto_states allows us to quickly determine all the states reachable after an entry in a
     /// given state has been reduced and performed a goto.
-    fn goto_states(grm: &YaccGrammar, sgraph: &StateGraph, stable: &StateTable) -> Vec<Vob>
+    fn goto_states(grm: &YaccGrammar<StorageT>,
+                   sgraph: &StateGraph<StorageT>,
+                   stable: &StateTable<StorageT>)
+                -> Vec<Vob>
     {
         let rev_edges = Dist::rev_edges(sgraph);
         let states_len = sgraph.all_states_len() as usize;
@@ -771,7 +788,7 @@ mod test {
 
     use cactus::Cactus;
     use cfgrammar::Symbol;
-    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use lrlex::Lexeme;
     use lrtable::{Minimiser, from_yacc, StIdx};
     use num_traits::ToPrimitive;
@@ -823,7 +840,7 @@ A: '(' A ')'
  ;
 ";
 
-        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
         let s0 = StIdx::from(0 as u32);
@@ -885,7 +902,7 @@ T: 'A';
 U: 'B';
 ";
 
-        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
@@ -942,7 +959,7 @@ Factor: '(' Expr ')'
       | 'INT' ;
 ";
 
-        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
@@ -1006,7 +1023,7 @@ W: 'b' ;
         // 6: [U -> V W ., {'a', '$'}]
         // 7: [W -> 'b' ., {'a', '$'}]
 
-        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
@@ -1060,7 +1077,7 @@ A: '(' A ')'
  | 'b'
  ;
 ";
-        let grm = yacc_grm(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         b.iter(|| {
             for _ in 0..10000 {

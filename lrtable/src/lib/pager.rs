@@ -32,13 +32,15 @@
 
 use std::collections::HashSet;
 use std::collections::hash_map::HashMap;
+use std::hash::Hash;
 
+use cfgrammar::{Grammar, Symbol, SIdx};
+use cfgrammar::yacc::YaccGrammar;
+use num_traits::{PrimInt, Unsigned};
 use vob::Vob;
 
 use StIdx;
 use firsts::Firsts;
-use cfgrammar::{Grammar, Symbol, SIdx};
-use cfgrammar::yacc::YaccGrammar;
 use itemset::Itemset;
 use stategraph::StateGraph;
 
@@ -56,9 +58,9 @@ use stategraph::StateGraph;
 //   Measuring and extending LR(1) parser generation
 //     Xin Chen, PhD thesis, University of Hawaii, 2009
 
-impl Itemset {
+impl<StorageT: Hash + PrimInt> Itemset<StorageT> {
     /// Return true if `other` is weakly compatible with `self`.
-    fn weakly_compatible(&self, other: &Itemset) -> bool {
+    fn weakly_compatible(&self, other: &Self) -> bool {
         // The weakly compatible check is one of the three core parts of Pager's algorithm
         // (along with merging and change propagation). In essence, there are three conditions
         // which, if satisfied, guarantee that `other` is weakly compatible with `self`
@@ -120,7 +122,7 @@ impl Itemset {
 
     /// Merge `other` into `self`, returning `true` if this led to any changes. If `other` is not
     /// weakly compatible with `self`, this function's effects and return value are undefined.
-    fn weakly_merge(&mut self, other: &Itemset) -> bool {
+    fn weakly_merge(&mut self, other: &Self) -> bool {
         let mut changed = false;
         for (&(prod_i, dot), ctx) in &mut self.items {
             if ctx.or(&other.items[&(prod_i, dot)]) {
@@ -142,7 +144,10 @@ fn vob_intersect(v1: &Vob, v2: &Vob) -> bool {
 }
 
 /// Create a `StateGraph` from 'grm'.
-pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
+pub fn pager_stategraph<StorageT: Hash + PrimInt + Unsigned>
+                       (grm: &YaccGrammar<StorageT>)
+                     -> StateGraph<StorageT>
+{
     // This function can be seen as a modified version of items() from Chen's dissertation.
 
     let firsts                                 = Firsts::new(grm);
@@ -299,8 +304,10 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
 
 /// Garbage collect `zip_states` (of `(core_states, closed_state)`) and `edges`. Returns a new pair
 /// with unused states and their corresponding edges removed.
-fn gc(mut states: Vec<(Itemset, Itemset)>, mut edges: Vec<HashMap<Symbol, StIdx>>)
-      -> (Vec<(Itemset, Itemset)>, Vec<HashMap<Symbol, StIdx>>) {
+fn gc<StorageT: Eq + Hash>
+     (mut states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
+      mut edges: Vec<HashMap<Symbol, StIdx>>)
+  -> (Vec<(Itemset<StorageT>, Itemset<StorageT>)>, Vec<HashMap<Symbol, StIdx>>) {
     // First of all, do a simple pass over all states. All state indexes reachable from the
     // start state will be inserted into the 'seen' set.
     let mut todo = HashSet::new();
@@ -368,7 +375,7 @@ mod test {
     use vob::Vob;
 
     use cfgrammar::Symbol;
-    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use pager::pager_stategraph;
     use stategraph::state_exists;
 
@@ -408,7 +415,7 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
           %start S
           %token a b c d
           %%
@@ -482,7 +489,7 @@ mod test {
 
     // Pager grammar
     fn grammar_pager() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
             %start X
             %%
              X : 'a' Y 'd' | 'a' Z 'c' | 'a' T | 'b' Y 'e' | 'b' Z 'd' | 'b' T;

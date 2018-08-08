@@ -33,9 +33,9 @@
 pub mod ast;
 pub mod grammar;
 pub mod parser;
+
 pub use self::ast::{GrammarValidationError, GrammarValidationErrorKind};
 pub use self::parser::{YaccParserError, YaccParserErrorKind};
-use self::parser::YaccParser;
 pub use self::grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar, YaccGrammarError};
 
 /// The particular Yacc variant this grammar makes use of.
@@ -46,19 +46,4 @@ pub enum YaccKind {
     Original,
     /// The variant used in the [Eco language composition editor](http://soft-dev.org/src/eco/)
     Eco
-}
-
-/// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
-/// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
-/// ([`YaccGrammarError`](grammar/enum.YaccGrammarError.html) on error).
-pub fn yacc_grm(yacc_kind: YaccKind, s: &str) -> Result<YaccGrammar, YaccGrammarError> {
-    match yacc_kind {
-        YaccKind::Original | YaccKind::Eco => {
-            let mut yp = YaccParser::new(yacc_kind, s.to_string());
-            try!(yp.parse());
-            let mut ast = yp.ast();
-            try!(ast.complete_and_validate());
-            Ok(YaccGrammar::new(yacc_kind, &ast))
-        }
-    }
 }
