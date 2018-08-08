@@ -45,7 +45,7 @@ use cpctplus;
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Node<TokId: PrimInt + Unsigned> {
+pub enum Node<TokId> {
     Term{lexeme: Lexeme<TokId>},
     Nonterm{nonterm_idx: NTIdx, nodes: Vec<Node<TokId>>}
 }
@@ -84,7 +84,7 @@ pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TStack<TokId> = Vec<Node<TokId>>; // Parse tree stack
 pub(crate) type Errors<TokId> = Vec<ParseError<TokId>>;
 
-pub struct Parser<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
+pub struct Parser<'a, TokId: 'a> {
     pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar,
     pub term_cost: &'a Fn(TIdx) -> u8,
@@ -419,7 +419,7 @@ pub enum ParseRepair {
 
 /// Records a single parse error.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ParseError<TokId: Copy> {
+pub struct ParseError<TokId> {
     state_idx: StIdx,
     lexeme_idx: usize,
     lexeme: Lexeme<TokId>,

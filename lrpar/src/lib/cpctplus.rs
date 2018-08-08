@@ -121,7 +121,7 @@ impl PartialEq for PathFNode {
     }
 }
 
-struct CPCTPlus<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
+struct CPCTPlus<'a, TokId: 'a> {
     parser: &'a Parser<'a, TokId>
 }
 

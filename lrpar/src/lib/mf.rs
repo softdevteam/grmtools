@@ -125,7 +125,7 @@ impl PartialEq for PathFNode {
     }
 }
 
-struct MF<'a, TokId: PrimInt + Unsigned> where TokId: 'a {
+struct MF<'a, TokId: 'a> {
     dist: Dist,
     parser: &'a Parser<'a, TokId>
 }
