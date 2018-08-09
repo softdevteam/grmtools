@@ -739,7 +739,7 @@ D : D;
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
             Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, prod_idx})
-                if prod_idx == PIdx(0) => (),
+                if prod_idx == PIdx(1) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
         }
     }

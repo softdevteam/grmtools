@@ -47,7 +47,7 @@ pub type Ctx = Vob;
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Itemset<StorageT: Eq + Hash> {
-    pub items: HashMap<(PIdx<StorageT>, SIdx), Ctx, BuildHasherDefault<FnvHasher>>
+    pub items: HashMap<(PIdx<StorageT>, SIdx<StorageT>), Ctx, BuildHasherDefault<FnvHasher>>
 }
 
 impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
@@ -58,7 +58,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
 
     /// Add an item `(prod, dot)` with context `ctx` to this itemset. Returns true if this led to
     /// any changes in the itemset.
-    pub fn add(&mut self, prod: PIdx<StorageT>, dot: SIdx, ctx: &Ctx) -> bool {
+    pub fn add(&mut self, prod: PIdx<StorageT>, dot: SIdx<StorageT>, ctx: &Ctx) -> bool {
         let entry = self.items.entry((prod, dot));
         match entry {
             Entry::Occupied(mut e) => {
