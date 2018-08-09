@@ -145,11 +145,9 @@ transitionmacro!(
     /// A type specifically for production indices (e.g. a rule `E::=A|B` would
     /// have two productions for the single rule `E`).
     PIdx);
-u32struct!(
+transitionmacro!(
     /// A type specifically for symbol indices (within a production).
-    SIdx,
-    u16);
-u32struct!(
+    SIdx);
+transitionmacro!(
     /// A type specifically for token indices.
-    TIdx,
-    u16);
+    TIdx);

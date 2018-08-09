@@ -84,7 +84,7 @@ pub use u32struct::{PIdx, SIdx, TIdx};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Symbol<StorageT> {
     Nonterm(NTIdx<StorageT>),
-    Term(TIdx)
+    Term(TIdx<StorageT>)
 }
 
 pub trait Grammar<StorageT> {

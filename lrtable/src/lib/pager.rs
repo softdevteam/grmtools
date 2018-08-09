@@ -58,7 +58,7 @@ use stategraph::StateGraph;
 //   Measuring and extending LR(1) parser generation
 //     Xin Chen, PhD thesis, University of Hawaii, 2009
 
-impl<StorageT: Hash + PrimInt> Itemset<StorageT> {
+impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
     /// Return true if `other` is weakly compatible with `self`.
     fn weakly_compatible(&self, other: &Self) -> bool {
         // The weakly compatible check is one of the three core parts of Pager's algorithm

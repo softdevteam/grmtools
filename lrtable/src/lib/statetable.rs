@@ -127,7 +127,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
                 for term_i in ctx.iter_set_bits(..) {
                     let off = actions_offset(grm.terms_len(),
                                              state_i,
-                                             TIdx::from(term_i));
+                                             TIdx::<StorageT>::from(term_i));
                     state_actions.set(off as usize, true);
                     match actions.entry(off) {
                         Entry::Occupied(mut e) => {
@@ -216,7 +216,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
             nt_depth.clear();
             let mut only_reduces = true;
             for j in 0..grm.terms_len() {
-                let off = actions_offset(grm.terms_len(), StIdx::from(i), TIdx::from(j));
+                let off = actions_offset(grm.terms_len(), StIdx::from(i), TIdx::<StorageT>::from(j));
                 match actions.get(&off) {
                     Some(&Action::Reduce(p_idx)) => {
                         let prod_len = grm.prod(p_idx).len();
@@ -263,26 +263,28 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
 
 
     /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
-    pub fn action(&self, state_idx: StIdx, term_idx: TIdx) -> Option<Action<StorageT>> {
+    pub fn action(&self, state_idx: StIdx, term_idx: TIdx<StorageT>) -> Option<Action<StorageT>> {
         let off = actions_offset(self.terms_len, state_idx, term_idx);
         self.actions.get(&off).map_or(None, |x| Some(*x))
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `state_idx`.
-    pub fn state_actions(&self, state_idx: StIdx) -> StateActionsIterator {
+    pub fn state_actions(&self, state_idx: StIdx) -> StateActionsIterator<StorageT> {
         let start = usize::from(state_idx) * self.terms_len as usize;
         let end = start + self.terms_len as usize;
         StateActionsIterator{iter: self.state_actions.iter_set_bits(start..end),
-                             start}
+                             start,
+                             phantom: PhantomData}
     }
 
     /// Return an iterator over the indexes of all shift actions of `state_idx`. By definition this
     /// is a subset of the indexes produced by [`state_actions`](#method.state_actions).
-    pub fn state_shifts(&self, state_idx: StIdx) -> StateActionsIterator {
+    pub fn state_shifts(&self, state_idx: StIdx) -> StateActionsIterator<StorageT> {
         let start = usize::from(state_idx) * self.terms_len as usize;
         let end = start + self.terms_len as usize;
         StateActionsIterator{iter: self.state_shifts.iter_set_bits(start..end),
-                            start}
+                             start,
+                             phantom: PhantomData}
     }
 
     /// Does the state `state_idx` 1) only contain reduce (and error) actions 2) do those
@@ -321,19 +323,23 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
     }
 }
 
-fn actions_offset(terms_len: u32, state_idx: StIdx, term_idx: TIdx) -> u32 {
+fn actions_offset<StorageT: PrimInt + Unsigned>
+                 (terms_len: u32, state_idx: StIdx, term_idx: TIdx<StorageT>)
+               -> u32
+{
     u32::from(state_idx) * terms_len + u32::from(term_idx)
 }
 
-pub struct StateActionsIterator<'a> {
+pub struct StateActionsIterator<'a, StorageT> {
     iter: IterSetBits<'a, usize>,
-    start: usize
+    start: usize,
+    phantom: PhantomData<StorageT>
 }
 
-impl<'a> Iterator for StateActionsIterator<'a> {
-    type Item = TIdx;
+impl<'a, StorageT: PrimInt + Unsigned> Iterator for StateActionsIterator<'a, StorageT> {
+    type Item = TIdx<StorageT>;
 
-    fn next(&mut self) -> Option<TIdx> {
+    fn next(&mut self) -> Option<TIdx<StorageT>> {
         self.iter.next().map(|i| TIdx::from(i - self.start))
     }
 }
@@ -355,7 +361,7 @@ impl<'a, StorageT: PrimInt + Unsigned> Iterator for CoreReducesIterator<'a, Stor
 fn resolve_shift_reduce<StorageT: Hash + PrimInt + Unsigned>
                        (grm: &YaccGrammar<StorageT>,
                         mut e: OccupiedEntry<u32, Action<StorageT>>,
-                        term_k: TIdx,
+                        term_k: TIdx<StorageT>,
                         prod_k: PIdx<StorageT>,
                         state_j: StIdx)
                      -> u64
@@ -439,7 +445,7 @@ mod test {
 
         // Actions
         assert_eq!(st.actions.len(), 15);
-        let assert_reduce = |state_i: StIdx, term_i: TIdx, rule: &str, prod_off: usize| {
+        let assert_reduce = |state_i: StIdx, term_i: TIdx<_>, rule: &str, prod_off: usize| {
             let prod_i = grm.nonterm_to_prods(grm.nonterm_idx(rule).unwrap())[prod_off];
             assert_eq!(st.action(state_i, term_i).unwrap(), Action::Reduce(prod_i.into()));
         };
@@ -465,7 +471,7 @@ mod test {
         s4_actions.extend(&[grm.term_idx("-").unwrap(),
                             grm.term_idx("*").unwrap(),
                             grm.eof_term_idx()]);
-        assert_eq!(st.state_actions(s4).collect::<HashSet<TIdx>>(), s4_actions);
+        assert_eq!(st.state_actions(s4).collect::<HashSet<_>>(), s4_actions);
 
         let s2_state_shifts = &[grm.term_idx("-").unwrap()]
                                .iter()

@@ -144,7 +144,7 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
     }
 
     /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
-    pub fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx) -> bool {
+    pub fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
         self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
@@ -160,7 +160,7 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
-    pub fn set(&mut self, nidx: NTIdx<StorageT>, tidx: TIdx) -> bool {
+    pub fn set(&mut self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
         let prod = &mut self.prod_firsts[usize::from(nidx)];
         if prod[usize::from(tidx)] {
             true

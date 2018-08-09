@@ -81,7 +81,7 @@ pub struct YaccGrammar<StorageT=u32> {
     /// How many terminals does this grammar have?
     terms_len: u32,
     /// The offset of the EOF terminal.
-    eof_term_idx: TIdx,
+    eof_term_idx: TIdx<StorageT>,
     /// How many productions does this grammar have?
     prods_len: u32,
     /// Which production is the sole production of the start rule?
@@ -191,7 +191,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
         let eof_term_idx = TIdx::from(term_names.len());
         term_names.push(None);
         term_precs.push(None);
-        let mut term_map = HashMap::<String, TIdx>::new();
+        let mut term_map = HashMap::<String, TIdx<StorageT>>::new();
         for (i, v) in term_names.iter().enumerate() {
             if let Some(n) = v.as_ref() {
                term_map.insert(n.clone(), TIdx::from(i));
@@ -313,7 +313,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     }
 
     /// Return the index of the end terminal.
-    pub fn eof_term_idx(&self) -> TIdx {
+    pub fn eof_term_idx(&self) -> TIdx<StorageT> {
         self.eof_term_idx
     }
 
@@ -350,19 +350,19 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
 
     /// Return the name of terminal `i` (where `None` indicates "the rule has no name"). Panics if
     /// `i` doesn't exist.
-    pub fn term_name(&self, i: TIdx) -> Option<&str> {
+    pub fn term_name(&self, i: TIdx<StorageT>) -> Option<&str> {
         self.term_names[usize::from(i)].as_ref().and_then(|x| Some(x.as_str()))
     }
 
     /// Return the precedence of terminal `i` (where `None` indicates "no precedence specified").
     /// Panics if `i` doesn't exist.
-    pub fn term_precedence(&self, i: TIdx) -> Option<Precedence> {
+    pub fn term_precedence(&self, i: TIdx<StorageT>) -> Option<Precedence> {
         self.term_precs[usize::from(i)]
     }
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
     /// inputs from this grammar.
-    pub fn terms_map(&self) -> HashMap<&str, TIdx> {
+    pub fn terms_map(&self) -> HashMap<&str, TIdx<StorageT>> {
         let mut m = HashMap::with_capacity(self.terms_len as usize - 1);
         for i in 0..self.terms_len as usize {
             if let Some(n) = self.term_names[i].as_ref() {
@@ -391,7 +391,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     }
 
     /// Return the index of the terminal named `n` or `None` if it doesn't exist.
-    pub fn term_idx(&self, n: &str) -> Option<TIdx> {
+    pub fn term_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
         self.term_names.iter()
                        .position(|x| x.as_ref().map_or(false, |x| x == n))
                        .map(TIdx::from)
@@ -438,7 +438,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     /// generating each terminal (where the cost must be greater than 0). Note that multiple
     /// terminals can have the same score. The simplest cost function is thus `|_| 1`.
     pub fn sentence_generator<F>(&self, term_cost: F) -> SentenceGenerator<StorageT>
-                        where F: Fn(TIdx) -> u8
+                        where F: Fn(TIdx<StorageT>) -> u8
     {
         SentenceGenerator::new(self, term_cost)
     }
@@ -493,7 +493,7 @@ pub struct SentenceGenerator<'a, StorageT: 'a> {
 
 impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
     fn new<F>(grm: &'a YaccGrammar<StorageT>, term_cost: F) -> Self
-        where F: Fn(TIdx) -> u8
+        where F: Fn(TIdx<StorageT>) -> u8
     {
         let mut term_costs = Vec::with_capacity(grm.terms_len() as usize);
         for i in 0..grm.terms_len() {
@@ -532,7 +532,7 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
 
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
     /// non-terminal `nonterm_idx`.
-    pub fn min_sentence(&self, nonterm_idx: NTIdx<StorageT>) -> Vec<TIdx> {
+    pub fn min_sentence(&self, nonterm_idx: NTIdx<StorageT>) -> Vec<TIdx<StorageT>> {
         let cheapest_prod = |nt_idx: NTIdx<StorageT>| -> PIdx<StorageT> {
             let mut low_sc = None;
             let mut low_idx = None;
@@ -573,7 +573,7 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
     }
 
     /// Return (in arbitrary order) all the minimal sentences for the non-terminal `nonterm_idx`.
-    pub fn min_sentences(&self, nonterm_idx: NTIdx<StorageT>) -> Vec<Vec<TIdx>> {
+    pub fn min_sentences(&self, nonterm_idx: NTIdx<StorageT>) -> Vec<Vec<TIdx<StorageT>>> {
         let cheapest_prods = |nt_idx: NTIdx<StorageT>| -> Vec<PIdx<StorageT>> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
@@ -653,7 +653,7 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
                 for i in 0..todo.len() {
                     cur.extend(&ms[i][todo[i]]);
                 }
-                sts.push(cur.drain(..).collect::<Vec<TIdx>>());
+                sts.push(cur.drain(..).collect::<Vec<TIdx<StorageT>>>());
 
                 let mut j = todo.len() - 1;
                 loop {
@@ -885,9 +885,10 @@ mod test {
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
         assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32), NTIdx::from(0 as u32)]);
 
-        assert_eq!(grm.terms_map(), [("T", TIdx::from(0 as u32))].iter()
-                                                                 .cloned()
-                                                                 .collect::<HashMap<&str, TIdx>>());
+        assert_eq!(grm.terms_map(),
+                   [("T", TIdx::from(0 as u32))].iter()
+                                                .cloned()
+                                                .collect::<HashMap<&str, TIdx<_>>>());
         assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<_>>(),
                    vec![NTIdx(0), NTIdx(1)]);
     }
@@ -1148,8 +1149,8 @@ mod test {
                                .map(|x| x.iter()
                                          .map(|y| grm.term_idx(y)
                                                      .unwrap())
-                                         .collect::<Vec<TIdx>>())
-                               .collect::<Vec<Vec<TIdx>>>();
+                                         .collect::<Vec<_>>())
+                               .collect::<Vec<_>>();
 
             let ms = sg.min_sentence(grm.nonterm_idx(nt_name).unwrap());
             if !cnds.iter().any(|x| x == &ms) {

@@ -30,6 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::time::Instant;
 
@@ -46,9 +47,9 @@ use parser::{Node, Parser, ParseRepair, Recoverer};
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum Repair {
+enum Repair<StorageT> {
     /// Insert a `Symbol::Term` with idx `term_idx`.
-    InsertTerm(TIdx),
+    InsertTerm(TIdx<StorageT>),
     /// Delete a symbol.
     Delete,
     /// Shift a symbol.
@@ -56,22 +57,22 @@ enum Repair {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum RepairMerge {
-    Repair(Repair),
-    Merge(Repair, Cactus<Cactus<RepairMerge>>),
+enum RepairMerge<StorageT> {
+    Repair(Repair<StorageT>),
+    Merge(Repair<StorageT>, Cactus<Cactus<RepairMerge<StorageT>>>),
     Terminator
 }
 
-#[derive(Clone, Debug, Eq)]
-struct PathFNode {
+#[derive(Clone, Debug)]
+struct PathFNode<StorageT> {
     pstack: Cactus<StIdx>,
     la_idx: usize,
-    repairs: Cactus<RepairMerge>,
+    repairs: Cactus<RepairMerge<StorageT>>,
     cf: u32
 }
 
-impl PathFNode {
-    fn last_repair(&self) -> Option<Repair> {
+impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
+    fn last_repair(&self) -> Option<Repair<StorageT>> {
         match self.repairs.val().unwrap() {
             &RepairMerge::Repair(r) => Some(r),
             &RepairMerge::Merge(x, _) => Some(x),
@@ -80,15 +81,15 @@ impl PathFNode {
     }
 }
 
-impl Hash for PathFNode {
+impl<StorageT: PrimInt + Unsigned> Hash for PathFNode<StorageT> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.pstack.hash(state);
         self.la_idx.hash(state);
     }
 }
 
-impl PartialEq for PathFNode {
-    fn eq(&self, other: &PathFNode) -> bool {
+impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
+    fn eq(&self, other: &PathFNode<StorageT>) -> bool {
         if self.la_idx != other.la_idx || self.pstack != other.pstack {
             return false;
         }
@@ -104,7 +105,7 @@ impl PartialEq for PathFNode {
             (_, _) => ()
         }
 
-        let num_shifts = |c: &Cactus<RepairMerge>| {
+        let num_shifts = |c: &Cactus<RepairMerge<StorageT>>| {
             let mut n = 0;
             for r in c.vals() {
                 match r {
@@ -121,12 +122,14 @@ impl PartialEq for PathFNode {
     }
 }
 
+impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> { }
+
 struct CPCTPlus<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
     parser: &'a Parser<'a, StorageT, TokId>
 }
 
 pub(crate) fn recoverer<'a,
-                        StorageT: Hash + PrimInt + Unsigned,
+                        StorageT: Debug + Hash + PrimInt + Unsigned,
                         TokId: PrimInt + Unsigned>
                        (parser: &'a Parser<StorageT, TokId>)
                      -> Box<Recoverer<StorageT, TokId> + 'a>
@@ -135,7 +138,7 @@ pub(crate) fn recoverer<'a,
 }
 
 impl<'a,
-     StorageT: Hash + PrimInt + Unsigned,
+     StorageT: Debug + Hash + PrimInt + Unsigned,
      TokId: PrimInt + Unsigned>
 Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
 {
@@ -145,7 +148,7 @@ Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
                in_la_idx: usize,
                mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<StorageT, TokId>>)
-           -> (usize, Vec<Vec<ParseRepair>>)
+           -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
     {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
@@ -260,13 +263,13 @@ Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
 }
 
 impl<'a,
-     StorageT: Hash + PrimInt + Unsigned,
+     StorageT: Debug + Hash + PrimInt + Unsigned,
      TokId: PrimInt + Unsigned>
 CPCTPlus<'a, StorageT, TokId>
 {
     fn insert(&self,
-             n: &PathFNode,
-             nbrs: &mut Vec<(u32, PathFNode)>)
+             n: &PathFNode<StorageT>,
+             nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
     {
         let la_idx = n.la_idx;
         for t_idx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
@@ -292,8 +295,8 @@ CPCTPlus<'a, StorageT, TokId>
     }
 
     fn delete(&self,
-           n: &PathFNode,
-           nbrs: &mut Vec<(u32, PathFNode)>)
+           n: &PathFNode<StorageT>,
+           nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
     {
         if n.la_idx == self.parser.lexemes.len() {
             return;
@@ -309,8 +312,8 @@ CPCTPlus<'a, StorageT, TokId>
     }
 
     fn shift(&self,
-             n: &PathFNode,
-             nbrs: &mut Vec<(u32, PathFNode)>)
+             n: &PathFNode<StorageT>,
+             nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
     {
         // Forward move rule (ER3)
         //
@@ -357,9 +360,9 @@ CPCTPlus<'a, StorageT, TokId>
     }
 
     /// Convert the output from `astar_all` into something more usable.
-    fn collect_repairs(&self, cnds: Vec<PathFNode>) -> Vec<Vec<Vec<ParseRepair>>>
+    fn collect_repairs(&self, cnds: Vec<PathFNode<StorageT>>) -> Vec<Vec<Vec<ParseRepair<StorageT>>>>
     {
-        fn traverse(rm: &Cactus<RepairMerge>) -> Vec<Vec<Repair>> {
+        fn traverse<StorageT: PrimInt>(rm: &Cactus<RepairMerge<StorageT>>) -> Vec<Vec<Repair<StorageT>>> {
             let mut out = Vec::new();
             match rm.val().unwrap() {
                 &RepairMerge::Repair(r) => {
@@ -404,8 +407,8 @@ CPCTPlus<'a, StorageT, TokId>
     }
 
     fn repair_to_parse_repair(&self,
-                              from: Vec<Repair>)
-                           -> Vec<ParseRepair> {
+                              from: Vec<Repair<StorageT>>)
+                           -> Vec<ParseRepair<StorageT>> {
         from.iter()
             .map(|y| {
                  match *y {
@@ -420,7 +423,10 @@ CPCTPlus<'a, StorageT, TokId>
 }
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?
-fn ends_with_parse_at_least_shifts(repairs: &Cactus<RepairMerge>) -> bool {
+fn ends_with_parse_at_least_shifts<StorageT: PrimInt + Unsigned>
+                                  (repairs: &Cactus<RepairMerge<StorageT>>)
+                                -> bool
+{
     let mut shfts = 0;
     for x in repairs.vals().take(PARSE_AT_LEAST) {
         match x {
@@ -434,6 +440,8 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<RepairMerge>) -> bool {
 
 #[cfg(test)]
 mod test {
+    use std::fmt::Debug;
+
     use cfgrammar::yacc::YaccGrammar;
     use lrlex::Lexeme;
     use num_traits::{PrimInt, ToPrimitive, Unsigned};
@@ -442,7 +450,7 @@ mod test {
     use parser::test::do_parse;
 
     fn pp_repairs<StorageT: PrimInt + Unsigned>
-                 (grm: &YaccGrammar<StorageT>, repairs: &Vec<ParseRepair>)
+                 (grm: &YaccGrammar<StorageT>, repairs: &Vec<ParseRepair<StorageT>>)
                -> String
     {
         let mut out = vec![];
@@ -460,9 +468,9 @@ mod test {
         out.join(", ")
     }
 
-    fn check_all_repairs<StorageT: PrimInt + Unsigned>
+    fn check_all_repairs<StorageT: Debug + PrimInt + Unsigned>
                         (grm: &YaccGrammar<StorageT>,
-                         repairs: &Vec<Vec<ParseRepair>>,
+                         repairs: &Vec<Vec<ParseRepair<StorageT>>>,
                          expected: &[&str])
     {
         assert_eq!(repairs.len(), expected.len(),
