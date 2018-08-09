@@ -114,7 +114,7 @@ Parser<'a, StorageT, TokId>
             assert!(term_cost(TIdx::from(i)) > 0);
         }
         let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
-        let mut pstack = vec![StIdx::from(0 as u32)];
+        let mut pstack = vec![StIdx::from(0u32)];
         let mut tstack: Vec<Node<StorageT, TokId>> = Vec::new();
         let mut errors: Vec<ParseError<StorageT, TokId>> = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors);

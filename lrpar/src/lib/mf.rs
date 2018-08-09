@@ -856,7 +856,7 @@ A: '(' A ')'
         let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
-        let s0 = StIdx::from(0 as u32);
+        let s0 = StIdx::from(0u32);
         assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), 0);
         assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), 0);
@@ -922,7 +922,7 @@ U: 'B';
         // This only tests a subset of all the states and distances but, I believe, it tests all
         // more interesting edge cases that the example from the Kim/Yi paper.
 
-        let s0 = StIdx::from(0 as u32);
+        let s0 = StIdx::from(0u32);
         assert_eq!(d.dist(s0, grm.term_idx("A").unwrap()), 0);
         assert_eq!(d.dist(s0, grm.term_idx("B").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.term_idx("C").unwrap()), 2);
@@ -979,7 +979,7 @@ Factor: '(' Expr ')'
         // This only tests a subset of all the states and distances but, I believe, it tests all
         // more interesting edge cases that the example from the Kim/Yi paper.
 
-        let s0 = StIdx::from(0 as u32);
+        let s0 = StIdx::from(0u32);
         assert_eq!(d.dist(s0, grm.term_idx("+").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.term_idx("*").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), 0);
@@ -1040,7 +1040,7 @@ W: 'b' ;
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
-        let s0 = StIdx::from(0 as u32);
+        let s0 = StIdx::from(0u32);
         assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), 0);
         assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.eof_term_idx()), 0);
