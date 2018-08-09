@@ -113,7 +113,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
                         Some(i) => prod_i = PIdx::from(i),
                         None => break
                     }
-                    dot = SIdx::from(0 as u32);
+                    dot = SIdx::from(0u32);
                     zero_todos.set(prod_i.into(), false);
                 }
             }
@@ -149,7 +149,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
                 }
 
                 for ref_prod_i in grm.nonterm_to_prods(nonterm_i).iter() {
-                    if new_is.add(*ref_prod_i, SIdx::from(0 as u32), &new_ctx) {
+                    if new_is.add(*ref_prod_i, SIdx::from(0u32), &new_ctx) {
                         zero_todos.set(usize::from(*ref_prod_i), true);
                     }
                 }

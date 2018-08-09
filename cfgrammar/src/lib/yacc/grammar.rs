@@ -883,10 +883,10 @@ mod test {
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
-        assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32), NTIdx::from(0 as u32)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx(1), NTIdx(0)]);
 
         assert_eq!(grm.terms_map(),
-                   [("T", TIdx::from(0 as u32))].iter()
+                   [("T", TIdx(0))].iter()
                                                 .cloned()
                                                 .collect::<HashMap<&str, TIdx<_>>>());
         assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<_>>(),
@@ -931,9 +931,9 @@ mod test {
         assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
                                          vec![PIdx(0)],
                                          vec![PIdx(1)]]);
-        assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32),
-                                         NTIdx::from(2 as u32),
-                                         NTIdx::from(0 as u32)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx(1),
+                                         NTIdx(2),
+                                         NTIdx(0)]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -958,12 +958,12 @@ mod test {
              | 'z';
           ").unwrap();
 
-        assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32),
-                                         NTIdx::from(1 as u32),
-                                         NTIdx::from(2 as u32),
-                                         NTIdx::from(3 as u32),
-                                         NTIdx::from(3 as u32),
-                                         NTIdx::from(0 as u32)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx(1),
+                                         NTIdx(1),
+                                         NTIdx(2),
+                                         NTIdx(3),
+                                         NTIdx(3),
+                                         NTIdx(0)]);
     }
 
     #[test]
@@ -1224,12 +1224,12 @@ mod test {
             A: 'b';
             ").unwrap();
 
-        assert_eq!(grm.prods_rules, vec![NTIdx::from(1 as u32),
-                                         NTIdx::from(1 as u32),
-                                         NTIdx::from(2 as u32),
-                                         NTIdx::from(3 as u32),
-                                         NTIdx::from(3 as u32),
-                                         NTIdx::from(2 as u32),
-                                         NTIdx::from(0 as u32)]);
+        assert_eq!(grm.prods_rules, vec![NTIdx(1),
+                                         NTIdx(1),
+                                         NTIdx(2),
+                                         NTIdx(3),
+                                         NTIdx(3),
+                                         NTIdx(2),
+                                         NTIdx(0)]);
     }
 }
