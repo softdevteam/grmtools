@@ -157,7 +157,7 @@ Parser<'a, StorageT, TokId>
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT, TokId>>>();
-                    tstack.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
+                    tstack.push(Node::Nonterm{nonterm_idx, nodes});
 
                     pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
@@ -206,7 +206,7 @@ Parser<'a, StorageT, TokId>
                     let keep_going = !repairs.is_empty();
                     let la_lexeme = self.next_lexeme(la_idx);
                     errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
-                                           lexeme: la_lexeme, repairs: repairs});
+                                           lexeme: la_lexeme, repairs});
                     if !keep_going {
                         return false;
                     }
@@ -243,7 +243,7 @@ Parser<'a, StorageT, TokId>
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<StorageT, TokId>>>();
-                        tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
+                        tstack_uw.push(Node::Nonterm{nonterm_idx, nodes});
                     }
 
                     pstack.drain(pop_idx..);
@@ -338,7 +338,7 @@ Parser<'a, StorageT, TokId>
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
                                              .collect::<Vec<Node<StorageT, TokId>>>();
-                        tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
+                        tstack_uw.push(Node::Nonterm{nonterm_idx, nodes});
                     }
 
                     for _ in 0..pop_num {

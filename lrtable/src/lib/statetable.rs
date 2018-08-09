@@ -165,7 +165,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
                                 e.insert(Action::Accept);
                             }
                             else {
-                                e.insert(Action::Reduce(prod_i.into()));
+                                e.insert(Action::Reduce(prod_i));
                             }
                         }
                     }
@@ -265,7 +265,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
     /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
     pub fn action(&self, state_idx: StIdx, term_idx: TIdx<StorageT>) -> Option<Action<StorageT>> {
         let off = actions_offset(self.terms_len, state_idx, term_idx);
-        self.actions.get(&off).map_or(None, |x| Some(*x))
+        self.actions.get(&off).and_then(|x| Some(*x))
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `state_idx`.
@@ -319,7 +319,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
     pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx<StorageT>) -> Option<StIdx> {
         let off = (u32::from(state_idx) * self.nonterms_len) + u32::from(nonterm_idx);
-        self.gotos.get(&off).map_or(None, |x| Some(*x))
+        self.gotos.get(&off).and_then(|x| Some(*x))
     }
 }
 

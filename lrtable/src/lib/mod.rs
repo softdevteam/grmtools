@@ -65,7 +65,7 @@ pub struct StIdx {
 
 impl From<u32> for StIdx {
     fn from(v: u32) -> Self {
-        if v > u16::max_value() as u32 {
+        if v > u32::from(u16::max_value()) {
             panic!("Overflow");
         }
         StIdx{v: v as u16}
@@ -74,7 +74,7 @@ impl From<u32> for StIdx {
 
 impl From<usize> for StIdx {
     fn from(v: usize) -> Self {
-        if v > u16::max_value() as usize {
+        if v > usize::from(u16::max_value()) {
             panic!("Overflow");
         }
         StIdx{v: v as u16}
@@ -93,6 +93,7 @@ impl From<StIdx> for u32 {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Minimiser {
     Pager
 }

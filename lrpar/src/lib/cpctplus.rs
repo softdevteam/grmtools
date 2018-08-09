@@ -73,10 +73,10 @@ struct PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
     fn last_repair(&self) -> Option<Repair<StorageT>> {
-        match self.repairs.val().unwrap() {
-            &RepairMerge::Repair(r) => Some(r),
-            &RepairMerge::Merge(x, _) => Some(x),
-            &RepairMerge::Terminator => None
+        match *self.repairs.val().unwrap() {
+            RepairMerge::Repair(r) => Some(r),
+            RepairMerge::Merge(x, _) => Some(x),
+            RepairMerge::Terminator => None
         }
     }
 }
@@ -108,9 +108,9 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
         let num_shifts = |c: &Cactus<RepairMerge<StorageT>>| {
             let mut n = 0;
             for r in c.vals() {
-                match r {
-                      &RepairMerge::Repair(Repair::Shift)
-                    | &RepairMerge::Merge(Repair::Shift, _) => n += 1,
+                match *r {
+                      RepairMerge::Repair(Repair::Shift)
+                    | RepairMerge::Merge(Repair::Shift, _) => n += 1,
                     _ => break
                 }
             }
@@ -208,11 +208,11 @@ Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
                     // If the repair sequences are identical, then merging is pointless.
                     return;
                 }
-                let merge = match old.repairs.val().unwrap() {
-                    &RepairMerge::Repair(r) => {
+                let merge = match *old.repairs.val().unwrap() {
+                    RepairMerge::Repair(r) => {
                         RepairMerge::Merge(r, Cactus::new().child(new.repairs))
                     },
-                    &RepairMerge::Merge(r, ref v) => {
+                    RepairMerge::Merge(r, ref v) => {
                         RepairMerge::Merge(r, v.child(new.repairs))
                     },
                     _ => unreachable!()
@@ -288,7 +288,7 @@ CPCTPlus<'a, StorageT, TokId>
                     pstack: n_pstack,
                     la_idx: n.la_idx,
                     repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx))),
-                    cf: n.cf.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap()};
+                    cf: n.cf.checked_add(u32::from((self.parser.term_cost)(t_idx))).unwrap()};
                 nbrs.push((nn.cf, nn));
             }
         }
@@ -364,8 +364,8 @@ CPCTPlus<'a, StorageT, TokId>
     {
         fn traverse<StorageT: PrimInt>(rm: &Cactus<RepairMerge<StorageT>>) -> Vec<Vec<Repair<StorageT>>> {
             let mut out = Vec::new();
-            match rm.val().unwrap() {
-                &RepairMerge::Repair(r) => {
+            match *rm.val().unwrap() {
+                RepairMerge::Repair(r) => {
                     let parents = traverse(&rm.parent().unwrap());
                     if parents.is_empty() {
                         out.push(vec![r]);
@@ -376,7 +376,7 @@ CPCTPlus<'a, StorageT, TokId>
                         }
                     }
                 },
-                &RepairMerge::Merge(r, ref vc) => {
+                RepairMerge::Merge(r, ref vc) => {
                     let parents = traverse(&rm.parent().unwrap());
                     if parents.is_empty() {
                         out.push(vec![r]);
@@ -392,7 +392,7 @@ CPCTPlus<'a, StorageT, TokId>
                         }
                     }
                 }
-                &RepairMerge::Terminator => ()
+                RepairMerge::Terminator => ()
             }
             out
         }
@@ -429,9 +429,9 @@ fn ends_with_parse_at_least_shifts<StorageT: PrimInt + Unsigned>
 {
     let mut shfts = 0;
     for x in repairs.vals().take(PARSE_AT_LEAST) {
-        match x {
-            &RepairMerge::Repair(Repair::Shift) => shfts += 1,
-            &RepairMerge::Merge(Repair::Shift, _) => shfts += 1,
+        match *x {
+            RepairMerge::Repair(Repair::Shift) => shfts += 1,
+            RepairMerge::Merge(Repair::Shift, _) => shfts += 1,
             _ => return false
         }
     }

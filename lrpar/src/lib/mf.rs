@@ -78,10 +78,10 @@ struct PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
     fn last_repair(&self) -> Option<Repair<StorageT>> {
-        match self.repairs.val().unwrap() {
-            &RepairMerge::Repair(r) => Some(r),
-            &RepairMerge::Merge(x, _) => Some(x),
-            &RepairMerge::Terminator => None
+        match *self.repairs.val().unwrap() {
+            RepairMerge::Repair(r) => Some(r),
+            RepairMerge::Merge(x, _) => Some(x),
+            RepairMerge::Terminator => None
         }
     }
 }
@@ -113,9 +113,9 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
         let num_shifts = |c: &Cactus<RepairMerge<StorageT>>| {
             let mut n = 0;
             for r in c.vals() {
-                match r {
-                      &RepairMerge::Repair(Repair::Shift)
-                    | &RepairMerge::Merge(Repair::Shift, _) => n += 1,
+                match *r {
+                      RepairMerge::Repair(Repair::Shift)
+                    | RepairMerge::Merge(Repair::Shift, _) => n += 1,
                     _ => break
                 }
             }
@@ -141,7 +141,7 @@ pub(crate) fn recoverer<'a,
                      -> Box<Recoverer<StorageT, TokId> + 'a>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
-    Box::new(MF{dist, parser: parser})
+    Box::new(MF{dist, parser})
 }
 
 impl<'a,
@@ -202,11 +202,11 @@ Recoverer<StorageT, TokId> for MF<'a, StorageT, TokId>
                     // If the repair sequences are identical, then merging is pointless.
                     return;
                 }
-                let merge = match old.repairs.val().unwrap() {
-                    &RepairMerge::Repair(r) => {
+                let merge = match *old.repairs.val().unwrap() {
+                    RepairMerge::Repair(r) => {
                         RepairMerge::Merge(r, Cactus::new().child(new.repairs))
                     },
-                    &RepairMerge::Merge(r, ref v) => {
+                    RepairMerge::Merge(r, ref v) => {
                         RepairMerge::Merge(r, v.child(new.repairs))
                     },
                     _ => unreachable!()
@@ -277,12 +277,12 @@ MF<'a, StorageT, TokId>
             };
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx)));
             if let Some(d) = self.dyn_dist(&n_repairs, t_st_idx, n.la_idx) {
-                assert!(n.cg == 0 || d >= n.cg - (self.parser.term_cost)(t_idx) as u32);
+                assert!(n.cg == 0 || d >= n.cg - u32::from((self.parser.term_cost)(t_idx)));
                 let nn = PathFNode{
                     pstack: n.pstack.child(t_st_idx),
                     la_idx: n.la_idx,
                     repairs: n_repairs,
-                    cf: n.cf.checked_add((self.parser.term_cost)(t_idx) as u32).unwrap(),
+                    cf: n.cf.checked_add(u32::from((self.parser.term_cost)(t_idx))).unwrap(),
                     cg: d};
                 nbrs.push((nn.cf, nn.cg, nn));
             }
@@ -298,7 +298,7 @@ MF<'a, StorageT, TokId>
             let sym_off = self.parser.grm.prod(p_idx).len();
             let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
             let mut qi_minus_alpha = n.pstack.clone();
-            for _ in 0..usize::from(sym_off) {
+            for _ in 0..sym_off {
                 qi_minus_alpha = qi_minus_alpha.parent().unwrap();
             }
 
@@ -317,7 +317,7 @@ MF<'a, StorageT, TokId>
                     if sym_off == 0 {
                         qi_minus_alpha = qi_minus_alpha.child(goto_st_idx);
                     } else {
-                        for _ in 0..usize::from(sym_off - 1) {
+                        for _ in 0..sym_off - 1 {
                             qi_minus_alpha = qi_minus_alpha.parent().unwrap();
                         }
                     }
@@ -357,7 +357,7 @@ MF<'a, StorageT, TokId>
             let nn = PathFNode{pstack: n.pstack.clone(),
                                la_idx: n.la_idx + 1,
                                repairs: n_repairs,
-                               cf: n.cf.checked_add(cost as u32).unwrap(),
+                               cf: n.cf.checked_add(u32::from(cost)).unwrap(),
                                cg: d};
             nbrs.push((nn.cf, nn.cg, nn));
         }
@@ -392,8 +392,8 @@ MF<'a, StorageT, TokId>
                    (rm: &Cactus<RepairMerge<StorageT>>)
                  -> Vec<Vec<Repair<StorageT>>> {
             let mut out = Vec::new();
-            match rm.val().unwrap() {
-                &RepairMerge::Repair(r) => {
+            match *rm.val().unwrap() {
+                RepairMerge::Repair(r) => {
                     let parents = traverse(&rm.parent().unwrap());
                     if parents.is_empty() {
                         out.push(vec![r]);
@@ -404,7 +404,7 @@ MF<'a, StorageT, TokId>
                         }
                     }
                 },
-                &RepairMerge::Merge(r, ref vc) => {
+                RepairMerge::Merge(r, ref vc) => {
                     let parents = traverse(&rm.parent().unwrap());
                     if parents.is_empty() {
                         out.push(vec![r]);
@@ -420,7 +420,7 @@ MF<'a, StorageT, TokId>
                         }
                     }
                 }
-                &RepairMerge::Terminator => ()
+                RepairMerge::Terminator => ()
             }
             out
         }
@@ -493,7 +493,7 @@ MF<'a, StorageT, TokId>
             if d < u32::max_value() && dc + d < ld {
                 ld = dc + d;
             }
-            dc = dc + (self.parser.term_cost)(t_idx) as u32;
+            dc += u32::from((self.parser.term_cost)(t_idx));
             if dc >= ld {
                 // Once the cumulative cost of deleting lexemes is bigger than the current least
                 // distance, there is no chance of finding a subsequent lexeme which could produce
@@ -541,7 +541,7 @@ pub(crate) fn rank_cnds<StorageT: Debug + Hash + PrimInt + Unsigned,
 {
     let mut cnds = Vec::new();
     let mut furthest = 0;
-    for rpr_seqs in in_cnds.into_iter() {
+    for rpr_seqs in in_cnds {
         if Instant::now() >= finish_by {
             return vec![];
         }
@@ -613,9 +613,8 @@ pub(crate) fn apply_repairs<StorageT: Debug + Hash + PrimInt + Unsigned,
 pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>
                               (all_rprs: &mut Vec<Vec<ParseRepair<StorageT>>>)
 {
-    for i in 0..all_rprs.len() {
+    for rprs in &mut all_rprs.iter_mut() {
         // Remove shifts from the end of repairs
-        let mut rprs = &mut all_rprs[i];
         while !rprs.is_empty() {
             if let ParseRepair::Shift = rprs[rprs.len() - 1] {
                 rprs.pop();
@@ -678,7 +677,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Dist<StorageT> {
                                 table[off] = 0;
                                 chgd = true;
                             }
-                            term_cost(t_idx) as u32
+                            u32::from(term_cost(t_idx))
                         }
                     };
 

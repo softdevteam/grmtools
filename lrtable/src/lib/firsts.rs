@@ -70,7 +70,7 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
             prod_firsts.push(Vob::from_elem(grm.terms_len() as usize, false));
         }
         let mut firsts = Firsts {
-            prod_firsts  : prod_firsts,
+            prod_firsts,
             prod_epsilons: Vob::from_elem(grm.nonterms_len() as usize, false),
             phantom      : PhantomData
         };
@@ -88,7 +88,7 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
                     if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
-                        if !firsts.is_epsilon_set(rul_i.into()) {
+                        if !firsts.is_epsilon_set(rul_i) {
                             firsts.prod_epsilons.set(usize::from(rul_i), true);
                             changed = true;
                         }
@@ -148,20 +148,20 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
         self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
-    /// Get all the firsts for production `nidx`.
-    pub fn prod_firsts(&self, nidx: NTIdx<StorageT>) -> &Vob {
-        &self.prod_firsts[usize::from(usize::from(nidx))]
+    /// Get all the firsts for production `ntidx`.
+    pub fn prod_firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob {
+        &self.prod_firsts[usize::from(ntidx)]
     }
 
-    /// Returns true if the nonterminal `nidx` has epsilon in its first set.
-    pub fn is_epsilon_set(&self, nidx: NTIdx<StorageT>) -> bool {
-        self.prod_epsilons[usize::from(usize::from(nidx))]
+    /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
+    pub fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool {
+        self.prod_epsilons[usize::from(ntidx)]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
-    pub fn set(&mut self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
-        let prod = &mut self.prod_firsts[usize::from(nidx)];
+    pub fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+        let prod = &mut self.prod_firsts[usize::from(ntidx)];
         if prod[usize::from(tidx)] {
             true
         }

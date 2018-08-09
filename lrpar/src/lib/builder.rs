@@ -89,13 +89,13 @@ pub fn process_file_in_src<StorageT, TokId>(srcp: &str)
 ///   -> Result<Node<TokId>,
 ///            (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
 /// ```
-pub fn process_file<'a, StorageT, TokId, P, Q>(inp: P,
-                                     outp: Q)
-                                  -> Result<(HashMap<String, TokId>), Box<Error>>
-                               where StorageT: Debug + Hash + PrimInt + TypeName + Unsigned,
-                                    TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName,
-                                     P: AsRef<Path>,
-                                     Q: AsRef<Path>
+pub fn process_file<StorageT, TokId, P, Q>(inp: P,
+                                 outp: Q)
+                              -> Result<(HashMap<String, TokId>), Box<Error>>
+                           where StorageT: Debug + Hash + PrimInt + TypeName + Unsigned,
+                                 TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName,
+                                 P: AsRef<Path>,
+                                 Q: AsRef<Path>
 {
     let inc = read_to_string(&inp).unwrap();
 
