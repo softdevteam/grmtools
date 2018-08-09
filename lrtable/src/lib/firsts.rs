@@ -30,6 +30,8 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::marker::PhantomData;
+
 use num_traits::{PrimInt, Unsigned};
 use vob::Vob;
 
@@ -54,14 +56,15 @@ use cfgrammar::yacc::YaccGrammar;
 ///   assert!(firsts.is_epsilon_set(grm.nonterm_idx("A").unwrap()));
 /// ```
 #[derive(Debug)]
-pub struct Firsts {
+pub struct Firsts<StorageT> {
     prod_firsts: Vec<Vob>,
-    prod_epsilons: Vob
+    prod_epsilons: Vob,
+    phantom: PhantomData<StorageT>
 }
 
-impl Firsts {
+impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
     /// Generates and returns the firsts set for the given grammar.
-    pub fn new<StorageT: PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>) -> Firsts {
+    pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
         let mut prod_firsts = Vec::with_capacity(grm.nonterms_len() as usize);
         for _ in 0..grm.nonterms_len() {
             prod_firsts.push(Vob::from_elem(grm.terms_len() as usize, false));
@@ -69,6 +72,7 @@ impl Firsts {
         let mut firsts = Firsts {
             prod_firsts  : prod_firsts,
             prod_epsilons: Vob::from_elem(grm.nonterms_len() as usize, false),
+            phantom      : PhantomData
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -140,23 +144,23 @@ impl Firsts {
     }
 
     /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
-    pub fn is_set(&self, nidx: NTIdx, tidx: TIdx) -> bool {
+    pub fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx) -> bool {
         self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
     /// Get all the firsts for production `nidx`.
-    pub fn prod_firsts(&self, nidx: NTIdx) -> &Vob {
+    pub fn prod_firsts(&self, nidx: NTIdx<StorageT>) -> &Vob {
         &self.prod_firsts[usize::from(usize::from(nidx))]
     }
 
     /// Returns true if the nonterminal `nidx` has epsilon in its first set.
-    pub fn is_epsilon_set(&self, nidx: NTIdx) -> bool {
+    pub fn is_epsilon_set(&self, nidx: NTIdx<StorageT>) -> bool {
         self.prod_epsilons[usize::from(usize::from(nidx))]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
-    pub fn set(&mut self, nidx: NTIdx, tidx: TIdx) -> bool {
+    pub fn set(&mut self, nidx: NTIdx<StorageT>, tidx: TIdx) -> bool {
         let prod = &mut self.prod_firsts[usize::from(nidx)];
         if prod[usize::from(tidx)] {
             true
@@ -178,7 +182,7 @@ mod test {
     use super::Firsts;
 
     fn has<StorageT: PrimInt + Unsigned>
-          (grm: &YaccGrammar<StorageT>, firsts: &Firsts, rn: &str, should_be: Vec<&str>)
+          (grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>, rn: &str, should_be: Vec<&str>)
     {
         let nt_i = grm.nonterm_idx(rn).unwrap();
         for i in 0 .. grm.terms_len() {

@@ -46,14 +46,14 @@ use cpctplus;
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Node<TokId> {
+pub enum Node<StorageT, TokId> {
     Term{lexeme: Lexeme<TokId>},
-    Nonterm{nonterm_idx: NTIdx, nodes: Vec<Node<TokId>>}
+    Nonterm{nonterm_idx: NTIdx<StorageT>, nodes: Vec<Node<StorageT, TokId>>}
 }
 
-impl<TokId: PrimInt + Unsigned> Node<TokId> {
+impl<StorageT: PrimInt + Unsigned, TokId: PrimInt + Unsigned> Node<StorageT, TokId> {
     /// Return a pretty-printed version of this node.
-    pub fn pp(&self, grm: &YaccGrammar, input: &str) -> String {
+    pub fn pp(&self, grm: &YaccGrammar<StorageT>, input: &str) -> String {
         let mut st = vec![(0, self)]; // Stack of (indent level, node) pairs
         let mut s = String::new();
         while !st.is_empty() {
@@ -82,7 +82,7 @@ impl<TokId: PrimInt + Unsigned> Node<TokId> {
 
 pub(crate) type Lexemes<TokId> = Vec<Lexeme<TokId>>;
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
-pub(crate) type TStack<TokId> = Vec<Node<TokId>>; // Parse tree stack
+pub(crate) type TStack<StorageT, TokId> = Vec<Node<StorageT, TokId>>; // Parse tree stack
 pub(crate) type Errors<TokId> = Vec<ParseError<TokId>>;
 
 pub struct Parser<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
@@ -105,7 +105,8 @@ Parser<'a, StorageT, TokId>
                 sgraph: &StateGraph<StorageT>,
                 stable: &StateTable<StorageT>,
                 lexemes: &Lexemes<TokId>)
-             -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
+             -> Result<Node<StorageT, TokId>,
+                      (Option<Node<StorageT, TokId>>, Vec<ParseError<TokId>>)>
           where F: Fn(TIdx) -> u8
     {
         for i in 0..grm.terms_len() {
@@ -113,7 +114,7 @@ Parser<'a, StorageT, TokId>
         }
         let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0 as u32)];
-        let mut tstack: Vec<Node<TokId>> = Vec::new();
+        let mut tstack: Vec<Node<StorageT, TokId>> = Vec::new();
         let mut errors: Vec<ParseError<TokId>> = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors);
         match (accpt, errors.is_empty()) {
@@ -137,7 +138,10 @@ Parser<'a, StorageT, TokId>
     /// Return `true` if the parse reached an accept state (i.e. all the input was consumed,
     /// possibly after making repairs) or `false` (i.e. some of the input was not consumed, even
     /// after possibly making repairs) otherwise.
-    pub fn lr(&self, mut la_idx: usize, pstack: &mut PStack, tstack: &mut TStack<TokId>,
+    pub fn lr(&self,
+              mut la_idx: usize,
+              pstack: &mut PStack,
+              tstack: &mut TStack<StorageT, TokId>,
               errors: &mut Errors<TokId>)
            -> bool
     {
@@ -151,7 +155,7 @@ Parser<'a, StorageT, TokId>
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
-                    let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<TokId>>>();
+                    let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT, TokId>>>();
                     tstack.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
 
                     pstack.drain(pop_idx..);
@@ -220,7 +224,7 @@ Parser<'a, StorageT, TokId>
                    mut la_idx: usize,
                    end_la_idx: usize,
                    pstack: &mut PStack,
-                   tstack: &mut Option<&mut Vec<Node<TokId>>>)
+                   tstack: &mut Option<&mut Vec<Node<StorageT, TokId>>>)
            -> usize
     {
         assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
@@ -237,7 +241,7 @@ Parser<'a, StorageT, TokId>
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
-                        let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<TokId>>>();
+                        let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<StorageT, TokId>>>();
                         tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
                     }
 
@@ -314,7 +318,7 @@ Parser<'a, StorageT, TokId>
                             mut la_idx: usize,
                             end_la_idx: usize,
                             mut pstack: Cactus<StIdx>,
-                            tstack: &mut Option<&mut Vec<Node<TokId>>>)
+                            tstack: &mut Option<&mut Vec<Node<StorageT, TokId>>>)
       -> (usize, Cactus<StIdx>)
     {
         assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
@@ -332,7 +336,7 @@ Parser<'a, StorageT, TokId>
                     let pop_num = self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
-                                             .collect::<Vec<Node<TokId>>>();
+                                             .collect::<Vec<Node<StorageT, TokId>>>();
                         tstack_uw.push(Node::Nonterm{nonterm_idx: nonterm_idx, nodes: nodes});
                     }
 
@@ -373,7 +377,7 @@ Parser<'a, StorageT, TokId>
 pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned,
                     TokId: PrimInt + Unsigned>
 {
-    fn recover(&self, Instant, &Parser<StorageT, TokId>, usize, &mut PStack, &mut TStack<TokId>)
+    fn recover(&self, Instant, &Parser<StorageT, TokId>, usize, &mut PStack, &mut TStack<StorageT, TokId>)
            -> (usize, Vec<Vec<ParseRepair>>);
 }
 
@@ -391,7 +395,7 @@ pub fn parse<StorageT: Hash + PrimInt + Unsigned,
             sgraph: &StateGraph<StorageT>,
             stable: &StateTable<StorageT>,
             lexemes: &Lexemes<TokId>)
-         -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
+         -> Result<Node<StorageT, TokId>, (Option<Node<StorageT, TokId>>, Vec<ParseError<TokId>>)>
 {
     parse_rcvry(RecoveryKind::MF, grm, |_| 1, sgraph, stable, lexemes)
 }
@@ -409,7 +413,7 @@ pub fn parse_rcvry
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexemes: &Lexemes<TokId>)
-    -> Result<Node<TokId>, (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
+    -> Result<Node<StorageT, TokId>, (Option<Node<StorageT, TokId>>, Vec<ParseError<TokId>>)>
     where F: Fn(TIdx) -> u8
 {
     Parser::parse(rcvry_kind, grm, term_cost, sgraph, stable, lexemes)
@@ -475,8 +479,8 @@ pub(crate) mod test {
                            lexs: &str,
                            grms: &str,
                            input: &str)
-                       -> (YaccGrammar,
-                           Result<Node<u16>, (Option<Node<u16>>,
+                       -> (YaccGrammar<u16>,
+                           Result<Node<u16, u16>, (Option<Node<u16, u16>>,
                                               Vec<ParseError<u16>>)>)
     {
         do_parse_with_costs(rcvry_kind, lexs, grms, input, &HashMap::new())
@@ -487,12 +491,12 @@ pub(crate) mod test {
                                       grms: &str,
                                       input: &str,
                                       costs: &HashMap<&str, u8>)
-                                  -> (YaccGrammar,
-                                      Result<Node<u16>, (Option<Node<u16>>,
+                                  -> (YaccGrammar<u16>,
+                                      Result<Node<u16, u16>, (Option<Node<u16, u16>>,
                                                          Vec<ParseError<u16>>)>)
     {
         let mut lexerdef = build_lex(lexs).unwrap();
-        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::<u16>::new_with_storaget(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         {
             let rule_ids = grm.terms_map().iter()

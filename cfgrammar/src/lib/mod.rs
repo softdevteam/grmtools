@@ -82,12 +82,12 @@ pub use u32struct::{PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Symbol {
-    Nonterm(NTIdx),
+pub enum Symbol<StorageT> {
+    Nonterm(NTIdx<StorageT>),
     Term(TIdx)
 }
 
-pub trait Grammar {
+pub trait Grammar<StorageT> {
     /// How many terminals does this grammar have?
     fn terms_len(&self) -> u32;
     /// How many productions does this grammar have?
@@ -95,5 +95,5 @@ pub trait Grammar {
     /// How many nonterminals does this grammar have?
     fn nonterms_len(&self) -> u32;
     /// What is the index of the start rule?
-    fn start_rule_idx(&self) -> NTIdx;
+    fn start_rule_idx(&self) -> NTIdx<StorageT>;
 }

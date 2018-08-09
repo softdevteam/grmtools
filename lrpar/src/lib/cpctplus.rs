@@ -144,7 +144,7 @@ Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
                parser: &Parser<StorageT, TokId>,
                in_la_idx: usize,
                mut in_pstack: &mut Vec<StIdx>,
-               mut tstack: &mut Vec<Node<TokId>>)
+               mut tstack: &mut Vec<Node<StorageT, TokId>>)
            -> (usize, Vec<Vec<ParseRepair>>)
     {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
@@ -436,11 +436,15 @@ fn ends_with_parse_at_least_shifts(repairs: &Cactus<RepairMerge>) -> bool {
 mod test {
     use cfgrammar::yacc::YaccGrammar;
     use lrlex::Lexeme;
-    use num_traits::ToPrimitive;
+    use num_traits::{PrimInt, ToPrimitive, Unsigned};
+
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
 
-    fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
+    fn pp_repairs<StorageT: PrimInt + Unsigned>
+                 (grm: &YaccGrammar<StorageT>, repairs: &Vec<ParseRepair>)
+               -> String
+    {
         let mut out = vec![];
         for r in repairs.iter() {
             match *r {
@@ -456,9 +460,11 @@ mod test {
         out.join(", ")
     }
 
-    fn check_all_repairs(grm: &YaccGrammar,
-                                    repairs: &Vec<Vec<ParseRepair>>,
-                                    expected: &[&str]) {
+    fn check_all_repairs<StorageT: PrimInt + Unsigned>
+                        (grm: &YaccGrammar<StorageT>,
+                         repairs: &Vec<Vec<ParseRepair>>,
+                         expected: &[&str])
+    {
         assert_eq!(repairs.len(), expected.len(),
                    "{:?}\nhas a different number of entries to:\n{:?}", repairs, expected);
         for i in 0..repairs.len() {

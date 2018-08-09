@@ -134,7 +134,7 @@ fn main() {
     };
 
     let yacc_y_path = &matches.free[1];
-    let grm = match YaccGrammar::new(yacckind, &read_file(yacc_y_path)) {
+    let grm = match YaccGrammar::<u16>::new_with_storaget(yacckind, &read_file(yacc_y_path)) {
         Ok(x) => x,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
@@ -181,7 +181,7 @@ fn main() {
     let lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
     let term_cost = |_| 1; // Cost of inserting/deleting a terminal
-    match parse_rcvry(recoverykind, &grm, &term_cost, &sgraph, &stable, &lexemes) {
+    match parse_rcvry::<u16, u16, _>(recoverykind, &grm, &term_cost, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err((o_pt, errs)) => {
             match o_pt {

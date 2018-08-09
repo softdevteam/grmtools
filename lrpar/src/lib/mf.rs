@@ -151,7 +151,7 @@ Recoverer<StorageT, TokId> for MF<'a, StorageT, TokId>
                parser: &Parser<StorageT, TokId>,
                in_la_idx: usize,
                mut in_pstack: &mut Vec<StIdx>,
-               mut tstack: &mut Vec<Node<TokId>>)
+               mut tstack: &mut Vec<Node<StorageT, TokId>>)
            -> (usize, Vec<Vec<ParseRepair>>)
     {
         let mut start_cactus_pstack = Cactus::new();
@@ -569,7 +569,7 @@ pub(crate) fn apply_repairs<StorageT: Hash + PrimInt + Unsigned,
                            (parser: &Parser<StorageT, TokId>,
                             mut la_idx: usize,
                             mut pstack: &mut Vec<StIdx>,
-                            mut tstack: &mut Option<&mut Vec<Node<TokId>>>,
+                            mut tstack: &mut Option<&mut Vec<Node<StorageT, TokId>>>,
                             repairs: &[ParseRepair])
                          -> usize
 {
@@ -784,6 +784,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Dist<StorageT> {
 mod test {
     use std::collections::HashMap;
 
+    use num_traits::{PrimInt, ToPrimitive, Unsigned};
     use test::{Bencher, black_box};
 
     use cactus::Cactus;
@@ -791,14 +792,16 @@ mod test {
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use lrlex::Lexeme;
     use lrtable::{Minimiser, from_yacc, StIdx};
-    use num_traits::ToPrimitive;
 
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::{do_parse, do_parse_with_costs};
 
     use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST, Repair, RepairMerge};
 
-    fn pp_repairs(grm: &YaccGrammar, repairs: &Vec<ParseRepair>) -> String {
+    fn pp_repairs<StorageT: PrimInt + Unsigned>
+                 (grm: &YaccGrammar<StorageT>, repairs: &Vec<ParseRepair>)
+               -> String
+    {
         let mut out = vec![];
         for r in repairs.iter() {
             match *r {
@@ -1086,7 +1089,8 @@ A: '(' A ')'
         });
     }
 
-    fn check_some_repairs(grm: &YaccGrammar,
+    fn check_some_repairs<StorageT: PrimInt + Unsigned>
+                         (grm: &YaccGrammar<StorageT>,
                           repairs: &Vec<Vec<ParseRepair>>,
                           expected: &[&str]) {
         for i in 0..expected.len() {
@@ -1096,9 +1100,10 @@ A: '(' A ')'
         }
     }
 
-    fn check_all_repairs(grm: &YaccGrammar,
-                                    repairs: &Vec<Vec<ParseRepair>>,
-                                    expected: &[&str]) {
+    fn check_all_repairs<StorageT: PrimInt + Unsigned>
+                        (grm: &YaccGrammar<StorageT>,
+                         repairs: &Vec<Vec<ParseRepair>>,
+                         expected: &[&str]) {
         assert_eq!(repairs.len(), expected.len(),
                    "{:?}\nhas a different number of entries to:\n{:?}", repairs, expected);
         for i in 0..repairs.len() {

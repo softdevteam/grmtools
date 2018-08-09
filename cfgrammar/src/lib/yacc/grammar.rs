@@ -87,18 +87,18 @@ pub struct YaccGrammar<StorageT=u32> {
     /// Which production is the sole production of the start rule?
     start_prod: PIdx<StorageT>,
     /// A list of all productions.
-    prods: Vec<Vec<Symbol>>,
+    prods: Vec<Vec<Symbol<StorageT>>>,
     /// A mapping from rules to their productions. Note that 1) the order of rules is identical to
     /// that of `nonterm_names` 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
     rules_prods: Vec<Vec<PIdx<StorageT>>>,
     /// A mapping from productions to their corresponding rule indexes.
-    prods_rules: Vec<NTIdx>,
+    prods_rules: Vec<NTIdx<StorageT>>,
     /// The precedence of each production.
     prod_precs: Vec<Option<Precedence>>,
     /// The index of the nonterminal added for implicit tokens, if they were specified; otherwise
     /// `None`.
-    implicit_nonterm: Option<NTIdx>
+    implicit_nonterm: Option<NTIdx<StorageT>>
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -176,7 +176,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
             nonterm_names.push(k.clone());
         }
         let mut rules_prods:Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(nonterm_names.len());
-        let mut nonterm_map = HashMap::<String, NTIdx>::new();
+        let mut nonterm_map = HashMap::<String, NTIdx<StorageT>>::new();
         for (i, v) in nonterm_names.iter().enumerate() {
             rules_prods.push(Vec::new());
             nonterm_map.insert(v.clone(), NTIdx::from(i));
@@ -318,27 +318,27 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     }
 
     /// Return the productions for nonterminal `i`. Panics if `i` doesn't exist.
-    pub fn nonterm_to_prods(&self, i: NTIdx) -> &[PIdx<StorageT>] {
+    pub fn nonterm_to_prods(&self, i: NTIdx<StorageT>) -> &[PIdx<StorageT>] {
         &self.rules_prods[usize::from(i)]
     }
 
     /// Return the name of nonterminal `i`. Panics if `i` doesn't exist.
-    pub fn nonterm_name(&self, i: NTIdx) -> &str {
+    pub fn nonterm_name(&self, i: NTIdx<StorageT>) -> &str {
         &self.nonterm_names[usize::from(i)]
     }
 
     /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
-    pub fn iter_nonterm_idxs(&self) -> Box<Iterator<Item=NTIdx>> {
-        Box::new((0..self.nonterms_len).map(NTIdx::from))
+    pub fn iter_nonterm_idxs(&self) -> Box<dyn Iterator<Item=NTIdx<StorageT>>> {
+        Box::new((0..self.nonterms_len).map(|x| NTIdx::from(x)))
     }
 
     /// Get the sequence of symbols for production `i`. Panics if `i` doesn't exist.
-    pub fn prod(&self, i: PIdx<StorageT>) -> &[Symbol] {
+    pub fn prod(&self, i: PIdx<StorageT>) -> &[Symbol<StorageT>] {
         &self.prods[usize::from(i)]
     }
 
     /// Return the nonterm index of the production `i`. Panics if `i` doesn't exist.
-    pub fn prod_to_nonterm(&self, i: PIdx<StorageT>) -> NTIdx {
+    pub fn prod_to_nonterm(&self, i: PIdx<StorageT>) -> NTIdx<StorageT> {
         self.prods_rules[usize::from(i)]
     }
 
@@ -379,12 +379,12 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     }
 
     /// Return the `NTIdx` of the implict nonterm if it exists, or `None` otherwise.
-    pub fn implicit_nonterm(&self) -> Option<NTIdx> {
+    pub fn implicit_nonterm(&self) -> Option<NTIdx<StorageT>> {
         self.implicit_nonterm
     }
 
     /// Return the index of the nonterminal named `n` or `None` if it doesn't exist.
-    pub fn nonterm_idx(&self, n: &str) -> Option<NTIdx> {
+    pub fn nonterm_idx(&self, n: &str) -> Option<NTIdx<StorageT>> {
         self.nonterm_names.iter()
                           .position(|x| x == n)
                           .map(NTIdx::from)
@@ -399,7 +399,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
 
     /// Is there a path from the `from` non-term to the `to` non-term? Note that recursive rules
     /// return `true` for a path from themselves to themselves.
-    pub fn has_path(&self, from: NTIdx, to: NTIdx) -> bool {
+    pub fn has_path(&self, from: NTIdx<StorageT>, to: NTIdx<StorageT>) -> bool {
         let mut seen = vec![];
         seen.resize(self.nonterms_len() as usize, false);
         let mut todo = vec![];
@@ -445,7 +445,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
 
 }
 
-impl<StorageT: PrimInt + Unsigned> Grammar for YaccGrammar<StorageT> {
+impl<StorageT: PrimInt + Unsigned> Grammar<StorageT> for YaccGrammar<StorageT> {
     fn prods_len(&self) -> u32 {
         self.prods_len
     }
@@ -459,7 +459,7 @@ impl<StorageT: PrimInt + Unsigned> Grammar for YaccGrammar<StorageT> {
     }
 
     /// Return the index of the start rule.
-    fn start_rule_idx(&self) -> NTIdx {
+    fn start_rule_idx(&self) -> NTIdx<StorageT> {
         self.prod_to_nonterm(self.start_prod)
     }
 }
@@ -508,7 +508,7 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
     /// What is the cost of a minimal sentence for the non-terminal `nonterm_idx`? Note that,
     /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
     /// much faster.
-    pub fn min_sentence_cost(&self, nonterm_idx: NTIdx) -> u32 {
+    pub fn min_sentence_cost(&self, nonterm_idx: NTIdx<StorageT>) -> u32 {
         self.nonterm_min_costs.borrow_mut()
                               .get_or_insert_with(|| nonterm_min_costs(self.grm,
                                                                        &self.term_costs))
@@ -518,7 +518,7 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
     /// What is the cost of a maximal sentence for the non-terminal `nonterm_idx`? Non-terminals
     /// which can generate sentences of unbounded length return None; non-terminals which can only
     /// generate maximal strings of a finite length return a `Some(u32)`.
-    pub fn max_sentence_cost(&self, nonterm_idx: NTIdx) -> Option<u32> {
+    pub fn max_sentence_cost(&self, nonterm_idx: NTIdx<StorageT>) -> Option<u32> {
         let v = self.nonterm_max_costs.borrow_mut()
                                       .get_or_insert_with(||
                                            nonterm_max_costs(self.grm, &self.term_costs))
@@ -532,8 +532,8 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
 
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
     /// non-terminal `nonterm_idx`.
-    pub fn min_sentence(&self, nonterm_idx: NTIdx) -> Vec<TIdx> {
-        let cheapest_prod = |nt_idx: NTIdx| -> PIdx<StorageT> {
+    pub fn min_sentence(&self, nonterm_idx: NTIdx<StorageT>) -> Vec<TIdx> {
+        let cheapest_prod = |nt_idx: NTIdx<StorageT>| -> PIdx<StorageT> {
             let mut low_sc = None;
             let mut low_idx = None;
             for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
@@ -573,8 +573,8 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
     }
 
     /// Return (in arbitrary order) all the minimal sentences for the non-terminal `nonterm_idx`.
-    pub fn min_sentences(&self, nonterm_idx: NTIdx) -> Vec<Vec<TIdx>> {
-        let cheapest_prods = |nt_idx: NTIdx| -> Vec<PIdx<StorageT>> {
+    pub fn min_sentences(&self, nonterm_idx: NTIdx<StorageT>) -> Vec<Vec<TIdx>> {
+        let cheapest_prods = |nt_idx: NTIdx<StorageT>| -> Vec<PIdx<StorageT>> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
             for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
@@ -888,8 +888,8 @@ mod test {
         assert_eq!(grm.terms_map(), [("T", TIdx::from(0 as u32))].iter()
                                                                  .cloned()
                                                                  .collect::<HashMap<&str, TIdx>>());
-        assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<NTIdx>>(),
-                   vec![NTIdx::from(0 as u32), NTIdx::from(1 as u32)]);
+        assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<_>>(),
+                   vec![NTIdx(0), NTIdx(1)]);
     }
 
     #[test]

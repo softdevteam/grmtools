@@ -150,14 +150,14 @@ pub fn pager_stategraph<StorageT: Hash + PrimInt + Unsigned>
 {
     // This function can be seen as a modified version of items() from Chen's dissertation.
 
-    let firsts                                 = Firsts::new(grm);
+    let firsts = Firsts::new(grm);
     // closed_states and core_states are both equally sized vectors of states. Core states are
     // smaller, and used for the weakly compatible checks, but we ultimately need to return
     // closed states. Closed states which are None are those which require processing; thus
     // closed_states also implicitly serves as a todo list.
-    let mut closed_states                      = Vec::new();
-    let mut core_states                        = Vec::new();
-    let mut edges: Vec<HashMap<Symbol, StIdx>> = Vec::new();
+    let mut closed_states = Vec::new();
+    let mut core_states = Vec::new();
+    let mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>> = Vec::new();
 
     let mut state0 = Itemset::new(grm);
     let mut ctx = Vob::from_elem(grm.terms_len() as usize, false);
@@ -304,10 +304,10 @@ pub fn pager_stategraph<StorageT: Hash + PrimInt + Unsigned>
 
 /// Garbage collect `zip_states` (of `(core_states, closed_state)`) and `edges`. Returns a new pair
 /// with unused states and their corresponding edges removed.
-fn gc<StorageT: Eq + Hash>
+fn gc<StorageT: Eq + Hash + PrimInt>
      (mut states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-      mut edges: Vec<HashMap<Symbol, StIdx>>)
-  -> (Vec<(Itemset<StorageT>, Itemset<StorageT>)>, Vec<HashMap<Symbol, StIdx>>) {
+      mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>>)
+  -> (Vec<(Itemset<StorageT>, Itemset<StorageT>)>, Vec<HashMap<Symbol<StorageT>, StIdx>>) {
     // First of all, do a simple pass over all states. All state indexes reachable from the
     // start state will be inserted into the 'seen' set.
     let mut todo = HashSet::new();

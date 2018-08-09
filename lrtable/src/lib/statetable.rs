@@ -315,7 +315,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
     }
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
-    pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx) -> Option<StIdx> {
+    pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx<StorageT>) -> Option<StIdx> {
         let off = (u32::from(state_idx) * self.nonterms_len) + u32::from(nonterm_idx);
         self.gotos.get(&off).map_or(None, |x| Some(*x))
     }

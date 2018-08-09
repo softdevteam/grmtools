@@ -72,7 +72,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
     }
 
     /// Create a new itemset which is a closed version of `self`.
-    pub fn close(&self, grm: &YaccGrammar<StorageT>, firsts: &Firsts) -> Self {
+    pub fn close(&self, grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>) -> Self {
         // This function can be seen as a merger of getClosure and getContext from Chen's
         // dissertation.
 
@@ -159,7 +159,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
     }
 
     /// Create a new Itemset based on calculating the goto of 'sym' on the current Itemset.
-    pub fn goto(&self, grm: &YaccGrammar<StorageT>, sym: &Symbol) -> Self {
+    pub fn goto(&self, grm: &YaccGrammar<StorageT>, sym: &Symbol<StorageT>) -> Self {
         // This is called 'transition' in Chen's dissertation, though note that the definition
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(grm);

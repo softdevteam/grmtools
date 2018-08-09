@@ -46,12 +46,12 @@ pub struct StateGraph<StorageT: Eq + Hash> {
     /// A vector of `(core_states, closed_states)` tuples.
     states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
     /// For each state in `states`, edges is a hashmap from symbols to state offsets.
-    edges: Vec<HashMap<Symbol, StIdx>>
+    edges: Vec<HashMap<Symbol<StorageT>, StIdx>>
 }
 
 impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
     pub(crate) fn new(states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-                      edges: Vec<HashMap<Symbol, StIdx>>)
+                      edges: Vec<HashMap<Symbol<StorageT>, StIdx>>)
                    -> Self
     {
         StateGraph{states, edges}
@@ -85,14 +85,14 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
     }
 
     /// Return the state pointed to by `sym` from `st_idx` or `None` otherwise.
-    pub fn edge(&self, st_idx: StIdx, sym: Symbol) -> Option<StIdx> {
+    pub fn edge(&self, st_idx: StIdx, sym: Symbol<StorageT>) -> Option<StIdx> {
         self.edges.get(usize::from(st_idx))
                   .and_then(|x| x.get(&sym))
                   .cloned()
     }
 
     /// Return the edges for state `st_idx`. Panics if `st_idx` doesn't exist.
-    pub fn edges(&self, st_idx: StIdx) -> &HashMap<Symbol, StIdx> {
+    pub fn edges(&self, st_idx: StIdx) -> &HashMap<Symbol<StorageT>, StIdx> {
         &self.edges[usize::from(st_idx)]
     }
 
@@ -109,7 +109,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
             i.to_string().len()
         }
 
-        fn fmt_sym<StorageT: PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>, sym: Symbol) -> String {
+        fn fmt_sym<StorageT: PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>, sym: Symbol<StorageT>) -> String {
             match sym {
                 Symbol::Nonterm(ntidx) => grm.nonterm_name(ntidx).to_string(),
                 Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap_or(""))

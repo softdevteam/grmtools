@@ -101,6 +101,12 @@ macro_rules! transitionmacro {
             }
         }
 
+        impl<T: PrimInt + Unsigned> From<u32> for $n<T> {
+            fn from(v: u32) -> Self {
+                $n(num_traits::cast(v).unwrap())
+            }
+        }
+
         impl<T: PrimInt + Unsigned> From<$n<T>> for usize {
             fn from(st: $n<T>) -> Self {
                 num_traits::cast(st.0).unwrap()
@@ -132,10 +138,9 @@ macro_rules! transitionmacro {
 // for now, knowing that we can transparently move the storage type from u16 to u32 in the future
 // without changing the user visible API.
 
-u32struct!(
+transitionmacro!(
     /// A type specifically for nonterminal indices.
-    NTIdx,
-    u16);
+    NTIdx);
 transitionmacro!(
     /// A type specifically for production indices (e.g. a rule `E::=A|B` would
     /// have two productions for the single rule `E`).
