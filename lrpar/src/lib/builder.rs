@@ -62,9 +62,10 @@ const RUST_FILE_EXT: &str = "rs";
 /// # Panics
 ///
 /// If the input filename does not end in `.y`.
-pub fn process_file_in_src<TokId>(srcp: &str)
-                               -> Result<(HashMap<String, TokId>), Box<Error>>
-                            where TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName
+pub fn process_file_in_src<StorageT, TokId>(srcp: &str)
+                                         -> Result<(HashMap<String, TokId>), Box<Error>>
+                                      where StorageT: Debug + Hash + PrimInt + TypeName + Unsigned,
+                                            TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName
 {
     let mut inp = current_dir()?;
     inp.push("src");
@@ -78,7 +79,7 @@ pub fn process_file_in_src<TokId>(srcp: &str)
     outp.push(var("OUT_DIR").unwrap());
     outp.push(leaf);
     outp.set_extension(RUST_FILE_EXT);
-    process_file::<TokId, _, _>(inp, outp)
+    process_file::<StorageT, TokId, _, _>(inp, outp)
 }
 
 /// Statically compile the `.y` file `inp` into Rust, placing the output into `outp`. The latter
@@ -88,10 +89,11 @@ pub fn process_file_in_src<TokId>(srcp: &str)
 ///   -> Result<Node<TokId>,
 ///            (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
 /// ```
-pub fn process_file<'a, TokId, P, Q>(inp: P,
+pub fn process_file<'a, StorageT, TokId, P, Q>(inp: P,
                                      outp: Q)
                                   -> Result<(HashMap<String, TokId>), Box<Error>>
-                               where TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName,
+                               where StorageT: Debug + Hash + PrimInt + TypeName + Unsigned,
+                                    TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName,
                                      P: AsRef<Path>,
                                      Q: AsRef<Path>
 {
@@ -124,8 +126,8 @@ pub fn process_file<'a, TokId, P, Q>(inp: P,
 use lrlex::Lexeme;
 
 pub fn parse(lexemes: &Vec<Lexeme<{tn}>>)
-          -> Result<Node<{tn}>, (Option<Node<{tn}>>, Vec<ParseError<{tn}>>)>
-{{", tn=TokId::type_name()));
+          -> Result<Node<{storaget}, {tn}>, (Option<Node<{storaget}, {tn}>>, Vec<ParseError<{storaget}, {tn}>>)>
+{{", storaget=StorageT::type_name(), tn=TokId::type_name()));
 
     // grm, sgraph, stable
     let mut grm_buf = Vec::new();

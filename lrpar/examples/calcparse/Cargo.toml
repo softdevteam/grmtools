@@ -1,11 +1,11 @@
 [package]
-name = "calc"
+name = "calcparse"
 version = "0.1.0"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 
 [[bin]]
 doc = false
-name = "calc"
+name = "calcparse"
 
 [build-dependencies]
 lrlex = { path="../../../lrlex" }
