@@ -73,12 +73,11 @@ extern crate num_traits;
 #[macro_use]
 extern crate serde;
 
-mod u32struct;
+mod idxnewtype;
 pub mod yacc;
 
 /// A type specifically for nonterminal indices.
-pub use u32struct::NTIdx;
-pub use u32struct::{PIdx, SIdx, TIdx};
+pub use idxnewtype::{NTIdx, PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

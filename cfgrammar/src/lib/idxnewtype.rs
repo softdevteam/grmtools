@@ -38,57 +38,7 @@ use std::num::TryFromIntError;
 
 use num_traits::{self, PrimInt, Unsigned};
 
-macro_rules! u32struct {
-    ($(#[$attr:meta])* $n: ident, $t: ident) => {
-        $(#[$attr])*
-        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
-        pub struct $n {
-            v: $t
-        }
-
-        impl From<u32> for $n {
-            fn from(v: u32) -> Self {
-                if v > u32::from($t::max_value()) {
-                    panic!("Overflow");
-                }
-                $n{v: v as $t}
-            }
-        }
-
-        impl From<usize> for $n {
-            fn from(v: usize) -> Self {
-                if v > usize::from($t::max_value()) {
-                    panic!("Overflow");
-                }
-                $n{v: v as $t}
-            }
-        }
-
-        impl From<$n> for usize {
-            fn from(st: $n) -> Self {
-                st.v as usize
-            }
-        }
-
-        impl From<$n> for u32 {
-            fn from(st: $n) -> Self {
-                u32::from(st.v)
-            }
-        }
-
-        impl TryFrom<$n> for u8 where usize: From<$n>
-        {
-            type Error = TryFromIntError;
-
-            fn try_from(st: $n) -> Result<Self, Self::Error> {
-                Ok(u8::try_from(usize::from(st.v))?)
-            }
-        }
-    }
-}
-
-macro_rules! transitionmacro {
+macro_rules! IdxNewtype {
     ($(#[$attr:meta])* $n: ident) => {
         $(#[$attr])*
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -119,8 +69,7 @@ macro_rules! transitionmacro {
             }
         }
 
-        impl<T: PrimInt + Unsigned> TryFrom<$n<T>>
-                                for u8
+        impl<T: PrimInt + Unsigned> TryFrom<$n<T>> for u8
                               where T: Unsigned, usize: From<T>
         {
             type Error = TryFromIntError;
@@ -138,16 +87,16 @@ macro_rules! transitionmacro {
 // for now, knowing that we can transparently move the storage type from u16 to u32 in the future
 // without changing the user visible API.
 
-transitionmacro!(
+IdxNewtype!(
     /// A type specifically for nonterminal indices.
     NTIdx);
-transitionmacro!(
+IdxNewtype!(
     /// A type specifically for production indices (e.g. a rule `E::=A|B` would
     /// have two productions for the single rule `E`).
     PIdx);
-transitionmacro!(
+IdxNewtype!(
     /// A type specifically for symbol indices (within a production).
     SIdx);
-transitionmacro!(
+IdxNewtype!(
     /// A type specifically for token indices.
     TIdx);
