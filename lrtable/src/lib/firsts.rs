@@ -30,6 +30,9 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::marker::PhantomData;
+
+use num_traits::{PrimInt, Unsigned};
 use vob::Vob;
 
 use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
@@ -38,7 +41,7 @@ use cfgrammar::yacc::YaccGrammar;
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
 /// grammar:
 /// ```ignore
-///   let grm = yacc_grm(YaccKind::Original, "
+///   let grm = YaccGrammar::new(YaccKind::Original, "
 ///     S: A 'b';
 ///     A: 'a'
 ///      | ;").unwrap();
@@ -53,21 +56,23 @@ use cfgrammar::yacc::YaccGrammar;
 ///   assert!(firsts.is_epsilon_set(grm.nonterm_idx("A").unwrap()));
 /// ```
 #[derive(Debug)]
-pub struct Firsts {
+pub struct Firsts<StorageT> {
     prod_firsts: Vec<Vob>,
-    prod_epsilons: Vob
+    prod_epsilons: Vob,
+    phantom: PhantomData<StorageT>
 }
 
-impl Firsts {
+impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
     /// Generates and returns the firsts set for the given grammar.
-    pub fn new(grm: &YaccGrammar) -> Firsts {
+    pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
         let mut prod_firsts = Vec::with_capacity(grm.nonterms_len() as usize);
         for _ in 0..grm.nonterms_len() {
             prod_firsts.push(Vob::from_elem(grm.terms_len() as usize, false));
         }
         let mut firsts = Firsts {
-            prod_firsts  : prod_firsts,
+            prod_firsts,
             prod_epsilons: Vob::from_elem(grm.nonterms_len() as usize, false),
+            phantom      : PhantomData
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -83,7 +88,7 @@ impl Firsts {
                     if prod.is_empty() {
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
-                        if !firsts.is_epsilon_set(rul_i.into()) {
+                        if !firsts.is_epsilon_set(rul_i) {
                             firsts.prod_epsilons.set(usize::from(rul_i), true);
                             changed = true;
                         }
@@ -139,24 +144,24 @@ impl Firsts {
     }
 
     /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
-    pub fn is_set(&self, nidx: NTIdx, tidx: TIdx) -> bool {
+    pub fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
         self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
-    /// Get all the firsts for production `nidx`.
-    pub fn prod_firsts(&self, nidx: NTIdx) -> &Vob {
-        &self.prod_firsts[usize::from(usize::from(nidx))]
+    /// Get all the firsts for production `ntidx`.
+    pub fn prod_firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob {
+        &self.prod_firsts[usize::from(ntidx)]
     }
 
-    /// Returns true if the nonterminal `nidx` has epsilon in its first set.
-    pub fn is_epsilon_set(&self, nidx: NTIdx) -> bool {
-        self.prod_epsilons[usize::from(usize::from(nidx))]
+    /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
+    pub fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool {
+        self.prod_epsilons[usize::from(ntidx)]
     }
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
-    pub fn set(&mut self, nidx: NTIdx, tidx: TIdx) -> bool {
-        let prod = &mut self.prod_firsts[usize::from(nidx)];
+    pub fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+        let prod = &mut self.prod_firsts[usize::from(ntidx)];
         if prod[usize::from(tidx)] {
             true
         }
@@ -170,11 +175,15 @@ impl Firsts {
 
 #[cfg(test)]
 mod test {
-    use super::Firsts;
     use cfgrammar::Grammar;
-    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
+    use num_traits::{PrimInt, Unsigned};
 
-    fn has(grm: &YaccGrammar, firsts: &Firsts, rn: &str, should_be: Vec<&str>) {
+    use super::Firsts;
+
+    fn has<StorageT: PrimInt + Unsigned>
+          (grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>, rn: &str, should_be: Vec<&str>)
+    {
         let nt_i = grm.nonterm_idx(rn).unwrap();
         for i in 0 .. grm.terms_len() {
             let n = match grm.term_name(i.into()) {
@@ -201,7 +210,7 @@ mod test {
 
     #[test]
     fn test_first(){
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start C
           %token c d
           %%
@@ -219,7 +228,7 @@ mod test {
 
     #[test]
     fn test_first_no_subsequent_nonterminals() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start C
           %token c d
           %%
@@ -233,7 +242,7 @@ mod test {
 
     #[test]
     fn test_first_epsilon() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start A
           %token a b c
           %%
@@ -250,7 +259,7 @@ mod test {
 
     #[test]
     fn test_last_epsilon() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start A
           %token b c
           %%
@@ -266,7 +275,7 @@ mod test {
 
     #[test]
     fn test_first_no_multiples() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start A
           %token b c
           %%
@@ -278,7 +287,7 @@ mod test {
     }
 
     fn eco_grammar() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
           %start S
           %token a b c d f
           %%
@@ -305,7 +314,7 @@ mod test {
 
     #[test]
     fn test_first_from_eco_bug() {
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
           %start E
           %token a b c d e f
           %%

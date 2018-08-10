@@ -68,25 +68,25 @@
 
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
+extern crate num_traits;
 #[cfg(feature="serde")]
 #[macro_use]
 extern crate serde;
 
-mod u32struct;
+mod idxnewtype;
 pub mod yacc;
 
 /// A type specifically for nonterminal indices.
-pub use u32struct::NTIdx;
-pub use u32struct::{PIdx, SIdx, TIdx};
+pub use idxnewtype::{NTIdx, PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Symbol {
-    Nonterm(NTIdx),
-    Term(TIdx)
+pub enum Symbol<StorageT> {
+    Nonterm(NTIdx<StorageT>),
+    Term(TIdx<StorageT>)
 }
 
-pub trait Grammar {
+pub trait Grammar<StorageT> {
     /// How many terminals does this grammar have?
     fn terms_len(&self) -> u32;
     /// How many productions does this grammar have?
@@ -94,5 +94,5 @@ pub trait Grammar {
     /// How many nonterminals does this grammar have?
     fn nonterms_len(&self) -> u32;
     /// What is the index of the start rule?
-    fn start_rule_idx(&self) -> NTIdx;
+    fn start_rule_idx(&self) -> NTIdx<StorageT>;
 }

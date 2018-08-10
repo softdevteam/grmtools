@@ -33,42 +33,49 @@
 // This macro generates a struct which exposes a u32 API (but which may, internally, use a smaller
 // storage size).
 
-macro_rules! u32struct {
-    ($(#[$attr:meta])* $n: ident, $t: ident) => {
+use std::convert::TryFrom;
+use std::num::TryFromIntError;
+
+use num_traits::{self, PrimInt, Unsigned};
+
+macro_rules! IdxNewtype {
+    ($(#[$attr:meta])* $n: ident) => {
         $(#[$attr])*
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
-        pub struct $n {
-            v: $t
-        }
+        pub struct $n<T>(pub T);
 
-        impl From<u32> for $n {
-            fn from(v: u32) -> Self {
-                if v > u32::from($t::max_value()) {
-                    panic!("Overflow");
-                }
-                $n{v: v as $t}
-            }
-        }
-
-        impl From<usize> for $n {
+        impl<T: PrimInt + Unsigned> From<usize> for $n<T> {
             fn from(v: usize) -> Self {
-                if v > usize::from($t::max_value()) {
-                    panic!("Overflow");
-                }
-                $n{v: v as $t}
+                $n(num_traits::cast(v).unwrap())
             }
         }
 
-        impl From<$n> for usize {
-            fn from(st: $n) -> Self {
-                st.v as usize
+        impl<T: PrimInt + Unsigned> From<u32> for $n<T> {
+            fn from(v: u32) -> Self {
+                $n(num_traits::cast(v).unwrap())
             }
         }
 
-        impl From<$n> for u32 {
-            fn from(st: $n) -> Self {
-                u32::from(st.v)
+        impl<T: PrimInt + Unsigned> From<$n<T>> for usize {
+            fn from(st: $n<T>) -> Self {
+                num_traits::cast(st.0).unwrap()
+            }
+        }
+
+        impl<T: PrimInt + Unsigned> From<$n<T>> for u32 where T: Unsigned {
+            fn from(st: $n<T>) -> Self {
+                num_traits::cast(st.0).unwrap()
+            }
+        }
+
+        impl<T: PrimInt + Unsigned> TryFrom<$n<T>> for u8
+                              where T: Unsigned, usize: From<T>
+        {
+            type Error = TryFromIntError;
+
+            fn try_from(st: $n<T>) -> Result<Self, Self::Error> {
+                Ok(u8::try_from(usize::from(st.0))?)
             }
         }
     }
@@ -80,20 +87,16 @@ macro_rules! u32struct {
 // for now, knowing that we can transparently move the storage type from u16 to u32 in the future
 // without changing the user visible API.
 
-u32struct!(
+IdxNewtype!(
     /// A type specifically for nonterminal indices.
-    NTIdx,
-    u16);
-u32struct!(
+    NTIdx);
+IdxNewtype!(
     /// A type specifically for production indices (e.g. a rule `E::=A|B` would
     /// have two productions for the single rule `E`).
-    PIdx,
-    u16);
-u32struct!(
+    PIdx);
+IdxNewtype!(
     /// A type specifically for symbol indices (within a production).
-    SIdx,
-    u16);
-u32struct!(
+    SIdx);
+IdxNewtype!(
     /// A type specifically for token indices.
-    TIdx,
-    u16);
+    TIdx);

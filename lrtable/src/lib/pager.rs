@@ -32,13 +32,15 @@
 
 use std::collections::HashSet;
 use std::collections::hash_map::HashMap;
+use std::hash::Hash;
 
+use cfgrammar::{Grammar, Symbol, SIdx};
+use cfgrammar::yacc::YaccGrammar;
+use num_traits::{PrimInt, Unsigned};
 use vob::Vob;
 
 use StIdx;
 use firsts::Firsts;
-use cfgrammar::{Grammar, Symbol, SIdx};
-use cfgrammar::yacc::YaccGrammar;
 use itemset::Itemset;
 use stategraph::StateGraph;
 
@@ -56,9 +58,9 @@ use stategraph::StateGraph;
 //   Measuring and extending LR(1) parser generation
 //     Xin Chen, PhD thesis, University of Hawaii, 2009
 
-impl Itemset {
+impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
     /// Return true if `other` is weakly compatible with `self`.
-    fn weakly_compatible(&self, other: &Itemset) -> bool {
+    fn weakly_compatible(&self, other: &Self) -> bool {
         // The weakly compatible check is one of the three core parts of Pager's algorithm
         // (along with merging and change propagation). In essence, there are three conditions
         // which, if satisfied, guarantee that `other` is weakly compatible with `self`
@@ -120,7 +122,7 @@ impl Itemset {
 
     /// Merge `other` into `self`, returning `true` if this led to any changes. If `other` is not
     /// weakly compatible with `self`, this function's effects and return value are undefined.
-    fn weakly_merge(&mut self, other: &Itemset) -> bool {
+    fn weakly_merge(&mut self, other: &Self) -> bool {
         let mut changed = false;
         for (&(prod_i, dot), ctx) in &mut self.items {
             if ctx.or(&other.items[&(prod_i, dot)]) {
@@ -142,22 +144,25 @@ fn vob_intersect(v1: &Vob, v2: &Vob) -> bool {
 }
 
 /// Create a `StateGraph` from 'grm'.
-pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
+pub fn pager_stategraph<StorageT: Hash + PrimInt + Unsigned>
+                       (grm: &YaccGrammar<StorageT>)
+                     -> StateGraph<StorageT>
+{
     // This function can be seen as a modified version of items() from Chen's dissertation.
 
-    let firsts                                 = Firsts::new(grm);
+    let firsts = Firsts::new(grm);
     // closed_states and core_states are both equally sized vectors of states. Core states are
     // smaller, and used for the weakly compatible checks, but we ultimately need to return
     // closed states. Closed states which are None are those which require processing; thus
     // closed_states also implicitly serves as a todo list.
-    let mut closed_states                      = Vec::new();
-    let mut core_states                        = Vec::new();
-    let mut edges: Vec<HashMap<Symbol, StIdx>> = Vec::new();
+    let mut closed_states = Vec::new();
+    let mut core_states = Vec::new();
+    let mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>> = Vec::new();
 
     let mut state0 = Itemset::new(grm);
     let mut ctx = Vob::from_elem(grm.terms_len() as usize, false);
     ctx.set(usize::from(grm.eof_term_idx()), true);
-    state0.add(grm.start_prod(), SIdx::from(0 as u32), &ctx);
+    state0.add(grm.start_prod(), SIdx::from(0u32), &ctx);
     closed_states.push(None);
     core_states.push(state0);
     edges.push(HashMap::new());
@@ -299,12 +304,14 @@ pub fn pager_stategraph(grm: &YaccGrammar) -> StateGraph {
 
 /// Garbage collect `zip_states` (of `(core_states, closed_state)`) and `edges`. Returns a new pair
 /// with unused states and their corresponding edges removed.
-fn gc(mut states: Vec<(Itemset, Itemset)>, mut edges: Vec<HashMap<Symbol, StIdx>>)
-      -> (Vec<(Itemset, Itemset)>, Vec<HashMap<Symbol, StIdx>>) {
+fn gc<StorageT: Eq + Hash + PrimInt>
+     (mut states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
+      mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>>)
+  -> (Vec<(Itemset<StorageT>, Itemset<StorageT>)>, Vec<HashMap<Symbol<StorageT>, StIdx>>) {
     // First of all, do a simple pass over all states. All state indexes reachable from the
     // start state will be inserted into the 'seen' set.
     let mut todo = HashSet::new();
-    todo.insert(StIdx::from(0 as u32));
+    todo.insert(StIdx::from(0u32));
     let mut seen = HashSet::new();
     while !todo.is_empty() {
         // XXX This is the clumsy way we're forced to do what we'd prefer to be:
@@ -368,7 +375,7 @@ mod test {
     use vob::Vob;
 
     use cfgrammar::Symbol;
-    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use pager::pager_stategraph;
     use stategraph::state_exists;
 
@@ -408,7 +415,7 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
           %start S
           %token a b c d
           %%
@@ -425,12 +432,12 @@ mod test {
         assert_eq!(sg.all_states_len(), 10);
         assert_eq!(sg.all_edges_len(), 10);
 
-        assert_eq!(sg.closed_state(StIdx::from(0 as u32)).items.len(), 3);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "^", 0, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "S", 0, 0, vec!["$", "b"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "S", 1, 0, vec!["$", "b"]);
+        assert_eq!(sg.closed_state(StIdx::from(0u32)).items.len(), 3);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "^", 0, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "S", 0, 0, vec!["$", "b"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "S", 1, 0, vec!["$", "b"]);
 
-        let s1 = sg.edge(StIdx::from(0 as u32), Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
+        let s1 = sg.edge(StIdx::from(0u32), Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s1).items.len(), 2);
         state_exists(&grm, &sg.closed_state(s1), "^", 0, 1, vec!["$"]);
         state_exists(&grm, &sg.closed_state(s1), "S", 0, 1, vec!["$", "b"]);
@@ -439,7 +446,7 @@ mod test {
         assert_eq!(sg.closed_state(s2).items.len(), 1);
         state_exists(&grm, &sg.closed_state(s2), "S", 0, 2, vec!["$", "b"]);
 
-        let s3 = sg.edge(StIdx::from(0 as u32), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s3 = sg.edge(StIdx::from(0u32), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s3).items.len(), 4);
         state_exists(&grm, &sg.closed_state(s3), "S", 1, 1, vec!["$", "b", "c"]);
         state_exists(&grm, &sg.closed_state(s3), "A", 0, 0, vec!["a"]);
@@ -482,7 +489,7 @@ mod test {
 
     // Pager grammar
     fn grammar_pager() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
             %start X
             %%
              X : 'a' Y 'd' | 'a' Z 'c' | 'a' T | 'b' Y 'e' | 'b' Z 'd' | 'b' T;
@@ -501,16 +508,16 @@ mod test {
         assert_eq!(sg.all_edges_len(), 27);
 
         // State 0
-        assert_eq!(sg.closed_state(StIdx::from(0 as u32)).items.len(), 7);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "^", 0, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 0, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 1, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 2, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 3, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 4, 0, vec!["$"]);
-        state_exists(&grm, &sg.closed_state(StIdx::from(0 as u32)), "X", 5, 0, vec!["$"]);
+        assert_eq!(sg.closed_state(StIdx::from(0u32)).items.len(), 7);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "^", 0, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "X", 0, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "X", 1, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "X", 2, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "X", 3, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "X", 4, 0, vec!["$"]);
+        state_exists(&grm, &sg.closed_state(StIdx::from(0u32)), "X", 5, 0, vec!["$"]);
 
-        let s1 = sg.edge(StIdx::from(0 as u32), Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        let s1 = sg.edge(StIdx::from(0u32), Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s1).items.len(), 7);
         state_exists(&grm, &sg.closed_state(s1), "X", 0, 1, vec!["a", "d", "e", "$"]);
         state_exists(&grm, &sg.closed_state(s1), "X", 1, 1, vec!["a", "d", "e", "$"]);
@@ -520,7 +527,7 @@ mod test {
         state_exists(&grm, &sg.closed_state(s1), "Z", 0, 0, vec!["c"]);
         state_exists(&grm, &sg.closed_state(s1), "T", 0, 0, vec!["a", "d", "e", "$"]);
 
-        let s7 = sg.edge(StIdx::from(0 as u32), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s7 = sg.edge(StIdx::from(0u32), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s7).items.len(), 7);
         state_exists(&grm, &sg.closed_state(s7), "X", 3, 1, vec!["a", "d", "e", "$"]);
         state_exists(&grm, &sg.closed_state(s7), "X", 4, 1, vec!["a", "d", "e", "$"]);
@@ -581,7 +588,7 @@ mod test {
         // Ommitted successors from the graph in Fig.3
 
         // X-successor of S0
-        let s0x = sg.edge(StIdx::from(0 as u32), Symbol::Nonterm(grm.nonterm_idx("X").unwrap())).unwrap();
+        let s0x = sg.edge(StIdx::from(0u32), Symbol::Nonterm(grm.nonterm_idx("X").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s0x), "^", 0, 1, vec!["$"]);
 
         // Y-successor of S1 (and it's d-successor)
@@ -649,7 +656,7 @@ mod test {
         let sg = pager_stategraph(&grm);
 
         // State 0
-        assert_eq!(sg.core_state(StIdx::from(0 as u32)).items.len(), 1);
-        state_exists(&grm, &sg.core_state(StIdx::from(0 as u32)), "^", 0, 0, vec!["$"]);
+        assert_eq!(sg.core_state(StIdx::from(0u32)).items.len(), 1);
+        state_exists(&grm, &sg.core_state(StIdx::from(0u32)), "^", 0, 0, vec!["$"]);
     }
 }

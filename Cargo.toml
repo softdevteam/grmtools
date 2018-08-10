@@ -2,7 +2,9 @@
 members=[
     "cfgrammar",
     "lrlex",
+    "lrlex/examples/calclex",
     "lrpar",
+    "lrpar/examples/calcparse",
     "lrtable"
 ]
 

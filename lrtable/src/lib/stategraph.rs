@@ -31,44 +31,49 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::HashMap;
+use std::hash::Hash;
 
-use StIdx;
 use cfgrammar::{Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
+use num_traits::{PrimInt, Unsigned};
+
+use StIdx;
 use itemset::Itemset;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StateGraph {
+pub struct StateGraph<StorageT: Eq + Hash> {
     /// A vector of `(core_states, closed_states)` tuples.
-    states: Vec<(Itemset, Itemset)>,
+    states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
     /// For each state in `states`, edges is a hashmap from symbols to state offsets.
-    edges: Vec<HashMap<Symbol, StIdx>>
+    edges: Vec<HashMap<Symbol<StorageT>, StIdx>>
 }
 
-impl StateGraph {
-    pub(crate) fn new(states: Vec<(Itemset, Itemset)>, edges: Vec<HashMap<Symbol, StIdx>>)
-                   -> StateGraph {
+impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
+    pub(crate) fn new(states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
+                      edges: Vec<HashMap<Symbol<StorageT>, StIdx>>)
+                   -> Self
+    {
         StateGraph{states, edges}
     }
 
     /// Return the itemset for closed state `st_idx`. Panics if `st_idx` doesn't exist.
-    pub fn closed_state(&self, st_idx: StIdx) -> &Itemset {
+    pub fn closed_state(&self, st_idx: StIdx) -> &Itemset<StorageT> {
         &self.states[usize::from(st_idx)].1
     }
 
     /// Return an iterator over all closed states in this `StateGraph`.
-    pub fn iter_closed_states<'a>(&'a self) -> Box<Iterator<Item=&'a Itemset> + 'a> {
+    pub fn iter_closed_states<'a>(&'a self) -> Box<Iterator<Item=&'a Itemset<StorageT>> + 'a> {
         Box::new(self.states.iter().map(|x| &x.1))
     }
 
     /// Return the itemset for core state `st_idx` or `None` if it doesn't exist.
-    pub fn core_state(&self, st_idx: StIdx) -> &Itemset {
+    pub fn core_state(&self, st_idx: StIdx) -> &Itemset<StorageT> {
         &self.states[usize::from(st_idx)].0
     }
 
     /// Return an iterator over all core states in this `StateGraph`.
-    pub fn iter_core_states<'a>(&'a self) -> Box<Iterator<Item=&'a Itemset> + 'a> {
+    pub fn iter_core_states<'a>(&'a self) -> Box<Iterator<Item=&'a Itemset<StorageT>> + 'a> {
         Box::new(self.states.iter().map(|x| &x.0))
     }
 
@@ -80,14 +85,14 @@ impl StateGraph {
     }
 
     /// Return the state pointed to by `sym` from `st_idx` or `None` otherwise.
-    pub fn edge(&self, st_idx: StIdx, sym: Symbol) -> Option<StIdx> {
+    pub fn edge(&self, st_idx: StIdx, sym: Symbol<StorageT>) -> Option<StIdx> {
         self.edges.get(usize::from(st_idx))
                   .and_then(|x| x.get(&sym))
                   .cloned()
     }
 
     /// Return the edges for state `st_idx`. Panics if `st_idx` doesn't exist.
-    pub fn edges(&self, st_idx: StIdx) -> &HashMap<Symbol, StIdx> {
+    pub fn edges(&self, st_idx: StIdx) -> &HashMap<Symbol<StorageT>, StIdx> {
         &self.edges[usize::from(st_idx)]
     }
 
@@ -96,7 +101,7 @@ impl StateGraph {
         self.edges.iter().fold(0, |a, x| a + x.len())
     }
 
-    fn pp(&self, grm: &YaccGrammar, core_states: bool) -> String {
+    fn pp(&self, grm: &YaccGrammar<StorageT>, core_states: bool) -> String {
         fn num_digits(i: u32) -> usize {
             // In an ideal world, we'd do ((i as f64).log10() as usize) + 1, but we then hit
             // floating point rounding errors (e.g. 1000.0.log10() == 2.999999999ish, not
@@ -104,7 +109,7 @@ impl StateGraph {
             i.to_string().len()
         }
 
-        fn fmt_sym(grm: &YaccGrammar, sym: Symbol) -> String {
+        fn fmt_sym<StorageT: PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>, sym: Symbol<StorageT>) -> String {
             match sym {
                 Symbol::Nonterm(ntidx) => grm.nonterm_name(ntidx).to_string(),
                 Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap_or(""))
@@ -173,12 +178,12 @@ impl StateGraph {
     }
 
     /// Return a pretty printed version of the core states, and all edges.
-    pub fn pp_core_states(&self, grm: &YaccGrammar) -> String {
+    pub fn pp_core_states(&self, grm: &YaccGrammar<StorageT>) -> String {
         self.pp(grm, true)
     }
 
     /// Return a pretty printed version of the closed states, and all edges.
-    pub fn pp_closed_states(&self, grm: &YaccGrammar) -> String {
+    pub fn pp_closed_states(&self, grm: &YaccGrammar<StorageT>) -> String {
         self.pp(grm, false)
     }
 }
@@ -187,9 +192,13 @@ impl StateGraph {
 use cfgrammar::{Grammar};
 
 #[cfg(test)]
-pub fn state_exists(grm: &YaccGrammar, is: &Itemset, nt: &str, prod_off: usize, dot: usize, la:
-                    Vec<&str>) {
-
+pub fn state_exists<StorageT: Hash + PrimInt + Unsigned>
+                   (grm: &YaccGrammar<StorageT>,
+                    is: &Itemset<StorageT>,
+                    nt: &str,
+                    prod_off: usize,
+                    dot: usize, la: Vec<&str>)
+{
     let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot.into())];
     for i in 0..grm.terms_len() as usize {
@@ -220,14 +229,14 @@ pub fn state_exists(grm: &YaccGrammar, is: &Itemset, nt: &str, prod_off: usize, 
 #[cfg(test)]
 mod test {
     use cfgrammar::{Symbol};
-    use cfgrammar::yacc::{yacc_grm, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use StIdx;
     use pager::pager_stategraph;
 
     #[test]
     fn test_statetable_core() {
         // Taken from p13 of https://link.springer.com/article/10.1007/s00236-010-0115-6
-        let grm = yacc_grm(YaccKind::Original, &"
+        let grm = YaccGrammar::new(YaccKind::Original, &"
             %start A
             %%
             A: 'OPEN_BRACKET' A 'CLOSE_BRACKET'
@@ -240,7 +249,7 @@ mod test {
         assert_eq!(sg.all_edges_len(), 9);
 
         // This follows the (not particularly logical) ordering of state numbers in the paper.
-        let s0 = StIdx::from(0 as u32);
+        let s0 = StIdx::from(0u32);
         sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap(); // s1
         let s2 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
         let s3 = sg.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();

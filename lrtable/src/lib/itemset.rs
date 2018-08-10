@@ -31,11 +31,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::{Entry, HashMap};
-use std::hash::BuildHasherDefault;
+use std::hash::{BuildHasherDefault, Hash};
 
 use cfgrammar::{Grammar, PIdx, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 use fnv::FnvHasher;
+use num_traits::{PrimInt, Unsigned};
 use vob::Vob;
 
 use firsts::Firsts;
@@ -45,19 +46,19 @@ pub type Ctx = Vob;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Itemset {
-    pub items: HashMap<(PIdx, SIdx), Ctx, BuildHasherDefault<FnvHasher>>
+pub struct Itemset<StorageT: Eq + Hash> {
+    pub items: HashMap<(PIdx<StorageT>, SIdx<StorageT>), Ctx, BuildHasherDefault<FnvHasher>>
 }
 
-impl Itemset {
+impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
     /// Create a blank Itemset.
-    pub fn new(_: &YaccGrammar) -> Itemset {
+    pub fn new(_: &YaccGrammar<StorageT>) -> Self {
         Itemset {items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default())}
     }
 
     /// Add an item `(prod, dot)` with context `ctx` to this itemset. Returns true if this led to
     /// any changes in the itemset.
-    pub fn add(&mut self, prod: PIdx, dot: SIdx, ctx: &Ctx) -> bool {
+    pub fn add(&mut self, prod: PIdx<StorageT>, dot: SIdx<StorageT>, ctx: &Ctx) -> bool {
         let entry = self.items.entry((prod, dot));
         match entry {
             Entry::Occupied(mut e) => {
@@ -71,7 +72,7 @@ impl Itemset {
     }
 
     /// Create a new itemset which is a closed version of `self`.
-    pub fn close(&self, grm: &YaccGrammar, firsts: &Firsts) -> Itemset {
+    pub fn close(&self, grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>) -> Self {
         // This function can be seen as a merger of getClosure and getContext from Chen's
         // dissertation.
 
@@ -112,7 +113,7 @@ impl Itemset {
                         Some(i) => prod_i = PIdx::from(i),
                         None => break
                     }
-                    dot = SIdx::from(0 as u32);
+                    dot = SIdx::from(0u32);
                     zero_todos.set(prod_i.into(), false);
                 }
             }
@@ -148,7 +149,7 @@ impl Itemset {
                 }
 
                 for ref_prod_i in grm.nonterm_to_prods(nonterm_i).iter() {
-                    if new_is.add(*ref_prod_i, SIdx::from(0 as u32), &new_ctx) {
+                    if new_is.add(*ref_prod_i, SIdx::from(0u32), &new_ctx) {
                         zero_todos.set(usize::from(*ref_prod_i), true);
                     }
                 }
@@ -158,7 +159,7 @@ impl Itemset {
     }
 
     /// Create a new Itemset based on calculating the goto of 'sym' on the current Itemset.
-    pub fn goto(&self, grm: &YaccGrammar, sym: &Symbol) -> Itemset {
+    pub fn goto(&self, grm: &YaccGrammar<StorageT>, sym: &Symbol<StorageT>) -> Self {
         // This is called 'transition' in Chen's dissertation, though note that the definition
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(grm);
@@ -179,13 +180,13 @@ mod test {
     use super::Itemset;
     use firsts::Firsts;
     use cfgrammar::{Grammar, Symbol};
-    use cfgrammar::yacc::{yacc_grm, YaccGrammar, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use stategraph::state_exists;
 
     #[test]
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
-        let grm = &yacc_grm(YaccKind::Original, &"
+        let grm = &YaccGrammar::new(YaccKind::Original, &"
           %start S
           %%
           S: L '=' R | R;
@@ -197,7 +198,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(grm.terms_len() as usize, false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], (0 as u32).into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0u32.into(), &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(cls_is.items.len(), 6);
@@ -210,7 +211,7 @@ mod test {
     }
 
     fn eco_grammar() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
           %start S
           %token a b c d f
           %%
@@ -231,7 +232,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(grm.terms_len() as usize, false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], (0 as u32).into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0u32.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -240,7 +241,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap())[0], (0 as u32).into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap())[0], 0u32.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
         state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
@@ -256,7 +257,7 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        yacc_grm(YaccKind::Original, &"
+        YaccGrammar::new(YaccKind::Original, &"
           %start S
           %token a b c d
           %%
@@ -273,7 +274,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(grm.terms_len() as usize, false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], (0 as u32).into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0u32.into(), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -284,7 +285,7 @@ mod test {
         la = Vob::from_elem(grm.terms_len() as usize, false);
         la.set(usize::from(grm.term_idx("b").unwrap()), true);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap())[1], (1 as u32).into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap())[1], 1u32.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
         state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
@@ -293,7 +294,7 @@ mod test {
         is = Itemset::new(&grm);
         la = Vob::from_elem(grm.terms_len() as usize, false);
         la.set(usize::from(grm.term_idx("a").unwrap()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0], (1 as u32).into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0], 1u32.into(), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
@@ -307,7 +308,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(grm.terms_len() as usize, false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], (0 as u32).into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0u32.into(), &la);
         let cls_is = is.close(&grm, &firsts);
 
         let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
