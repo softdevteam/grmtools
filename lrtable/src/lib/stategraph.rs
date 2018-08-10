@@ -249,7 +249,7 @@ mod test {
         assert_eq!(sg.all_edges_len(), 9);
 
         // This follows the (not particularly logical) ordering of state numbers in the paper.
-        let s0 = StIdx::from(0u32);
+        let s0 = StIdx(0);
         sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap(); // s1
         let s2 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
         let s3 = sg.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
