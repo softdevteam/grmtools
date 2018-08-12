@@ -55,20 +55,18 @@ pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 /// StIdx is a wrapper for a 32-bit state index.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StIdx {
-    // The biggest grammars I'm currently aware of have just over 1000 states, so in practise it
-    // looks like a u16 is always big enough to store state indexes. So, for as long as we can get
-    // away with it, we only store u16. Nevertheless, we tell the world we only deal in u32 so that
-    // we can change our storage to u32 later transparently.
-    v: u16
-}
+// The biggest grammars I'm currently aware of have just over 1000 states, so in practise it
+// looks like a u16 is always big enough to store state indexes. So, for as long as we can get
+// away with it, we only store u16. Nevertheless, we tell the world we only deal in u32 so that
+// we can change our storage to u32 later transparently.
+pub struct StIdx(u16);
 
 impl From<u32> for StIdx {
     fn from(v: u32) -> Self {
         if v > u32::from(u16::max_value()) {
             panic!("Overflow");
         }
-        StIdx{v: v as u16}
+        StIdx(v as u16)
     }
 }
 
@@ -77,19 +75,19 @@ impl From<usize> for StIdx {
         if v > usize::from(u16::max_value()) {
             panic!("Overflow");
         }
-        StIdx{v: v as u16}
+        StIdx(v as u16)
     }
 }
 
 impl From<StIdx> for usize {
     fn from(st: StIdx) -> Self {
-        st.v as usize
+        st.0 as usize
     }
 }
 
 impl From<StIdx> for u32 {
     fn from(st: StIdx) -> Self {
-        st.v as u32
+        st.0 as u32
     }
 }
 

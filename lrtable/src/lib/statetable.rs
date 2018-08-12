@@ -431,7 +431,7 @@ mod test {
         let sg = pager_stategraph(&grm);
         assert_eq!(sg.all_states_len(), 9);
 
-        let s0 = StIdx::from(0u32);
+        let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s2 = sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Term").unwrap())).unwrap();
         let s3 = sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Factor").unwrap())).unwrap();
@@ -511,7 +511,7 @@ mod test {
         assert_eq!(st.actions.len(), 8);
 
         // We only extract the states necessary to test those rules affected by the reduce/reduce.
-        let s0 = StIdx::from(0u32);
+        let s0 = StIdx(0);
         let s4 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
 
         assert_eq!(st.action(s4, grm.term_idx("x").unwrap()).unwrap(),
@@ -531,7 +531,7 @@ mod test {
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 15);
 
-        let s0 = StIdx::from(0u32);
+        let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
@@ -560,7 +560,7 @@ mod test {
             ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
-        let s0 = StIdx::from(0u32);
+        let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
         let s2 = sg.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
 
@@ -585,7 +585,7 @@ mod test {
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 15);
 
-        let s0 = StIdx::from(0u32);
+        let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
@@ -624,7 +624,7 @@ mod test {
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 24);
 
-        let s0 = StIdx::from(0u32);
+        let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
@@ -680,7 +680,7 @@ mod test {
         let st = StateTable::new(&grm, &sg).unwrap();
         assert_eq!(st.actions.len(), 34);
 
-        let s0 = StIdx::from(0u32);
+        let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
