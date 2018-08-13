@@ -215,8 +215,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
         for i in 0..sg.all_states_len() {
             nt_depth.clear();
             let mut only_reduces = true;
-            for j in 0..grm.terms_len() {
-                let off = actions_offset(grm.terms_len(), StIdx::from(i), TIdx::<StorageT>::from(j));
+            for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+                let off = actions_offset(grm.terms_len(), StIdx::from(i), tidx);
                 match actions.get(&off) {
                     Some(&Action::Reduce(p_idx)) => {
                         let prod_len = grm.prod(p_idx).len();

@@ -30,6 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -681,9 +682,10 @@ impl<StorageT: Hash + PrimInt + Unsigned> Dist<StorageT> {
                         }
                     };
 
-                    for j in 0..terms_len {
-                        let this_off = i * terms_len + j;
-                        let other_off = usize::from(sym_st_idx) * terms_len + j;
+                    for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+                        let this_off = i * terms_len + usize::try_from(tidx).unwrap();
+                        let other_off = usize::try_from(u32::from(sym_st_idx) * grm.terms_len()
+                                                        + u32::from(tidx)).unwrap();
 
                         if table[other_off] != u32::max_value()
                            && table[other_off] + d < table[this_off]

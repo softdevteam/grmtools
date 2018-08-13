@@ -108,9 +108,8 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
-                                for term_idx in 0..grm.terms_len() {
-                                    if firsts.is_set(nonterm_i, TIdx::from(term_idx))
-                                      && !firsts.set(rul_i, TIdx::from(term_idx)) {
+                                for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+                                    if firsts.is_set(nonterm_i, tidx) && !firsts.set(rul_i, tidx) {
                                         changed = true;
                                     }
                                 }
@@ -185,19 +184,19 @@ mod test {
           (grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>, rn: &str, should_be: Vec<&str>)
     {
         let nt_i = grm.nonterm_idx(rn).unwrap();
-        for i in 0 .. grm.terms_len() {
-            let n = match grm.term_name(i.into()) {
+        for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+            let n = match grm.term_name(tidx) {
                 Some(n) => n,
                 None => &"<no name>"
             };
             match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
-                    if !firsts.is_set(nt_i, i.into()) {
+                    if !firsts.is_set(nt_i, tidx) {
                         panic!("{} is not set in {}", n, rn);
                     }
                 }
                 None    => {
-                    if firsts.is_set(nt_i, i.into()) {
+                    if firsts.is_set(nt_i, tidx) {
                         panic!("{} is incorrectly set in {}", n, rn);
                     }
                 }

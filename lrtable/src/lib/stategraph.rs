@@ -190,6 +190,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
 
 #[cfg(test)]
 use cfgrammar::{Grammar};
+#[cfg(test)]
+use std::convert::TryFrom;
 
 #[cfg(test)]
 pub fn state_exists<StorageT: Hash + PrimInt + Unsigned>
@@ -201,16 +203,16 @@ pub fn state_exists<StorageT: Hash + PrimInt + Unsigned>
 {
     let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot.into())];
-    for i in 0..grm.terms_len() as usize {
-        let bit = ctx[i];
+    for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+        let bit = ctx[usize::try_from(tidx).unwrap()];
         let mut found = false;
         for t in la.iter() {
             let off = if t == &"$" {
-                    TIdx::from(grm.eof_term_idx())
+                    grm.eof_term_idx()
                 } else {
                     grm.term_idx(t).unwrap()
                 };
-            if off == i.into() {
+            if off == tidx {
                 if !bit {
                     panic!("bit for terminal {}, dot {} is not set in production {} of {} when it should be",
                            t, dot, prod_off, nt);
@@ -221,7 +223,7 @@ pub fn state_exists<StorageT: Hash + PrimInt + Unsigned>
         }
         if !found && bit {
             panic!("bit for terminal {}, dot {} is set in production {} of {} when it shouldn't be",
-                   grm.term_name(i.into()).unwrap(), dot, prod_off, nt);
+                   grm.term_name(tidx).unwrap(), dot, prod_off, nt);
         }
     }
 }

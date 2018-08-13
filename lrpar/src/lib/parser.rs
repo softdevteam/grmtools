@@ -110,8 +110,8 @@ Parser<'a, StorageT, TokId>
                       (Option<Node<StorageT, TokId>>, Vec<ParseError<StorageT, TokId>>)>
           where F: Fn(TIdx<StorageT>) -> u8
     {
-        for i in 0..grm.terms_len() {
-            assert!(term_cost(TIdx::from(i)) > 0);
+        for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+            assert!(term_cost(tidx) > 0);
         }
         let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0u32)];

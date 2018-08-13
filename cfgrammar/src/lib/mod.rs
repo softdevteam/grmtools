@@ -66,12 +66,16 @@
 
 #![feature(try_from)]
 
+use std::ops::Range;
+
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
 extern crate num_traits;
 #[cfg(feature="serde")]
 #[macro_use]
 extern crate serde;
+
+use num_traits::PrimInt;
 
 mod idxnewtype;
 pub mod yacc;
@@ -86,7 +90,7 @@ pub enum Symbol<StorageT> {
     Term(TIdx<StorageT>)
 }
 
-pub trait Grammar<StorageT> {
+pub trait Grammar<StorageT: PrimInt> {
     /// How many terminals does this grammar have?
     fn terms_len(&self) -> u32;
     /// How many productions does this grammar have?
@@ -95,4 +99,8 @@ pub trait Grammar<StorageT> {
     fn nonterms_len(&self) -> u32;
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> NTIdx<StorageT>;
+
+    fn iter_tidxs(&self, r: Range<u32>) -> Box<dyn Iterator<Item=TIdx<StorageT>>> {
+        Box::new(r.map(|x| TIdx(num_traits::cast(x).unwrap())))
+    }
 }

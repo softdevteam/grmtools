@@ -364,9 +364,9 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     /// inputs from this grammar.
     pub fn terms_map(&self) -> HashMap<&str, TIdx<StorageT>> {
         let mut m = HashMap::with_capacity(self.terms_len as usize - 1);
-        for i in 0..self.terms_len as usize {
-            if let Some(n) = self.term_names[i].as_ref() {
-                m.insert(&**n, TIdx::from(i));
+        for tidx in self.iter_tidxs(0..self.terms_len) {
+            if let Some(n) = self.term_names[usize::try_from(tidx).unwrap()].as_ref() {
+                m.insert(&**n, tidx);
             }
         }
         m
@@ -496,8 +496,8 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
         where F: Fn(TIdx<StorageT>) -> u8
     {
         let mut term_costs = Vec::with_capacity(grm.terms_len() as usize);
-        for i in 0..grm.terms_len() {
-            term_costs.push(term_cost(TIdx::from(i)));
+        for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+            term_costs.push(term_cost(tidx));
         }
         SentenceGenerator{grm,
                           term_costs,
