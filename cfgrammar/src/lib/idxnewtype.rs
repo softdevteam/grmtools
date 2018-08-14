@@ -33,8 +33,6 @@
 // This macro generates a struct which exposes a u32 API (but which may, internally, use a smaller
 // storage size).
 
-use std::convert::TryFrom;
-use std::num::TryFromIntError;
 
 use num_traits::{self, PrimInt, Unsigned};
 
@@ -66,16 +64,6 @@ macro_rules! IdxNewtype {
         impl<T: PrimInt + Unsigned> From<$n<T>> for u32 where T: Unsigned {
             fn from(st: $n<T>) -> Self {
                 num_traits::cast(st.0).unwrap()
-            }
-        }
-
-        impl<T: PrimInt + Unsigned> TryFrom<$n<T>> for u8
-                              where T: Unsigned, usize: From<T>
-        {
-            type Error = TryFromIntError;
-
-            fn try_from(st: $n<T>) -> Result<Self, Self::Error> {
-                Ok(u8::try_from(usize::from(st.0))?)
             }
         }
     }
