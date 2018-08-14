@@ -70,7 +70,7 @@ pub enum AssocKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct YaccGrammar<StorageT=u32> {
     /// How many nonterminals does this grammar have?
-    nonterms_len: u32,
+    nonterms_len: NTIdx<StorageT>,
     /// A mapping from `NTIdx` -> `String`.
     nonterm_names: Vec<String>,
     /// A mapping from `TIdx` -> `Option<String>`. Every user-specified terminal will have a name,
@@ -296,7 +296,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
         }
 
         Ok(YaccGrammar{
-            nonterms_len:     u32::try_from(nonterm_names.len()).unwrap(),
+            nonterms_len:     NTIdx::from(nonterm_names.len()),
             nonterm_names,
             terms_len:        u32::try_from(term_names.len()).unwrap(),
             eof_term_idx,
@@ -325,11 +325,6 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     /// Return the name of nonterminal `i`. Panics if `i` doesn't exist.
     pub fn nonterm_name(&self, i: NTIdx<StorageT>) -> &str {
         &self.nonterm_names[usize::from(i)]
-    }
-
-    /// Return an iterator which produces (in no particular order) all this grammar's valid `NTIdx`s.
-    pub fn iter_nonterm_idxs(&self) -> Box<dyn Iterator<Item=NTIdx<StorageT>>> {
-        Box::new((0..self.nonterms_len).map(|x| NTIdx::from(x)))
     }
 
     /// Get the sequence of symbols for production `i`. Panics if `i` doesn't exist.
@@ -401,27 +396,27 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     /// return `true` for a path from themselves to themselves.
     pub fn has_path(&self, from: NTIdx<StorageT>, to: NTIdx<StorageT>) -> bool {
         let mut seen = vec![];
-        seen.resize(self.nonterms_len() as usize, false);
+        seen.resize(usize::from(self.nonterms_len()), false);
         let mut todo = vec![];
-        todo.resize(self.nonterms_len() as usize, false);
+        todo.resize(usize::from(self.nonterms_len()), false);
         todo[usize::from(from)] = true;
         loop {
             let mut empty = true;
-            for i in 0..self.nonterms_len() as usize {
-                if !todo[i] {
+            for ntidx in self.iter_ntidxs() {
+                if !todo[usize::from(ntidx)] {
                     continue;
                 }
-                seen[i] = true;
-                todo[i] = false;
+                seen[usize::from(ntidx)] = true;
+                todo[usize::from(ntidx)] = false;
                 empty = false;
-                for p_idx in self.nonterm_to_prods(NTIdx::from(i)).iter() {
+                for p_idx in self.nonterm_to_prods(ntidx).iter() {
                     for sym in self.prod(*p_idx) {
-                        if let Symbol::Nonterm(nt_idx) = *sym {
-                            if nt_idx == to {
+                        if let Symbol::Nonterm(pt_ntidx) = *sym {
+                            if pt_ntidx == to {
                                 return true;
                             }
-                            if !seen[usize::from(nt_idx)] {
-                                todo[usize::from(nt_idx)] = true;
+                            if !seen[usize::from(pt_ntidx)] {
+                                todo[usize::from(pt_ntidx)] = true;
                             }
                         }
                     }
@@ -454,7 +449,7 @@ impl<StorageT: PrimInt + Unsigned> Grammar<StorageT> for YaccGrammar<StorageT> {
         self.terms_len
     }
 
-    fn nonterms_len(&self) -> u32 {
+    fn nonterms_len(&self) -> NTIdx<StorageT> {
         self.nonterms_len
     }
 
@@ -702,9 +697,9 @@ fn nonterm_min_costs<StorageT: PrimInt + Unsigned>
     // eventually we will reach a point where we can determine it definitively.
 
     let mut costs = vec![];
-    costs.resize(grm.nonterms_len() as usize, 0);
+    costs.resize(usize::from(grm.nonterms_len()), 0);
     let mut done = vec![];
-    done.resize(grm.nonterms_len() as usize, false);
+    done.resize(usize::from(grm.nonterms_len()), false);
     loop {
         let mut all_done = true;
         for i in 0..done.len() {
@@ -762,16 +757,16 @@ fn nonterm_max_costs<StorageT: PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u32>
 {
     let mut done = vec![];
-    done.resize(grm.nonterms_len() as usize, false);
+    done.resize(usize::from(grm.nonterms_len()), false);
     let mut costs = vec![];
-    costs.resize(grm.nonterms_len() as usize, 0);
+    costs.resize(usize::from(grm.nonterms_len()), 0);
 
     // First mark all recursive non-terminals.
-    for i in 0..grm.nonterms_len() as usize {
+    for ntidx in grm.iter_ntidxs() {
         // Calling has_path so frequently is not exactly efficient...
-        if grm.has_path(NTIdx::from(i), NTIdx::from(i)) {
-            costs[i] = u32::max_value();
-            done[i] = true;
+        if grm.has_path(ntidx, ntidx) {
+            costs[usize::from(ntidx)] = u32::max_value();
+            done[usize::from(ntidx)] = true;
         }
     }
 
@@ -864,7 +859,7 @@ impl fmt::Display for YaccGrammarError {
 mod test {
     use std::collections::HashMap;
     use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_max_costs, nonterm_min_costs};
-    use {NTIdx, PIdx, Symbol, TIdx};
+    use {Grammar, NTIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
     #[test]
@@ -889,7 +884,7 @@ mod test {
                    [("T", TIdx(0))].iter()
                                                 .cloned()
                                                 .collect::<HashMap<&str, TIdx<_>>>());
-        assert_eq!(grm.iter_nonterm_idxs().collect::<Vec<_>>(),
+        assert_eq!(grm.iter_ntidxs().collect::<Vec<_>>(),
                    vec![NTIdx(0), NTIdx(1)]);
     }
 

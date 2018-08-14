@@ -65,13 +65,13 @@ pub struct Firsts<StorageT> {
 impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
-        let mut prod_firsts = Vec::with_capacity(grm.nonterms_len() as usize);
-        for _ in 0..grm.nonterms_len() {
+        let mut prod_firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
+        for _ in grm.iter_ntidxs() {
             prod_firsts.push(Vob::from_elem(grm.terms_len() as usize, false));
         }
         let mut firsts = Firsts {
             prod_firsts,
-            prod_epsilons: Vob::from_elem(grm.nonterms_len() as usize, false),
+            prod_epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
             phantom      : PhantomData
         };
 
@@ -80,7 +80,7 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for rul_i in grm.iter_nonterm_idxs() {
+            for rul_i in grm.iter_ntidxs() {
                 // For each rule E
                 for prod_i in grm.nonterm_to_prods(rul_i).iter() {
                     // ...and each production A

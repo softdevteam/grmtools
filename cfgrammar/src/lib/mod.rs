@@ -75,7 +75,7 @@ extern crate num_traits;
 #[macro_use]
 extern crate serde;
 
-use num_traits::PrimInt;
+use num_traits::{PrimInt, Unsigned};
 
 mod idxnewtype;
 pub mod yacc;
@@ -90,15 +90,21 @@ pub enum Symbol<StorageT> {
     Term(TIdx<StorageT>)
 }
 
-pub trait Grammar<StorageT: PrimInt> {
+pub trait Grammar<StorageT: PrimInt + Unsigned> {
     /// How many terminals does this grammar have?
     fn terms_len(&self) -> u32;
     /// How many productions does this grammar have?
     fn prods_len(&self) -> u32;
     /// How many nonterminals does this grammar have?
-    fn nonterms_len(&self) -> u32;
+    fn nonterms_len(&self) -> NTIdx<StorageT>;
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> NTIdx<StorageT>;
+
+    /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
+    /// grammar's valid `NTIdx`s.
+    fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=NTIdx<StorageT>>> {
+        Box::new((0..usize::from(self.nonterms_len())).map(|x| NTIdx(num_traits::cast(x).unwrap())))
+    }
 
     fn iter_tidxs(&self, r: Range<u32>) -> Box<dyn Iterator<Item=TIdx<StorageT>>> {
         Box::new(r.map(|x| TIdx(num_traits::cast(x).unwrap())))

@@ -174,12 +174,12 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
 
             let nt_len = grm.nonterms_len();
             // Assert that we can fit the goto table into a u32
-            assert!(sg.all_states_len().checked_mul(nt_len).is_some());
+            assert!(sg.all_states_len().checked_mul(u32::from(nt_len)).is_some());
             for (&sym, state_j) in sg.edges(state_i) {
                 match sym {
                     Symbol::Nonterm(nonterm_i) => {
                         // Populate gotos
-                        let off = (u32::from(state_i) * nt_len) + u32::from(nonterm_i);
+                        let off = (u32::from(state_i) * u32::from(nt_len)) + u32::from(nonterm_i);
                         debug_assert!(gotos.get(&off).is_none());
                         gotos.insert(off, *state_j);
                     },
@@ -253,7 +253,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
                        state_shifts,
                        core_reduces,
                        reduce_states,
-                       nonterms_len: grm.nonterms_len(),
+                       nonterms_len: u32::from(grm.nonterms_len()),
                        prods_len: grm.prods_len(),
                        terms_len: grm.terms_len(),
                        reduce_reduce,
