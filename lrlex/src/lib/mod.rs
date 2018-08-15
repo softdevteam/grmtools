@@ -96,7 +96,7 @@ impl fmt::Display for LexBuildError {
     }
 }
 
-pub fn build_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerDef<TokId>, LexBuildError> {
+pub fn build_lex<StorageT: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerDef<StorageT>, LexBuildError> {
     parse_lex(s)
 }
 

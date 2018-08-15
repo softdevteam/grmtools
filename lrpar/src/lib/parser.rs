@@ -47,12 +47,12 @@ use cpctplus;
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Node<StorageT, TokId> {
-    Term{lexeme: Lexeme<TokId>},
-    Nonterm{nonterm_idx: NTIdx<StorageT>, nodes: Vec<Node<StorageT, TokId>>}
+pub enum Node<StorageT> {
+    Term{lexeme: Lexeme<StorageT>},
+    Nonterm{nonterm_idx: NTIdx<StorageT>, nodes: Vec<Node<StorageT>>}
 }
 
-impl<StorageT: 'static + PrimInt + Unsigned, TokId: PrimInt + Unsigned> Node<StorageT, TokId>
+impl<StorageT: 'static + PrimInt + Unsigned> Node<StorageT>
 where usize: AsPrimitive<StorageT>
 {
     /// Return a pretty-printed version of this node.
@@ -83,24 +83,22 @@ where usize: AsPrimitive<StorageT>
     }
 }
 
-pub(crate) type Lexemes<TokId> = Vec<Lexeme<TokId>>;
+pub(crate) type Lexemes<StorageT> = Vec<Lexeme<StorageT>>;
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
-pub(crate) type TStack<StorageT, TokId> = Vec<Node<StorageT, TokId>>; // Parse tree stack
-pub(crate) type Errors<StorageT, TokId> = Vec<ParseError<StorageT, TokId>>;
+pub(crate) type TStack<StorageT> = Vec<Node<StorageT>>; // Parse tree stack
+pub(crate) type Errors<StorageT> = Vec<ParseError<StorageT>>;
 
-pub struct Parser<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
+pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
     pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar<StorageT>,
     pub term_cost: &'a Fn(TIdx<StorageT>) -> u8,
     pub sgraph: &'a StateGraph<StorageT>,
     pub stable: &'a StateTable<StorageT>,
-    pub lexemes: &'a Lexemes<TokId>
+    pub lexemes: &'a Lexemes<StorageT>
 }
 
-impl<'a,
-     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-     TokId: PrimInt + Unsigned>
-Parser<'a, StorageT, TokId>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+Parser<'a, StorageT>
 where usize: AsPrimitive<StorageT>
 {
     fn parse<F>(rcvry_kind: RecoveryKind,
@@ -108,9 +106,9 @@ where usize: AsPrimitive<StorageT>
                 term_cost: F,
                 sgraph: &StateGraph<StorageT>,
                 stable: &StateTable<StorageT>,
-                lexemes: &Lexemes<TokId>)
-             -> Result<Node<StorageT, TokId>,
-                      (Option<Node<StorageT, TokId>>, Vec<ParseError<StorageT, TokId>>)>
+                lexemes: &Lexemes<StorageT>)
+             -> Result<Node<StorageT>,
+                      (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
           where F: Fn(TIdx<StorageT>) -> u8
     {
         for tidx in grm.iter_tidxs() {
@@ -118,8 +116,8 @@ where usize: AsPrimitive<StorageT>
         }
         let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0u32)];
-        let mut tstack: Vec<Node<StorageT, TokId>> = Vec::new();
-        let mut errors: Vec<ParseError<StorageT, TokId>> = Vec::new();
+        let mut tstack: Vec<Node<StorageT>> = Vec::new();
+        let mut errors: Vec<ParseError<StorageT>> = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors);
         match (accpt, errors.is_empty()) {
             (true, true)   => Ok(tstack.drain(..).nth(0).unwrap()),
@@ -145,8 +143,8 @@ where usize: AsPrimitive<StorageT>
     pub fn lr(&self,
               mut la_idx: usize,
               pstack: &mut PStack,
-              tstack: &mut TStack<StorageT, TokId>,
-              errors: &mut Errors<StorageT, TokId>)
+              tstack: &mut TStack<StorageT>,
+              errors: &mut Errors<StorageT>)
            -> bool
     {
         let mut recoverer = None;
@@ -159,7 +157,7 @@ where usize: AsPrimitive<StorageT>
                 Some(Action::Reduce(prod_id)) => {
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
-                    let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT, TokId>>>();
+                    let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
                     tstack.push(Node::Nonterm{nonterm_idx, nodes});
 
                     pstack.drain(pop_idx..);
@@ -224,11 +222,11 @@ where usize: AsPrimitive<StorageT>
     /// the input is < end_la_idx, or if an error is encountered). Does not do any form of error
     /// recovery.
     pub fn lr_upto(&self,
-                   lexeme_prefix: Option<Lexeme<TokId>>,
+                   lexeme_prefix: Option<Lexeme<StorageT>>,
                    mut la_idx: usize,
                    end_la_idx: usize,
                    pstack: &mut PStack,
-                   tstack: &mut Option<&mut Vec<Node<StorageT, TokId>>>)
+                   tstack: &mut Option<&mut Vec<Node<StorageT>>>)
            -> usize
     {
         assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
@@ -245,7 +243,7 @@ where usize: AsPrimitive<StorageT>
                     let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
-                        let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<StorageT, TokId>>>();
+                        let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
                         tstack_uw.push(Node::Nonterm{nonterm_idx, nodes});
                     }
 
@@ -278,7 +276,7 @@ where usize: AsPrimitive<StorageT>
 
     /// Return a `Lexeme` for the next lemexe (if `la_idx` == `self.lexemes.len()` this will be
     /// a lexeme constructed to look as if contains the EOF terminal).
-    pub(crate) fn next_lexeme(&self, la_idx: usize) -> Lexeme<TokId>
+    pub(crate) fn next_lexeme(&self, la_idx: usize) -> Lexeme<StorageT>
     {
         let llen = self.lexemes.len();
         debug_assert!(la_idx <= llen);
@@ -294,7 +292,7 @@ where usize: AsPrimitive<StorageT>
                     last_la.start() + last_la.len()
                 };
 
-            Lexeme::new(TokId::from(u32::from(self.grm.eof_term_idx())).unwrap(), last_la_end, 0)
+            Lexeme::new(StorageT::from(u32::from(self.grm.eof_term_idx())).unwrap(), last_la_end, 0)
         }
     }
 
@@ -318,11 +316,11 @@ where usize: AsPrimitive<StorageT>
     /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
     /// lexeme at position `la_idx`.
     pub(crate) fn lr_cactus(&self,
-                            lexeme_prefix: Option<Lexeme<TokId>>,
+                            lexeme_prefix: Option<Lexeme<StorageT>>,
                             mut la_idx: usize,
                             end_la_idx: usize,
                             mut pstack: Cactus<StIdx>,
-                            tstack: &mut Option<&mut Vec<Node<StorageT, TokId>>>)
+                            tstack: &mut Option<&mut Vec<Node<StorageT>>>)
       -> (usize, Cactus<StIdx>)
     {
         assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
@@ -340,7 +338,7 @@ where usize: AsPrimitive<StorageT>
                     let pop_num = self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
-                                             .collect::<Vec<Node<StorageT, TokId>>>();
+                                             .collect::<Vec<Node<StorageT>>>();
                         tstack_uw.push(Node::Nonterm{nonterm_idx, nodes});
                     }
 
@@ -378,10 +376,9 @@ where usize: AsPrimitive<StorageT>
     }
 }
 
-pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned,
-                    TokId: PrimInt + Unsigned>
+pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned>
 {
-    fn recover(&self, Instant, &Parser<StorageT, TokId>, usize, &mut PStack, &mut TStack<StorageT, TokId>)
+    fn recover(&self, Instant, &Parser<StorageT>, usize, &mut PStack, &mut TStack<StorageT>)
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>);
 }
 
@@ -393,14 +390,13 @@ pub enum RecoveryKind {
 
 /// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the
 /// input was consumed) or `None` otherwise, and a vector of `ParseError`s.
-pub fn parse<StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-            TokId: PrimInt + Unsigned>
+pub fn parse<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
            (grm: &YaccGrammar<StorageT>,
             sgraph: &StateGraph<StorageT>,
             stable: &StateTable<StorageT>,
-            lexemes: &Lexemes<TokId>)
-         -> Result<Node<StorageT, TokId>,
-                  (Option<Node<StorageT, TokId>>, Vec<ParseError<StorageT, TokId>>)>
+            lexemes: &Lexemes<StorageT>)
+         -> Result<Node<StorageT>,
+                  (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
       where usize: AsPrimitive<StorageT>
 {
     parse_rcvry(RecoveryKind::MF, grm, |_| 1, sgraph, stable, lexemes)
@@ -410,16 +406,14 @@ pub fn parse<StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
 /// tree. On failure, return a parse tree (if all the input was consumed) or `None` otherwise, and
 /// a vector of `ParseError`s.
 pub fn parse_rcvry
-       <StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        TokId: PrimInt + Unsigned,
-        F>
+       <StorageT: 'static + Debug + Hash + PrimInt + Unsigned, F>
        (rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         term_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexemes: &Lexemes<TokId>)
-    -> Result<Node<StorageT, TokId>, (Option<Node<StorageT, TokId>>, Vec<ParseError<StorageT, TokId>>)>
+        lexemes: &Lexemes<StorageT>)
+    -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
     where F: Fn(TIdx<StorageT>) -> u8,
           usize: AsPrimitive<StorageT>
 {
@@ -442,14 +436,14 @@ pub enum ParseRepair<StorageT> {
 
 /// Records a single parse error.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ParseError<StorageT, TokId> {
+pub struct ParseError<StorageT> {
     state_idx: StIdx,
     lexeme_idx: usize,
-    lexeme: Lexeme<TokId>,
+    lexeme: Lexeme<StorageT>,
     repairs: Vec<Vec<ParseRepair<StorageT>>>
 }
 
-impl<StorageT: PrimInt + Unsigned, TokId: Copy> ParseError<StorageT, TokId> {
+impl<StorageT: PrimInt + Unsigned> ParseError<StorageT> {
     /// Return the state table index where this error was detected.
     pub fn state_idx(&self) -> StIdx {
         self.state_idx
@@ -461,7 +455,7 @@ impl<StorageT: PrimInt + Unsigned, TokId: Copy> ParseError<StorageT, TokId> {
     }
 
     /// Return the lexeme where this error was detected.
-    pub fn lexeme(&self) -> &Lexeme<TokId> {
+    pub fn lexeme(&self) -> &Lexeme<StorageT> {
         &self.lexeme
     }
 
@@ -487,8 +481,8 @@ pub(crate) mod test {
                            grms: &str,
                            input: &str)
                        -> (YaccGrammar<u16>,
-                           Result<Node<u16, u16>, (Option<Node<u16, u16>>,
-                                              Vec<ParseError<u16, u16>>)>)
+                           Result<Node<u16>, (Option<Node<u16>>,
+                                              Vec<ParseError<u16>>)>)
     {
         do_parse_with_costs(rcvry_kind, lexs, grms, input, &HashMap::new())
     }
@@ -499,8 +493,8 @@ pub(crate) mod test {
                                       input: &str,
                                       costs: &HashMap<&str, u8>)
                                   -> (YaccGrammar<u16>,
-                                      Result<Node<u16, u16>, (Option<Node<u16, u16>>,
-                                                         Vec<ParseError<u16, u16>>)>)
+                                      Result<Node<u16>, (Option<Node<u16>>,
+                                                         Vec<ParseError<u16>>)>)
     {
         let mut lexerdef = build_lex(lexs).unwrap();
         let grm = YaccGrammar::<u16>::new_with_storaget(YaccKind::Original, grms).unwrap();

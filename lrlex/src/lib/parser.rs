@@ -35,14 +35,14 @@ use std::convert::TryFrom;
 use {LexErrorKind, LexBuildError, LexBuildResult};
 use lexer::{LexerDef, Rule};
 
-pub struct LexParser<TokId> {
+pub struct LexParser<StorageT> {
     src: String,
     newlines: Vec<usize>,
-    rules: Vec<Rule<TokId>>
+    rules: Vec<Rule<StorageT>>
 }
 
-impl<TokId: TryFrom<usize>> LexParser<TokId> {
-    fn new(src: String) -> LexBuildResult<LexParser<TokId>> {
+impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
+    fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
         let mut p = LexParser{
             src,
             newlines: vec![0],
@@ -143,8 +143,8 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
 
         let re_str = line[..rspace].trim_right().to_string();
         let rules_len = self.rules.len();
-        let tok_id = TokId::try_from(rules_len)
-                           .unwrap_or_else(|_| panic!("TokId::try_from failed on {} (if TokId is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
+        let tok_id = StorageT::try_from(rules_len)
+                           .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
 
         let rule = Rule::new(Some(tok_id), name, re_str)
                         .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
@@ -175,7 +175,7 @@ impl<TokId: TryFrom<usize>> LexParser<TokId> {
     }
 }
 
-pub fn parse_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> LexBuildResult<LexerDef<TokId>> {
+pub fn parse_lex<StorageT: Copy + Eq + TryFrom<usize>>(s: &str) -> LexBuildResult<LexerDef<StorageT>> {
     LexParser::new(s.to_string()).map(|p| LexerDef::new(p.rules))
 }
 

@@ -130,34 +130,30 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> { }
 
-struct MF<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
+struct MF<'a, StorageT: 'a + Eq + Hash> {
     dist: Dist<StorageT>,
-    parser: &'a Parser<'a, StorageT, TokId>
+    parser: &'a Parser<'a, StorageT>
 }
 
-pub(crate) fn recoverer<'a,
-                        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-                        TokId: PrimInt + Unsigned>
-                       (parser: &'a Parser<StorageT, TokId>)
-                     -> Box<Recoverer<StorageT, TokId> + 'a>
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+                       (parser: &'a Parser<StorageT>)
+                     -> Box<Recoverer<StorageT> + 'a>
            where usize: AsPrimitive<StorageT>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
     Box::new(MF{dist, parser})
 }
 
-impl<'a,
-     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-     TokId: PrimInt + Unsigned>
-Recoverer<StorageT, TokId> for MF<'a, StorageT, TokId>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+Recoverer<StorageT> for MF<'a, StorageT>
 where usize: AsPrimitive<StorageT>
 {
     fn recover(&self,
                finish_by: Instant,
-               parser: &Parser<StorageT, TokId>,
+               parser: &Parser<StorageT>,
                in_la_idx: usize,
                mut in_pstack: &mut Vec<StIdx>,
-               mut tstack: &mut Vec<Node<StorageT, TokId>>)
+               mut tstack: &mut Vec<Node<StorageT>>)
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
     {
         let mut start_cactus_pstack = Cactus::new();
@@ -259,10 +255,8 @@ where usize: AsPrimitive<StorageT>
     }
 }
 
-impl<'a,
-     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-     TokId: PrimInt + Unsigned>
-MF<'a, StorageT, TokId>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+MF<'a, StorageT>
 where usize: AsPrimitive<StorageT>
 {
     fn insert(&self,
@@ -534,9 +528,8 @@ fn ends_with_parse_at_least_shifts<StorageT>
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-                        TokId: PrimInt + Unsigned>
-                       (parser: &Parser<StorageT, TokId>,
+pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+                       (parser: &Parser<StorageT>,
                         finish_by: Instant,
                         in_la_idx: usize,
                         in_pstack: &Vec<StIdx>,
@@ -577,12 +570,11 @@ pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
-pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-                            TokId: PrimInt + Unsigned>
-                           (parser: &Parser<StorageT, TokId>,
+pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+                           (parser: &Parser<StorageT>,
                             mut la_idx: usize,
                             mut pstack: &mut Vec<StIdx>,
-                            mut tstack: &mut Option<&mut Vec<Node<StorageT, TokId>>>,
+                            mut tstack: &mut Option<&mut Vec<Node<StorageT>>>,
                             repairs: &[ParseRepair<StorageT>])
                          -> usize
                       where usize: AsPrimitive<StorageT>
@@ -592,7 +584,7 @@ pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigne
             ParseRepair::InsertSeq(_) => unreachable!(),
             ParseRepair::Insert(t_idx) => {
                 let next_lexeme = parser.next_lexeme(la_idx);
-                let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
+                let new_lexeme = Lexeme::new(StorageT::from(u32::from(t_idx)).unwrap(),
                                              next_lexeme.start(), 0);
                 parser.lr_upto(Some(new_lexeme),
                                la_idx,

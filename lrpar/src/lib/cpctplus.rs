@@ -124,32 +124,28 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> { }
 
-struct CPCTPlus<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
-    parser: &'a Parser<'a, StorageT, TokId>
+struct CPCTPlus<'a, StorageT: 'a + Eq + Hash> {
+    parser: &'a Parser<'a, StorageT>
 }
 
-pub(crate) fn recoverer<'a,
-                        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-                        TokId: PrimInt + Unsigned>
-                       (parser: &'a Parser<StorageT, TokId>)
-                     -> Box<Recoverer<StorageT, TokId> + 'a>
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+                       (parser: &'a Parser<StorageT>)
+                     -> Box<Recoverer<StorageT> + 'a>
                   where usize: AsPrimitive<StorageT>
 {
     Box::new(CPCTPlus{parser})
 }
 
-impl<'a,
-     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-     TokId: PrimInt + Unsigned>
-Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+Recoverer<StorageT> for CPCTPlus<'a, StorageT>
 where usize: AsPrimitive<StorageT>
 {
     fn recover(&self,
                finish_by: Instant,
-               parser: &Parser<StorageT, TokId>,
+               parser: &Parser<StorageT>,
                in_la_idx: usize,
                mut in_pstack: &mut Vec<StIdx>,
-               mut tstack: &mut Vec<Node<StorageT, TokId>>)
+               mut tstack: &mut Vec<Node<StorageT>>)
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
     {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
@@ -264,10 +260,8 @@ where usize: AsPrimitive<StorageT>
     }
 }
 
-impl<'a,
-     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-     TokId: PrimInt + Unsigned>
-CPCTPlus<'a, StorageT, TokId>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+CPCTPlus<'a, StorageT>
 where usize: AsPrimitive<StorageT>
 {
     fn insert(&self,
@@ -281,7 +275,7 @@ where usize: AsPrimitive<StorageT>
             }
 
             let next_lexeme = self.parser.next_lexeme(n.la_idx);
-            let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
+            let new_lexeme = Lexeme::new(StorageT::from(u32::from(t_idx)).unwrap(),
                                          next_lexeme.start(), 0);
             let (new_la_idx, n_pstack) =
                 self.parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
