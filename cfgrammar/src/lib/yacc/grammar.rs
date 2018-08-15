@@ -83,7 +83,7 @@ pub struct YaccGrammar<StorageT=u32> {
     /// The offset of the EOF terminal.
     eof_term_idx: TIdx<StorageT>,
     /// How many productions does this grammar have?
-    prods_len: u32,
+    prods_len: PIdx<StorageT>,
     /// Which production is the sole production of the start rule?
     start_prod: PIdx<StorageT>,
     /// A list of all productions.
@@ -302,7 +302,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
             eof_term_idx,
             term_names,
             term_precs,
-            prods_len:        u32::try_from(prods.len()).unwrap(),
+            prods_len:        PIdx::from(prods.len()),
             start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
             rules_prods,
             prods_rules:      prods_rules.into_iter().map(|x| x.unwrap()).collect(),
@@ -441,7 +441,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
 }
 
 impl<StorageT: PrimInt + Unsigned> Grammar<StorageT> for YaccGrammar<StorageT> {
-    fn prods_len(&self) -> u32 {
+    fn prods_len(&self) -> PIdx<StorageT> {
         self.prods_len
     }
 

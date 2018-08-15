@@ -95,7 +95,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
         // continually iterate over the bitfield from 2 until no new items have been added.
 
         let mut keys_iter = self.items.keys(); // The initial todo list
-        let mut zero_todos = Vob::from_elem(grm.prods_len() as usize, false); // Subsequent todos
+        let mut zero_todos = Vob::from_elem(usize::from(grm.prods_len()), false); // Subsequent todos
         let mut new_ctx = Vob::from_elem(grm.terms_len() as usize, false);
         loop {
             let prod_i;

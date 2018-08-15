@@ -94,7 +94,7 @@ pub trait Grammar<StorageT: PrimInt + Unsigned> {
     /// How many terminals does this grammar have?
     fn terms_len(&self) -> u32;
     /// How many productions does this grammar have?
-    fn prods_len(&self) -> u32;
+    fn prods_len(&self) -> PIdx<StorageT>;
     /// How many nonterminals does this grammar have?
     fn nonterms_len(&self) -> NTIdx<StorageT>;
     /// What is the index of the start rule?

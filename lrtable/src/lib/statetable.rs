@@ -85,7 +85,7 @@ pub struct StateTable<StorageT> {
     state_shifts     : Vob,
     reduce_states    : Vob,
     nonterms_len     : u32,
-    prods_len        : u32,
+    prods_len        : PIdx<StorageT>,
     terms_len        : u32,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
@@ -209,7 +209,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
         assert!(final_state.is_some());
 
         let mut nt_depth = HashMap::new();
-        let mut core_reduces = Vob::from_elem((sg.all_states_len() * grm.prods_len()) as usize, false);
+        let mut core_reduces = Vob::from_elem(sg.all_states_len() as usize * usize::from(grm.prods_len()), false);
         let mut state_shifts = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
         let mut reduce_states = Vob::from_elem(sg.all_states_len() as usize, false);
         for i in 0..sg.all_states_len() {
@@ -236,7 +236,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
 
             let mut distinct_reduces = 0; // How many distinct reductions do we have?
             for &p_idx in nt_depth.values() {
-                let off = (i * grm.prods_len() + u32::from(p_idx)) as usize;
+                let off = i as usize * usize::from(grm.prods_len()) + usize::from(p_idx);
                 if core_reduces.set(off, true) == Some(true) {
                     distinct_reduces += 1;
                 }
@@ -309,8 +309,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
     ///
     /// since the two [E -> ...] items both have the same effects on a parse stack.
     pub fn core_reduces(&self, state_idx: StIdx) -> CoreReducesIterator<StorageT> {
-        let start = usize::from(state_idx) * self.prods_len as usize;
-        let end = start + self.prods_len as usize;
+        let start = usize::from(state_idx) * usize::from(self.prods_len);
+        let end = start + usize::from(self.prods_len);
         CoreReducesIterator{iter: self.core_reduces.iter_set_bits(start..end),
                             start,
                             phantom: PhantomData}
