@@ -42,7 +42,7 @@ use cfgrammar::{Grammar, Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
 use astar::astar_all;
@@ -136,19 +136,21 @@ struct MF<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
 }
 
 pub(crate) fn recoverer<'a,
-                        StorageT: Debug + Hash + PrimInt + Unsigned,
+                        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
                         TokId: PrimInt + Unsigned>
                        (parser: &'a Parser<StorageT, TokId>)
                      -> Box<Recoverer<StorageT, TokId> + 'a>
+           where usize: AsPrimitive<StorageT>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
     Box::new(MF{dist, parser})
 }
 
 impl<'a,
-     StorageT: Debug + Hash + PrimInt + Unsigned,
+     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
      TokId: PrimInt + Unsigned>
 Recoverer<StorageT, TokId> for MF<'a, StorageT, TokId>
+where usize: AsPrimitive<StorageT>
 {
     fn recover(&self,
                finish_by: Instant,
@@ -258,9 +260,10 @@ Recoverer<StorageT, TokId> for MF<'a, StorageT, TokId>
 }
 
 impl<'a,
-     StorageT: Debug + Hash + PrimInt + Unsigned,
+     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
      TokId: PrimInt + Unsigned>
 MF<'a, StorageT, TokId>
+where usize: AsPrimitive<StorageT>
 {
     fn insert(&self,
               n: &PathFNode<StorageT>,
@@ -531,7 +534,7 @@ fn ends_with_parse_at_least_shifts<StorageT>
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-pub(crate) fn rank_cnds<StorageT: Debug + Hash + PrimInt + Unsigned,
+pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
                         TokId: PrimInt + Unsigned>
                        (parser: &Parser<StorageT, TokId>,
                         finish_by: Instant,
@@ -539,6 +542,7 @@ pub(crate) fn rank_cnds<StorageT: Debug + Hash + PrimInt + Unsigned,
                         in_pstack: &Vec<StIdx>,
                         in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>)
                      -> Vec<Vec<ParseRepair<StorageT>>>
+                  where usize: AsPrimitive<StorageT>
 {
     let mut cnds = Vec::new();
     let mut furthest = 0;
@@ -573,7 +577,7 @@ pub(crate) fn rank_cnds<StorageT: Debug + Hash + PrimInt + Unsigned,
 
 /// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
 /// distance and a new pstack.
-pub(crate) fn apply_repairs<StorageT: Debug + Hash + PrimInt + Unsigned,
+pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
                             TokId: PrimInt + Unsigned>
                            (parser: &Parser<StorageT, TokId>,
                             mut la_idx: usize,
@@ -581,6 +585,7 @@ pub(crate) fn apply_repairs<StorageT: Debug + Hash + PrimInt + Unsigned,
                             mut tstack: &mut Option<&mut Vec<Node<StorageT, TokId>>>,
                             repairs: &[ParseRepair<StorageT>])
                          -> usize
+                      where usize: AsPrimitive<StorageT>
 {
     for r in repairs.iter() {
         match *r {
@@ -639,7 +644,9 @@ pub(crate) struct Dist<StorageT> {
     phantom: PhantomData<StorageT>
 }
 
-impl<StorageT: Hash + PrimInt + Unsigned> Dist<StorageT> {
+impl<StorageT: 'static + Hash + PrimInt + Unsigned> Dist<StorageT>
+where usize: AsPrimitive<StorageT>
+{
     pub(crate) fn new<F>
                      (grm: &YaccGrammar<StorageT>,
                       sgraph: &StateGraph<StorageT>,
@@ -682,7 +689,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Dist<StorageT> {
                         }
                     };
 
-                    for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+                    for tidx in grm.iter_tidxs() {
                         let this_off = i * terms_len + usize::try_from(tidx).unwrap();
                         let other_off = usize::try_from(u32::from(sym_st_idx) * grm.terms_len()
                                                         + u32::from(tidx)).unwrap();
@@ -795,7 +802,7 @@ mod test {
     use std::collections::HashMap;
     use std::fmt::Debug;
 
-    use num_traits::{PrimInt, ToPrimitive, Unsigned};
+    use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
     use test::{Bencher, black_box};
 
     use cactus::Cactus;
@@ -809,9 +816,10 @@ mod test {
 
     use super::{ends_with_parse_at_least_shifts, Dist, PARSE_AT_LEAST, Repair, RepairMerge};
 
-    fn pp_repairs<StorageT: PrimInt + Unsigned>
+    fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>
                  (grm: &YaccGrammar<StorageT>, repairs: &Vec<ParseRepair<StorageT>>)
                -> String
+            where usize: AsPrimitive<StorageT>
     {
         let mut out = vec![];
         for r in repairs.iter() {
@@ -1100,10 +1108,12 @@ A: '(' A ')'
         });
     }
 
-    fn check_some_repairs<StorageT: PrimInt + Unsigned>
+    fn check_some_repairs<StorageT: 'static + PrimInt + Unsigned>
                          (grm: &YaccGrammar<StorageT>,
                           repairs: &Vec<Vec<ParseRepair<StorageT>>>,
-                          expected: &[&str]) {
+                          expected: &[&str])
+                    where usize: AsPrimitive<StorageT>
+    {
         for i in 0..expected.len() {
             if repairs.iter().find(|x| pp_repairs(&grm, x) == expected[i]).is_none() {
                 panic!("No match found for:\n  {}", expected[i]);
@@ -1111,10 +1121,12 @@ A: '(' A ')'
         }
     }
 
-    fn check_all_repairs<StorageT: Debug + PrimInt + Unsigned>
+    fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>
                         (grm: &YaccGrammar<StorageT>,
                          repairs: &Vec<Vec<ParseRepair<StorageT>>>,
-                         expected: &[&str]) {
+                         expected: &[&str])
+                    where usize: AsPrimitive<StorageT>
+    {
         assert_eq!(repairs.len(), expected.len(),
                    "{:?}\nhas a different number of entries to:\n{:?}", repairs, expected);
         for i in 0..repairs.len() {

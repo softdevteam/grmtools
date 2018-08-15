@@ -42,7 +42,7 @@ extern crate vob;
 
 use std::hash::Hash;
 
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 mod firsts;
 mod itemset;
@@ -98,9 +98,10 @@ pub enum Minimiser {
     Pager
 }
 
-pub fn from_yacc<StorageT: Hash + PrimInt + Unsigned>
+pub fn from_yacc<StorageT: 'static + Hash + PrimInt + Unsigned>
                 (grm: &YaccGrammar<StorageT>, m: Minimiser)
               -> Result<(StateGraph<StorageT>, StateTable<StorageT>), StateTableError<StorageT>>
+           where usize: AsPrimitive<StorageT>
 {
     match m {
         Minimiser::Pager => {

@@ -36,7 +36,7 @@ use std::hash::Hash;
 
 use cfgrammar::{Grammar, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
 use StIdx;
@@ -144,9 +144,10 @@ fn vob_intersect(v1: &Vob, v2: &Vob) -> bool {
 }
 
 /// Create a `StateGraph` from 'grm'.
-pub fn pager_stategraph<StorageT: Hash + PrimInt + Unsigned>
+pub fn pager_stategraph<StorageT: 'static + Hash + PrimInt + Unsigned>
                        (grm: &YaccGrammar<StorageT>)
                      -> StateGraph<StorageT>
+where usize: AsPrimitive<StorageT>
 {
     // This function can be seen as a modified version of items() from Chen's dissertation.
 

@@ -38,7 +38,7 @@ use cactus::Cactus;
 use cfgrammar::TIdx;
 use lrlex::Lexeme;
 use lrtable::{Action, StIdx};
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use astar::dijkstra;
 use mf::{apply_repairs, rank_cnds, simplify_repairs};
@@ -129,18 +129,20 @@ struct CPCTPlus<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
 }
 
 pub(crate) fn recoverer<'a,
-                        StorageT: Debug + Hash + PrimInt + Unsigned,
+                        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
                         TokId: PrimInt + Unsigned>
                        (parser: &'a Parser<StorageT, TokId>)
                      -> Box<Recoverer<StorageT, TokId> + 'a>
+                  where usize: AsPrimitive<StorageT>
 {
     Box::new(CPCTPlus{parser})
 }
 
 impl<'a,
-     StorageT: Debug + Hash + PrimInt + Unsigned,
+     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
      TokId: PrimInt + Unsigned>
 Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
+where usize: AsPrimitive<StorageT>
 {
     fn recover(&self,
                finish_by: Instant,
@@ -263,9 +265,10 @@ Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
 }
 
 impl<'a,
-     StorageT: Debug + Hash + PrimInt + Unsigned,
+     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
      TokId: PrimInt + Unsigned>
 CPCTPlus<'a, StorageT, TokId>
+where usize: AsPrimitive<StorageT>
 {
     fn insert(&self,
              n: &PathFNode<StorageT>,
@@ -444,14 +447,15 @@ mod test {
 
     use cfgrammar::yacc::YaccGrammar;
     use lrlex::Lexeme;
-    use num_traits::{PrimInt, ToPrimitive, Unsigned};
+    use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
 
-    fn pp_repairs<StorageT: PrimInt + Unsigned>
+    fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>
                  (grm: &YaccGrammar<StorageT>, repairs: &Vec<ParseRepair<StorageT>>)
                -> String
+            where usize: AsPrimitive<StorageT>
     {
         let mut out = vec![];
         for r in repairs.iter() {
@@ -468,10 +472,11 @@ mod test {
         out.join(", ")
     }
 
-    fn check_all_repairs<StorageT: Debug + PrimInt + Unsigned>
+    fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>
                         (grm: &YaccGrammar<StorageT>,
                          repairs: &Vec<Vec<ParseRepair<StorageT>>>,
                          expected: &[&str])
+            where usize: AsPrimitive<StorageT>
     {
         assert_eq!(repairs.len(), expected.len(),
                    "{:?}\nhas a different number of entries to:\n{:?}", repairs, expected);

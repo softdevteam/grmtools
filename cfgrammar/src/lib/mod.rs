@@ -66,7 +66,7 @@
 
 #![feature(try_from)]
 
-use std::ops::Range;
+use std::convert::TryFrom;
 
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
@@ -75,7 +75,7 @@ extern crate num_traits;
 #[macro_use]
 extern crate serde;
 
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 mod idxnewtype;
 pub mod yacc;
@@ -90,7 +90,7 @@ pub enum Symbol<StorageT> {
     Term(TIdx<StorageT>)
 }
 
-pub trait Grammar<StorageT: PrimInt + Unsigned> {
+pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
     /// How many terminals does this grammar have?
     fn terms_len(&self) -> u32;
     /// How many productions does this grammar have?
@@ -102,11 +102,19 @@ pub trait Grammar<StorageT: PrimInt + Unsigned> {
 
     /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
     /// grammar's valid `NTIdx`s.
-    fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=NTIdx<StorageT>>> {
-        Box::new((0..usize::from(self.nonterms_len())).map(|x| NTIdx(num_traits::cast(x).unwrap())))
+    fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=NTIdx<StorageT>>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.nonterms_len() and, since nonterms_len() returns an NTIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.nonterms_len())).map(|x| NTIdx(x.as_())))
     }
 
-    fn iter_tidxs(&self, r: Range<u32>) -> Box<dyn Iterator<Item=TIdx<StorageT>>> {
-        Box::new(r.map(|x| TIdx(num_traits::cast(x).unwrap())))
+    fn iter_tidxs(&self) -> Box<dyn Iterator<Item=TIdx<StorageT>>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.nonterms_len() and, since nonterms_len() returns an TIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::try_from(self.terms_len()).unwrap()).map(|x| TIdx(x.as_())))
     }
 }

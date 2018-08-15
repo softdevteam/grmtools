@@ -38,7 +38,7 @@ use std::marker::PhantomData;
 use cfgrammar::{Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use fnv::FnvHasher;
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::{IterSetBits, Vob};
 
 use StIdx;
@@ -105,7 +105,9 @@ pub enum Action<StorageT> {
     Accept
 }
 
-impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
+impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateTable<StorageT>
+where usize: AsPrimitive<StorageT>
+{
     pub fn new(grm: &YaccGrammar<StorageT>, sg: &StateGraph<StorageT>) -> Result<Self, StateTableError<StorageT>> {
         let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut state_actions = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
@@ -215,7 +217,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateTable<StorageT> {
         for i in 0..sg.all_states_len() {
             nt_depth.clear();
             let mut only_reduces = true;
-            for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+            for tidx in grm.iter_tidxs() {
                 let off = actions_offset(grm.terms_len(), StIdx::from(i), tidx);
                 match actions.get(&off) {
                     Some(&Action::Reduce(p_idx)) => {
@@ -358,13 +360,14 @@ impl<'a, StorageT: PrimInt + Unsigned> Iterator for CoreReducesIterator<'a, Stor
     }
 }
 
-fn resolve_shift_reduce<StorageT: Hash + PrimInt + Unsigned>
+fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>
                        (grm: &YaccGrammar<StorageT>,
                         mut e: OccupiedEntry<u32, Action<StorageT>>,
                         term_k: TIdx<StorageT>,
                         prod_k: PIdx<StorageT>,
                         state_j: StIdx)
                      -> u64
+where usize: AsPrimitive<StorageT>
 {
     let mut shift_reduce = 0;
     let term_k_prec = grm.term_precedence(term_k);

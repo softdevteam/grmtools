@@ -36,7 +36,7 @@ use std::hash::{BuildHasherDefault, Hash};
 use cfgrammar::{Grammar, PIdx, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 use fnv::FnvHasher;
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
 use firsts::Firsts;
@@ -50,7 +50,9 @@ pub struct Itemset<StorageT: Eq + Hash> {
     pub items: HashMap<(PIdx<StorageT>, SIdx<StorageT>), Ctx, BuildHasherDefault<FnvHasher>>
 }
 
-impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
+impl<StorageT: 'static + Hash + PrimInt + Unsigned> Itemset<StorageT> 
+where usize: AsPrimitive<StorageT>
+{
     /// Create a blank Itemset.
     pub fn new(_: &YaccGrammar<StorageT>) -> Self {
         Itemset {items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default())}

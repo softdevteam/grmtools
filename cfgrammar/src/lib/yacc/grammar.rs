@@ -35,7 +35,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use {Grammar, NTIdx, PIdx, Symbol, TIdx};
 use super::YaccKind;
@@ -110,7 +110,7 @@ impl YaccGrammar<u32> {
     }
 }
 
-impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
+impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: AsPrimitive<StorageT> {
     /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
     /// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
     /// ([`YaccGrammarError`](grammar/enum.YaccGrammarError.html) on error).
@@ -333,7 +333,8 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     }
 
     /// Return the nonterm index of the production `i`. Panics if `i` doesn't exist.
-    pub fn prod_to_nonterm(&self, i: PIdx<StorageT>) -> NTIdx<StorageT> {
+    pub fn prod_to_nonterm(&self, i: PIdx<StorageT>) -> NTIdx<StorageT>
+    {
         self.prods_rules[usize::from(i)]
     }
 
@@ -359,7 +360,7 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
     /// inputs from this grammar.
     pub fn terms_map(&self) -> HashMap<&str, TIdx<StorageT>> {
         let mut m = HashMap::with_capacity(self.terms_len as usize - 1);
-        for tidx in self.iter_tidxs(0..self.terms_len) {
+        for tidx in self.iter_tidxs() {
             if let Some(n) = self.term_names[usize::try_from(tidx).unwrap()].as_ref() {
                 m.insert(&**n, tidx);
             }
@@ -440,7 +441,10 @@ impl<StorageT: PrimInt + Unsigned> YaccGrammar<StorageT> {
 
 }
 
-impl<StorageT: PrimInt + Unsigned> Grammar<StorageT> for YaccGrammar<StorageT> {
+impl<StorageT: 'static + PrimInt + Unsigned> Grammar<StorageT>
+for YaccGrammar<StorageT>
+where usize: AsPrimitive<StorageT>
+{
     fn prods_len(&self) -> PIdx<StorageT> {
         self.prods_len
     }
@@ -454,7 +458,8 @@ impl<StorageT: PrimInt + Unsigned> Grammar<StorageT> for YaccGrammar<StorageT> {
     }
 
     /// Return the index of the start rule.
-    fn start_rule_idx(&self) -> NTIdx<StorageT> {
+    fn start_rule_idx(&self) -> NTIdx<StorageT>
+    {
         self.prod_to_nonterm(self.start_prod)
     }
 }
@@ -486,12 +491,14 @@ pub struct SentenceGenerator<'a, StorageT: 'a> {
     term_costs: Vec<u8>
 }
 
-impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
+impl<'a, StorageT: 'static + PrimInt + Unsigned> SentenceGenerator<'a, StorageT> 
+where usize: AsPrimitive<StorageT>
+{
     fn new<F>(grm: &'a YaccGrammar<StorageT>, term_cost: F) -> Self
         where F: Fn(TIdx<StorageT>) -> u8
     {
         let mut term_costs = Vec::with_capacity(grm.terms_len() as usize);
-        for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+        for tidx in grm.iter_tidxs() {
             term_costs.push(term_cost(tidx));
         }
         SentenceGenerator{grm,
@@ -671,8 +678,9 @@ impl<'a, StorageT: PrimInt + Unsigned> SentenceGenerator<'a, StorageT> {
 
 /// Return the cost of a minimal string for each non-terminal in this grammar. The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
-fn nonterm_min_costs<StorageT: PrimInt + Unsigned>
+fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u32>
+              where usize: AsPrimitive<StorageT>
 {
     // We use a simple(ish) fixed-point algorithm to determine costs. We maintain two lists
     // "costs" and "done". An integer costs[i] starts at 0 and monotonically increments
@@ -753,8 +761,9 @@ fn nonterm_min_costs<StorageT: PrimInt + Unsigned>
 /// Return the cost of the maximal string for each non-terminal in this grammar (u32::max_val()
 /// representing "this non-terminal can generate strings of infinite length"). The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
-fn nonterm_max_costs<StorageT: PrimInt + Unsigned>
+fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u32>
+               where usize: AsPrimitive<StorageT>
 {
     let mut done = vec![];
     done.resize(usize::from(grm.nonterms_len()), false);

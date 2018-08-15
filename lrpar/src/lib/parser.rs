@@ -39,7 +39,7 @@ use cfgrammar::{Grammar, NTIdx, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use mf;
 use cpctplus;
@@ -52,7 +52,9 @@ pub enum Node<StorageT, TokId> {
     Nonterm{nonterm_idx: NTIdx<StorageT>, nodes: Vec<Node<StorageT, TokId>>}
 }
 
-impl<StorageT: PrimInt + Unsigned, TokId: PrimInt + Unsigned> Node<StorageT, TokId> {
+impl<StorageT: 'static + PrimInt + Unsigned, TokId: PrimInt + Unsigned> Node<StorageT, TokId>
+where usize: AsPrimitive<StorageT>
+{
     /// Return a pretty-printed version of this node.
     pub fn pp(&self, grm: &YaccGrammar<StorageT>, input: &str) -> String {
         let mut st = vec![(0, self)]; // Stack of (indent level, node) pairs
@@ -96,9 +98,10 @@ pub struct Parser<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
 }
 
 impl<'a,
-     StorageT: Debug + Hash + PrimInt + Unsigned,
+     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
      TokId: PrimInt + Unsigned>
 Parser<'a, StorageT, TokId>
+where usize: AsPrimitive<StorageT>
 {
     fn parse<F>(rcvry_kind: RecoveryKind,
                 grm: &YaccGrammar<StorageT>,
@@ -110,7 +113,7 @@ Parser<'a, StorageT, TokId>
                       (Option<Node<StorageT, TokId>>, Vec<ParseError<StorageT, TokId>>)>
           where F: Fn(TIdx<StorageT>) -> u8
     {
-        for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+        for tidx in grm.iter_tidxs() {
             assert!(term_cost(tidx) > 0);
         }
         let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
@@ -390,7 +393,7 @@ pub enum RecoveryKind {
 
 /// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the
 /// input was consumed) or `None` otherwise, and a vector of `ParseError`s.
-pub fn parse<StorageT: Debug + Hash + PrimInt + Unsigned,
+pub fn parse<StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
             TokId: PrimInt + Unsigned>
            (grm: &YaccGrammar<StorageT>,
             sgraph: &StateGraph<StorageT>,
@@ -398,6 +401,7 @@ pub fn parse<StorageT: Debug + Hash + PrimInt + Unsigned,
             lexemes: &Lexemes<TokId>)
          -> Result<Node<StorageT, TokId>,
                   (Option<Node<StorageT, TokId>>, Vec<ParseError<StorageT, TokId>>)>
+      where usize: AsPrimitive<StorageT>
 {
     parse_rcvry(RecoveryKind::MF, grm, |_| 1, sgraph, stable, lexemes)
 }
@@ -406,7 +410,7 @@ pub fn parse<StorageT: Debug + Hash + PrimInt + Unsigned,
 /// tree. On failure, return a parse tree (if all the input was consumed) or `None` otherwise, and
 /// a vector of `ParseError`s.
 pub fn parse_rcvry
-       <StorageT: Debug + Hash + PrimInt + Unsigned,
+       <StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         TokId: PrimInt + Unsigned,
         F>
        (rcvry_kind: RecoveryKind,
@@ -416,7 +420,8 @@ pub fn parse_rcvry
         stable: &StateTable<StorageT>,
         lexemes: &Lexemes<TokId>)
     -> Result<Node<StorageT, TokId>, (Option<Node<StorageT, TokId>>, Vec<ParseError<StorageT, TokId>>)>
-    where F: Fn(TIdx<StorageT>) -> u8
+    where F: Fn(TIdx<StorageT>) -> u8,
+          usize: AsPrimitive<StorageT>
 {
     Parser::parse(rcvry_kind, grm, term_cost, sgraph, stable, lexemes)
 }

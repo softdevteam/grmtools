@@ -35,7 +35,7 @@ use std::hash::Hash;
 
 use cfgrammar::{Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use StIdx;
 use itemset::Itemset;
@@ -49,7 +49,9 @@ pub struct StateGraph<StorageT: Eq + Hash> {
     edges: Vec<HashMap<Symbol<StorageT>, StIdx>>
 }
 
-impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
+impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateGraph<StorageT>
+where usize: AsPrimitive<StorageT>
+{
     pub(crate) fn new(states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
                       edges: Vec<HashMap<Symbol<StorageT>, StIdx>>)
                    -> Self
@@ -109,7 +111,9 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
             i.to_string().len()
         }
 
-        fn fmt_sym<StorageT: PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>, sym: Symbol<StorageT>) -> String {
+        fn fmt_sym<StorageT: 'static + PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>, sym: Symbol<StorageT>) -> String
+             where usize: AsPrimitive<StorageT>
+        {
             match sym {
                 Symbol::Nonterm(ntidx) => grm.nonterm_name(ntidx).to_string(),
                 Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap_or(""))
@@ -194,16 +198,17 @@ use cfgrammar::{Grammar};
 use std::convert::TryFrom;
 
 #[cfg(test)]
-pub fn state_exists<StorageT: Hash + PrimInt + Unsigned>
+pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>
                    (grm: &YaccGrammar<StorageT>,
                     is: &Itemset<StorageT>,
                     nt: &str,
                     prod_off: usize,
                     dot: usize, la: Vec<&str>)
+where usize: AsPrimitive<StorageT>
 {
     let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot.into())];
-    for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+    for tidx in grm.iter_tidxs() {
         let bit = ctx[usize::try_from(tidx).unwrap()];
         let mut found = false;
         for t in la.iter() {

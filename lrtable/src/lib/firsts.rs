@@ -32,7 +32,7 @@
 
 use std::marker::PhantomData;
 
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
 use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
@@ -62,7 +62,9 @@ pub struct Firsts<StorageT> {
     phantom: PhantomData<StorageT>
 }
 
-impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
+impl<StorageT: 'static + PrimInt + Unsigned> Firsts<StorageT>
+where usize: AsPrimitive<StorageT>
+{
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
         let mut prod_firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
@@ -108,7 +110,7 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
-                                for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+                                for tidx in grm.iter_tidxs() {
                                     if firsts.is_set(nonterm_i, tidx) && !firsts.set(rul_i, tidx) {
                                         changed = true;
                                     }
@@ -176,15 +178,16 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
 mod test {
     use cfgrammar::Grammar;
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
-    use num_traits::{PrimInt, Unsigned};
+    use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
     use super::Firsts;
 
-    fn has<StorageT: PrimInt + Unsigned>
+    fn has<StorageT: 'static + PrimInt + Unsigned>
           (grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>, rn: &str, should_be: Vec<&str>)
+     where usize: AsPrimitive<StorageT>
     {
         let nt_i = grm.nonterm_idx(rn).unwrap();
-        for tidx in grm.iter_tidxs(0..grm.terms_len()) {
+        for tidx in grm.iter_tidxs() {
             let n = match grm.term_name(tidx) {
                 Some(n) => n,
                 None => &"<no name>"
