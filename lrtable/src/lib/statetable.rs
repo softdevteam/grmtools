@@ -41,7 +41,7 @@ use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::{IterSetBits, Vob};
 
-use StIdx;
+use {StIdx, StIdxStorageT};
 use stategraph::StateGraph;
 
 /// The various different possible Yacc parser errors.
@@ -86,7 +86,7 @@ pub struct StateTable<StorageT> {
     reduce_states    : Vob,
     nonterms_len     : u32,
     prods_len        : PIdx<StorageT>,
-    terms_len        : u32,
+    terms_len        : TIdx<StorageT>,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
     /// The number of shift/reduce errors encountered.
@@ -110,14 +110,15 @@ where usize: AsPrimitive<StorageT>
 {
     pub fn new(grm: &YaccGrammar<StorageT>, sg: &StateGraph<StorageT>) -> Result<Self, StateTableError<StorageT>> {
         let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
-        let mut state_actions = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
+        let mut state_actions = Vob::from_elem(usize::from(sg.all_states_len())
+                                                     .checked_mul(usize::from(grm.terms_len()))
+                                                     .unwrap(),
+                                               false);
         let mut gotos = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce  = 0; // How many automatically resolved shift/reduces were made?
         let mut final_state = None;
 
-        // Assert that we can fit the actions table into a u32
-        assert!(sg.all_states_len().checked_mul(grm.terms_len()).is_some());
         for (state_i, state) in sg.iter_closed_states()
                                   .enumerate()
                                   .map(|(x, y)| (StIdx::from(x), y)) {
@@ -175,8 +176,8 @@ where usize: AsPrimitive<StorageT>
             }
 
             let nt_len = grm.nonterms_len();
-            // Assert that we can fit the goto table into a u32
-            assert!(sg.all_states_len().checked_mul(u32::from(nt_len)).is_some());
+            // Assert that we can fit the goto table into an StIdxStorageT
+            assert!(StIdxStorageT::from(sg.all_states_len()).checked_mul(nt_len.into()).is_some());
             for (&sym, state_j) in sg.edges(state_i) {
                 match sym {
                     Symbol::Nonterm(nonterm_i) => {
@@ -211,14 +212,20 @@ where usize: AsPrimitive<StorageT>
         assert!(final_state.is_some());
 
         let mut nt_depth = HashMap::new();
-        let mut core_reduces = Vob::from_elem(sg.all_states_len() as usize * usize::from(grm.prods_len()), false);
-        let mut state_shifts = Vob::from_elem((sg.all_states_len() * grm.terms_len()) as usize, false);
-        let mut reduce_states = Vob::from_elem(sg.all_states_len() as usize, false);
-        for i in 0..sg.all_states_len() {
+        let mut core_reduces = Vob::from_elem(usize::from(sg.all_states_len())
+                                                    .checked_mul(usize::from(grm.prods_len()))
+                                                    .unwrap(),
+                                              false);
+        let mut state_shifts = Vob::from_elem(usize::from(sg.all_states_len())
+                                                    .checked_mul(usize::from(grm.terms_len()))
+                                                    .unwrap(),
+                                              false);
+        let mut reduce_states = Vob::from_elem(usize::from(sg.all_states_len()), false);
+        for st_idx in sg.iter_stidxs() {
             nt_depth.clear();
             let mut only_reduces = true;
             for tidx in grm.iter_tidxs() {
-                let off = actions_offset(grm.terms_len(), StIdx::from(i), tidx);
+                let off = actions_offset(grm.terms_len(), st_idx, tidx);
                 match actions.get(&off) {
                     Some(&Action::Reduce(p_idx)) => {
                         let prod_len = grm.prod(p_idx).len();
@@ -238,14 +245,18 @@ where usize: AsPrimitive<StorageT>
 
             let mut distinct_reduces = 0; // How many distinct reductions do we have?
             for &p_idx in nt_depth.values() {
-                let off = i as usize * usize::from(grm.prods_len()) + usize::from(p_idx);
+                let off = usize::from(st_idx)
+                                .checked_mul(usize::from(grm.prods_len()))
+                                .unwrap()
+                                .checked_add(usize::from(p_idx))
+                                .unwrap();
                 if core_reduces.set(off, true) == Some(true) {
                     distinct_reduces += 1;
                 }
             }
 
             if only_reduces && distinct_reduces == 1 {
-                reduce_states.set(i as usize, true);
+                reduce_states.set(usize::from(st_idx), true);
             }
         }
 
@@ -263,7 +274,6 @@ where usize: AsPrimitive<StorageT>
                        final_state: final_state.unwrap()})
     }
 
-
     /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
     pub fn action(&self, state_idx: StIdx, term_idx: TIdx<StorageT>) -> Option<Action<StorageT>> {
         let off = actions_offset(self.terms_len, state_idx, term_idx);
@@ -272,8 +282,8 @@ where usize: AsPrimitive<StorageT>
 
     /// Return an iterator over the indexes of all non-empty actions of `state_idx`.
     pub fn state_actions(&self, state_idx: StIdx) -> StateActionsIterator<StorageT> {
-        let start = usize::from(state_idx) * self.terms_len as usize;
-        let end = start + self.terms_len as usize;
+        let start = usize::from(state_idx) * usize::from(self.terms_len);
+        let end = start + usize::from(self.terms_len);
         StateActionsIterator{iter: self.state_actions.iter_set_bits(start..end),
                              start,
                              phantom: PhantomData}
@@ -282,8 +292,8 @@ where usize: AsPrimitive<StorageT>
     /// Return an iterator over the indexes of all shift actions of `state_idx`. By definition this
     /// is a subset of the indexes produced by [`state_actions`](#method.state_actions).
     pub fn state_shifts(&self, state_idx: StIdx) -> StateActionsIterator<StorageT> {
-        let start = usize::from(state_idx) * self.terms_len as usize;
-        let end = start + self.terms_len as usize;
+        let start = usize::from(state_idx) * usize::from(self.terms_len);
+        let end = start + usize::from(self.terms_len);
         StateActionsIterator{iter: self.state_shifts.iter_set_bits(start..end),
                              start,
                              phantom: PhantomData}
@@ -326,10 +336,10 @@ where usize: AsPrimitive<StorageT>
 }
 
 fn actions_offset<StorageT: PrimInt + Unsigned>
-                 (terms_len: u32, state_idx: StIdx, term_idx: TIdx<StorageT>)
-               -> u32
+                 (terms_len: TIdx<StorageT>, st_idx: StIdx, term_idx: TIdx<StorageT>)
+               -> StIdxStorageT
 {
-    u32::from(state_idx) * terms_len + u32::from(term_idx)
+    StIdxStorageT::from(st_idx) * StIdxStorageT::from(terms_len) + StIdxStorageT::from(term_idx)
 }
 
 pub struct StateActionsIterator<'a, StorageT> {
@@ -432,7 +442,7 @@ mod test {
             Factor : 'id';
           ").unwrap();
         let sg = pager_stategraph(&grm);
-        assert_eq!(sg.all_states_len(), 9);
+        assert_eq!(sg.all_states_len(), StIdx(9));
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();

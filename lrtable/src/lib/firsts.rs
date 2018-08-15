@@ -69,7 +69,7 @@ where usize: AsPrimitive<StorageT>
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
         let mut prod_firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
         for _ in grm.iter_ntidxs() {
-            prod_firsts.push(Vob::from_elem(grm.terms_len() as usize, false));
+            prod_firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
         }
         let mut firsts = Firsts {
             prod_firsts,

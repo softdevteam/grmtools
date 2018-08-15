@@ -30,7 +30,6 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -631,7 +630,7 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>
 }
 
 pub(crate) struct Dist<StorageT> {
-    terms_len: u32,
+    terms_len: TIdx<StorageT>,
     table: Vec<u32>,
     phantom: PhantomData<StorageT>
 }
@@ -656,23 +655,23 @@ where usize: AsPrimitive<StorageT>
         // also has a reduction target of state 5: thus state state 0 ends up with the minimum
         // distances of itself and state 5.
 
-        let terms_len = grm.terms_len() as usize;
-        let states_len = sgraph.all_states_len() as usize;
+        let terms_len = usize::from(grm.terms_len());
+        let states_len = usize::from(sgraph.all_states_len());
         let sengen = grm.sentence_generator(&term_cost);
         let goto_states = Dist::goto_states(grm, sgraph, stable);
 
         let mut table = Vec::new();
-        table.resize(states_len as usize * terms_len, u32::max_value());
+        table.resize(states_len * terms_len, u32::max_value());
         table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
         loop {
             let mut chgd = false;
-            for i in 0..states_len as usize {
+            for st_idx in sgraph.iter_stidxs() {
                 // The first phase is KimYi's dist algorithm.
-                for (&sym, &sym_st_idx) in sgraph.edges(StIdx::from(i)).iter() {
+                for (&sym, &sym_st_idx) in sgraph.edges(st_idx).iter() {
                     let d = match sym {
                         Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
                         Symbol::Term(t_idx) => {
-                            let off = i * terms_len + usize::from(t_idx);
+                            let off = usize::from(st_idx) * terms_len + usize::from(t_idx);
                             if table[off] != 0 {
                                 table[off] = 0;
                                 chgd = true;
@@ -682,9 +681,8 @@ where usize: AsPrimitive<StorageT>
                     };
 
                     for tidx in grm.iter_tidxs() {
-                        let this_off = i * terms_len + usize::try_from(tidx).unwrap();
-                        let other_off = usize::try_from(u32::from(sym_st_idx) * grm.terms_len()
-                                                        + u32::from(tidx)).unwrap();
+                        let this_off = usize::from(st_idx) * terms_len + usize::from(tidx);
+                        let other_off = usize::from(sym_st_idx) * terms_len + usize::from(tidx);
 
                         if table[other_off] != u32::max_value()
                            && table[other_off] + d < table[this_off]
@@ -696,10 +694,13 @@ where usize: AsPrimitive<StorageT>
                 }
 
                 // The second phase takes into account reductions and gotos.
-                for st_idx in goto_states[i].iter_set_bits(..) {
-                    for j in 0..terms_len {
-                        let this_off = i * terms_len + j;
-                        let other_off = st_idx * terms_len + j;
+                for goto_st_idx in goto_states[usize::from(st_idx)]
+                                              .iter_set_bits(..)
+                                              .map(|x| StIdx::from(x))
+                {
+                    for tidx in grm.iter_tidxs() {
+                        let this_off = usize::from(st_idx) * terms_len + usize::from(tidx);
+                        let other_off = usize::from(goto_st_idx) * terms_len + usize::from(tidx);
 
                         if table[other_off] != u32::max_value()
                            && table[other_off] < table[this_off]
@@ -719,18 +720,19 @@ where usize: AsPrimitive<StorageT>
     }
 
     pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx<StorageT>) -> u32 {
-        self.table[usize::from(st_idx) * self.terms_len as usize + usize::from(t_idx)]
+        self.table[usize::from(st_idx) * usize::from(self.terms_len) + usize::from(t_idx)]
     }
 
     /// rev_edges allows us to walk backwards over the stategraph.
     fn rev_edges(sgraph: &StateGraph<StorageT>) -> Vec<Vob>
     {
         let states_len = sgraph.all_states_len();
-        let mut rev_edges = Vec::with_capacity(states_len as usize);
-        rev_edges.resize(states_len as usize, Vob::from_elem(sgraph.all_states_len() as usize, false));
-        for i in 0..states_len {
-            for (_, &sym_st_idx) in sgraph.edges(StIdx::from(i)).iter() {
-                rev_edges[usize::from(sym_st_idx)].set(i as usize, true);
+        let mut rev_edges = Vec::with_capacity(usize::from(states_len));
+        rev_edges.resize(usize::from(states_len),
+                         Vob::from_elem(usize::from(sgraph.all_states_len()), false));
+        for st_idx in sgraph.iter_stidxs() {
+            for (_, &sym_st_idx) in sgraph.edges(st_idx).iter() {
+                rev_edges[usize::from(sym_st_idx)].set(usize::from(st_idx), true);
             }
         }
         rev_edges
@@ -744,16 +746,14 @@ where usize: AsPrimitive<StorageT>
                 -> Vec<Vob>
     {
         let rev_edges = Dist::rev_edges(sgraph);
-        let states_len = sgraph.all_states_len() as usize;
-        let mut goto_states = Vec::with_capacity(states_len as usize);
-        goto_states.resize(states_len as usize,
-                           Vob::from_elem(sgraph.all_states_len() as usize,
-                           false));
+        let states_len = usize::from(sgraph.all_states_len());
+        let mut goto_states = Vec::with_capacity(states_len);
+        goto_states.resize(states_len, Vob::from_elem(states_len, false));
         // prev and next are hoist here to lessen memory allocation in a core loop below.
         let mut prev = Vob::from_elem(states_len, false);
         let mut next = Vob::from_elem(states_len, false);
-        for i in 0..states_len {
-            for &(p_idx, sym_off) in sgraph.core_state(StIdx::from(i)).items.keys() {
+        for st_idx in sgraph.iter_stidxs() {
+            for &(p_idx, sym_off) in sgraph.core_state(st_idx).items.keys() {
                 let prod = grm.prod(p_idx);
                 if usize::from(sym_off) < prod.len() {
                     continue;
@@ -768,19 +768,19 @@ where usize: AsPrimitive<StorageT>
                 // back prod.len() states in the stategraph to do this: the final result will end
                 // up in prev.
                 prev.set_all(false);
-                prev.set(i, true);
+                prev.set(usize::from(st_idx), true);
                 for _ in 0..prod.len() {
                     next.set_all(false);
-                    for st_idx in prev.iter_set_bits(..) {
-                        next.or(&rev_edges[st_idx]);
+                    for prev_st_idx in prev.iter_set_bits(..) {
+                        next.or(&rev_edges[prev_st_idx]);
                     }
                     mem::swap(&mut prev, &mut next);
                 }
 
                 // From the reduction states, find all the goto states.
-                for st_idx in prev.iter_set_bits(..) {
-                    if let Some(goto_st_idx) = stable.goto(StIdx::from(st_idx), nt_idx) {
-                        goto_states[i].set(usize::from(goto_st_idx), true);
+                for prev_st_idx in prev.iter_set_bits(..) {
+                    if let Some(goto_st_idx) = stable.goto(StIdx::from(prev_st_idx), nt_idx) {
+                        goto_states[usize::from(st_idx)].set(usize::from(goto_st_idx), true);
                     }
                 }
             }

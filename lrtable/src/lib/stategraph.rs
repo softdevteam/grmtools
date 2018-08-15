@@ -37,7 +37,7 @@ use cfgrammar::{Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use StIdx;
+use {StIdx, StIdxStorageT};
 use itemset::Itemset;
 
 #[derive(Debug)]
@@ -57,6 +57,15 @@ where usize: AsPrimitive<StorageT>
                    -> Self
     {
         StateGraph{states, edges}
+    }
+
+    /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
+    /// grammar's valid `NTIdx`s.
+    pub fn iter_stidxs(&self) -> Box<dyn Iterator<Item=StIdx>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.states.len() which we've already checked fits within StIdxStorageT.
+        Box::new((0..self.states.len()).map(|x| StIdx::from(x)))
     }
 
     /// Return the itemset for closed state `st_idx`. Panics if `st_idx` doesn't exist.
@@ -81,9 +90,9 @@ where usize: AsPrimitive<StorageT>
 
     /// How many states does this `StateGraph` contain? NB: By definition the `StateGraph` contains
     /// the same number of core and closed states.
-    pub fn all_states_len(&self) -> u32 {
+    pub fn all_states_len(&self) -> StIdx {
         debug_assert!(self.states.len() <= u32::max_value() as usize);
-        self.states.len() as u32
+        StIdx::from(self.states.len() as StIdxStorageT)
     }
 
     /// Return the state pointed to by `sym` from `st_idx` or `None` otherwise.
@@ -104,11 +113,11 @@ where usize: AsPrimitive<StorageT>
     }
 
     fn pp(&self, grm: &YaccGrammar<StorageT>, core_states: bool) -> String {
-        fn num_digits(i: u32) -> usize {
+        fn num_digits(i: StIdx) -> usize {
             // In an ideal world, we'd do ((i as f64).log10() as usize) + 1, but we then hit
             // floating point rounding errors (e.g. 1000.0.log10() == 2.999999999ish, not
             // 3). So we do the lazy thing, convert the number to a string and do things that way.
-            i.to_string().len()
+            usize::from(i).to_string().len()
         }
 
         fn fmt_sym<StorageT: 'static + PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>, sym: Symbol<StorageT>) -> String
@@ -121,13 +130,14 @@ where usize: AsPrimitive<StorageT>
         }
 
         let mut o = String::new();
-        for (st_idx, &(ref core_st, ref closed_st)) in self.states.iter().enumerate() {
-            if st_idx > 0 {
+        for (st_idx, &(ref core_st, ref closed_st)) in self.iter_stidxs()
+                                                           .zip(self.states.iter()) {
+            if StIdxStorageT::from(st_idx) > 0 {
                 o.push_str(&"\n");
             }
             {
-                let padding = num_digits(self.all_states_len()) - num_digits(st_idx as u32);
-                o.push_str(&format!("{}:{}", st_idx, " ".repeat(padding)));
+                let padding = num_digits(self.all_states_len()) - num_digits(st_idx);
+                o.push_str(&format!("{}:{}", StIdxStorageT::from(st_idx), " ".repeat(padding)));
             }
 
             let st = if core_states {
@@ -251,7 +261,7 @@ mod test {
              | 'b';
           ").unwrap();
         let sg = pager_stategraph(&grm);
-        assert_eq!(sg.all_states_len(), 7);
+        assert_eq!(sg.all_states_len(), StIdx(7));
         assert_eq!(sg.states.iter().fold(0, |a, x| a + x.0.items.len()), 7);
         assert_eq!(sg.all_edges_len(), 9);
 

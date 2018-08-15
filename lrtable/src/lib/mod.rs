@@ -54,6 +54,8 @@ use cfgrammar::yacc::YaccGrammar;
 pub use stategraph::StateGraph;
 pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
+type StIdxStorageT = u32;
+
 /// StIdx is a wrapper for a 32-bit state index.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

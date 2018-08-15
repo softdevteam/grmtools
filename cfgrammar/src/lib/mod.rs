@@ -91,14 +91,14 @@ pub enum Symbol<StorageT> {
 }
 
 pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
-    /// How many terminals does this grammar have?
-    fn terms_len(&self) -> u32;
     /// How many productions does this grammar have?
     fn prods_len(&self) -> PIdx<StorageT>;
     /// How many nonterminals does this grammar have?
     fn nonterms_len(&self) -> NTIdx<StorageT>;
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> NTIdx<StorageT>;
+    /// How many terminals does this grammar have?
+    fn terms_len(&self) -> TIdx<StorageT>;
 
     /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
     /// grammar's valid `NTIdx`s.

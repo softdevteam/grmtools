@@ -79,7 +79,7 @@ pub struct YaccGrammar<StorageT=u32> {
     /// A mapping from `TIdx` -> `Option<Precedence>`
     term_precs: Vec<Option<Precedence>>,
     /// How many terminals does this grammar have?
-    terms_len: u32,
+    terms_len: TIdx<StorageT>,
     /// The offset of the EOF terminal.
     eof_term_idx: TIdx<StorageT>,
     /// How many productions does this grammar have?
@@ -295,10 +295,12 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             }
         }
 
+        assert!(term_names.len() > 0);
+        assert!(nonterm_names.len() > 0);
         Ok(YaccGrammar{
             nonterms_len:     NTIdx::from(nonterm_names.len()),
             nonterm_names,
-            terms_len:        u32::try_from(term_names.len()).unwrap(),
+            terms_len:        TIdx::from(term_names.len()),
             eof_term_idx,
             term_names,
             term_precs,
@@ -359,7 +361,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
     /// inputs from this grammar.
     pub fn terms_map(&self) -> HashMap<&str, TIdx<StorageT>> {
-        let mut m = HashMap::with_capacity(self.terms_len as usize - 1);
+        let mut m = HashMap::with_capacity(usize::from(self.terms_len) - 1);
         for tidx in self.iter_tidxs() {
             if let Some(n) = self.term_names[usize::try_from(tidx).unwrap()].as_ref() {
                 m.insert(&**n, tidx);
@@ -449,10 +451,6 @@ where usize: AsPrimitive<StorageT>
         self.prods_len
     }
 
-    fn terms_len(&self) -> u32 {
-        self.terms_len
-    }
-
     fn nonterms_len(&self) -> NTIdx<StorageT> {
         self.nonterms_len
     }
@@ -461,6 +459,10 @@ where usize: AsPrimitive<StorageT>
     fn start_rule_idx(&self) -> NTIdx<StorageT>
     {
         self.prod_to_nonterm(self.start_prod)
+    }
+
+    fn terms_len(&self) -> TIdx<StorageT> {
+        self.terms_len
     }
 }
 
@@ -497,7 +499,7 @@ where usize: AsPrimitive<StorageT>
     fn new<F>(grm: &'a YaccGrammar<StorageT>, term_cost: F) -> Self
         where F: Fn(TIdx<StorageT>) -> u8
     {
-        let mut term_costs = Vec::with_capacity(grm.terms_len() as usize);
+        let mut term_costs = Vec::with_capacity(usize::from(grm.terms_len()));
         for tidx in grm.iter_tidxs() {
             term_costs.push(term_cost(tidx));
         }
