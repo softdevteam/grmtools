@@ -181,7 +181,7 @@ where usize: AsPrimitive<StorageT>
                 }
                 o.push_str("}]");
             }
-            for (esym, e_st_idx) in self.edges(StIdx::from(st_idx)).iter() {
+            for (esym, e_st_idx) in self.edges(st_idx).iter() {
                 o.push_str(&format!("\n{}{} -> {}",
                                    " ".repeat(num_digits(self.all_states_len()) + 2),
                                    fmt_sym(&grm, *esym),

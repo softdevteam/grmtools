@@ -295,8 +295,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             }
         }
 
-        assert!(term_names.len() > 0);
-        assert!(nonterm_names.len() > 0);
+        assert!(!term_names.is_empty());
+        assert!(!nonterm_names.is_empty());
         Ok(YaccGrammar{
             nonterms_len:     NTIdx::from(nonterm_names.len()),
             nonterm_names,

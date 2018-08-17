@@ -148,7 +148,7 @@ pub fn process_file<StorageT, P, Q>(inp: P,
     outs.push_str(&format!("use lrpar::{{Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
 use lrlex::Lexeme;
 
-pub fn parse(lexemes: &Vec<Lexeme<{storaget}>>)
+pub fn parse(lexemes: &[Lexeme<{storaget}>])
           -> Result<Node<{storaget}>, (Option<Node<{storaget}>>, Vec<ParseError<{storaget}>>)>
 {{", storaget=StorageT::type_name()));
 

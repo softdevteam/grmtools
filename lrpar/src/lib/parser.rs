@@ -94,7 +94,7 @@ pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
     pub term_cost: &'a Fn(TIdx<StorageT>) -> u8,
     pub sgraph: &'a StateGraph<StorageT>,
     pub stable: &'a StateTable<StorageT>,
-    pub lexemes: &'a Lexemes<StorageT>
+    pub lexemes: &'a [Lexeme<StorageT>]
 }
 
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
@@ -106,7 +106,7 @@ where usize: AsPrimitive<StorageT>
                 term_cost: F,
                 sgraph: &StateGraph<StorageT>,
                 stable: &StateTable<StorageT>,
-                lexemes: &Lexemes<StorageT>)
+                lexemes: &[Lexeme<StorageT>])
              -> Result<Node<StorageT>,
                       (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
           where F: Fn(TIdx<StorageT>) -> u8
@@ -412,7 +412,7 @@ pub fn parse_rcvry
         term_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexemes: &Lexemes<StorageT>)
+        lexemes: &[Lexeme<StorageT>])
     -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
     where F: Fn(TIdx<StorageT>) -> u8,
           usize: AsPrimitive<StorageT>

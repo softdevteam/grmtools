@@ -304,7 +304,7 @@ where usize: AsPrimitive<StorageT>
         let nn = PathFNode{pstack: n.pstack.clone(),
                            la_idx: n.la_idx + 1,
                            repairs: n.repairs.child(RepairMerge::Repair(Repair::Delete)),
-                           cf: n.cf.checked_add(cost as u32).unwrap()};
+                           cf: n.cf.checked_add(u32::from(cost)).unwrap()};
         nbrs.push((nn.cf, nn));
     }
 
@@ -397,14 +397,14 @@ where usize: AsPrimitive<StorageT>
         let mut all_rprs = Vec::with_capacity(cnds.len());
         for cnd in cnds {
             all_rprs.push(traverse(&cnd.repairs).into_iter()
-                                                .map(|x| self.repair_to_parse_repair(x))
+                                                .map(|x| self.repair_to_parse_repair(&x))
                                                 .collect::<Vec<_>>());
         }
         all_rprs
     }
 
     fn repair_to_parse_repair(&self,
-                              from: Vec<Repair<StorageT>>)
+                              from: &[Repair<StorageT>])
                            -> Vec<ParseRepair<StorageT>> {
         from.iter()
             .map(|y| {

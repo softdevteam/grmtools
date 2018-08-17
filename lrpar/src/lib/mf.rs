@@ -425,14 +425,14 @@ where usize: AsPrimitive<StorageT>
         let mut all_rprs = Vec::with_capacity(cnds.len());
         for cnd in cnds {
             all_rprs.push(traverse(&cnd.repairs).into_iter()
-                                                .map(|x| self.repair_to_parse_repair(x))
+                                                .map(|x| self.repair_to_parse_repair(&x))
                                                 .collect::<Vec<_>>());
         }
         all_rprs
     }
 
     fn repair_to_parse_repair(&self,
-                              from: Vec<Repair<StorageT>>)
+                              from: &[Repair<StorageT>])
                            -> Vec<ParseRepair<StorageT>> {
         from.iter()
             .map(|y| {
@@ -514,8 +514,8 @@ fn ends_with_parse_at_least_shifts<StorageT>
     let mut shfts = 0;
     for x in repairs.vals().take(PARSE_AT_LEAST) {
         match x {
-            &RepairMerge::Repair(Repair::Shift) => shfts += 1,
-            &RepairMerge::Merge(Repair::Shift, _) => shfts += 1,
+            RepairMerge::Repair(Repair::Shift) => shfts += 1,
+            RepairMerge::Merge(Repair::Shift, _) => shfts += 1,
             _ => return false
         }
     }
