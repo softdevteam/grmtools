@@ -44,12 +44,6 @@ macro_rules! IdxNewtype {
         #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
         pub struct $n<T>(pub T);
 
-        impl<T: PrimInt + Unsigned> From<usize> for $n<T> {
-            fn from(v: usize) -> Self {
-                $n(num_traits::cast(v).unwrap())
-            }
-        }
-
         impl<T: PrimInt + Unsigned> From<$n<T>> for usize {
             fn from(st: $n<T>) -> Self {
                 debug_assert!(size_of::<usize>() >= size_of::<T>());

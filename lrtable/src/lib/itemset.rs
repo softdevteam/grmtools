@@ -112,7 +112,10 @@ where usize: AsPrimitive<StorageT>
                 }
                 None => {
                     match zero_todos.iter_set_bits(..).next() {
-                        Some(i) => prod_i = PIdx::from(i),
+                        Some(i) => {
+                            // Since zero_todos.len() == grm.prods_len, the call to as_ is safe.
+                            prod_i = PIdx(i.as_())
+                        },
                         None => break
                     }
                     dot = SIdx(StorageT::zero());
@@ -120,7 +123,7 @@ where usize: AsPrimitive<StorageT>
                 }
             }
             let prod = grm.prod(prod_i);
-            if dot == prod.len().into() { continue; }
+            if dot == grm.prod_len(prod_i) { continue; }
             if let Symbol::Nonterm(nonterm_i) = prod[usize::from(dot)] {
                 // This if statement is, in essence, a fast version of what's called getContext in
                 // Chen's dissertation, folding in getTHeads at the same time. The particular
@@ -167,9 +170,9 @@ where usize: AsPrimitive<StorageT>
         let mut newis = Itemset::new(grm);
         for (&(prod_i, dot), ctx) in &self.items {
             let prod = grm.prod(prod_i);
-            if dot == SIdx::from(prod.len()) { continue; }
+            if dot == grm.prod_len(prod_i) { continue; }
             if sym == &prod[usize::from(dot)] {
-                newis.add(prod_i, (usize::from(dot) + 1).into(), ctx);
+                newis.add(prod_i, SIdx(dot.as_storaget() + StorageT::one()), ctx);
             }
         }
         newis
@@ -204,12 +207,12 @@ mod test {
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(cls_is.items.len(), 6);
-        state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
-        state_exists(&grm, &cls_is, "S", 0, 0, vec!["$"]);
-        state_exists(&grm, &cls_is, "S", 1, 0, vec!["$"]);
-        state_exists(&grm, &cls_is, "L", 0, 0, vec!["$", "="]);
-        state_exists(&grm, &cls_is, "L", 1, 0, vec!["$", "="]);
-        state_exists(&grm, &cls_is, "R", 0, 0, vec!["$"]);
+        state_exists(&grm, &cls_is, "^", 0, SIdx(0), vec!["$"]);
+        state_exists(&grm, &cls_is, "S", 0, SIdx(0), vec!["$"]);
+        state_exists(&grm, &cls_is, "S", 1, SIdx(0), vec!["$"]);
+        state_exists(&grm, &cls_is, "L", 0, SIdx(0), vec!["$", "="]);
+        state_exists(&grm, &cls_is, "L", 1, SIdx(0), vec!["$", "="]);
+        state_exists(&grm, &cls_is, "R", 0, SIdx(0), vec!["$"]);
     }
 
     fn eco_grammar() -> YaccGrammar {
@@ -237,18 +240,18 @@ mod test {
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
-        state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
-        state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "$"]);
-        state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "$"]);
-        state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
+        state_exists(&grm, &cls_is, "^", 0, SIdx(0), vec!["$"]);
+        state_exists(&grm, &cls_is, "S", 0, SIdx(0), vec!["b", "$"]);
+        state_exists(&grm, &cls_is, "S", 1, SIdx(0), vec!["b", "$"]);
+        state_exists(&grm, &cls_is, "S", 2, SIdx(0), vec!["b", "$"]);
 
         is = Itemset::new(&grm);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap())[0], SIdx(0), &la);
         cls_is = is.close(&grm, &firsts);
-        state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
-        state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
-        state_exists(&grm, &cls_is, "D", 0, 0, vec!["a"]);
-        state_exists(&grm, &cls_is, "D", 1, 0, vec!["a"]);
+        state_exists(&grm, &cls_is, "F", 0, SIdx(0), vec!["$"]);
+        state_exists(&grm, &cls_is, "C", 0, SIdx(0), vec!["d", "f"]);
+        state_exists(&grm, &cls_is, "D", 0, SIdx(0), vec!["a"]);
+        state_exists(&grm, &cls_is, "D", 1, SIdx(0), vec!["a"]);
     }
 
     // GrammarAST from 'LR(k) Analyse fuer Pragmatiker'
@@ -279,9 +282,9 @@ mod test {
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
-        state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
-        state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "$"]);
-        state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "$"]);
+        state_exists(&grm, &cls_is, "^", 0, SIdx(0), vec!["$"]);
+        state_exists(&grm, &cls_is, "S", 0, SIdx(0), vec!["b", "$"]);
+        state_exists(&grm, &cls_is, "S", 1, SIdx(0), vec!["b", "$"]);
 
         is = Itemset::new(&grm);
         la = Vob::from_elem(usize::from(grm.terms_len()), false);
@@ -289,17 +292,17 @@ mod test {
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap())[1], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
-        state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
-        state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
-        state_exists(&grm, &cls_is, "A", 2, 0, vec!["a"]);
+        state_exists(&grm, &cls_is, "A", 0, SIdx(0), vec!["a"]);
+        state_exists(&grm, &cls_is, "A", 1, SIdx(0), vec!["a"]);
+        state_exists(&grm, &cls_is, "A", 2, SIdx(0), vec!["a"]);
 
         is = Itemset::new(&grm);
         la = Vob::from_elem(usize::from(grm.terms_len()), false);
         la.set(usize::from(grm.term_idx("a").unwrap()), true);
         is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
-        state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
-        state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
+        state_exists(&grm, &cls_is, "S", 0, SIdx(0), vec!["b", "c"]);
+        state_exists(&grm, &cls_is, "S", 1, SIdx(0), vec!["b", "c"]);
     }
 
     #[test]
@@ -314,16 +317,16 @@ mod test {
         let cls_is = is.close(&grm, &firsts);
 
         let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
-        state_exists(&grm, &goto1, "^", 0, 1, vec!["$"]);
-        state_exists(&grm, &goto1, "S", 0, 1, vec!["$", "b"]);
+        state_exists(&grm, &goto1, "^", 0, SIdx(1), vec!["$"]);
+        state_exists(&grm, &goto1, "S", 0, SIdx(1), vec!["$", "b"]);
 
         // follow 'b' from start set
         let goto2 = cls_is.goto(&grm, &Symbol::Term(grm.term_idx("b").unwrap()));
-        state_exists(&grm, &goto2, "S", 1, 1, vec!["$", "b"]);
+        state_exists(&grm, &goto2, "S", 1, SIdx(1), vec!["$", "b"]);
 
         // continue by following 'a' from last goto, after it's been closed
         let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Term(grm.term_idx("a").unwrap()));
-        state_exists(&grm, &goto3, "A", 1, 1, vec!["a"]);
-        state_exists(&grm, &goto3, "A", 2, 1, vec!["a"]);
+        state_exists(&grm, &goto3, "A", 1, SIdx(1), vec!["a"]);
+        state_exists(&grm, &goto3, "A", 2, SIdx(1), vec!["a"]);
     }
 }

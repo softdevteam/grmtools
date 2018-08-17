@@ -172,7 +172,8 @@ where usize: AsPrimitive<StorageT>
                     } else {
                         seen_b = true;
                     }
-                    let tidx = TIdx::from(b_idx);
+                    // Since ctx is exactly term_len bits long, the call to as_ is safe.
+                    let tidx = TIdx(b_idx.as_());
                     if tidx == grm.eof_term_idx() {
                         o.push_str("'$'");
                     } else {
@@ -203,7 +204,7 @@ where usize: AsPrimitive<StorageT>
 }
 
 #[cfg(test)]
-use cfgrammar::{Grammar};
+use cfgrammar::{Grammar, SIdx};
 
 #[cfg(test)]
 pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>
@@ -211,11 +212,12 @@ pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>
                     is: &Itemset<StorageT>,
                     nt: &str,
                     prod_off: usize,
-                    dot: usize, la: Vec<&str>)
+                    dot: SIdx<StorageT>,
+                    la: Vec<&str>)
 where usize: AsPrimitive<StorageT>
 {
     let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
-    let ctx = &is.items[&(ab_prod_off, dot.into())];
+    let ctx = &is.items[&(ab_prod_off, dot)];
     for tidx in grm.iter_tidxs() {
         let bit = ctx[usize::from(tidx)];
         let mut found = false;
@@ -228,7 +230,7 @@ where usize: AsPrimitive<StorageT>
             if off == tidx {
                 if !bit {
                     panic!("bit for terminal {}, dot {} is not set in production {} of {} when it should be",
-                           t, dot, prod_off, nt);
+                           t, usize::from(dot), prod_off, nt);
                 }
                 found = true;
                 break;
@@ -236,7 +238,7 @@ where usize: AsPrimitive<StorageT>
         }
         if !found && bit {
             panic!("bit for terminal {}, dot {} is set in production {} of {} when it shouldn't be",
-                   grm.term_name(tidx).unwrap(), dot, prod_off, nt);
+                   grm.term_name(tidx).unwrap(), usize::from(dot), prod_off, nt);
         }
     }
 }

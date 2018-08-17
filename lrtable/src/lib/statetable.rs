@@ -35,7 +35,7 @@ use std::hash::{Hash, BuildHasherDefault};
 use std::fmt;
 use std::marker::PhantomData;
 
-use cfgrammar::{Grammar, PIdx, NTIdx, SIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -124,13 +124,15 @@ where usize: AsPrimitive<StorageT>
                                   .map(|(x, y)| (StIdx::from(x), y)) {
             // Populate reduce and accepts
             for (&(prod_i, dot), ctx) in &state.items {
-                if dot < SIdx::from(grm.prod(prod_i).len()) {
+                if dot < grm.prod_len(prod_i) {
                     continue;
                 }
                 for term_i in ctx.iter_set_bits(..) {
                     let off = actions_offset(grm.terms_len(),
                                              state_i,
-                                             TIdx::<StorageT>::from(term_i));
+                                             // Since ctx is exactly term_len bits long, the call
+                                             // to as_ is safe.
+                                             TIdx(term_i.as_()));
                     state_actions.set(off as usize, true);
                     match actions.entry(off) {
                         Entry::Occupied(mut e) => {
@@ -348,11 +350,15 @@ pub struct StateActionsIterator<'a, StorageT> {
     phantom: PhantomData<StorageT>
 }
 
-impl<'a, StorageT: PrimInt + Unsigned> Iterator for StateActionsIterator<'a, StorageT> {
+impl<'a, StorageT: 'static + PrimInt + Unsigned> Iterator for StateActionsIterator<'a, StorageT>
+where usize: AsPrimitive<StorageT>
+{
     type Item = TIdx<StorageT>;
 
     fn next(&mut self) -> Option<TIdx<StorageT>> {
-        self.iter.next().map(|i| TIdx::from(i - self.start))
+        // Since self.iter's IterSetBits range as exactly terms_len long, by definition `i -
+        // self.start` fits into StorageT and thus the as_ call here is safe.
+        self.iter.next().map(|i| TIdx((i - self.start).as_()))
     }
 }
 
@@ -362,11 +368,15 @@ pub struct CoreReducesIterator<'a, StorageT> {
     phantom: PhantomData<StorageT>
 }
 
-impl<'a, StorageT: PrimInt + Unsigned> Iterator for CoreReducesIterator<'a, StorageT> {
+impl<'a, StorageT: 'static + PrimInt + Unsigned> Iterator for CoreReducesIterator<'a, StorageT>
+where usize: AsPrimitive<StorageT>
+{
     type Item = PIdx<StorageT>;
 
     fn next(&mut self) -> Option<PIdx<StorageT>> {
-        self.iter.next().map(|i| PIdx::from(i - self.start))
+        // Since self.iter's IterSetBits range as exactly terms_len long, by definition `i -
+        // self.start` fits into StorageT and thus the as_ call here is safe.
+        self.iter.next().map(|i| PIdx((i - self.start).as_()))
     }
 }
 
