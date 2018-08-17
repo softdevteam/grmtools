@@ -66,7 +66,7 @@ where usize: AsPrimitive<StorageT>
             }
             match *e {
                 Node::Term{lexeme} => {
-                    let t_idx = TIdx::from(lexeme.tok_id().to_u32().unwrap());
+                    let t_idx = TIdx(lexeme.tok_id());
                     let tn = grm.term_name(t_idx).unwrap();
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
@@ -233,7 +233,7 @@ where usize: AsPrimitive<StorageT>
         while la_idx != end_la_idx && la_idx <= self.lexemes.len() {
             let st = *pstack.last().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
-                              TIdx::from(l.tok_id().to_u32().unwrap())
+                              TIdx(l.tok_id())
                           } else {
                               self.next_tidx(la_idx)
                           };
@@ -302,7 +302,7 @@ where usize: AsPrimitive<StorageT>
         let ll = self.lexemes.len();
         debug_assert!(la_idx <= ll);
         if la_idx < ll {
-            TIdx::from(self.lexemes[la_idx].tok_id().to_u32().unwrap())
+            TIdx(self.lexemes[la_idx].tok_id())
         } else {
             self.grm.eof_term_idx()
         }
@@ -327,7 +327,7 @@ where usize: AsPrimitive<StorageT>
         while la_idx != end_la_idx {
             let st = *pstack.val().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
-                              TIdx::from(l.tok_id().to_u32().unwrap())
+                              TIdx(l.tok_id())
                           } else {
                               self.next_tidx(la_idx)
                           };

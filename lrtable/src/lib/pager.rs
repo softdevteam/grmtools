@@ -163,7 +163,7 @@ where usize: AsPrimitive<StorageT>
     let mut state0 = Itemset::new(grm);
     let mut ctx = Vob::from_elem(usize::from(grm.terms_len()), false);
     ctx.set(usize::from(grm.eof_term_idx()), true);
-    state0.add(grm.start_prod(), SIdx::from(0u32), &ctx);
+    state0.add(grm.start_prod(), SIdx(StorageT::zero()), &ctx);
     closed_states.push(None);
     core_states.push(state0);
     edges.push(HashMap::new());

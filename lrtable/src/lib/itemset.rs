@@ -115,7 +115,7 @@ where usize: AsPrimitive<StorageT>
                         Some(i) => prod_i = PIdx::from(i),
                         None => break
                     }
-                    dot = SIdx::from(0u32);
+                    dot = SIdx(StorageT::zero());
                     zero_todos.set(prod_i.into(), false);
                 }
             }
@@ -151,7 +151,7 @@ where usize: AsPrimitive<StorageT>
                 }
 
                 for ref_prod_i in grm.nonterm_to_prods(nonterm_i).iter() {
-                    if new_is.add(*ref_prod_i, SIdx::from(0u32), &new_ctx) {
+                    if new_is.add(*ref_prod_i, SIdx(StorageT::zero()), &new_ctx) {
                         zero_todos.set(usize::from(*ref_prod_i), true);
                     }
                 }
@@ -181,7 +181,7 @@ mod test {
     use vob::Vob;
     use super::Itemset;
     use firsts::Firsts;
-    use cfgrammar::{Grammar, Symbol};
+    use cfgrammar::{Grammar, SIdx, Symbol};
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use stategraph::state_exists;
 
@@ -200,7 +200,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0u32.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(cls_is.items.len(), 6);
@@ -234,7 +234,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0u32.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -243,7 +243,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 2, 0, vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap())[0], 0u32.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap())[0], SIdx(0), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "F", 0, 0, vec!["$"]);
         state_exists(&grm, &cls_is, "C", 0, 0, vec!["d", "f"]);
@@ -276,7 +276,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0u32.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, 0, vec!["$"]);
@@ -287,7 +287,7 @@ mod test {
         la = Vob::from_elem(usize::from(grm.terms_len()), false);
         la.set(usize::from(grm.term_idx("b").unwrap()), true);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap())[1], 1u32.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap())[1], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, 0, vec!["a"]);
         state_exists(&grm, &cls_is, "A", 1, 0, vec!["a"]);
@@ -296,7 +296,7 @@ mod test {
         is = Itemset::new(&grm);
         la = Vob::from_elem(usize::from(grm.terms_len()), false);
         la.set(usize::from(grm.term_idx("a").unwrap()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0], 1u32.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, 0, vec!["b", "c"]);
         state_exists(&grm, &cls_is, "S", 1, 0, vec!["b", "c"]);
@@ -310,7 +310,7 @@ mod test {
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
         la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], 0u32.into(), &la);
+        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);
 
         let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));

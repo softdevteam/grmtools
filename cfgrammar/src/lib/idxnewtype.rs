@@ -50,12 +50,6 @@ macro_rules! IdxNewtype {
             }
         }
 
-        impl<T: PrimInt + Unsigned> From<u32> for $n<T> {
-            fn from(v: u32) -> Self {
-                $n(num_traits::cast(v).unwrap())
-            }
-        }
-
         impl<T: PrimInt + Unsigned> From<$n<T>> for usize {
             fn from(st: $n<T>) -> Self {
                 debug_assert!(size_of::<usize>() >= size_of::<T>());
