@@ -64,10 +64,6 @@
 //! For most current uses, the main function to investigate is [`yacc_grm`](yacc/fn.yacc_grm.html)
 //! which takes as input a Yacc grammar.
 
-#![feature(try_from)]
-
-use std::convert::TryFrom;
-
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
 extern crate num_traits;
@@ -115,6 +111,6 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
         // We can use as_ safely, because we know that we're only generating integers from
         // 0..self.nonterms_len() and, since nonterms_len() returns an TIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::try_from(self.terms_len()).unwrap()).map(|x| TIdx(x.as_())))
+        Box::new((0..usize::from(self.terms_len())).map(|x| TIdx(x.as_())))
     }
 }

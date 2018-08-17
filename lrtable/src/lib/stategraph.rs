@@ -204,8 +204,6 @@ where usize: AsPrimitive<StorageT>
 
 #[cfg(test)]
 use cfgrammar::{Grammar};
-#[cfg(test)]
-use std::convert::TryFrom;
 
 #[cfg(test)]
 pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>
@@ -219,7 +217,7 @@ where usize: AsPrimitive<StorageT>
     let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot.into())];
     for tidx in grm.iter_tidxs() {
-        let bit = ctx[usize::try_from(tidx).unwrap()];
+        let bit = ctx[usize::from(tidx)];
         let mut found = false;
         for t in la.iter() {
             let off = if t == &"$" {

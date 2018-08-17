@@ -32,7 +32,6 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::fmt;
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -363,7 +362,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     pub fn terms_map(&self) -> HashMap<&str, TIdx<StorageT>> {
         let mut m = HashMap::with_capacity(usize::from(self.terms_len) - 1);
         for tidx in self.iter_tidxs() {
-            if let Some(n) = self.term_names[usize::try_from(tidx).unwrap()].as_ref() {
+            if let Some(n) = self.term_names[usize::from(tidx)].as_ref() {
                 m.insert(&**n, tidx);
             }
         }
