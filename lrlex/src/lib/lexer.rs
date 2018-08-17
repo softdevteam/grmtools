@@ -282,6 +282,7 @@ impl<StorageT: Copy> Lexeme<StorageT> {
 
     /// Length in bytes of the lexeme
     pub fn len(&self) -> usize {
+        debug_assert!(usize::try_from(u32::max_value()).is_ok());
         self.len as usize
     }
 

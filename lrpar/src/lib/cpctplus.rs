@@ -68,7 +68,7 @@ struct PathFNode<StorageT> {
     pstack: Cactus<StIdx>,
     la_idx: usize,
     repairs: Cactus<RepairMerge<StorageT>>,
-    cf: u32
+    cf: u16
 }
 
 impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
@@ -266,7 +266,7 @@ where usize: AsPrimitive<StorageT>
 {
     fn insert(&self,
              n: &PathFNode<StorageT>,
-             nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
+             nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
         let la_idx = n.la_idx;
         for t_idx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
@@ -285,7 +285,7 @@ where usize: AsPrimitive<StorageT>
                     pstack: n_pstack,
                     la_idx: n.la_idx,
                     repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx))),
-                    cf: n.cf.checked_add(u32::from((self.parser.term_cost)(t_idx))).unwrap()};
+                    cf: n.cf.checked_add(u16::from((self.parser.term_cost)(t_idx))).unwrap()};
                 nbrs.push((nn.cf, nn));
             }
         }
@@ -293,7 +293,7 @@ where usize: AsPrimitive<StorageT>
 
     fn delete(&self,
            n: &PathFNode<StorageT>,
-           nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
+           nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
         if n.la_idx == self.parser.lexemes.len() {
             return;
@@ -304,13 +304,13 @@ where usize: AsPrimitive<StorageT>
         let nn = PathFNode{pstack: n.pstack.clone(),
                            la_idx: n.la_idx + 1,
                            repairs: n.repairs.child(RepairMerge::Repair(Repair::Delete)),
-                           cf: n.cf.checked_add(u32::from(cost)).unwrap()};
+                           cf: n.cf.checked_add(u16::from(cost)).unwrap()};
         nbrs.push((nn.cf, nn));
     }
 
     fn shift(&self,
              n: &PathFNode<StorageT>,
-             nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
+             nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
         // Forward move rule (ER3)
         //

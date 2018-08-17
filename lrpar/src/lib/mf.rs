@@ -72,8 +72,8 @@ struct PathFNode<StorageT> {
     pstack: Cactus<StIdx>,
     la_idx: usize,
     repairs: Cactus<RepairMerge<StorageT>>,
-    cf: u32,
-    cg: u32
+    cf: u16,
+    cg: u16
 }
 
 impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
@@ -260,7 +260,7 @@ where usize: AsPrimitive<StorageT>
 {
     fn insert(&self,
               n: &PathFNode<StorageT>,
-              nbrs: &mut Vec<(u32, u32, PathFNode<StorageT>)>)
+              nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
         for t_idx in self.parser.stable.state_shifts(top_pstack) {
@@ -274,12 +274,12 @@ where usize: AsPrimitive<StorageT>
             };
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx)));
             if let Some(d) = self.dyn_dist(&n_repairs, t_st_idx, n.la_idx) {
-                assert!(n.cg == 0 || d >= n.cg - u32::from((self.parser.term_cost)(t_idx)));
+                assert!(n.cg == 0 || d >= n.cg - u16::from((self.parser.term_cost)(t_idx)));
                 let nn = PathFNode{
                     pstack: n.pstack.child(t_st_idx),
                     la_idx: n.la_idx,
                     repairs: n_repairs,
-                    cf: n.cf.checked_add(u32::from((self.parser.term_cost)(t_idx))).unwrap(),
+                    cf: n.cf.checked_add(u16::from((self.parser.term_cost)(t_idx))).unwrap(),
                     cg: d};
                 nbrs.push((nn.cf, nn.cg, nn));
             }
@@ -288,7 +288,7 @@ where usize: AsPrimitive<StorageT>
 
     fn reduce(&self,
               n: &PathFNode<StorageT>,
-              nbrs: &mut Vec<(u32, u32, PathFNode<StorageT>)>)
+              nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
         for p_idx in self.parser.stable.core_reduces(top_pstack) {
@@ -341,7 +341,7 @@ where usize: AsPrimitive<StorageT>
 
     fn delete(&self,
               n: &PathFNode<StorageT>,
-              nbrs: &mut Vec<(u32, u32, PathFNode<StorageT>)>)
+              nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
         if n.la_idx == self.parser.lexemes.len() {
             return;
@@ -354,7 +354,7 @@ where usize: AsPrimitive<StorageT>
             let nn = PathFNode{pstack: n.pstack.clone(),
                                la_idx: n.la_idx + 1,
                                repairs: n_repairs,
-                               cf: n.cf.checked_add(u32::from(cost)).unwrap(),
+                               cf: n.cf.checked_add(u16::from(cost)).unwrap(),
                                cg: d};
             nbrs.push((nn.cf, nn.cg, nn));
         }
@@ -362,7 +362,7 @@ where usize: AsPrimitive<StorageT>
 
     fn shift(&self,
              n: &PathFNode<StorageT>,
-             nbrs: &mut Vec<(u32, u32, PathFNode<StorageT>)>)
+             nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
         let la_tidx = self.parser.next_tidx(n.la_idx);
         let top_pstack = *n.pstack.val().unwrap();
@@ -452,7 +452,7 @@ where usize: AsPrimitive<StorageT>
                 repairs: &Cactus<RepairMerge<StorageT>>,
                 st_idx: StIdx,
                 la_idx: usize)
-              -> Option<u32>
+              -> Option<u16>
     {
         // This function is very different than anything in KimYi: it estimates the distance to a
         // success node based in part on dynamic properties of the input as well as static
@@ -482,15 +482,15 @@ where usize: AsPrimitive<StorageT>
         // "=" to "y" is 0. Assuming the deletion cost of "}" is 1, it's therefore cheaper to
         // delete "}" and add that to the distance from "=" to "y". Thus the cheapest distance is
         // 1.
-        let mut ld = u32::max_value(); // ld == Current least distance
+        let mut ld = u16::max_value(); // ld == Current least distance
         let mut dc = 0; // Cumulative deletion cost
         for i in la_idx..self.parser.lexemes.len() + 1 {
             let t_idx = self.parser.next_tidx(i);
             let d = self.dist.dist(st_idx, t_idx);
-            if d < u32::max_value() && dc + d < ld {
+            if d < u16::max_value() && dc + d < ld {
                 ld = dc + d;
             }
-            dc += u32::from((self.parser.term_cost)(t_idx));
+            dc += u16::from((self.parser.term_cost)(t_idx));
             if dc >= ld {
                 // Once the cumulative cost of deleting lexemes is bigger than the current least
                 // distance, there is no chance of finding a subsequent lexeme which could produce
@@ -498,7 +498,7 @@ where usize: AsPrimitive<StorageT>
                 break;
             }
         }
-        if ld == u32::max_value() {
+        if ld == u16::max_value() {
             None
         } else {
             Some(ld)
@@ -631,7 +631,7 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>
 
 pub(crate) struct Dist<StorageT> {
     terms_len: TIdx<StorageT>,
-    table: Vec<u32>,
+    table: Vec<u16>,
     phantom: PhantomData<StorageT>
 }
 
@@ -661,7 +661,7 @@ where usize: AsPrimitive<StorageT>
         let goto_states = Dist::goto_states(grm, sgraph, stable);
 
         let mut table = Vec::new();
-        table.resize(states_len * terms_len, u32::max_value());
+        table.resize(states_len * terms_len, u16::max_value());
         table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
         loop {
             let mut chgd = false;
@@ -676,7 +676,7 @@ where usize: AsPrimitive<StorageT>
                                 table[off] = 0;
                                 chgd = true;
                             }
-                            u32::from(term_cost(t_idx))
+                            u16::from(term_cost(t_idx))
                         }
                     };
 
@@ -684,7 +684,7 @@ where usize: AsPrimitive<StorageT>
                         let this_off = usize::from(st_idx) * terms_len + usize::from(tidx);
                         let other_off = usize::from(sym_st_idx) * terms_len + usize::from(tidx);
 
-                        if table[other_off] != u32::max_value()
+                        if table[other_off] != u16::max_value()
                            && table[other_off] + d < table[this_off]
                         {
                             table[this_off] = table[other_off] + d;
@@ -702,7 +702,7 @@ where usize: AsPrimitive<StorageT>
                         let this_off = usize::from(st_idx) * terms_len + usize::from(tidx);
                         let other_off = usize::from(goto_st_idx) * terms_len + usize::from(tidx);
 
-                        if table[other_off] != u32::max_value()
+                        if table[other_off] != u16::max_value()
                            && table[other_off] < table[this_off]
                         {
                             table[this_off] = table[other_off];
@@ -719,7 +719,7 @@ where usize: AsPrimitive<StorageT>
         Dist{terms_len: grm.terms_len(), table, phantom: PhantomData}
     }
 
-    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx<StorageT>) -> u32 {
+    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx<StorageT>) -> u16 {
         self.table[usize::from(st_idx) * usize::from(self.terms_len) + usize::from(t_idx)]
     }
 
@@ -865,24 +865,24 @@ A: '(' A ')'
         assert_eq!(d.dist(s0, grm.eof_term_idx()), 1);
 
         let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s1, grm.eof_term_idx()), 0);
 
         let s2 = sgraph.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), u16::max_value());
         assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s2, grm.eof_term_idx()), 0);
 
         let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), u16::max_value());
         assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s3, grm.eof_term_idx()), 0);
 
         let s5 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
@@ -893,17 +893,17 @@ A: '(' A ')'
         assert_eq!(d.dist(s5, grm.eof_term_idx()), 1);
 
         let s6 = sgraph.edge(s5, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("(").unwrap()), u16::max_value());
         assert_eq!(d.dist(s6, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s6, grm.eof_term_idx()), 1);
 
         let s4 = sgraph.edge(s6, Symbol::Term(grm.term_idx(")").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("(").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx("(").unwrap()), u16::max_value());
         assert_eq!(d.dist(s4, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s4, grm.eof_term_idx()), 0);
     }
 
@@ -929,34 +929,34 @@ U: 'B';
         assert_eq!(d.dist(s0, grm.term_idx("C").unwrap()), 2);
 
         let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("A").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s1, grm.term_idx("A").unwrap()), u16::max_value());
         assert_eq!(d.dist(s1, grm.term_idx("B").unwrap()), 0);
         assert_eq!(d.dist(s1, grm.term_idx("C").unwrap()), 1);
 
         let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("A").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("B").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("C").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("C").unwrap()), u16::max_value());
 
         let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("A").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s3, grm.term_idx("A").unwrap()), u16::max_value());
         assert_eq!(d.dist(s3, grm.term_idx("B").unwrap()), 0);
         assert_eq!(d.dist(s3, grm.term_idx("C").unwrap()), 1);
 
         let s4 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("U").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("A").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx("B").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.term_idx("B").unwrap()), u16::max_value());
         assert_eq!(d.dist(s4, grm.term_idx("C").unwrap()), 0);
 
         let s5 = sgraph.edge(s1, Symbol::Term(grm.term_idx("B").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("A").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s5, grm.term_idx("B").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s5, grm.term_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s5, grm.term_idx("B").unwrap()), u16::max_value());
         assert_eq!(d.dist(s5, grm.term_idx("C").unwrap()), 0);
 
         let s6 = sgraph.edge(s4, Symbol::Term(grm.term_idx("C").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("A").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("B").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("C").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.term_idx("C").unwrap()), u16::max_value());
     }
 
     #[test]
@@ -1052,8 +1052,8 @@ W: 'b' ;
         assert_eq!(d.dist(s1, grm.eof_term_idx()), 0);
 
         let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u32::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u32::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s2, grm.eof_term_idx()), 0);
 
         let s3 = sgraph.edge(s1, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();

@@ -487,12 +487,12 @@ where usize: AsPrimitive<StorageT>
 /// ```
 pub struct SentenceGenerator<'a, StorageT: 'a> {
     grm: &'a YaccGrammar<StorageT>,
-    nonterm_min_costs: RefCell<Option<Vec<u32>>>,
-    nonterm_max_costs: RefCell<Option<Vec<u32>>>,
+    nonterm_min_costs: RefCell<Option<Vec<u16>>>,
+    nonterm_max_costs: RefCell<Option<Vec<u16>>>,
     term_costs: Vec<u8>
 }
 
-impl<'a, StorageT: 'static + PrimInt + Unsigned> SentenceGenerator<'a, StorageT> 
+impl<'a, StorageT: 'static + PrimInt + Unsigned> SentenceGenerator<'a, StorageT>
 where usize: AsPrimitive<StorageT>
 {
     fn new<F>(grm: &'a YaccGrammar<StorageT>, term_cost: F) -> Self
@@ -511,7 +511,7 @@ where usize: AsPrimitive<StorageT>
     /// What is the cost of a minimal sentence for the non-terminal `nonterm_idx`? Note that,
     /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
     /// much faster.
-    pub fn min_sentence_cost(&self, nonterm_idx: NTIdx<StorageT>) -> u32 {
+    pub fn min_sentence_cost(&self, nonterm_idx: NTIdx<StorageT>) -> u16 {
         self.nonterm_min_costs.borrow_mut()
                               .get_or_insert_with(|| nonterm_min_costs(self.grm,
                                                                        &self.term_costs))
@@ -520,13 +520,13 @@ where usize: AsPrimitive<StorageT>
 
     /// What is the cost of a maximal sentence for the non-terminal `nonterm_idx`? Non-terminals
     /// which can generate sentences of unbounded length return None; non-terminals which can only
-    /// generate maximal strings of a finite length return a `Some(u32)`.
-    pub fn max_sentence_cost(&self, nonterm_idx: NTIdx<StorageT>) -> Option<u32> {
+    /// generate maximal strings of a finite length return a `Some(u16)`.
+    pub fn max_sentence_cost(&self, nonterm_idx: NTIdx<StorageT>) -> Option<u16> {
         let v = self.nonterm_max_costs.borrow_mut()
                                       .get_or_insert_with(||
                                            nonterm_max_costs(self.grm, &self.term_costs))
                                       [usize::from(nonterm_idx)];
-        if v == u32::max_value() {
+        if v == u16::max_value() {
             None
         } else {
             Some(v)
@@ -544,7 +544,7 @@ where usize: AsPrimitive<StorageT>
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Nonterm(i) => self.min_sentence_cost(i),
-                        Symbol::Term(i)    => u32::from(self.term_costs[usize::from(i)])
+                        Symbol::Term(i)    => u16::from(self.term_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc < low_sc.unwrap() {
@@ -585,7 +585,7 @@ where usize: AsPrimitive<StorageT>
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Nonterm(i) => self.min_sentence_cost(i),
-                        Symbol::Term(i)    => u32::from(self.term_costs[usize::from(i)])
+                        Symbol::Term(i)    => u16::from(self.term_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc <= low_sc.unwrap() {
@@ -680,7 +680,7 @@ where usize: AsPrimitive<StorageT>
 /// Return the cost of a minimal string for each non-terminal in this grammar. The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
 fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
-                    (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u32>
+                    (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
               where usize: AsPrimitive<StorageT>
 {
     // We use a simple(ish) fixed-point algorithm to determine costs. We maintain two lists
@@ -719,12 +719,12 @@ fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
             let mut ls_cmplt = None; // lowest completed cost
             let mut ls_noncmplt = None; // lowest non-completed cost
             for p_idx in grm.nonterm_to_prods(NTIdx::from(i)).iter() {
-                let mut c: u32 = 0; // production cost
+                let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
                                  Symbol::Term(term_idx) =>
-                                     u32::from(term_costs[usize::from(term_idx)]),
+                                     u16::from(term_costs[usize::from(term_idx)]),
                                  Symbol::Nonterm(nt_idx) => {
                                      if !done[usize::from(nt_idx)] {
                                          cmplt = false;
@@ -763,7 +763,7 @@ fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
 /// representing "this non-terminal can generate strings of infinite length"). The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
 fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
-                    (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u32>
+                    (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
                where usize: AsPrimitive<StorageT>
 {
     let mut done = vec![];
@@ -775,7 +775,7 @@ fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
     for ntidx in grm.iter_ntidxs() {
         // Calling has_path so frequently is not exactly efficient...
         if grm.has_path(ntidx, ntidx) {
-            costs[usize::from(ntidx)] = u32::max_value();
+            costs[usize::from(ntidx)] = u16::max_value();
             done[usize::from(ntidx)] = true;
         }
     }
@@ -790,17 +790,17 @@ fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
             let mut hs_cmplt = None; // highest completed cost
             let mut hs_noncmplt = None; // highest non-completed cost
             'a: for p_idx in grm.nonterm_to_prods(NTIdx::from(i)).iter() {
-                let mut c: u32 = 0; // production cost
+                let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
                                  Symbol::Term(term_idx) =>
-                                     u32::from(term_costs[usize::from(term_idx)]),
+                                     u16::from(term_costs[usize::from(term_idx)]),
                                  Symbol::Nonterm(nt_idx) => {
-                                     if costs[usize::from(nt_idx)] == u32::max_value() {
+                                     if costs[usize::from(nt_idx)] == u16::max_value() {
                                          // As soon as we find reference to an infinite
                                          // non-terminal, we can stop looking.
-                                         hs_cmplt = Some(u32::max_value());
+                                         hs_cmplt = Some(u16::max_value());
                                          break 'a;
                                      }
                                      if !done[usize::from(nt_idx)] {
@@ -811,7 +811,7 @@ fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
                              };
                     c = c.checked_add(sc).expect(
                             "Overflow occurred when calculating non-term costs");
-                    if c == u32::max_value() {
+                    if c == u16::max_value() {
                         panic!("Unable to represent cost in 64 bits.");
                     }
                 }
@@ -1190,11 +1190,11 @@ mod test {
           ").unwrap();
 
         let scores = nonterm_max_costs(&grm, &vec![1, 1, 1]);
-        assert_eq!(scores[usize::from(grm.nonterm_idx("A").unwrap())], u32::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("B").unwrap())], u32::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("C").unwrap())], u32::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("D").unwrap())], u32::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("E").unwrap())], u32::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("A").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("B").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("C").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("D").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("E").unwrap())], u16::max_value());
     }
 
     #[test]
@@ -1209,7 +1209,7 @@ mod test {
           ").unwrap();
 
         let scores = nonterm_max_costs(&grm, &vec![1, 1, 1]);
-        assert_eq!(scores[usize::from(grm.nonterm_idx("A").unwrap())], u32::max_value());
+        assert_eq!(scores[usize::from(grm.nonterm_idx("A").unwrap())], u16::max_value());
         assert_eq!(scores[usize::from(grm.nonterm_idx("B").unwrap())], 3);
         assert_eq!(scores[usize::from(grm.nonterm_idx("C").unwrap())], 2);
         assert_eq!(scores[usize::from(grm.nonterm_idx("D").unwrap())], 3);
