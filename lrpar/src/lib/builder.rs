@@ -31,7 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashMap;
-use std::convert::{AsRef, TryFrom};
+use std::convert::AsRef;
 use std::env::{current_dir, var};
 use std::error::Error;
 use std::fmt::Debug;
@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use lrtable::{Minimiser, from_yacc, StateGraph, StateTable};
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use typename::TypeName;
@@ -74,8 +74,8 @@ const RUST_FILE_EXT: &str = "rs";
 /// grammar's tokens, nonterminals, or productions.
 pub fn process_file_in_src<StorageT>(srcp: &str)
                                          -> Result<(HashMap<String, StorageT>), Box<Error>>
-                                      where StorageT: Debug + Hash + PrimInt + TypeName + Unsigned,
-                                            StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
+                                      where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+                                            usize: AsPrimitive<StorageT>
 {
     let mut inp = current_dir()?;
     inp.push("src");
@@ -115,23 +115,21 @@ pub fn process_file_in_src<StorageT>(srcp: &str)
 pub fn process_file<StorageT, P, Q>(inp: P,
                                  outp: Q)
                               -> Result<(HashMap<String, StorageT>), Box<Error>>
-                           where StorageT: Debug + Hash + PrimInt + TypeName + Unsigned,
-                                 StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName,
+                           where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
                                  P: AsRef<Path>,
-                                 Q: AsRef<Path>
+                                 Q: AsRef<Path>,
+                                 usize: AsPrimitive<StorageT>
 {
     let inc = read_to_string(&inp).unwrap();
 
-    let grm = match YaccGrammar::new(YaccKind::Eco, &inc) {
+    let grm = match YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc) {
         Ok(x) => x,
         Err(s) => {
             panic!("{:?}", s);
         }
     };
     let rule_ids = grm.terms_map().iter()
-                                  .map(|(&n, &i)| (n.to_owned(),
-                                                   StorageT::try_from(usize::from(i))
-                                                         .unwrap_or_else(|_| panic!("woo"))))
+                                  .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
                                   .collect::<HashMap<_, _>>();
 
     let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {

@@ -69,6 +69,12 @@ macro_rules! IdxNewtype {
                 num_traits::cast(st.0).unwrap()
             }
         }
+
+        impl<T: PrimInt + Unsigned> $n<T> {
+            pub fn as_storaget(&self) -> T {
+                self.0
+            }
+        }
     }
 }
 

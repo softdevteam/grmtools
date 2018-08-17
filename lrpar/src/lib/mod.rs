@@ -31,7 +31,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #![feature(test)]
-#![feature(try_from)]
 
 extern crate cactus;
 extern crate cfgrammar;
