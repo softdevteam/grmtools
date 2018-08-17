@@ -46,23 +46,19 @@
 //! however, terminals are not required to appear in any production (such terminals can be used to
 //! catch error conditions).
 //!
-//! We make the following guarantees about grammars:
+//! cfgrammar makes the following guarantees about grammars:
 //!
 //!   * The grammar has a single start rule accessed by `start_rule_idx`.
 //!   * The non-terminals are numbered from `0` to `nonterms_len() - 1` (inclusive).
 //!   * The productions are numbered from `0` to `prods_len() - 1` (inclusive).
 //!   * The terminals are numbered from `0` to `terms_len() - 1` (inclusive).
+//!   * The StorageT type used to store terminals, nonterminals, and productions can be infallibly
+//!     converted into usize (see [`TIdx`](struct.TIdx.html) and friends for more details).
 //!
-//! This means that it is safe to write code such as:
-//!
-//! ```text
-//! for i in 0..grm.nonterms_len() as usize {
-//!   println!("{}", grm.nonterm_name(NTIdx::from(i)));
-//! }
-//! ```
-//!
-//! For most current uses, the main function to investigate is [`yacc_grm`](yacc/fn.yacc_grm.html)
-//! which takes as input a Yacc grammar.
+//! For most current uses, the main function to investigate is
+//! [`YaccGrammar::new()`](yacc/grammar/struct.YaccGrammar.html#method.new) and/or
+//! [`YaccGrammar::new_with_storaget()`](yacc/grammar/struct.YaccGrammar.html#method.new_with_storaget)
+//! which take as input a Yacc grammar.
 
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
