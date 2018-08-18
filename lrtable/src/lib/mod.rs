@@ -41,6 +41,7 @@ extern crate serde;
 extern crate vob;
 
 use std::hash::Hash;
+use std::mem::size_of;
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
@@ -57,6 +58,8 @@ pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 type StIdxStorageT = u32;
 
 /// StIdx is a wrapper for a 32-bit state index.
+///
+/// We guarantee that this value can be infallibly converted to usize.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // The biggest grammars I'm currently aware of have just over 1000 states, so in practise it
@@ -65,9 +68,9 @@ type StIdxStorageT = u32;
 // we can change our storage to u32 later transparently.
 pub struct StIdx(u16);
 
-impl From<u32> for StIdx {
-    fn from(v: u32) -> Self {
-        if v > u32::from(u16::max_value()) {
+impl From<StIdxStorageT> for StIdx {
+    fn from(v: StIdxStorageT) -> Self {
+        if v > StIdxStorageT::from(u16::max_value()) {
             panic!("Overflow");
         }
         StIdx(v as u16)
@@ -85,13 +88,14 @@ impl From<usize> for StIdx {
 
 impl From<StIdx> for usize {
     fn from(st: StIdx) -> Self {
+        debug_assert!(size_of::<usize>() >= size_of::<StIdxStorageT>());
         st.0 as usize
     }
 }
 
-impl From<StIdx> for u32 {
+impl From<StIdx> for StIdxStorageT {
     fn from(st: StIdx) -> Self {
-        st.0 as u32
+        st.0 as StIdxStorageT
     }
 }
 
