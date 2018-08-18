@@ -31,6 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::HashMap;
+use std::convert::TryFrom;
 use std::hash::Hash;
 
 use cfgrammar::{Symbol, TIdx};
@@ -56,6 +57,9 @@ where usize: AsPrimitive<StorageT>
                       edges: Vec<HashMap<Symbol<StorageT>, StIdx>>)
                    -> Self
     {
+        // states.len() needs to fit into StIdxStorageT; however we don't need to worry about
+        // edges.len() (which merely needs to fit in a usize)
+        assert!(StIdxStorageT::try_from(states.len()).is_ok());
         StateGraph{states, edges}
     }
 
@@ -91,7 +95,7 @@ where usize: AsPrimitive<StorageT>
     /// How many states does this `StateGraph` contain? NB: By definition the `StateGraph` contains
     /// the same number of core and closed states.
     pub fn all_states_len(&self) -> StIdx {
-        debug_assert!(self.states.len() <= u32::max_value() as usize);
+        // We checked in the constructor that self.states.len() can fit into StIdxStorageT
         StIdx::from(self.states.len() as StIdxStorageT)
     }
 
