@@ -38,6 +38,7 @@ use std::fmt::Debug;
 use std::fs::{File, read_to_string};
 use std::hash::Hash;
 use std::io::Write;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
@@ -51,122 +52,135 @@ const YACC_SUFFIX: &str = "_y";
 const YACC_FILE_EXT: &str = "y";
 const RUST_FILE_EXT: &str = "rs";
 
-/// Given the filename `x.y` as input, it will statically compile the file `src/x.y` into a Rust
-/// module which can then be imported using `lrpar_mod!(x_y)`. This is a convenience function
-/// around [`process_file`](fn.process_file.html) which makes it easier to compile `.y` files
-/// stored in a project's `src/` directory. Note that leaf names must be unique within a single
-/// project, even if they are in different directories: in other words, `a.y` and `x/a.y` will both
-/// be mapped to the same module `a_y` (and it is undefined what the resulting Rust module will
-/// contain).
-///
-/// If specified, `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big
-/// enough to index (separately) all the tokens, nonterminals, and productions in the grammar and
-/// less than or equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too big). In
-/// other words, if you have a grammar with 256 tokens, 256 nonterminals, and 256 productions, you
-/// can safely specify `u8` here; but if any of those counts becomes 256 you will need to specify
-/// `u16`. If you are parsing large files, the additional storage requirements of larger integer
-/// types can be noticeable, and in such cases it can be worth specifying a smaller type.
-/// `StorageT` defaults to `u32` if unspecified.
-///
-/// # Panics
-///
-/// If the input filename does not end in `.y` or if `StorageT` is not big enough to index the
-/// grammar's tokens, nonterminals, or productions.
-pub fn process_file_in_src<StorageT>(srcp: &str)
-                                         -> Result<(HashMap<String, StorageT>), Box<Error>>
-                                      where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
-                                            usize: AsPrimitive<StorageT>
-{
-    let mut inp = current_dir()?;
-    inp.push("src");
-    inp.push(srcp);
-    if Path::new(srcp).extension().unwrap().to_str().unwrap() != YACC_FILE_EXT {
-        panic!("File name passed to process_file_in_src must have extension '{}'.", YACC_FILE_EXT);
-    }
-    let mut leaf = inp.file_stem().unwrap().to_str().unwrap().to_owned();
-    leaf.push_str(&YACC_SUFFIX);
-    let mut outp = PathBuf::new();
-    outp.push(var("OUT_DIR").unwrap());
-    outp.push(leaf);
-    outp.set_extension(RUST_FILE_EXT);
-    process_file::<StorageT, _, _>(inp, outp)
+pub struct ParserBuilder<StorageT> {
+    phantom: PhantomData<StorageT>
 }
 
-/// Statically compile the `.y` file `inp` into Rust, placing the output into `outp`. The latter
-/// defines a module with the following function:
-/// ```rust,ignore
-///      parser(lexemes: &Vec<Lexeme<StorageT>>)
-///   -> Result<Node<StorageT>,
-///            (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
-/// ```
-///
-/// If specified, `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big
-/// enough to index (separately) all the tokens, nonterminals, and productions in the grammar and
-/// less than or equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too big). In
-/// other words, if you have a grammar with 256 tokens, 256 nonterminals, and 256 productions, you
-/// can safely specify `u8` here; but if any of those counts becomes 256 you will need to specify
-/// `u16`. If you are parsing large files, the additional storage requirements of larger integer
-/// types can be noticeable, and in such cases it can be worth specifying a smaller type.
-/// `StorageT` defaults to `u32` if unspecified.
-///
-/// # Panics
-///
-/// If `StorageT` is not big enough to index the grammar's tokens, nonterminals, or productions.
-pub fn process_file<StorageT, P, Q>(inp: P,
-                                 outp: Q)
-                              -> Result<(HashMap<String, StorageT>), Box<Error>>
-                           where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
-                                 P: AsRef<Path>,
-                                 Q: AsRef<Path>,
-                                 usize: AsPrimitive<StorageT>
+impl<StorageT> ParserBuilder<StorageT>
+where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+      usize: AsPrimitive<StorageT>
 {
-    let inc = read_to_string(&inp).unwrap();
+    pub fn new() -> Self {
+        ParserBuilder{
+            phantom: PhantomData
+        }
+    }
 
-    let grm = YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc)?;
-    let rule_ids = grm.terms_map().iter()
-                                  .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
-                                  .collect::<HashMap<_, _>>();
+    /// Given the filename `x.y` as input, it will statically compile the file `src/x.y` into a
+    /// Rust module which can then be imported using `lrpar_mod!(x_y)`. This is a convenience
+    /// function around [`process_file`](fn.process_file.html) which makes it easier to compile
+    /// `.y` files stored in a project's `src/` directory. Note that leaf names must be unique
+    /// within a single project, even if they are in different directories: in other words, `a.y`
+    /// and `x/a.y` will both be mapped to the same module `a_y` (and it is undefined what the
+    /// resulting Rust module will contain).
+    ///
+    /// If specified, `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big
+    /// enough to index (separately) all the tokens, nonterminals, and productions in the grammar
+    /// and less than or equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too
+    /// big). In other words, if you have a grammar with 256 tokens, 256 nonterminals, and 256
+    /// productions, you can safely specify `u8` here; but if any of those counts becomes 256 you
+    /// will need to specify `u16`. If you are parsing large files, the additional storage
+    /// requirements of larger integer types can be noticeable, and in such cases it can be worth
+    /// specifying a smaller type. `StorageT` defaults to `u32` if unspecified.
+    ///
+    /// # Panics
+    ///
+    /// If the input filename does not end in `.y` or if `StorageT` is not big enough to index the
+    /// grammar's tokens, nonterminals, or productions.
+    pub fn process_file_in_src(&self, srcp: &str)
+                            -> Result<(HashMap<String, StorageT>), Box<Error>>
+    {
+        let mut inp = current_dir()?;
+        inp.push("src");
+        inp.push(srcp);
+        if Path::new(srcp).extension().unwrap().to_str().unwrap() != YACC_FILE_EXT {
+            panic!("File name passed to process_file_in_src must have extension '{}'.", YACC_FILE_EXT);
+        }
+        let mut leaf = inp.file_stem().unwrap().to_str().unwrap().to_owned();
+        leaf.push_str(&YACC_SUFFIX);
+        let mut outp = PathBuf::new();
+        outp.push(var("OUT_DIR").unwrap());
+        outp.push(leaf);
+        outp.set_extension(RUST_FILE_EXT);
+        self.process_file(inp, outp)
+    }
 
-    let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
+    /// Statically compile the `.y` file `inp` into Rust, placing the output into `outp`. The
+    /// latter defines a module with the following function:
+    /// ```rust,ignore
+    ///      parser(lexemes: &Vec<Lexeme<StorageT>>)
+    ///   -> Result<Node<StorageT>,
+    ///            (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
+    /// ```
+    ///
+    /// If specified, `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big
+    /// enough to index (separately) all the tokens, nonterminals, and productions in the grammar
+    /// and less than or equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too
+    /// big). In other words, if you have a grammar with 256 tokens, 256 nonterminals, and 256
+    /// productions, you can safely specify `u8` here; but if any of those counts becomes 256 you
+    /// will need to specify `u16`. If you are parsing large files, the additional storage
+    /// requirements of larger integer types can be noticeable, and in such cases it can be worth
+    /// specifying a smaller type. `StorageT` defaults to `u32` if unspecified.
+    ///
+    /// # Panics
+    ///
+    /// If `StorageT` is not big enough to index the grammar's tokens, nonterminals, or
+    /// productions.
+    pub fn process_file<P, Q>(&self,
+                              inp: P,
+                              outp: Q)
+                           -> Result<(HashMap<String, StorageT>), Box<Error>>
+                        where P: AsRef<Path>,
+                              Q: AsRef<Path>
+    {
+        let inc = read_to_string(&inp).unwrap();
 
-    let mut outs = String::new();
-    // Header
-    let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
-    outs.push_str(&format!("mod {}_y {{", mod_name));
-    outs.push_str(&format!("use lrpar::{{Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
+        let grm = YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc)?;
+        let rule_ids = grm.terms_map().iter()
+                                      .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
+                                      .collect::<HashMap<_, _>>();
+
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
+
+        let mut outs = String::new();
+        // Header
+        let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
+        outs.push_str(&format!("mod {}_y {{", mod_name));
+        outs.push_str(&format!("use lrpar::{{Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
 use lrlex::Lexeme;
 
 pub fn parse(lexemes: &[Lexeme<{storaget}>])
           -> Result<Node<{storaget}>, (Option<Node<{storaget}>>, Vec<ParseError<{storaget}>>)>
 {{", storaget=StorageT::type_name()));
 
-    // grm, sgraph, stable
-    let mut grm_buf = Vec::new();
-    grm.serialize(&mut Serializer::new(&mut grm_buf)).unwrap();
-    let mut sgraph_buf = Vec::new();
-    sgraph.serialize(&mut Serializer::new(&mut sgraph_buf)).unwrap();
-    let mut stable_buf = Vec::new();
-    stable.serialize(&mut Serializer::new(&mut stable_buf)).unwrap();
-    outs.push_str(&format!("
+        // grm, sgraph, stable
+        let mut grm_buf = Vec::new();
+        grm.serialize(&mut Serializer::new(&mut grm_buf)).unwrap();
+        let mut sgraph_buf = Vec::new();
+        sgraph.serialize(&mut Serializer::new(&mut sgraph_buf)).unwrap();
+        let mut stable_buf = Vec::new();
+        stable.serialize(&mut Serializer::new(&mut stable_buf)).unwrap();
+        outs.push_str(&format!("
     let (grm, sgraph, stable) = reconstitute(&vec!{:?}, &vec!{:?}, &vec!{:?});
     parse_rcvry(RecoveryKind::MF, &grm, |_| 1, &sgraph, &stable, lexemes)
 ", grm_buf, sgraph_buf, stable_buf));
 
-    outs.push_str("}");
+        outs.push_str("}");
 
-    // Footer
-    outs.push_str("}");
-    // If the file we're about to write out already exists with the same contents, then we don't
-    // overwrite it (since that will force a recompile of the file, and relinking of the binary
-    // etc).
-    if let Ok(curs) = read_to_string(&outp) {
-        if curs == outs {
-            return Ok(rule_ids);
+        // Footer
+        outs.push_str("}");
+        // If the file we're about to write out already exists with the same contents, then we don't
+        // overwrite it (since that will force a recompile of the file, and relinking of the binary
+        // etc).
+        if let Ok(curs) = read_to_string(&outp) {
+            if curs == outs {
+                return Ok(rule_ids);
+            }
         }
+        let mut f = File::create(outp)?;
+        f.write_all(outs.as_bytes())?;
+        Ok(rule_ids)
     }
-    let mut f = File::create(outp)?;
-    f.write_all(outs.as_bytes())?;
-    Ok(rule_ids)
 }
 
 /// This function is called by generated files; it exists so that generated files don't require a

@@ -33,6 +33,8 @@
 extern crate lrlex;
 extern crate lrpar;
 
+use lrpar::ParserBuilder;
+
 fn main() {
     // First we create the parser, which returns a HashMap of all the tokens used, then we pass
     // that HashMap to the lexer.
@@ -40,6 +42,8 @@ fn main() {
     // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
-    let lex_rule_ids_map = lrpar::process_file_in_src::<u8>("calc.y").unwrap();
+    let lex_rule_ids_map = ParserBuilder::<u8>::new()
+                                               .process_file_in_src("calc.y")
+                                               .unwrap();
     lrlex::process_file_in_src::<u8>("calc.l", Some(lex_rule_ids_map)).unwrap();
 }
