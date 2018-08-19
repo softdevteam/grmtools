@@ -122,22 +122,12 @@ pub fn process_file<StorageT, P, Q>(inp: P,
 {
     let inc = read_to_string(&inp).unwrap();
 
-    let grm = match YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc) {
-        Ok(x) => x,
-        Err(s) => {
-            panic!("{:?}", s);
-        }
-    };
+    let grm = YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc)?;
     let rule_ids = grm.terms_map().iter()
                                   .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
                                   .collect::<HashMap<_, _>>();
 
-    let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
-        Ok(x) => x,
-        Err(s) => {
-            panic!("{:?}", s);
-        }
-    };
+    let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
 
     let mut outs = String::new();
     // Header
