@@ -48,11 +48,14 @@ use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use typename::TypeName;
 
+use RecoveryKind;
+
 const YACC_SUFFIX: &str = "_y";
 const YACC_FILE_EXT: &str = "y";
 const RUST_FILE_EXT: &str = "rs";
 
 pub struct ParserBuilder<StorageT> {
+    recoverer: RecoveryKind,
     phantom: PhantomData<StorageT>
 }
 
@@ -62,8 +65,15 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
 {
     pub fn new() -> Self {
         ParserBuilder{
+            recoverer: RecoveryKind::MF,
             phantom: PhantomData
         }
+    }
+
+    /// Set the recoverer for this parser to `rk`.
+    pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
+        self.recoverer = rk;
+        self
     }
 
     /// Given the filename `x.y` as input, it will statically compile the file `src/x.y` into a
@@ -160,10 +170,15 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         sgraph.serialize(&mut Serializer::new(&mut sgraph_buf)).unwrap();
         let mut stable_buf = Vec::new();
         stable.serialize(&mut Serializer::new(&mut stable_buf)).unwrap();
+        let recoverer = match self.recoverer {
+            RecoveryKind::CPCTPlus => "CPCTPlus",
+            RecoveryKind::MF => "MF",
+            RecoveryKind::None => "None"
+        };
         outs.push_str(&format!("
     let (grm, sgraph, stable) = reconstitute(&vec!{:?}, &vec!{:?}, &vec!{:?});
-    parse_rcvry(RecoveryKind::MF, &grm, |_| 1, &sgraph, &stable, lexemes)
-", grm_buf, sgraph_buf, stable_buf));
+    parse_rcvry(RecoveryKind::{}, &grm, |_| 1, &sgraph, &stable, lexemes)
+", grm_buf, sgraph_buf, stable_buf, recoverer));
 
         outs.push_str("}");
 
