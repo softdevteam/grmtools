@@ -57,15 +57,7 @@ pub struct LexBuildError {
     col: usize
 }
 
-impl Error for LexBuildError {
-    fn description(&self) -> &str {
-        panic!("XXX");
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        None
-    }
-}
+impl Error for LexBuildError {}
 
 /// The various different possible Lex parser errors.
 #[derive(Debug)]

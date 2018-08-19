@@ -32,6 +32,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::error::Error;
 use std::fmt;
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
@@ -874,6 +875,8 @@ pub enum YaccGrammarError {
     YaccParserError(YaccParserError),
     GrammarValidationError(GrammarValidationError)
 }
+
+impl Error for YaccGrammarError {}
 
 impl From<YaccParserError> for YaccGrammarError {
     fn from(err: YaccParserError) -> YaccGrammarError {

@@ -31,6 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fmt;
 
 use indexmap::IndexMap;
@@ -84,6 +85,8 @@ pub struct GrammarValidationError {
     pub kind: GrammarValidationErrorKind,
     pub sym: Option<Symbol>
 }
+
+impl Error for GrammarValidationError {}
 
 impl fmt::Display for GrammarValidationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

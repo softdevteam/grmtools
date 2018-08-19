@@ -30,7 +30,8 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::fmt::Debug;
+use std::fmt::{self, Debug, Display};
+use std::error::Error;
 use std::hash::Hash;
 use std::time::{Duration, Instant};
 
@@ -442,6 +443,14 @@ pub struct ParseError<StorageT> {
     lexeme: Lexeme<StorageT>,
     repairs: Vec<Vec<ParseRepair<StorageT>>>
 }
+
+impl<StorageT: Debug> Display for ParseError<StorageT> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Parse error at lexeme {:?}", self.lexeme)
+    }
+}
+
+impl<StorageT: Debug> Error for ParseError<StorageT> {}
 
 impl<StorageT: PrimInt + Unsigned> ParseError<StorageT> {
     /// Return the state table index where this error was detected.
