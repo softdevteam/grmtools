@@ -32,7 +32,7 @@
 
 use std::marker::PhantomData;
 
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
 use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
@@ -62,16 +62,18 @@ pub struct Firsts<StorageT> {
     phantom: PhantomData<StorageT>
 }
 
-impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
+impl<StorageT: 'static + PrimInt + Unsigned> Firsts<StorageT>
+where usize: AsPrimitive<StorageT>
+{
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
-        let mut prod_firsts = Vec::with_capacity(grm.nonterms_len() as usize);
-        for _ in 0..grm.nonterms_len() {
-            prod_firsts.push(Vob::from_elem(grm.terms_len() as usize, false));
+        let mut prod_firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
+        for _ in grm.iter_ntidxs() {
+            prod_firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
         }
         let mut firsts = Firsts {
             prod_firsts,
-            prod_epsilons: Vob::from_elem(grm.nonterms_len() as usize, false),
+            prod_epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
             phantom      : PhantomData
         };
 
@@ -80,7 +82,7 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for rul_i in grm.iter_nonterm_idxs() {
+            for rul_i in grm.iter_ntidxs() {
                 // For each rule E
                 for prod_i in grm.nonterm_to_prods(rul_i).iter() {
                     // ...and each production A
@@ -108,9 +110,8 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
                                 // together with the current nonterminals FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
-                                for term_idx in 0..grm.terms_len() {
-                                    if firsts.is_set(nonterm_i, TIdx::from(term_idx))
-                                      && !firsts.set(rul_i, TIdx::from(term_idx)) {
+                                for tidx in grm.iter_tidxs() {
+                                    if firsts.is_set(nonterm_i, tidx) && !firsts.set(rul_i, tidx) {
                                         changed = true;
                                     }
                                 }
@@ -177,27 +178,28 @@ impl<StorageT: PrimInt + Unsigned> Firsts<StorageT> {
 mod test {
     use cfgrammar::Grammar;
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
-    use num_traits::{PrimInt, Unsigned};
+    use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
     use super::Firsts;
 
-    fn has<StorageT: PrimInt + Unsigned>
+    fn has<StorageT: 'static + PrimInt + Unsigned>
           (grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>, rn: &str, should_be: Vec<&str>)
+     where usize: AsPrimitive<StorageT>
     {
         let nt_i = grm.nonterm_idx(rn).unwrap();
-        for i in 0 .. grm.terms_len() {
-            let n = match grm.term_name(i.into()) {
+        for tidx in grm.iter_tidxs() {
+            let n = match grm.term_name(tidx) {
                 Some(n) => n,
                 None => &"<no name>"
             };
             match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
-                    if !firsts.is_set(nt_i, i.into()) {
+                    if !firsts.is_set(nt_i, tidx) {
                         panic!("{} is not set in {}", n, rn);
                     }
                 }
                 None    => {
-                    if firsts.is_set(nt_i, i.into()) {
+                    if firsts.is_set(nt_i, tidx) {
                         panic!("{} is incorrectly set in {}", n, rn);
                     }
                 }

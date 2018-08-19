@@ -30,7 +30,6 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#![feature(fs_read_write)]
 #![feature(try_from)]
 
 extern crate regex;
@@ -96,7 +95,7 @@ impl fmt::Display for LexBuildError {
     }
 }
 
-pub fn build_lex<TokId: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerDef<TokId>, LexBuildError> {
+pub fn build_lex<StorageT: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerDef<StorageT>, LexBuildError> {
     parse_lex(s)
 }
 

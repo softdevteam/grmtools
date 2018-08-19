@@ -40,6 +40,6 @@ fn main() {
     // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
-    let lex_rule_ids_map = lrpar::process_file_in_src::<u8, u8>("calc.y").unwrap();
+    let lex_rule_ids_map = lrpar::process_file_in_src::<u8>("calc.y").unwrap();
     lrlex::process_file_in_src::<u8>("calc.l", Some(lex_rule_ids_map)).unwrap();
 }

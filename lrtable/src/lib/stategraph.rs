@@ -31,13 +31,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::HashMap;
+use std::convert::TryFrom;
 use std::hash::Hash;
 
 use cfgrammar::{Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use StIdx;
+use {StIdx, StIdxStorageT};
 use itemset::Itemset;
 
 #[derive(Debug)]
@@ -49,12 +50,26 @@ pub struct StateGraph<StorageT: Eq + Hash> {
     edges: Vec<HashMap<Symbol<StorageT>, StIdx>>
 }
 
-impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
+impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateGraph<StorageT>
+where usize: AsPrimitive<StorageT>
+{
     pub(crate) fn new(states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
                       edges: Vec<HashMap<Symbol<StorageT>, StIdx>>)
                    -> Self
     {
+        // states.len() needs to fit into StIdxStorageT; however we don't need to worry about
+        // edges.len() (which merely needs to fit in a usize)
+        assert!(StIdxStorageT::try_from(states.len()).is_ok());
         StateGraph{states, edges}
+    }
+
+    /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
+    /// grammar's valid `NTIdx`s.
+    pub fn iter_stidxs(&self) -> Box<dyn Iterator<Item=StIdx>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.states.len() which we've already checked fits within StIdxStorageT.
+        Box::new((0..self.states.len()).map(|x| StIdx::from(x)))
     }
 
     /// Return the itemset for closed state `st_idx`. Panics if `st_idx` doesn't exist.
@@ -79,9 +94,9 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
 
     /// How many states does this `StateGraph` contain? NB: By definition the `StateGraph` contains
     /// the same number of core and closed states.
-    pub fn all_states_len(&self) -> u32 {
-        debug_assert!(self.states.len() <= u32::max_value() as usize);
-        self.states.len() as u32
+    pub fn all_states_len(&self) -> StIdx {
+        // We checked in the constructor that self.states.len() can fit into StIdxStorageT
+        StIdx::from(self.states.len() as StIdxStorageT)
     }
 
     /// Return the state pointed to by `sym` from `st_idx` or `None` otherwise.
@@ -102,14 +117,16 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
     }
 
     fn pp(&self, grm: &YaccGrammar<StorageT>, core_states: bool) -> String {
-        fn num_digits(i: u32) -> usize {
+        fn num_digits(i: StIdx) -> usize {
             // In an ideal world, we'd do ((i as f64).log10() as usize) + 1, but we then hit
             // floating point rounding errors (e.g. 1000.0.log10() == 2.999999999ish, not
             // 3). So we do the lazy thing, convert the number to a string and do things that way.
-            i.to_string().len()
+            usize::from(i).to_string().len()
         }
 
-        fn fmt_sym<StorageT: PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>, sym: Symbol<StorageT>) -> String {
+        fn fmt_sym<StorageT: 'static + PrimInt + Unsigned>(grm: &YaccGrammar<StorageT>, sym: Symbol<StorageT>) -> String
+             where usize: AsPrimitive<StorageT>
+        {
             match sym {
                 Symbol::Nonterm(ntidx) => grm.nonterm_name(ntidx).to_string(),
                 Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap_or(""))
@@ -117,13 +134,14 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
         }
 
         let mut o = String::new();
-        for (st_idx, &(ref core_st, ref closed_st)) in self.states.iter().enumerate() {
-            if st_idx > 0 {
+        for (st_idx, &(ref core_st, ref closed_st)) in self.iter_stidxs()
+                                                           .zip(self.states.iter()) {
+            if StIdxStorageT::from(st_idx) > 0 {
                 o.push_str(&"\n");
             }
             {
-                let padding = num_digits(self.all_states_len()) - num_digits(st_idx as u32);
-                o.push_str(&format!("{}:{}", st_idx, " ".repeat(padding)));
+                let padding = num_digits(self.all_states_len()) - num_digits(st_idx);
+                o.push_str(&format!("{}:{}", StIdxStorageT::from(st_idx), " ".repeat(padding)));
             }
 
             let st = if core_states {
@@ -158,7 +176,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
                     } else {
                         seen_b = true;
                     }
-                    let tidx = TIdx::from(b_idx);
+                    // Since ctx is exactly term_len bits long, the call to as_ is safe.
+                    let tidx = TIdx(b_idx.as_());
                     if tidx == grm.eof_term_idx() {
                         o.push_str("'$'");
                     } else {
@@ -167,7 +186,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
                 }
                 o.push_str("}]");
             }
-            for (esym, e_st_idx) in self.edges(StIdx::from(st_idx)).iter() {
+            for (esym, e_st_idx) in self.edges(st_idx).iter() {
                 o.push_str(&format!("\n{}{} -> {}",
                                    " ".repeat(num_digits(self.all_states_len()) + 2),
                                    fmt_sym(&grm, *esym),
@@ -189,31 +208,33 @@ impl<StorageT: Hash + PrimInt + Unsigned> StateGraph<StorageT> {
 }
 
 #[cfg(test)]
-use cfgrammar::{Grammar};
+use cfgrammar::{Grammar, SIdx};
 
 #[cfg(test)]
-pub fn state_exists<StorageT: Hash + PrimInt + Unsigned>
+pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>
                    (grm: &YaccGrammar<StorageT>,
                     is: &Itemset<StorageT>,
                     nt: &str,
                     prod_off: usize,
-                    dot: usize, la: Vec<&str>)
+                    dot: SIdx<StorageT>,
+                    la: Vec<&str>)
+where usize: AsPrimitive<StorageT>
 {
     let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
-    let ctx = &is.items[&(ab_prod_off, dot.into())];
-    for i in 0..grm.terms_len() as usize {
-        let bit = ctx[i];
+    let ctx = &is.items[&(ab_prod_off, dot)];
+    for tidx in grm.iter_tidxs() {
+        let bit = ctx[usize::from(tidx)];
         let mut found = false;
         for t in la.iter() {
             let off = if t == &"$" {
-                    TIdx::from(grm.eof_term_idx())
+                    grm.eof_term_idx()
                 } else {
                     grm.term_idx(t).unwrap()
                 };
-            if off == i.into() {
+            if off == tidx {
                 if !bit {
                     panic!("bit for terminal {}, dot {} is not set in production {} of {} when it should be",
-                           t, dot, prod_off, nt);
+                           t, usize::from(dot), prod_off, nt);
                 }
                 found = true;
                 break;
@@ -221,7 +242,7 @@ pub fn state_exists<StorageT: Hash + PrimInt + Unsigned>
         }
         if !found && bit {
             panic!("bit for terminal {}, dot {} is set in production {} of {} when it shouldn't be",
-                   grm.term_name(i.into()).unwrap(), dot, prod_off, nt);
+                   grm.term_name(tidx).unwrap(), usize::from(dot), prod_off, nt);
         }
     }
 }
@@ -244,7 +265,7 @@ mod test {
              | 'b';
           ").unwrap();
         let sg = pager_stategraph(&grm);
-        assert_eq!(sg.all_states_len(), 7);
+        assert_eq!(sg.all_states_len(), StIdx(7));
         assert_eq!(sg.states.iter().fold(0, |a, x| a + x.0.items.len()), 7);
         assert_eq!(sg.all_edges_len(), 9);
 

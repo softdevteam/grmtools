@@ -51,7 +51,7 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
                                        success: FS)
                                     -> Vec<N>
                                  where N: Debug + Clone + Hash + Eq + PartialEq,
-                                       FN: Fn(bool, &N, &mut Vec<(u32, u32, N)>) -> bool,
+                                       FN: Fn(bool, &N, &mut Vec<(u16, u16, N)>) -> bool,
                                        FM: Fn(&mut N, N),
                                        FS: Fn(&N) -> bool,
 {
@@ -71,19 +71,19 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
     // as we find compatible repairs, continually update merged node. This means that when we pop
     // things off the todo we *must* use "merged node" as our node to work with.
     let mut todo: Vec<IndexMap<N, N>> = vec![indexmap![start_node.clone() => start_node]];
-    let mut c: u32 = 0; // What cost are we currently examining?
+    let mut c: u16 = 0; // What cost are we currently examining?
     let mut next = Vec::new();
     loop {
-        if todo[c as usize].is_empty() {
+        if todo[usize::from(c)].is_empty() {
             c = c.checked_add(1).unwrap();
-            if c as usize == todo.len() {
+            if usize::from(c) == todo.len() {
                 // No success node found and search exhausted.
                 return Vec::new();
             }
             continue;
         }
 
-        let n = todo[c as usize].pop().unwrap().1;
+        let n = todo[usize::from(c)].pop().unwrap().1;
         if success(&n) {
             scs_nodes.push(n);
             break;
@@ -93,8 +93,8 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
             return Vec::new();
         }
         for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {
-            assert!(nbr_cost + nbr_hrstc >= c);
-            let off = nbr_cost.checked_add(nbr_hrstc).unwrap() as usize;
+            debug_assert!(nbr_cost.checked_add(nbr_hrstc).unwrap() >= c);
+            let off = usize::from(nbr_cost.checked_add(nbr_hrstc).unwrap());
             for _ in todo.len()..off + 1 {
                 todo.push(IndexMap::new());
             }
@@ -112,7 +112,7 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
     // That never leads to more interesting repairs from our perspective.
 
     // Free up all memory except for the cost todo that contains the first success node.
-    let mut scs_todo = todo.drain(c as usize..c as usize + 1).nth(0).unwrap();
+    let mut scs_todo = todo.drain(usize::from(c)..usize::from(c) + 1).nth(0).unwrap();
     while !scs_todo.is_empty() {
         let n = scs_todo.pop().unwrap().1;
         if success(&n) {
@@ -153,24 +153,24 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
                                       success: FS)
                                    -> Vec<N>
                                 where N: Debug + Clone + Hash + Eq + PartialEq,
-                                      FN: Fn(bool, &N, &mut Vec<(u32, N)>) -> bool,
+                                      FN: Fn(bool, &N, &mut Vec<(u16, N)>) -> bool,
                                       FM: Fn(&mut N, N),
                                       FS: Fn(&N) -> bool,
 {
     let mut scs_nodes = Vec::new();
     let mut todo: Vec<IndexMap<N, N>> = vec![indexmap![start_node.clone() => start_node]];
-    let mut c: u32 = 0;
+    let mut c: u16 = 0;
     let mut next = Vec::new();
     loop {
-        if todo[c as usize].is_empty() {
+        if todo[usize::from(c)].is_empty() {
             c = c.checked_add(1).unwrap();
-            if c as usize == todo.len() {
+            if usize::from(c) == todo.len() {
                 return Vec::new();
             }
             continue;
         }
 
-        let n = todo[c as usize].pop().unwrap().1;
+        let n = todo[usize::from(c)].pop().unwrap().1;
         if success(&n) {
             scs_nodes.push(n);
             break;
@@ -180,7 +180,7 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
             return Vec::new();
         }
         for (nbr_cost, nbr) in next.drain(..) {
-            let off = nbr_cost as usize;
+            let off = usize::from(nbr_cost);
             for _ in todo.len()..off + 1 {
                 todo.push(IndexMap::new());
             }
@@ -191,7 +191,7 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
         }
     }
 
-    let mut scs_todo = todo.drain(c as usize..c as usize + 1).nth(0).unwrap();
+    let mut scs_todo = todo.drain(usize::from(c)..usize::from(c) + 1).nth(0).unwrap();
     while !scs_todo.is_empty() {
         let n = scs_todo.pop().unwrap().1;
         if success(&n) {

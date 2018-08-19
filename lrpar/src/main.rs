@@ -181,7 +181,7 @@ fn main() {
     let lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
     let term_cost = |_| 1; // Cost of inserting/deleting a terminal
-    match parse_rcvry::<u16, u16, _>(recoverykind, &grm, &term_cost, &sgraph, &stable, &lexemes) {
+    match parse_rcvry::<u16, _>(recoverykind, &grm, &term_cost, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err((o_pt, errs)) => {
             match o_pt {

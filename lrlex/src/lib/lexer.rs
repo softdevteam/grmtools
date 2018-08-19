@@ -39,12 +39,12 @@ use std::slice::Iter;
 use regex;
 use regex::{Regex, RegexBuilder};
 
-pub struct Rule<TokId> {
+pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
     /// rules a guaranteed unique value, though that value can be overridden by clients who need to
     /// control the ID). If `None`, then this rule specifies lexemes which should not appear in the
     /// user's input.
-    pub tok_id: Option<TokId>,
+    pub tok_id: Option<StorageT>,
     /// This rule's name. If None, then text which matches this rule will be skipped (i.e. will not
     /// create a lexeme).
     pub name: Option<String>,
@@ -52,14 +52,14 @@ pub struct Rule<TokId> {
     pub re: Regex
 }
 
-impl<TokId> Rule<TokId> {
+impl<StorageT> Rule<StorageT> {
     /// Create a new `Rule`. This interface is unstable and should only be used by code generated
     /// by lrlex itself.
     #[doc(hidden)]
-    pub fn new(tok_id: Option<TokId>,
+    pub fn new(tok_id: Option<StorageT>,
            name: Option<String>,
            re_str: String)
-        -> Result<Rule<TokId>, regex::Error>
+        -> Result<Rule<StorageT>, regex::Error>
     {
         let re = RegexBuilder::new(&format!("\\A(?:{})", &re_str))
                               .multi_line(true)
@@ -76,28 +76,28 @@ pub struct LexError {
 
 /// This struct represents, in essence, a .l file in memory. From it one can produce a `Lexer`
 /// which actually lexes inputs.
-pub struct LexerDef<TokId> {
-    pub(crate) rules: Vec<Rule<TokId>>
+pub struct LexerDef<StorageT> {
+    pub(crate) rules: Vec<Rule<StorageT>>
 }
 
-impl<TokId: Copy + Eq> LexerDef<TokId> {
-    pub fn new(rules: Vec<Rule<TokId>>) -> LexerDef<TokId> {
+impl<StorageT: Copy + Eq> LexerDef<StorageT> {
+    pub fn new(rules: Vec<Rule<StorageT>>) -> LexerDef<StorageT> {
         LexerDef{rules}
     }
 
     /// Get the `Rule` at index `idx`.
-    pub fn get_rule(&self, idx: usize) -> Option<&Rule<TokId>> {
+    pub fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
         self.rules.get(idx)
     }
 
     /// Get the `Rule` instance associated with a particular lexeme ID. Panics if no such rule
     /// exists.
-    pub fn get_rule_by_id(&self, tok_id: TokId) -> &Rule<TokId> {
+    pub fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
         &self.rules.iter().find(|r| r.tok_id == Some(tok_id)).unwrap()
     }
 
     /// Get the `Rule` instance associated with a particular name.
-    pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<TokId>> {
+    pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
         self.rules.iter().find(|r| r.name.as_ref().map(|x| x.as_str()) == Some(n))
     }
 
@@ -116,7 +116,7 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
     /// benign: some lexers deliberately define tokens which are not used (e.g. reserving future
     /// keywords). A non-empty set #2 is more likely to be an error since there are parts of the
     /// grammar where nothing the user can input will be parseable.
-    pub fn set_rule_ids<'a>(&'a mut self, rule_ids_map: &HashMap<&'a str, TokId>)
+    pub fn set_rule_ids<'a>(&'a mut self, rule_ids_map: &HashMap<&'a str, StorageT>)
                             -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
@@ -168,31 +168,31 @@ impl<TokId: Copy + Eq> LexerDef<TokId> {
     }
 
     /// Returns an iterator over all rules in this AST.
-    pub fn iter_rules(&self) -> Iter<Rule<TokId>> {
+    pub fn iter_rules(&self) -> Iter<Rule<StorageT>> {
         self.rules.iter()
     }
 
     /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
-    pub fn lexer<'a>(&'a self, s: &'a str) -> Lexer<'a, TokId> {
+    pub fn lexer<'a>(&'a self, s: &'a str) -> Lexer<'a, StorageT> {
         Lexer::new(self, s)
     }
 }
 
 /// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
 /// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
-pub struct Lexer<'a, TokId: 'a> {
-    lexerdef: &'a LexerDef<TokId>,
+pub struct Lexer<'a, StorageT: 'a> {
+    lexerdef: &'a LexerDef<StorageT>,
     s: &'a str,
     newlines: Rc<RefCell<Vec<usize>>>
 }
 
-impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
-    fn new(lexerdef: &'a LexerDef<TokId>, s: &'a str) -> Lexer<'a, TokId> {
+impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
+    fn new(lexerdef: &'a LexerDef<StorageT>, s: &'a str) -> Lexer<'a, StorageT> {
         Lexer {lexerdef, s, newlines: Rc::new(RefCell::new(Vec::new()))}
     }
 
     /// Return all this lexer's lexemes or a `LexError` if there was a problem when lexing.
-    pub fn lexemes(&self) -> Result<Vec<Lexeme<TokId>>, LexError> {
+    pub fn lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
         let mut i = 0; // byte index into s
         let mut lxs = Vec::new(); // lexemes
 
@@ -233,7 +233,7 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
 
     /// Return the line and column number of a `Lexeme`, or `Err` if it is clearly out of bounds
     /// for this lexer.
-    pub fn line_and_col(&self, l: &Lexeme<TokId>) -> Result<(usize, usize), ()> {
+    pub fn line_and_col(&self, l: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
         if l.start > self.s.len() {
             return Err(());
         }
@@ -255,14 +255,14 @@ impl<'a, TokId: Copy + Eq> Lexer<'a, TokId> {
 /// A lexeme has a starting position in a string, a length, and a token id. It is a deliberately
 /// small data-structure to large input files to be stored efficiently.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Lexeme<TokId> {
+pub struct Lexeme<StorageT> {
     start: usize,
     len: u32,
-    tok_id: TokId
+    tok_id: StorageT
 }
 
-impl<TokId: Copy> Lexeme<TokId> {
-    pub fn new(tok_id: TokId, start: usize, len: usize) -> Lexeme<TokId> {
+impl<StorageT: Copy> Lexeme<StorageT> {
+    pub fn new(tok_id: StorageT, start: usize, len: usize) -> Lexeme<StorageT> {
         Lexeme{
             start,
             len: u32::try_from(len).unwrap(),
@@ -271,7 +271,7 @@ impl<TokId: Copy> Lexeme<TokId> {
     }
 
     /// The token ID.
-    pub fn tok_id(&self) -> TokId {
+    pub fn tok_id(&self) -> StorageT {
         self.tok_id
     }
 
@@ -282,6 +282,7 @@ impl<TokId: Copy> Lexeme<TokId> {
 
     /// Length in bytes of the lexeme
     pub fn len(&self) -> usize {
+        debug_assert!(usize::try_from(u32::max_value()).is_ok());
         self.len as usize
     }
 

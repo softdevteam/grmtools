@@ -30,6 +30,8 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#![feature(try_from)]
+
 extern crate cfgrammar;
 extern crate fnv;
 extern crate num_traits;
@@ -39,8 +41,9 @@ extern crate serde;
 extern crate vob;
 
 use std::hash::Hash;
+use std::mem::size_of;
 
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 mod firsts;
 mod itemset;
@@ -52,7 +55,11 @@ use cfgrammar::yacc::YaccGrammar;
 pub use stategraph::StateGraph;
 pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
+type StIdxStorageT = u32;
+
 /// StIdx is a wrapper for a 32-bit state index.
+///
+/// We guarantee that this value can be infallibly converted to usize.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // The biggest grammars I'm currently aware of have just over 1000 states, so in practise it
@@ -61,9 +68,9 @@ pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 // we can change our storage to u32 later transparently.
 pub struct StIdx(u16);
 
-impl From<u32> for StIdx {
-    fn from(v: u32) -> Self {
-        if v > u32::from(u16::max_value()) {
+impl From<StIdxStorageT> for StIdx {
+    fn from(v: StIdxStorageT) -> Self {
+        if v > StIdxStorageT::from(u16::max_value()) {
             panic!("Overflow");
         }
         StIdx(v as u16)
@@ -81,13 +88,14 @@ impl From<usize> for StIdx {
 
 impl From<StIdx> for usize {
     fn from(st: StIdx) -> Self {
+        debug_assert!(size_of::<usize>() >= size_of::<StIdxStorageT>());
         st.0 as usize
     }
 }
 
-impl From<StIdx> for u32 {
+impl From<StIdx> for StIdxStorageT {
     fn from(st: StIdx) -> Self {
-        st.0 as u32
+        st.0 as StIdxStorageT
     }
 }
 
@@ -96,9 +104,10 @@ pub enum Minimiser {
     Pager
 }
 
-pub fn from_yacc<StorageT: Hash + PrimInt + Unsigned>
+pub fn from_yacc<StorageT: 'static + Hash + PrimInt + Unsigned>
                 (grm: &YaccGrammar<StorageT>, m: Minimiser)
               -> Result<(StateGraph<StorageT>, StateTable<StorageT>), StateTableError<StorageT>>
+           where usize: AsPrimitive<StorageT>
 {
     match m {
         Minimiser::Pager => {

@@ -38,7 +38,7 @@ use cactus::Cactus;
 use cfgrammar::TIdx;
 use lrlex::Lexeme;
 use lrtable::{Action, StIdx};
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use astar::dijkstra;
 use mf::{apply_repairs, rank_cnds, simplify_repairs};
@@ -68,7 +68,7 @@ struct PathFNode<StorageT> {
     pstack: Cactus<StIdx>,
     la_idx: usize,
     repairs: Cactus<RepairMerge<StorageT>>,
-    cf: u32
+    cf: u16
 }
 
 impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
@@ -124,30 +124,28 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> { }
 
-struct CPCTPlus<'a, StorageT: 'a + Eq + Hash, TokId: 'a> {
-    parser: &'a Parser<'a, StorageT, TokId>
+struct CPCTPlus<'a, StorageT: 'a + Eq + Hash> {
+    parser: &'a Parser<'a, StorageT>
 }
 
-pub(crate) fn recoverer<'a,
-                        StorageT: Debug + Hash + PrimInt + Unsigned,
-                        TokId: PrimInt + Unsigned>
-                       (parser: &'a Parser<StorageT, TokId>)
-                     -> Box<Recoverer<StorageT, TokId> + 'a>
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+                       (parser: &'a Parser<StorageT>)
+                     -> Box<Recoverer<StorageT> + 'a>
+                  where usize: AsPrimitive<StorageT>
 {
     Box::new(CPCTPlus{parser})
 }
 
-impl<'a,
-     StorageT: Debug + Hash + PrimInt + Unsigned,
-     TokId: PrimInt + Unsigned>
-Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+Recoverer<StorageT> for CPCTPlus<'a, StorageT>
+where usize: AsPrimitive<StorageT>
 {
     fn recover(&self,
                finish_by: Instant,
-               parser: &Parser<StorageT, TokId>,
+               parser: &Parser<StorageT>,
                in_la_idx: usize,
                mut in_pstack: &mut Vec<StIdx>,
-               mut tstack: &mut Vec<Node<StorageT, TokId>>)
+               mut tstack: &mut Vec<Node<StorageT>>)
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
     {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
@@ -262,14 +260,13 @@ Recoverer<StorageT, TokId> for CPCTPlus<'a, StorageT, TokId>
     }
 }
 
-impl<'a,
-     StorageT: Debug + Hash + PrimInt + Unsigned,
-     TokId: PrimInt + Unsigned>
-CPCTPlus<'a, StorageT, TokId>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+CPCTPlus<'a, StorageT>
+where usize: AsPrimitive<StorageT>
 {
     fn insert(&self,
              n: &PathFNode<StorageT>,
-             nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
+             nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
         let la_idx = n.la_idx;
         for t_idx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
@@ -278,7 +275,7 @@ CPCTPlus<'a, StorageT, TokId>
             }
 
             let next_lexeme = self.parser.next_lexeme(n.la_idx);
-            let new_lexeme = Lexeme::new(TokId::from(u32::from(t_idx)).unwrap(),
+            let new_lexeme = Lexeme::new(StorageT::from(u32::from(t_idx)).unwrap(),
                                          next_lexeme.start(), 0);
             let (new_la_idx, n_pstack) =
                 self.parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
@@ -288,7 +285,7 @@ CPCTPlus<'a, StorageT, TokId>
                     pstack: n_pstack,
                     la_idx: n.la_idx,
                     repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx))),
-                    cf: n.cf.checked_add(u32::from((self.parser.term_cost)(t_idx))).unwrap()};
+                    cf: n.cf.checked_add(u16::from((self.parser.term_cost)(t_idx))).unwrap()};
                 nbrs.push((nn.cf, nn));
             }
         }
@@ -296,7 +293,7 @@ CPCTPlus<'a, StorageT, TokId>
 
     fn delete(&self,
            n: &PathFNode<StorageT>,
-           nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
+           nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
         if n.la_idx == self.parser.lexemes.len() {
             return;
@@ -307,13 +304,13 @@ CPCTPlus<'a, StorageT, TokId>
         let nn = PathFNode{pstack: n.pstack.clone(),
                            la_idx: n.la_idx + 1,
                            repairs: n.repairs.child(RepairMerge::Repair(Repair::Delete)),
-                           cf: n.cf.checked_add(cost as u32).unwrap()};
+                           cf: n.cf.checked_add(u16::from(cost)).unwrap()};
         nbrs.push((nn.cf, nn));
     }
 
     fn shift(&self,
              n: &PathFNode<StorageT>,
-             nbrs: &mut Vec<(u32, PathFNode<StorageT>)>)
+             nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
         // Forward move rule (ER3)
         //
@@ -400,14 +397,14 @@ CPCTPlus<'a, StorageT, TokId>
         let mut all_rprs = Vec::with_capacity(cnds.len());
         for cnd in cnds {
             all_rprs.push(traverse(&cnd.repairs).into_iter()
-                                                .map(|x| self.repair_to_parse_repair(x))
+                                                .map(|x| self.repair_to_parse_repair(&x))
                                                 .collect::<Vec<_>>());
         }
         all_rprs
     }
 
     fn repair_to_parse_repair(&self,
-                              from: Vec<Repair<StorageT>>)
+                              from: &[Repair<StorageT>])
                            -> Vec<ParseRepair<StorageT>> {
         from.iter()
             .map(|y| {
@@ -444,14 +441,15 @@ mod test {
 
     use cfgrammar::yacc::YaccGrammar;
     use lrlex::Lexeme;
-    use num_traits::{PrimInt, ToPrimitive, Unsigned};
+    use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
     use parser::{ParseRepair, RecoveryKind};
     use parser::test::do_parse;
 
-    fn pp_repairs<StorageT: PrimInt + Unsigned>
+    fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>
                  (grm: &YaccGrammar<StorageT>, repairs: &Vec<ParseRepair<StorageT>>)
                -> String
+            where usize: AsPrimitive<StorageT>
     {
         let mut out = vec![];
         for r in repairs.iter() {
@@ -468,10 +466,11 @@ mod test {
         out.join(", ")
     }
 
-    fn check_all_repairs<StorageT: Debug + PrimInt + Unsigned>
+    fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>
                         (grm: &YaccGrammar<StorageT>,
                          repairs: &Vec<Vec<ParseRepair<StorageT>>>,
                          expected: &[&str])
+            where usize: AsPrimitive<StorageT>
     {
         assert_eq!(repairs.len(), expected.len(),
                    "{:?}\nhas a different number of entries to:\n{:?}", repairs, expected);

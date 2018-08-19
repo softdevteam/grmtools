@@ -46,25 +46,19 @@
 //! however, terminals are not required to appear in any production (such terminals can be used to
 //! catch error conditions).
 //!
-//! We make the following guarantees about grammars:
+//! cfgrammar makes the following guarantees about grammars:
 //!
 //!   * The grammar has a single start rule accessed by `start_rule_idx`.
 //!   * The non-terminals are numbered from `0` to `nonterms_len() - 1` (inclusive).
 //!   * The productions are numbered from `0` to `prods_len() - 1` (inclusive).
 //!   * The terminals are numbered from `0` to `terms_len() - 1` (inclusive).
+//!   * The StorageT type used to store terminals, nonterminals, and productions can be infallibly
+//!     converted into usize (see [`TIdx`](struct.TIdx.html) and friends for more details).
 //!
-//! This means that it is safe to write code such as:
-//!
-//! ```text
-//! for i in 0..grm.nonterms_len() as usize {
-//!   println!("{}", grm.nonterm_name(NTIdx::from(i)));
-//! }
-//! ```
-//!
-//! For most current uses, the main function to investigate is [`yacc_grm`](yacc/fn.yacc_grm.html)
-//! which takes as input a Yacc grammar.
-
-#![feature(try_from)]
+//! For most current uses, the main function to investigate is
+//! [`YaccGrammar::new()`](yacc/grammar/struct.YaccGrammar.html#method.new) and/or
+//! [`YaccGrammar::new_with_storaget()`](yacc/grammar/struct.YaccGrammar.html#method.new_with_storaget)
+//! which take as input a Yacc grammar.
 
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
@@ -72,6 +66,8 @@ extern crate num_traits;
 #[cfg(feature="serde")]
 #[macro_use]
 extern crate serde;
+
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 mod idxnewtype;
 pub mod yacc;
@@ -86,13 +82,31 @@ pub enum Symbol<StorageT> {
     Term(TIdx<StorageT>)
 }
 
-pub trait Grammar<StorageT> {
-    /// How many terminals does this grammar have?
-    fn terms_len(&self) -> u32;
+pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
     /// How many productions does this grammar have?
-    fn prods_len(&self) -> u32;
+    fn prods_len(&self) -> PIdx<StorageT>;
     /// How many nonterminals does this grammar have?
-    fn nonterms_len(&self) -> u32;
+    fn nonterms_len(&self) -> NTIdx<StorageT>;
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> NTIdx<StorageT>;
+    /// How many terminals does this grammar have?
+    fn terms_len(&self) -> TIdx<StorageT>;
+
+    /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
+    /// grammar's valid `NTIdx`s.
+    fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=NTIdx<StorageT>>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.nonterms_len() and, since nonterms_len() returns an NTIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.nonterms_len())).map(|x| NTIdx(x.as_())))
+    }
+
+    fn iter_tidxs(&self) -> Box<dyn Iterator<Item=TIdx<StorageT>>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.nonterms_len() and, since nonterms_len() returns an TIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.terms_len())).map(|x| TIdx(x.as_())))
+    }
 }

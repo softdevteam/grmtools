@@ -31,7 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashMap;
-use std::convert::{AsRef, TryFrom};
+use std::convert::AsRef;
 use std::env::{current_dir, var};
 use std::error::Error;
 use std::fmt::Debug;
@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use lrtable::{Minimiser, from_yacc, StateGraph, StateTable};
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use typename::TypeName;
@@ -59,13 +59,23 @@ const RUST_FILE_EXT: &str = "rs";
 /// be mapped to the same module `a_y` (and it is undefined what the resulting Rust module will
 /// contain).
 ///
+/// If specified, `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big
+/// enough to index (separately) all the tokens, nonterminals, and productions in the grammar and
+/// less than or equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too big). In
+/// other words, if you have a grammar with 256 tokens, 256 nonterminals, and 256 productions, you
+/// can safely specify `u8` here; but if any of those counts becomes 256 you will need to specify
+/// `u16`. If you are parsing large files, the additional storage requirements of larger integer
+/// types can be noticeable, and in such cases it can be worth specifying a smaller type.
+/// `StorageT` defaults to `u32` if unspecified.
+///
 /// # Panics
 ///
-/// If the input filename does not end in `.y`.
-pub fn process_file_in_src<StorageT, TokId>(srcp: &str)
-                                         -> Result<(HashMap<String, TokId>), Box<Error>>
-                                      where StorageT: Debug + Hash + PrimInt + TypeName + Unsigned,
-                                            TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName
+/// If the input filename does not end in `.y` or if `StorageT` is not big enough to index the
+/// grammar's tokens, nonterminals, or productions.
+pub fn process_file_in_src<StorageT>(srcp: &str)
+                                         -> Result<(HashMap<String, StorageT>), Box<Error>>
+                                      where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+                                            usize: AsPrimitive<StorageT>
 {
     let mut inp = current_dir()?;
     inp.push("src");
@@ -79,36 +89,47 @@ pub fn process_file_in_src<StorageT, TokId>(srcp: &str)
     outp.push(var("OUT_DIR").unwrap());
     outp.push(leaf);
     outp.set_extension(RUST_FILE_EXT);
-    process_file::<StorageT, TokId, _, _>(inp, outp)
+    process_file::<StorageT, _, _>(inp, outp)
 }
 
 /// Statically compile the `.y` file `inp` into Rust, placing the output into `outp`. The latter
 /// defines a module with the following function:
 /// ```rust,ignore
-///      parser(lexemes: &Vec<Lexeme<TokId>>)
-///   -> Result<Node<TokId>,
-///            (Option<Node<TokId>>, Vec<ParseError<TokId>>)>
+///      parser(lexemes: &Vec<Lexeme<StorageT>>)
+///   -> Result<Node<StorageT>,
+///            (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
 /// ```
-pub fn process_file<StorageT, TokId, P, Q>(inp: P,
+///
+/// If specified, `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big
+/// enough to index (separately) all the tokens, nonterminals, and productions in the grammar and
+/// less than or equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too big). In
+/// other words, if you have a grammar with 256 tokens, 256 nonterminals, and 256 productions, you
+/// can safely specify `u8` here; but if any of those counts becomes 256 you will need to specify
+/// `u16`. If you are parsing large files, the additional storage requirements of larger integer
+/// types can be noticeable, and in such cases it can be worth specifying a smaller type.
+/// `StorageT` defaults to `u32` if unspecified.
+///
+/// # Panics
+///
+/// If `StorageT` is not big enough to index the grammar's tokens, nonterminals, or productions.
+pub fn process_file<StorageT, P, Q>(inp: P,
                                  outp: Q)
-                              -> Result<(HashMap<String, TokId>), Box<Error>>
-                           where StorageT: Debug + Hash + PrimInt + TypeName + Unsigned,
-                                 TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName,
+                              -> Result<(HashMap<String, StorageT>), Box<Error>>
+                           where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
                                  P: AsRef<Path>,
-                                 Q: AsRef<Path>
+                                 Q: AsRef<Path>,
+                                 usize: AsPrimitive<StorageT>
 {
     let inc = read_to_string(&inp).unwrap();
 
-    let grm = match YaccGrammar::new(YaccKind::Eco, &inc) {
+    let grm = match YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc) {
         Ok(x) => x,
         Err(s) => {
             panic!("{:?}", s);
         }
     };
     let rule_ids = grm.terms_map().iter()
-                                  .map(|(&n, &i)| (n.to_owned(),
-                                                   TokId::try_from(usize::from(i))
-                                                         .unwrap_or_else(|_| panic!("woo"))))
+                                  .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
                                   .collect::<HashMap<_, _>>();
 
     let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
@@ -125,9 +146,9 @@ pub fn process_file<StorageT, TokId, P, Q>(inp: P,
     outs.push_str(&format!("use lrpar::{{Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
 use lrlex::Lexeme;
 
-pub fn parse(lexemes: &Vec<Lexeme<{tn}>>)
-          -> Result<Node<{storaget}, {tn}>, (Option<Node<{storaget}, {tn}>>, Vec<ParseError<{storaget}, {tn}>>)>
-{{", storaget=StorageT::type_name(), tn=TokId::type_name()));
+pub fn parse(lexemes: &[Lexeme<{storaget}>])
+          -> Result<Node<{storaget}>, (Option<Node<{storaget}>>, Vec<ParseError<{storaget}>>)>
+{{", storaget=StorageT::type_name()));
 
     // grm, sgraph, stable
     let mut grm_buf = Vec::new();

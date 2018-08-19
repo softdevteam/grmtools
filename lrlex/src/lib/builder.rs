@@ -62,11 +62,11 @@ const RUST_FILE_EXT: &str = "rs";
 /// # Panics
 ///
 /// If the input filename does not end in `.l`.
-pub fn process_file_in_src<TokId>(srcp: &str,
-                                  rule_ids_map: Option<HashMap<String, TokId>>)
+pub fn process_file_in_src<StorageT>(srcp: &str,
+                                  rule_ids_map: Option<HashMap<String, StorageT>>)
                                -> Result<(Option<HashSet<String>>, Option<HashSet<String>>),
                                          Box<Error>>
-                            where TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName
+                            where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
 {
     let mut inp = current_dir()?;
     inp.push("src");
@@ -80,7 +80,7 @@ pub fn process_file_in_src<TokId>(srcp: &str,
     outp.push(var("OUT_DIR").unwrap());
     outp.push(leaf);
     outp.set_extension(RUST_FILE_EXT);
-    process_file::<TokId, _, _>(inp, outp, rule_ids_map)
+    process_file::<StorageT, _, _>(inp, outp, rule_ids_map)
 }
 
 /// Statically compile the `.l` file `inp` into Rust, placing the output into `outp`. The latter
@@ -92,17 +92,17 @@ pub fn process_file_in_src<TokId>(srcp: &str,
 /// returned tuple are the same as [`set_rule_ids`](struct.LexerDef.html#method.set_rule_ids) (in
 /// other words, `rule_ids_map` can be used to synchronise a lexer and parser, and to check that
 /// all rules are used by both parts).
-pub fn process_file<TokId, P, Q>(inp: P,
+pub fn process_file<StorageT, P, Q>(inp: P,
                                  outp: Q,
-                                 rule_ids_map: Option<HashMap<String, TokId>>)
+                                 rule_ids_map: Option<HashMap<String, StorageT>>)
                               -> Result<(Option<HashSet<String>>, Option<HashSet<String>>),
                                         Box<Error>>
-                           where TokId: Copy + Debug + Eq + TryFrom<usize> + TypeName,
+                           where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName,
                                  P: AsRef<Path>,
                                  Q: AsRef<Path>
 {
     let inc = read_to_string(&inp).unwrap();
-    let mut lexerdef = parse_lex::<TokId>(&inc)?;
+    let mut lexerdef = parse_lex::<StorageT>(&inc)?;
     let (missing_from_lexer, missing_from_parser) = match rule_ids_map {
         Some(ref rim) => {
             // Convert from HashMap<String, _> to HashMap<&str, _>
@@ -134,7 +134,7 @@ pub fn process_file<TokId, P, Q>(inp: P,
         for (n, id) in &rim {
             outs.push_str(&format!("#[allow(dead_code)]\nconst T_{}: {} = {:?};\n",
                                    n.to_ascii_uppercase(),
-                                   TokId::type_name(),
+                                   StorageT::type_name(),
                                    *id));
         }
     }
@@ -155,13 +155,13 @@ pub fn process_file<TokId, P, Q>(inp: P,
     Ok((missing_from_lexer, missing_from_parser))
 }
 
-impl<TokId: Copy + Debug + Eq + TypeName> LexerDef<TokId> {
+impl<StorageT: Copy + Debug + Eq + TypeName> LexerDef<StorageT> {
     pub(crate) fn rust_pp(&self, outs: &mut String) {
         // Header
         outs.push_str(&format!("use lrlex::{{LexerDef, Rule}};
 
 pub fn lexerdef() -> LexerDef<{}> {{
-    let rules = vec![", TokId::type_name()));
+    let rules = vec![", StorageT::type_name()));
 
         // Individual rules
         for r in &self.rules {
