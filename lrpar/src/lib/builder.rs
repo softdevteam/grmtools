@@ -54,7 +54,9 @@ const YACC_SUFFIX: &str = "_y";
 const YACC_FILE_EXT: &str = "y";
 const RUST_FILE_EXT: &str = "rs";
 
-pub struct ParserBuilder<StorageT> {
+/// A `ParserBuilder` allows one to specify the criteria for building a statically generated
+/// parser.
+pub struct ParserBuilder<StorageT=u32> {
     recoverer: RecoveryKind,
     phantom: PhantomData<StorageT>
 }
@@ -63,6 +65,24 @@ impl<StorageT> ParserBuilder<StorageT>
 where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
       usize: AsPrimitive<StorageT>
 {
+    /// Create a new `ParserBuilder`.
+    ///
+    /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough to index
+    /// (separately) all the tokens, nonterminals, and productions in the grammar and less than or
+    /// equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too big). In other
+    /// words, if you have a grammar with 256 tokens, 256 nonterminals, and 256 productions, you
+    /// can safely specify `u8` here; but if any of those counts becomes 256 you will need to
+    /// specify `u16`. If you are parsing large files, the additional storage requirements of
+    /// larger integer types can be noticeable, and in such cases it can be worth specifying a
+    /// smaller type. `StorageT` defaults to `u32` if unspecified.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// ParserBuilder::<u8>::new()
+    ///     .process_file_in_src("grm.y")
+    ///     .unwrap();
+    /// ```
     pub fn new() -> Self {
         ParserBuilder{
             recoverer: RecoveryKind::MF,
@@ -76,22 +96,13 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
         self
     }
 
-    /// Given the filename `x.y` as input, it will statically compile the file `src/x.y` into a
-    /// Rust module which can then be imported using `lrpar_mod!(x_y)`. This is a convenience
-    /// function around [`process_file`](fn.process_file.html) which makes it easier to compile
-    /// `.y` files stored in a project's `src/` directory. Note that leaf names must be unique
-    /// within a single project, even if they are in different directories: in other words, `a.y`
-    /// and `x/a.y` will both be mapped to the same module `a_y` (and it is undefined what the
-    /// resulting Rust module will contain).
-    ///
-    /// If specified, `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big
-    /// enough to index (separately) all the tokens, nonterminals, and productions in the grammar
-    /// and less than or equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too
-    /// big). In other words, if you have a grammar with 256 tokens, 256 nonterminals, and 256
-    /// productions, you can safely specify `u8` here; but if any of those counts becomes 256 you
-    /// will need to specify `u16`. If you are parsing large files, the additional storage
-    /// requirements of larger integer types can be noticeable, and in such cases it can be worth
-    /// specifying a smaller type. `StorageT` defaults to `u32` if unspecified.
+    /// Given the filename `x.y` as input, statically compile the file `src/x.y` into a Rust module
+    /// which can then be imported using `lrpar_mod!(x_y)`. This is a convenience function around
+    /// [`process_file`](struct.ParserBuilder.html#method.process_file) which makes it easier to
+    /// compile `.y` files stored in a project's `src/` directory. Note that leaf names must be
+    /// unique within a single project, even if they are in different directories: in other words,
+    /// `a.y` and `x/a.y` will both be mapped to the same module `a_y` (and it is undefined which
+    /// of the input files will "win" the compilation race).
     ///
     /// # Panics
     ///
@@ -117,20 +128,12 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
 
     /// Statically compile the `.y` file `inp` into Rust, placing the output into `outp`. The
     /// latter defines a module with the following function:
+    ///
     /// ```rust,ignore
     ///      parser(lexemes: &Vec<Lexeme<StorageT>>)
     ///   -> Result<Node<StorageT>,
     ///            (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
     /// ```
-    ///
-    /// If specified, `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big
-    /// enough to index (separately) all the tokens, nonterminals, and productions in the grammar
-    /// and less than or equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too
-    /// big). In other words, if you have a grammar with 256 tokens, 256 nonterminals, and 256
-    /// productions, you can safely specify `u8` here; but if any of those counts becomes 256 you
-    /// will need to specify `u16`. If you are parsing large files, the additional storage
-    /// requirements of larger integer types can be noticeable, and in such cases it can be worth
-    /// specifying a smaller type. `StorageT` defaults to `u32` if unspecified.
     ///
     /// # Panics
     ///
