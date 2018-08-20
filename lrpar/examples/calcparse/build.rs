@@ -37,9 +37,9 @@ use lrlex::LexerBuilder;
 use lrpar::ParserBuilder;
 
 fn main() {
-    // First we create the parser, which returns a HashMap of all the tokens used, then we pass
-    // that HashMap to the lexer.
-
+    // We need to build the parser before the lexer, so that we can tie identifiers up between the
+    // two.
+    //
     // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
@@ -47,6 +47,7 @@ fn main() {
                                                .process_file_in_src("calc.y")
                                                .unwrap();
     LexerBuilder::new()
-                 .process_file_in_src("calc.l", Some(lex_rule_ids_map))
+                 .rule_ids_map(lex_rule_ids_map)
+                 .process_file_in_src("calc.l")
                  .unwrap();
 }

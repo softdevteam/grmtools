@@ -36,7 +36,6 @@ use std::env::{current_dir, var};
 use std::error::Error;
 use std::fmt::Debug;
 use std::fs::{File, read_to_string};
-use std::marker::PhantomData;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -52,7 +51,7 @@ const RUST_FILE_EXT: &str = "rs";
 /// A `LexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
 pub struct LexerBuilder<StorageT=u32> {
-    phantom: PhantomData<StorageT>
+    rule_ids_map: Option<HashMap<String, StorageT>>
 }
 
 impl<StorageT> LexerBuilder<StorageT>
@@ -76,8 +75,17 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     /// ```
     pub fn new() -> Self {
         LexerBuilder{
-            phantom: PhantomData
+            rule_ids_map: None
         }
+    }
+
+    /// Set this lexer builder's map of rule IDs to `rule_ids_map`. By default, lexing rules have
+    /// arbitrary, but distinct, IDs. Setting the map of rule IDs (from rule names to `StorageT`)
+    /// allows users to synchronise a lexer and parser and to check that all rules are used by both
+    /// parts).
+    pub fn rule_ids_map(mut self, rule_ids_map: HashMap<String, StorageT>) -> Self {
+        self.rule_ids_map = Some(rule_ids_map);
+        self
     }
 
     /// Given the filename `x.l` as input, statically compile the file `src/x.l` into a Rust module
@@ -88,15 +96,10 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     /// `a.l` and `x/a.l` will both be mapped to the same module `a_l` (and it is undefined which
     /// of the input files will "win" the compilation race).
     ///
-    /// See [`process_file`](struct.LexerBuilder.html#method.process_file)'s documentation for
-    /// information about the `rule_ids_map` argument and the returned tuple.
-    ///
     /// # Panics
     ///
     /// If the input filename does not end in `.l`.
-    pub fn process_file_in_src(&self,
-                               srcp: &str,
-                               rule_ids_map: Option<HashMap<String, StorageT>>)
+    pub fn process_file_in_src(self, srcp: &str)
                             -> Result<(Option<HashSet<String>>, Option<HashSet<String>>),
                                        Box<Error>>
     {
@@ -112,23 +115,15 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
         outp.push(var("OUT_DIR").unwrap());
         outp.push(leaf);
         outp.set_extension(RUST_FILE_EXT);
-        self.process_file(inp, outp, rule_ids_map)
+        self.process_file(inp, outp)
     }
 
     /// Statically compile the `.l` file `inp` into Rust, placing the output into `outp`. The
     /// latter defines a module with a function `lexerdef()`, which returns a
     /// [`LexerDef`](struct.LexerDef.html) that can then be used as normal.
-    ///
-    /// If `None` is passed to `rule_ids_map` is ignored: lexing rules have arbitrary, but
-    /// distinct, IDs. If `Some(x)` is passed to `rule_ids_map` then the semantics of this
-    /// parameter, and the returned tuple are the same as
-    /// [`set_rule_ids`](struct.LexerDef.html#method.set_rule_ids) (in other words, `rule_ids_map`
-    /// can be used to synchronise a lexer and parser, and to check that all rules are used by both
-    /// parts).
-    pub fn process_file<P, Q>(&self,
+    pub fn process_file<P, Q>(self,
                               inp: P,
-                              outp: Q,
-                              rule_ids_map: Option<HashMap<String, StorageT>>)
+                              outp: Q)
                            -> Result<(Option<HashSet<String>>, Option<HashSet<String>>),
                                       Box<Error>>
                                where P: AsRef<Path>,
@@ -136,7 +131,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     {
         let inc = read_to_string(&inp).unwrap();
         let mut lexerdef = parse_lex::<StorageT>(&inc)?;
-        let (missing_from_lexer, missing_from_parser) = match rule_ids_map {
+        let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
                 // Convert from HashMap<String, _> to HashMap<&str, _>
                 let owned_map = rim.iter()
@@ -163,8 +158,8 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
         lexerdef.rust_pp(&mut outs);
 
         // Token IDs
-        if let Some(rim) = rule_ids_map {
-            for (n, id) in &rim {
+        if let Some(ref rim) = self.rule_ids_map {
+            for (n, id) in rim {
                 outs.push_str(&format!("#[allow(dead_code)]\nconst T_{}: {} = {:?};\n",
                                        n.to_ascii_uppercase(),
                                        StorageT::type_name(),
