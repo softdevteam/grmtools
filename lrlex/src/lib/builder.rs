@@ -49,6 +49,8 @@ const LEX_SUFFIX: &str = "_l";
 const LEX_FILE_EXT: &str = "l";
 const RUST_FILE_EXT: &str = "rs";
 
+/// A `LexerBuilder` allows one to specify the criteria for building a statically generated
+/// lexer.
 pub struct LexerBuilder<StorageT=u32> {
     phantom: PhantomData<StorageT>
 }
@@ -56,22 +58,38 @@ pub struct LexerBuilder<StorageT=u32> {
 impl<StorageT> LexerBuilder<StorageT>
 where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
 {
+    /// Create a new `LexerBuilder`.
+    ///
+    /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough to index
+    /// all the tokens, nonterminals, and productions in the lexer and less than or equal in size
+    /// to `usize` (e.g. on a 64-bit machine `u128` would be too big). If you are lexing large
+    /// files, the additional storage requirements of larger integer types can be noticeable, and
+    /// in such cases it can be worth specifying a smaller type. `StorageT` defaults to `u32` if
+    /// unspecified.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// LexerBuilder::<u8>::new()
+    ///     .process_file_in_src("grm.l", None)
+    ///     .unwrap();
+    /// ```
     pub fn new() -> Self {
         LexerBuilder{
             phantom: PhantomData
         }
     }
 
-    /// Given the filename `x.l` as input, it will statically compile the file `src/x.l` into a
-    /// Rust module which can then be imported using `lrlex_mod!(x_l)`. This is a convenience
-    /// function around [`process_file`](fn.process_file.html) which makes it easier to compile
-    /// `.l` files stored in a project's `src/` directory. Note that leaf names must be unique
-    /// within a single project, even if they are in different directories: in other words, `a.l`
-    /// and `x/a.l` will both be mapped to the same module `a_l` (and it is undefined what the
-    /// resulting Rust module will contain).
+    /// Given the filename `x.l` as input, statically compile the file `src/x.l` into a Rust module
+    /// which can then be imported using `lrlex_mod!(x_l)`. This is a convenience function around
+    /// [`process_file`](struct.LexerBuilder.html#method.process_file) which makes it easier to
+    /// compile `.l` files stored in a project's `src/` directory. Note that leaf names must be
+    /// unique within a single project, even if they are in different directories: in other words,
+    /// `a.l` and `x/a.l` will both be mapped to the same module `a_l` (and it is undefined which
+    /// of the input files will "win" the compilation race).
     ///
-    /// See [`process_file`](fn.process_file.html)'s documentation for information about the
-    /// `rule_ids_map` argument and the returned tuple.
+    /// See [`process_file`](struct.LexerBuilder.html#method.process_file)'s documentation for
+    /// information about the `rule_ids_map` argument and the returned tuple.
     ///
     /// # Panics
     ///
