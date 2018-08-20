@@ -33,6 +33,7 @@
 extern crate lrlex;
 extern crate lrpar;
 
+use lrlex::LexerBuilder;
 use lrpar::ParserBuilder;
 
 fn main() {
@@ -45,5 +46,7 @@ fn main() {
     let lex_rule_ids_map = ParserBuilder::<u8>::new()
                                                .process_file_in_src("calc.y")
                                                .unwrap();
-    lrlex::process_file_in_src::<u8>("calc.l", Some(lex_rule_ids_map)).unwrap();
+    LexerBuilder::new()
+                 .process_file_in_src("calc.l", Some(lex_rule_ids_map))
+                 .unwrap();
 }

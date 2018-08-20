@@ -43,7 +43,7 @@ mod builder;
 mod lexer;
 mod parser;
 
-pub use builder::{process_file, process_file_in_src};
+pub use builder::LexerBuilder;
 pub use lexer::{Lexeme, LexerDef, Lexer, Rule};
 use parser::parse_lex;
 
