@@ -35,13 +35,15 @@ use std::convert::AsRef;
 use std::env::{current_dir, var};
 use std::error::Error;
 use std::fmt::Debug;
-use std::fs::{File, read_to_string};
+use std::fs::{self, File, read_to_string};
 use std::hash::Hash;
 use std::io::Write;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
+use cfgrammar::Grammar;
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
+use filetime::FileTime;
 use lrtable::{Minimiser, from_yacc, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use rmps::{Deserializer, Serializer};
@@ -152,10 +154,30 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
         let rule_ids = grm.terms_map().iter()
                                       .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
                                       .collect::<HashMap<_, _>>();
+        let imc = self.gen_ids_map_cache(&grm);
+
+        // We don't need to go through the full rigmarole of generating an output file if all of
+        // the following are true: the output file exists; it is newer than the input file; and the
+        // rule IDs map cache hasn't changed. The last of these might be surprising, but it's
+        // vital: we don't know what the IDs map might be from one run to the next, and it might
+        // change for reasons beyond lrpar's control. If it does change, that means that the lexer
+        // and lrpar would get out of sync, so we have to play it safe and regenerate in such cases.
+        if let Ok(ref inmd) = fs::metadata(&inp) {
+            if let Ok(ref outmd) = fs::metadata(&outp) {
+                if FileTime::from_last_modification_time(outmd) >
+                   FileTime::from_last_modification_time(inmd) {
+                    if let Ok(outc) = read_to_string(&outp) {
+                        if outc.contains(&imc) {
+                            return Ok(rule_ids);
+                        }
+                    }
+                }
+            }
+        }
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
-
         let mut outs = String::new();
+
         // Header
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
         outs.push_str(&format!("mod {}_y {{", mod_name));
@@ -183,21 +205,33 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
     parse_rcvry(RecoveryKind::{}, &grm, |_| 1, &sgraph, &stable, lexemes)
 ", grm_buf, sgraph_buf, stable_buf, recoverer));
 
-        outs.push_str("}");
+        outs.push_str("}\n");
 
         // Footer
-        outs.push_str("}");
-        // If the file we're about to write out already exists with the same contents, then we don't
-        // overwrite it (since that will force a recompile of the file, and relinking of the binary
-        // etc).
-        if let Ok(curs) = read_to_string(&outp) {
-            if curs == outs {
-                return Ok(rule_ids);
-            }
-        }
+        outs.push_str("}\n\n");
+        // Output the cache so that we can check whether the IDs map is stable.
+        outs.push_str(&imc);
+
         let mut f = File::create(outp)?;
         f.write_all(outs.as_bytes())?;
         Ok(rule_ids)
+    }
+
+    /// Generate the rule IDs map cache. We don't need to be particularly clever here: we just need
+    /// to record the identifiers and nonterminal names so that we can check if they've changed
+    /// later.
+    fn gen_ids_map_cache(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut cache = String::new();
+        cache.push_str(" \n/* CACHE INFORMATION\n");
+        for tidx in grm.iter_tidxs() {
+            let n = match grm.term_name(tidx) {
+                Some(n) => format!("'{}'", n),
+                None => format!("<unknown>")
+            };
+            cache.push_str(&format!("   {} {}\n", usize::from(tidx), n));
+        }
+        cache.push_str("*/\n");
+        cache
     }
 }
 

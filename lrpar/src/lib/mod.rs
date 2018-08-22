@@ -34,6 +34,7 @@
 
 extern crate cactus;
 extern crate cfgrammar;
+extern crate filetime;
 #[macro_use] extern crate indexmap;
 extern crate lrlex;
 extern crate lrtable;
