@@ -7,4 +7,4 @@ Term: Factor 'MUL' Term
     | Factor ;
 
 Factor: 'LBRACK' Expr 'RBRACK'
-      | 'INT' ;
+      | 'INT';
