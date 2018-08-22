@@ -33,6 +33,7 @@
 // Note: this is the parser for both YaccKind::Original and YaccKind::Eco yacc kinds.
 
 use std::collections::HashSet;
+use std::error::Error;
 use std::fmt;
 
 extern crate regex;
@@ -67,6 +68,8 @@ pub struct YaccParserError {
     line: usize,
     col: usize
 }
+
+impl Error for YaccParserError {}
 
 impl fmt::Display for YaccParserError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

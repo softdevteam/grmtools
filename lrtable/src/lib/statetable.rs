@@ -31,8 +31,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::{Entry, HashMap, OccupiedEntry};
+use std::error::Error;
 use std::hash::{Hash, BuildHasherDefault};
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::marker::PhantomData;
 
 use cfgrammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
@@ -56,6 +57,8 @@ pub struct StateTableError<StorageT> {
     pub kind: StateTableErrorKind,
     pub prod_idx: PIdx<StorageT>
 }
+
+impl<StorageT: Debug> Error for StateTableError<StorageT> {}
 
 impl<StorageT> fmt::Display for StateTableError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

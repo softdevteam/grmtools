@@ -43,7 +43,7 @@ mod builder;
 mod lexer;
 mod parser;
 
-pub use builder::{process_file, process_file_in_src};
+pub use builder::LexerBuilder;
 pub use lexer::{Lexeme, LexerDef, Lexer, Rule};
 use parser::parse_lex;
 
@@ -57,15 +57,7 @@ pub struct LexBuildError {
     col: usize
 }
 
-impl Error for LexBuildError {
-    fn description(&self) -> &str {
-        panic!("XXX");
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        None
-    }
-}
+impl Error for LexBuildError {}
 
 /// The various different possible Lex parser errors.
 #[derive(Debug)]

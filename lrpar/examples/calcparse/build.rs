@@ -33,13 +33,20 @@
 extern crate lrlex;
 extern crate lrpar;
 
-fn main() {
+use lrlex::LexerBuilder;
+use lrpar::ParserBuilder;
+
+fn main() -> Result<(), Box<std::error::Error>> {
     // First we create the parser, which returns a HashMap of all the tokens used, then we pass
     // that HashMap to the lexer.
-
+    //
     // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
-    let lex_rule_ids_map = lrpar::process_file_in_src::<u8>("calc.y").unwrap();
-    lrlex::process_file_in_src::<u8>("calc.l", Some(lex_rule_ids_map)).unwrap();
+    let lex_rule_ids_map = ParserBuilder::<u8>::new()
+                                               .process_file_in_src("calc.y")?;
+    LexerBuilder::new()
+                 .rule_ids_map(lex_rule_ids_map)
+                 .process_file_in_src("calc.l")?;
+    Ok(())
 }

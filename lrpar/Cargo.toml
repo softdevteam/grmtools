@@ -14,6 +14,7 @@ path = "src/lib/mod.rs"
 [dependencies]
 cactus = "1.0"
 cfgrammar = { path="../cfgrammar", features=["serde"] }
+filetime = "0.2"
 getopts = "0.2"
 indexmap = "1.0"
 lrlex = { path="../lrlex" }

@@ -34,6 +34,7 @@
 
 extern crate cactus;
 extern crate cfgrammar;
+extern crate filetime;
 #[macro_use] extern crate indexmap;
 extern crate lrlex;
 extern crate lrtable;
@@ -51,7 +52,7 @@ pub mod parser;
 pub use parser::{Node, parse_rcvry, ParseError, ParseRepair, RecoveryKind};
 mod mf;
 
-pub use builder::{process_file, process_file_in_src, reconstitute};
+pub use builder::{ParserBuilder, reconstitute};
 
 /// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
 /// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.

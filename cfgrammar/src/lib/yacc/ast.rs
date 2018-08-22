@@ -31,9 +31,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fmt;
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 use yacc::Precedence;
 
@@ -45,7 +46,7 @@ pub struct GrammarAST {
     // map from a rule name to indexes into prods
     pub rules: IndexMap<String, Vec<usize>>,
     pub prods: Vec<Production>,
-    pub tokens: HashSet<String>,
+    pub tokens: IndexSet<String>,
     pub precs: HashMap<String, Precedence>,
     pub implicit_tokens: Option<HashSet<String>>
 }
@@ -85,6 +86,8 @@ pub struct GrammarValidationError {
     pub sym: Option<Symbol>
 }
 
+impl Error for GrammarValidationError {}
+
 impl fmt::Display for GrammarValidationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
@@ -123,7 +126,7 @@ impl GrammarAST {
             rules:  IndexMap::new(), // Using an IndexMap means that we retain the order
                                      // of rules as they're found in the input file.
             prods:  Vec::new(),
-            tokens: HashSet::new(),
+            tokens: IndexSet::new(),
             precs:  HashMap::new(),
             implicit_tokens: None
         }
