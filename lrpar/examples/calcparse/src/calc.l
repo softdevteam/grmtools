@@ -3,5 +3,5 @@
 \+ "PLUS"
 \* "MUL"
 \( "LBRACK"
-\( "RBRACK"
+\) "RBRACK"
 [\t ]+ ;
