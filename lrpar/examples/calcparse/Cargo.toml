@@ -12,5 +12,6 @@ lrlex = { path="../../../lrlex" }
 lrpar = { path="../.." }
 
 [dependencies]
+cfgrammar = { path="../../../cfgrammar" }
 lrlex = { path="../../../lrlex" }
 lrpar = { path="../.." }

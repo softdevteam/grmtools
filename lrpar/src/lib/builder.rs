@@ -221,9 +221,18 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
 ", out_grm.to_str().unwrap(), out_sgraph.to_str().unwrap(), out_stable.to_str().unwrap(), recoverer));
 
         outs.push_str("}\n");
-
-        // Footer
         outs.push_str("}\n\n");
+
+        // The nonterminal constants
+        for ntidx in grm.iter_ntidxs() {
+            if !grm.nonterm_to_prods(ntidx).contains(&grm.start_prod()) {
+                outs.push_str(&format!("#[allow(dead_code)]\nconst NT_{}: {} = {:?};\n",
+                                       grm.nonterm_name(ntidx).to_ascii_uppercase(),
+                                       StorageT::type_name(),
+                                       usize::from(ntidx)));
+            }
+        }
+
         // Output the cache so that we can check whether the IDs map is stable.
         outs.push_str(&imc);
 
