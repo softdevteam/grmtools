@@ -280,6 +280,11 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         self.start
     }
 
+    /// Byte offset of the start of the lexeme
+    pub fn end(&self) -> usize {
+        self.start() + self.len()
+    }
+
     /// Length in bytes of the lexeme
     pub fn len(&self) -> usize {
         debug_assert!(usize::try_from(u32::max_value()).is_ok());
