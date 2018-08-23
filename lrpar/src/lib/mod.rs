@@ -32,6 +32,7 @@
 
 #![feature(test)]
 
+extern crate bincode;
 extern crate cactus;
 extern crate cfgrammar;
 extern crate filetime;
