@@ -63,11 +63,11 @@
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
 extern crate num_traits;
-#[cfg(feature="serde")]
-#[macro_use]
-extern crate serde;
+#[cfg(feature="serde")] #[macro_use] extern crate serde;
+extern crate vob;
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use vob::Vob;
 
 mod idxnewtype;
 pub mod yacc;
@@ -109,4 +109,21 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
         // definition the integers we're creating fit within StorageT.
         Box::new((0..usize::from(self.terms_len())).map(|x| TIdx(x.as_())))
     }
+
+    fn firsts(&self) -> Box<dyn Firsts<StorageT>>;
+}
+
+pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
+    /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx`.
+    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
+
+    /// Return all the firsts for production `ntidx`.
+    fn prod_firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob;
+
+    /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
+    fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool;
+
+    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
+    /// it was already set, or false otherwise.
+    fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 }

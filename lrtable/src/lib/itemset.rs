@@ -39,7 +39,8 @@ use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use firsts::Firsts;
+use cfgrammar::Firsts;
+use cfgrammar::yacc::firsts::YaccFirsts;
 
 /// The type of "context" (also known as "lookaheads")
 pub type Ctx = Vob;
@@ -74,7 +75,7 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Create a new itemset which is a closed version of `self`.
-    pub fn close(&self, grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>) -> Self {
+    pub fn close(&self, grm: &YaccGrammar<StorageT>, firsts: &YaccFirsts<StorageT>) -> Self {
         // This function can be seen as a merger of getClosure and getContext from Chen's
         // dissertation.
 
@@ -183,7 +184,6 @@ where usize: AsPrimitive<StorageT>
 mod test {
     use vob::Vob;
     use super::Itemset;
-    use firsts::Firsts;
     use cfgrammar::{Grammar, SIdx, Symbol};
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use stategraph::state_exists;
@@ -198,7 +198,7 @@ mod test {
           L: '*' R | 'id';
           R: L;
           ").unwrap();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
@@ -232,7 +232,7 @@ mod test {
     #[test]
     fn test_closure1_ecogrm() {
         let grm = eco_grammar();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
@@ -274,7 +274,7 @@ mod test {
     #[test]
     fn test_closure1_grm3() {
         let grm = grammar3();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
@@ -308,7 +308,7 @@ mod test {
     #[test]
     fn test_goto1() {
         let grm = grammar3();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
