@@ -114,11 +114,11 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
 }
 
 pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
+    /// Return all the firsts for nonterminal `ntidx`.
+    fn firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob;
+
     /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx`.
     fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
-
-    /// Return all the firsts for production `ntidx`.
-    fn prod_firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob;
 
     /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
     fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool;

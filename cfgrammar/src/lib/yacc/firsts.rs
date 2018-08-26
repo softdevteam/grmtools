@@ -57,7 +57,7 @@ use yacc::YaccGrammar;
 /// ```
 #[derive(Debug)]
 pub struct YaccFirsts<StorageT> {
-    prod_firsts: Vec<Vob>,
+    firsts: Vec<Vob>,
     prod_epsilons: Vob,
     phantom: PhantomData<StorageT>
 }
@@ -67,12 +67,12 @@ where usize: AsPrimitive<StorageT>
 {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
-        let mut prod_firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
+        let mut firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
         for _ in grm.iter_ntidxs() {
-            prod_firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
+            firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
         }
         let mut firsts = YaccFirsts {
-            prod_firsts,
+            firsts,
             prod_epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
             phantom      : PhantomData
         };
@@ -149,12 +149,12 @@ impl<StorageT: 'static + PrimInt + Unsigned>
 Firsts<StorageT> for YaccFirsts<StorageT>
 where usize: AsPrimitive<StorageT>
 {
-    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
-        self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
+    fn firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob {
+        &self.firsts[usize::from(ntidx)]
     }
 
-    fn prod_firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob {
-        &self.prod_firsts[usize::from(ntidx)]
+    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+        self.firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
     fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool {
@@ -162,12 +162,12 @@ where usize: AsPrimitive<StorageT>
     }
 
     fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
-        let prod = &mut self.prod_firsts[usize::from(ntidx)];
-        if prod[usize::from(tidx)] {
+        let nt = &mut self.firsts[usize::from(ntidx)];
+        if nt[usize::from(tidx)] {
             true
         }
         else {
-            prod.set(usize::from(tidx), true);
+            nt.set(usize::from(tidx), true);
             false
         }
     }

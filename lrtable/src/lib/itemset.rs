@@ -142,7 +142,7 @@ where usize: AsPrimitive<StorageT>
                             break;
                         },
                         Symbol::Nonterm(nonterm_j) => {
-                            new_ctx.or(firsts.prod_firsts(nonterm_j));
+                            new_ctx.or(firsts.firsts(nonterm_j));
                             if !firsts.is_epsilon_set(nonterm_j) {
                                 nullable = false;
                                 break;
