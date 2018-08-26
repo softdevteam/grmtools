@@ -58,7 +58,7 @@ use yacc::YaccGrammar;
 #[derive(Debug)]
 pub struct YaccFirsts<StorageT> {
     firsts: Vec<Vob>,
-    prod_epsilons: Vob,
+    epsilons: Vob,
     phantom: PhantomData<StorageT>
 }
 
@@ -73,7 +73,7 @@ where usize: AsPrimitive<StorageT>
         }
         let mut firsts = YaccFirsts {
             firsts,
-            prod_epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
+            epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
             phantom      : PhantomData
         };
 
@@ -91,7 +91,7 @@ where usize: AsPrimitive<StorageT>
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
                         if !firsts.is_epsilon_set(rul_i) {
-                            firsts.prod_epsilons.set(usize::from(rul_i), true);
+                            firsts.epsilons.set(usize::from(rul_i), true);
                             changed = true;
                         }
                         continue;
@@ -121,8 +121,8 @@ where usize: AsPrimitive<StorageT>
                                 // to FIRSTs.
                                 if firsts.is_epsilon_set(nonterm_i) && sym_i == prod.len() - 1 {
                                     // Only add epsilon if the symbol is the last in the production
-                                    if !firsts.prod_epsilons[usize::from(rul_i)] {
-                                        firsts.prod_epsilons.set(usize::from(rul_i), true);
+                                    if !firsts.epsilons[usize::from(rul_i)] {
+                                        firsts.epsilons.set(usize::from(rul_i), true);
                                         changed = true;
                                     }
                                 }
@@ -158,7 +158,7 @@ where usize: AsPrimitive<StorageT>
     }
 
     fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool {
-        self.prod_epsilons[usize::from(ntidx)]
+        self.epsilons[usize::from(ntidx)]
     }
 
     fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
