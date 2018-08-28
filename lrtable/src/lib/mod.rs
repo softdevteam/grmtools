@@ -45,7 +45,6 @@ use std::mem::size_of;
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-mod firsts;
 mod itemset;
 mod pager;
 mod stategraph;

@@ -49,6 +49,7 @@ extern crate vob;
 mod astar;
 mod builder;
 mod cpctplus;
+mod panic;
 pub mod parser;
 pub use parser::{Node, parse_rcvry, ParseError, ParseRepair, RecoveryKind};
 mod mf;

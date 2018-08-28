@@ -35,8 +35,8 @@ use std::marker::PhantomData;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use cfgrammar::{Grammar, NTIdx, Symbol, TIdx};
-use cfgrammar::yacc::YaccGrammar;
+use {Firsts, Grammar, NTIdx, Symbol, TIdx};
+use yacc::YaccGrammar;
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
 /// grammar:
@@ -56,24 +56,24 @@ use cfgrammar::yacc::YaccGrammar;
 ///   assert!(firsts.is_epsilon_set(grm.nonterm_idx("A").unwrap()));
 /// ```
 #[derive(Debug)]
-pub struct Firsts<StorageT> {
-    prod_firsts: Vec<Vob>,
-    prod_epsilons: Vob,
+pub struct YaccFirsts<StorageT> {
+    firsts: Vec<Vob>,
+    epsilons: Vob,
     phantom: PhantomData<StorageT>
 }
 
-impl<StorageT: 'static + PrimInt + Unsigned> Firsts<StorageT>
+impl<StorageT: 'static + PrimInt + Unsigned> YaccFirsts<StorageT>
 where usize: AsPrimitive<StorageT>
 {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
-        let mut prod_firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
+        let mut firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
         for _ in grm.iter_ntidxs() {
-            prod_firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
+            firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
         }
-        let mut firsts = Firsts {
-            prod_firsts,
-            prod_epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
+        let mut firsts = YaccFirsts {
+            firsts,
+            epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
             phantom      : PhantomData
         };
 
@@ -91,7 +91,7 @@ where usize: AsPrimitive<StorageT>
                         // if it's an empty production, ensure this nonterminal's epsilon bit is
                         // set.
                         if !firsts.is_epsilon_set(rul_i) {
-                            firsts.prod_epsilons.set(usize::from(rul_i), true);
+                            firsts.epsilons.set(usize::from(rul_i), true);
                             changed = true;
                         }
                         continue;
@@ -121,8 +121,8 @@ where usize: AsPrimitive<StorageT>
                                 // to FIRSTs.
                                 if firsts.is_epsilon_set(nonterm_i) && sym_i == prod.len() - 1 {
                                     // Only add epsilon if the symbol is the last in the production
-                                    if !firsts.prod_epsilons[usize::from(rul_i)] {
-                                        firsts.prod_epsilons.set(usize::from(rul_i), true);
+                                    if !firsts.epsilons[usize::from(rul_i)] {
+                                        firsts.epsilons.set(usize::from(rul_i), true);
                                         changed = true;
                                     }
                                 }
@@ -143,47 +143,44 @@ where usize: AsPrimitive<StorageT>
             }
         }
     }
+}
 
-    /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx` is set.
-    pub fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
-        self.prod_firsts[usize::from(nidx)][usize::from(tidx)]
+impl<StorageT: 'static + PrimInt + Unsigned>
+Firsts<StorageT> for YaccFirsts<StorageT>
+where usize: AsPrimitive<StorageT>
+{
+    fn firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob {
+        &self.firsts[usize::from(ntidx)]
     }
 
-    /// Get all the firsts for production `ntidx`.
-    pub fn prod_firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob {
-        &self.prod_firsts[usize::from(ntidx)]
+    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+        self.firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
-    /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
-    pub fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool {
-        self.prod_epsilons[usize::from(ntidx)]
+    fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool {
+        self.epsilons[usize::from(ntidx)]
     }
 
-    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
-    /// it was already set, or false otherwise.
-    pub fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
-        let prod = &mut self.prod_firsts[usize::from(ntidx)];
-        if prod[usize::from(tidx)] {
+    fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+        let nt = &mut self.firsts[usize::from(ntidx)];
+        if nt[usize::from(tidx)] {
             true
         }
         else {
-            prod.set(usize::from(tidx), true);
+            nt.set(usize::from(tidx), true);
             false
         }
     }
 }
 
-
 #[cfg(test)]
 mod test {
-    use cfgrammar::Grammar;
-    use cfgrammar::yacc::{YaccGrammar, YaccKind};
+    use {Firsts, Grammar};
+    use yacc::{YaccGrammar, YaccKind};
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-    use super::Firsts;
-
     fn has<StorageT: 'static + PrimInt + Unsigned>
-          (grm: &YaccGrammar<StorageT>, firsts: &Firsts<StorageT>, rn: &str, should_be: Vec<&str>)
+          (grm: &YaccGrammar<StorageT>, firsts: &Box<Firsts<StorageT>>, rn: &str, should_be: Vec<&str>)
      where usize: AsPrimitive<StorageT>
     {
         let nt_i = grm.nonterm_idx(rn).unwrap();
@@ -221,7 +218,7 @@ mod test {
           E: D | C;
           F: E;
           ").unwrap();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.firsts();
         has(&grm, &firsts, "^", vec!["c"]);
         has(&grm, &firsts, "D", vec!["d"]);
         has(&grm, &firsts, "E", vec!["d", "c"]);
@@ -238,7 +235,7 @@ mod test {
           D: 'd';
           E: D C;
           ").unwrap();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.firsts();
         has(&grm, &firsts, "E", vec!["d"]);
     }
 
@@ -253,7 +250,7 @@ mod test {
           C: 'c' | ;
           D: C;
           ").unwrap();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b", "a"]);
         has(&grm, &firsts, "C", vec!["c", ""]);
         has(&grm, &firsts, "D", vec!["c", ""]);
@@ -269,7 +266,7 @@ mod test {
           B: 'b' | ;
           C: B 'c' B;
           ").unwrap();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b", "c"]);
         has(&grm, &firsts, "B", vec!["b", ""]);
         has(&grm, &firsts, "C", vec!["b", "c"]);
@@ -284,7 +281,7 @@ mod test {
           A: B 'b';
           B: 'b' | ;
           ").unwrap();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b"]);
     }
 
@@ -305,7 +302,7 @@ mod test {
     #[test]
     fn test_first_from_eco() {
         let grm = eco_grammar();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.firsts();
         has(&grm, &firsts, "S", vec!["a", "b"]);
         has(&grm, &firsts, "A", vec!["a"]);
         has(&grm, &firsts, "B", vec!["a"]);
@@ -328,7 +325,7 @@ mod test {
           F: 'f' | ;
           G: C D;
           ").unwrap();
-        let firsts = Firsts::new(&grm);
+        let firsts = grm.firsts();
         has(&grm, &firsts, "E", vec!["a"]);
         has(&grm, &firsts, "T", vec!["a"]);
         has(&grm, &firsts, "P", vec!["a"]);

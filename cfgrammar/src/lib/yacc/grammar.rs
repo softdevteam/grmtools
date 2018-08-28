@@ -37,8 +37,9 @@ use std::fmt;
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 
-use {Grammar, NTIdx, PIdx, SIdx, Symbol, TIdx};
+use {Firsts, Grammar, NTIdx, PIdx, SIdx, Symbol, TIdx};
 use super::YaccKind;
+use yacc::firsts::YaccFirsts;
 use yacc::parser::YaccParser;
 
 const START_NONTERM         : &str = "^";
@@ -393,6 +394,11 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         m
     }
 
+    /// Return this grammar's start nonterminal.
+    pub fn start_nonterm(&self) -> NTIdx<StorageT> {
+        self.prod_to_nonterm(self.start_prod)
+    }
+
     /// Return the production index of the start rule's sole production (for Yacc grammars the
     /// start rule is defined to have precisely one production).
     pub fn start_prod(&self) -> PIdx<StorageT> {
@@ -468,6 +474,11 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         SentenceGenerator::new(self, term_cost)
     }
 
+    /// Return a `YaccFirsts` struct, allowing static dispatch (rather than the `firsts()` method,
+    /// which returns `Box<Firsts>`).
+    pub fn yacc_firsts(&self) -> YaccFirsts<StorageT> {
+        YaccFirsts::new(self)
+    }
 }
 
 impl<StorageT: 'static + PrimInt + Unsigned> Grammar<StorageT>
@@ -490,6 +501,10 @@ where usize: AsPrimitive<StorageT>
 
     fn terms_len(&self) -> TIdx<StorageT> {
         self.terms_len
+    }
+
+    fn firsts(&self) -> Box<dyn Firsts<StorageT>> {
+        Box::new(YaccFirsts::new(self))
     }
 }
 

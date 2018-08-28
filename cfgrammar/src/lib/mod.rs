@@ -63,11 +63,11 @@
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
 extern crate num_traits;
-#[cfg(feature="serde")]
-#[macro_use]
-extern crate serde;
+#[cfg(feature="serde")] #[macro_use] extern crate serde;
+extern crate vob;
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use vob::Vob;
 
 mod idxnewtype;
 pub mod yacc;
@@ -102,6 +102,16 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
         Box::new((0..usize::from(self.nonterms_len())).map(|x| NTIdx(x.as_())))
     }
 
+    /// Return an iterator which produces (in order from `0..self.prods_len()`) all this
+    /// grammar's valid `PIdx`s.
+    fn iter_pidxs(&self) -> Box<dyn Iterator<Item=PIdx<StorageT>>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.nonterms_len() and, since nonterms_len() returns an NTIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.prods_len())).map(|x| PIdx(x.as_())))
+    }
+
     fn iter_tidxs(&self) -> Box<dyn Iterator<Item=TIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
@@ -109,4 +119,21 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
         // definition the integers we're creating fit within StorageT.
         Box::new((0..usize::from(self.terms_len())).map(|x| TIdx(x.as_())))
     }
+
+    fn firsts(&self) -> Box<dyn Firsts<StorageT>>;
+}
+
+pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
+    /// Return all the firsts for nonterminal `ntidx`.
+    fn firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob;
+
+    /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx`.
+    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
+
+    /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
+    fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool;
+
+    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
+    /// it was already set, or false otherwise.
+    fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 }

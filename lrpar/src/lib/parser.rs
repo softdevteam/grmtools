@@ -44,6 +44,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use mf;
 use cpctplus;
+use panic;
 
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
@@ -181,6 +182,7 @@ where usize: AsPrimitive<StorageT>
                         recoverer = Some(match self.rcvry_kind {
                                              RecoveryKind::CPCTPlus => cpctplus::recoverer(self),
                                              RecoveryKind::MF => mf::recoverer(self),
+                                             RecoveryKind::Panic => panic::recoverer(self),
                                              RecoveryKind::None => {
                                                 let la_lexeme = self.next_lexeme(la_idx);
                                                 errors.push(ParseError{state_idx: st,
@@ -386,6 +388,7 @@ pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned>
 pub enum RecoveryKind {
     CPCTPlus,
     MF,
+    Panic,
     None
 }
 

@@ -31,6 +31,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 pub mod ast;
+pub mod firsts;
 pub mod grammar;
 pub mod parser;
 

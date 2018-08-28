@@ -211,6 +211,7 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         let recoverer = match self.recoverer {
             RecoveryKind::CPCTPlus => "CPCTPlus",
             RecoveryKind::MF => "MF",
+            RecoveryKind::Panic => "Panic",
             RecoveryKind::None => "None"
         };
         outs.push_str(&format!("
