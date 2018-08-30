@@ -385,6 +385,7 @@ pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned>
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>);
 }
 
+#[derive(Debug)]
 pub enum RecoveryKind {
     CPCTPlus,
     MF,

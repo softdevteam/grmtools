@@ -62,6 +62,8 @@ const STABLE_FILE_EXT: &str = "stable";
 /// A `ParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
 pub struct ParserBuilder<StorageT=u32> {
+    // Anything stored in here almost certainly needs to be included as part of the rebuild_cache
+    // function below so that, if it's changed, the grammar is rebuilt.
     recoverer: RecoveryKind,
     phantom: PhantomData<StorageT>
 }
@@ -149,7 +151,7 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
         let rule_ids = grm.terms_map().iter()
                                       .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
                                       .collect::<HashMap<_, _>>();
-        let imc = self.gen_ids_map_cache(&grm);
+        let cache = self.rebuild_cache(&grm);
 
         // out_base is the base filename for the output (e.g. /path/to/target/out/grm_y) to which
         // we will write filenames with various extensions below.
@@ -162,16 +164,17 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
         outp_rs.set_extension(RUST_FILE_EXT);
         // We don't need to go through the full rigmarole of generating an output file if all of
         // the following are true: the output file exists; it is newer than the input file; and the
-        // rule IDs map cache hasn't changed. The last of these might be surprising, but it's
-        // vital: we don't know what the IDs map might be from one run to the next, and it might
+        // cache hasn't changed. The last of these might be surprising, but it's vital: we don't
+        // know, for example, what the IDs map might be from one run to the next, and it might
         // change for reasons beyond lrpar's control. If it does change, that means that the lexer
-        // and lrpar would get out of sync, so we have to play it safe and regenerate in such cases.
+        // and lrpar would get out of sync, so we have to play it safe and regenerate in such
+        // cases.
         if let Ok(ref inmd) = fs::metadata(&inp) {
             if let Ok(ref out_rs_md) = fs::metadata(&outp_rs) {
                 if FileTime::from_last_modification_time(out_rs_md) >
                    FileTime::from_last_modification_time(inmd) {
                     if let Ok(outc) = read_to_string(&outp_rs) {
-                        if outc.contains(&imc) {
+                        if outc.contains(&cache) {
                             return Ok(rule_ids);
                         }
                     }
@@ -235,19 +238,25 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         }
 
         // Output the cache so that we can check whether the IDs map is stable.
-        outs.push_str(&imc);
+        outs.push_str(&cache);
 
         let mut f = File::create(outp_rs)?;
         f.write_all(outs.as_bytes())?;
         Ok(rule_ids)
     }
 
-    /// Generate the rule IDs map cache. We don't need to be particularly clever here: we just need
-    /// to record the identifiers and nonterminal names so that we can check if they've changed
-    /// later.
-    fn gen_ids_map_cache(&self, grm: &YaccGrammar<StorageT>) -> String {
+    /// Generate the cache, which determines if anything's changed enough that we need to
+    /// regenerate outputs and force rustc to recompile.
+    fn rebuild_cache(&self, grm: &YaccGrammar<StorageT>) -> String {
+        // We don't need to be particularly clever here: we just need to record the various things
+        // that could change between builds.
         let mut cache = String::new();
         cache.push_str(" \n/* CACHE INFORMATION\n");
+
+        // Record the recoverer
+        cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));
+
+        // Record the rule IDs map
         for tidx in grm.iter_tidxs() {
             let n = match grm.term_name(tidx) {
                 Some(n) => format!("'{}'", n),
@@ -255,6 +264,7 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
             };
             cache.push_str(&format!("   {} {}\n", usize::from(tidx), n));
         }
+
         cache.push_str("*/\n");
         cache
     }
