@@ -104,7 +104,7 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     fn rules_len(&self) -> RIdx<StorageT>;
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> RIdx<StorageT>;
-    /// How many terminals does this grammar have?
+    /// How many tokens does this grammar have?
     fn terms_len(&self) -> TIdx<StorageT>;
 
     /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
@@ -142,13 +142,13 @@ pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitiv
     /// Return all the firsts for rule `ntidx`.
     fn firsts(&self, ntidx: RIdx<StorageT>) -> &Vob;
 
-    /// Returns true if the terminal `tidx` is in the first set for rule `nidx`.
+    /// Returns true if the token `tidx` is in the first set for rule `nidx`.
     fn is_set(&self, nidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 
     /// Returns true if the rule `ntidx` has epsilon in its first set.
     fn is_epsilon_set(&self, ntidx: RIdx<StorageT>) -> bool;
 
-    /// Ensures that the firsts bit for terminal `tidx` rule `nidx` is set. Returns true if
+    /// Ensures that the firsts bit for token `tidx` rule `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
     fn set(&mut self, ntidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 }

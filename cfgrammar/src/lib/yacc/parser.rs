@@ -155,7 +155,7 @@ impl YaccParser {
                     if self.lookahead_is("%", i).is_some() {
                         break;
                     }
-                    let (j, n) = try!(self.parse_terminal(i));
+                    let (j, n) = try!(self.parse_token(i));
                     self.ast.tokens.insert(n);
                     i = try!(self.parse_ws(j));
                 }
@@ -182,7 +182,7 @@ impl YaccParser {
                         if self.lookahead_is("%", i).is_some() {
                             break;
                         }
-                        let (j, n) = try!(self.parse_terminal(i));
+                        let (j, n) = try!(self.parse_token(i));
                         self.ast.tokens.insert(n.clone());
                         implicit_terms.insert(n);
                         i = try!(self.parse_ws(j));
@@ -210,7 +210,7 @@ impl YaccParser {
                 i = try!(self.parse_ws(k));
                 while i < self.src.len() {
                     if self.lookahead_is("%", i).is_some() { break; }
-                    let (j, n) = try!(self.parse_terminal(i));
+                    let (j, n) = try!(self.parse_token(i));
                     if self.ast.precs.contains_key(&n) {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
                     }
@@ -267,13 +267,13 @@ impl YaccParser {
             }
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
-                let (j, sym) = try!(self.parse_terminal(i));
+                let (j, sym) = try!(self.parse_token(i));
                 i = try!(self.parse_ws(j));
                 self.ast.tokens.insert(sym.clone());
                 syms.push(Symbol::Term(sym));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = try!(self.parse_ws(j));
-                let (k, sym) = try!(self.parse_terminal(i));
+                let (k, sym) = try!(self.parse_token(i));
                 if self.ast.tokens.contains(&sym) {
                     prec = Some(sym);
                 } else {
@@ -281,7 +281,7 @@ impl YaccParser {
                 }
                 i = k;
             } else {
-                let (j, sym) = try!(self.parse_terminal(i));
+                let (j, sym) = try!(self.parse_token(i));
                 if self.ast.tokens.contains(&sym) {
                     syms.push(Symbol::Term(sym));
                 } else {
@@ -306,7 +306,7 @@ impl YaccParser {
         }
     }
 
-    fn parse_terminal(&self, i: usize) -> YaccResult<(usize, String)> {
+    fn parse_token(&self, i: usize) -> YaccResult<(usize, String)> {
         match RE_TERMINAL.find(&self.src[i..]) {
             Some(m) => {
                 assert!(m.start() == 0 && m.end() > 0);
@@ -434,20 +434,20 @@ mod test {
         Symbol::Rule(n.to_string())
     }
 
-    fn terminal(n: &str) -> Symbol {
+    fn token(n: &str) -> Symbol {
         Symbol::Term(n.to_string())
     }
 
     #[test]
     fn test_macro() {
-        assert_eq!(Symbol::Term("A".to_string()), terminal("A"));
+        assert_eq!(Symbol::Term("A".to_string()), token("A"));
     }
 
     #[test]
     fn test_symbol_eq() {
         assert_eq!(rule("A"), rule("A"));
         assert!(rule("A") != rule("B"));
-        assert!(rule("A") != terminal("A"));
+        assert!(rule("A") != token("A"));
     }
 
     #[test]
@@ -460,7 +460,7 @@ mod test {
         assert_eq!(*grm.get_rule("A").unwrap(),
                    vec![0]);
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a")],
+                   Production{symbols: vec![token("a")],
                               precedence: None});
     }
 
@@ -473,10 +473,10 @@ mod test {
         ".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a")],
+                   Production{symbols: vec![token("a")],
                               precedence: None});
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[1]],
-                   Production{symbols: vec![terminal("b")],
+                   Production{symbols: vec![token("b")],
                               precedence: None});
     }
 
@@ -495,7 +495,7 @@ mod test {
                               precedence: None});
 
         assert_eq!(grm.prods[grm.get_rule("B").unwrap()[0]],
-                   Production{symbols: vec![terminal("b")],
+                   Production{symbols: vec![token("b")],
                               precedence: None});
         assert_eq!(grm.prods[grm.get_rule("B").unwrap()[1]],
                    Production{symbols: vec![],
@@ -505,7 +505,7 @@ mod test {
                    Production{symbols: vec![],
                               precedence: None});
         assert_eq!(grm.prods[grm.get_rule("C").unwrap()[1]],
-                   Production{symbols: vec![terminal("c")],
+                   Production{symbols: vec![token("c")],
                               precedence: None});
     }
 
@@ -520,7 +520,7 @@ mod test {
         let src = "%%\nA : 'a' B;".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a"), rule("B")],
+                   Production{symbols: vec![token("a"), rule("B")],
                               precedence: None});
     }
 
@@ -529,7 +529,7 @@ mod test {
         let src = "%%\nA : 'a' \"b\";".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a"), terminal("b")],
+                   Production{symbols: vec![token("a"), token("b")],
                               precedence: None});
     }
 
@@ -576,7 +576,7 @@ mod test {
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert!(grm.has_token("T"));
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("T")],
+                   Production{symbols: vec![token("T")],
                               precedence: None});
     }
 

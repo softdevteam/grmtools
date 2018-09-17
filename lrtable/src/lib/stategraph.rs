@@ -233,7 +233,7 @@ where usize: AsPrimitive<StorageT>
                 };
             if off == tidx {
                 if !bit {
-                    panic!("bit for terminal {}, dot {} is not set in production {} of {} when it should be",
+                    panic!("bit for token {}, dot {} is not set in production {} of {} when it should be",
                            t, usize::from(dot), prod_off, nt);
                 }
                 found = true;
@@ -241,7 +241,7 @@ where usize: AsPrimitive<StorageT>
             }
         }
         if !found && bit {
-            panic!("bit for terminal {}, dot {} is set in production {} of {} when it shouldn't be",
+            panic!("bit for token {}, dot {} is set in production {} of {} when it shouldn't be",
                    grm.term_name(tidx).unwrap(), usize::from(dot), prod_off, nt);
         }
     }

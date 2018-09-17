@@ -1214,8 +1214,8 @@ E : 'N'
 
     fn kimyi_lex_grm() -> (&'static str, &'static str) {
         // The example from the KimYi paper, with a bit of alpha-renaming to make it clearer. The
-        // paper uses "A" as a rule name and "a" as a terminal name, which are then easily
-        // confused. Here we use "E" as the rule name, and keep "a" as the terminal name.
+        // paper uses "A" as a rule name and "a" as a token name, which are then easily
+        // confused. Here we use "E" as the rule name, and keep "a" as the token name.
         let lexs = "%%
 \\( '('
 \\) ')'

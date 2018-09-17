@@ -108,7 +108,7 @@ where usize: AsPrimitive<StorageT>
                             Symbol::Rule(nonterm_i) => {
                                 // if we're dealing with another Nonterm, union its FIRSTs
                                 // together with the current rules FIRSTs. Note this is
-                                // (intentionally) a no-op if the two terminals are one and the
+                                // (intentionally) a no-op if the two tokens are one and the
                                 // same.
                                 for tidx in grm.iter_tidxs() {
                                     if firsts.is_set(nonterm_i, tidx) && !firsts.set(rul_i, tidx) {

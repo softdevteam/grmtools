@@ -157,7 +157,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
 
         if !self.allow_missing_terms_in_lexer {
             if let Some(ref mfl) = missing_from_lexer {
-                eprintln!("Error: the following terminals are used in the grammar but are not defined in the lexer:");
+                eprintln!("Error: the following tokens are used in the grammar but are not defined in the lexer:");
                 for n in mfl {
                     eprintln!("    {}", n);
                 }
@@ -167,7 +167,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
         }
         if !self.allow_missing_terms_in_parser {
             if let Some(ref mfp) = missing_from_parser {
-                eprintln!("Error: the following terminals are defined in the lexer but not used in the grammar:");
+                eprintln!("Error: the following tokens are defined in the lexer but not used in the grammar:");
                 for n in mfp {
                     eprintln!("    {}", n);
                 }
@@ -208,14 +208,14 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
         Ok((missing_from_lexer, missing_from_parser))
     }
 
-    /// If passed false, terminals used in the grammar but not defined in the lexer will cause a
+    /// If passed false, tokens used in the grammar but not defined in the lexer will cause a
     /// panic at lexer generation time. Defaults to false.
     pub fn allow_missing_terms_in_lexer(mut self, allow: bool) -> Self {
         self.allow_missing_terms_in_lexer = allow;
         self
     }
 
-    /// If passed false, terminals defined in the lexer but not used in the grammar will cause a
+    /// If passed false, tokens defined in the lexer but not used in the grammar will cause a
     /// panic at lexer generation time. Defaults to true (since lexers sometimes define tokens such
     /// as reserved words, which are intentionally not in the grammar).
     pub fn allow_missing_terms_in_parser(mut self, allow: bool) -> Self {

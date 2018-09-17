@@ -75,7 +75,7 @@ impl<StorageT> fmt::Display for StateTableError<StorageT> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StateTable<StorageT> {
     // For actions, we use a HashMap as a quick representation of a sparse table. We use the normal
-    // statetable representation where rows represent states and columns represent terminals. Thus
+    // statetable representation where rows represent states and columns represent tokens. Thus
     // the statetable:
     //        A         B
     //   0  shift 1
@@ -397,14 +397,14 @@ where usize: AsPrimitive<StorageT>
     let prod_k_prec = grm.prod_precedence(prod_k);
     match (term_k_prec, prod_k_prec) {
         (_, None) | (None, _) => {
-            // If the terminal and production don't both have precedences, we use Yacc's default
+            // If the token and production don't both have precedences, we use Yacc's default
             // resolution, which is in favour of the shift.
             e.insert(Action::Shift(state_j));
             shift_reduce += 1;
         },
         (Some(term_prec), Some(prod_prec)) => {
             if term_prec.level == prod_prec.level {
-                // Both terminal and production have the same level precedence, so we need to look
+                // Both token and production have the same level precedence, so we need to look
                 // at the precedence kind.
                 match (term_prec.kind, prod_prec.kind) {
                     (AssocKind::Left, AssocKind::Left) => {
@@ -425,7 +425,7 @@ where usize: AsPrimitive<StorageT>
                     }
                 }
             } else if term_prec.level > prod_prec.level {
-                // The terminal has higher level precedence, so resolve in favour of shift.
+                // The token has higher level precedence, so resolve in favour of shift.
                 e.insert(Action::Shift(state_j));
             }
             // If term_lev < prod_lev, then the production has higher level precedence and we keep

@@ -278,7 +278,7 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Return a `Lexeme` for the next lemexe (if `la_idx` == `self.lexemes.len()` this will be
-    /// a lexeme constructed to look as if contains the EOF terminal).
+    /// a lexeme constructed to look as if contains the EOF token).
     pub(crate) fn next_lexeme(&self, la_idx: usize) -> Lexeme<StorageT>
     {
         let llen = self.lexemes.len();

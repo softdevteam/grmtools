@@ -67,21 +67,21 @@ pub enum AssocKind {
 }
 
 /// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
-/// guarantees this struct makes about rules, terminals, productions, and symbols.
+/// guarantees this struct makes about rules, tokens, productions, and symbols.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct YaccGrammar<StorageT=u32> {
     /// How many rules does this grammar have?
     rules_len: RIdx<StorageT>,
     /// A mapping from `RIdx` -> `String`.
     rule_names: Vec<String>,
-    /// A mapping from `TIdx` -> `Option<String>`. Every user-specified terminal will have a name,
-    /// but terminals inserted by cfgrammar (e.g. the EOF terminal) won't.
+    /// A mapping from `TIdx` -> `Option<String>`. Every user-specified token will have a name,
+    /// but tokens inserted by cfgrammar (e.g. the EOF token) won't.
     term_names: Vec<Option<String>>,
     /// A mapping from `TIdx` -> `Option<Precedence>`
     term_precs: Vec<Option<Precedence>>,
-    /// How many terminals does this grammar have?
+    /// How many tokens does this grammar have?
     terms_len: TIdx<StorageT>,
-    /// The offset of the EOF terminal.
+    /// The offset of the EOF token.
     eof_term_idx: TIdx<StorageT>,
     /// How many productions does this grammar have?
     prods_len: PIdx<StorageT>,
@@ -138,7 +138,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             panic!("StorageT is not big enough to store this grammar's rules.");
         }
         if ast.tokens.len() > num_traits::cast(StorageT::max_value()).unwrap() {
-            panic!("StorageT is not big enough to store this grammar's terminals.");
+            panic!("StorageT is not big enough to store this grammar's tokens.");
         }
         if ast.prods.len() > num_traits::cast(StorageT::max_value()).unwrap() {
             panic!("StorageT is not big enough to store this grammar's productions.");
@@ -261,7 +261,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             else if implicit_rule.as_ref().map_or(false, |s| s == astrulename) {
                 // Add the implicit rule: ~: "IMPLICIT_TERM1" ~ | ... | "IMPLICIT_TERMN" ~ | ;
                 let implicit_prods = &mut rules_prods[usize::from(nonterm_map[astrulename])];
-                // Add a production for each implicit terminal
+                // Add a production for each implicit token
                 for t in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(PIdx(prods.len().as_()));
                     prods.push(Some(vec![Symbol::Term(term_map[t]), Symbol::Rule(rule_idx)]));
@@ -332,7 +332,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         })
     }
 
-    /// Return the index of the end terminal.
+    /// Return the index of the end token.
     pub fn eof_term_idx(&self) -> TIdx<StorageT> {
         self.eof_term_idx
     }
@@ -370,13 +370,13 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         self.prod_precs[usize::from(i)]
     }
 
-    /// Return the name of terminal `i` (where `None` indicates "the rule has no name"). Panics if
+    /// Return the name of token `i` (where `None` indicates "the rule has no name"). Panics if
     /// `i` doesn't exist.
     pub fn term_name(&self, i: TIdx<StorageT>) -> Option<&str> {
         self.term_names[usize::from(i)].as_ref().and_then(|x| Some(x.as_str()))
     }
 
-    /// Return the precedence of terminal `i` (where `None` indicates "no precedence specified").
+    /// Return the precedence of token `i` (where `None` indicates "no precedence specified").
     /// Panics if `i` doesn't exist.
     pub fn term_precedence(&self, i: TIdx<StorageT>) -> Option<Precedence> {
         self.term_precs[usize::from(i)]
@@ -414,7 +414,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                           .map(|x| RIdx(x.as_()))
     }
 
-    /// Return the index of the terminal named `n` or `None` if it doesn't exist.
+    /// Return the index of the token named `n` or `None` if it doesn't exist.
     pub fn term_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
         self.term_names.iter()
                        .position(|x| x.as_ref().map_or(false, |x| x == n))
@@ -461,8 +461,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return a `SentenceGenerator` which can then generate minimal sentences for any non-term
     /// based on the user-defined `term_cost` function which gives the associated cost for
-    /// generating each terminal (where the cost must be greater than 0). Note that multiple
-    /// terminals can have the same score. The simplest cost function is thus `|_| 1`.
+    /// generating each token (where the cost must be greater than 0). Note that multiple
+    /// tokens can have the same score. The simplest cost function is thus `|_| 1`.
     pub fn sentence_generator<F>(&self, term_cost: F) -> SentenceGenerator<StorageT>
                         where F: Fn(TIdx<StorageT>) -> u8
     {
@@ -716,7 +716,7 @@ where usize: AsPrimitive<StorageT>
 }
 
 /// Return the cost of a minimal string for each rule in this grammar. The cost of a
-/// terminal is specified by the user-defined `term_cost` function.
+/// token is specified by the user-defined `term_cost` function.
 fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
               where usize: AsPrimitive<StorageT>
@@ -730,17 +730,17 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
     // On each iteration of the loop, we examine each rule in the todo list to see if
     // we can get a better idea of its true cost. Some are trivial:
     //   * A rule with an empty production immediately has a cost of 0.
-    //   * Rules whose productions don't reference any rules (i.e. only contain terminals) can be
+    //   * Rules whose productions don't reference any rules (i.e. only contain tokens) can be
     //     immediately given a cost by calculating the lowest-cost production.
     // However if a rule A references another rule B, we may need to wait until
     // we've fully analysed B before we can cost A. This might seem to cause problems with
     // recursive rules, so we introduce the concept of "incomplete costs" i.e. if a production
     // references a rule we can work out its minimum possible cost simply by counting
-    // the production's terminal costs. Since rules can have a mix of complete and
+    // the production's token costs. Since rules can have a mix of complete and
     // incomplete productions, this is sometimes enough to allow us to assign a final cost to
     // a rule (if the lowest complete production's cost is lower than or equal to all
     // the lowest incomplete production's cost). This allows us to make progress, since it
-    // means that we can iteratively improve our knowledge of a terminal's minimum cost:
+    // means that we can iteratively improve our knowledge of a token's minimum cost:
     // eventually we will reach a point where we can determine it definitively.
 
     let mut costs = vec![];
@@ -801,7 +801,7 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
 
 /// Return the cost of the maximal string for each rule in this grammar (u32::max_val()
 /// representing "this rule can generate strings of infinite length"). The cost of a
-/// terminal is specified by the user-defined `term_cost` function.
+/// token is specified by the user-defined `term_cost` function.
 fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
                where usize: AsPrimitive<StorageT>

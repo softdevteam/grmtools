@@ -151,8 +151,8 @@ impl GrammarAST {
     /// checking that:
     ///   1) The start rule references a rule in the grammar
     ///   2) Every rule reference references a rule in the grammar
-    ///   3) Every terminal reference references a declared token
-    ///   4) If a production has a precedence terminal, then it references a declared token
+    ///   3) Every token reference references a declared token
+    ///   4) If a production has a precedence token, then it references a declared token
     /// If the validation succeeds, None is returned.
     pub(crate) fn complete_and_validate(&mut self) -> Result<(), GrammarValidationError> {
         match self.start {
@@ -211,7 +211,7 @@ mod test {
         Symbol::Rule(n.to_string())
     }
 
-    fn terminal(n: &str) -> Symbol {
+    fn token(n: &str) -> Symbol {
         Symbol::Term(n.to_string())
     }
 
@@ -264,31 +264,30 @@ mod test {
     }
 
     #[test]
-    fn test_valid_terminal_ref(){
+    fn test_valid_token_ref(){
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(terminal("b")), None);
+        grm.add_prod("A".to_string(), vec!(token("b")), None);
         assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
-    #[should_panic]
-    fn test_valid_token_ref(){
+    fn test_redefine_rules_as_tokens(){
         // for now we won't support the YACC feature that allows
         // to redefine rules as tokens by adding them to '%token'
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
         grm.add_prod("A".to_string(), vec!(rule("b")), None);
-        assert!(grm.complete_and_validate().is_ok());
+        assert!(grm.complete_and_validate().is_err());
     }
 
     #[test]
-    fn test_invalid_terminal_ref(){
+    fn test_invalid_token_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(terminal("b")), None);
+        grm.add_prod("A".to_string(), vec!(token("b")), None);
         match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
             _ => panic!("Validation error")
@@ -299,7 +298,7 @@ mod test {
     fn test_invalid_rule_forgotten_token(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(rule("b"), terminal("b")), None);
+        grm.add_prod("A".to_string(), vec!(rule("b"), token("b")), None);
         match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
@@ -312,7 +311,7 @@ mod test {
         grm.precs.insert("b".to_string(), Precedence{level: 1, kind: AssocKind::Left});
         grm.start = Some("A".to_string());
         grm.tokens.insert("b".to_string());
-        grm.add_prod("A".to_string(), vec!(terminal("b")), Some("b".to_string()));
+        grm.add_prod("A".to_string(), vec!(token("b")), Some("b".to_string()));
         assert!(grm.complete_and_validate().is_ok());
     }
 
@@ -320,7 +319,7 @@ mod test {
     fn test_invalid_precedence_override(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(terminal("b")), Some("b".to_string()));
+        grm.add_prod("A".to_string(), vec!(token("b")), Some("b".to_string()));
         match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
             _ => panic!("Validation error")
