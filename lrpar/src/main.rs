@@ -151,7 +151,7 @@ fn main() {
     };
 
     {
-        let rule_ids = grm.terms_map().iter()
+        let rule_ids = grm.tokens_map().iter()
                                       .map(|(&n, &i)| (n, usize::from(i).to_u16().unwrap()))
                                       .collect();
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);

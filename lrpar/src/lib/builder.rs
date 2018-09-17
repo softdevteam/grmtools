@@ -148,7 +148,7 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
     {
         let inc = read_to_string(&inp).unwrap();
         let grm = YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc)?;
-        let rule_ids = grm.terms_map().iter()
+        let rule_ids = grm.tokens_map().iter()
                                       .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
                                       .collect::<HashMap<_, _>>();
         let cache = self.rebuild_cache(&grm);

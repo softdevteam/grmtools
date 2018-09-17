@@ -384,7 +384,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
     /// inputs from this grammar.
-    pub fn terms_map(&self) -> HashMap<&str, TIdx<StorageT>> {
+    pub fn tokens_map(&self) -> HashMap<&str, TIdx<StorageT>> {
         let mut m = HashMap::with_capacity(usize::from(self.tokens_len) - 1);
         for tidx in self.iter_tidxs() {
             if let Some(n) = self.token_names[usize::from(tidx)].as_ref() {
@@ -934,7 +934,7 @@ mod test {
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
         assert_eq!(grm.prods_rules, vec![RIdx(1), RIdx(0)]);
 
-        assert_eq!(grm.terms_map(),
+        assert_eq!(grm.tokens_map(),
                    [("T", TIdx(0))].iter()
                                                 .cloned()
                                                 .collect::<HashMap<&str, TIdx<_>>>());

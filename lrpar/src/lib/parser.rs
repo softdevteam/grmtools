@@ -513,7 +513,7 @@ pub(crate) mod test {
         let grm = YaccGrammar::<u16>::new_with_storaget(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         {
-            let rule_ids = grm.terms_map().iter()
+            let rule_ids = grm.tokens_map().iter()
                                           .map(|(&n, &i)| (n, u32::from(i).to_u16().unwrap()))
                                           .collect();
             lexerdef.set_rule_ids(&rule_ids);
