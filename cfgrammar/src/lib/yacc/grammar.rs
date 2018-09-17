@@ -43,7 +43,7 @@ use yacc::firsts::YaccFirsts;
 use yacc::parser::YaccParser;
 
 const START_RULE         : &str = "^";
-const IMPLICIT_NONTERM      : &str = "~";
+const IMPLICIT_RULE      : &str = "~";
 const IMPLICIT_START_RULE: &str = "^~";
 
 use yacc::ast;
@@ -170,9 +170,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             },
             YaccKind::Eco => {
                 if ast.implicit_tokens.is_some() {
-                    let mut n1 = IMPLICIT_NONTERM.to_string();
+                    let mut n1 = IMPLICIT_RULE.to_string();
                     while ast.rules.get(&n1).is_some() {
-                        n1 += IMPLICIT_NONTERM;
+                        n1 += IMPLICIT_RULE;
                     }
                     rule_names.push(n1.clone());
                     implicit_rule = Some(n1);
@@ -912,7 +912,7 @@ impl fmt::Display for YaccGrammarError {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use super::{IMPLICIT_NONTERM, IMPLICIT_START_RULE, rule_max_costs, rule_min_costs};
+    use super::{IMPLICIT_RULE, IMPLICIT_START_RULE, rule_max_costs, rule_min_costs};
     use {Grammar, RIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
@@ -1093,7 +1093,7 @@ mod test {
 
         let itfs_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(itfs_rule_idx)][0])];
         assert_eq!(itfs_prod1.len(), 2);
-        assert_eq!(itfs_prod1[0], Symbol::Rule(grm.rule_idx(IMPLICIT_NONTERM).unwrap()));
+        assert_eq!(itfs_prod1[0], Symbol::Rule(grm.rule_idx(IMPLICIT_RULE).unwrap()));
         assert_eq!(itfs_prod1[1], Symbol::Rule(grm.rule_idx(&"S").unwrap()));
 
         let s_rule_idx = grm.rule_idx(&"S").unwrap();
@@ -1102,7 +1102,7 @@ mod test {
         let s_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][0])];
         assert_eq!(s_prod1.len(), 2);
         assert_eq!(s_prod1[0], Symbol::Term(grm.term_idx("a").unwrap()));
-        assert_eq!(s_prod1[1], Symbol::Rule(grm.rule_idx(IMPLICIT_NONTERM).unwrap()));
+        assert_eq!(s_prod1[1], Symbol::Rule(grm.rule_idx(IMPLICIT_RULE).unwrap()));
 
         let s_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][1])];
         assert_eq!(s_prod2.len(), 1);
@@ -1114,13 +1114,13 @@ mod test {
         let t_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][0])];
         assert_eq!(t_prod1.len(), 2);
         assert_eq!(t_prod1[0], Symbol::Term(grm.term_idx("c").unwrap()));
-        assert_eq!(t_prod1[1], Symbol::Rule(grm.rule_idx(IMPLICIT_NONTERM).unwrap()));
+        assert_eq!(t_prod1[1], Symbol::Rule(grm.rule_idx(IMPLICIT_RULE).unwrap()));
 
         let t_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][1])];
         assert_eq!(t_prod2.len(), 0);
 
-        assert_eq!(Some(grm.rule_idx(IMPLICIT_NONTERM).unwrap()), grm.implicit_rule());
-        let i_rule_idx = grm.rule_idx(IMPLICIT_NONTERM).unwrap();
+        assert_eq!(Some(grm.rule_idx(IMPLICIT_RULE).unwrap()), grm.implicit_rule());
+        let i_rule_idx = grm.rule_idx(IMPLICIT_RULE).unwrap();
         assert_eq!(grm.rules_prods[usize::from(i_rule_idx)].len(), 3);
         let i_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][0])];
         let i_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][1])];
