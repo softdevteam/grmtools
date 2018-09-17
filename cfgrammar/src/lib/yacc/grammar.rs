@@ -78,7 +78,7 @@ pub struct YaccGrammar<StorageT=u32> {
     /// but tokens inserted by cfgrammar (e.g. the EOF token) won't.
     token_names: Vec<Option<String>>,
     /// A mapping from `TIdx` -> `Option<Precedence>`
-    term_precs: Vec<Option<Precedence>>,
+    token_precs: Vec<Option<Precedence>>,
     /// How many tokens does this grammar have?
     terms_len: TIdx<StorageT>,
     /// The offset of the EOF token.
@@ -201,14 +201,14 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         }
 
         let mut token_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
-        let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
+        let mut token_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
         for k in &ast.tokens {
             token_names.push(Some(k.clone()));
-            term_precs.push(ast.precs.get(k).cloned());
+            token_precs.push(ast.precs.get(k).cloned());
         }
         let eof_term_idx = TIdx(token_names.len().as_());
         token_names.push(None);
-        term_precs.push(None);
+        token_precs.push(None);
         let mut term_map = HashMap::<String, TIdx<StorageT>>::new();
         for (i, v) in token_names.iter().enumerate() {
             if let Some(n) = v.as_ref() {
@@ -321,7 +321,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             terms_len:        TIdx(token_names.len().as_()),
             eof_term_idx,
             token_names,
-            term_precs,
+            token_precs,
             prods_len:        PIdx(prods.len().as_()),
             start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
             rules_prods,
@@ -379,7 +379,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     /// Return the precedence of token `i` (where `None` indicates "no precedence specified").
     /// Panics if `i` doesn't exist.
     pub fn term_precedence(&self, i: TIdx<StorageT>) -> Option<Precedence> {
-        self.term_precs[usize::from(i)]
+        self.token_precs[usize::from(i)]
     }
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
