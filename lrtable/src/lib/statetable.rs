@@ -87,7 +87,7 @@ pub struct StateTable<StorageT> {
     core_reduces     : Vob,
     state_shifts     : Vob,
     reduce_states    : Vob,
-    nonterms_len     : u32,
+    rules_len     : u32,
     prods_len        : PIdx<StorageT>,
     terms_len        : TIdx<StorageT>,
     /// The number of reduce/reduce errors encountered.
@@ -180,7 +180,7 @@ where usize: AsPrimitive<StorageT>
                 }
             }
 
-            let nt_len = grm.nonterms_len();
+            let nt_len = grm.rules_len();
             // Assert that we can fit the goto table into an StIdxStorageT
             assert!(StIdxStorageT::from(sg.all_states_len()).checked_mul(nt_len.into()).is_some());
             for (&sym, state_j) in sg.edges(state_i) {
@@ -271,7 +271,7 @@ where usize: AsPrimitive<StorageT>
                        state_shifts,
                        core_reduces,
                        reduce_states,
-                       nonterms_len: u32::from(grm.nonterms_len()),
+                       rules_len: u32::from(grm.rules_len()),
                        prods_len: grm.prods_len(),
                        terms_len: grm.terms_len(),
                        reduce_reduce,
@@ -335,7 +335,7 @@ where usize: AsPrimitive<StorageT>
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
     pub fn goto(&self, state_idx: StIdx, nonterm_idx: RIdx<StorageT>) -> Option<StIdx> {
-        let off = (u32::from(state_idx) * self.nonterms_len) + u32::from(nonterm_idx);
+        let off = (u32::from(state_idx) * self.rules_len) + u32::from(nonterm_idx);
         self.gotos.get(&off).and_then(|x| Some(*x))
     }
 }

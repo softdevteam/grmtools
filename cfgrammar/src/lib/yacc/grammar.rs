@@ -71,7 +71,7 @@ pub enum AssocKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct YaccGrammar<StorageT=u32> {
     /// How many nonterminals does this grammar have?
-    nonterms_len: RIdx<StorageT>,
+    rules_len: RIdx<StorageT>,
     /// A mapping from `RIdx` -> `String`.
     nonterm_names: Vec<String>,
     /// A mapping from `TIdx` -> `Option<String>`. Every user-specified terminal will have a name,
@@ -316,7 +316,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         assert!(!term_names.is_empty());
         assert!(!nonterm_names.is_empty());
         Ok(YaccGrammar{
-            nonterms_len:     RIdx(nonterm_names.len().as_()),
+            rules_len:     RIdx(nonterm_names.len().as_()),
             nonterm_names,
             terms_len:        TIdx(term_names.len().as_()),
             eof_term_idx,
@@ -432,9 +432,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     /// return `true` for a path from themselves to themselves.
     pub fn has_path(&self, from: RIdx<StorageT>, to: RIdx<StorageT>) -> bool {
         let mut seen = vec![];
-        seen.resize(usize::from(self.nonterms_len()), false);
+        seen.resize(usize::from(self.rules_len()), false);
         let mut todo = vec![];
-        todo.resize(usize::from(self.nonterms_len()), false);
+        todo.resize(usize::from(self.rules_len()), false);
         todo[usize::from(from)] = true;
         loop {
             let mut empty = true;
@@ -489,8 +489,8 @@ where usize: AsPrimitive<StorageT>
         self.prods_len
     }
 
-    fn nonterms_len(&self) -> RIdx<StorageT> {
-        self.nonterms_len
+    fn rules_len(&self) -> RIdx<StorageT> {
+        self.rules_len
     }
 
     /// Return the index of the start rule.
@@ -749,9 +749,9 @@ fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
     // eventually we will reach a point where we can determine it definitively.
 
     let mut costs = vec![];
-    costs.resize(usize::from(grm.nonterms_len()), 0);
+    costs.resize(usize::from(grm.rules_len()), 0);
     let mut done = vec![];
-    done.resize(usize::from(grm.nonterms_len()), false);
+    done.resize(usize::from(grm.rules_len()), false);
     loop {
         let mut all_done = true;
         for i in 0..done.len() {
@@ -761,8 +761,8 @@ fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
             all_done = false;
             let mut ls_cmplt = None; // lowest completed cost
             let mut ls_noncmplt = None; // lowest non-completed cost
-            // The call to as_() is guaranteed safe because done.len() == grm.nonterms_len(), and
-            // we guarantee that grm.nonterms_len() can fit in StorageT.
+            // The call to as_() is guaranteed safe because done.len() == grm.rules_len(), and
+            // we guarantee that grm.rules_len() can fit in StorageT.
             for p_idx in grm.nonterm_to_prods(RIdx(i.as_())).iter() {
                 let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
@@ -812,9 +812,9 @@ fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
                where usize: AsPrimitive<StorageT>
 {
     let mut done = vec![];
-    done.resize(usize::from(grm.nonterms_len()), false);
+    done.resize(usize::from(grm.rules_len()), false);
     let mut costs = vec![];
-    costs.resize(usize::from(grm.nonterms_len()), 0);
+    costs.resize(usize::from(grm.rules_len()), 0);
 
     // First mark all recursive non-terminals.
     for ntidx in grm.iter_ntidxs() {
@@ -834,8 +834,8 @@ fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
             all_done = false;
             let mut hs_cmplt = None; // highest completed cost
             let mut hs_noncmplt = None; // highest non-completed cost
-            // The call to as_() is guaranteed safe because done.len() == grm.nonterms_len(), and
-            // we guarantee that grm.nonterms_len() can fit in StorageT.
+            // The call to as_() is guaranteed safe because done.len() == grm.rules_len(), and
+            // we guarantee that grm.rules_len() can fit in StorageT.
             'a: for p_idx in grm.nonterm_to_prods(RIdx(i.as_())).iter() {
                 let mut c: u16 = 0; // production cost
                 let mut cmplt = true;

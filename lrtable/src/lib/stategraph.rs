@@ -63,7 +63,7 @@ where usize: AsPrimitive<StorageT>
         StateGraph{states, edges}
     }
 
-    /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
+    /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
     /// grammar's valid `RIdx`s.
     pub fn iter_stidxs(&self) -> Box<dyn Iterator<Item=StIdx>>
     {

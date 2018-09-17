@@ -101,20 +101,20 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     /// How many productions does this grammar have?
     fn prods_len(&self) -> PIdx<StorageT>;
     /// How many nonterminals does this grammar have?
-    fn nonterms_len(&self) -> RIdx<StorageT>;
+    fn rules_len(&self) -> RIdx<StorageT>;
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> RIdx<StorageT>;
     /// How many terminals does this grammar have?
     fn terms_len(&self) -> TIdx<StorageT>;
 
-    /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
+    /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
     /// grammar's valid `RIdx`s.
     fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=RIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.nonterms_len() and, since nonterms_len() returns an RIdx<StorageT>, then by
+        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::from(self.nonterms_len())).map(|x| RIdx(x.as_())))
+        Box::new((0..usize::from(self.rules_len())).map(|x| RIdx(x.as_())))
     }
 
     /// Return an iterator which produces (in order from `0..self.prods_len()`) all this
@@ -122,7 +122,7 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     fn iter_pidxs(&self) -> Box<dyn Iterator<Item=PIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.nonterms_len() and, since nonterms_len() returns an RIdx<StorageT>, then by
+        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
         Box::new((0..usize::from(self.prods_len())).map(|x| PIdx(x.as_())))
     }
@@ -130,7 +130,7 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     fn iter_tidxs(&self) -> Box<dyn Iterator<Item=TIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.nonterms_len() and, since nonterms_len() returns an TIdx<StorageT>, then by
+        // 0..self.rules_len() and, since rules_len() returns an TIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
         Box::new((0..usize::from(self.terms_len())).map(|x| TIdx(x.as_())))
     }

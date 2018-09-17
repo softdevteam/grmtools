@@ -67,13 +67,13 @@ where usize: AsPrimitive<StorageT>
 {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
-        let mut firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
+        let mut firsts = Vec::with_capacity(usize::from(grm.rules_len()));
         for _ in grm.iter_ntidxs() {
             firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
         }
         let mut firsts = YaccFirsts {
             firsts,
-            epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
+            epsilons: Vob::from_elem(usize::from(grm.rules_len()), false),
             phantom      : PhantomData
         };
 
