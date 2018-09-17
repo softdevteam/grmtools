@@ -520,7 +520,7 @@ pub(crate) mod test {
         }
         let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
         let costs_tidx = costs.iter()
-                              .map(|(k, v)| (grm.term_idx(k).unwrap(), v))
+                              .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
                               .collect::<HashMap<_, _>>();
         let pr = parse_rcvry(rcvry_kind,
                              &grm,
@@ -654,7 +654,7 @@ Call: 'ID' '(' ')';";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
-        let err_tok_id = usize::from(grm.term_idx("ID").unwrap()).to_u16().unwrap();
+        let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
      }
 }

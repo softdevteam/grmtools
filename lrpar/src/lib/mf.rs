@@ -52,7 +52,7 @@ const TRY_PARSE_AT_MOST: usize = 250;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum Repair<StorageT> {
-    /// Insert a `Symbol::Term` with idx `term_idx`.
+    /// Insert a `Symbol::Term` with idx `token_idx`.
     InsertTerm(TIdx<StorageT>),
     /// Delete a symbol.
     Delete,
@@ -437,8 +437,8 @@ where usize: AsPrimitive<StorageT>
         from.iter()
             .map(|y| {
                  match *y {
-                     Repair::InsertTerm(term_idx) =>
-                         ParseRepair::Insert(term_idx),
+                     Repair::InsertTerm(token_idx) =>
+                         ParseRepair::Insert(token_idx),
                      Repair::Delete => ParseRepair::Delete,
                      Repair::Shift => ParseRepair::Shift,
                  }
@@ -833,8 +833,8 @@ mod test {
                     s.push_str("}");
                     out.push(s);
                 },
-                ParseRepair::Insert(term_idx) =>
-                    out.push(format!("Insert \"{}\"", grm.token_name(term_idx).unwrap())),
+                ParseRepair::Insert(token_idx) =>
+                    out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>
@@ -858,52 +858,52 @@ A: '(' A ')'
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
         let s0 = StIdx::from(0u32);
-        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("b").unwrap()), 0);
         assert_eq!(d.dist(s0, grm.eof_token_idx()), 1);
 
         let s1 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx(")").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s1, grm.eof_token_idx()), 0);
 
-        let s2 = sgraph.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u16::max_value());
+        let s2 = sgraph.edge(s0, Symbol::Term(grm.token_idx("a").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s2, grm.eof_token_idx()), 0);
 
-        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), u16::max_value());
+        let s3 = sgraph.edge(s0, Symbol::Term(grm.token_idx("b").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s3, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s3, grm.token_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s3, grm.eof_token_idx()), 0);
 
-        let s5 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("(").unwrap()), 0);
-        assert_eq!(d.dist(s5, grm.term_idx(")").unwrap()), 1);
-        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), 0);
+        let s5 = sgraph.edge(s0, Symbol::Term(grm.token_idx("(").unwrap())).unwrap();
+        assert_eq!(d.dist(s5, grm.token_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.token_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s5, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.token_idx("b").unwrap()), 0);
         assert_eq!(d.dist(s5, grm.eof_token_idx()), 1);
 
         let s6 = sgraph.edge(s5, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s6, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s6, grm.eof_token_idx()), 1);
 
-        let s4 = sgraph.edge(s6, Symbol::Term(grm.term_idx(")").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), u16::max_value());
+        let s4 = sgraph.edge(s6, Symbol::Term(grm.token_idx(")").unwrap())).unwrap();
+        assert_eq!(d.dist(s4, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s4, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.token_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s4, grm.eof_token_idx()), 0);
     }
 
@@ -924,39 +924,39 @@ U: 'B';
         // more interesting edge cases that the example from the Kim/Yi paper.
 
         let s0 = StIdx::from(0u32);
-        assert_eq!(d.dist(s0, grm.term_idx("A").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx("B").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("C").unwrap()), 2);
+        assert_eq!(d.dist(s0, grm.token_idx("A").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("B").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("C").unwrap()), 2);
 
         let s1 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("T").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx("B").unwrap()), 0);
-        assert_eq!(d.dist(s1, grm.term_idx("C").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx("B").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.token_idx("C").unwrap()), 1);
 
         let s2 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("S").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("B").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("C").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("C").unwrap()), u16::max_value());
 
-        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s3, grm.term_idx("B").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("C").unwrap()), 1);
+        let s3 = sgraph.edge(s0, Symbol::Term(grm.token_idx("A").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s3, grm.token_idx("B").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("C").unwrap()), 1);
 
         let s4 = sgraph.edge(s1, Symbol::Rule(grm.rule_idx("U").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx("B").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx("C").unwrap()), 0);
+        assert_eq!(d.dist(s4, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.token_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.token_idx("C").unwrap()), 0);
 
-        let s5 = sgraph.edge(s1, Symbol::Term(grm.term_idx("B").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s5, grm.term_idx("B").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s5, grm.term_idx("C").unwrap()), 0);
+        let s5 = sgraph.edge(s1, Symbol::Term(grm.token_idx("B").unwrap())).unwrap();
+        assert_eq!(d.dist(s5, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s5, grm.token_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s5, grm.token_idx("C").unwrap()), 0);
 
-        let s6 = sgraph.edge(s4, Symbol::Term(grm.term_idx("C").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("B").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("C").unwrap()), u16::max_value());
+        let s6 = sgraph.edge(s4, Symbol::Term(grm.token_idx("C").unwrap())).unwrap();
+        assert_eq!(d.dist(s6, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx("C").unwrap()), u16::max_value());
     }
 
     #[test]
@@ -981,32 +981,32 @@ Factor: '(' Expr ')'
         // more interesting edge cases that the example from the Kim/Yi paper.
 
         let s0 = StIdx::from(0u32);
-        assert_eq!(d.dist(s0, grm.term_idx("+").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("*").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("INT").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("+").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("*").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("INT").unwrap()), 0);
 
-        let s1 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("+").unwrap()), 1);
-        assert_eq!(d.dist(s1, grm.term_idx("*").unwrap()), 1);
-        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), 0);
-        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), 1);
-        assert_eq!(d.dist(s1, grm.term_idx("INT").unwrap()), 0);
+        let s1 = sgraph.edge(s0, Symbol::Term(grm.token_idx("(").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.token_idx("+").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.token_idx("*").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.token_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.token_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.token_idx("INT").unwrap()), 0);
 
         let s2 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("Factor").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("+").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("*").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), 1);
-        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("INT").unwrap()), 1);
+        assert_eq!(d.dist(s2, grm.token_idx("+").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.token_idx("*").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.token_idx("(").unwrap()), 1);
+        assert_eq!(d.dist(s2, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.token_idx("INT").unwrap()), 1);
 
-        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("INT").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("+").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("*").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), 1);
-        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("INT").unwrap()), 1);
+        let s3 = sgraph.edge(s0, Symbol::Term(grm.token_idx("INT").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.token_idx("+").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("*").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("(").unwrap()), 1);
+        assert_eq!(d.dist(s3, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("INT").unwrap()), 1);
     }
 
     #[test]
@@ -1042,43 +1042,43 @@ W: 'b' ;
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
         let s0 = StIdx::from(0u32);
-        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("b").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.eof_token_idx()), 0);
 
         let s1 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("T").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.token_idx("b").unwrap()), 1);
         assert_eq!(d.dist(s1, grm.eof_token_idx()), 0);
 
         let s2 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("S").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("b").unwrap()), u16::max_value());
         assert_eq!(d.dist(s2, grm.eof_token_idx()), 0);
 
-        let s3 = sgraph.edge(s1, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), 1);
-        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), 0);
+        let s3 = sgraph.edge(s1, Symbol::Term(grm.token_idx("a").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.token_idx("a").unwrap()), 1);
+        assert_eq!(d.dist(s3, grm.token_idx("b").unwrap()), 0);
         assert_eq!(d.dist(s3, grm.eof_token_idx()), 1);
 
         let s4 = sgraph.edge(s1, Symbol::Rule(grm.rule_idx("U").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s4, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s4, grm.token_idx("b").unwrap()), 1);
         assert_eq!(d.dist(s4, grm.eof_token_idx()), 0);
 
         let s5 = sgraph.edge(s1, Symbol::Rule(grm.rule_idx("V").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), 1);
-        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.token_idx("a").unwrap()), 1);
+        assert_eq!(d.dist(s5, grm.token_idx("b").unwrap()), 0);
         assert_eq!(d.dist(s5, grm.eof_token_idx()), 1);
 
-        let s6 = sgraph.edge(s5, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), 1);
+        let s6 = sgraph.edge(s5, Symbol::Term(grm.token_idx("b").unwrap())).unwrap();
+        assert_eq!(d.dist(s6, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s6, grm.token_idx("b").unwrap()), 1);
         assert_eq!(d.dist(s6, grm.eof_token_idx()), 0);
 
         let s7 = sgraph.edge(s5, Symbol::Rule(grm.rule_idx("W").unwrap())).unwrap();
-        assert_eq!(d.dist(s7, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s7, grm.term_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s7, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s7, grm.token_idx("b").unwrap()), 1);
         assert_eq!(d.dist(s7, grm.eof_token_idx()), 0);
     }
 
@@ -1182,7 +1182,7 @@ E : 'N'
         }
 
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u32::from(grm.term_idx("N").unwrap()).to_u16().unwrap();
+        let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_all_repairs(&grm,
                           errs[0].repairs(),

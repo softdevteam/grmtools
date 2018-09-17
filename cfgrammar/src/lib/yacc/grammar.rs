@@ -415,7 +415,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the index of the token named `n` or `None` if it doesn't exist.
-    pub fn term_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
+    pub fn token_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
         self.token_names.iter()
                        .position(|x| x.as_ref().map_or(false, |x| x == n))
                        // The call to as_() is safe because token_names is guaranteed to be small
@@ -763,8 +763,8 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
-                                 Symbol::Term(term_idx) =>
-                                     u16::from(term_costs[usize::from(term_idx)]),
+                                 Symbol::Term(token_idx) =>
+                                     u16::from(term_costs[usize::from(token_idx)]),
                                  Symbol::Rule(nt_idx) => {
                                      if !done[usize::from(nt_idx)] {
                                          cmplt = false;
@@ -836,8 +836,8 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
-                                 Symbol::Term(term_idx) =>
-                                     u16::from(term_costs[usize::from(term_idx)]),
+                                 Symbol::Term(token_idx) =>
+                                     u16::from(term_costs[usize::from(token_idx)]),
                                  Symbol::Rule(nt_idx) => {
                                      if costs[usize::from(nt_idx)] == u16::max_value() {
                                          // As soon as we find reference to an infinite rule, we
@@ -925,13 +925,13 @@ mod test {
         assert_eq!(grm.implicit_rule(), None);
         grm.rule_idx("^").unwrap();
         grm.rule_idx("R").unwrap();
-        grm.term_idx("T").unwrap();
+        grm.token_idx("T").unwrap();
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(1)], vec![PIdx(0)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Rule(grm.rule_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);
-        assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
+        assert_eq!(*r_prod, [Symbol::Term(grm.token_idx("T").unwrap())]);
         assert_eq!(grm.prods_rules, vec![RIdx(1), RIdx(0)]);
 
         assert_eq!(grm.tokens_map(),
@@ -950,7 +950,7 @@ mod test {
         grm.rule_idx("^").unwrap();
         grm.rule_idx("R").unwrap();
         grm.rule_idx("S").unwrap();
-        grm.term_idx("T").unwrap();
+        grm.token_idx("T").unwrap();
         assert!(grm.token_name(grm.eof_token_idx()).is_none());
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
@@ -963,7 +963,7 @@ mod test {
         assert_eq!(r_prod[0], Symbol::Rule(grm.rule_idx("S").unwrap()));
         let s_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("S").unwrap())][0]);
         assert_eq!(s_prod.len(), 1);
-        assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T").unwrap()));
+        assert_eq!(s_prod[0], Symbol::Term(grm.token_idx("T").unwrap()));
     }
 
     #[test]
@@ -974,8 +974,8 @@ mod test {
         grm.rule_idx("^").unwrap();
         grm.rule_idx("R").unwrap();
         grm.rule_idx("S").unwrap();
-        grm.term_idx("T1").unwrap();
-        grm.term_idx("T2").unwrap();
+        grm.token_idx("T1").unwrap();
+        grm.token_idx("T2").unwrap();
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
                                          vec![PIdx(0)],
@@ -988,11 +988,11 @@ mod test {
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);
         assert_eq!(r_prod.len(), 3);
         assert_eq!(r_prod[0], Symbol::Rule(grm.rule_idx("S").unwrap()));
-        assert_eq!(r_prod[1], Symbol::Term(grm.term_idx("T1").unwrap()));
+        assert_eq!(r_prod[1], Symbol::Term(grm.token_idx("T1").unwrap()));
         assert_eq!(r_prod[2], Symbol::Rule(grm.rule_idx("S").unwrap()));
         let s_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("S").unwrap())][0]);
         assert_eq!(s_prod.len(), 1);
-        assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T2").unwrap()));
+        assert_eq!(s_prod[0], Symbol::Term(grm.token_idx("T2").unwrap()));
     }
 
     #[test]
@@ -1101,7 +1101,7 @@ mod test {
 
         let s_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][0])];
         assert_eq!(s_prod1.len(), 2);
-        assert_eq!(s_prod1[0], Symbol::Term(grm.term_idx("a").unwrap()));
+        assert_eq!(s_prod1[0], Symbol::Term(grm.token_idx("a").unwrap()));
         assert_eq!(s_prod1[1], Symbol::Rule(grm.rule_idx(IMPLICIT_RULE).unwrap()));
 
         let s_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][1])];
@@ -1113,7 +1113,7 @@ mod test {
 
         let t_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][0])];
         assert_eq!(t_prod1.len(), 2);
-        assert_eq!(t_prod1[0], Symbol::Term(grm.term_idx("c").unwrap()));
+        assert_eq!(t_prod1[0], Symbol::Term(grm.token_idx("c").unwrap()));
         assert_eq!(t_prod1[1], Symbol::Rule(grm.rule_idx(IMPLICIT_RULE).unwrap()));
 
         let t_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][1])];
@@ -1128,9 +1128,9 @@ mod test {
         assert_eq!(i_prod2.len(), 2);
         // We don't know what order the implicit rule will contain our tokens in,
         // hence the awkward dance below.
-        let cnd1 = vec![Symbol::Term(grm.term_idx("ws1").unwrap()),
+        let cnd1 = vec![Symbol::Term(grm.token_idx("ws1").unwrap()),
                         Symbol::Rule(grm.implicit_rule().unwrap())];
-        let cnd2 = vec![Symbol::Term(grm.term_idx("ws2").unwrap()),
+        let cnd2 = vec![Symbol::Term(grm.token_idx("ws2").unwrap()),
                         Symbol::Rule(grm.implicit_rule().unwrap())];
         assert!((*i_prod1 == cnd1 && *i_prod2 == cnd2) || (*i_prod1 == cnd2 && *i_prod2 == cnd1));
         let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];
@@ -1196,7 +1196,7 @@ mod test {
         let find = |nt_name: &str, str_cnds: Vec<Vec<&str>>| {
             let cnds = str_cnds.iter()
                                .map(|x| x.iter()
-                                         .map(|y| grm.term_idx(y)
+                                         .map(|y| grm.token_idx(y)
                                                      .unwrap())
                                          .collect::<Vec<_>>())
                                .collect::<Vec<_>>();

@@ -280,8 +280,8 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
-    pub fn action(&self, state_idx: StIdx, term_idx: TIdx<StorageT>) -> Option<Action<StorageT>> {
-        let off = actions_offset(self.tokens_len, state_idx, term_idx);
+    pub fn action(&self, state_idx: StIdx, token_idx: TIdx<StorageT>) -> Option<Action<StorageT>> {
+        let off = actions_offset(self.tokens_len, state_idx, token_idx);
         self.actions.get(&off).and_then(|x| Some(*x))
     }
 
@@ -341,10 +341,10 @@ where usize: AsPrimitive<StorageT>
 }
 
 fn actions_offset<StorageT: PrimInt + Unsigned>
-                 (tokens_len: TIdx<StorageT>, st_idx: StIdx, term_idx: TIdx<StorageT>)
+                 (tokens_len: TIdx<StorageT>, st_idx: StIdx, token_idx: TIdx<StorageT>)
                -> StIdxStorageT
 {
-    StIdxStorageT::from(st_idx) * StIdxStorageT::from(tokens_len) + StIdxStorageT::from(term_idx)
+    StIdxStorageT::from(st_idx) * StIdxStorageT::from(tokens_len) + StIdxStorageT::from(token_idx)
 }
 
 pub struct StateActionsIterator<'a, StorageT> {
@@ -461,9 +461,9 @@ mod test {
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s2 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Term").unwrap())).unwrap();
         let s3 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Factor").unwrap())).unwrap();
-        let s4 = sg.edge(s0, Symbol::Term(grm.term_idx("id").unwrap())).unwrap();
-        let s5 = sg.edge(s2, Symbol::Term(grm.term_idx("-").unwrap())).unwrap();
-        let s6 = sg.edge(s3, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
+        let s4 = sg.edge(s0, Symbol::Term(grm.token_idx("id").unwrap())).unwrap();
+        let s5 = sg.edge(s2, Symbol::Term(grm.token_idx("-").unwrap())).unwrap();
+        let s6 = sg.edge(s3, Symbol::Term(grm.token_idx("*").unwrap())).unwrap();
         let s7 = sg.edge(s5, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s8 = sg.edge(s6, Symbol::Rule(grm.rule_idx("Term").unwrap())).unwrap();
 
@@ -476,30 +476,30 @@ mod test {
             assert_eq!(st.action(state_i, term_i).unwrap(), Action::Reduce(prod_i.into()));
         };
 
-        assert_eq!(st.action(s0, grm.term_idx("id").unwrap()).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s0, grm.token_idx("id").unwrap()).unwrap(), Action::Shift(s4));
         assert_eq!(st.action(s1, grm.eof_token_idx()).unwrap(), Action::Accept);
         assert_eq!(st.final_state, s1);
-        assert_eq!(st.action(s2, grm.term_idx("-").unwrap()).unwrap(), Action::Shift(s5));
+        assert_eq!(st.action(s2, grm.token_idx("-").unwrap()).unwrap(), Action::Shift(s5));
         assert_reduce(s2, grm.eof_token_idx(), "Expr", 1);
-        assert_reduce(s3, grm.term_idx("-").unwrap(), "Term", 1);
-        assert_eq!(st.action(s3, grm.term_idx("*").unwrap()).unwrap(), Action::Shift(s6));
+        assert_reduce(s3, grm.token_idx("-").unwrap(), "Term", 1);
+        assert_eq!(st.action(s3, grm.token_idx("*").unwrap()).unwrap(), Action::Shift(s6));
         assert_reduce(s3, grm.eof_token_idx(), "Term", 1);
-        assert_reduce(s4, grm.term_idx("-").unwrap(), "Factor", 0);
-        assert_reduce(s4, grm.term_idx("*").unwrap(), "Factor", 0);
+        assert_reduce(s4, grm.token_idx("-").unwrap(), "Factor", 0);
+        assert_reduce(s4, grm.token_idx("*").unwrap(), "Factor", 0);
         assert_reduce(s4, grm.eof_token_idx(), "Factor", 0);
-        assert_eq!(st.action(s5, grm.term_idx("id").unwrap()).unwrap(), Action::Shift(s4));
-        assert_eq!(st.action(s6, grm.term_idx("id").unwrap()).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s5, grm.token_idx("id").unwrap()).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s6, grm.token_idx("id").unwrap()).unwrap(), Action::Shift(s4));
         assert_reduce(s7, grm.eof_token_idx(), "Expr", 0);
-        assert_reduce(s8, grm.term_idx("-").unwrap(), "Term", 0);
+        assert_reduce(s8, grm.token_idx("-").unwrap(), "Term", 0);
         assert_reduce(s8, grm.eof_token_idx(), "Term", 0);
 
         let mut s4_actions = HashSet::new();
-        s4_actions.extend(&[grm.term_idx("-").unwrap(),
-                            grm.term_idx("*").unwrap(),
+        s4_actions.extend(&[grm.token_idx("-").unwrap(),
+                            grm.token_idx("*").unwrap(),
                             grm.eof_token_idx()]);
         assert_eq!(st.state_actions(s4).collect::<HashSet<_>>(), s4_actions);
 
-        let s2_state_shifts = &[grm.term_idx("-").unwrap()]
+        let s2_state_shifts = &[grm.token_idx("-").unwrap()]
                                .iter()
                                .cloned()
                                .collect::<HashSet<_>>();
@@ -538,9 +538,9 @@ mod test {
 
         // We only extract the states necessary to test those rules affected by the reduce/reduce.
         let s0 = StIdx(0);
-        let s4 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        let s4 = sg.edge(s0, Symbol::Term(grm.token_idx("a").unwrap())).unwrap();
 
-        assert_eq!(st.action(s4, grm.term_idx("x").unwrap()).unwrap(),
+        assert_eq!(st.action(s4, grm.token_idx("x").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("B").unwrap())[0]));
     }
 
@@ -559,16 +559,16 @@ mod test {
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
-        let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
+        let s3 = sg.edge(s1, Symbol::Term(grm.token_idx("+").unwrap())).unwrap();
+        let s4 = sg.edge(s1, Symbol::Term(grm.token_idx("*").unwrap())).unwrap();
         let s5 = sg.edge(s4, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s6 = sg.edge(s3, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
 
-        assert_eq!(st.action(s5, grm.term_idx("+").unwrap()).unwrap(), Action::Shift(s3));
-        assert_eq!(st.action(s5, grm.term_idx("*").unwrap()).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s5, grm.token_idx("+").unwrap()).unwrap(), Action::Shift(s3));
+        assert_eq!(st.action(s5, grm.token_idx("*").unwrap()).unwrap(), Action::Shift(s4));
 
-        assert_eq!(st.action(s6, grm.term_idx("+").unwrap()).unwrap(), Action::Shift(s3));
-        assert_eq!(st.action(s6, grm.term_idx("*").unwrap()).unwrap(), Action::Shift(s4));
+        assert_eq!(st.action(s6, grm.token_idx("+").unwrap()).unwrap(), Action::Shift(s3));
+        assert_eq!(st.action(s6, grm.token_idx("*").unwrap()).unwrap(), Action::Shift(s4));
     }
 
     #[test]
@@ -587,12 +587,12 @@ mod test {
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
         let s0 = StIdx(0);
-        let s1 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
-        let s2 = sg.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s1 = sg.edge(s0, Symbol::Term(grm.token_idx("a").unwrap())).unwrap();
+        let s2 = sg.edge(s0, Symbol::Term(grm.token_idx("b").unwrap())).unwrap();
 
-        assert_eq!(st.action(s1, grm.term_idx("c").unwrap()).unwrap(),
+        assert_eq!(st.action(s1, grm.token_idx("c").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("A").unwrap())[0]));
-        assert_eq!(st.action(s2, grm.term_idx("c").unwrap()).unwrap(),
+        assert_eq!(st.action(s2, grm.token_idx("c").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("B").unwrap())[1]));
     }
 
@@ -613,21 +613,21 @@ mod test {
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
-        let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
+        let s3 = sg.edge(s1, Symbol::Term(grm.token_idx("+").unwrap())).unwrap();
+        let s4 = sg.edge(s1, Symbol::Term(grm.token_idx("*").unwrap())).unwrap();
         let s5 = sg.edge(s4, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s6 = sg.edge(s3, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
 
-        assert_eq!(st.action(s5, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s5, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
-        assert_eq!(st.action(s5, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s5, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s5, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
 
-        assert_eq!(st.action(s6, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s6, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));
-        assert_eq!(st.action(s6, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s6, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Shift(s4));
         assert_eq!(st.action(s6, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));
@@ -652,36 +652,36 @@ mod test {
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
-        let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
-        let s5 = sg.edge(s1, Symbol::Term(grm.term_idx("=").unwrap())).unwrap();
+        let s3 = sg.edge(s1, Symbol::Term(grm.token_idx("+").unwrap())).unwrap();
+        let s4 = sg.edge(s1, Symbol::Term(grm.token_idx("*").unwrap())).unwrap();
+        let s5 = sg.edge(s1, Symbol::Term(grm.token_idx("=").unwrap())).unwrap();
         let s6 = sg.edge(s5, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s7 = sg.edge(s4, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s8 = sg.edge(s3, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
 
-        assert_eq!(st.action(s6, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s6, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Shift(s3));
-        assert_eq!(st.action(s6, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s6, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Shift(s4));
-        assert_eq!(st.action(s6, grm.term_idx("=").unwrap()).unwrap(),
+        assert_eq!(st.action(s6, grm.token_idx("=").unwrap()).unwrap(),
                    Action::Shift(s5));
         assert_eq!(st.action(s6, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[2]));
 
-        assert_eq!(st.action(s7, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s7, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
-        assert_eq!(st.action(s7, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s7, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
-        assert_eq!(st.action(s7, grm.term_idx("=").unwrap()).unwrap(),
+        assert_eq!(st.action(s7, grm.token_idx("=").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s7, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
 
-        assert_eq!(st.action(s8, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s8, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));
-        assert_eq!(st.action(s8, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s8, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Shift(s4));
-        assert_eq!(st.action(s8, grm.term_idx("=").unwrap()).unwrap(),
+        assert_eq!(st.action(s8, grm.token_idx("=").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));
         assert_eq!(st.action(s8, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));
@@ -708,53 +708,53 @@ mod test {
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
-        let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
-        let s5 = sg.edge(s1, Symbol::Term(grm.term_idx("=").unwrap())).unwrap();
-        let s6 = sg.edge(s1, Symbol::Term(grm.term_idx("~").unwrap())).unwrap();
+        let s3 = sg.edge(s1, Symbol::Term(grm.token_idx("+").unwrap())).unwrap();
+        let s4 = sg.edge(s1, Symbol::Term(grm.token_idx("*").unwrap())).unwrap();
+        let s5 = sg.edge(s1, Symbol::Term(grm.token_idx("=").unwrap())).unwrap();
+        let s6 = sg.edge(s1, Symbol::Term(grm.token_idx("~").unwrap())).unwrap();
         let s7 = sg.edge(s6, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s8 = sg.edge(s5, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s9 = sg.edge(s4, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s10 = sg.edge(s3, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
 
-        assert_eq!(st.action(s7, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s7, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[3]));
-        assert_eq!(st.action(s7, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s7, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[3]));
-        assert_eq!(st.action(s7, grm.term_idx("=").unwrap()).unwrap(),
+        assert_eq!(st.action(s7, grm.token_idx("=").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[3]));
         assert_eq!(st.action(s7, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[3]));
 
-        assert_eq!(st.action(s8, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s8, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Shift(s3));
-        assert_eq!(st.action(s8, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s8, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Shift(s4));
-        assert_eq!(st.action(s8, grm.term_idx("=").unwrap()).unwrap(),
+        assert_eq!(st.action(s8, grm.token_idx("=").unwrap()).unwrap(),
                    Action::Shift(s5));
-        assert_eq!(st.action(s8, grm.term_idx("~").unwrap()).unwrap(),
+        assert_eq!(st.action(s8, grm.token_idx("~").unwrap()).unwrap(),
                    Action::Shift(s6));
         assert_eq!(st.action(s8, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[2]));
 
-        assert_eq!(st.action(s9, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s9, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
-        assert_eq!(st.action(s9, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s9, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
-        assert_eq!(st.action(s9, grm.term_idx("=").unwrap()).unwrap(),
+        assert_eq!(st.action(s9, grm.token_idx("=").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
-        assert_eq!(st.action(s9, grm.term_idx("~").unwrap()).unwrap(),
+        assert_eq!(st.action(s9, grm.token_idx("~").unwrap()).unwrap(),
                    Action::Shift(s6));
         assert_eq!(st.action(s9, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
 
-        assert_eq!(st.action(s10, grm.term_idx("+").unwrap()).unwrap(),
+        assert_eq!(st.action(s10, grm.token_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));
-        assert_eq!(st.action(s10, grm.term_idx("*").unwrap()).unwrap(),
+        assert_eq!(st.action(s10, grm.token_idx("*").unwrap()).unwrap(),
                    Action::Shift(s4));
-        assert_eq!(st.action(s10, grm.term_idx("=").unwrap()).unwrap(),
+        assert_eq!(st.action(s10, grm.token_idx("=").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));
-        assert_eq!(st.action(s10, grm.term_idx("~").unwrap()).unwrap(),
+        assert_eq!(st.action(s10, grm.token_idx("~").unwrap()).unwrap(),
                    Action::Shift(s6));
         assert_eq!(st.action(s10, grm.eof_token_idx()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));

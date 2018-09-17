@@ -288,7 +288,7 @@ mod test {
 
         is = Itemset::new(&grm);
         la = Vob::from_elem(usize::from(grm.tokens_len()), false);
-        la.set(usize::from(grm.term_idx("b").unwrap()), true);
+        la.set(usize::from(grm.token_idx("b").unwrap()), true);
         la.set(usize::from(grm.eof_token_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("S").unwrap())[1], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
@@ -298,7 +298,7 @@ mod test {
 
         is = Itemset::new(&grm);
         la = Vob::from_elem(usize::from(grm.tokens_len()), false);
-        la.set(usize::from(grm.term_idx("a").unwrap()), true);
+        la.set(usize::from(grm.token_idx("a").unwrap()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("A").unwrap())[0], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, SIdx(0), vec!["b", "c"]);
@@ -321,11 +321,11 @@ mod test {
         state_exists(&grm, &goto1, "S", 0, SIdx(1), vec!["$", "b"]);
 
         // follow 'b' from start set
-        let goto2 = cls_is.goto(&grm, &Symbol::Term(grm.term_idx("b").unwrap()));
+        let goto2 = cls_is.goto(&grm, &Symbol::Term(grm.token_idx("b").unwrap()));
         state_exists(&grm, &goto2, "S", 1, SIdx(1), vec!["$", "b"]);
 
         // continue by following 'a' from last goto, after it's been closed
-        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Term(grm.term_idx("a").unwrap()));
+        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Term(grm.token_idx("a").unwrap()));
         state_exists(&grm, &goto3, "A", 1, SIdx(1), vec!["a"]);
         state_exists(&grm, &goto3, "A", 2, SIdx(1), vec!["a"]);
     }

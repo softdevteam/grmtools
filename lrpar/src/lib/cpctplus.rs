@@ -48,7 +48,7 @@ const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum Repair<StorageT> {
-    /// Insert a `Symbol::Term` with idx `term_idx`.
+    /// Insert a `Symbol::Term` with idx `token_idx`.
     InsertTerm(TIdx<StorageT>),
     /// Delete a symbol.
     Delete,
@@ -409,8 +409,8 @@ where usize: AsPrimitive<StorageT>
         from.iter()
             .map(|y| {
                  match *y {
-                     Repair::InsertTerm(term_idx) =>
-                         ParseRepair::Insert(term_idx),
+                     Repair::InsertTerm(token_idx) =>
+                         ParseRepair::Insert(token_idx),
                      Repair::Delete => ParseRepair::Delete,
                      Repair::Shift => ParseRepair::Shift,
                  }
@@ -455,8 +455,8 @@ mod test {
         for r in repairs.iter() {
             match *r {
                 ParseRepair::InsertSeq{..} => panic!("Internal error"),
-                ParseRepair::Insert(term_idx) =>
-                    out.push(format!("Insert \"{}\"", grm.token_name(term_idx).unwrap())),
+                ParseRepair::Insert(token_idx) =>
+                    out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>
@@ -535,7 +535,7 @@ E : 'N'
         }
 
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u32::from(grm.term_idx("N").unwrap()).to_u16().unwrap();
+        let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_all_repairs(&grm,
                           errs[0].repairs(),
