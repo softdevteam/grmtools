@@ -139,7 +139,7 @@ pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigne
                      -> Box<Recoverer<StorageT> + 'a>
            where usize: AsPrimitive<StorageT>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.token_cost);
     Box::new(MF{dist, parser})
 }
 
@@ -274,12 +274,12 @@ where usize: AsPrimitive<StorageT>
             };
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx)));
             if let Some(d) = self.dyn_dist(&n_repairs, t_st_idx, n.la_idx) {
-                assert!(n.cg == 0 || d >= n.cg - u16::from((self.parser.term_cost)(t_idx)));
+                assert!(n.cg == 0 || d >= n.cg - u16::from((self.parser.token_cost)(t_idx)));
                 let nn = PathFNode{
                     pstack: n.pstack.child(t_st_idx),
                     la_idx: n.la_idx,
                     repairs: n_repairs,
-                    cf: n.cf.checked_add(u16::from((self.parser.term_cost)(t_idx))).unwrap(),
+                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(t_idx))).unwrap(),
                     cg: d};
                 nbrs.push((nn.cf, nn.cg, nn));
             }
@@ -350,7 +350,7 @@ where usize: AsPrimitive<StorageT>
         let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Delete));
         if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.la_idx + 1) {
             let la_tidx = self.parser.next_tidx(n.la_idx);
-            let cost = (self.parser.term_cost)(la_tidx);
+            let cost = (self.parser.token_cost)(la_tidx);
             let nn = PathFNode{pstack: n.pstack.clone(),
                                la_idx: n.la_idx + 1,
                                repairs: n_repairs,
@@ -472,7 +472,7 @@ where usize: AsPrimitive<StorageT>
 
         // Now we deal with the "main" case: dealing with distances in the face of possible
         // deletions. Imagine that there are two lexemes starting at position la_idx: (in order) T
-        // and U, both with a term_cost of 1. Assume the dist() from st_idx to T is 2 and the
+        // and U, both with a token_cost of 1. Assume the dist() from st_idx to T is 2 and the
         // dist() from st_idx to U is 0. If we delete T then the distance to U is 1, which is a
         // shorter distance than T. We therefore need to return a distance of 1, even though that
         // is the distance to the second lexeme.
@@ -490,7 +490,7 @@ where usize: AsPrimitive<StorageT>
             if d < u16::max_value() && dc + d < ld {
                 ld = dc + d;
             }
-            dc += u16::from((self.parser.term_cost)(t_idx));
+            dc += u16::from((self.parser.token_cost)(t_idx));
             if dc >= ld {
                 // Once the cumulative cost of deleting lexemes is bigger than the current least
                 // distance, there is no chance of finding a subsequent lexeme which could produce
@@ -642,7 +642,7 @@ where usize: AsPrimitive<StorageT>
                      (grm: &YaccGrammar<StorageT>,
                       sgraph: &StateGraph<StorageT>,
                       stable: &StateTable<StorageT>,
-                      term_cost: F)
+                      token_cost: F)
                    -> Dist<StorageT>
                    where F: Fn(TIdx<StorageT>) -> u8
     {
@@ -657,7 +657,7 @@ where usize: AsPrimitive<StorageT>
 
         let tokens_len = usize::from(grm.tokens_len());
         let states_len = usize::from(sgraph.all_states_len());
-        let sengen = grm.sentence_generator(&term_cost);
+        let sengen = grm.sentence_generator(&token_cost);
         let goto_states = Dist::goto_states(grm, sgraph, stable);
 
         let mut table = Vec::new();
@@ -676,7 +676,7 @@ where usize: AsPrimitive<StorageT>
                                 table[off] = 0;
                                 chgd = true;
                             }
-                            u16::from(term_cost(t_idx))
+                            u16::from(token_cost(t_idx))
                         }
                     };
 

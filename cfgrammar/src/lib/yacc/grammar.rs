@@ -460,13 +460,13 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return a `SentenceGenerator` which can then generate minimal sentences for any non-term
-    /// based on the user-defined `term_cost` function which gives the associated cost for
+    /// based on the user-defined `token_cost` function which gives the associated cost for
     /// generating each token (where the cost must be greater than 0). Note that multiple
     /// tokens can have the same score. The simplest cost function is thus `|_| 1`.
-    pub fn sentence_generator<F>(&self, term_cost: F) -> SentenceGenerator<StorageT>
+    pub fn sentence_generator<F>(&self, token_cost: F) -> SentenceGenerator<StorageT>
                         where F: Fn(TIdx<StorageT>) -> u8
     {
-        SentenceGenerator::new(self, term_cost)
+        SentenceGenerator::new(self, token_cost)
     }
 
     /// Return a `YaccFirsts` struct, allowing static dispatch (rather than the `firsts()` method,
@@ -527,21 +527,21 @@ pub struct SentenceGenerator<'a, StorageT: 'a> {
     grm: &'a YaccGrammar<StorageT>,
     rule_min_costs: RefCell<Option<Vec<u16>>>,
     rule_max_costs: RefCell<Option<Vec<u16>>>,
-    term_costs: Vec<u8>
+    token_costs: Vec<u8>
 }
 
 impl<'a, StorageT: 'static + PrimInt + Unsigned> SentenceGenerator<'a, StorageT>
 where usize: AsPrimitive<StorageT>
 {
-    fn new<F>(grm: &'a YaccGrammar<StorageT>, term_cost: F) -> Self
+    fn new<F>(grm: &'a YaccGrammar<StorageT>, token_cost: F) -> Self
         where F: Fn(TIdx<StorageT>) -> u8
     {
-        let mut term_costs = Vec::with_capacity(usize::from(grm.tokens_len()));
+        let mut token_costs = Vec::with_capacity(usize::from(grm.tokens_len()));
         for tidx in grm.iter_tidxs() {
-            term_costs.push(term_cost(tidx));
+            token_costs.push(token_cost(tidx));
         }
         SentenceGenerator{grm,
-                          term_costs,
+                          token_costs,
                           rule_min_costs: RefCell::new(None),
                           rule_max_costs: RefCell::new(None)}
     }
@@ -552,7 +552,7 @@ where usize: AsPrimitive<StorageT>
     pub fn min_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> u16 {
         self.rule_min_costs.borrow_mut()
                               .get_or_insert_with(|| rule_min_costs(self.grm,
-                                                                       &self.term_costs))
+                                                                       &self.token_costs))
                               [usize::from(rule_idx)]
     }
 
@@ -562,7 +562,7 @@ where usize: AsPrimitive<StorageT>
     pub fn max_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> Option<u16> {
         let v = self.rule_max_costs.borrow_mut()
                                       .get_or_insert_with(||
-                                           rule_max_costs(self.grm, &self.term_costs))
+                                           rule_max_costs(self.grm, &self.token_costs))
                                       [usize::from(rule_idx)];
         if v == u16::max_value() {
             None
@@ -582,7 +582,7 @@ where usize: AsPrimitive<StorageT>
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Rule(i) => self.min_sentence_cost(i),
-                        Symbol::Term(i)    => u16::from(self.term_costs[usize::from(i)])
+                        Symbol::Term(i)    => u16::from(self.token_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc < low_sc.unwrap() {
@@ -623,7 +623,7 @@ where usize: AsPrimitive<StorageT>
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Rule(i) => self.min_sentence_cost(i),
-                        Symbol::Term(i)    => u16::from(self.term_costs[usize::from(i)])
+                        Symbol::Term(i)    => u16::from(self.token_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc <= low_sc.unwrap() {
@@ -716,9 +716,9 @@ where usize: AsPrimitive<StorageT>
 }
 
 /// Return the cost of a minimal string for each rule in this grammar. The cost of a
-/// token is specified by the user-defined `term_cost` function.
+/// token is specified by the user-defined `token_cost` function.
 fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
-                    (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
+                    (grm: &YaccGrammar<StorageT>, token_costs: &[u8]) -> Vec<u16>
               where usize: AsPrimitive<StorageT>
 {
     // We use a simple(ish) fixed-point algorithm to determine costs. We maintain two lists
@@ -764,7 +764,7 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
                                  Symbol::Term(token_idx) =>
-                                     u16::from(term_costs[usize::from(token_idx)]),
+                                     u16::from(token_costs[usize::from(token_idx)]),
                                  Symbol::Rule(nt_idx) => {
                                      if !done[usize::from(nt_idx)] {
                                          cmplt = false;
@@ -801,9 +801,9 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
 
 /// Return the cost of the maximal string for each rule in this grammar (u32::max_val()
 /// representing "this rule can generate strings of infinite length"). The cost of a
-/// token is specified by the user-defined `term_cost` function.
+/// token is specified by the user-defined `token_cost` function.
 fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
-                    (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
+                    (grm: &YaccGrammar<StorageT>, token_costs: &[u8]) -> Vec<u16>
                where usize: AsPrimitive<StorageT>
 {
     let mut done = vec![];
@@ -837,7 +837,7 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
                                  Symbol::Term(token_idx) =>
-                                     u16::from(term_costs[usize::from(token_idx)]),
+                                     u16::from(token_costs[usize::from(token_idx)]),
                                  Symbol::Rule(nt_idx) => {
                                      if costs[usize::from(nt_idx)] == u16::max_value() {
                                          // As soon as we find reference to an infinite rule, we

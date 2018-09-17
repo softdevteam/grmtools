@@ -93,7 +93,7 @@ pub(crate) type Errors<StorageT> = Vec<ParseError<StorageT>>;
 pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
     pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar<StorageT>,
-    pub term_cost: &'a Fn(TIdx<StorageT>) -> u8,
+    pub token_cost: &'a Fn(TIdx<StorageT>) -> u8,
     pub sgraph: &'a StateGraph<StorageT>,
     pub stable: &'a StateTable<StorageT>,
     pub lexemes: &'a [Lexeme<StorageT>]
@@ -105,7 +105,7 @@ where usize: AsPrimitive<StorageT>
 {
     fn parse<F>(rcvry_kind: RecoveryKind,
                 grm: &YaccGrammar<StorageT>,
-                term_cost: F,
+                token_cost: F,
                 sgraph: &StateGraph<StorageT>,
                 stable: &StateTable<StorageT>,
                 lexemes: &[Lexeme<StorageT>])
@@ -114,9 +114,9 @@ where usize: AsPrimitive<StorageT>
           where F: Fn(TIdx<StorageT>) -> u8
     {
         for tidx in grm.iter_tidxs() {
-            assert!(term_cost(tidx) > 0);
+            assert!(token_cost(tidx) > 0);
         }
-        let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
+        let psr = Parser{rcvry_kind, grm, token_cost: &token_cost, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0u32)];
         let mut tstack: Vec<Node<StorageT>> = Vec::new();
         let mut errors: Vec<ParseError<StorageT>> = Vec::new();
@@ -414,7 +414,7 @@ pub fn parse_rcvry
        <StorageT: 'static + Debug + Hash + PrimInt + Unsigned, F>
        (rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
-        term_cost: F,
+        token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexemes: &[Lexeme<StorageT>])
@@ -422,7 +422,7 @@ pub fn parse_rcvry
     where F: Fn(TIdx<StorageT>) -> u8,
           usize: AsPrimitive<StorageT>
 {
-    Parser::parse(rcvry_kind, grm, term_cost, sgraph, stable, lexemes)
+    Parser::parse(rcvry_kind, grm, token_cost, sgraph, stable, lexemes)
 }
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry

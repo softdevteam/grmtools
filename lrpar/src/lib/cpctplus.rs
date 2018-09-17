@@ -285,7 +285,7 @@ where usize: AsPrimitive<StorageT>
                     pstack: n_pstack,
                     la_idx: n.la_idx,
                     repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx))),
-                    cf: n.cf.checked_add(u16::from((self.parser.term_cost)(t_idx))).unwrap()};
+                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(t_idx))).unwrap()};
                 nbrs.push((nn.cf, nn));
             }
         }
@@ -300,7 +300,7 @@ where usize: AsPrimitive<StorageT>
         }
 
         let la_tidx = self.parser.next_tidx(n.la_idx);
-        let cost = (self.parser.term_cost)(la_tidx);
+        let cost = (self.parser.token_cost)(la_tidx);
         let nn = PathFNode{pstack: n.pstack.clone(),
                            la_idx: n.la_idx + 1,
                            repairs: n.repairs.child(RepairMerge::Repair(Repair::Delete)),
