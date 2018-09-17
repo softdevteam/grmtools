@@ -84,7 +84,7 @@ where usize: AsPrimitive<StorageT>
             let mut changed = false;
             for rul_i in grm.iter_rules() {
                 // For each rule E
-                for prod_i in grm.nonterm_to_prods(rul_i).iter() {
+                for prod_i in grm.rule_to_prods(rul_i).iter() {
                     // ...and each production A
                     let prod = grm.prod(*prod_i);
                     if prod.is_empty() {

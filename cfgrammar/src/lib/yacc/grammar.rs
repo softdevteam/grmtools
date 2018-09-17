@@ -338,7 +338,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the productions for rule `i`. Panics if `i` doesn't exist.
-    pub fn nonterm_to_prods(&self, i: RIdx<StorageT>) -> &[PIdx<StorageT>] {
+    pub fn rule_to_prods(&self, i: RIdx<StorageT>) -> &[PIdx<StorageT>] {
         &self.rules_prods[usize::from(i)]
     }
 
@@ -445,7 +445,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                 seen[usize::from(ntidx)] = true;
                 todo[usize::from(ntidx)] = false;
                 empty = false;
-                for p_idx in self.nonterm_to_prods(ntidx).iter() {
+                for p_idx in self.rule_to_prods(ntidx).iter() {
                     for sym in self.prod(*p_idx) {
                         if let Symbol::Nonterm(pt_ntidx) = *sym {
                             if pt_ntidx == to {
@@ -582,7 +582,7 @@ where usize: AsPrimitive<StorageT>
         let cheapest_prod = |nt_idx: RIdx<StorageT>| -> PIdx<StorageT> {
             let mut low_sc = None;
             let mut low_idx = None;
-            for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
+            for &pidx in self.grm.rule_to_prods(nt_idx).iter() {
                 let mut sc = 0;
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
@@ -623,7 +623,7 @@ where usize: AsPrimitive<StorageT>
         let cheapest_prods = |nt_idx: RIdx<StorageT>| -> Vec<PIdx<StorageT>> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
-            for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
+            for &pidx in self.grm.rule_to_prods(nt_idx).iter() {
                 let mut sc = 0;
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
@@ -763,7 +763,7 @@ fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
             let mut ls_noncmplt = None; // lowest non-completed cost
             // The call to as_() is guaranteed safe because done.len() == grm.rules_len(), and
             // we guarantee that grm.rules_len() can fit in StorageT.
-            for p_idx in grm.nonterm_to_prods(RIdx(i.as_())).iter() {
+            for p_idx in grm.rule_to_prods(RIdx(i.as_())).iter() {
                 let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
@@ -836,7 +836,7 @@ fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
             let mut hs_noncmplt = None; // highest non-completed cost
             // The call to as_() is guaranteed safe because done.len() == grm.rules_len(), and
             // we guarantee that grm.rules_len() can fit in StorageT.
-            'a: for p_idx in grm.nonterm_to_prods(RIdx(i.as_())).iter() {
+            'a: for p_idx in grm.rule_to_prods(RIdx(i.as_())).iter() {
                 let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {

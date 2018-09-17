@@ -220,7 +220,7 @@ pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>
                     la: Vec<&str>)
 where usize: AsPrimitive<StorageT>
 {
-    let ab_prod_off = grm.nonterm_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
+    let ab_prod_off = grm.rule_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot)];
     for tidx in grm.iter_tidxs() {
         let bit = ctx[usize::from(tidx)];

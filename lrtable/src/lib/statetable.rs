@@ -472,7 +472,7 @@ mod test {
         // Actions
         assert_eq!(st.actions.len(), 15);
         let assert_reduce = |state_i: StIdx, term_i: TIdx<_>, rule: &str, prod_off: usize| {
-            let prod_i = grm.nonterm_to_prods(grm.nonterm_idx(rule).unwrap())[prod_off];
+            let prod_i = grm.rule_to_prods(grm.nonterm_idx(rule).unwrap())[prod_off];
             assert_eq!(st.action(state_i, term_i).unwrap(), Action::Reduce(prod_i.into()));
         };
 
@@ -505,7 +505,7 @@ mod test {
                                .collect::<HashSet<_>>();
         assert_eq!(st.state_shifts(s2).collect::<HashSet<_>>(), *s2_state_shifts);
 
-        let s4_core_reduces = &[grm.nonterm_to_prods(grm.nonterm_idx("Factor").unwrap())[0]]
+        let s4_core_reduces = &[grm.rule_to_prods(grm.nonterm_idx("Factor").unwrap())[0]]
                               .iter()
                               .cloned()
                               .collect::<HashSet<_>>();
@@ -541,7 +541,7 @@ mod test {
         let s4 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
 
         assert_eq!(st.action(s4, grm.term_idx("x").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("B").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("B").unwrap())[0]));
     }
 
     #[test]
@@ -591,9 +591,9 @@ mod test {
         let s2 = sg.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
 
         assert_eq!(st.action(s1, grm.term_idx("c").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("A").unwrap())[0]));
         assert_eq!(st.action(s2, grm.term_idx("c").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("B").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("B").unwrap())[1]));
     }
 
     #[test]
@@ -619,18 +619,18 @@ mod test {
         let s6 = sg.edge(s3, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
 
         assert_eq!(st.action(s5, grm.term_idx("+").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s5, grm.term_idx("*").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s5, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
 
         assert_eq!(st.action(s6, grm.term_idx("+").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
         assert_eq!(st.action(s6, grm.term_idx("*").unwrap()).unwrap(),
                    Action::Shift(s4));
         assert_eq!(st.action(s6, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
     }
 
     #[test]
@@ -666,25 +666,25 @@ mod test {
         assert_eq!(st.action(s6, grm.term_idx("=").unwrap()).unwrap(),
                    Action::Shift(s5));
         assert_eq!(st.action(s6, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[2]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[2]));
 
         assert_eq!(st.action(s7, grm.term_idx("+").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s7, grm.term_idx("*").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s7, grm.term_idx("=").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s7, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
 
         assert_eq!(st.action(s8, grm.term_idx("+").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
         assert_eq!(st.action(s8, grm.term_idx("*").unwrap()).unwrap(),
                    Action::Shift(s4));
         assert_eq!(st.action(s8, grm.term_idx("=").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
         assert_eq!(st.action(s8, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
     }
 
     #[test]
@@ -718,13 +718,13 @@ mod test {
         let s10 = sg.edge(s3, Symbol::Nonterm(grm.nonterm_idx("Expr").unwrap())).unwrap();
 
         assert_eq!(st.action(s7, grm.term_idx("+").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[3]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[3]));
         assert_eq!(st.action(s7, grm.term_idx("*").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[3]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[3]));
         assert_eq!(st.action(s7, grm.term_idx("=").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[3]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[3]));
         assert_eq!(st.action(s7, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[3]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[3]));
 
         assert_eq!(st.action(s8, grm.term_idx("+").unwrap()).unwrap(),
                    Action::Shift(s3));
@@ -735,29 +735,29 @@ mod test {
         assert_eq!(st.action(s8, grm.term_idx("~").unwrap()).unwrap(),
                    Action::Shift(s6));
         assert_eq!(st.action(s8, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[2]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[2]));
 
         assert_eq!(st.action(s9, grm.term_idx("+").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s9, grm.term_idx("*").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s9, grm.term_idx("=").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
         assert_eq!(st.action(s9, grm.term_idx("~").unwrap()).unwrap(),
                    Action::Shift(s6));
         assert_eq!(st.action(s9, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[1]));
 
         assert_eq!(st.action(s10, grm.term_idx("+").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
         assert_eq!(st.action(s10, grm.term_idx("*").unwrap()).unwrap(),
                    Action::Shift(s4));
         assert_eq!(st.action(s10, grm.term_idx("=").unwrap()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
         assert_eq!(st.action(s10, grm.term_idx("~").unwrap()).unwrap(),
                    Action::Shift(s6));
         assert_eq!(st.action(s10, grm.eof_term_idx()).unwrap(),
-                   Action::Reduce(grm.nonterm_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
+                   Action::Reduce(grm.rule_to_prods(grm.nonterm_idx("Expr").unwrap())[0]));
     }
 
     #[test]
