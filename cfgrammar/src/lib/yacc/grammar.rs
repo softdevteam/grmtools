@@ -343,7 +343,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the name of rule `i`. Panics if `i` doesn't exist.
-    pub fn nonterm_name(&self, i: RIdx<StorageT>) -> &str {
+    pub fn rule_name(&self, i: RIdx<StorageT>) -> &str {
         &self.rule_names[usize::from(i)]
     }
 

@@ -74,7 +74,7 @@ where usize: AsPrimitive<StorageT>
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
                 Node::Nonterm{nonterm_idx, ref nodes} => {
-                    s.push_str(&format!("{}\n", grm.nonterm_name(nonterm_idx)));
+                    s.push_str(&format!("{}\n", grm.rule_name(nonterm_idx)));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }

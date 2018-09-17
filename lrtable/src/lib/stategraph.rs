@@ -128,7 +128,7 @@ where usize: AsPrimitive<StorageT>
              where usize: AsPrimitive<StorageT>
         {
             match sym {
-                Symbol::Nonterm(ntidx) => grm.nonterm_name(ntidx).to_string(),
+                Symbol::Nonterm(ntidx) => grm.rule_name(ntidx).to_string(),
                 Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap_or(""))
             }
         }
@@ -158,7 +158,7 @@ where usize: AsPrimitive<StorageT>
                 };
                 o.push_str(&format!("{} [{} ->",
                                     " ".repeat(padding),
-                                    grm.nonterm_name(grm.prod_to_nonterm(p_idx))));
+                                    grm.rule_name(grm.prod_to_nonterm(p_idx))));
                 for (is_idx, is_sym) in grm.prod(p_idx).iter().enumerate() {
                     if is_idx == usize::from(s_idx) {
                         o.push_str(" .");

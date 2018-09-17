@@ -231,7 +231,7 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         for ntidx in grm.iter_rules() {
             if !grm.rule_to_prods(ntidx).contains(&grm.start_prod()) {
                 outs.push_str(&format!("#[allow(dead_code)]\nconst NT_{}: {} = {:?};\n",
-                                       grm.nonterm_name(ntidx).to_ascii_uppercase(),
+                                       grm.rule_name(ntidx).to_ascii_uppercase(),
                                        StorageT::type_name(),
                                        usize::from(ntidx)));
             }
