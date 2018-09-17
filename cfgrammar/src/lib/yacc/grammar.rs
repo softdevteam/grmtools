@@ -378,7 +378,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return the precedence of token `i` (where `None` indicates "no precedence specified").
     /// Panics if `i` doesn't exist.
-    pub fn term_precedence(&self, i: TIdx<StorageT>) -> Option<Precedence> {
+    pub fn token_precedence(&self, i: TIdx<StorageT>) -> Option<Precedence> {
         self.token_precs[usize::from(i)]
     }
 

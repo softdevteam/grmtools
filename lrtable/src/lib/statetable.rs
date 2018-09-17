@@ -393,7 +393,7 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>
 where usize: AsPrimitive<StorageT>
 {
     let mut shift_reduce = 0;
-    let term_k_prec = grm.term_precedence(term_k);
+    let term_k_prec = grm.token_precedence(term_k);
     let prod_k_prec = grm.prod_precedence(prod_k);
     match (term_k_prec, prod_k_prec) {
         (_, None) | (None, _) => {
