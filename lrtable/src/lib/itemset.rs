@@ -99,7 +99,7 @@ where usize: AsPrimitive<StorageT>
 
         let mut keys_iter = self.items.keys(); // The initial todo list
         let mut zero_todos = Vob::from_elem(usize::from(grm.prods_len()), false); // Subsequent todos
-        let mut new_ctx = Vob::from_elem(usize::from(grm.terms_len()), false);
+        let mut new_ctx = Vob::from_elem(usize::from(grm.tokens_len()), false);
         loop {
             let prod_i;
             let dot;
@@ -201,7 +201,7 @@ mod test {
         let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
-        let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
+        let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);
@@ -235,7 +235,7 @@ mod test {
         let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
-        let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
+        let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
@@ -277,7 +277,7 @@ mod test {
         let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
-        let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
+        let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
@@ -287,7 +287,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 1, SIdx(0), vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        la = Vob::from_elem(usize::from(grm.terms_len()), false);
+        la = Vob::from_elem(usize::from(grm.tokens_len()), false);
         la.set(usize::from(grm.term_idx("b").unwrap()), true);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("S").unwrap())[1], SIdx(1), &la);
@@ -297,7 +297,7 @@ mod test {
         state_exists(&grm, &cls_is, "A", 2, SIdx(0), vec!["a"]);
 
         is = Itemset::new(&grm);
-        la = Vob::from_elem(usize::from(grm.terms_len()), false);
+        la = Vob::from_elem(usize::from(grm.tokens_len()), false);
         la.set(usize::from(grm.term_idx("a").unwrap()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("A").unwrap())[0], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
@@ -311,7 +311,7 @@ mod test {
         let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
-        let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
+        let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
         la.set(usize::from(grm.eof_term_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);

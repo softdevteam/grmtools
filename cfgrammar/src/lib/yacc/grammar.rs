@@ -80,7 +80,7 @@ pub struct YaccGrammar<StorageT=u32> {
     /// A mapping from `TIdx` -> `Option<Precedence>`
     token_precs: Vec<Option<Precedence>>,
     /// How many tokens does this grammar have?
-    terms_len: TIdx<StorageT>,
+    tokens_len: TIdx<StorageT>,
     /// The offset of the EOF token.
     eof_term_idx: TIdx<StorageT>,
     /// How many productions does this grammar have?
@@ -318,7 +318,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         Ok(YaccGrammar{
             rules_len:     RIdx(rule_names.len().as_()),
             rule_names,
-            terms_len:        TIdx(token_names.len().as_()),
+            tokens_len:        TIdx(token_names.len().as_()),
             eof_term_idx,
             token_names,
             token_precs,
@@ -385,7 +385,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
     /// inputs from this grammar.
     pub fn terms_map(&self) -> HashMap<&str, TIdx<StorageT>> {
-        let mut m = HashMap::with_capacity(usize::from(self.terms_len) - 1);
+        let mut m = HashMap::with_capacity(usize::from(self.tokens_len) - 1);
         for tidx in self.iter_tidxs() {
             if let Some(n) = self.token_names[usize::from(tidx)].as_ref() {
                 m.insert(&**n, tidx);
@@ -494,8 +494,8 @@ where usize: AsPrimitive<StorageT>
         self.prod_to_rule(self.start_prod)
     }
 
-    fn terms_len(&self) -> TIdx<StorageT> {
-        self.terms_len
+    fn tokens_len(&self) -> TIdx<StorageT> {
+        self.tokens_len
     }
 
     fn firsts(&self) -> Box<dyn Firsts<StorageT>> {
@@ -536,7 +536,7 @@ where usize: AsPrimitive<StorageT>
     fn new<F>(grm: &'a YaccGrammar<StorageT>, term_cost: F) -> Self
         where F: Fn(TIdx<StorageT>) -> u8
     {
-        let mut term_costs = Vec::with_capacity(usize::from(grm.terms_len()));
+        let mut term_costs = Vec::with_capacity(usize::from(grm.tokens_len()));
         for tidx in grm.iter_tidxs() {
             term_costs.push(term_cost(tidx));
         }

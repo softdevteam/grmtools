@@ -89,7 +89,7 @@ pub struct StateTable<StorageT> {
     reduce_states    : Vob,
     rules_len     : u32,
     prods_len        : PIdx<StorageT>,
-    terms_len        : TIdx<StorageT>,
+    tokens_len        : TIdx<StorageT>,
     /// The number of reduce/reduce errors encountered.
     pub reduce_reduce: u64,
     /// The number of shift/reduce errors encountered.
@@ -114,7 +114,7 @@ where usize: AsPrimitive<StorageT>
     pub fn new(grm: &YaccGrammar<StorageT>, sg: &StateGraph<StorageT>) -> Result<Self, StateTableError<StorageT>> {
         let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut state_actions = Vob::from_elem(usize::from(sg.all_states_len())
-                                                     .checked_mul(usize::from(grm.terms_len()))
+                                                     .checked_mul(usize::from(grm.tokens_len()))
                                                      .unwrap(),
                                                false);
         let mut gotos = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
@@ -131,7 +131,7 @@ where usize: AsPrimitive<StorageT>
                     continue;
                 }
                 for term_i in ctx.iter_set_bits(..) {
-                    let off = actions_offset(grm.terms_len(),
+                    let off = actions_offset(grm.tokens_len(),
                                              state_i,
                                              // Since ctx is exactly term_len bits long, the call
                                              // to as_ is safe.
@@ -193,7 +193,7 @@ where usize: AsPrimitive<StorageT>
                     },
                     Symbol::Term(term_k) => {
                         // Populate shifts
-                        let off = actions_offset(grm.terms_len(), state_i, term_k);
+                        let off = actions_offset(grm.tokens_len(), state_i, term_k);
                         state_actions.set(off as usize, true);
                         match actions.entry(off) {
                             Entry::Occupied(mut e) => {
@@ -222,7 +222,7 @@ where usize: AsPrimitive<StorageT>
                                                     .unwrap(),
                                               false);
         let mut state_shifts = Vob::from_elem(usize::from(sg.all_states_len())
-                                                    .checked_mul(usize::from(grm.terms_len()))
+                                                    .checked_mul(usize::from(grm.tokens_len()))
                                                     .unwrap(),
                                               false);
         let mut reduce_states = Vob::from_elem(usize::from(sg.all_states_len()), false);
@@ -230,7 +230,7 @@ where usize: AsPrimitive<StorageT>
             nt_depth.clear();
             let mut only_reduces = true;
             for tidx in grm.iter_tidxs() {
-                let off = actions_offset(grm.terms_len(), st_idx, tidx);
+                let off = actions_offset(grm.tokens_len(), st_idx, tidx);
                 match actions.get(&off) {
                     Some(&Action::Reduce(p_idx)) => {
                         let prod_len = grm.prod(p_idx).len();
@@ -273,7 +273,7 @@ where usize: AsPrimitive<StorageT>
                        reduce_states,
                        rules_len: u32::from(grm.rules_len()),
                        prods_len: grm.prods_len(),
-                       terms_len: grm.terms_len(),
+                       tokens_len: grm.tokens_len(),
                        reduce_reduce,
                        shift_reduce,
                        final_state: final_state.unwrap()})
@@ -281,14 +281,14 @@ where usize: AsPrimitive<StorageT>
 
     /// Return the action for `state_idx` and `sym`, or `None` if there isn't any.
     pub fn action(&self, state_idx: StIdx, term_idx: TIdx<StorageT>) -> Option<Action<StorageT>> {
-        let off = actions_offset(self.terms_len, state_idx, term_idx);
+        let off = actions_offset(self.tokens_len, state_idx, term_idx);
         self.actions.get(&off).and_then(|x| Some(*x))
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `state_idx`.
     pub fn state_actions(&self, state_idx: StIdx) -> StateActionsIterator<StorageT> {
-        let start = usize::from(state_idx) * usize::from(self.terms_len);
-        let end = start + usize::from(self.terms_len);
+        let start = usize::from(state_idx) * usize::from(self.tokens_len);
+        let end = start + usize::from(self.tokens_len);
         StateActionsIterator{iter: self.state_actions.iter_set_bits(start..end),
                              start,
                              phantom: PhantomData}
@@ -297,8 +297,8 @@ where usize: AsPrimitive<StorageT>
     /// Return an iterator over the indexes of all shift actions of `state_idx`. By definition this
     /// is a subset of the indexes produced by [`state_actions`](#method.state_actions).
     pub fn state_shifts(&self, state_idx: StIdx) -> StateActionsIterator<StorageT> {
-        let start = usize::from(state_idx) * usize::from(self.terms_len);
-        let end = start + usize::from(self.terms_len);
+        let start = usize::from(state_idx) * usize::from(self.tokens_len);
+        let end = start + usize::from(self.tokens_len);
         StateActionsIterator{iter: self.state_shifts.iter_set_bits(start..end),
                              start,
                              phantom: PhantomData}
@@ -341,10 +341,10 @@ where usize: AsPrimitive<StorageT>
 }
 
 fn actions_offset<StorageT: PrimInt + Unsigned>
-                 (terms_len: TIdx<StorageT>, st_idx: StIdx, term_idx: TIdx<StorageT>)
+                 (tokens_len: TIdx<StorageT>, st_idx: StIdx, term_idx: TIdx<StorageT>)
                -> StIdxStorageT
 {
-    StIdxStorageT::from(st_idx) * StIdxStorageT::from(terms_len) + StIdxStorageT::from(term_idx)
+    StIdxStorageT::from(st_idx) * StIdxStorageT::from(tokens_len) + StIdxStorageT::from(term_idx)
 }
 
 pub struct StateActionsIterator<'a, StorageT> {
@@ -359,7 +359,7 @@ where usize: AsPrimitive<StorageT>
     type Item = TIdx<StorageT>;
 
     fn next(&mut self) -> Option<TIdx<StorageT>> {
-        // Since self.iter's IterSetBits range as exactly terms_len long, by definition `i -
+        // Since self.iter's IterSetBits range as exactly tokens_len long, by definition `i -
         // self.start` fits into StorageT and thus the as_ call here is safe.
         self.iter.next().map(|i| TIdx((i - self.start).as_()))
     }
@@ -377,7 +377,7 @@ where usize: AsPrimitive<StorageT>
     type Item = PIdx<StorageT>;
 
     fn next(&mut self) -> Option<PIdx<StorageT>> {
-        // Since self.iter's IterSetBits range as exactly terms_len long, by definition `i -
+        // Since self.iter's IterSetBits range as exactly tokens_len long, by definition `i -
         // self.start` fits into StorageT and thus the as_ call here is safe.
         self.iter.next().map(|i| PIdx((i - self.start).as_()))
     }

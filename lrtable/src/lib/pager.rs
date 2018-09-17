@@ -160,7 +160,7 @@ where usize: AsPrimitive<StorageT>
     let mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>> = Vec::new();
 
     let mut state0 = Itemset::new(grm);
-    let mut ctx = Vob::from_elem(usize::from(grm.terms_len()), false);
+    let mut ctx = Vob::from_elem(usize::from(grm.tokens_len()), false);
     ctx.set(usize::from(grm.eof_term_idx()), true);
     state0.add(grm.start_prod(), SIdx(StorageT::zero()), &ctx);
     closed_states.push(None);
@@ -170,14 +170,14 @@ where usize: AsPrimitive<StorageT>
     // We maintain two lists of which nonterms and terms we've seen; when processing a given
     // state there's no point processing a nonterm or term more than once.
     let mut seen_nonterms = Vob::from_elem(usize::from(grm.rules_len()), false);
-    let mut seen_terms = Vob::from_elem(usize::from(grm.terms_len()), false);
+    let mut seen_terms = Vob::from_elem(usize::from(grm.tokens_len()), false);
     // new_states is used to separate out iterating over states vs. mutating it
     let mut new_states = Vec::new();
     // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
     // matches for a given symbol.
     let mut cnd_nonterm_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.rules_len()));
-    let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.terms_len()));
-    for _ in 0..usize::from(grm.terms_len()).checked_add(1).unwrap(){
+    let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.tokens_len()));
+    for _ in 0..usize::from(grm.tokens_len()).checked_add(1).unwrap(){
         cnd_term_weaklies.push(Vec::new());
     }
     for _ in grm.iter_rules() { cnd_nonterm_weaklies.push(Vec::new()); }

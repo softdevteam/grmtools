@@ -630,7 +630,7 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>
 }
 
 pub(crate) struct Dist<StorageT> {
-    terms_len: TIdx<StorageT>,
+    tokens_len: TIdx<StorageT>,
     table: Vec<u16>,
     phantom: PhantomData<StorageT>
 }
@@ -655,14 +655,14 @@ where usize: AsPrimitive<StorageT>
         // also has a reduction target of state 5: thus state state 0 ends up with the minimum
         // distances of itself and state 5.
 
-        let terms_len = usize::from(grm.terms_len());
+        let tokens_len = usize::from(grm.tokens_len());
         let states_len = usize::from(sgraph.all_states_len());
         let sengen = grm.sentence_generator(&term_cost);
         let goto_states = Dist::goto_states(grm, sgraph, stable);
 
         let mut table = Vec::new();
-        table.resize(states_len * terms_len, u16::max_value());
-        table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
+        table.resize(states_len * tokens_len, u16::max_value());
+        table[usize::from(stable.final_state) * tokens_len + usize::from(grm.eof_term_idx())] = 0;
         loop {
             let mut chgd = false;
             for st_idx in sgraph.iter_stidxs() {
@@ -671,7 +671,7 @@ where usize: AsPrimitive<StorageT>
                     let d = match sym {
                         Symbol::Rule(nt_idx) => sengen.min_sentence_cost(nt_idx),
                         Symbol::Term(t_idx) => {
-                            let off = usize::from(st_idx) * terms_len + usize::from(t_idx);
+                            let off = usize::from(st_idx) * tokens_len + usize::from(t_idx);
                             if table[off] != 0 {
                                 table[off] = 0;
                                 chgd = true;
@@ -681,8 +681,8 @@ where usize: AsPrimitive<StorageT>
                     };
 
                     for tidx in grm.iter_tidxs() {
-                        let this_off = usize::from(st_idx) * terms_len + usize::from(tidx);
-                        let other_off = usize::from(sym_st_idx) * terms_len + usize::from(tidx);
+                        let this_off = usize::from(st_idx) * tokens_len + usize::from(tidx);
+                        let other_off = usize::from(sym_st_idx) * tokens_len + usize::from(tidx);
 
                         if table[other_off] != u16::max_value()
                            && table[other_off] + d < table[this_off]
@@ -699,8 +699,8 @@ where usize: AsPrimitive<StorageT>
                                               .map(|x| StIdx::from(x))
                 {
                     for tidx in grm.iter_tidxs() {
-                        let this_off = usize::from(st_idx) * terms_len + usize::from(tidx);
-                        let other_off = usize::from(goto_st_idx) * terms_len + usize::from(tidx);
+                        let this_off = usize::from(st_idx) * tokens_len + usize::from(tidx);
+                        let other_off = usize::from(goto_st_idx) * tokens_len + usize::from(tidx);
 
                         if table[other_off] != u16::max_value()
                            && table[other_off] < table[this_off]
@@ -716,11 +716,11 @@ where usize: AsPrimitive<StorageT>
             }
         }
 
-        Dist{terms_len: grm.terms_len(), table, phantom: PhantomData}
+        Dist{tokens_len: grm.tokens_len(), table, phantom: PhantomData}
     }
 
     pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx<StorageT>) -> u16 {
-        self.table[usize::from(st_idx) * usize::from(self.terms_len) + usize::from(t_idx)]
+        self.table[usize::from(st_idx) * usize::from(self.tokens_len) + usize::from(t_idx)]
     }
 
     /// rev_edges allows us to walk backwards over the stategraph.

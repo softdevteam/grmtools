@@ -105,7 +105,7 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> RIdx<StorageT>;
     /// How many tokens does this grammar have?
-    fn terms_len(&self) -> TIdx<StorageT>;
+    fn tokens_len(&self) -> TIdx<StorageT>;
 
     /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
     /// grammar's valid `RIdx`s.
@@ -132,7 +132,7 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
         // We can use as_ safely, because we know that we're only generating integers from
         // 0..self.rules_len() and, since rules_len() returns an TIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::from(self.terms_len())).map(|x| TIdx(x.as_())))
+        Box::new((0..usize::from(self.tokens_len())).map(|x| TIdx(x.as_())))
     }
 
     fn firsts(&self) -> Box<dyn Firsts<StorageT>>;
