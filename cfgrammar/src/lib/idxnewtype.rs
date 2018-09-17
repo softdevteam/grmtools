@@ -66,12 +66,6 @@ macro_rules! IdxNewtype {
     }
 }
 
-// Will anyone create a grammar with more than 65535 non-terminals, productions, symbols within a
-// production, or terminals? Yes, now that I've said it out loud, they probably will. But all
-// practical grammars I know of are comfortably within these limits, so use narrow storage types
-// for now, knowing that we can transparently move the storage type from u16 to u32 in the future
-// without changing the user visible API.
-
 IdxNewtype!(
     /// A type specifically for rule indices.
     ///
