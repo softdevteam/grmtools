@@ -456,7 +456,7 @@ mod test {
             match *r {
                 ParseRepair::InsertSeq{..} => panic!("Internal error"),
                 ParseRepair::Insert(term_idx) =>
-                    out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
+                    out.push(format!("Insert \"{}\"", grm.token_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>

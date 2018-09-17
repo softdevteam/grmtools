@@ -258,7 +258,7 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
 
         // Record the rule IDs map
         for tidx in grm.iter_tidxs() {
-            let n = match grm.term_name(tidx) {
+            let n = match grm.token_name(tidx) {
                 Some(n) => format!("'{}'", n),
                 None => format!("<unknown>")
             };

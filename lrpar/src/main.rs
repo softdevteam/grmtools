@@ -212,14 +212,14 @@ fn main() {
                                         if j > 0 {
                                             s.push_str(" ");
                                         }
-                                        s.push_str(grm.term_name(*t_idx).unwrap());
+                                        s.push_str(grm.token_name(*t_idx).unwrap());
                                     }
                                 }
                                 s.push_str("}");
                                 out.push(s);
                             },
                             ParseRepair::Insert(term_idx) =>
-                                out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
+                                out.push(format!("Insert \"{}\"", grm.token_name(term_idx).unwrap())),
                             ParseRepair::Delete | ParseRepair::Shift => {
                                 let l = lexemes[lex_idx];
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");

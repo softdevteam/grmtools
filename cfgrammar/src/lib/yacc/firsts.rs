@@ -185,7 +185,7 @@ mod test {
     {
         let nt_i = grm.rule_idx(rn).unwrap();
         for tidx in grm.iter_tidxs() {
-            let n = match grm.term_name(tidx) {
+            let n = match grm.token_name(tidx) {
                 Some(n) => n,
                 None => &"<no name>"
             };

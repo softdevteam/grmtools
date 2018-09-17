@@ -129,7 +129,7 @@ where usize: AsPrimitive<StorageT>
         {
             match sym {
                 Symbol::Rule(ntidx) => grm.rule_name(ntidx).to_string(),
-                Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap_or(""))
+                Symbol::Term(tidx) => format!("'{}'", grm.token_name(tidx).unwrap_or(""))
             }
         }
 
@@ -181,7 +181,7 @@ where usize: AsPrimitive<StorageT>
                     if tidx == grm.eof_token_idx() {
                         o.push_str("'$'");
                     } else {
-                        o.push_str(&format!("'{}'", grm.term_name(tidx).unwrap()));
+                        o.push_str(&format!("'{}'", grm.token_name(tidx).unwrap()));
                     }
                 }
                 o.push_str("}]");
@@ -242,7 +242,7 @@ where usize: AsPrimitive<StorageT>
         }
         if !found && bit {
             panic!("bit for token {}, dot {} is set in production {} of {} when it shouldn't be",
-                   grm.term_name(tidx).unwrap(), usize::from(dot), prod_off, nt);
+                   grm.token_name(tidx).unwrap(), usize::from(dot), prod_off, nt);
         }
     }
 }

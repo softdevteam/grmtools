@@ -372,7 +372,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return the name of token `i` (where `None` indicates "the rule has no name"). Panics if
     /// `i` doesn't exist.
-    pub fn term_name(&self, i: TIdx<StorageT>) -> Option<&str> {
+    pub fn token_name(&self, i: TIdx<StorageT>) -> Option<&str> {
         self.token_names[usize::from(i)].as_ref().and_then(|x| Some(x.as_str()))
     }
 
@@ -951,7 +951,7 @@ mod test {
         grm.rule_idx("R").unwrap();
         grm.rule_idx("S").unwrap();
         grm.term_idx("T").unwrap();
-        assert!(grm.term_name(grm.eof_token_idx()).is_none());
+        assert!(grm.token_name(grm.eof_token_idx()).is_none());
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
                                          vec![PIdx(0)],

@@ -827,14 +827,14 @@ mod test {
                             if j > 0 {
                                 s.push_str(" ");
                             }
-                            s.push_str(&format!("\"{}\"", grm.term_name(*t_idx).unwrap()));
+                            s.push_str(&format!("\"{}\"", grm.token_name(*t_idx).unwrap()));
                         }
                     }
                     s.push_str("}");
                     out.push(s);
                 },
                 ParseRepair::Insert(term_idx) =>
-                    out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
+                    out.push(format!("Insert \"{}\"", grm.token_name(term_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>

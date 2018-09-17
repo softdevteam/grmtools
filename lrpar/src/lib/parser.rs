@@ -69,7 +69,7 @@ where usize: AsPrimitive<StorageT>
             match *e {
                 Node::Term{lexeme} => {
                     let t_idx = TIdx(lexeme.tok_id());
-                    let tn = grm.term_name(t_idx).unwrap();
+                    let tn = grm.token_name(t_idx).unwrap();
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
