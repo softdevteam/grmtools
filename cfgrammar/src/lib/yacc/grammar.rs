@@ -526,7 +526,7 @@ where usize: AsPrimitive<StorageT>
 pub struct SentenceGenerator<'a, StorageT: 'a> {
     grm: &'a YaccGrammar<StorageT>,
     rule_min_costs: RefCell<Option<Vec<u16>>>,
-    nonterm_max_costs: RefCell<Option<Vec<u16>>>,
+    rule_max_costs: RefCell<Option<Vec<u16>>>,
     term_costs: Vec<u8>
 }
 
@@ -543,7 +543,7 @@ where usize: AsPrimitive<StorageT>
         SentenceGenerator{grm,
                           term_costs,
                           rule_min_costs: RefCell::new(None),
-                          nonterm_max_costs: RefCell::new(None)}
+                          rule_max_costs: RefCell::new(None)}
     }
 
     /// What is the cost of a minimal sentence for the non-terminal `rule_idx`? Note that,
@@ -560,9 +560,9 @@ where usize: AsPrimitive<StorageT>
     /// which can generate sentences of unbounded length return None; non-terminals which can only
     /// generate maximal strings of a finite length return a `Some(u16)`.
     pub fn max_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> Option<u16> {
-        let v = self.nonterm_max_costs.borrow_mut()
+        let v = self.rule_max_costs.borrow_mut()
                                       .get_or_insert_with(||
-                                           nonterm_max_costs(self.grm, &self.term_costs))
+                                           rule_max_costs(self.grm, &self.term_costs))
                                       [usize::from(rule_idx)];
         if v == u16::max_value() {
             None
@@ -802,7 +802,7 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
 /// Return the cost of the maximal string for each non-terminal in this grammar (u32::max_val()
 /// representing "this non-terminal can generate strings of infinite length"). The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
-fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
+fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
                where usize: AsPrimitive<StorageT>
 {
@@ -912,7 +912,7 @@ impl fmt::Display for YaccGrammarError {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_max_costs, rule_min_costs};
+    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, rule_max_costs, rule_min_costs};
     use {Grammar, RIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
@@ -1222,7 +1222,7 @@ mod test {
     }
 
     #[test]
-    fn test_nonterm_max_costs1() {
+    fn test_rule_max_costs1() {
         let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
@@ -1233,7 +1233,7 @@ mod test {
             E: 'x' A | 'x' 'y';
           ").unwrap();
 
-        let scores = nonterm_max_costs(&grm, &vec![1, 1, 1]);
+        let scores = rule_max_costs(&grm, &vec![1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
         assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], u16::max_value());
         assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], u16::max_value());
@@ -1242,7 +1242,7 @@ mod test {
     }
 
     #[test]
-    fn test_nonterm_max_costs2() {
+    fn test_rule_max_costs2() {
         let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
@@ -1252,7 +1252,7 @@ mod test {
             D: 'y' 'x' | 'y' 'x' 'z';
           ").unwrap();
 
-        let scores = nonterm_max_costs(&grm, &vec![1, 1, 1]);
+        let scores = rule_max_costs(&grm, &vec![1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
         assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], 3);
         assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], 2);
