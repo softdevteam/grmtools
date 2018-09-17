@@ -125,7 +125,7 @@ where usize: AsPrimitive<StorageT>
             }
             let prod = grm.prod(prod_i);
             if dot == grm.prod_len(prod_i) { continue; }
-            if let Symbol::Nonterm(nonterm_i) = prod[usize::from(dot)] {
+            if let Symbol::Rule(nonterm_i) = prod[usize::from(dot)] {
                 // This if statement is, in essence, a fast version of what's called getContext in
                 // Chen's dissertation, folding in getTHeads at the same time. The particular
                 // formulation here is based as much on
@@ -141,7 +141,7 @@ where usize: AsPrimitive<StorageT>
                             nullable = false;
                             break;
                         },
-                        Symbol::Nonterm(nonterm_j) => {
+                        Symbol::Rule(nonterm_j) => {
                             new_ctx.or(firsts.firsts(nonterm_j));
                             if !firsts.is_epsilon_set(nonterm_j) {
                                 nullable = false;
@@ -316,7 +316,7 @@ mod test {
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);
 
-        let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.rule_idx("S").unwrap()));
+        let goto1 = cls_is.goto(&grm, &Symbol::Rule(grm.rule_idx("S").unwrap()));
         state_exists(&grm, &goto1, "^", 0, SIdx(1), vec!["$"]);
         state_exists(&grm, &goto1, "S", 0, SIdx(1), vec!["$", "b"]);
 

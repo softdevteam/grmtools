@@ -185,7 +185,7 @@ where usize: AsPrimitive<StorageT>
             assert!(StIdxStorageT::from(sg.all_states_len()).checked_mul(nt_len.into()).is_some());
             for (&sym, state_j) in sg.edges(state_i) {
                 match sym {
-                    Symbol::Nonterm(nonterm_i) => {
+                    Symbol::Rule(nonterm_i) => {
                         // Populate gotos
                         let off = (u32::from(state_i) * u32::from(nt_len)) + u32::from(nonterm_i);
                         debug_assert!(gotos.get(&off).is_none());
@@ -458,14 +458,14 @@ mod test {
         assert_eq!(sg.all_states_len(), StIdx(9));
 
         let s0 = StIdx(0);
-        let s1 = sg.edge(s0, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s2 = sg.edge(s0, Symbol::Nonterm(grm.rule_idx("Term").unwrap())).unwrap();
-        let s3 = sg.edge(s0, Symbol::Nonterm(grm.rule_idx("Factor").unwrap())).unwrap();
+        let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s2 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Term").unwrap())).unwrap();
+        let s3 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Factor").unwrap())).unwrap();
         let s4 = sg.edge(s0, Symbol::Term(grm.term_idx("id").unwrap())).unwrap();
         let s5 = sg.edge(s2, Symbol::Term(grm.term_idx("-").unwrap())).unwrap();
         let s6 = sg.edge(s3, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
-        let s7 = sg.edge(s5, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s8 = sg.edge(s6, Symbol::Nonterm(grm.rule_idx("Term").unwrap())).unwrap();
+        let s7 = sg.edge(s5, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s8 = sg.edge(s6, Symbol::Rule(grm.rule_idx("Term").unwrap())).unwrap();
 
         let st = StateTable::new(&grm, &sg).unwrap();
 
@@ -558,11 +558,11 @@ mod test {
         assert_eq!(st.actions.len(), 15);
 
         let s0 = StIdx(0);
-        let s1 = sg.edge(s0, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
-        let s5 = sg.edge(s4, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s6 = sg.edge(s3, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s5 = sg.edge(s4, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s6 = sg.edge(s3, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
 
         assert_eq!(st.action(s5, grm.term_idx("+").unwrap()).unwrap(), Action::Shift(s3));
         assert_eq!(st.action(s5, grm.term_idx("*").unwrap()).unwrap(), Action::Shift(s4));
@@ -612,11 +612,11 @@ mod test {
         assert_eq!(st.actions.len(), 15);
 
         let s0 = StIdx(0);
-        let s1 = sg.edge(s0, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
-        let s5 = sg.edge(s4, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s6 = sg.edge(s3, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s5 = sg.edge(s4, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s6 = sg.edge(s3, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
 
         assert_eq!(st.action(s5, grm.term_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[1]));
@@ -651,13 +651,13 @@ mod test {
         assert_eq!(st.actions.len(), 24);
 
         let s0 = StIdx(0);
-        let s1 = sg.edge(s0, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
         let s5 = sg.edge(s1, Symbol::Term(grm.term_idx("=").unwrap())).unwrap();
-        let s6 = sg.edge(s5, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s7 = sg.edge(s4, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s8 = sg.edge(s3, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s6 = sg.edge(s5, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s7 = sg.edge(s4, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s8 = sg.edge(s3, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
 
         assert_eq!(st.action(s6, grm.term_idx("+").unwrap()).unwrap(),
                    Action::Shift(s3));
@@ -707,15 +707,15 @@ mod test {
         assert_eq!(st.actions.len(), 34);
 
         let s0 = StIdx(0);
-        let s1 = sg.edge(s0, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Term(grm.term_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("*").unwrap())).unwrap();
         let s5 = sg.edge(s1, Symbol::Term(grm.term_idx("=").unwrap())).unwrap();
         let s6 = sg.edge(s1, Symbol::Term(grm.term_idx("~").unwrap())).unwrap();
-        let s7 = sg.edge(s6, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s8 = sg.edge(s5, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s9 = sg.edge(s4, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
-        let s10 = sg.edge(s3, Symbol::Nonterm(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s7 = sg.edge(s6, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s8 = sg.edge(s5, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s9 = sg.edge(s4, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
+        let s10 = sg.edge(s3, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
 
         assert_eq!(st.action(s7, grm.term_idx("+").unwrap()).unwrap(),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[3]));

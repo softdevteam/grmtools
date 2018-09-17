@@ -65,7 +65,7 @@ pub struct Production {
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
-    Nonterm(String),
+    Rule(String),
     Term(String)
 }
 
@@ -113,7 +113,7 @@ impl fmt::Display for GrammarValidationError {
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Symbol::Nonterm(ref s) => write!(f, "{}", s),
+            Symbol::Rule(ref s) => write!(f, "{}", s),
             Symbol::Term(ref s)    => write!(f, "{}", s)
         }
     }
@@ -163,7 +163,7 @@ impl GrammarAST {
             Some(ref s) => {
                 if !self.rules.contains_key(s) {
                     return Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule,
-                                               sym: Some(Symbol::Nonterm(s.clone()))});
+                                               sym: Some(Symbol::Rule(s.clone()))});
                 }
             }
         }
@@ -182,7 +182,7 @@ impl GrammarAST {
                 }
                 for sym in &prod.symbols {
                     match *sym {
-                        Symbol::Nonterm(ref name) => {
+                        Symbol::Rule(ref name) => {
                             if !self.rules.contains_key(name) {
                                 return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef,
                                     sym: Some(sym.clone())});
@@ -208,7 +208,7 @@ mod test {
     use yacc::{AssocKind, Precedence};
 
     fn rule(n: &str) -> Symbol {
-        Symbol::Nonterm(n.to_string())
+        Symbol::Rule(n.to_string())
     }
 
     fn terminal(n: &str) -> Symbol {

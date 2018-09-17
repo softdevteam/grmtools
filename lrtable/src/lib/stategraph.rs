@@ -128,7 +128,7 @@ where usize: AsPrimitive<StorageT>
              where usize: AsPrimitive<StorageT>
         {
             match sym {
-                Symbol::Nonterm(ntidx) => grm.rule_name(ntidx).to_string(),
+                Symbol::Rule(ntidx) => grm.rule_name(ntidx).to_string(),
                 Symbol::Term(tidx) => format!("'{}'", grm.term_name(tidx).unwrap_or(""))
             }
         }
@@ -271,14 +271,14 @@ mod test {
 
         // This follows the (not particularly logical) ordering of state numbers in the paper.
         let s0 = StIdx(0);
-        sg.edge(s0, Symbol::Nonterm(grm.rule_idx("A").unwrap())).unwrap(); // s1
+        sg.edge(s0, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap(); // s1
         let s2 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
         let s3 = sg.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
         let s5 = sg.edge(s0, Symbol::Term(grm.term_idx("OPEN_BRACKET").unwrap())).unwrap();
         assert_eq!(s2, sg.edge(s5, Symbol::Term(grm.term_idx("a").unwrap())).unwrap());
         assert_eq!(s3, sg.edge(s5, Symbol::Term(grm.term_idx("b").unwrap())).unwrap());
         assert_eq!(s5, sg.edge(s5, Symbol::Term(grm.term_idx("OPEN_BRACKET").unwrap())).unwrap());
-        let s4 = sg.edge(s5, Symbol::Nonterm(grm.rule_idx("A").unwrap())).unwrap();
+        let s4 = sg.edge(s5, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap();
         sg.edge(s4, Symbol::Term(grm.term_idx("CLOSE_BRACKET").unwrap())).unwrap(); // s6
     }
 }

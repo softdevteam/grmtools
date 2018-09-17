@@ -105,7 +105,7 @@ where usize: AsPrimitive<StorageT>
                                 }
                                 break;
                             },
-                            Symbol::Nonterm(nonterm_i) => {
+                            Symbol::Rule(nonterm_i) => {
                                 // if we're dealing with another Nonterm, union its FIRSTs
                                 // together with the current rules FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the

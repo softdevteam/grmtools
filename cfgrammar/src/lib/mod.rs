@@ -93,7 +93,7 @@ pub use idxnewtype::{RIdx, PIdx, SIdx, TIdx};
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Symbol<StorageT> {
-    Nonterm(RIdx<StorageT>),
+    Rule(RIdx<StorageT>),
     Term(TIdx<StorageT>)
 }
 

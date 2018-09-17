@@ -285,7 +285,7 @@ impl YaccParser {
                 if self.ast.tokens.contains(&sym) {
                     syms.push(Symbol::Term(sym));
                 } else {
-                    syms.push(Symbol::Nonterm(sym));
+                    syms.push(Symbol::Rule(sym));
                 }
                 i = j;
             }
@@ -431,7 +431,7 @@ mod test {
     }
 
     fn rule(n: &str) -> Symbol {
-        Symbol::Nonterm(n.to_string())
+        Symbol::Rule(n.to_string())
     }
 
     fn terminal(n: &str) -> Symbol {
