@@ -525,7 +525,7 @@ where usize: AsPrimitive<StorageT>
 /// ```
 pub struct SentenceGenerator<'a, StorageT: 'a> {
     grm: &'a YaccGrammar<StorageT>,
-    nonterm_min_costs: RefCell<Option<Vec<u16>>>,
+    rule_min_costs: RefCell<Option<Vec<u16>>>,
     nonterm_max_costs: RefCell<Option<Vec<u16>>>,
     term_costs: Vec<u8>
 }
@@ -542,7 +542,7 @@ where usize: AsPrimitive<StorageT>
         }
         SentenceGenerator{grm,
                           term_costs,
-                          nonterm_min_costs: RefCell::new(None),
+                          rule_min_costs: RefCell::new(None),
                           nonterm_max_costs: RefCell::new(None)}
     }
 
@@ -550,8 +550,8 @@ where usize: AsPrimitive<StorageT>
     /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
     /// much faster.
     pub fn min_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> u16 {
-        self.nonterm_min_costs.borrow_mut()
-                              .get_or_insert_with(|| nonterm_min_costs(self.grm,
+        self.rule_min_costs.borrow_mut()
+                              .get_or_insert_with(|| rule_min_costs(self.grm,
                                                                        &self.term_costs))
                               [usize::from(rule_idx)]
     }
@@ -717,7 +717,7 @@ where usize: AsPrimitive<StorageT>
 
 /// Return the cost of a minimal string for each non-terminal in this grammar. The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
-fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
+fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
               where usize: AsPrimitive<StorageT>
 {
@@ -912,7 +912,7 @@ impl fmt::Display for YaccGrammarError {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_max_costs, nonterm_min_costs};
+    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_max_costs, rule_min_costs};
     use {Grammar, RIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
@@ -1161,7 +1161,7 @@ mod test {
     }
 
     #[test]
-    fn test_nonterm_min_costs() {
+    fn test_rule_min_costs() {
         let grm = YaccGrammar::new(YaccKind::Original, "
             %start A
             %%
@@ -1172,7 +1172,7 @@ mod test {
             E: 'x' A | 'x' 'y';
           ").unwrap();
 
-        let scores = nonterm_min_costs(&grm, &vec![1, 1, 1]);
+        let scores = rule_min_costs(&grm, &vec![1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx(&"A").unwrap())], 0);
         assert_eq!(scores[usize::from(grm.rule_idx(&"B").unwrap())], 1);
         assert_eq!(scores[usize::from(grm.rule_idx(&"C").unwrap())], 1);
