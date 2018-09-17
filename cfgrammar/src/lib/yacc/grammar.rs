@@ -42,9 +42,9 @@ use super::YaccKind;
 use yacc::firsts::YaccFirsts;
 use yacc::parser::YaccParser;
 
-const START_NONTERM         : &str = "^";
+const START_RULE         : &str = "^";
 const IMPLICIT_NONTERM      : &str = "~";
-const IMPLICIT_START_NONTERM: &str = "^~";
+const IMPLICIT_START_RULE: &str = "^~";
 
 use yacc::ast;
 use yacc::ast::GrammarValidationError;
@@ -155,9 +155,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         // until we've hit something unique (at the very worst, this will require looping for as
         // many times as there are rules). We use the same technique later for unique end
         // term and whitespace names.
-        let mut start_nonterm = START_NONTERM.to_string();
+        let mut start_nonterm = START_RULE.to_string();
         while ast.rules.get(&start_nonterm).is_some() {
-            start_nonterm += START_NONTERM;
+            start_nonterm += START_RULE;
         }
         rule_names.push(start_nonterm.clone());
 
@@ -176,9 +176,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                     }
                     rule_names.push(n1.clone());
                     implicit_rule = Some(n1);
-                    let mut n2 = IMPLICIT_START_NONTERM.to_string();
+                    let mut n2 = IMPLICIT_START_RULE.to_string();
                     while ast.rules.get(&n2).is_some() {
-                        n2 += IMPLICIT_START_NONTERM;
+                        n2 += IMPLICIT_START_RULE;
                     }
                     rule_names.push(n2.clone());
                     implicit_start_nonterm = Some(n2);
@@ -912,7 +912,7 @@ impl fmt::Display for YaccGrammarError {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, rule_max_costs, rule_min_costs};
+    use super::{IMPLICIT_NONTERM, IMPLICIT_START_RULE, rule_max_costs, rule_min_costs};
     use {Grammar, RIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
@@ -1088,7 +1088,7 @@ mod test {
 
         assert_eq!(grm.prod_precs.len(), 9);
 
-        let itfs_rule_idx = grm.rule_idx(IMPLICIT_START_NONTERM).unwrap();
+        let itfs_rule_idx = grm.rule_idx(IMPLICIT_START_RULE).unwrap();
         assert_eq!(grm.rules_prods[usize::from(itfs_rule_idx)].len(), 1);
 
         let itfs_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(itfs_rule_idx)][0])];
