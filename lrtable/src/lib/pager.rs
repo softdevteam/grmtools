@@ -79,8 +79,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
         }
 
         // Check that each itemset has the same core configuration.
-        for &(prod_i, dot) in self.items.keys() {
-            if other.items.get(&(prod_i, dot)).is_none() {
+        for &(pidx, dot) in self.items.keys() {
+            if other.items.get(&(pidx, dot)).is_none() {
                 return false;
             }
         }
@@ -123,8 +123,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
     /// weakly compatible with `self`, this function's effects and return value are undefined.
     fn weakly_merge(&mut self, other: &Self) -> bool {
         let mut changed = false;
-        for (&(prod_i, dot), ctx) in &mut self.items {
-            if ctx.or(&other.items[&(prod_i, dot)]) {
+        for (&(pidx, dot), ctx) in &mut self.items {
+            if ctx.or(&other.items[&(pidx, dot)]) {
                 changed = true;
             }
         }
@@ -167,20 +167,20 @@ where usize: AsPrimitive<StorageT>
     core_states.push(state0);
     edges.push(HashMap::new());
 
-    // We maintain two lists of which nonterms and terms we've seen; when processing a given
-    // state there's no point processing a nonterm or term more than once.
-    let mut seen_nonterms = Vob::from_elem(usize::from(grm.rules_len()), false);
-    let mut seen_terms = Vob::from_elem(usize::from(grm.tokens_len()), false);
+    // We maintain two lists of which rules and tokens we've seen; when processing a given
+    // state there's no point processing a rule or token more than once.
+    let mut seen_rules = Vob::from_elem(usize::from(grm.rules_len()), false);
+    let mut seen_tokens = Vob::from_elem(usize::from(grm.tokens_len()), false);
     // new_states is used to separate out iterating over states vs. mutating it
     let mut new_states = Vec::new();
-    // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
+    // cnd_[rule|token]_weaklies represent which states are possible weakly compatible
     // matches for a given symbol.
-    let mut cnd_nonterm_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.rules_len()));
-    let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.tokens_len()));
+    let mut cnd_rule_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.rules_len()));
+    let mut cnd_token_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.tokens_len()));
     for _ in 0..usize::from(grm.tokens_len()).checked_add(1).unwrap(){
-        cnd_term_weaklies.push(Vec::new());
+        cnd_token_weaklies.push(Vec::new());
     }
-    for _ in grm.iter_rules() { cnd_nonterm_weaklies.push(Vec::new()); }
+    for _ in grm.iter_rules() { cnd_rule_weaklies.push(Vec::new()); }
 
     let mut todo = 1; // How many None values are there in closed_states?
     let mut todo_off = 0; // Offset in closed states to start searching for the next todo.
@@ -201,24 +201,24 @@ where usize: AsPrimitive<StorageT>
         {
             closed_states[state_i] = Some(core_states[state_i].close(grm, &firsts));
             let cl_state = &closed_states[state_i].as_ref().unwrap();
-            seen_nonterms.set_all(false);
-            seen_terms.set_all(false);
-            for &(prod_i, dot) in cl_state.items.keys() {
-                let prod = grm.prod(prod_i);
-                if dot == grm.prod_len(prod_i) { continue; }
+            seen_rules.set_all(false);
+            seen_tokens.set_all(false);
+            for &(pidx, dot) in cl_state.items.keys() {
+                let prod = grm.prod(pidx);
+                if dot == grm.prod_len(pidx) { continue; }
                 let sym = prod[usize::from(dot)];
                 match sym {
-                    Symbol::Rule(nonterm_i) => {
-                        if seen_nonterms[usize::from(nonterm_i)] {
+                    Symbol::Rule(s_ridx) => {
+                        if seen_rules[usize::from(s_ridx)] {
                             continue;
                         }
-                        seen_nonterms.set(usize::from(nonterm_i), true);
+                        seen_rules.set(usize::from(s_ridx), true);
                     },
-                    Symbol::Token(term_i) => {
-                        if seen_terms[usize::from(term_i)] {
+                    Symbol::Token(s_tidx) => {
+                        if seen_tokens[usize::from(s_tidx)] {
                             continue;
                         }
-                        seen_terms.set(usize::from(term_i), true);
+                        seen_tokens.set(usize::from(s_tidx), true);
                     }
                 }
                 let nstate = cl_state.goto(grm, &sym);
@@ -231,8 +231,8 @@ where usize: AsPrimitive<StorageT>
             {
                 // Try and compatible match for this state.
                 let cnd_states = match sym {
-                    Symbol::Rule(nonterm_i) => &cnd_nonterm_weaklies[usize::from(nonterm_i)],
-                    Symbol::Token(term_i) => &cnd_term_weaklies[usize::from(term_i)]
+                    Symbol::Rule(s_ridx) => &cnd_rule_weaklies[usize::from(s_ridx)],
+                    Symbol::Token(s_tidx) => &cnd_token_weaklies[usize::from(s_tidx)]
                 };
                 // First of all see if any of the candidate states are exactly the same as the
                 // new state, in which case we only need to add an edge to the candidate
@@ -276,10 +276,10 @@ where usize: AsPrimitive<StorageT>
                 },
                 None    => {
                     match sym {
-                        Symbol::Rule(nonterm_i) =>
-                            cnd_nonterm_weaklies[usize::from(nonterm_i)].push(core_states.len().into()),
-                        Symbol::Token(term_i) =>
-                            cnd_term_weaklies[usize::from(term_i)].push(core_states.len().into())
+                        Symbol::Rule(s_ridx) =>
+                            cnd_rule_weaklies[usize::from(s_ridx)].push(core_states.len().into()),
+                        Symbol::Token(s_tidx) =>
+                            cnd_token_weaklies[usize::from(s_tidx)].push(core_states.len().into())
                     }
                     edges[state_i].insert(sym, core_states.len().into());
                     edges.push(HashMap::new());
@@ -317,7 +317,7 @@ fn gc<StorageT: Eq + Hash + PrimInt>
     let mut seen = HashSet::new();
     while !todo.is_empty() {
         // XXX This is the clumsy way we're forced to do what we'd prefer to be:
-        //     "let &(prod_i, dot) = todo.pop()"
+        //     "let &(pidx, dot) = todo.pop()"
         let state_i = *todo.iter().next().unwrap();
         todo.remove(&state_i);
         seen.insert(state_i);
