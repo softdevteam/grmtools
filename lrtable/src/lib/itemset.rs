@@ -136,7 +136,7 @@ where usize: AsPrimitive<StorageT>
                 let mut nullable = true;
                 for sym in prod.iter().skip(usize::from(dot) + 1) {
                     match *sym {
-                        Symbol::Term(term_j) => {
+                        Symbol::Token(term_j) => {
                             new_ctx.set(usize::from(term_j), true);
                             nullable = false;
                             break;
@@ -321,11 +321,11 @@ mod test {
         state_exists(&grm, &goto1, "S", 0, SIdx(1), vec!["$", "b"]);
 
         // follow 'b' from start set
-        let goto2 = cls_is.goto(&grm, &Symbol::Term(grm.token_idx("b").unwrap()));
+        let goto2 = cls_is.goto(&grm, &Symbol::Token(grm.token_idx("b").unwrap()));
         state_exists(&grm, &goto2, "S", 1, SIdx(1), vec!["$", "b"]);
 
         // continue by following 'a' from last goto, after it's been closed
-        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Term(grm.token_idx("a").unwrap()));
+        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Token(grm.token_idx("a").unwrap()));
         state_exists(&grm, &goto3, "A", 1, SIdx(1), vec!["a"]);
         state_exists(&grm, &goto3, "A", 2, SIdx(1), vec!["a"]);
     }

@@ -66,7 +66,7 @@ pub struct Production {
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
     Rule(String),
-    Term(String)
+    Token(String)
 }
 
 /// The various different possible grammar validation errors.
@@ -114,7 +114,7 @@ impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Symbol::Rule(ref s) => write!(f, "{}", s),
-            Symbol::Term(ref s)    => write!(f, "{}", s)
+            Symbol::Token(ref s)    => write!(f, "{}", s)
         }
     }
 }
@@ -173,11 +173,11 @@ impl GrammarAST {
                 if let Some(ref n) = prod.precedence {
                     if !self.tokens.contains(n) {
                         return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
-                            sym: Some(Symbol::Term(n.clone()))});
+                            sym: Some(Symbol::Token(n.clone()))});
                     }
                     if !self.precs.contains_key(n) {
                         return Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoPrecForToken,
-                            sym: Some(Symbol::Term(n.clone()))});
+                            sym: Some(Symbol::Token(n.clone()))});
                     }
                 }
                 for sym in &prod.symbols {
@@ -188,7 +188,7 @@ impl GrammarAST {
                                     sym: Some(sym.clone())});
                             }
                         }
-                        Symbol::Term(ref name) => {
+                        Symbol::Token(ref name) => {
                             if !self.tokens.contains(name) {
                                 return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
                                     sym: Some(sym.clone())});
@@ -212,7 +212,7 @@ mod test {
     }
 
     fn token(n: &str) -> Symbol {
-        Symbol::Term(n.to_string())
+        Symbol::Token(n.to_string())
     }
 
     #[test]

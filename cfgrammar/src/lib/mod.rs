@@ -94,7 +94,7 @@ pub use idxnewtype::{RIdx, PIdx, SIdx, TIdx};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Symbol<StorageT> {
     Rule(RIdx<StorageT>),
-    Term(TIdx<StorageT>)
+    Token(TIdx<StorageT>)
 }
 
 pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {

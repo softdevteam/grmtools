@@ -264,7 +264,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                 // Add a production for each implicit token
                 for t in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(PIdx(prods.len().as_()));
-                    prods.push(Some(vec![Symbol::Term(term_map[t]), Symbol::Rule(rule_idx)]));
+                    prods.push(Some(vec![Symbol::Token(term_map[t]), Symbol::Rule(rule_idx)]));
                     prod_precs.push(Some(None));
                     prods_rules.push(Some(rule_idx));
                 }
@@ -285,8 +285,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                         ast::Symbol::Rule(ref n) => {
                             prod.push(Symbol::Rule(nonterm_map[n]));
                         },
-                        ast::Symbol::Term(ref n) => {
-                            prod.push(Symbol::Term(term_map[n]));
+                        ast::Symbol::Token(ref n) => {
+                            prod.push(Symbol::Token(term_map[n]));
                             if implicit_rule.is_some() {
                                 prod.push(Symbol::Rule(nonterm_map[&implicit_rule.clone().unwrap()]));
                             }
@@ -298,7 +298,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                     prec = Some(ast.precs[n]);
                 } else {
                     for astsym in astprod.symbols.iter().rev() {
-                        if let ast::Symbol::Term(ref n) = *astsym {
+                        if let ast::Symbol::Token(ref n) = *astsym {
                             if let Some(p) = ast.precs.get(n) {
                                 prec = Some(*p);
                             }
@@ -582,7 +582,7 @@ where usize: AsPrimitive<StorageT>
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Rule(i) => self.min_sentence_cost(i),
-                        Symbol::Term(i)    => u16::from(self.token_costs[usize::from(i)])
+                        Symbol::Token(i)    => u16::from(self.token_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc < low_sc.unwrap() {
@@ -604,7 +604,7 @@ where usize: AsPrimitive<StorageT>
                         st.push((p_idx, i + 1));
                         st.push((cheapest_prod(*j), 0));
                     },
-                    Symbol::Term(j) => {
+                    Symbol::Token(j) => {
                         s.push(*j);
                     }
                 }
@@ -623,7 +623,7 @@ where usize: AsPrimitive<StorageT>
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Rule(i) => self.min_sentence_cost(i),
-                        Symbol::Term(i)    => u16::from(self.token_costs[usize::from(i)])
+                        Symbol::Token(i)    => u16::from(self.token_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc <= low_sc.unwrap() {
@@ -659,7 +659,7 @@ where usize: AsPrimitive<StorageT>
             for sym in prod {
                 match *sym {
                     Symbol::Rule(nt_idx) => ms.push(self.min_sentences(nt_idx)),
-                    Symbol::Term(t_idx) => ms.push(vec![vec![t_idx]])
+                    Symbol::Token(t_idx) => ms.push(vec![vec![t_idx]])
                 }
             }
 
@@ -763,7 +763,7 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
-                                 Symbol::Term(token_idx) =>
+                                 Symbol::Token(token_idx) =>
                                      u16::from(token_costs[usize::from(token_idx)]),
                                  Symbol::Rule(nt_idx) => {
                                      if !done[usize::from(nt_idx)] {
@@ -836,7 +836,7 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
                     let sc = match *sym {
-                                 Symbol::Term(token_idx) =>
+                                 Symbol::Token(token_idx) =>
                                      u16::from(token_costs[usize::from(token_idx)]),
                                  Symbol::Rule(nt_idx) => {
                                      if costs[usize::from(nt_idx)] == u16::max_value() {
@@ -931,7 +931,7 @@ mod test {
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Rule(grm.rule_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);
-        assert_eq!(*r_prod, [Symbol::Term(grm.token_idx("T").unwrap())]);
+        assert_eq!(*r_prod, [Symbol::Token(grm.token_idx("T").unwrap())]);
         assert_eq!(grm.prods_rules, vec![RIdx(1), RIdx(0)]);
 
         assert_eq!(grm.tokens_map(),
@@ -963,7 +963,7 @@ mod test {
         assert_eq!(r_prod[0], Symbol::Rule(grm.rule_idx("S").unwrap()));
         let s_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("S").unwrap())][0]);
         assert_eq!(s_prod.len(), 1);
-        assert_eq!(s_prod[0], Symbol::Term(grm.token_idx("T").unwrap()));
+        assert_eq!(s_prod[0], Symbol::Token(grm.token_idx("T").unwrap()));
     }
 
     #[test]
@@ -988,11 +988,11 @@ mod test {
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);
         assert_eq!(r_prod.len(), 3);
         assert_eq!(r_prod[0], Symbol::Rule(grm.rule_idx("S").unwrap()));
-        assert_eq!(r_prod[1], Symbol::Term(grm.token_idx("T1").unwrap()));
+        assert_eq!(r_prod[1], Symbol::Token(grm.token_idx("T1").unwrap()));
         assert_eq!(r_prod[2], Symbol::Rule(grm.rule_idx("S").unwrap()));
         let s_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("S").unwrap())][0]);
         assert_eq!(s_prod.len(), 1);
-        assert_eq!(s_prod[0], Symbol::Term(grm.token_idx("T2").unwrap()));
+        assert_eq!(s_prod[0], Symbol::Token(grm.token_idx("T2").unwrap()));
     }
 
     #[test]
@@ -1101,7 +1101,7 @@ mod test {
 
         let s_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][0])];
         assert_eq!(s_prod1.len(), 2);
-        assert_eq!(s_prod1[0], Symbol::Term(grm.token_idx("a").unwrap()));
+        assert_eq!(s_prod1[0], Symbol::Token(grm.token_idx("a").unwrap()));
         assert_eq!(s_prod1[1], Symbol::Rule(grm.rule_idx(IMPLICIT_RULE).unwrap()));
 
         let s_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][1])];
@@ -1113,7 +1113,7 @@ mod test {
 
         let t_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][0])];
         assert_eq!(t_prod1.len(), 2);
-        assert_eq!(t_prod1[0], Symbol::Term(grm.token_idx("c").unwrap()));
+        assert_eq!(t_prod1[0], Symbol::Token(grm.token_idx("c").unwrap()));
         assert_eq!(t_prod1[1], Symbol::Rule(grm.rule_idx(IMPLICIT_RULE).unwrap()));
 
         let t_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][1])];
@@ -1128,9 +1128,9 @@ mod test {
         assert_eq!(i_prod2.len(), 2);
         // We don't know what order the implicit rule will contain our tokens in,
         // hence the awkward dance below.
-        let cnd1 = vec![Symbol::Term(grm.token_idx("ws1").unwrap()),
+        let cnd1 = vec![Symbol::Token(grm.token_idx("ws1").unwrap()),
                         Symbol::Rule(grm.implicit_rule().unwrap())];
-        let cnd2 = vec![Symbol::Term(grm.token_idx("ws2").unwrap()),
+        let cnd2 = vec![Symbol::Token(grm.token_idx("ws2").unwrap()),
                         Symbol::Rule(grm.implicit_rule().unwrap())];
         assert!((*i_prod1 == cnd1 && *i_prod2 == cnd2) || (*i_prod1 == cnd2 && *i_prod2 == cnd1));
         let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];

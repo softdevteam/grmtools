@@ -98,7 +98,7 @@ where usize: AsPrimitive<StorageT>
                     }
                     for (sym_i, sym) in prod.iter().enumerate() {
                         match *sym {
-                            Symbol::Term(term_i) => {
+                            Symbol::Token(term_i) => {
                                 // if symbol is a Term, add to FIRSTS
                                 if !firsts.set(rul_i, term_i) {
                                     changed = true;

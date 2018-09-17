@@ -129,7 +129,7 @@ where usize: AsPrimitive<StorageT>
         {
             match sym {
                 Symbol::Rule(ntidx) => grm.rule_name(ntidx).to_string(),
-                Symbol::Term(tidx) => format!("'{}'", grm.token_name(tidx).unwrap_or(""))
+                Symbol::Token(tidx) => format!("'{}'", grm.token_name(tidx).unwrap_or(""))
             }
         }
 
@@ -272,13 +272,13 @@ mod test {
         // This follows the (not particularly logical) ordering of state numbers in the paper.
         let s0 = StIdx(0);
         sg.edge(s0, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap(); // s1
-        let s2 = sg.edge(s0, Symbol::Term(grm.token_idx("a").unwrap())).unwrap();
-        let s3 = sg.edge(s0, Symbol::Term(grm.token_idx("b").unwrap())).unwrap();
-        let s5 = sg.edge(s0, Symbol::Term(grm.token_idx("OPEN_BRACKET").unwrap())).unwrap();
-        assert_eq!(s2, sg.edge(s5, Symbol::Term(grm.token_idx("a").unwrap())).unwrap());
-        assert_eq!(s3, sg.edge(s5, Symbol::Term(grm.token_idx("b").unwrap())).unwrap());
-        assert_eq!(s5, sg.edge(s5, Symbol::Term(grm.token_idx("OPEN_BRACKET").unwrap())).unwrap());
+        let s2 = sg.edge(s0, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
+        let s3 = sg.edge(s0, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
+        let s5 = sg.edge(s0, Symbol::Token(grm.token_idx("OPEN_BRACKET").unwrap())).unwrap();
+        assert_eq!(s2, sg.edge(s5, Symbol::Token(grm.token_idx("a").unwrap())).unwrap());
+        assert_eq!(s3, sg.edge(s5, Symbol::Token(grm.token_idx("b").unwrap())).unwrap());
+        assert_eq!(s5, sg.edge(s5, Symbol::Token(grm.token_idx("OPEN_BRACKET").unwrap())).unwrap());
         let s4 = sg.edge(s5, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap();
-        sg.edge(s4, Symbol::Term(grm.token_idx("CLOSE_BRACKET").unwrap())).unwrap(); // s6
+        sg.edge(s4, Symbol::Token(grm.token_idx("CLOSE_BRACKET").unwrap())).unwrap(); // s6
     }
 }

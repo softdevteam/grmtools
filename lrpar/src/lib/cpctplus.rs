@@ -48,7 +48,7 @@ const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum Repair<StorageT> {
-    /// Insert a `Symbol::Term` with idx `token_idx`.
+    /// Insert a `Symbol::Token` with idx `token_idx`.
     InsertTerm(TIdx<StorageT>),
     /// Delete a symbol.
     Delete,

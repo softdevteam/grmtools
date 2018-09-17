@@ -429,9 +429,9 @@ pub fn parse_rcvry
 /// in the sequence of repairs is represented by a `ParseRepair`.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ParseRepair<StorageT> {
-    /// Insert a `Symbol::Term`.
+    /// Insert a `Symbol::Token`.
     Insert(TIdx<StorageT>),
-    /// Insert one of the sequences of `Symbol::Term`s.
+    /// Insert one of the sequences of `Symbol::Token`s.
     InsertSeq(Vec<Vec<TIdx<StorageT>>>),
     /// Delete a symbol.
     Delete,
