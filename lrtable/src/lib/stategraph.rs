@@ -158,7 +158,7 @@ where usize: AsPrimitive<StorageT>
                 };
                 o.push_str(&format!("{} [{} ->",
                                     " ".repeat(padding),
-                                    grm.rule_name(grm.prod_to_nonterm(p_idx))));
+                                    grm.rule_name(grm.prod_to_rule(p_idx))));
                 for (is_idx, is_sym) in grm.prod(p_idx).iter().enumerate() {
                     if is_idx == usize::from(s_idx) {
                         o.push_str(" .");

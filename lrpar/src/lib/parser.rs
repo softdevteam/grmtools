@@ -157,7 +157,7 @@ where usize: AsPrimitive<StorageT>
 
             match self.stable.action(st, la_tidx) {
                 Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
+                    let nonterm_idx = self.grm.prod_to_rule(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
                     tstack.push(Node::Nonterm{nonterm_idx, nodes});
@@ -243,7 +243,7 @@ where usize: AsPrimitive<StorageT>
 
             match self.stable.action(st, la_tidx) {
                 Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
+                    let nonterm_idx = self.grm.prod_to_rule(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
@@ -337,7 +337,7 @@ where usize: AsPrimitive<StorageT>
 
             match self.stable.action(st, la_tidx) {
                 Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
+                    let nonterm_idx = self.grm.prod_to_rule(prod_id);
                     let pop_num = self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)

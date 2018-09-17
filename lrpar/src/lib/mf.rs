@@ -293,7 +293,7 @@ where usize: AsPrimitive<StorageT>
         let top_pstack = *n.pstack.val().unwrap();
         for p_idx in self.parser.stable.core_reduces(top_pstack) {
             let sym_off = self.parser.grm.prod(p_idx).len();
-            let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
+            let nt_idx = self.parser.grm.prod_to_rule(p_idx);
             let mut qi_minus_alpha = n.pstack.clone();
             for _ in 0..sym_off {
                 qi_minus_alpha = qi_minus_alpha.parent().unwrap();
@@ -307,7 +307,7 @@ where usize: AsPrimitive<StorageT>
                 while self.parser.stable.reduce_only_state(goto_st_idx) {
                     let p_idx = self.parser.stable.core_reduces(goto_st_idx).last().unwrap();
                     let sym_off = self.parser.grm.prod(p_idx).len();
-                    let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
+                    let nt_idx = self.parser.grm.prod_to_rule(p_idx);
                     // Technically we should push goto_st_idx, and then pop sym_off elements, but
                     // we can avoid the push in cases where sym_off is greater than 0, compensating
                     // for that by poping (sym_off - 1) elements.
@@ -758,7 +758,7 @@ where usize: AsPrimitive<StorageT>
                 if usize::from(sym_off) < prod.len() {
                     continue;
                 }
-                let nt_idx = grm.prod_to_nonterm(p_idx);
+                let nt_idx = grm.prod_to_rule(p_idx);
 
                 // We've found an item in a core state where the dot is at the end of the rule:
                 // what we now do is reach backwards in the stategraph to find all of the

@@ -234,7 +234,7 @@ where usize: AsPrimitive<StorageT>
                 match actions.get(&off) {
                     Some(&Action::Reduce(p_idx)) => {
                         let prod_len = grm.prod(p_idx).len();
-                        let nt_idx = grm.prod_to_nonterm(p_idx);
+                        let nt_idx = grm.prod_to_rule(p_idx);
                         nt_depth.insert((nt_idx, prod_len), p_idx);
                     },
                     Some(&Action::Shift(_)) => {

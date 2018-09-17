@@ -359,7 +359,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the nonterm index of the production `i`. Panics if `i` doesn't exist.
-    pub fn prod_to_nonterm(&self, i: PIdx<StorageT>) -> RIdx<StorageT>
+    pub fn prod_to_rule(&self, i: PIdx<StorageT>) -> RIdx<StorageT>
     {
         self.prods_rules[usize::from(i)]
     }
@@ -396,7 +396,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return this grammar's start rule.
     pub fn start_nonterm(&self) -> RIdx<StorageT> {
-        self.prod_to_nonterm(self.start_prod)
+        self.prod_to_rule(self.start_prod)
     }
 
     /// Return the production index of the start rule's sole production (for Yacc grammars the
@@ -496,7 +496,7 @@ where usize: AsPrimitive<StorageT>
     /// Return the index of the start rule.
     fn start_rule_idx(&self) -> RIdx<StorageT>
     {
-        self.prod_to_nonterm(self.start_prod)
+        self.prod_to_rule(self.start_prod)
     }
 
     fn terms_len(&self) -> TIdx<StorageT> {
