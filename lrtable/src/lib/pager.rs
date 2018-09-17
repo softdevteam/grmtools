@@ -180,7 +180,7 @@ where usize: AsPrimitive<StorageT>
     for _ in 0..usize::from(grm.terms_len()).checked_add(1).unwrap(){
         cnd_term_weaklies.push(Vec::new());
     }
-    for _ in grm.iter_ntidxs() { cnd_nonterm_weaklies.push(Vec::new()); }
+    for _ in grm.iter_rules() { cnd_nonterm_weaklies.push(Vec::new()); }
 
     let mut todo = 1; // How many None values are there in closed_states?
     let mut todo_off = 0; // Offset in closed states to start searching for the next todo.

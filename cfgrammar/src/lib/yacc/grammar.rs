@@ -438,7 +438,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         todo[usize::from(from)] = true;
         loop {
             let mut empty = true;
-            for ntidx in self.iter_ntidxs() {
+            for ntidx in self.iter_rules() {
                 if !todo[usize::from(ntidx)] {
                     continue;
                 }
@@ -817,7 +817,7 @@ fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
     costs.resize(usize::from(grm.rules_len()), 0);
 
     // First mark all recursive non-terminals.
-    for ntidx in grm.iter_ntidxs() {
+    for ntidx in grm.iter_rules() {
         // Calling has_path so frequently is not exactly efficient...
         if grm.has_path(ntidx, ntidx) {
             costs[usize::from(ntidx)] = u16::max_value();
@@ -943,7 +943,7 @@ mod test {
                    [("T", TIdx(0))].iter()
                                                 .cloned()
                                                 .collect::<HashMap<&str, TIdx<_>>>());
-        assert_eq!(grm.iter_ntidxs().collect::<Vec<_>>(),
+        assert_eq!(grm.iter_rules().collect::<Vec<_>>(),
                    vec![RIdx(0), RIdx(1)]);
     }
 

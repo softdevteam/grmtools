@@ -68,7 +68,7 @@ where usize: AsPrimitive<StorageT>
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
         let mut firsts = Vec::with_capacity(usize::from(grm.rules_len()));
-        for _ in grm.iter_ntidxs() {
+        for _ in grm.iter_rules() {
             firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
         }
         let mut firsts = YaccFirsts {
@@ -82,7 +82,7 @@ where usize: AsPrimitive<StorageT>
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for rul_i in grm.iter_ntidxs() {
+            for rul_i in grm.iter_rules() {
                 // For each rule E
                 for prod_i in grm.nonterm_to_prods(rul_i).iter() {
                     // ...and each production A

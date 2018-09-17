@@ -109,7 +109,7 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
 
     /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
     /// grammar's valid `RIdx`s.
-    fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=RIdx<StorageT>>>
+    fn iter_rules(&self) -> Box<dyn Iterator<Item=RIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
         // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
