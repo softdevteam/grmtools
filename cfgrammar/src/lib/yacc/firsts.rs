@@ -35,7 +35,7 @@ use std::marker::PhantomData;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use {Firsts, Grammar, NTIdx, Symbol, TIdx};
+use {Firsts, Grammar, RIdx, Symbol, TIdx};
 use yacc::YaccGrammar;
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
@@ -149,19 +149,19 @@ impl<StorageT: 'static + PrimInt + Unsigned>
 Firsts<StorageT> for YaccFirsts<StorageT>
 where usize: AsPrimitive<StorageT>
 {
-    fn firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob {
+    fn firsts(&self, ntidx: RIdx<StorageT>) -> &Vob {
         &self.firsts[usize::from(ntidx)]
     }
 
-    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+    fn is_set(&self, nidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
         self.firsts[usize::from(nidx)][usize::from(tidx)]
     }
 
-    fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool {
+    fn is_epsilon_set(&self, ntidx: RIdx<StorageT>) -> bool {
         self.epsilons[usize::from(ntidx)]
     }
 
-    fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+    fn set(&mut self, ntidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
         let nt = &mut self.firsts[usize::from(ntidx)];
         if nt[usize::from(tidx)] {
             true

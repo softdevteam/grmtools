@@ -36,7 +36,7 @@ use std::hash::{Hash, BuildHasherDefault};
 use std::fmt::{self, Debug};
 use std::marker::PhantomData;
 
-use cfgrammar::{Grammar, PIdx, NTIdx, Symbol, TIdx};
+use cfgrammar::{Grammar, PIdx, RIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -334,7 +334,7 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Return the goto state for `state_idx` and `nonterm_idx`, or `None` if there isn't any.
-    pub fn goto(&self, state_idx: StIdx, nonterm_idx: NTIdx<StorageT>) -> Option<StIdx> {
+    pub fn goto(&self, state_idx: StIdx, nonterm_idx: RIdx<StorageT>) -> Option<StIdx> {
         let off = (u32::from(state_idx) * self.nonterms_len) + u32::from(nonterm_idx);
         self.gotos.get(&off).and_then(|x| Some(*x))
     }

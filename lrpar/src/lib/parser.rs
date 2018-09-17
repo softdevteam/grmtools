@@ -36,7 +36,7 @@ use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, NTIdx, TIdx};
+use cfgrammar::{Grammar, RIdx, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
@@ -51,7 +51,7 @@ const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node<StorageT> {
     Term{lexeme: Lexeme<StorageT>},
-    Nonterm{nonterm_idx: NTIdx<StorageT>, nodes: Vec<Node<StorageT>>}
+    Nonterm{nonterm_idx: RIdx<StorageT>, nodes: Vec<Node<StorageT>>}
 }
 
 impl<StorageT: 'static + PrimInt + Unsigned> Node<StorageT>

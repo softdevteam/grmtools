@@ -64,7 +64,7 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
-    /// grammar's valid `NTIdx`s.
+    /// grammar's valid `RIdx`s.
     pub fn iter_stidxs(&self) -> Box<dyn Iterator<Item=StIdx>>
     {
         // We can use as_ safely, because we know that we're only generating integers from

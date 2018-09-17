@@ -4,7 +4,7 @@ extern crate cfgrammar;
 #[macro_use] extern crate lrlex;
 #[macro_use] extern crate lrpar;
 
-use cfgrammar::NTIdx;
+use cfgrammar::RIdx;
 use lrpar::Node;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
@@ -61,7 +61,7 @@ impl<'a> Eval<'a> {
 
     fn eval(&self, n: &Node<u8>) -> i64 {
         match *n {
-            Node::Nonterm{nonterm_idx: NTIdx(ntidx), ref nodes} if ntidx==NT_EXPR => {
+            Node::Nonterm{nonterm_idx: RIdx(ntidx), ref nodes} if ntidx==NT_EXPR => {
                 if nodes.len() == 1 {
                     self.eval(&nodes[0])
                 } else {
@@ -69,7 +69,7 @@ impl<'a> Eval<'a> {
                     self.eval(&nodes[0]) + self.eval(&nodes[2])
                 }
             },
-            Node::Nonterm{nonterm_idx: NTIdx(ntidx), ref nodes} if ntidx==NT_TERM => {
+            Node::Nonterm{nonterm_idx: RIdx(ntidx), ref nodes} if ntidx==NT_TERM => {
                 if nodes.len() == 1 {
                     self.eval(&nodes[0])
                 } else {
@@ -77,7 +77,7 @@ impl<'a> Eval<'a> {
                     self.eval(&nodes[0]) * self.eval(&nodes[2])
                 }
             },
-            Node::Nonterm{nonterm_idx: NTIdx(ntidx), ref nodes} if ntidx==NT_FACTOR => {
+            Node::Nonterm{nonterm_idx: RIdx(ntidx), ref nodes} if ntidx==NT_FACTOR => {
                 if nodes.len() == 1 {
                     if let Node::Term{lexeme} = nodes[0] {
                         self.s[lexeme.start()..lexeme.end()].parse().unwrap()

@@ -88,12 +88,12 @@ mod idxnewtype;
 pub mod yacc;
 
 /// A type specifically for nonterminal indices.
-pub use idxnewtype::{NTIdx, PIdx, SIdx, TIdx};
+pub use idxnewtype::{RIdx, PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Symbol<StorageT> {
-    Nonterm(NTIdx<StorageT>),
+    Nonterm(RIdx<StorageT>),
     Term(TIdx<StorageT>)
 }
 
@@ -101,20 +101,20 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     /// How many productions does this grammar have?
     fn prods_len(&self) -> PIdx<StorageT>;
     /// How many nonterminals does this grammar have?
-    fn nonterms_len(&self) -> NTIdx<StorageT>;
+    fn nonterms_len(&self) -> RIdx<StorageT>;
     /// What is the index of the start rule?
-    fn start_rule_idx(&self) -> NTIdx<StorageT>;
+    fn start_rule_idx(&self) -> RIdx<StorageT>;
     /// How many terminals does this grammar have?
     fn terms_len(&self) -> TIdx<StorageT>;
 
     /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
-    /// grammar's valid `NTIdx`s.
-    fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=NTIdx<StorageT>>>
+    /// grammar's valid `RIdx`s.
+    fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=RIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.nonterms_len() and, since nonterms_len() returns an NTIdx<StorageT>, then by
+        // 0..self.nonterms_len() and, since nonterms_len() returns an RIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::from(self.nonterms_len())).map(|x| NTIdx(x.as_())))
+        Box::new((0..usize::from(self.nonterms_len())).map(|x| RIdx(x.as_())))
     }
 
     /// Return an iterator which produces (in order from `0..self.prods_len()`) all this
@@ -122,7 +122,7 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     fn iter_pidxs(&self) -> Box<dyn Iterator<Item=PIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.nonterms_len() and, since nonterms_len() returns an NTIdx<StorageT>, then by
+        // 0..self.nonterms_len() and, since nonterms_len() returns an RIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
         Box::new((0..usize::from(self.prods_len())).map(|x| PIdx(x.as_())))
     }
@@ -140,15 +140,15 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
 
 pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
     /// Return all the firsts for nonterminal `ntidx`.
-    fn firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob;
+    fn firsts(&self, ntidx: RIdx<StorageT>) -> &Vob;
 
     /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx`.
-    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
+    fn is_set(&self, nidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 
     /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
-    fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool;
+    fn is_epsilon_set(&self, ntidx: RIdx<StorageT>) -> bool;
 
     /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
-    fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
+    fn set(&mut self, ntidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 }

@@ -37,7 +37,7 @@ use std::fmt;
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 
-use {Firsts, Grammar, NTIdx, PIdx, SIdx, Symbol, TIdx};
+use {Firsts, Grammar, RIdx, PIdx, SIdx, Symbol, TIdx};
 use super::YaccKind;
 use yacc::firsts::YaccFirsts;
 use yacc::parser::YaccParser;
@@ -71,8 +71,8 @@ pub enum AssocKind {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct YaccGrammar<StorageT=u32> {
     /// How many nonterminals does this grammar have?
-    nonterms_len: NTIdx<StorageT>,
-    /// A mapping from `NTIdx` -> `String`.
+    nonterms_len: RIdx<StorageT>,
+    /// A mapping from `RIdx` -> `String`.
     nonterm_names: Vec<String>,
     /// A mapping from `TIdx` -> `Option<String>`. Every user-specified terminal will have a name,
     /// but terminals inserted by cfgrammar (e.g. the EOF terminal) won't.
@@ -94,12 +94,12 @@ pub struct YaccGrammar<StorageT=u32> {
     /// are not necessarily stored sequentially.
     rules_prods: Vec<Vec<PIdx<StorageT>>>,
     /// A mapping from productions to their corresponding rule indexes.
-    prods_rules: Vec<NTIdx<StorageT>>,
+    prods_rules: Vec<RIdx<StorageT>>,
     /// The precedence of each production.
     prod_precs: Vec<Option<Precedence>>,
     /// The index of the nonterminal added for implicit tokens, if they were specified; otherwise
     /// `None`.
-    implicit_nonterm: Option<NTIdx<StorageT>>
+    implicit_nonterm: Option<RIdx<StorageT>>
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -132,8 +132,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             }
         };
 
-        // Check that StorageT is big enough to hold NTIdx/PIdx/SIdx/TIdx values; after these
-        // checks we can guarantee that things like NTIdx(ast.rules.len().as_()) are safe.
+        // Check that StorageT is big enough to hold RIdx/PIdx/SIdx/TIdx values; after these
+        // checks we can guarantee that things like RIdx(ast.rules.len().as_()) are safe.
         if ast.rules.len() > num_traits::cast(StorageT::max_value()).unwrap() {
             panic!("StorageT is not big enough to store this grammar's non-terminals.");
         }
@@ -194,10 +194,10 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             nonterm_names.push(k.clone());
         }
         let mut rules_prods:Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(nonterm_names.len());
-        let mut nonterm_map = HashMap::<String, NTIdx<StorageT>>::new();
+        let mut nonterm_map = HashMap::<String, RIdx<StorageT>>::new();
         for (i, v) in nonterm_names.iter().enumerate() {
             rules_prods.push(Vec::new());
-            nonterm_map.insert(v.clone(), NTIdx(i.as_()));
+            nonterm_map.insert(v.clone(), RIdx(i.as_()));
         }
 
         let mut term_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
@@ -316,7 +316,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         assert!(!term_names.is_empty());
         assert!(!nonterm_names.is_empty());
         Ok(YaccGrammar{
-            nonterms_len:     NTIdx(nonterm_names.len().as_()),
+            nonterms_len:     RIdx(nonterm_names.len().as_()),
             nonterm_names,
             terms_len:        TIdx(term_names.len().as_()),
             eof_term_idx,
@@ -338,12 +338,12 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the productions for nonterminal `i`. Panics if `i` doesn't exist.
-    pub fn nonterm_to_prods(&self, i: NTIdx<StorageT>) -> &[PIdx<StorageT>] {
+    pub fn nonterm_to_prods(&self, i: RIdx<StorageT>) -> &[PIdx<StorageT>] {
         &self.rules_prods[usize::from(i)]
     }
 
     /// Return the name of nonterminal `i`. Panics if `i` doesn't exist.
-    pub fn nonterm_name(&self, i: NTIdx<StorageT>) -> &str {
+    pub fn nonterm_name(&self, i: RIdx<StorageT>) -> &str {
         &self.nonterm_names[usize::from(i)]
     }
 
@@ -359,7 +359,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the nonterm index of the production `i`. Panics if `i` doesn't exist.
-    pub fn prod_to_nonterm(&self, i: PIdx<StorageT>) -> NTIdx<StorageT>
+    pub fn prod_to_nonterm(&self, i: PIdx<StorageT>) -> RIdx<StorageT>
     {
         self.prods_rules[usize::from(i)]
     }
@@ -395,7 +395,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return this grammar's start nonterminal.
-    pub fn start_nonterm(&self) -> NTIdx<StorageT> {
+    pub fn start_nonterm(&self) -> RIdx<StorageT> {
         self.prod_to_nonterm(self.start_prod)
     }
 
@@ -405,18 +405,18 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         self.start_prod
     }
 
-    /// Return the `NTIdx` of the implict nonterm if it exists, or `None` otherwise.
-    pub fn implicit_nonterm(&self) -> Option<NTIdx<StorageT>> {
+    /// Return the `RIdx` of the implict nonterm if it exists, or `None` otherwise.
+    pub fn implicit_nonterm(&self) -> Option<RIdx<StorageT>> {
         self.implicit_nonterm
     }
 
     /// Return the index of the nonterminal named `n` or `None` if it doesn't exist.
-    pub fn nonterm_idx(&self, n: &str) -> Option<NTIdx<StorageT>> {
+    pub fn nonterm_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
         self.nonterm_names.iter()
                           .position(|x| x == n)
                           // The call to as_() is safe because nonterm_names is guaranteed to be
                           // small enough to fit into StorageT
-                          .map(|x| NTIdx(x.as_()))
+                          .map(|x| RIdx(x.as_()))
     }
 
     /// Return the index of the terminal named `n` or `None` if it doesn't exist.
@@ -430,7 +430,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Is there a path from the `from` non-term to the `to` non-term? Note that recursive rules
     /// return `true` for a path from themselves to themselves.
-    pub fn has_path(&self, from: NTIdx<StorageT>, to: NTIdx<StorageT>) -> bool {
+    pub fn has_path(&self, from: RIdx<StorageT>, to: RIdx<StorageT>) -> bool {
         let mut seen = vec![];
         seen.resize(usize::from(self.nonterms_len()), false);
         let mut todo = vec![];
@@ -489,12 +489,12 @@ where usize: AsPrimitive<StorageT>
         self.prods_len
     }
 
-    fn nonterms_len(&self) -> NTIdx<StorageT> {
+    fn nonterms_len(&self) -> RIdx<StorageT> {
         self.nonterms_len
     }
 
     /// Return the index of the start rule.
-    fn start_rule_idx(&self) -> NTIdx<StorageT>
+    fn start_rule_idx(&self) -> RIdx<StorageT>
     {
         self.prod_to_nonterm(self.start_prod)
     }
@@ -554,7 +554,7 @@ where usize: AsPrimitive<StorageT>
     /// What is the cost of a minimal sentence for the non-terminal `nonterm_idx`? Note that,
     /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
     /// much faster.
-    pub fn min_sentence_cost(&self, nonterm_idx: NTIdx<StorageT>) -> u16 {
+    pub fn min_sentence_cost(&self, nonterm_idx: RIdx<StorageT>) -> u16 {
         self.nonterm_min_costs.borrow_mut()
                               .get_or_insert_with(|| nonterm_min_costs(self.grm,
                                                                        &self.term_costs))
@@ -564,7 +564,7 @@ where usize: AsPrimitive<StorageT>
     /// What is the cost of a maximal sentence for the non-terminal `nonterm_idx`? Non-terminals
     /// which can generate sentences of unbounded length return None; non-terminals which can only
     /// generate maximal strings of a finite length return a `Some(u16)`.
-    pub fn max_sentence_cost(&self, nonterm_idx: NTIdx<StorageT>) -> Option<u16> {
+    pub fn max_sentence_cost(&self, nonterm_idx: RIdx<StorageT>) -> Option<u16> {
         let v = self.nonterm_max_costs.borrow_mut()
                                       .get_or_insert_with(||
                                            nonterm_max_costs(self.grm, &self.term_costs))
@@ -578,8 +578,8 @@ where usize: AsPrimitive<StorageT>
 
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
     /// non-terminal `nonterm_idx`.
-    pub fn min_sentence(&self, nonterm_idx: NTIdx<StorageT>) -> Vec<TIdx<StorageT>> {
-        let cheapest_prod = |nt_idx: NTIdx<StorageT>| -> PIdx<StorageT> {
+    pub fn min_sentence(&self, nonterm_idx: RIdx<StorageT>) -> Vec<TIdx<StorageT>> {
+        let cheapest_prod = |nt_idx: RIdx<StorageT>| -> PIdx<StorageT> {
             let mut low_sc = None;
             let mut low_idx = None;
             for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
@@ -619,8 +619,8 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Return (in arbitrary order) all the minimal sentences for the non-terminal `nonterm_idx`.
-    pub fn min_sentences(&self, nonterm_idx: NTIdx<StorageT>) -> Vec<Vec<TIdx<StorageT>>> {
-        let cheapest_prods = |nt_idx: NTIdx<StorageT>| -> Vec<PIdx<StorageT>> {
+    pub fn min_sentences(&self, nonterm_idx: RIdx<StorageT>) -> Vec<Vec<TIdx<StorageT>>> {
+        let cheapest_prods = |nt_idx: RIdx<StorageT>| -> Vec<PIdx<StorageT>> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
             for &pidx in self.grm.nonterm_to_prods(nt_idx).iter() {
@@ -763,7 +763,7 @@ fn nonterm_min_costs<StorageT: 'static + PrimInt + Unsigned>
             let mut ls_noncmplt = None; // lowest non-completed cost
             // The call to as_() is guaranteed safe because done.len() == grm.nonterms_len(), and
             // we guarantee that grm.nonterms_len() can fit in StorageT.
-            for p_idx in grm.nonterm_to_prods(NTIdx(i.as_())).iter() {
+            for p_idx in grm.nonterm_to_prods(RIdx(i.as_())).iter() {
                 let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
@@ -836,7 +836,7 @@ fn nonterm_max_costs<StorageT: 'static + PrimInt + Unsigned>
             let mut hs_noncmplt = None; // highest non-completed cost
             // The call to as_() is guaranteed safe because done.len() == grm.nonterms_len(), and
             // we guarantee that grm.nonterms_len() can fit in StorageT.
-            'a: for p_idx in grm.nonterm_to_prods(NTIdx(i.as_())).iter() {
+            'a: for p_idx in grm.nonterm_to_prods(RIdx(i.as_())).iter() {
                 let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
                 for sym in grm.prod(*p_idx) {
@@ -918,7 +918,7 @@ impl fmt::Display for YaccGrammarError {
 mod test {
     use std::collections::HashMap;
     use super::{IMPLICIT_NONTERM, IMPLICIT_START_NONTERM, nonterm_max_costs, nonterm_min_costs};
-    use {Grammar, NTIdx, PIdx, Symbol, TIdx};
+    use {Grammar, RIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
     #[test]
@@ -937,14 +937,14 @@ mod test {
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
-        assert_eq!(grm.prods_rules, vec![NTIdx(1), NTIdx(0)]);
+        assert_eq!(grm.prods_rules, vec![RIdx(1), RIdx(0)]);
 
         assert_eq!(grm.terms_map(),
                    [("T", TIdx(0))].iter()
                                                 .cloned()
                                                 .collect::<HashMap<&str, TIdx<_>>>());
         assert_eq!(grm.iter_ntidxs().collect::<Vec<_>>(),
-                   vec![NTIdx(0), NTIdx(1)]);
+                   vec![RIdx(0), RIdx(1)]);
     }
 
     #[test]
@@ -985,9 +985,9 @@ mod test {
         assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
                                          vec![PIdx(0)],
                                          vec![PIdx(1)]]);
-        assert_eq!(grm.prods_rules, vec![NTIdx(1),
-                                         NTIdx(2),
-                                         NTIdx(0)]);
+        assert_eq!(grm.prods_rules, vec![RIdx(1),
+                                         RIdx(2),
+                                         RIdx(0)]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
@@ -1012,12 +1012,12 @@ mod test {
              | 'z';
           ").unwrap();
 
-        assert_eq!(grm.prods_rules, vec![NTIdx(1),
-                                         NTIdx(1),
-                                         NTIdx(2),
-                                         NTIdx(3),
-                                         NTIdx(3),
-                                         NTIdx(0)]);
+        assert_eq!(grm.prods_rules, vec![RIdx(1),
+                                         RIdx(1),
+                                         RIdx(2),
+                                         RIdx(3),
+                                         RIdx(3),
+                                         RIdx(0)]);
     }
 
     #[test]
@@ -1278,12 +1278,12 @@ mod test {
             A: 'b';
             ").unwrap();
 
-        assert_eq!(grm.prods_rules, vec![NTIdx(1),
-                                         NTIdx(1),
-                                         NTIdx(2),
-                                         NTIdx(3),
-                                         NTIdx(3),
-                                         NTIdx(2),
-                                         NTIdx(0)]);
+        assert_eq!(grm.prods_rules, vec![RIdx(1),
+                                         RIdx(1),
+                                         RIdx(2),
+                                         RIdx(3),
+                                         RIdx(3),
+                                         RIdx(2),
+                                         RIdx(0)]);
     }
 }
