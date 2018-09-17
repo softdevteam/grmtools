@@ -53,7 +53,7 @@ const RUST_FILE_EXT: &str = "rs";
 pub struct LexerBuilder<StorageT=u32> {
     rule_ids_map: Option<HashMap<String, StorageT>>,
     allow_missing_terms_in_lexer: bool,
-    allow_missing_terms_in_parser: bool
+    allow_missing_tokens_in_parser: bool
 }
 
 impl<StorageT> LexerBuilder<StorageT>
@@ -79,7 +79,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
         LexerBuilder{
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
-            allow_missing_terms_in_parser: true
+            allow_missing_tokens_in_parser: true
         }
     }
 
@@ -165,7 +165,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
                 panic!();
             }
         }
-        if !self.allow_missing_terms_in_parser {
+        if !self.allow_missing_tokens_in_parser {
             if let Some(ref mfp) = missing_from_parser {
                 eprintln!("Error: the following tokens are defined in the lexer but not used in the grammar:");
                 for n in mfp {
@@ -218,8 +218,8 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     /// If passed false, tokens defined in the lexer but not used in the grammar will cause a
     /// panic at lexer generation time. Defaults to true (since lexers sometimes define tokens such
     /// as reserved words, which are intentionally not in the grammar).
-    pub fn allow_missing_terms_in_parser(mut self, allow: bool) -> Self {
-        self.allow_missing_terms_in_parser = allow;
+    pub fn allow_missing_tokens_in_parser(mut self, allow: bool) -> Self {
+        self.allow_missing_tokens_in_parser = allow;
         self
     }
 }
