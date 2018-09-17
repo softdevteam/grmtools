@@ -220,7 +220,7 @@ pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>
                     la: Vec<&str>)
 where usize: AsPrimitive<StorageT>
 {
-    let ab_prod_off = grm.rule_to_prods(grm.nonterm_idx(nt).unwrap())[prod_off];
+    let ab_prod_off = grm.rule_to_prods(grm.rule_idx(nt).unwrap())[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot)];
     for tidx in grm.iter_tidxs() {
         let bit = ctx[usize::from(tidx)];
@@ -271,14 +271,14 @@ mod test {
 
         // This follows the (not particularly logical) ordering of state numbers in the paper.
         let s0 = StIdx(0);
-        sg.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap(); // s1
+        sg.edge(s0, Symbol::Nonterm(grm.rule_idx("A").unwrap())).unwrap(); // s1
         let s2 = sg.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
         let s3 = sg.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
         let s5 = sg.edge(s0, Symbol::Term(grm.term_idx("OPEN_BRACKET").unwrap())).unwrap();
         assert_eq!(s2, sg.edge(s5, Symbol::Term(grm.term_idx("a").unwrap())).unwrap());
         assert_eq!(s3, sg.edge(s5, Symbol::Term(grm.term_idx("b").unwrap())).unwrap());
         assert_eq!(s5, sg.edge(s5, Symbol::Term(grm.term_idx("OPEN_BRACKET").unwrap())).unwrap());
-        let s4 = sg.edge(s5, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
+        let s4 = sg.edge(s5, Symbol::Nonterm(grm.rule_idx("A").unwrap())).unwrap();
         sg.edge(s4, Symbol::Term(grm.term_idx("CLOSE_BRACKET").unwrap())).unwrap(); // s6
     }
 }

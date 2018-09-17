@@ -51,7 +51,7 @@ const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node<StorageT> {
     Term{lexeme: Lexeme<StorageT>},
-    Nonterm{nonterm_idx: RIdx<StorageT>, nodes: Vec<Node<StorageT>>}
+    Nonterm{rule_idx: RIdx<StorageT>, nodes: Vec<Node<StorageT>>}
 }
 
 impl<StorageT: 'static + PrimInt + Unsigned> Node<StorageT>
@@ -73,8 +73,8 @@ where usize: AsPrimitive<StorageT>
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
-                Node::Nonterm{nonterm_idx, ref nodes} => {
-                    s.push_str(&format!("{}\n", grm.rule_name(nonterm_idx)));
+                Node::Nonterm{rule_idx, ref nodes} => {
+                    s.push_str(&format!("{}\n", grm.rule_name(rule_idx)));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }
@@ -157,14 +157,14 @@ where usize: AsPrimitive<StorageT>
 
             match self.stable.action(st, la_tidx) {
                 Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_rule(prod_id);
+                    let rule_idx = self.grm.prod_to_rule(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
-                    tstack.push(Node::Nonterm{nonterm_idx, nodes});
+                    tstack.push(Node::Nonterm{rule_idx, nodes});
 
                     pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
-                    pstack.push(self.stable.goto(prior, nonterm_idx).unwrap());
+                    pstack.push(self.stable.goto(prior, rule_idx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     let la_lexeme = self.next_lexeme(la_idx);
@@ -243,16 +243,16 @@ where usize: AsPrimitive<StorageT>
 
             match self.stable.action(st, la_tidx) {
                 Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_rule(prod_id);
+                    let rule_idx = self.grm.prod_to_rule(prod_id);
                     let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
-                        tstack_uw.push(Node::Nonterm{nonterm_idx, nodes});
+                        tstack_uw.push(Node::Nonterm{rule_idx, nodes});
                     }
 
                     pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
-                    pstack.push(self.stable.goto(prior, nonterm_idx).unwrap());
+                    pstack.push(self.stable.goto(prior, rule_idx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     if let Some(ref mut tstack_uw) = *tstack {
@@ -337,19 +337,19 @@ where usize: AsPrimitive<StorageT>
 
             match self.stable.action(st, la_tidx) {
                 Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_rule(prod_id);
+                    let rule_idx = self.grm.prod_to_rule(prod_id);
                     let pop_num = self.grm.prod(prod_id).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
                                              .collect::<Vec<Node<StorageT>>>();
-                        tstack_uw.push(Node::Nonterm{nonterm_idx, nodes});
+                        tstack_uw.push(Node::Nonterm{rule_idx, nodes});
                     }
 
                     for _ in 0..pop_num {
                         pstack = pstack.parent().unwrap();
                     }
                     let prior = *pstack.val().unwrap();
-                    pstack = pstack.child(self.stable.goto(prior, nonterm_idx).unwrap());
+                    pstack = pstack.child(self.stable.goto(prior, rule_idx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     if let Some(ref mut tstack_uw) = *tstack {

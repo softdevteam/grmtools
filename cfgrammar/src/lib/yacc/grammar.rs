@@ -406,7 +406,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the index of the rule named `n` or `None` if it doesn't exist.
-    pub fn nonterm_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
+    pub fn rule_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
         self.rule_names.iter()
                           .position(|x| x == n)
                           // The call to as_() is safe because rule_names is guaranteed to be
@@ -546,24 +546,24 @@ where usize: AsPrimitive<StorageT>
                           nonterm_max_costs: RefCell::new(None)}
     }
 
-    /// What is the cost of a minimal sentence for the non-terminal `nonterm_idx`? Note that,
+    /// What is the cost of a minimal sentence for the non-terminal `rule_idx`? Note that,
     /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
     /// much faster.
-    pub fn min_sentence_cost(&self, nonterm_idx: RIdx<StorageT>) -> u16 {
+    pub fn min_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> u16 {
         self.nonterm_min_costs.borrow_mut()
                               .get_or_insert_with(|| nonterm_min_costs(self.grm,
                                                                        &self.term_costs))
-                              [usize::from(nonterm_idx)]
+                              [usize::from(rule_idx)]
     }
 
-    /// What is the cost of a maximal sentence for the non-terminal `nonterm_idx`? Non-terminals
+    /// What is the cost of a maximal sentence for the non-terminal `rule_idx`? Non-terminals
     /// which can generate sentences of unbounded length return None; non-terminals which can only
     /// generate maximal strings of a finite length return a `Some(u16)`.
-    pub fn max_sentence_cost(&self, nonterm_idx: RIdx<StorageT>) -> Option<u16> {
+    pub fn max_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> Option<u16> {
         let v = self.nonterm_max_costs.borrow_mut()
                                       .get_or_insert_with(||
                                            nonterm_max_costs(self.grm, &self.term_costs))
-                                      [usize::from(nonterm_idx)];
+                                      [usize::from(rule_idx)];
         if v == u16::max_value() {
             None
         } else {
@@ -572,8 +572,8 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
-    /// non-terminal `nonterm_idx`.
-    pub fn min_sentence(&self, nonterm_idx: RIdx<StorageT>) -> Vec<TIdx<StorageT>> {
+    /// non-terminal `rule_idx`.
+    pub fn min_sentence(&self, rule_idx: RIdx<StorageT>) -> Vec<TIdx<StorageT>> {
         let cheapest_prod = |nt_idx: RIdx<StorageT>| -> PIdx<StorageT> {
             let mut low_sc = None;
             let mut low_idx = None;
@@ -594,7 +594,7 @@ where usize: AsPrimitive<StorageT>
         };
 
         let mut s = vec![];
-        let mut st = vec![(cheapest_prod(nonterm_idx), 0)];
+        let mut st = vec![(cheapest_prod(rule_idx), 0)];
         while !st.is_empty() {
             let (p_idx, sym_idx) = st.pop().unwrap();
             let prod = self.grm.prod(p_idx);
@@ -613,8 +613,8 @@ where usize: AsPrimitive<StorageT>
         s
     }
 
-    /// Return (in arbitrary order) all the minimal sentences for the non-terminal `nonterm_idx`.
-    pub fn min_sentences(&self, nonterm_idx: RIdx<StorageT>) -> Vec<Vec<TIdx<StorageT>>> {
+    /// Return (in arbitrary order) all the minimal sentences for the non-terminal `rule_idx`.
+    pub fn min_sentences(&self, rule_idx: RIdx<StorageT>) -> Vec<Vec<TIdx<StorageT>>> {
         let cheapest_prods = |nt_idx: RIdx<StorageT>| -> Vec<PIdx<StorageT>> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
@@ -638,7 +638,7 @@ where usize: AsPrimitive<StorageT>
         };
 
         let mut sts = Vec::new(); // Output sentences
-        for p_idx in cheapest_prods(nonterm_idx) {
+        for p_idx in cheapest_prods(rule_idx) {
             let prod = self.grm.prod(p_idx);
             if prod.is_empty() {
                 sts.push(vec![]);
@@ -923,14 +923,14 @@ mod test {
 
         assert_eq!(grm.start_prod, PIdx(1));
         assert_eq!(grm.implicit_rule(), None);
-        grm.nonterm_idx("^").unwrap();
-        grm.nonterm_idx("R").unwrap();
+        grm.rule_idx("^").unwrap();
+        grm.rule_idx("R").unwrap();
         grm.term_idx("T").unwrap();
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(1)], vec![PIdx(0)]]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
-        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.rule_idx("R").unwrap())]);
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);
         assert_eq!(*r_prod, [Symbol::Term(grm.term_idx("T").unwrap())]);
         assert_eq!(grm.prods_rules, vec![RIdx(1), RIdx(0)]);
 
@@ -947,21 +947,21 @@ mod test {
         let grm = YaccGrammar::new(YaccKind::Original,
                            "%start R %token T %% R : S; S: 'T';").unwrap();
 
-        grm.nonterm_idx("^").unwrap();
-        grm.nonterm_idx("R").unwrap();
-        grm.nonterm_idx("S").unwrap();
+        grm.rule_idx("^").unwrap();
+        grm.rule_idx("R").unwrap();
+        grm.rule_idx("S").unwrap();
         grm.term_idx("T").unwrap();
         assert!(grm.term_name(grm.eof_term_idx()).is_none());
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
                                          vec![PIdx(0)],
                                          vec![PIdx(1)]]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
-        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.rule_idx("R").unwrap())]);
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);
         assert_eq!(r_prod.len(), 1);
-        assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
-        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("S").unwrap())][0]);
+        assert_eq!(r_prod[0], Symbol::Nonterm(grm.rule_idx("S").unwrap()));
+        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("S").unwrap())][0]);
         assert_eq!(s_prod.len(), 1);
         assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T").unwrap()));
     }
@@ -971,9 +971,9 @@ mod test {
         let grm = YaccGrammar::new(YaccKind::Original,
                            "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';").unwrap();
 
-        grm.nonterm_idx("^").unwrap();
-        grm.nonterm_idx("R").unwrap();
-        grm.nonterm_idx("S").unwrap();
+        grm.rule_idx("^").unwrap();
+        grm.rule_idx("R").unwrap();
+        grm.rule_idx("S").unwrap();
         grm.term_idx("T1").unwrap();
         grm.term_idx("T2").unwrap();
 
@@ -983,14 +983,14 @@ mod test {
         assert_eq!(grm.prods_rules, vec![RIdx(1),
                                          RIdx(2),
                                          RIdx(0)]);
-        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("^").unwrap())][0]);
-        assert_eq!(*start_prod, [Symbol::Nonterm(grm.nonterm_idx("R").unwrap())]);
-        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("R").unwrap())][0]);
+        let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
+        assert_eq!(*start_prod, [Symbol::Nonterm(grm.rule_idx("R").unwrap())]);
+        let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);
         assert_eq!(r_prod.len(), 3);
-        assert_eq!(r_prod[0], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
+        assert_eq!(r_prod[0], Symbol::Nonterm(grm.rule_idx("S").unwrap()));
         assert_eq!(r_prod[1], Symbol::Term(grm.term_idx("T1").unwrap()));
-        assert_eq!(r_prod[2], Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
-        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.nonterm_idx("S").unwrap())][0]);
+        assert_eq!(r_prod[2], Symbol::Nonterm(grm.rule_idx("S").unwrap()));
+        let s_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("S").unwrap())][0]);
         assert_eq!(s_prod.len(), 1);
         assert_eq!(s_prod[0], Symbol::Term(grm.term_idx("T2").unwrap()));
     }
@@ -1088,39 +1088,39 @@ mod test {
 
         assert_eq!(grm.prod_precs.len(), 9);
 
-        let itfs_rule_idx = grm.nonterm_idx(IMPLICIT_START_NONTERM).unwrap();
+        let itfs_rule_idx = grm.rule_idx(IMPLICIT_START_NONTERM).unwrap();
         assert_eq!(grm.rules_prods[usize::from(itfs_rule_idx)].len(), 1);
 
         let itfs_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(itfs_rule_idx)][0])];
         assert_eq!(itfs_prod1.len(), 2);
-        assert_eq!(itfs_prod1[0], Symbol::Nonterm(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()));
-        assert_eq!(itfs_prod1[1], Symbol::Nonterm(grm.nonterm_idx(&"S").unwrap()));
+        assert_eq!(itfs_prod1[0], Symbol::Nonterm(grm.rule_idx(IMPLICIT_NONTERM).unwrap()));
+        assert_eq!(itfs_prod1[1], Symbol::Nonterm(grm.rule_idx(&"S").unwrap()));
 
-        let s_rule_idx = grm.nonterm_idx(&"S").unwrap();
+        let s_rule_idx = grm.rule_idx(&"S").unwrap();
         assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
 
         let s_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][0])];
         assert_eq!(s_prod1.len(), 2);
         assert_eq!(s_prod1[0], Symbol::Term(grm.term_idx("a").unwrap()));
-        assert_eq!(s_prod1[1], Symbol::Nonterm(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()));
+        assert_eq!(s_prod1[1], Symbol::Nonterm(grm.rule_idx(IMPLICIT_NONTERM).unwrap()));
 
         let s_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][1])];
         assert_eq!(s_prod2.len(), 1);
-        assert_eq!(s_prod2[0], Symbol::Nonterm(grm.nonterm_idx("T").unwrap()));
+        assert_eq!(s_prod2[0], Symbol::Nonterm(grm.rule_idx("T").unwrap()));
 
-        let t_rule_idx = grm.nonterm_idx(&"T").unwrap();
+        let t_rule_idx = grm.rule_idx(&"T").unwrap();
         assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
 
         let t_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][0])];
         assert_eq!(t_prod1.len(), 2);
         assert_eq!(t_prod1[0], Symbol::Term(grm.term_idx("c").unwrap()));
-        assert_eq!(t_prod1[1], Symbol::Nonterm(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()));
+        assert_eq!(t_prod1[1], Symbol::Nonterm(grm.rule_idx(IMPLICIT_NONTERM).unwrap()));
 
         let t_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][1])];
         assert_eq!(t_prod2.len(), 0);
 
-        assert_eq!(Some(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()), grm.implicit_rule());
-        let i_rule_idx = grm.nonterm_idx(IMPLICIT_NONTERM).unwrap();
+        assert_eq!(Some(grm.rule_idx(IMPLICIT_NONTERM).unwrap()), grm.implicit_rule());
+        let i_rule_idx = grm.rule_idx(IMPLICIT_NONTERM).unwrap();
         assert_eq!(grm.rules_prods[usize::from(i_rule_idx)].len(), 3);
         let i_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][0])];
         let i_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][1])];
@@ -1147,9 +1147,9 @@ mod test {
             C: C 'y' | ;
           ").unwrap();
 
-        let a_nt_idx = grm.nonterm_idx(&"A").unwrap();
-        let b_nt_idx = grm.nonterm_idx(&"B").unwrap();
-        let c_nt_idx = grm.nonterm_idx(&"C").unwrap();
+        let a_nt_idx = grm.rule_idx(&"A").unwrap();
+        let b_nt_idx = grm.rule_idx(&"B").unwrap();
+        let c_nt_idx = grm.rule_idx(&"C").unwrap();
         assert!(grm.has_path(a_nt_idx, b_nt_idx));
         assert!(grm.has_path(a_nt_idx, c_nt_idx));
         assert!(grm.has_path(b_nt_idx, b_nt_idx));
@@ -1173,11 +1173,11 @@ mod test {
           ").unwrap();
 
         let scores = nonterm_min_costs(&grm, &vec![1, 1, 1]);
-        assert_eq!(scores[usize::from(grm.nonterm_idx(&"A").unwrap())], 0);
-        assert_eq!(scores[usize::from(grm.nonterm_idx(&"B").unwrap())], 1);
-        assert_eq!(scores[usize::from(grm.nonterm_idx(&"C").unwrap())], 1);
-        assert_eq!(scores[usize::from(grm.nonterm_idx(&"D").unwrap())], 2);
-        assert_eq!(scores[usize::from(grm.nonterm_idx(&"E").unwrap())], 1);
+        assert_eq!(scores[usize::from(grm.rule_idx(&"A").unwrap())], 0);
+        assert_eq!(scores[usize::from(grm.rule_idx(&"B").unwrap())], 1);
+        assert_eq!(scores[usize::from(grm.rule_idx(&"C").unwrap())], 1);
+        assert_eq!(scores[usize::from(grm.rule_idx(&"D").unwrap())], 2);
+        assert_eq!(scores[usize::from(grm.rule_idx(&"E").unwrap())], 1);
     }
 
     #[test]
@@ -1201,12 +1201,12 @@ mod test {
                                          .collect::<Vec<_>>())
                                .collect::<Vec<_>>();
 
-            let ms = sg.min_sentence(grm.nonterm_idx(nt_name).unwrap());
+            let ms = sg.min_sentence(grm.rule_idx(nt_name).unwrap());
             if !cnds.iter().any(|x| x == &ms) {
                 panic!("{:?} doesn't have any matches in {:?}", ms, str_cnds);
             }
 
-            let min_sts = sg.min_sentences(grm.nonterm_idx(nt_name).unwrap());
+            let min_sts = sg.min_sentences(grm.rule_idx(nt_name).unwrap());
             assert_eq!(cnds.len(), min_sts.len());
             for ms in min_sts {
                 if !cnds.iter().any(|x| x == &ms) {
@@ -1234,11 +1234,11 @@ mod test {
           ").unwrap();
 
         let scores = nonterm_max_costs(&grm, &vec![1, 1, 1]);
-        assert_eq!(scores[usize::from(grm.nonterm_idx("A").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("B").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("C").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("D").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("E").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.rule_idx("D").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.rule_idx("E").unwrap())], u16::max_value());
     }
 
     #[test]
@@ -1253,10 +1253,10 @@ mod test {
           ").unwrap();
 
         let scores = nonterm_max_costs(&grm, &vec![1, 1, 1]);
-        assert_eq!(scores[usize::from(grm.nonterm_idx("A").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.nonterm_idx("B").unwrap())], 3);
-        assert_eq!(scores[usize::from(grm.nonterm_idx("C").unwrap())], 2);
-        assert_eq!(scores[usize::from(grm.nonterm_idx("D").unwrap())], 3);
+        assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], 3);
+        assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], 2);
+        assert_eq!(scores[usize::from(grm.rule_idx("D").unwrap())], 3);
     }
 
     #[test]

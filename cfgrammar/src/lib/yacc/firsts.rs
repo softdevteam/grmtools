@@ -50,10 +50,10 @@ use yacc::YaccGrammar;
 /// then the following assertions (and only the following assertions) about the firsts set are
 /// correct:
 /// ```ignore
-///   assert!(firsts.is_set(grm.nonterm_idx("S").unwrap(), grm.term_idx("a").unwrap()));
-///   assert!(firsts.is_set(grm.nonterm_idx("S").unwrap(), grm.term_idx("b").unwrap()));
-///   assert!(firsts.is_set(grm.nonterm_idx("A").unwrap(), grm.term_idx("a").unwrap()));
-///   assert!(firsts.is_epsilon_set(grm.nonterm_idx("A").unwrap()));
+///   assert!(firsts.is_set(grm.rule_idx("S").unwrap(), grm.term_idx("a").unwrap()));
+///   assert!(firsts.is_set(grm.rule_idx("S").unwrap(), grm.term_idx("b").unwrap()));
+///   assert!(firsts.is_set(grm.rule_idx("A").unwrap(), grm.term_idx("a").unwrap()));
+///   assert!(firsts.is_epsilon_set(grm.rule_idx("A").unwrap()));
 /// ```
 #[derive(Debug)]
 pub struct YaccFirsts<StorageT> {
@@ -183,7 +183,7 @@ mod test {
           (grm: &YaccGrammar<StorageT>, firsts: &Box<Firsts<StorageT>>, rn: &str, should_be: Vec<&str>)
      where usize: AsPrimitive<StorageT>
     {
-        let nt_i = grm.nonterm_idx(rn).unwrap();
+        let nt_i = grm.rule_idx(rn).unwrap();
         for tidx in grm.iter_tidxs() {
             let n = match grm.term_name(tidx) {
                 Some(n) => n,
