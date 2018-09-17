@@ -135,7 +135,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         // Check that StorageT is big enough to hold RIdx/PIdx/SIdx/TIdx values; after these
         // checks we can guarantee that things like RIdx(ast.rules.len().as_()) are safe.
         if ast.rules.len() > num_traits::cast(StorageT::max_value()).unwrap() {
-            panic!("StorageT is not big enough to store this grammar's non-terminals.");
+            panic!("StorageT is not big enough to store this grammar's rules.");
         }
         if ast.tokens.len() > num_traits::cast(StorageT::max_value()).unwrap() {
             panic!("StorageT is not big enough to store this grammar's terminals.");
@@ -503,7 +503,7 @@ where usize: AsPrimitive<StorageT>
     }
 }
 
-/// A `SentenceGenerator` can generate minimal sentences for any given non-terminal. e.g. for the
+/// A `SentenceGenerator` can generate minimal sentences for any given rule. e.g. for the
 /// grammar:
 ///
 /// ```text
@@ -546,7 +546,7 @@ where usize: AsPrimitive<StorageT>
                           rule_max_costs: RefCell::new(None)}
     }
 
-    /// What is the cost of a minimal sentence for the non-terminal `rule_idx`? Note that,
+    /// What is the cost of a minimal sentence for the rule `rule_idx`? Note that,
     /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
     /// much faster.
     pub fn min_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> u16 {
@@ -556,9 +556,9 @@ where usize: AsPrimitive<StorageT>
                               [usize::from(rule_idx)]
     }
 
-    /// What is the cost of a maximal sentence for the non-terminal `rule_idx`? Non-terminals
-    /// which can generate sentences of unbounded length return None; non-terminals which can only
-    /// generate maximal strings of a finite length return a `Some(u16)`.
+    /// What is the cost of a maximal sentence for the rule `rule_idx`? Rules which can generate
+    /// sentences of unbounded length return None; rules which can only generate maximal strings of
+    /// a finite length return a `Some(u16)`.
     pub fn max_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> Option<u16> {
         let v = self.rule_max_costs.borrow_mut()
                                       .get_or_insert_with(||
@@ -572,7 +572,7 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
-    /// non-terminal `rule_idx`.
+    /// rule `rule_idx`.
     pub fn min_sentence(&self, rule_idx: RIdx<StorageT>) -> Vec<TIdx<StorageT>> {
         let cheapest_prod = |nt_idx: RIdx<StorageT>| -> PIdx<StorageT> {
             let mut low_sc = None;
@@ -613,7 +613,7 @@ where usize: AsPrimitive<StorageT>
         s
     }
 
-    /// Return (in arbitrary order) all the minimal sentences for the non-terminal `rule_idx`.
+    /// Return (in arbitrary order) all the minimal sentences for the rule `rule_idx`.
     pub fn min_sentences(&self, rule_idx: RIdx<StorageT>) -> Vec<Vec<TIdx<StorageT>>> {
         let cheapest_prods = |nt_idx: RIdx<StorageT>| -> Vec<PIdx<StorageT>> {
             let mut low_sc = None;
@@ -715,7 +715,7 @@ where usize: AsPrimitive<StorageT>
     }
 }
 
-/// Return the cost of a minimal string for each non-terminal in this grammar. The cost of a
+/// Return the cost of a minimal string for each rule in this grammar. The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
 fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
@@ -727,18 +727,18 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
     // list as a simple "todo" list: whilst there is at least one false value in done, there is
     // still work to do.
     //
-    // On each iteration of the loop, we examine each non-terminal in the todo list to see if
+    // On each iteration of the loop, we examine each rule in the todo list to see if
     // we can get a better idea of its true cost. Some are trivial:
-    //   * A non-terminal with an empty production immediately has a cost of 0.
-    //   * Non-terminals whose productions don't reference any non-terminals (i.e. only contain
-    //     terminals) can be immediately given a cost by calculating the lowest-cost production.
-    // However if a non-terminal A references another non-terminal B, we may need to wait until
+    //   * A rule with an empty production immediately has a cost of 0.
+    //   * Rules whose productions don't reference any rules (i.e. only contain terminals) can be
+    //     immediately given a cost by calculating the lowest-cost production.
+    // However if a rule A references another rule B, we may need to wait until
     // we've fully analysed B before we can cost A. This might seem to cause problems with
     // recursive rules, so we introduce the concept of "incomplete costs" i.e. if a production
-    // references a non-terminal we can work out its minimum possible cost simply by counting
-    // the production's terminal costs. Since non-terminals can have a mix of complete and
+    // references a rule we can work out its minimum possible cost simply by counting
+    // the production's terminal costs. Since rules can have a mix of complete and
     // incomplete productions, this is sometimes enough to allow us to assign a final cost to
-    // a non-terminal (if the lowest complete production's cost is lower than or equal to all
+    // a rule (if the lowest complete production's cost is lower than or equal to all
     // the lowest incomplete production's cost). This allows us to make progress, since it
     // means that we can iteratively improve our knowledge of a terminal's minimum cost:
     // eventually we will reach a point where we can determine it definitively.
@@ -799,8 +799,8 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
 }
 
 
-/// Return the cost of the maximal string for each non-terminal in this grammar (u32::max_val()
-/// representing "this non-terminal can generate strings of infinite length"). The cost of a
+/// Return the cost of the maximal string for each rule in this grammar (u32::max_val()
+/// representing "this rule can generate strings of infinite length"). The cost of a
 /// terminal is specified by the user-defined `term_cost` function.
 fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
                     (grm: &YaccGrammar<StorageT>, term_costs: &[u8]) -> Vec<u16>
@@ -811,7 +811,7 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
     let mut costs = vec![];
     costs.resize(usize::from(grm.rules_len()), 0);
 
-    // First mark all recursive non-terminals.
+    // First mark all recursive rules.
     for ntidx in grm.iter_rules() {
         // Calling has_path so frequently is not exactly efficient...
         if grm.has_path(ntidx, ntidx) {
@@ -840,8 +840,8 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
                                      u16::from(term_costs[usize::from(term_idx)]),
                                  Symbol::Rule(nt_idx) => {
                                      if costs[usize::from(nt_idx)] == u16::max_value() {
-                                         // As soon as we find reference to an infinite
-                                         // non-terminal, we can stop looking.
+                                         // As soon as we find reference to an infinite rule, we
+                                         // can stop looking.
                                          hs_cmplt = Some(u16::max_value());
                                          break 'a;
                                      }
