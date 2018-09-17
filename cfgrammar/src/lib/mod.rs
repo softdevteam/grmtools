@@ -30,29 +30,44 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-//! A library for manipulating Context Free Grammars (CFG). At the moment it only really supports
-//! Yacc-style grammars (albeit several variants of Yacc grammars), but the long-term aim is to
-//! provide an API that, when possible, is agnostic about the type of grammar being manipulated.
+//! A library for manipulating Context Free Grammars (CFG). It is impractical to fully homogenise
+//! all the types of grammars out there, so the aim is for different grammar types
+//! to have completely separate implementations. Code that wants to be generic over more than one
+//! grammar type can then use an "adapter" to homogenise the particular grammar types of interest.
+//! Currently this is a little academic, since only Yacc-style grammars are supported (albeit
+//! several variants of Yacc grammars).
 //!
-//! A note on the terminology we use, since there's no universal standard (and EBNF, which is
-//! perhaps the closest we've got, uses terminology that now seems partially anachronistic):
+//! Unfortunately, CFG terminology is something of a mess. Some people use different terms for the
+//! same concept interchangeably; some use different terms to convey subtle differences of meaning
+//! (but without complete uniformity). "Token", "terminal", and "lexeme" are examples of this: they
+//! are synonyms in some tools and papers, but not in others.
 //!
-//!   * A rule is a mapping from a nonterminal name to 1 or more productions (the latter of which
-//!     is often called 'alternatives').
-//!   * A symbol is either a nonterminal or a terminal.
-//!   * A production is a (possibly empty) ordered sequence of symbols.
+//! In order to make this library somewhat coherent, we therefore use some basic terminology
+//! guidelines for major concepts (acknowledging that this will cause clashes with some grammar
+//! types).
 //!
-//! Every nonterminal has a corresponding rule (and thus the two concepts are interchangeable);
-//! however, terminals are not required to appear in any production (such terminals can be used to
-//! catch error conditions).
+//!   * A *grammar* is an ordered sequence of *productions*.
+//!   * A *production* is an ordered sequence of *symbols*.
+//!   * A *rule* maps a name to one or more productions.
+//!   * A *token* is the name of a syntactic element.
+//!
+//! For example, in the following Yacc grammar:
+//!
+//!   R1: "a" "b" | R2;
+//!   R2: "c";
+//!
+//! the following statements are true:
+//!
+//!   * There are 3 productions. 1: ["a", "b"] 2: ["R2"] 3: ["c"]`
+//!   * There are two rules: R1 and R2. The mapping to productions is {R1: {1, 2}, R2: {3}}
+//!   * There are three tokens: a, b, and c.
 //!
 //! cfgrammar makes the following guarantees about grammars:
 //!
-//!   * The grammar has a single start rule accessed by `start_rule_idx`.
-//!   * The non-terminals are numbered from `0` to `nonterms_len() - 1` (inclusive).
-//!   * The productions are numbered from `0` to `prods_len() - 1` (inclusive).
-//!   * The terminals are numbered from `0` to `terms_len() - 1` (inclusive).
-//!   * The StorageT type used to store terminals, nonterminals, and productions can be infallibly
+//!   * Productions are numbered from `0` to `prods_len() - 1` (inclusive).
+//!   * Rules are numbered from `0` to `rules_len() - 1` (inclusive).
+//!   * Tokens are numbered from `0` to `toks_len() - 1` (inclusive).
+//!   * The StorageT type used to store productions, rules, and token indices can be infallibly
 //!     converted into usize (see [`TIdx`](struct.TIdx.html) and friends for more details).
 //!
 //! For most current uses, the main function to investigate is
