@@ -73,7 +73,7 @@ pub struct YaccGrammar<StorageT=u32> {
     /// How many rules does this grammar have?
     rules_len: RIdx<StorageT>,
     /// A mapping from `RIdx` -> `String`.
-    nonterm_names: Vec<String>,
+    rule_names: Vec<String>,
     /// A mapping from `TIdx` -> `Option<String>`. Every user-specified terminal will have a name,
     /// but terminals inserted by cfgrammar (e.g. the EOF terminal) won't.
     term_names: Vec<Option<String>>,
@@ -90,7 +90,7 @@ pub struct YaccGrammar<StorageT=u32> {
     /// A list of all productions.
     prods: Vec<Vec<Symbol<StorageT>>>,
     /// A mapping from rules to their productions. Note that 1) the order of rules is identical to
-    /// that of `nonterm_names` 2) every rule will have at least 1 production 3) productions
+    /// that of `rule_names` 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
     rules_prods: Vec<Vec<PIdx<StorageT>>>,
     /// A mapping from productions to their corresponding rule indexes.
@@ -149,7 +149,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             }
         }
 
-        let mut nonterm_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
+        let mut rule_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
 
         // Generate a guaranteed unique start nonterm name. We simply keep making the string longer
         // until we've hit something unique (at the very worst, this will require looping for as
@@ -159,7 +159,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         while ast.rules.get(&start_nonterm).is_some() {
             start_nonterm += START_NONTERM;
         }
-        nonterm_names.push(start_nonterm.clone());
+        rule_names.push(start_nonterm.clone());
 
         let implicit_nonterm;
         let implicit_start_nonterm;
@@ -174,13 +174,13 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                     while ast.rules.get(&n1).is_some() {
                         n1 += IMPLICIT_NONTERM;
                     }
-                    nonterm_names.push(n1.clone());
+                    rule_names.push(n1.clone());
                     implicit_nonterm = Some(n1);
                     let mut n2 = IMPLICIT_START_NONTERM.to_string();
                     while ast.rules.get(&n2).is_some() {
                         n2 += IMPLICIT_START_NONTERM;
                     }
-                    nonterm_names.push(n2.clone());
+                    rule_names.push(n2.clone());
                     implicit_start_nonterm = Some(n2);
                 }
                 else {
@@ -191,11 +191,11 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         };
 
         for k in ast.rules.keys() {
-            nonterm_names.push(k.clone());
+            rule_names.push(k.clone());
         }
-        let mut rules_prods:Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(nonterm_names.len());
+        let mut rules_prods:Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(rule_names.len());
         let mut nonterm_map = HashMap::<String, RIdx<StorageT>>::new();
-        for (i, v) in nonterm_names.iter().enumerate() {
+        for (i, v) in rule_names.iter().enumerate() {
             rules_prods.push(Vec::new());
             nonterm_map.insert(v.clone(), RIdx(i.as_()));
         }
@@ -222,7 +222,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         let mut prods = vec![None; ast.prods.len()];
         let mut prod_precs: Vec<Option<Option<Precedence>>> = vec![None; ast.prods.len()];
         let mut prods_rules = vec![None; ast.prods.len()];
-        for astrulename in &nonterm_names {
+        for astrulename in &rule_names {
             let rule_idx = nonterm_map[astrulename];
             if astrulename == &start_nonterm {
                 // Add the special start rule which has a single production which references a
@@ -314,10 +314,10 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         }
 
         assert!(!term_names.is_empty());
-        assert!(!nonterm_names.is_empty());
+        assert!(!rule_names.is_empty());
         Ok(YaccGrammar{
-            rules_len:     RIdx(nonterm_names.len().as_()),
-            nonterm_names,
+            rules_len:     RIdx(rule_names.len().as_()),
+            rule_names,
             terms_len:        TIdx(term_names.len().as_()),
             eof_term_idx,
             term_names,
@@ -344,7 +344,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return the name of rule `i`. Panics if `i` doesn't exist.
     pub fn nonterm_name(&self, i: RIdx<StorageT>) -> &str {
-        &self.nonterm_names[usize::from(i)]
+        &self.rule_names[usize::from(i)]
     }
 
     /// Get the sequence of symbols for production `i`. Panics if `i` doesn't exist.
@@ -412,9 +412,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return the index of the rule named `n` or `None` if it doesn't exist.
     pub fn nonterm_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
-        self.nonterm_names.iter()
+        self.rule_names.iter()
                           .position(|x| x == n)
-                          // The call to as_() is safe because nonterm_names is guaranteed to be
+                          // The call to as_() is safe because rule_names is guaranteed to be
                           // small enough to fit into StorageT
                           .map(|x| RIdx(x.as_()))
     }
