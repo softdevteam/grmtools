@@ -67,10 +67,10 @@ pub enum AssocKind {
 }
 
 /// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
-/// guarantees this struct makes about nonterminals, terminals, productions, and symbols.
+/// guarantees this struct makes about rules, terminals, productions, and symbols.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct YaccGrammar<StorageT=u32> {
-    /// How many nonterminals does this grammar have?
+    /// How many rules does this grammar have?
     rules_len: RIdx<StorageT>,
     /// A mapping from `RIdx` -> `String`.
     nonterm_names: Vec<String>,
@@ -97,7 +97,7 @@ pub struct YaccGrammar<StorageT=u32> {
     prods_rules: Vec<RIdx<StorageT>>,
     /// The precedence of each production.
     prod_precs: Vec<Option<Precedence>>,
-    /// The index of the nonterminal added for implicit tokens, if they were specified; otherwise
+    /// The index of the rule added for implicit tokens, if they were specified; otherwise
     /// `None`.
     implicit_nonterm: Option<RIdx<StorageT>>
 }
@@ -153,7 +153,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
         // Generate a guaranteed unique start nonterm name. We simply keep making the string longer
         // until we've hit something unique (at the very worst, this will require looping for as
-        // many times as there are nonterminals). We use the same technique later for unique end
+        // many times as there are rules). We use the same technique later for unique end
         // term and whitespace names.
         let mut start_nonterm = START_NONTERM.to_string();
         while ast.rules.get(&start_nonterm).is_some() {
@@ -226,7 +226,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             let rule_idx = nonterm_map[astrulename];
             if astrulename == &start_nonterm {
                 // Add the special start rule which has a single production which references a
-                // single nonterminal.
+                // single rule.
                 rules_prods[usize::from(nonterm_map[astrulename])]
                     .push(PIdx(prods.len().as_()));
                 let start_prod = match implicit_start_nonterm {
@@ -337,12 +337,12 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         self.eof_term_idx
     }
 
-    /// Return the productions for nonterminal `i`. Panics if `i` doesn't exist.
+    /// Return the productions for rule `i`. Panics if `i` doesn't exist.
     pub fn nonterm_to_prods(&self, i: RIdx<StorageT>) -> &[PIdx<StorageT>] {
         &self.rules_prods[usize::from(i)]
     }
 
-    /// Return the name of nonterminal `i`. Panics if `i` doesn't exist.
+    /// Return the name of rule `i`. Panics if `i` doesn't exist.
     pub fn nonterm_name(&self, i: RIdx<StorageT>) -> &str {
         &self.nonterm_names[usize::from(i)]
     }
@@ -394,7 +394,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         m
     }
 
-    /// Return this grammar's start nonterminal.
+    /// Return this grammar's start rule.
     pub fn start_nonterm(&self) -> RIdx<StorageT> {
         self.prod_to_nonterm(self.start_prod)
     }
@@ -410,7 +410,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         self.implicit_nonterm
     }
 
-    /// Return the index of the nonterminal named `n` or `None` if it doesn't exist.
+    /// Return the index of the rule named `n` or `None` if it doesn't exist.
     pub fn nonterm_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
         self.nonterm_names.iter()
                           .position(|x| x == n)
@@ -1131,7 +1131,7 @@ mod test {
         let i_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][1])];
         assert_eq!(i_prod1.len(), 2);
         assert_eq!(i_prod2.len(), 2);
-        // We don't know what order the implicit nonterminal will contain our tokens in,
+        // We don't know what order the implicit rule will contain our tokens in,
         // hence the awkward dance below.
         let cnd1 = vec![Symbol::Term(grm.term_idx("ws1").unwrap()),
                         Symbol::Nonterm(grm.implicit_nonterm().unwrap())];

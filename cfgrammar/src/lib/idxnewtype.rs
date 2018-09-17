@@ -73,7 +73,7 @@ macro_rules! IdxNewtype {
 // without changing the user visible API.
 
 IdxNewtype!(
-    /// A type specifically for nonterminal indices.
+    /// A type specifically for rule indices.
     ///
     /// It is guaranteed that `RIdx` can be converted, without loss of precision, to `usize` with
     /// the idiom `RIdx::from(x_usize)`. `usize` values can be converted to `RIdx`, causing a

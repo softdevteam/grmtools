@@ -62,7 +62,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     /// Create a new `LexerBuilder`.
     ///
     /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough to index
-    /// all the tokens, nonterminals, and productions in the lexer and less than or equal in size
+    /// all the tokens, rules, and productions in the lexer and less than or equal in size
     /// to `usize` (e.g. on a 64-bit machine `u128` would be too big). If you are lexing large
     /// files, the additional storage requirements of larger integer types can be noticeable, and
     /// in such cases it can be worth specifying a smaller type. `StorageT` defaults to `u32` if

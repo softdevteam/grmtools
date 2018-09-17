@@ -87,7 +87,7 @@ use vob::Vob;
 mod idxnewtype;
 pub mod yacc;
 
-/// A type specifically for nonterminal indices.
+/// A type specifically for rule indices.
 pub use idxnewtype::{RIdx, PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
@@ -100,7 +100,7 @@ pub enum Symbol<StorageT> {
 pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
     /// How many productions does this grammar have?
     fn prods_len(&self) -> PIdx<StorageT>;
-    /// How many nonterminals does this grammar have?
+    /// How many rules does this grammar have?
     fn rules_len(&self) -> RIdx<StorageT>;
     /// What is the index of the start rule?
     fn start_rule_idx(&self) -> RIdx<StorageT>;
@@ -139,16 +139,16 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
 }
 
 pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
-    /// Return all the firsts for nonterminal `ntidx`.
+    /// Return all the firsts for rule `ntidx`.
     fn firsts(&self, ntidx: RIdx<StorageT>) -> &Vob;
 
-    /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx`.
+    /// Returns true if the terminal `tidx` is in the first set for rule `nidx`.
     fn is_set(&self, nidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 
-    /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
+    /// Returns true if the rule `ntidx` has epsilon in its first set.
     fn is_epsilon_set(&self, ntidx: RIdx<StorageT>) -> bool;
 
-    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
+    /// Ensures that the firsts bit for terminal `tidx` rule `nidx` is set. Returns true if
     /// it was already set, or false otherwise.
     fn set(&mut self, ntidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 }

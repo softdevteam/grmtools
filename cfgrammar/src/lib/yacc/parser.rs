@@ -430,7 +430,7 @@ mod test {
         Ok(yp.ast())
     }
 
-    fn nonterminal(n: &str) -> Symbol {
+    fn rule(n: &str) -> Symbol {
         Symbol::Nonterm(n.to_string())
     }
 
@@ -445,9 +445,9 @@ mod test {
 
     #[test]
     fn test_symbol_eq() {
-        assert_eq!(nonterminal("A"), nonterminal("A"));
-        assert!(nonterminal("A") != nonterminal("B"));
-        assert!(nonterminal("A") != terminal("A"));
+        assert_eq!(rule("A"), rule("A"));
+        assert!(rule("A") != rule("B"));
+        assert!(rule("A") != terminal("A"));
     }
 
     #[test]
@@ -520,7 +520,7 @@ mod test {
         let src = "%%\nA : 'a' B;".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a"), nonterminal("B")],
+                   Production{symbols: vec![terminal("a"), rule("B")],
                               precedence: None});
     }
 

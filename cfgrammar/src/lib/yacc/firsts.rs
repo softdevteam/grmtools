@@ -78,7 +78,7 @@ where usize: AsPrimitive<StorageT>
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
-        // look at each rule E, and see if any of the nonterminals at the start of its productions
+        // look at each rule E, and see if any of the rules at the start of its productions
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
@@ -88,7 +88,7 @@ where usize: AsPrimitive<StorageT>
                     // ...and each production A
                     let prod = grm.prod(*prod_i);
                     if prod.is_empty() {
-                        // if it's an empty production, ensure this nonterminal's epsilon bit is
+                        // if it's an empty production, ensure this rule's epsilon bit is
                         // set.
                         if !firsts.is_epsilon_set(rul_i) {
                             firsts.epsilons.set(usize::from(rul_i), true);
@@ -107,7 +107,7 @@ where usize: AsPrimitive<StorageT>
                             },
                             Symbol::Nonterm(nonterm_i) => {
                                 // if we're dealing with another Nonterm, union its FIRSTs
-                                // together with the current nonterminals FIRSTs. Note this is
+                                // together with the current rules FIRSTs. Note this is
                                 // (intentionally) a no-op if the two terminals are one and the
                                 // same.
                                 for tidx in grm.iter_tidxs() {
@@ -116,7 +116,7 @@ where usize: AsPrimitive<StorageT>
                                     }
                                 }
 
-                                // If the epsilon bit in the nonterminal being referenced is set,
+                                // If the epsilon bit in the rule being referenced is set,
                                 // and if its the last symbol in the production, then add epsilon
                                 // to FIRSTs.
                                 if firsts.is_epsilon_set(nonterm_i) && sym_i == prod.len() - 1 {
@@ -226,7 +226,7 @@ mod test {
     }
 
     #[test]
-    fn test_first_no_subsequent_nonterminals() {
+    fn test_first_no_subsequent_rules() {
         let grm = YaccGrammar::new(YaccKind::Original, &"
           %start C
           %token c d

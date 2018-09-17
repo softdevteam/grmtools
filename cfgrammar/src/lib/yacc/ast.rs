@@ -150,7 +150,7 @@ impl GrammarAST {
     /// After the AST has been populated, perform any final operations, and validate the grammar
     /// checking that:
     ///   1) The start rule references a rule in the grammar
-    ///   2) Every nonterminal reference references a rule in the grammar
+    ///   2) Every rule reference references a rule in the grammar
     ///   3) Every terminal reference references a declared token
     ///   4) If a production has a precedence terminal, then it references a declared token
     /// If the validation succeeds, None is returned.
@@ -207,7 +207,7 @@ mod test {
     use super::{GrammarAST, GrammarValidationError, GrammarValidationErrorKind, Symbol};
     use yacc::{AssocKind, Precedence};
 
-    fn nonterminal(n: &str) -> Symbol {
+    fn rule(n: &str) -> Symbol {
         Symbol::Nonterm(n.to_string())
     }
 
@@ -244,19 +244,19 @@ mod test {
     }
 
     #[test]
-    fn test_valid_nonterminal_ref(){
+    fn test_valid_rule_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(nonterminal("B")), None);
+        grm.add_prod("A".to_string(), vec!(rule("B")), None);
         grm.add_prod("B".to_string(), vec!(), None);
         assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
-    fn test_invalid_nonterminal_ref(){
+    fn test_invalid_rule_ref(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(nonterminal("B")), None);
+        grm.add_prod("A".to_string(), vec!(rule("B")), None);
         match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
@@ -276,11 +276,11 @@ mod test {
     #[should_panic]
     fn test_valid_token_ref(){
         // for now we won't support the YACC feature that allows
-        // to redefine nonterminals as tokens by adding them to '%token'
+        // to redefine rules as tokens by adding them to '%token'
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(nonterminal("b")), None);
+        grm.add_prod("A".to_string(), vec!(rule("b")), None);
         assert!(grm.complete_and_validate().is_ok());
     }
 
@@ -296,10 +296,10 @@ mod test {
     }
 
     #[test]
-    fn test_invalid_nonterminal_forgotten_token(){
+    fn test_invalid_rule_forgotten_token(){
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(nonterminal("b"), terminal("b")), None);
+        grm.add_prod("A".to_string(), vec!(rule("b"), terminal("b")), None);
         match grm.complete_and_validate() {
             Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
             _ => panic!("Validation error")
