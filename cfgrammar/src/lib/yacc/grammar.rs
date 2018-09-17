@@ -99,7 +99,7 @@ pub struct YaccGrammar<StorageT=u32> {
     prod_precs: Vec<Option<Precedence>>,
     /// The index of the rule added for implicit tokens, if they were specified; otherwise
     /// `None`.
-    implicit_nonterm: Option<RIdx<StorageT>>
+    implicit_rule: Option<RIdx<StorageT>>
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -161,11 +161,11 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         }
         rule_names.push(start_nonterm.clone());
 
-        let implicit_nonterm;
+        let implicit_rule;
         let implicit_start_nonterm;
         match yacc_kind {
             YaccKind::Original => {
-                implicit_nonterm = None;
+                implicit_rule = None;
                 implicit_start_nonterm = None;
             },
             YaccKind::Eco => {
@@ -175,7 +175,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                         n1 += IMPLICIT_NONTERM;
                     }
                     rule_names.push(n1.clone());
-                    implicit_nonterm = Some(n1);
+                    implicit_rule = Some(n1);
                     let mut n2 = IMPLICIT_START_NONTERM.to_string();
                     while ast.rules.get(&n2).is_some() {
                         n2 += IMPLICIT_START_NONTERM;
@@ -184,7 +184,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                     implicit_start_nonterm = Some(n2);
                 }
                 else {
-                    implicit_nonterm = None;
+                    implicit_rule = None;
                     implicit_start_nonterm = None;
                 }
             }
@@ -252,13 +252,13 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                 //   ^~: ~ S;
                 rules_prods[usize::from(nonterm_map[astrulename])]
                     .push(PIdx(prods.len().as_()));
-                prods.push(Some(vec![Symbol::Nonterm(nonterm_map[implicit_nonterm.as_ref().unwrap()]),
+                prods.push(Some(vec![Symbol::Nonterm(nonterm_map[implicit_rule.as_ref().unwrap()]),
                                      Symbol::Nonterm(nonterm_map[ast.start.as_ref().unwrap()])]));
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(rule_idx));
                 continue;
             }
-            else if implicit_nonterm.as_ref().map_or(false, |s| s == astrulename) {
+            else if implicit_rule.as_ref().map_or(false, |s| s == astrulename) {
                 // Add the implicit rule: ~: "IMPLICIT_TERM1" ~ | ... | "IMPLICIT_TERMN" ~ | ;
                 let implicit_prods = &mut rules_prods[usize::from(nonterm_map[astrulename])];
                 // Add a production for each implicit terminal
@@ -287,8 +287,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                         },
                         ast::Symbol::Term(ref n) => {
                             prod.push(Symbol::Term(term_map[n]));
-                            if implicit_nonterm.is_some() {
-                                prod.push(Symbol::Nonterm(nonterm_map[&implicit_nonterm.clone().unwrap()]));
+                            if implicit_rule.is_some() {
+                                prod.push(Symbol::Nonterm(nonterm_map[&implicit_rule.clone().unwrap()]));
                             }
                         }
                     };
@@ -328,7 +328,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             prods_rules:      prods_rules.into_iter().map(|x| x.unwrap()).collect(),
             prods:            prods.into_iter().map(|x| x.unwrap()).collect(),
             prod_precs:       prod_precs.into_iter().map(|x| x.unwrap()).collect(),
-            implicit_nonterm: implicit_nonterm.and_then(|x| Some(nonterm_map[&x]))
+            implicit_rule: implicit_rule.and_then(|x| Some(nonterm_map[&x]))
         })
     }
 
@@ -406,8 +406,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the `RIdx` of the implict nonterm if it exists, or `None` otherwise.
-    pub fn implicit_nonterm(&self) -> Option<RIdx<StorageT>> {
-        self.implicit_nonterm
+    pub fn implicit_rule(&self) -> Option<RIdx<StorageT>> {
+        self.implicit_rule
     }
 
     /// Return the index of the rule named `n` or `None` if it doesn't exist.
@@ -927,7 +927,7 @@ mod test {
                            "%start R %token T %% R: 'T';").unwrap();
 
         assert_eq!(grm.start_prod, PIdx(1));
-        assert_eq!(grm.implicit_nonterm(), None);
+        assert_eq!(grm.implicit_rule(), None);
         grm.nonterm_idx("^").unwrap();
         grm.nonterm_idx("R").unwrap();
         grm.term_idx("T").unwrap();
@@ -1124,7 +1124,7 @@ mod test {
         let t_prod2 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][1])];
         assert_eq!(t_prod2.len(), 0);
 
-        assert_eq!(Some(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()), grm.implicit_nonterm());
+        assert_eq!(Some(grm.nonterm_idx(IMPLICIT_NONTERM).unwrap()), grm.implicit_rule());
         let i_rule_idx = grm.nonterm_idx(IMPLICIT_NONTERM).unwrap();
         assert_eq!(grm.rules_prods[usize::from(i_rule_idx)].len(), 3);
         let i_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][0])];
@@ -1134,9 +1134,9 @@ mod test {
         // We don't know what order the implicit rule will contain our tokens in,
         // hence the awkward dance below.
         let cnd1 = vec![Symbol::Term(grm.term_idx("ws1").unwrap()),
-                        Symbol::Nonterm(grm.implicit_nonterm().unwrap())];
+                        Symbol::Nonterm(grm.implicit_rule().unwrap())];
         let cnd2 = vec![Symbol::Term(grm.term_idx("ws2").unwrap()),
-                        Symbol::Nonterm(grm.implicit_nonterm().unwrap())];
+                        Symbol::Nonterm(grm.implicit_rule().unwrap())];
         assert!((*i_prod1 == cnd1 && *i_prod2 == cnd2) || (*i_prod1 == cnd2 && *i_prod2 == cnd1));
         let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];
         assert_eq!(i_prod3.len(), 0);
