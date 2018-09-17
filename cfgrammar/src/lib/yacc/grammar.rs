@@ -394,11 +394,6 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         m
     }
 
-    /// Return this grammar's start rule.
-    pub fn start_nonterm(&self) -> RIdx<StorageT> {
-        self.prod_to_rule(self.start_prod)
-    }
-
     /// Return the production index of the start rule's sole production (for Yacc grammars the
     /// start rule is defined to have precisely one production).
     pub fn start_prod(&self) -> PIdx<StorageT> {
