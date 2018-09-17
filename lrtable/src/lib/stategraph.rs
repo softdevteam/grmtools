@@ -178,7 +178,7 @@ where usize: AsPrimitive<StorageT>
                     }
                     // Since ctx is exactly term_len bits long, the call to as_ is safe.
                     let tidx = TIdx(b_idx.as_());
-                    if tidx == grm.eof_term_idx() {
+                    if tidx == grm.eof_token_idx() {
                         o.push_str("'$'");
                     } else {
                         o.push_str(&format!("'{}'", grm.term_name(tidx).unwrap()));
@@ -227,7 +227,7 @@ where usize: AsPrimitive<StorageT>
         let mut found = false;
         for t in la.iter() {
             let off = if t == &"$" {
-                    grm.eof_term_idx()
+                    grm.eof_token_idx()
                 } else {
                     grm.term_idx(t).unwrap()
                 };

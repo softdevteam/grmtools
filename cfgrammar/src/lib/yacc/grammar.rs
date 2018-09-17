@@ -82,7 +82,7 @@ pub struct YaccGrammar<StorageT=u32> {
     /// How many tokens does this grammar have?
     tokens_len: TIdx<StorageT>,
     /// The offset of the EOF token.
-    eof_term_idx: TIdx<StorageT>,
+    eof_token_idx: TIdx<StorageT>,
     /// How many productions does this grammar have?
     prods_len: PIdx<StorageT>,
     /// Which production is the sole production of the start rule?
@@ -206,7 +206,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             token_names.push(Some(k.clone()));
             token_precs.push(ast.precs.get(k).cloned());
         }
-        let eof_term_idx = TIdx(token_names.len().as_());
+        let eof_token_idx = TIdx(token_names.len().as_());
         token_names.push(None);
         token_precs.push(None);
         let mut term_map = HashMap::<String, TIdx<StorageT>>::new();
@@ -319,7 +319,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             rules_len:     RIdx(rule_names.len().as_()),
             rule_names,
             tokens_len:        TIdx(token_names.len().as_()),
-            eof_term_idx,
+            eof_token_idx,
             token_names,
             token_precs,
             prods_len:        PIdx(prods.len().as_()),
@@ -333,8 +333,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the index of the end token.
-    pub fn eof_term_idx(&self) -> TIdx<StorageT> {
-        self.eof_term_idx
+    pub fn eof_token_idx(&self) -> TIdx<StorageT> {
+        self.eof_token_idx
     }
 
     /// Return the productions for rule `i`. Panics if `i` doesn't exist.
@@ -951,7 +951,7 @@ mod test {
         grm.rule_idx("R").unwrap();
         grm.rule_idx("S").unwrap();
         grm.term_idx("T").unwrap();
-        assert!(grm.term_name(grm.eof_term_idx()).is_none());
+        assert!(grm.term_name(grm.eof_token_idx()).is_none());
 
         assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
                                          vec![PIdx(0)],

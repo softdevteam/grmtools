@@ -270,7 +270,7 @@ where usize: AsPrimitive<StorageT>
     {
         let la_idx = n.la_idx;
         for t_idx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
-            if t_idx == self.parser.grm.eof_term_idx() {
+            if t_idx == self.parser.grm.eof_token_idx() {
                 continue;
             }
 

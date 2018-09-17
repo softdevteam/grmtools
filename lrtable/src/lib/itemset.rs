@@ -202,7 +202,7 @@ mod test {
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
-        la.set(usize::from(grm.eof_term_idx()), true);
+        la.set(usize::from(grm.eof_token_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
@@ -236,7 +236,7 @@ mod test {
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
-        la.set(usize::from(grm.eof_term_idx()), true);
+        la.set(usize::from(grm.eof_token_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
@@ -278,7 +278,7 @@ mod test {
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
-        la.set(usize::from(grm.eof_term_idx()), true);
+        la.set(usize::from(grm.eof_token_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
@@ -289,7 +289,7 @@ mod test {
         is = Itemset::new(&grm);
         la = Vob::from_elem(usize::from(grm.tokens_len()), false);
         la.set(usize::from(grm.term_idx("b").unwrap()), true);
-        la.set(usize::from(grm.eof_term_idx()), true);
+        la.set(usize::from(grm.eof_token_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("S").unwrap())[1], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, SIdx(0), vec!["a"]);
@@ -312,7 +312,7 @@ mod test {
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
-        la.set(usize::from(grm.eof_term_idx()), true);
+        la.set(usize::from(grm.eof_token_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);
 

@@ -173,7 +173,7 @@ where usize: AsPrimitive<StorageT>
                     la_idx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_tidx, self.grm.eof_term_idx());
+                    debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     debug_assert_eq!(tstack.len(), 1);
                     return true;
                 },
@@ -295,7 +295,7 @@ where usize: AsPrimitive<StorageT>
                     last_la.start() + last_la.len()
                 };
 
-            Lexeme::new(StorageT::from(u32::from(self.grm.eof_term_idx())).unwrap(), last_la_end, 0)
+            Lexeme::new(StorageT::from(u32::from(self.grm.eof_token_idx())).unwrap(), last_la_end, 0)
         }
     }
 
@@ -307,7 +307,7 @@ where usize: AsPrimitive<StorageT>
         if la_idx < ll {
             TIdx(self.lexemes[la_idx].tok_id())
         } else {
-            self.grm.eof_term_idx()
+            self.grm.eof_token_idx()
         }
     }
 
@@ -364,7 +364,7 @@ where usize: AsPrimitive<StorageT>
                     la_idx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_tidx, self.grm.eof_term_idx());
+                    debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     if let Some(ref mut tstack_uw) = *tstack {
                         debug_assert_eq!(tstack_uw.len(), 1);
                     }
@@ -648,7 +648,7 @@ Call: 'ID' '(' ')';";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
-        let err_tok_id = usize::from(grm.eof_term_idx()).to_u16().unwrap();
+        let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
