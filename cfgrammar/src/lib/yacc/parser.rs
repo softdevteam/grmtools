@@ -56,7 +56,7 @@ pub enum YaccParserErrorKind {
     ProgramsNotSupported,
     UnknownDeclaration,
     DuplicatePrecedence,
-    PrecNotFollowedByTerm,
+    PrecNotFollowedByToken,
     DuplicateImplicitTokensDeclaration,
     DuplicateStartDeclaration
 }
@@ -83,7 +83,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccParserErrorKind::UnknownDeclaration   => "Unknown declaration",
             YaccParserErrorKind::DuplicatePrecedence  => "Token already has a precedence",
-            YaccParserErrorKind::PrecNotFollowedByTerm
+            YaccParserErrorKind::PrecNotFollowedByToken
                                                       => "%prec not followed by token name",
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration
                                                       => "Duplicate %implicit_tokens declaration",
@@ -105,7 +105,7 @@ lazy_static! {
     static ref RE_NAME: Regex = {
         Regex::new(r"^[a-zA-Z_.][a-zA-Z0-9_.]*").unwrap()
     };
-    static ref RE_TERMINAL: Regex = {
+    static ref RE_TOKEN: Regex = {
         Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap()
     };
 }
@@ -176,7 +176,7 @@ impl YaccParser {
                     if self.ast.implicit_tokens.is_some() {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicateImplicitTokensDeclaration, i));
                     }
-                    let mut implicit_terms = HashSet::new();
+                    let mut implicit_tokens = HashSet::new();
                     i = try!(self.parse_ws(j));
                     while j < self.src.len() {
                         if self.lookahead_is("%", i).is_some() {
@@ -184,10 +184,10 @@ impl YaccParser {
                         }
                         let (j, n) = try!(self.parse_token(i));
                         self.ast.tokens.insert(n.clone());
-                        implicit_terms.insert(n);
+                        implicit_tokens.insert(n);
                         i = try!(self.parse_ws(j));
                     }
-                    self.ast.implicit_tokens = Some(implicit_terms);
+                    self.ast.implicit_tokens = Some(implicit_tokens);
                     continue;
                 }
             }
@@ -277,7 +277,7 @@ impl YaccParser {
                 if self.ast.tokens.contains(&sym) {
                     prec = Some(sym);
                 } else {
-                    return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByTerm, i));
+                    return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByToken, i));
                 }
                 i = k;
             } else {
@@ -307,7 +307,7 @@ impl YaccParser {
     }
 
     fn parse_token(&self, i: usize) -> YaccResult<(usize, String)> {
-        match RE_TERMINAL.find(&self.src[i..]) {
+        match RE_TOKEN.find(&self.src[i..]) {
             Some(m) => {
                 assert!(m.start() == 0 && m.end() > 0);
                 match self.src[i..].chars().next().unwrap() {
@@ -809,7 +809,7 @@ x".to_string();
           B: ;
           ") {
                 Ok(_) => panic!("Incorrect %prec parsed"),
-                Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByTerm, line: 3, ..}) => (),
+                Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByToken, line: 3, ..}) => (),
                 Err(e) => panic!("Incorrect error returned {}", e)
         }
     }

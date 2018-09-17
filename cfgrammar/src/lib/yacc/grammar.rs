@@ -151,22 +151,22 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
         let mut rule_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
 
-        // Generate a guaranteed unique start nonterm name. We simply keep making the string longer
+        // Generate a guaranteed unique start rule name. We simply keep making the string longer
         // until we've hit something unique (at the very worst, this will require looping for as
         // many times as there are rules). We use the same technique later for unique end
-        // term and whitespace names.
-        let mut start_nonterm = START_RULE.to_string();
-        while ast.rules.get(&start_nonterm).is_some() {
-            start_nonterm += START_RULE;
+        // token and whitespace names.
+        let mut start_rule = START_RULE.to_string();
+        while ast.rules.get(&start_rule).is_some() {
+            start_rule += START_RULE;
         }
-        rule_names.push(start_nonterm.clone());
+        rule_names.push(start_rule.clone());
 
         let implicit_rule;
-        let implicit_start_nonterm;
+        let implicit_start_rule;
         match yacc_kind {
             YaccKind::Original => {
                 implicit_rule = None;
-                implicit_start_nonterm = None;
+                implicit_start_rule = None;
             },
             YaccKind::Eco => {
                 if ast.implicit_tokens.is_some() {
@@ -181,11 +181,11 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                         n2 += IMPLICIT_START_RULE;
                     }
                     rule_names.push(n2.clone());
-                    implicit_start_nonterm = Some(n2);
+                    implicit_start_rule = Some(n2);
                 }
                 else {
                     implicit_rule = None;
-                    implicit_start_nonterm = None;
+                    implicit_start_rule = None;
                 }
             }
         };
@@ -194,10 +194,10 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             rule_names.push(k.clone());
         }
         let mut rules_prods:Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(rule_names.len());
-        let mut nonterm_map = HashMap::<String, RIdx<StorageT>>::new();
+        let mut rule_map = HashMap::<String, RIdx<StorageT>>::new();
         for (i, v) in rule_names.iter().enumerate() {
             rules_prods.push(Vec::new());
-            nonterm_map.insert(v.clone(), RIdx(i.as_()));
+            rule_map.insert(v.clone(), RIdx(i.as_()));
         }
 
         let mut token_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
@@ -209,86 +209,86 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         let eof_token_idx = TIdx(token_names.len().as_());
         token_names.push(None);
         token_precs.push(None);
-        let mut term_map = HashMap::<String, TIdx<StorageT>>::new();
+        let mut token_map = HashMap::<String, TIdx<StorageT>>::new();
         for (i, v) in token_names.iter().enumerate() {
             if let Some(n) = v.as_ref() {
-               term_map.insert(n.clone(), TIdx(i.as_()));
+               token_map.insert(n.clone(), TIdx(i.as_()));
             }
         }
 
         // In order to avoid fiddling about with production indices from the AST, we simply map
-        // them 1:1 to grammar indices. That means that any new productions are added to the *end*
+        // tem 1:1 to grammar indices. That means that any new productions are added to the *end*
         // of the list of productions.
         let mut prods = vec![None; ast.prods.len()];
         let mut prod_precs: Vec<Option<Option<Precedence>>> = vec![None; ast.prods.len()];
         let mut prods_rules = vec![None; ast.prods.len()];
         for astrulename in &rule_names {
-            let rule_idx = nonterm_map[astrulename];
-            if astrulename == &start_nonterm {
+            let ridx = rule_map[astrulename];
+            if astrulename == &start_rule {
                 // Add the special start rule which has a single production which references a
                 // single rule.
-                rules_prods[usize::from(nonterm_map[astrulename])]
+                rules_prods[usize::from(rule_map[astrulename])]
                     .push(PIdx(prods.len().as_()));
-                let start_prod = match implicit_start_nonterm {
+                let start_prod = match implicit_start_rule {
                     None => {
                         // Add ^: S;
-                        vec![Symbol::Rule(nonterm_map[ast.start.as_ref().unwrap()])]
+                        vec![Symbol::Rule(rule_map[ast.start.as_ref().unwrap()])]
                     }
                     Some(ref s) => {
                         // An implicit rule has been specified, so the special start rule
                         // needs to reference the intermediate start rule required. Therefore add:
                         //   ^: ^~;
-                        vec![Symbol::Rule(nonterm_map[s])]
+                        vec![Symbol::Rule(rule_map[s])]
                     }
                 };
                 prods.push(Some(start_prod));
                 prod_precs.push(Some(None));
-                prods_rules.push(Some(rule_idx));
+                prods_rules.push(Some(ridx));
                 continue;
             }
-            else if implicit_start_nonterm.as_ref().map_or(false, |s| s == astrulename) {
+            else if implicit_start_rule.as_ref().map_or(false, |s| s == astrulename) {
                 // Add the intermediate start rule (handling implicit tokens at the beginning of
                 // the file):
                 //   ^~: ~ S;
-                rules_prods[usize::from(nonterm_map[astrulename])]
+                rules_prods[usize::from(rule_map[astrulename])]
                     .push(PIdx(prods.len().as_()));
-                prods.push(Some(vec![Symbol::Rule(nonterm_map[implicit_rule.as_ref().unwrap()]),
-                                     Symbol::Rule(nonterm_map[ast.start.as_ref().unwrap()])]));
+                prods.push(Some(vec![Symbol::Rule(rule_map[implicit_rule.as_ref().unwrap()]),
+                                     Symbol::Rule(rule_map[ast.start.as_ref().unwrap()])]));
                 prod_precs.push(Some(None));
-                prods_rules.push(Some(rule_idx));
+                prods_rules.push(Some(ridx));
                 continue;
             }
             else if implicit_rule.as_ref().map_or(false, |s| s == astrulename) {
-                // Add the implicit rule: ~: "IMPLICIT_TERM1" ~ | ... | "IMPLICIT_TERMN" ~ | ;
-                let implicit_prods = &mut rules_prods[usize::from(nonterm_map[astrulename])];
+                // Add the implicit rule: ~: "IMPLICIT_TOKEN_1" ~ | ... | "IMPLICIT_TOKEN_N" ~ | ;
+                let implicit_prods = &mut rules_prods[usize::from(rule_map[astrulename])];
                 // Add a production for each implicit token
                 for t in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(PIdx(prods.len().as_()));
-                    prods.push(Some(vec![Symbol::Token(term_map[t]), Symbol::Rule(rule_idx)]));
+                    prods.push(Some(vec![Symbol::Token(token_map[t]), Symbol::Rule(ridx)]));
                     prod_precs.push(Some(None));
-                    prods_rules.push(Some(rule_idx));
+                    prods_rules.push(Some(ridx));
                 }
                 // Add an empty production
                 implicit_prods.push(PIdx(prods.len().as_()));
                 prods.push(Some(vec![]));
                 prod_precs.push(Some(None));
-                prods_rules.push(Some(rule_idx));
+                prods_rules.push(Some(ridx));
                 continue;
             }
 
-            let rule = &mut rules_prods[usize::from(rule_idx)];
+            let rule = &mut rules_prods[usize::from(ridx)];
             for &prod_idx in &ast.rules[astrulename] {
                 let astprod = &ast.prods[prod_idx];
                 let mut prod = Vec::with_capacity(astprod.symbols.len());
                 for astsym in &astprod.symbols {
                     match *astsym {
                         ast::Symbol::Rule(ref n) => {
-                            prod.push(Symbol::Rule(nonterm_map[n]));
+                            prod.push(Symbol::Rule(rule_map[n]));
                         },
                         ast::Symbol::Token(ref n) => {
-                            prod.push(Symbol::Token(term_map[n]));
+                            prod.push(Symbol::Token(token_map[n]));
                             if implicit_rule.is_some() {
-                                prod.push(Symbol::Rule(nonterm_map[&implicit_rule.clone().unwrap()]));
+                                prod.push(Symbol::Rule(rule_map[&implicit_rule.clone().unwrap()]));
                             }
                         }
                     };
@@ -309,26 +309,26 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                 (*rule).push(PIdx(prod_idx.as_()));
                 prods[prod_idx] = Some(prod);
                 prod_precs[prod_idx] = Some(prec);
-                prods_rules[prod_idx] = Some(rule_idx);
+                prods_rules[prod_idx] = Some(ridx);
             }
         }
 
         assert!(!token_names.is_empty());
         assert!(!rule_names.is_empty());
         Ok(YaccGrammar{
-            rules_len:     RIdx(rule_names.len().as_()),
+            rules_len:        RIdx(rule_names.len().as_()),
             rule_names,
-            tokens_len:        TIdx(token_names.len().as_()),
+            tokens_len:       TIdx(token_names.len().as_()),
             eof_token_idx,
             token_names,
             token_precs,
             prods_len:        PIdx(prods.len().as_()),
-            start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
+            start_prod:       rules_prods[usize::from(rule_map[&start_rule])][0],
             rules_prods,
             prods_rules:      prods_rules.into_iter().map(|x| x.unwrap()).collect(),
             prods:            prods.into_iter().map(|x| x.unwrap()).collect(),
             prod_precs:       prod_precs.into_iter().map(|x| x.unwrap()).collect(),
-            implicit_rule: implicit_rule.and_then(|x| Some(nonterm_map[&x]))
+            implicit_rule: implicit_rule.and_then(|x| Some(rule_map[&x]))
         })
     }
 
@@ -337,49 +337,50 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         self.eof_token_idx
     }
 
-    /// Return the productions for rule `i`. Panics if `i` doesn't exist.
-    pub fn rule_to_prods(&self, i: RIdx<StorageT>) -> &[PIdx<StorageT>] {
-        &self.rules_prods[usize::from(i)]
+    /// Return the productions for rule `ridx`. Panics if `ridx` doesn't exist.
+    pub fn rule_to_prods(&self, ridx: RIdx<StorageT>) -> &[PIdx<StorageT>] {
+        &self.rules_prods[usize::from(ridx)]
     }
 
-    /// Return the name of rule `i`. Panics if `i` doesn't exist.
-    pub fn rule_name(&self, i: RIdx<StorageT>) -> &str {
-        &self.rule_names[usize::from(i)]
+    /// Return the name of rule `ridx`. Panics if `ridx` doesn't exist.
+    pub fn rule_name(&self, ridx: RIdx<StorageT>) -> &str {
+        &self.rule_names[usize::from(ridx)]
     }
 
-    /// Get the sequence of symbols for production `i`. Panics if `i` doesn't exist.
-    pub fn prod(&self, i: PIdx<StorageT>) -> &[Symbol<StorageT>] {
-        &self.prods[usize::from(i)]
+    /// Get the sequence of symbols for production `pidx`. Panics if `pidx` doesn't exist.
+    pub fn prod(&self, pidx: PIdx<StorageT>) -> &[Symbol<StorageT>] {
+        &self.prods[usize::from(pidx)]
     }
 
-    pub fn prod_len(&self, i: PIdx<StorageT>) -> SIdx<StorageT> {
+    /// How many symbols does production `pidx` have? Panics if `pidx` doesn't exist.
+    pub fn prod_len(&self, pidx: PIdx<StorageT>) -> SIdx<StorageT> {
         // Since we've already checked that StorageT can store all the symbols for every production
         // in the grammar, the call to as_ is safe.
-        SIdx(self.prods[usize::from(i)].len().as_())
+        SIdx(self.prods[usize::from(pidx)].len().as_())
     }
 
-    /// Return the nonterm index of the production `i`. Panics if `i` doesn't exist.
-    pub fn prod_to_rule(&self, i: PIdx<StorageT>) -> RIdx<StorageT>
+    /// Return the rule index of the production `pidx`. Panics if `pidx` doesn't exist.
+    pub fn prod_to_rule(&self, pidx: PIdx<StorageT>) -> RIdx<StorageT>
     {
-        self.prods_rules[usize::from(i)]
+        self.prods_rules[usize::from(pidx)]
     }
 
-    /// Return the precedence of production `i` (where `None` indicates "no precedence specified").
-    /// Panics if `i` doesn't exist.
-    pub fn prod_precedence(&self, i: PIdx<StorageT>) -> Option<Precedence> {
-        self.prod_precs[usize::from(i)]
+    /// Return the precedence of production `pidx` (where `None` indicates "no precedence specified").
+    /// Panics if `pidx` doesn't exist.
+    pub fn prod_precedence(&self, pidx: PIdx<StorageT>) -> Option<Precedence> {
+        self.prod_precs[usize::from(pidx)]
     }
 
-    /// Return the name of token `i` (where `None` indicates "the rule has no name"). Panics if
-    /// `i` doesn't exist.
-    pub fn token_name(&self, i: TIdx<StorageT>) -> Option<&str> {
-        self.token_names[usize::from(i)].as_ref().and_then(|x| Some(x.as_str()))
+    /// Return the name of token `tidx` (where `None` indicates "the rule has no name"). Panics if
+    /// `tidx` doesn't exist.
+    pub fn token_name(&self, tidx: TIdx<StorageT>) -> Option<&str> {
+        self.token_names[usize::from(tidx)].as_ref().and_then(|x| Some(x.as_str()))
     }
 
-    /// Return the precedence of token `i` (where `None` indicates "no precedence specified").
-    /// Panics if `i` doesn't exist.
-    pub fn token_precedence(&self, i: TIdx<StorageT>) -> Option<Precedence> {
-        self.token_precs[usize::from(i)]
+    /// Return the precedence of token `tidx` (where `None` indicates "no precedence specified").
+    /// Panics if `tidx` doesn't exist.
+    pub fn token_precedence(&self, tidx: TIdx<StorageT>) -> Option<Precedence> {
+        self.token_precs[usize::from(tidx)]
     }
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
@@ -400,7 +401,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         self.start_prod
     }
 
-    /// Return the `RIdx` of the implict nonterm if it exists, or `None` otherwise.
+    /// Return the `RIdx` of the implict rule if it exists, or `None` otherwise.
     pub fn implicit_rule(&self) -> Option<RIdx<StorageT>> {
         self.implicit_rule
     }
@@ -423,7 +424,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                        .map(|x| TIdx(x.as_()))
     }
 
-    /// Is there a path from the `from` non-term to the `to` non-term? Note that recursive rules
+    /// Is there a path from the `from` rule to the `to` rule? Note that recursive rules
     /// return `true` for a path from themselves to themselves.
     pub fn has_path(&self, from: RIdx<StorageT>, to: RIdx<StorageT>) -> bool {
         let mut seen = vec![];
@@ -433,21 +434,21 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         todo[usize::from(from)] = true;
         loop {
             let mut empty = true;
-            for ntidx in self.iter_rules() {
-                if !todo[usize::from(ntidx)] {
+            for ridx in self.iter_rules() {
+                if !todo[usize::from(ridx)] {
                     continue;
                 }
-                seen[usize::from(ntidx)] = true;
-                todo[usize::from(ntidx)] = false;
+                seen[usize::from(ridx)] = true;
+                todo[usize::from(ridx)] = false;
                 empty = false;
-                for p_idx in self.rule_to_prods(ntidx).iter() {
-                    for sym in self.prod(*p_idx) {
-                        if let Symbol::Rule(pt_ntidx) = *sym {
-                            if pt_ntidx == to {
+                for pidx in self.rule_to_prods(ridx).iter() {
+                    for sym in self.prod(*pidx) {
+                        if let Symbol::Rule(p_ridx) = *sym {
+                            if p_ridx == to {
                                 return true;
                             }
-                            if !seen[usize::from(pt_ntidx)] {
-                                todo[usize::from(pt_ntidx)] = true;
+                            if !seen[usize::from(p_ridx)] {
+                                todo[usize::from(p_ridx)] = true;
                             }
                         }
                     }
@@ -459,7 +460,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         }
     }
 
-    /// Return a `SentenceGenerator` which can then generate minimal sentences for any non-term
+    /// Return a `SentenceGenerator` which can then generate minimal sentences for any rule
     /// based on the user-defined `token_cost` function which gives the associated cost for
     /// generating each token (where the cost must be greater than 0). Note that multiple
     /// tokens can have the same score. The simplest cost function is thus `|_| 1`.
@@ -546,24 +547,24 @@ where usize: AsPrimitive<StorageT>
                           rule_max_costs: RefCell::new(None)}
     }
 
-    /// What is the cost of a minimal sentence for the rule `rule_idx`? Note that,
-    /// unlike `min_sentence`, this function does not actually *build* a sentence and it is thus
-    /// much faster.
-    pub fn min_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> u16 {
+    /// What is the cost of a minimal sentence for the rule `ridx`? Note that, unlike
+    /// `min_sentence`, this function does not actually *build* a sentence and it is thus much
+    /// faster.
+    pub fn min_sentence_cost(&self, ridx: RIdx<StorageT>) -> u16 {
         self.rule_min_costs.borrow_mut()
                               .get_or_insert_with(|| rule_min_costs(self.grm,
                                                                        &self.token_costs))
-                              [usize::from(rule_idx)]
+                              [usize::from(ridx)]
     }
 
-    /// What is the cost of a maximal sentence for the rule `rule_idx`? Rules which can generate
+    /// What is the cost of a maximal sentence for the rule `ridx`? Rules which can generate
     /// sentences of unbounded length return None; rules which can only generate maximal strings of
     /// a finite length return a `Some(u16)`.
-    pub fn max_sentence_cost(&self, rule_idx: RIdx<StorageT>) -> Option<u16> {
+    pub fn max_sentence_cost(&self, ridx: RIdx<StorageT>) -> Option<u16> {
         let v = self.rule_max_costs.borrow_mut()
                                       .get_or_insert_with(||
                                            rule_max_costs(self.grm, &self.token_costs))
-                                      [usize::from(rule_idx)];
+                                      [usize::from(ridx)];
         if v == u16::max_value() {
             None
         } else {
@@ -572,12 +573,12 @@ where usize: AsPrimitive<StorageT>
     }
 
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
-    /// rule `rule_idx`.
-    pub fn min_sentence(&self, rule_idx: RIdx<StorageT>) -> Vec<TIdx<StorageT>> {
-        let cheapest_prod = |nt_idx: RIdx<StorageT>| -> PIdx<StorageT> {
+    /// rule `ridx`.
+    pub fn min_sentence(&self, ridx: RIdx<StorageT>) -> Vec<TIdx<StorageT>> {
+        let cheapest_prod = |p_ridx: RIdx<StorageT>| -> PIdx<StorageT> {
             let mut low_sc = None;
             let mut low_idx = None;
-            for &pidx in self.grm.rule_to_prods(nt_idx).iter() {
+            for &pidx in self.grm.rule_to_prods(p_ridx).iter() {
                 let mut sc = 0;
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
@@ -594,18 +595,18 @@ where usize: AsPrimitive<StorageT>
         };
 
         let mut s = vec![];
-        let mut st = vec![(cheapest_prod(rule_idx), 0)];
+        let mut st = vec![(cheapest_prod(ridx), 0)];
         while !st.is_empty() {
-            let (p_idx, sym_idx) = st.pop().unwrap();
-            let prod = self.grm.prod(p_idx);
-            for (i, sym) in prod.iter().enumerate().skip(sym_idx) {
+            let (pidx, sym_idx) = st.pop().unwrap();
+            let prod = self.grm.prod(pidx);
+            for (sidx, sym) in prod.iter().enumerate().skip(sym_idx) {
                 match sym {
-                    Symbol::Rule(j) => {
-                        st.push((p_idx, i + 1));
-                        st.push((cheapest_prod(*j), 0));
+                    Symbol::Rule(s_ridx) => {
+                        st.push((pidx, sidx + 1));
+                        st.push((cheapest_prod(*s_ridx), 0));
                     },
-                    Symbol::Token(j) => {
-                        s.push(*j);
+                    Symbol::Token(s_tidx) => {
+                        s.push(*s_tidx);
                     }
                 }
             }
@@ -613,17 +614,17 @@ where usize: AsPrimitive<StorageT>
         s
     }
 
-    /// Return (in arbitrary order) all the minimal sentences for the rule `rule_idx`.
-    pub fn min_sentences(&self, rule_idx: RIdx<StorageT>) -> Vec<Vec<TIdx<StorageT>>> {
-        let cheapest_prods = |nt_idx: RIdx<StorageT>| -> Vec<PIdx<StorageT>> {
+    /// Return (in arbitrary order) all the minimal sentences for the rule `ridx`.
+    pub fn min_sentences(&self, ridx: RIdx<StorageT>) -> Vec<Vec<TIdx<StorageT>>> {
+        let cheapest_prods = |p_ridx: RIdx<StorageT>| -> Vec<PIdx<StorageT>> {
             let mut low_sc = None;
             let mut low_idxs = vec![];
-            for &pidx in self.grm.rule_to_prods(nt_idx).iter() {
+            for &pidx in self.grm.rule_to_prods(p_ridx).iter() {
                 let mut sc = 0;
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
-                        Symbol::Rule(i) => self.min_sentence_cost(i),
-                        Symbol::Token(i)    => u16::from(self.token_costs[usize::from(i)])
+                        Symbol::Rule(s_ridx) => self.min_sentence_cost(s_ridx),
+                        Symbol::Token(s_tidx) => u16::from(self.token_costs[usize::from(s_tidx)])
                     };
                 }
                 if low_sc.is_none() || sc <= low_sc.unwrap() {
@@ -638,8 +639,8 @@ where usize: AsPrimitive<StorageT>
         };
 
         let mut sts = Vec::new(); // Output sentences
-        for p_idx in cheapest_prods(rule_idx) {
-            let prod = self.grm.prod(p_idx);
+        for pidx in cheapest_prods(ridx) {
+            let prod = self.grm.prod(pidx);
             if prod.is_empty() {
                 sts.push(vec![]);
                 continue;
@@ -658,8 +659,8 @@ where usize: AsPrimitive<StorageT>
             let mut ms = Vec::with_capacity(prod.len());
             for sym in prod {
                 match *sym {
-                    Symbol::Rule(nt_idx) => ms.push(self.min_sentences(nt_idx)),
-                    Symbol::Token(t_idx) => ms.push(vec![vec![t_idx]])
+                    Symbol::Rule(s_ridx) => ms.push(self.min_sentences(s_ridx)),
+                    Symbol::Token(s_tidx) => ms.push(vec![vec![s_tidx]])
                 }
             }
 
@@ -758,22 +759,22 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
             let mut ls_noncmplt = None; // lowest non-completed cost
             // The call to as_() is guaranteed safe because done.len() == grm.rules_len(), and
             // we guarantee that grm.rules_len() can fit in StorageT.
-            for p_idx in grm.rule_to_prods(RIdx(i.as_())).iter() {
+            for pidx in grm.rule_to_prods(RIdx(i.as_())).iter() {
                 let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
-                for sym in grm.prod(*p_idx) {
+                for sym in grm.prod(*pidx) {
                     let sc = match *sym {
-                                 Symbol::Token(token_idx) =>
-                                     u16::from(token_costs[usize::from(token_idx)]),
-                                 Symbol::Rule(nt_idx) => {
-                                     if !done[usize::from(nt_idx)] {
+                                 Symbol::Token(tidx) =>
+                                     u16::from(token_costs[usize::from(tidx)]),
+                                 Symbol::Rule(ridx) => {
+                                     if !done[usize::from(ridx)] {
                                          cmplt = false;
                                      }
-                                     costs[usize::from(nt_idx)]
+                                     costs[usize::from(ridx)]
                                  }
                              };
                     c = c.checked_add(sc).expect(
-                            "Overflow occurred when calculating non-term costs");
+                            "Overflow occurred when calculating rule costs");
                 }
                 if cmplt && (ls_cmplt.is_none() || c < ls_cmplt.unwrap()) {
                     ls_cmplt = Some(c);
@@ -812,11 +813,11 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
     costs.resize(usize::from(grm.rules_len()), 0);
 
     // First mark all recursive rules.
-    for ntidx in grm.iter_rules() {
+    for ridx in grm.iter_rules() {
         // Calling has_path so frequently is not exactly efficient...
-        if grm.has_path(ntidx, ntidx) {
-            costs[usize::from(ntidx)] = u16::max_value();
-            done[usize::from(ntidx)] = true;
+        if grm.has_path(ridx, ridx) {
+            costs[usize::from(ridx)] = u16::max_value();
+            done[usize::from(ridx)] = true;
         }
     }
 
@@ -831,28 +832,28 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
             let mut hs_noncmplt = None; // highest non-completed cost
             // The call to as_() is guaranteed safe because done.len() == grm.rules_len(), and
             // we guarantee that grm.rules_len() can fit in StorageT.
-            'a: for p_idx in grm.rule_to_prods(RIdx(i.as_())).iter() {
+            'a: for pidx in grm.rule_to_prods(RIdx(i.as_())).iter() {
                 let mut c: u16 = 0; // production cost
                 let mut cmplt = true;
-                for sym in grm.prod(*p_idx) {
+                for sym in grm.prod(*pidx) {
                     let sc = match *sym {
-                                 Symbol::Token(token_idx) =>
-                                     u16::from(token_costs[usize::from(token_idx)]),
-                                 Symbol::Rule(nt_idx) => {
-                                     if costs[usize::from(nt_idx)] == u16::max_value() {
+                                 Symbol::Token(s_tidx) =>
+                                     u16::from(token_costs[usize::from(s_tidx)]),
+                                 Symbol::Rule(s_ridx) => {
+                                     if costs[usize::from(s_ridx)] == u16::max_value() {
                                          // As soon as we find reference to an infinite rule, we
                                          // can stop looking.
                                          hs_cmplt = Some(u16::max_value());
                                          break 'a;
                                      }
-                                     if !done[usize::from(nt_idx)] {
+                                     if !done[usize::from(s_ridx)] {
                                          cmplt = false;
                                      }
-                                     costs[usize::from(nt_idx)]
+                                     costs[usize::from(s_ridx)]
                                  }
                              };
                     c = c.checked_add(sc).expect(
-                            "Overflow occurred when calculating non-term costs");
+                            "Overflow occurred when calculating rule costs");
                     if c == u16::max_value() {
                         panic!("Unable to represent cost in 64 bits.");
                     }
@@ -1147,17 +1148,17 @@ mod test {
             C: C 'y' | ;
           ").unwrap();
 
-        let a_nt_idx = grm.rule_idx(&"A").unwrap();
-        let b_nt_idx = grm.rule_idx(&"B").unwrap();
-        let c_nt_idx = grm.rule_idx(&"C").unwrap();
-        assert!(grm.has_path(a_nt_idx, b_nt_idx));
-        assert!(grm.has_path(a_nt_idx, c_nt_idx));
-        assert!(grm.has_path(b_nt_idx, b_nt_idx));
-        assert!(grm.has_path(b_nt_idx, c_nt_idx));
-        assert!(grm.has_path(c_nt_idx, c_nt_idx));
-        assert!(!grm.has_path(a_nt_idx, a_nt_idx));
-        assert!(!grm.has_path(b_nt_idx, a_nt_idx));
-        assert!(!grm.has_path(c_nt_idx, a_nt_idx));
+        let a_ridx = grm.rule_idx(&"A").unwrap();
+        let b_ridx = grm.rule_idx(&"B").unwrap();
+        let c_ridx = grm.rule_idx(&"C").unwrap();
+        assert!(grm.has_path(a_ridx, b_ridx));
+        assert!(grm.has_path(a_ridx, c_ridx));
+        assert!(grm.has_path(b_ridx, b_ridx));
+        assert!(grm.has_path(b_ridx, c_ridx));
+        assert!(grm.has_path(c_ridx, c_ridx));
+        assert!(!grm.has_path(a_ridx, a_ridx));
+        assert!(!grm.has_path(b_ridx, a_ridx));
+        assert!(!grm.has_path(c_ridx, a_ridx));
     }
 
     #[test]

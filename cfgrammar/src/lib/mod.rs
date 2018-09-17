@@ -139,16 +139,16 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
 }
 
 pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
-    /// Return all the firsts for rule `ntidx`.
-    fn firsts(&self, ntidx: RIdx<StorageT>) -> &Vob;
+    /// Return all the firsts for rule `ridx`.
+    fn firsts(&self, ridx: RIdx<StorageT>) -> &Vob;
 
-    /// Returns true if the token `tidx` is in the first set for rule `nidx`.
-    fn is_set(&self, nidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
+    /// Returns true if the token `tidx` is in the first set for rule `ridx`.
+    fn is_set(&self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 
-    /// Returns true if the rule `ntidx` has epsilon in its first set.
-    fn is_epsilon_set(&self, ntidx: RIdx<StorageT>) -> bool;
+    /// Returns true if the rule `ridx` has epsilon in its first set.
+    fn is_epsilon_set(&self, ridx: RIdx<StorageT>) -> bool;
 
-    /// Ensures that the firsts bit for token `tidx` rule `nidx` is set. Returns true if
+    /// Ensures that the firsts bit for token `tidx` rule `ridx` is set. Returns true if
     /// it was already set, or false otherwise.
-    fn set(&mut self, ntidx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
+    fn set(&mut self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 }

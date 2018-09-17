@@ -71,7 +71,7 @@ IdxNewtype!(
     ///
     /// It is guaranteed that `RIdx` can be converted, without loss of precision, to `usize` with
     /// the idiom `RIdx::from(x_usize)`. `usize` values can be converted to `RIdx`, causing a
-    /// panic if this would lead to a loss of precision with `usize::from(y_ntidx)`.
+    /// panic if this would lead to a loss of precision with `usize::from(y_ridx)`.
     RIdx);
 IdxNewtype!(
     /// A type specifically for production indices (e.g. a rule `E::=A|B` would

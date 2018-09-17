@@ -54,7 +54,7 @@ pub struct GrammarAST {
 #[derive(Debug)]
 pub struct Rule {
     pub name: String,
-    pub prod_idxs: Vec<usize> // index into GrammarAST.prod
+    pub pidxs: Vec<usize> // index into GrammarAST.prod
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -167,9 +167,9 @@ impl GrammarAST {
                 }
             }
         }
-        for prod_idxs in self.rules.values() {
-            for &prod_idx in prod_idxs {
-                let prod = &self.prods[prod_idx];
+        for pidxs in self.rules.values() {
+            for &pidx in pidxs {
+                let prod = &self.prods[pidx];
                 if let Some(ref n) = prod.precedence {
                     if !self.tokens.contains(n) {
                         return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
