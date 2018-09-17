@@ -76,7 +76,7 @@ pub struct YaccGrammar<StorageT=u32> {
     rule_names: Vec<String>,
     /// A mapping from `TIdx` -> `Option<String>`. Every user-specified token will have a name,
     /// but tokens inserted by cfgrammar (e.g. the EOF token) won't.
-    term_names: Vec<Option<String>>,
+    token_names: Vec<Option<String>>,
     /// A mapping from `TIdx` -> `Option<Precedence>`
     term_precs: Vec<Option<Precedence>>,
     /// How many tokens does this grammar have?
@@ -200,17 +200,17 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             nonterm_map.insert(v.clone(), RIdx(i.as_()));
         }
 
-        let mut term_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
+        let mut token_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut term_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
         for k in &ast.tokens {
-            term_names.push(Some(k.clone()));
+            token_names.push(Some(k.clone()));
             term_precs.push(ast.precs.get(k).cloned());
         }
-        let eof_term_idx = TIdx(term_names.len().as_());
-        term_names.push(None);
+        let eof_term_idx = TIdx(token_names.len().as_());
+        token_names.push(None);
         term_precs.push(None);
         let mut term_map = HashMap::<String, TIdx<StorageT>>::new();
-        for (i, v) in term_names.iter().enumerate() {
+        for (i, v) in token_names.iter().enumerate() {
             if let Some(n) = v.as_ref() {
                term_map.insert(n.clone(), TIdx(i.as_()));
             }
@@ -313,14 +313,14 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             }
         }
 
-        assert!(!term_names.is_empty());
+        assert!(!token_names.is_empty());
         assert!(!rule_names.is_empty());
         Ok(YaccGrammar{
             rules_len:     RIdx(rule_names.len().as_()),
             rule_names,
-            terms_len:        TIdx(term_names.len().as_()),
+            terms_len:        TIdx(token_names.len().as_()),
             eof_term_idx,
-            term_names,
+            token_names,
             term_precs,
             prods_len:        PIdx(prods.len().as_()),
             start_prod:       rules_prods[usize::from(nonterm_map[&start_nonterm])][0],
@@ -373,7 +373,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     /// Return the name of token `i` (where `None` indicates "the rule has no name"). Panics if
     /// `i` doesn't exist.
     pub fn term_name(&self, i: TIdx<StorageT>) -> Option<&str> {
-        self.term_names[usize::from(i)].as_ref().and_then(|x| Some(x.as_str()))
+        self.token_names[usize::from(i)].as_ref().and_then(|x| Some(x.as_str()))
     }
 
     /// Return the precedence of token `i` (where `None` indicates "no precedence specified").
@@ -387,7 +387,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     pub fn terms_map(&self) -> HashMap<&str, TIdx<StorageT>> {
         let mut m = HashMap::with_capacity(usize::from(self.terms_len) - 1);
         for tidx in self.iter_tidxs() {
-            if let Some(n) = self.term_names[usize::from(tidx)].as_ref() {
+            if let Some(n) = self.token_names[usize::from(tidx)].as_ref() {
                 m.insert(&**n, tidx);
             }
         }
@@ -416,9 +416,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return the index of the token named `n` or `None` if it doesn't exist.
     pub fn term_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
-        self.term_names.iter()
+        self.token_names.iter()
                        .position(|x| x.as_ref().map_or(false, |x| x == n))
-                       // The call to as_() is safe because term_names is guaranteed to be small
+                       // The call to as_() is safe because token_names is guaranteed to be small
                        // enough to fit into StorageT
                        .map(|x| TIdx(x.as_()))
     }
