@@ -35,7 +35,7 @@ use std::marker::PhantomData;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use {Grammar, RIdx, Symbol, TIdx};
+use {RIdx, Symbol, TIdx};
 use yacc::YaccGrammar;
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
@@ -175,7 +175,6 @@ where usize: AsPrimitive<StorageT>
 
 #[cfg(test)]
 mod test {
-    use Grammar;
     use yacc::{YaccGrammar, YaccKind};
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
     use super::YaccFirsts;

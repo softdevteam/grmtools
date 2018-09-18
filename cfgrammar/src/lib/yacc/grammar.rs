@@ -37,7 +37,7 @@ use std::fmt;
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 
-use {Grammar, RIdx, PIdx, SIdx, Symbol, TIdx};
+use {RIdx, PIdx, SIdx, Symbol, TIdx};
 use super::YaccKind;
 use yacc::firsts::YaccFirsts;
 use yacc::parser::YaccParser;
@@ -332,6 +332,34 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         })
     }
 
+    /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
+    /// grammar's valid `RIdx`s.
+    pub fn iter_rules(&self) -> impl Iterator<Item=RIdx<StorageT>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.rules_len())).map(|x| RIdx(x.as_())))
+    }
+
+    /// Return an iterator which produces (in order from `0..self.prods_len()`) all this
+    /// grammar's valid `PIdx`s.
+    pub fn iter_pidxs(&self) -> impl Iterator<Item=PIdx<StorageT>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.prods_len())).map(|x| PIdx(x.as_())))
+    }
+
+    pub fn iter_tidxs(&self) -> impl Iterator<Item=TIdx<StorageT>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.rules_len() and, since rules_len() returns an TIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.tokens_len())).map(|x| TIdx(x.as_())))
+    }
+
     /// Return the index of the end token.
     pub fn eof_token_idx(&self) -> TIdx<StorageT> {
         self.eof_token_idx
@@ -474,27 +502,25 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     pub fn firsts(&self) -> YaccFirsts<StorageT> {
         YaccFirsts::new(self)
     }
-}
 
-impl<StorageT: 'static + PrimInt + Unsigned> Grammar<StorageT>
-for YaccGrammar<StorageT>
-where usize: AsPrimitive<StorageT>
-{
-    fn prods_len(&self) -> PIdx<StorageT> {
+    /// How many productions does this grammar have?
+    pub fn prods_len(&self) -> PIdx<StorageT> {
         self.prods_len
     }
 
-    fn rules_len(&self) -> RIdx<StorageT> {
+    /// How many rules does this grammar have?
+    pub fn rules_len(&self) -> RIdx<StorageT> {
         self.rules_len
     }
 
-    /// Return the index of the start rule.
-    fn start_rule_idx(&self) -> RIdx<StorageT>
+    /// What is the index of the start rule?
+    pub fn start_rule_idx(&self) -> RIdx<StorageT>
     {
         self.prod_to_rule(self.start_prod)
     }
 
-    fn tokens_len(&self) -> TIdx<StorageT> {
+    /// How many tokens does this grammar have?
+    pub fn tokens_len(&self) -> TIdx<StorageT> {
         self.tokens_len
     }
 }
@@ -909,7 +935,7 @@ impl fmt::Display for YaccGrammarError {
 mod test {
     use std::collections::HashMap;
     use super::{IMPLICIT_RULE, IMPLICIT_START_RULE, rule_max_costs, rule_min_costs};
-    use {Grammar, RIdx, PIdx, Symbol, TIdx};
+    use {RIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
     #[test]

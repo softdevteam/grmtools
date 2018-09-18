@@ -42,7 +42,6 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
 use bincode::{deserialize, serialize_into};
-use cfgrammar::Grammar;
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use filetime::FileTime;
 use lrtable::{Minimiser, from_yacc, StateGraph, StateTable};

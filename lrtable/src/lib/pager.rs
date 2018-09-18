@@ -34,7 +34,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::HashMap;
 use std::hash::Hash;
 
-use cfgrammar::{Grammar, Symbol, SIdx};
+use cfgrammar::{Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;

@@ -33,7 +33,7 @@
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::{BuildHasherDefault, Hash};
 
-use cfgrammar::{Grammar, PIdx, Symbol, SIdx};
+use cfgrammar::{PIdx, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -183,7 +183,7 @@ where usize: AsPrimitive<StorageT>
 mod test {
     use vob::Vob;
     use super::Itemset;
-    use cfgrammar::{Grammar, SIdx, Symbol};
+    use cfgrammar::{SIdx, Symbol};
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use stategraph::state_exists;
 

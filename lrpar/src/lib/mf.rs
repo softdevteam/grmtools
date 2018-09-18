@@ -37,7 +37,7 @@ use std::mem;
 use std::time::Instant;
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, Symbol, TIdx};
+use cfgrammar::{Symbol, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
