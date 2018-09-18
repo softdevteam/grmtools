@@ -70,7 +70,7 @@ enum RepairMerge<StorageT> {
 #[derive(Clone, Debug)]
 struct PathFNode<StorageT> {
     pstack: Cactus<StIdx>,
-    la_idx: usize,
+    laidx: usize,
     repairs: Cactus<RepairMerge<StorageT>>,
     cf: u16,
     cg: u16
@@ -89,13 +89,13 @@ impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
 impl<StorageT: PrimInt + Unsigned> Hash for PathFNode<StorageT> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.pstack.hash(state);
-        self.la_idx.hash(state);
+        self.laidx.hash(state);
     }
 }
 
 impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
     fn eq(&self, other: &PathFNode<StorageT>) -> bool {
-        if self.la_idx != other.la_idx || self.pstack != other.pstack {
+        if self.laidx != other.laidx || self.pstack != other.pstack {
             return false;
         }
         // The rest of this function is subtle: we're not looking for repair sequences which are
@@ -150,7 +150,7 @@ where usize: AsPrimitive<StorageT>
     fn recover(&self,
                finish_by: Instant,
                parser: &Parser<StorageT>,
-               in_la_idx: usize,
+               in_laidx: usize,
                mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<StorageT>>)
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
@@ -161,7 +161,7 @@ where usize: AsPrimitive<StorageT>
         }
 
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
-                                   la_idx: in_la_idx,
+                                   laidx: in_laidx,
                                    repairs: Cactus::new().child(RepairMerge::Terminator),
                                    cf: 0,
                                    cg: 0};
@@ -224,33 +224,33 @@ where usize: AsPrimitive<StorageT>
                 }
 
                 match parser.stable.action(*n.pstack.val().unwrap(),
-                                           parser.next_tidx(n.la_idx)) {
+                                           parser.next_tidx(n.laidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }
             });
 
         if astar_cnds.is_empty() {
-            return (in_la_idx, vec![]);
+            return (in_laidx, vec![]);
         }
 
         let full_rprs = self.collect_repairs(astar_cnds);
         let mut rnk_rprs = rank_cnds(parser,
                                      finish_by,
-                                     in_la_idx,
+                                     in_laidx,
                                      &in_pstack,
                                      full_rprs);
         if rnk_rprs.is_empty() {
-            return (in_la_idx, vec![]);
+            return (in_laidx, vec![]);
         }
         simplify_repairs(&mut rnk_rprs);
-        let la_idx = apply_repairs(parser,
-                                   in_la_idx,
+        let laidx = apply_repairs(parser,
+                                   in_laidx,
                                    &mut in_pstack,
                                    &mut Some(&mut tstack),
                                    &rnk_rprs[0]);
 
-        (la_idx, rnk_rprs)
+        (laidx, rnk_rprs)
     }
 }
 
@@ -273,11 +273,11 @@ where usize: AsPrimitive<StorageT>
                 _ => unreachable!()
             };
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(tidx)));
-            if let Some(d) = self.dyn_dist(&n_repairs, t_stidx, n.la_idx) {
+            if let Some(d) = self.dyn_dist(&n_repairs, t_stidx, n.laidx) {
                 assert!(n.cg == 0 || d >= n.cg - u16::from((self.parser.token_cost)(tidx)));
                 let nn = PathFNode{
                     pstack: n.pstack.child(t_stidx),
-                    la_idx: n.la_idx,
+                    laidx: n.laidx,
                     repairs: n_repairs,
                     cf: n.cf.checked_add(u16::from((self.parser.token_cost)(tidx))).unwrap(),
                     cg: d};
@@ -326,10 +326,10 @@ where usize: AsPrimitive<StorageT>
                     }
                 }
 
-                if let Some(d) = self.dyn_dist(&n.repairs, goto_stidx, n.la_idx) {
+                if let Some(d) = self.dyn_dist(&n.repairs, goto_stidx, n.laidx) {
                     let nn = PathFNode{
                         pstack: qi_minus_alpha.child(goto_stidx),
-                        la_idx: n.la_idx,
+                        laidx: n.laidx,
                         repairs: n.repairs.clone(),
                         cf: n.cf,
                         cg: d};
@@ -343,16 +343,16 @@ where usize: AsPrimitive<StorageT>
               n: &PathFNode<StorageT>,
               nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
-        if n.la_idx == self.parser.lexemes.len() {
+        if n.laidx == self.parser.lexemes.len() {
             return;
         }
 
         let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Delete));
-        if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.la_idx + 1) {
-            let la_tidx = self.parser.next_tidx(n.la_idx);
+        if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.laidx + 1) {
+            let la_tidx = self.parser.next_tidx(n.laidx);
             let cost = (self.parser.token_cost)(la_tidx);
             let nn = PathFNode{pstack: n.pstack.clone(),
-                               la_idx: n.la_idx + 1,
+                               laidx: n.laidx + 1,
                                repairs: n_repairs,
                                cf: n.cf.checked_add(u16::from(cost)).unwrap(),
                                cg: d};
@@ -364,16 +364,16 @@ where usize: AsPrimitive<StorageT>
              n: &PathFNode<StorageT>,
              nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
-        let la_tidx = self.parser.next_tidx(n.la_idx);
+        let la_tidx = self.parser.next_tidx(n.laidx);
         let top_pstack = *n.pstack.val().unwrap();
         if let Some(Action::Shift(state_id)) = self.parser.stable.action(top_pstack,
                                                                          la_tidx) {
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Shift));
-            let new_la_idx = n.la_idx + 1;
-            if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_la_idx) {
+            let new_laidx = n.laidx + 1;
+            if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_laidx) {
                 let nn = PathFNode{
                     pstack: n.pstack.child(state_id),
-                    la_idx: new_la_idx,
+                    laidx: new_laidx,
                     repairs: n_repairs,
                     cf: n.cf,
                     cg: d};
@@ -446,12 +446,12 @@ where usize: AsPrimitive<StorageT>
             .collect()
     }
 
-    /// Return the distance from `stidx` at input position `la_idx`, given the current `repairs`.
+    /// Return the distance from `stidx` at input position `laidx`, given the current `repairs`.
     /// Returns `None` if no route can be found.
     fn dyn_dist(&self,
                 repairs: &Cactus<RepairMerge<StorageT>>,
                 stidx: StIdx,
-                la_idx: usize)
+                laidx: usize)
               -> Option<u16>
     {
         // This function is very different than anything in KimYi: it estimates the distance to a
@@ -471,7 +471,7 @@ where usize: AsPrimitive<StorageT>
         }
 
         // Now we deal with the "main" case: dealing with distances in the face of possible
-        // deletions. Imagine that there are two lexemes starting at position la_idx: (in order) T
+        // deletions. Imagine that there are two lexemes starting at position laidx: (in order) T
         // and U, both with a token_cost of 1. Assume the dist() from stidx to T is 2 and the
         // dist() from stidx to U is 0. If we delete T then the distance to U is 1, which is a
         // shorter distance than T. We therefore need to return a distance of 1, even though that
@@ -484,7 +484,7 @@ where usize: AsPrimitive<StorageT>
         // 1.
         let mut ld = u16::max_value(); // ld == Current least distance
         let mut dc = 0; // Cumulative deletion cost
-        for i in la_idx..self.parser.lexemes.len() + 1 {
+        for i in laidx..self.parser.lexemes.len() + 1 {
             let tidx = self.parser.next_tidx(i);
             let d = self.dist.dist(stidx, tidx);
             if d < u16::max_value() && dc + d < ld {
@@ -530,7 +530,7 @@ fn ends_with_parse_at_least_shifts<StorageT>
 pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
                        (parser: &Parser<StorageT>,
                         finish_by: Instant,
-                        in_la_idx: usize,
+                        in_laidx: usize,
                         in_pstack: &Vec<StIdx>,
                         in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>)
                      -> Vec<Vec<ParseRepair<StorageT>>>
@@ -543,20 +543,20 @@ pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
             return vec![];
         }
         let mut pstack = in_pstack.clone();
-        let mut la_idx = apply_repairs(parser,
-                                       in_la_idx,
+        let mut laidx = apply_repairs(parser,
+                                       in_laidx,
                                        &mut pstack,
                                        &mut None,
                                        &rpr_seqs[0]);
-        la_idx = parser.lr_upto(None,
-                                la_idx,
-                                in_la_idx + TRY_PARSE_AT_MOST,
+        laidx = parser.lr_upto(None,
+                                laidx,
+                                in_laidx + TRY_PARSE_AT_MOST,
                                 &mut pstack,
                                 &mut None);
-        if la_idx >= furthest {
-            furthest = la_idx;
+        if laidx >= furthest {
+            furthest = laidx;
         }
-        cnds.push((pstack, la_idx, rpr_seqs));
+        cnds.push((pstack, laidx, rpr_seqs));
     }
 
     // Remove any elements except those which parsed as far as possible.
@@ -567,11 +567,11 @@ pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
         .collect::<Vec<_>>()
 }
 
-/// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
+/// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
 /// distance and a new pstack.
 pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
                            (parser: &Parser<StorageT>,
-                            mut la_idx: usize,
+                            mut laidx: usize,
                             mut pstack: &mut Vec<StIdx>,
                             mut tstack: &mut Option<&mut Vec<Node<StorageT>>>,
                             repairs: &[ParseRepair<StorageT>])
@@ -582,28 +582,28 @@ pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigne
         match *r {
             ParseRepair::InsertSeq(_) => unreachable!(),
             ParseRepair::Insert(tidx) => {
-                let next_lexeme = parser.next_lexeme(la_idx);
+                let next_lexeme = parser.next_lexeme(laidx);
                 let new_lexeme = Lexeme::new(StorageT::from(u32::from(tidx)).unwrap(),
                                              next_lexeme.start(), 0);
                 parser.lr_upto(Some(new_lexeme),
-                               la_idx,
-                               la_idx + 1,
+                               laidx,
+                               laidx + 1,
                                &mut pstack,
                                &mut tstack);
             },
             ParseRepair::Delete => {
-                la_idx += 1;
+                laidx += 1;
             }
             ParseRepair::Shift => {
-                la_idx = parser.lr_upto(None,
-                                        la_idx,
-                                        la_idx + 1,
+                laidx = parser.lr_upto(None,
+                                        laidx,
+                                        laidx + 1,
                                         &mut pstack,
                                         &mut tstack);
             }
         }
     }
-    la_idx
+    laidx
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.

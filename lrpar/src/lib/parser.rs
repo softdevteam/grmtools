@@ -129,21 +129,21 @@ where usize: AsPrimitive<StorageT>
         }
     }
 
-    /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
-    /// as the first lexeme) up to (but excluding) `end_la_idx` (if it's specified). Parsing
+    /// Start parsing text at `laidx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
+    /// as the first lexeme) up to (but excluding) `end_laidx` (if it's specified). Parsing
     /// continues as long as possible (assuming that any errors encountered can be recovered from)
-    /// unless `end_la_idx` is `None`, at which point this function returns as soon as it
+    /// unless `end_laidx` is `None`, at which point this function returns as soon as it
     /// encounters an error.
     ///
-    /// Note that if `lexeme_prefix` is specified, `la_idx` will still be incremented, and thus
-    /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
-    /// lexeme at position `la_idx`.
+    /// Note that if `lexeme_prefix` is specified, `laidx` will still be incremented, and thus
+    /// `end_laidx` *must* be set to `laidx + 1` in order that the parser doesn't skip the real
+    /// lexeme at position `laidx`.
     ///
     /// Return `true` if the parse reached an accept state (i.e. all the input was consumed,
     /// possibly after making repairs) or `false` (i.e. some of the input was not consumed, even
     /// after possibly making repairs) otherwise.
     pub fn lr(&self,
-              mut la_idx: usize,
+              mut laidx: usize,
               pstack: &mut PStack,
               tstack: &mut TStack<StorageT>,
               errors: &mut Errors<StorageT>)
@@ -153,7 +153,7 @@ where usize: AsPrimitive<StorageT>
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
         loop {
             let stidx = *pstack.last().unwrap();
-            let la_tidx = self.next_tidx(la_idx);
+            let la_tidx = self.next_tidx(laidx);
 
             match self.stable.action(stidx, la_tidx) {
                 Some(Action::Reduce(pidx)) => {
@@ -167,10 +167,10 @@ where usize: AsPrimitive<StorageT>
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
-                    let la_lexeme = self.next_lexeme(la_idx);
+                    let la_lexeme = self.next_lexeme(laidx);
                     tstack.push(Node::Term{lexeme: la_lexeme});
                     pstack.push(state_id);
-                    la_idx += 1;
+                    laidx += 1;
                 },
                 Some(Action::Accept) => {
                     debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
@@ -184,9 +184,9 @@ where usize: AsPrimitive<StorageT>
                                              RecoveryKind::MF => mf::recoverer(self),
                                              RecoveryKind::Panic => panic::recoverer(self),
                                              RecoveryKind::None => {
-                                                let la_lexeme = self.next_lexeme(la_idx);
+                                                let la_lexeme = self.next_lexeme(laidx);
                                                 errors.push(ParseError{stidx,
-                                                                       lexeme_idx: la_idx,
+                                                                       lexeme_idx: laidx,
                                                                        lexeme: la_lexeme,
                                                                        repairs: vec![]});
                                                 return false;
@@ -196,49 +196,49 @@ where usize: AsPrimitive<StorageT>
 
                     let before = Instant::now();
                     let finish_by = before + recovery_budget;
-                    let (new_la_idx, repairs) = recoverer.as_ref()
+                    let (new_laidx, repairs) = recoverer.as_ref()
                                                          .unwrap()
                                                          .as_ref()
                                                          .recover(finish_by,
                                                                   self,
-                                                                  la_idx,
+                                                                  laidx,
                                                                   pstack,
                                                                   tstack);
                     let after = Instant::now();
                     recovery_budget = recovery_budget.checked_sub(after - before)
                                                      .unwrap_or_else(|| Duration::new(0, 0));
                     let keep_going = !repairs.is_empty();
-                    let la_lexeme = self.next_lexeme(la_idx);
-                    errors.push(ParseError{stidx, lexeme_idx: la_idx,
+                    let la_lexeme = self.next_lexeme(laidx);
+                    errors.push(ParseError{stidx, lexeme_idx: laidx,
                                            lexeme: la_lexeme, repairs});
                     if !keep_going {
                         return false;
                     }
-                    la_idx = new_la_idx;
+                    laidx = new_laidx;
                 }
             }
         }
     }
 
-    /// Parse from `la_idx` up to (but excluding) `end_la_idx` mutating `pstack` as parsing occurs.
-    /// Returns the index of the token it parsed up to (by definition <= end_la_idx: can be less if
-    /// the input is < end_la_idx, or if an error is encountered). Does not do any form of error
+    /// Parse from `laidx` up to (but excluding) `end_laidx` mutating `pstack` as parsing occurs.
+    /// Returns the index of the token it parsed up to (by definition <= end_laidx: can be less if
+    /// the input is < end_laidx, or if an error is encountered). Does not do any form of error
     /// recovery.
     pub fn lr_upto(&self,
                    lexeme_prefix: Option<Lexeme<StorageT>>,
-                   mut la_idx: usize,
-                   end_la_idx: usize,
+                   mut laidx: usize,
+                   end_laidx: usize,
                    pstack: &mut PStack,
                    tstack: &mut Option<&mut Vec<Node<StorageT>>>)
            -> usize
     {
-        assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
-        while la_idx != end_la_idx && la_idx <= self.lexemes.len() {
+        assert!(lexeme_prefix.is_none() || end_laidx == laidx + 1);
+        while laidx != end_laidx && laidx <= self.lexemes.len() {
             let stidx = *pstack.last().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
                               TIdx(l.tok_id())
                           } else {
-                              self.next_tidx(la_idx)
+                              self.next_tidx(laidx)
                           };
 
             match self.stable.action(stidx, la_tidx) {
@@ -259,12 +259,12 @@ where usize: AsPrimitive<StorageT>
                         let la_lexeme = if let Some(l) = lexeme_prefix {
                                             l
                                         } else {
-                                            self.next_lexeme(la_idx)
+                                            self.next_lexeme(laidx)
                                         };
                         tstack_uw.push(Node::Term{lexeme: la_lexeme});
                     }
                     pstack.push(state_id);
-                    la_idx += 1;
+                    laidx += 1;
                 },
                 Some(Action::Accept) => {
                     break;
@@ -274,24 +274,24 @@ where usize: AsPrimitive<StorageT>
                 }
             }
         }
-        la_idx
+        laidx
     }
 
-    /// Return a `Lexeme` for the next lemexe (if `la_idx` == `self.lexemes.len()` this will be
+    /// Return a `Lexeme` for the next lemexe (if `laidx` == `self.lexemes.len()` this will be
     /// a lexeme constructed to look as if contains the EOF token).
-    pub(crate) fn next_lexeme(&self, la_idx: usize) -> Lexeme<StorageT>
+    pub(crate) fn next_lexeme(&self, laidx: usize) -> Lexeme<StorageT>
     {
         let llen = self.lexemes.len();
-        debug_assert!(la_idx <= llen);
-        if la_idx < llen {
-            self.lexemes[la_idx]
+        debug_assert!(laidx <= llen);
+        if laidx < llen {
+            self.lexemes[laidx]
         } else {
             // We have to artificially construct a Lexeme for the EOF lexeme.
             let last_la_end = if llen == 0 {
                     0
                 } else {
-                    debug_assert!(la_idx > 0);
-                    let last_la = self.lexemes[la_idx - 1];
+                    debug_assert!(laidx > 0);
+                    let last_la = self.lexemes[laidx - 1];
                     last_la.start() + last_la.len()
                 };
 
@@ -299,40 +299,40 @@ where usize: AsPrimitive<StorageT>
         }
     }
 
-    /// Return the `TIdx` of the next lexeme (if `la_idx` == `self.lexemes.len()` this will be the
+    /// Return the `TIdx` of the next lexeme (if `laidx` == `self.lexemes.len()` this will be the
     /// EOF `TIdx`).
-    pub(crate) fn next_tidx(&self, la_idx: usize) -> TIdx<StorageT> {
+    pub(crate) fn next_tidx(&self, laidx: usize) -> TIdx<StorageT> {
         let ll = self.lexemes.len();
-        debug_assert!(la_idx <= ll);
-        if la_idx < ll {
-            TIdx(self.lexemes[la_idx].tok_id())
+        debug_assert!(laidx <= ll);
+        if laidx < ll {
+            TIdx(self.lexemes[laidx].tok_id())
         } else {
             self.grm.eof_token_idx()
         }
     }
 
-    /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
-    /// as the first lexeme) up to (but excluding) `end_la_idx`. If an error is encountered, parsing
+    /// Start parsing text at `laidx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
+    /// as the first lexeme) up to (but excluding) `end_laidx`. If an error is encountered, parsing
     /// immediately terminates (without recovery).
     ///
-    /// Note that if `lexeme_prefix` is specified, `la_idx` will still be incremented, and thus
-    /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
-    /// lexeme at position `la_idx`.
+    /// Note that if `lexeme_prefix` is specified, `laidx` will still be incremented, and thus
+    /// `end_laidx` *must* be set to `laidx + 1` in order that the parser doesn't skip the real
+    /// lexeme at position `laidx`.
     pub(crate) fn lr_cactus(&self,
                             lexeme_prefix: Option<Lexeme<StorageT>>,
-                            mut la_idx: usize,
-                            end_la_idx: usize,
+                            mut laidx: usize,
+                            end_laidx: usize,
                             mut pstack: Cactus<StIdx>,
                             tstack: &mut Option<&mut Vec<Node<StorageT>>>)
       -> (usize, Cactus<StIdx>)
     {
-        assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
-        while la_idx != end_la_idx {
+        assert!(lexeme_prefix.is_none() || end_laidx == laidx + 1);
+        while laidx != end_laidx {
             let stidx = *pstack.val().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
                               TIdx(l.tok_id())
                           } else {
-                              self.next_tidx(la_idx)
+                              self.next_tidx(laidx)
                           };
 
             match self.stable.action(stidx, la_tidx) {
@@ -356,12 +356,12 @@ where usize: AsPrimitive<StorageT>
                         let la_lexeme = if let Some(l) = lexeme_prefix {
                                             l
                                         } else {
-                                            self.next_lexeme(la_idx)
+                                            self.next_lexeme(laidx)
                                         };
                         tstack_uw.push(Node::Term{lexeme: la_lexeme});
                     }
                     pstack = pstack.child(state_id);
-                    la_idx += 1;
+                    laidx += 1;
                 },
                 Some(Action::Accept) => {
                     debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
@@ -375,7 +375,7 @@ where usize: AsPrimitive<StorageT>
                 }
             }
         }
-        (la_idx, pstack)
+        (laidx, pstack)
     }
 }
 
