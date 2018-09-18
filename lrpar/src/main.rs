@@ -208,11 +208,11 @@ fn main() {
                                     if i > 0 {
                                         s.push_str(", ");
                                     }
-                                    for (j, t_idx) in seq.iter().enumerate() {
+                                    for (j, tidx) in seq.iter().enumerate() {
                                         if j > 0 {
                                             s.push_str(" ");
                                         }
-                                        s.push_str(grm.token_name(*t_idx).unwrap());
+                                        s.push_str(grm.token_name(*tidx).unwrap());
                                     }
                                 }
                                 s.push_str("}");

@@ -51,7 +51,7 @@ const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node<StorageT> {
     Term{lexeme: Lexeme<StorageT>},
-    Nonterm{rule_idx: RIdx<StorageT>, nodes: Vec<Node<StorageT>>}
+    Nonterm{ridx: RIdx<StorageT>, nodes: Vec<Node<StorageT>>}
 }
 
 impl<StorageT: 'static + PrimInt + Unsigned> Node<StorageT>
@@ -68,13 +68,13 @@ where usize: AsPrimitive<StorageT>
             }
             match *e {
                 Node::Term{lexeme} => {
-                    let t_idx = TIdx(lexeme.tok_id());
-                    let tn = grm.token_name(t_idx).unwrap();
+                    let tidx = TIdx(lexeme.tok_id());
+                    let tn = grm.token_name(tidx).unwrap();
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
-                Node::Nonterm{rule_idx, ref nodes} => {
-                    s.push_str(&format!("{}\n", grm.rule_name(rule_idx)));
+                Node::Nonterm{ridx, ref nodes} => {
+                    s.push_str(&format!("{}\n", grm.rule_name(ridx)));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }
@@ -152,19 +152,19 @@ where usize: AsPrimitive<StorageT>
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
         loop {
-            let st = *pstack.last().unwrap();
+            let stidx = *pstack.last().unwrap();
             let la_tidx = self.next_tidx(la_idx);
 
-            match self.stable.action(st, la_tidx) {
-                Some(Action::Reduce(prod_id)) => {
-                    let rule_idx = self.grm.prod_to_rule(prod_id);
-                    let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
+            match self.stable.action(stidx, la_tidx) {
+                Some(Action::Reduce(pidx)) => {
+                    let ridx = self.grm.prod_to_rule(pidx);
+                    let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
-                    tstack.push(Node::Nonterm{rule_idx, nodes});
+                    tstack.push(Node::Nonterm{ridx, nodes});
 
                     pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
-                    pstack.push(self.stable.goto(prior, rule_idx).unwrap());
+                    pstack.push(self.stable.goto(prior, ridx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     let la_lexeme = self.next_lexeme(la_idx);
@@ -185,7 +185,7 @@ where usize: AsPrimitive<StorageT>
                                              RecoveryKind::Panic => panic::recoverer(self),
                                              RecoveryKind::None => {
                                                 let la_lexeme = self.next_lexeme(la_idx);
-                                                errors.push(ParseError{state_idx: st,
+                                                errors.push(ParseError{stidx,
                                                                        lexeme_idx: la_idx,
                                                                        lexeme: la_lexeme,
                                                                        repairs: vec![]});
@@ -209,7 +209,7 @@ where usize: AsPrimitive<StorageT>
                                                      .unwrap_or_else(|| Duration::new(0, 0));
                     let keep_going = !repairs.is_empty();
                     let la_lexeme = self.next_lexeme(la_idx);
-                    errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
+                    errors.push(ParseError{stidx, lexeme_idx: la_idx,
                                            lexeme: la_lexeme, repairs});
                     if !keep_going {
                         return false;
@@ -234,25 +234,25 @@ where usize: AsPrimitive<StorageT>
     {
         assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
         while la_idx != end_la_idx && la_idx <= self.lexemes.len() {
-            let st = *pstack.last().unwrap();
+            let stidx = *pstack.last().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
                               TIdx(l.tok_id())
                           } else {
                               self.next_tidx(la_idx)
                           };
 
-            match self.stable.action(st, la_tidx) {
-                Some(Action::Reduce(prod_id)) => {
-                    let rule_idx = self.grm.prod_to_rule(prod_id);
-                    let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
+            match self.stable.action(stidx, la_tidx) {
+                Some(Action::Reduce(pidx)) => {
+                    let ridx = self.grm.prod_to_rule(pidx);
+                    let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
-                        tstack_uw.push(Node::Nonterm{rule_idx, nodes});
+                        tstack_uw.push(Node::Nonterm{ridx, nodes});
                     }
 
                     pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
-                    pstack.push(self.stable.goto(prior, rule_idx).unwrap());
+                    pstack.push(self.stable.goto(prior, ridx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     if let Some(ref mut tstack_uw) = *tstack {
@@ -328,28 +328,28 @@ where usize: AsPrimitive<StorageT>
     {
         assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
         while la_idx != end_la_idx {
-            let st = *pstack.val().unwrap();
+            let stidx = *pstack.val().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
                               TIdx(l.tok_id())
                           } else {
                               self.next_tidx(la_idx)
                           };
 
-            match self.stable.action(st, la_tidx) {
-                Some(Action::Reduce(prod_id)) => {
-                    let rule_idx = self.grm.prod_to_rule(prod_id);
-                    let pop_num = self.grm.prod(prod_id).len();
+            match self.stable.action(stidx, la_tidx) {
+                Some(Action::Reduce(pidx)) => {
+                    let ridx = self.grm.prod_to_rule(pidx);
+                    let pop_num = self.grm.prod(pidx).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
                                              .collect::<Vec<Node<StorageT>>>();
-                        tstack_uw.push(Node::Nonterm{rule_idx, nodes});
+                        tstack_uw.push(Node::Nonterm{ridx, nodes});
                     }
 
                     for _ in 0..pop_num {
                         pstack = pstack.parent().unwrap();
                     }
                     let prior = *pstack.val().unwrap();
-                    pstack = pstack.child(self.stable.goto(prior, rule_idx).unwrap());
+                    pstack = pstack.child(self.stable.goto(prior, ridx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     if let Some(ref mut tstack_uw) = *tstack {
@@ -442,7 +442,7 @@ pub enum ParseRepair<StorageT> {
 /// Records a single parse error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParseError<StorageT> {
-    state_idx: StIdx,
+    stidx: StIdx,
     lexeme_idx: usize,
     lexeme: Lexeme<StorageT>,
     repairs: Vec<Vec<ParseRepair<StorageT>>>
@@ -458,8 +458,8 @@ impl<StorageT: Debug> Error for ParseError<StorageT> {}
 
 impl<StorageT: PrimInt + Unsigned> ParseError<StorageT> {
     /// Return the state table index where this error was detected.
-    pub fn state_idx(&self) -> StIdx {
-        self.state_idx
+    pub fn stidx(&self) -> StIdx {
+        self.stidx
     }
 
     /// Return the lexeme where this error was detected.
@@ -524,7 +524,7 @@ pub(crate) mod test {
                               .collect::<HashMap<_, _>>();
         let pr = parse_rcvry(rcvry_kind,
                              &grm,
-                             move |t_idx| **costs_tidx.get(&t_idx).unwrap_or(&&1),
+                             move |tidx| **costs_tidx.get(&tidx).unwrap_or(&&1),
                              &sgraph,
                              &stable,
                              &lexemes);

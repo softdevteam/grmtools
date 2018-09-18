@@ -228,12 +228,12 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         outs.push_str("}\n\n");
 
         // The rule constants
-        for ntidx in grm.iter_rules() {
-            if !grm.rule_to_prods(ntidx).contains(&grm.start_prod()) {
+        for ridx in grm.iter_rules() {
+            if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
                 outs.push_str(&format!("#[allow(dead_code)]\nconst NT_{}: {} = {:?};\n",
-                                       grm.rule_name(ntidx).to_ascii_uppercase(),
+                                       grm.rule_name(ridx).to_ascii_uppercase(),
                                        StorageT::type_name(),
-                                       usize::from(ntidx)));
+                                       usize::from(ridx)));
             }
         }
 

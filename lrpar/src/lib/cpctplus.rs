@@ -269,13 +269,13 @@ where usize: AsPrimitive<StorageT>
              nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
         let la_idx = n.la_idx;
-        for t_idx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
-            if t_idx == self.parser.grm.eof_token_idx() {
+        for tidx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
+            if tidx == self.parser.grm.eof_token_idx() {
                 continue;
             }
 
             let next_lexeme = self.parser.next_lexeme(n.la_idx);
-            let new_lexeme = Lexeme::new(StorageT::from(u32::from(t_idx)).unwrap(),
+            let new_lexeme = Lexeme::new(StorageT::from(u32::from(tidx)).unwrap(),
                                          next_lexeme.start(), 0);
             let (new_la_idx, n_pstack) =
                 self.parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
@@ -284,8 +284,8 @@ where usize: AsPrimitive<StorageT>
                 let nn = PathFNode{
                     pstack: n_pstack,
                     la_idx: n.la_idx,
-                    repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx))),
-                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(t_idx))).unwrap()};
+                    repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(tidx))),
+                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(tidx))).unwrap()};
                 nbrs.push((nn.cf, nn));
             }
         }

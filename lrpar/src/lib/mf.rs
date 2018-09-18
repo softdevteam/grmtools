@@ -263,23 +263,23 @@ where usize: AsPrimitive<StorageT>
               nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
-        for t_idx in self.parser.stable.state_shifts(top_pstack) {
-            if t_idx == self.parser.grm.eof_token_idx() {
+        for tidx in self.parser.stable.state_shifts(top_pstack) {
+            if tidx == self.parser.grm.eof_token_idx() {
                 continue;
             }
 
-            let t_st_idx = match self.parser.stable.action(top_pstack, t_idx).unwrap() {
-                Action::Shift(s_idx) => s_idx,
+            let t_stidx = match self.parser.stable.action(top_pstack, tidx).unwrap() {
+                Action::Shift(stidx) => stidx,
                 _ => unreachable!()
             };
-            let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx)));
-            if let Some(d) = self.dyn_dist(&n_repairs, t_st_idx, n.la_idx) {
-                assert!(n.cg == 0 || d >= n.cg - u16::from((self.parser.token_cost)(t_idx)));
+            let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(tidx)));
+            if let Some(d) = self.dyn_dist(&n_repairs, t_stidx, n.la_idx) {
+                assert!(n.cg == 0 || d >= n.cg - u16::from((self.parser.token_cost)(tidx)));
                 let nn = PathFNode{
-                    pstack: n.pstack.child(t_st_idx),
+                    pstack: n.pstack.child(t_stidx),
                     la_idx: n.la_idx,
                     repairs: n_repairs,
-                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(t_idx))).unwrap(),
+                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(tidx))).unwrap(),
                     cg: d};
                 nbrs.push((nn.cf, nn.cg, nn));
             }
@@ -291,44 +291,44 @@ where usize: AsPrimitive<StorageT>
               nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
-        for p_idx in self.parser.stable.core_reduces(top_pstack) {
-            let sym_off = self.parser.grm.prod(p_idx).len();
-            let nt_idx = self.parser.grm.prod_to_rule(p_idx);
+        for pidx in self.parser.stable.core_reduces(top_pstack) {
+            let sym_off = self.parser.grm.prod(pidx).len();
+            let ridx = self.parser.grm.prod_to_rule(pidx);
             let mut qi_minus_alpha = n.pstack.clone();
             for _ in 0..sym_off {
                 qi_minus_alpha = qi_minus_alpha.parent().unwrap();
             }
 
-            if let Some(mut goto_st_idx) = self.parser.stable
+            if let Some(mut goto_stidx) = self.parser.stable
                                                   .goto(*qi_minus_alpha.val().unwrap(),
-                                                        nt_idx) {
-                // We want to reduce/goto goto_st_idx. However if that state only contains
+                                                        ridx) {
+                // We want to reduce/goto goto_stidx. However if that state only contains
                 // reductions and if all reductions are the same, we can skip over it.
-                while self.parser.stable.reduce_only_state(goto_st_idx) {
-                    let p_idx = self.parser.stable.core_reduces(goto_st_idx).last().unwrap();
-                    let sym_off = self.parser.grm.prod(p_idx).len();
-                    let nt_idx = self.parser.grm.prod_to_rule(p_idx);
-                    // Technically we should push goto_st_idx, and then pop sym_off elements, but
+                while self.parser.stable.reduce_only_state(goto_stidx) {
+                    let pidx = self.parser.stable.core_reduces(goto_stidx).last().unwrap();
+                    let sym_off = self.parser.grm.prod(pidx).len();
+                    let ridx = self.parser.grm.prod_to_rule(pidx);
+                    // Technically we should push goto_stidx, and then pop sym_off elements, but
                     // we can avoid the push in cases where sym_off is greater than 0, compensating
                     // for that by poping (sym_off - 1) elements.
                     if sym_off == 0 {
-                        qi_minus_alpha = qi_minus_alpha.child(goto_st_idx);
+                        qi_minus_alpha = qi_minus_alpha.child(goto_stidx);
                     } else {
                         for _ in 0..sym_off - 1 {
                             qi_minus_alpha = qi_minus_alpha.parent().unwrap();
                         }
                     }
                     if let Some(x) = self.parser.stable.goto(*qi_minus_alpha.val().unwrap(),
-                                                             nt_idx) {
-                        goto_st_idx = x;
+                                                             ridx) {
+                        goto_stidx = x;
                     } else {
                         return;
                     }
                 }
 
-                if let Some(d) = self.dyn_dist(&n.repairs, goto_st_idx, n.la_idx) {
+                if let Some(d) = self.dyn_dist(&n.repairs, goto_stidx, n.la_idx) {
                     let nn = PathFNode{
-                        pstack: qi_minus_alpha.child(goto_st_idx),
+                        pstack: qi_minus_alpha.child(goto_stidx),
                         la_idx: n.la_idx,
                         repairs: n.repairs.clone(),
                         cf: n.cf,
@@ -446,11 +446,11 @@ where usize: AsPrimitive<StorageT>
             .collect()
     }
 
-    /// Return the distance from `st_idx` at input position `la_idx`, given the current `repairs`.
+    /// Return the distance from `stidx` at input position `la_idx`, given the current `repairs`.
     /// Returns `None` if no route can be found.
     fn dyn_dist(&self,
                 repairs: &Cactus<RepairMerge<StorageT>>,
-                st_idx: StIdx,
+                stidx: StIdx,
                 la_idx: usize)
               -> Option<u16>
     {
@@ -472,8 +472,8 @@ where usize: AsPrimitive<StorageT>
 
         // Now we deal with the "main" case: dealing with distances in the face of possible
         // deletions. Imagine that there are two lexemes starting at position la_idx: (in order) T
-        // and U, both with a token_cost of 1. Assume the dist() from st_idx to T is 2 and the
-        // dist() from st_idx to U is 0. If we delete T then the distance to U is 1, which is a
+        // and U, both with a token_cost of 1. Assume the dist() from stidx to T is 2 and the
+        // dist() from stidx to U is 0. If we delete T then the distance to U is 1, which is a
         // shorter distance than T. We therefore need to return a distance of 1, even though that
         // is the distance to the second lexeme.
         //
@@ -485,12 +485,12 @@ where usize: AsPrimitive<StorageT>
         let mut ld = u16::max_value(); // ld == Current least distance
         let mut dc = 0; // Cumulative deletion cost
         for i in la_idx..self.parser.lexemes.len() + 1 {
-            let t_idx = self.parser.next_tidx(i);
-            let d = self.dist.dist(st_idx, t_idx);
+            let tidx = self.parser.next_tidx(i);
+            let d = self.dist.dist(stidx, tidx);
             if d < u16::max_value() && dc + d < ld {
                 ld = dc + d;
             }
-            dc += u16::from((self.parser.token_cost)(t_idx));
+            dc += u16::from((self.parser.token_cost)(tidx));
             if dc >= ld {
                 // Once the cumulative cost of deleting lexemes is bigger than the current least
                 // distance, there is no chance of finding a subsequent lexeme which could produce
@@ -581,9 +581,9 @@ pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigne
     for r in repairs.iter() {
         match *r {
             ParseRepair::InsertSeq(_) => unreachable!(),
-            ParseRepair::Insert(t_idx) => {
+            ParseRepair::Insert(tidx) => {
                 let next_lexeme = parser.next_lexeme(la_idx);
-                let new_lexeme = Lexeme::new(StorageT::from(u32::from(t_idx)).unwrap(),
+                let new_lexeme = Lexeme::new(StorageT::from(u32::from(tidx)).unwrap(),
                                              next_lexeme.start(), 0);
                 parser.lr_upto(Some(new_lexeme),
                                la_idx,
@@ -665,24 +665,24 @@ where usize: AsPrimitive<StorageT>
         table[usize::from(stable.final_state) * tokens_len + usize::from(grm.eof_token_idx())] = 0;
         loop {
             let mut chgd = false;
-            for st_idx in sgraph.iter_stidxs() {
+            for stidx in sgraph.iter_stidxs() {
                 // The first phase is KimYi's dist algorithm.
-                for (&sym, &sym_st_idx) in sgraph.edges(st_idx).iter() {
+                for (&sym, &sym_stidx) in sgraph.edges(stidx).iter() {
                     let d = match sym {
-                        Symbol::Rule(nt_idx) => sengen.min_sentence_cost(nt_idx),
-                        Symbol::Token(t_idx) => {
-                            let off = usize::from(st_idx) * tokens_len + usize::from(t_idx);
+                        Symbol::Rule(ridx) => sengen.min_sentence_cost(ridx),
+                        Symbol::Token(tidx) => {
+                            let off = usize::from(stidx) * tokens_len + usize::from(tidx);
                             if table[off] != 0 {
                                 table[off] = 0;
                                 chgd = true;
                             }
-                            u16::from(token_cost(t_idx))
+                            u16::from(token_cost(tidx))
                         }
                     };
 
                     for tidx in grm.iter_tidxs() {
-                        let this_off = usize::from(st_idx) * tokens_len + usize::from(tidx);
-                        let other_off = usize::from(sym_st_idx) * tokens_len + usize::from(tidx);
+                        let this_off = usize::from(stidx) * tokens_len + usize::from(tidx);
+                        let other_off = usize::from(sym_stidx) * tokens_len + usize::from(tidx);
 
                         if table[other_off] != u16::max_value()
                            && table[other_off] + d < table[this_off]
@@ -694,13 +694,13 @@ where usize: AsPrimitive<StorageT>
                 }
 
                 // The second phase takes into account reductions and gotos.
-                for goto_st_idx in goto_states[usize::from(st_idx)]
+                for goto_stidx in goto_states[usize::from(stidx)]
                                               .iter_set_bits(..)
                                               .map(|x| StIdx::from(x))
                 {
                     for tidx in grm.iter_tidxs() {
-                        let this_off = usize::from(st_idx) * tokens_len + usize::from(tidx);
-                        let other_off = usize::from(goto_st_idx) * tokens_len + usize::from(tidx);
+                        let this_off = usize::from(stidx) * tokens_len + usize::from(tidx);
+                        let other_off = usize::from(goto_stidx) * tokens_len + usize::from(tidx);
 
                         if table[other_off] != u16::max_value()
                            && table[other_off] < table[this_off]
@@ -719,8 +719,8 @@ where usize: AsPrimitive<StorageT>
         Dist{tokens_len: grm.tokens_len(), table, phantom: PhantomData}
     }
 
-    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx<StorageT>) -> u16 {
-        self.table[usize::from(st_idx) * usize::from(self.tokens_len) + usize::from(t_idx)]
+    pub(crate) fn dist(&self, stidx: StIdx, tidx: TIdx<StorageT>) -> u16 {
+        self.table[usize::from(stidx) * usize::from(self.tokens_len) + usize::from(tidx)]
     }
 
     /// rev_edges allows us to walk backwards over the stategraph.
@@ -730,9 +730,9 @@ where usize: AsPrimitive<StorageT>
         let mut rev_edges = Vec::with_capacity(usize::from(states_len));
         rev_edges.resize(usize::from(states_len),
                          Vob::from_elem(usize::from(sgraph.all_states_len()), false));
-        for st_idx in sgraph.iter_stidxs() {
-            for (_, &sym_st_idx) in sgraph.edges(st_idx).iter() {
-                rev_edges[usize::from(sym_st_idx)].set(usize::from(st_idx), true);
+        for stidx in sgraph.iter_stidxs() {
+            for (_, &sym_stidx) in sgraph.edges(stidx).iter() {
+                rev_edges[usize::from(sym_stidx)].set(usize::from(stidx), true);
             }
         }
         rev_edges
@@ -752,13 +752,13 @@ where usize: AsPrimitive<StorageT>
         // prev and next are hoist here to lessen memory allocation in a core loop below.
         let mut prev = Vob::from_elem(states_len, false);
         let mut next = Vob::from_elem(states_len, false);
-        for st_idx in sgraph.iter_stidxs() {
-            for &(p_idx, sym_off) in sgraph.core_state(st_idx).items.keys() {
-                let prod = grm.prod(p_idx);
+        for stidx in sgraph.iter_stidxs() {
+            for &(pidx, sym_off) in sgraph.core_state(stidx).items.keys() {
+                let prod = grm.prod(pidx);
                 if usize::from(sym_off) < prod.len() {
                     continue;
                 }
-                let nt_idx = grm.prod_to_rule(p_idx);
+                let ridx = grm.prod_to_rule(pidx);
 
                 // We've found an item in a core state where the dot is at the end of the rule:
                 // what we now do is reach backwards in the stategraph to find all of the
@@ -768,19 +768,19 @@ where usize: AsPrimitive<StorageT>
                 // back prod.len() states in the stategraph to do this: the final result will end
                 // up in prev.
                 prev.set_all(false);
-                prev.set(usize::from(st_idx), true);
+                prev.set(usize::from(stidx), true);
                 for _ in 0..prod.len() {
                     next.set_all(false);
-                    for prev_st_idx in prev.iter_set_bits(..) {
-                        next.or(&rev_edges[prev_st_idx]);
+                    for prev_stidx in prev.iter_set_bits(..) {
+                        next.or(&rev_edges[prev_stidx]);
                     }
                     mem::swap(&mut prev, &mut next);
                 }
 
                 // From the reduction states, find all the goto states.
-                for prev_st_idx in prev.iter_set_bits(..) {
-                    if let Some(goto_st_idx) = stable.goto(StIdx::from(prev_st_idx), nt_idx) {
-                        goto_states[usize::from(st_idx)].set(usize::from(goto_st_idx), true);
+                for prev_stidx in prev.iter_set_bits(..) {
+                    if let Some(goto_stidx) = stable.goto(StIdx::from(prev_stidx), ridx) {
+                        goto_states[usize::from(stidx)].set(usize::from(goto_stidx), true);
                     }
                 }
             }
@@ -823,11 +823,11 @@ mod test {
                         if i > 0 {
                             s.push_str(", ");
                         }
-                        for (j, t_idx) in seq.iter().enumerate() {
+                        for (j, tidx) in seq.iter().enumerate() {
                             if j > 0 {
                                 s.push_str(" ");
                             }
-                            s.push_str(&format!("\"{}\"", grm.token_name(*t_idx).unwrap()));
+                            s.push_str(&format!("\"{}\"", grm.token_name(*tidx).unwrap()));
                         }
                     }
                     s.push_str("}");
