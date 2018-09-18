@@ -61,7 +61,7 @@ impl<'a> Eval<'a> {
 
     fn eval(&self, n: &Node<u8>) -> i64 {
         match *n {
-            Node::Nonterm{ridx: RIdx(ridx), ref nodes} if ridx==NT_EXPR => {
+            Node::Nonterm{ridx: RIdx(ridx), ref nodes} if ridx==R_EXPR => {
                 if nodes.len() == 1 {
                     self.eval(&nodes[0])
                 } else {
@@ -69,7 +69,7 @@ impl<'a> Eval<'a> {
                     self.eval(&nodes[0]) + self.eval(&nodes[2])
                 }
             },
-            Node::Nonterm{ridx: RIdx(ridx), ref nodes} if ridx==NT_TERM => {
+            Node::Nonterm{ridx: RIdx(ridx), ref nodes} if ridx==R_TERM => {
                 if nodes.len() == 1 {
                     self.eval(&nodes[0])
                 } else {
@@ -77,7 +77,7 @@ impl<'a> Eval<'a> {
                     self.eval(&nodes[0]) * self.eval(&nodes[2])
                 }
             },
-            Node::Nonterm{ridx: RIdx(ridx), ref nodes} if ridx==NT_FACTOR => {
+            Node::Nonterm{ridx: RIdx(ridx), ref nodes} if ridx==R_FACTOR => {
                 if nodes.len() == 1 {
                     if let Node::Term{lexeme} = nodes[0] {
                         self.s[lexeme.start()..lexeme.end()].parse().unwrap()
