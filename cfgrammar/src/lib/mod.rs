@@ -82,7 +82,6 @@ extern crate num_traits;
 extern crate vob;
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use vob::Vob;
 
 mod idxnewtype;
 pub mod yacc;
@@ -134,21 +133,4 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
         // definition the integers we're creating fit within StorageT.
         Box::new((0..usize::from(self.tokens_len())).map(|x| TIdx(x.as_())))
     }
-
-    fn firsts(&self) -> Box<dyn Firsts<StorageT>>;
-}
-
-pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
-    /// Return all the firsts for rule `ridx`.
-    fn firsts(&self, ridx: RIdx<StorageT>) -> &Vob;
-
-    /// Returns true if the token `tidx` is in the first set for rule `ridx`.
-    fn is_set(&self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
-
-    /// Returns true if the rule `ridx` has epsilon in its first set.
-    fn is_epsilon_set(&self, ridx: RIdx<StorageT>) -> bool;
-
-    /// Ensures that the firsts bit for token `tidx` rule `ridx` is set. Returns true if
-    /// it was already set, or false otherwise.
-    fn set(&mut self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 }

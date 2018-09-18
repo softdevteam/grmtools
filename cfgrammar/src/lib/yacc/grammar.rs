@@ -37,7 +37,7 @@ use std::fmt;
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 
-use {Firsts, Grammar, RIdx, PIdx, SIdx, Symbol, TIdx};
+use {Grammar, RIdx, PIdx, SIdx, Symbol, TIdx};
 use super::YaccKind;
 use yacc::firsts::YaccFirsts;
 use yacc::parser::YaccParser;
@@ -470,9 +470,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         SentenceGenerator::new(self, token_cost)
     }
 
-    /// Return a `YaccFirsts` struct, allowing static dispatch (rather than the `firsts()` method,
-    /// which returns `Box<Firsts>`).
-    pub fn yacc_firsts(&self) -> YaccFirsts<StorageT> {
+    /// Return a `YaccFirsts` struct for this grammar.
+    pub fn firsts(&self) -> YaccFirsts<StorageT> {
         YaccFirsts::new(self)
     }
 }
@@ -497,10 +496,6 @@ where usize: AsPrimitive<StorageT>
 
     fn tokens_len(&self) -> TIdx<StorageT> {
         self.tokens_len
-    }
-
-    fn firsts(&self) -> Box<dyn Firsts<StorageT>> {
-        Box::new(YaccFirsts::new(self))
     }
 }
 

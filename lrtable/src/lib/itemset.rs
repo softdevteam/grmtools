@@ -39,7 +39,6 @@ use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use cfgrammar::Firsts;
 use cfgrammar::yacc::firsts::YaccFirsts;
 
 /// The type of "context" (also known as "lookaheads")
@@ -198,7 +197,7 @@ mod test {
           L: '*' R | 'id';
           R: L;
           ").unwrap();
-        let firsts = grm.yacc_firsts();
+        let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
@@ -232,7 +231,7 @@ mod test {
     #[test]
     fn test_closure1_ecogrm() {
         let grm = eco_grammar();
-        let firsts = grm.yacc_firsts();
+        let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
@@ -274,7 +273,7 @@ mod test {
     #[test]
     fn test_closure1_grm3() {
         let grm = grammar3();
-        let firsts = grm.yacc_firsts();
+        let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
@@ -308,7 +307,7 @@ mod test {
     #[test]
     fn test_goto1() {
         let grm = grammar3();
-        let firsts = grm.yacc_firsts();
+        let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);

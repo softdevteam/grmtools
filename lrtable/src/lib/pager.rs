@@ -150,7 +150,7 @@ where usize: AsPrimitive<StorageT>
 {
     // This function can be seen as a modified version of items() from Chen's dissertation.
 
-    let firsts = grm.yacc_firsts();
+    let firsts = grm.firsts();
     // closed_states and core_states are both equally sized vectors of states. Core states are
     // smaller, and used for the weakly compatible checks, but we ultimately need to return
     // closed states. Closed states which are None are those which require processing; thus

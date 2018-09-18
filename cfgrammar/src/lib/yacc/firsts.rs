@@ -35,7 +35,7 @@ use std::marker::PhantomData;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use {Firsts, Grammar, RIdx, Symbol, TIdx};
+use {Grammar, RIdx, Symbol, TIdx};
 use yacc::YaccGrammar;
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
@@ -143,25 +143,25 @@ where usize: AsPrimitive<StorageT>
             }
         }
     }
-}
 
-impl<StorageT: 'static + PrimInt + Unsigned>
-Firsts<StorageT> for YaccFirsts<StorageT>
-where usize: AsPrimitive<StorageT>
-{
-    fn firsts(&self, ridx: RIdx<StorageT>) -> &Vob {
+    /// Return all the firsts for rule `ridx`.
+    pub fn firsts(&self, ridx: RIdx<StorageT>) -> &Vob {
         &self.firsts[usize::from(ridx)]
     }
 
-    fn is_set(&self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+    /// Returns true if the token `tidx` is in the first set for rule `ridx`.
+    pub fn is_set(&self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
         self.firsts[usize::from(ridx)][usize::from(tidx)]
     }
 
-    fn is_epsilon_set(&self, ridx: RIdx<StorageT>) -> bool {
+    /// Returns true if the rule `ridx` has epsilon in its first set.
+    pub fn is_epsilon_set(&self, ridx: RIdx<StorageT>) -> bool {
         self.epsilons[usize::from(ridx)]
     }
 
-    fn set(&mut self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+    /// Ensures that the firsts bit for token `tidx` rule `ridx` is set. Returns true if
+    /// it was already set, or false otherwise.
+    pub fn set(&mut self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
         let r = &mut self.firsts[usize::from(ridx)];
         if r[usize::from(tidx)] {
             true
@@ -175,12 +175,13 @@ where usize: AsPrimitive<StorageT>
 
 #[cfg(test)]
 mod test {
-    use {Firsts, Grammar};
+    use Grammar;
     use yacc::{YaccGrammar, YaccKind};
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
+    use super::YaccFirsts;
 
     fn has<StorageT: 'static + PrimInt + Unsigned>
-          (grm: &YaccGrammar<StorageT>, firsts: &Box<Firsts<StorageT>>, rn: &str, should_be: Vec<&str>)
+          (grm: &YaccGrammar<StorageT>, firsts: &YaccFirsts<StorageT>, rn: &str, should_be: Vec<&str>)
      where usize: AsPrimitive<StorageT>
     {
         let ridx = grm.rule_idx(rn).unwrap();
