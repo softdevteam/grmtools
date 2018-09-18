@@ -79,8 +79,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
         }
 
         // Check that each itemset has the same core configuration.
-        for &(prod_i, dot) in self.items.keys() {
-            if other.items.get(&(prod_i, dot)).is_none() {
+        for &(pidx, dot) in self.items.keys() {
+            if other.items.get(&(pidx, dot)).is_none() {
                 return false;
             }
         }
@@ -123,8 +123,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
     /// weakly compatible with `self`, this function's effects and return value are undefined.
     fn weakly_merge(&mut self, other: &Self) -> bool {
         let mut changed = false;
-        for (&(prod_i, dot), ctx) in &mut self.items {
-            if ctx.or(&other.items[&(prod_i, dot)]) {
+        for (&(pidx, dot), ctx) in &mut self.items {
+            if ctx.or(&other.items[&(pidx, dot)]) {
                 changed = true;
             }
         }
@@ -160,27 +160,27 @@ where usize: AsPrimitive<StorageT>
     let mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>> = Vec::new();
 
     let mut state0 = Itemset::new(grm);
-    let mut ctx = Vob::from_elem(usize::from(grm.terms_len()), false);
-    ctx.set(usize::from(grm.eof_term_idx()), true);
+    let mut ctx = Vob::from_elem(usize::from(grm.tokens_len()), false);
+    ctx.set(usize::from(grm.eof_token_idx()), true);
     state0.add(grm.start_prod(), SIdx(StorageT::zero()), &ctx);
     closed_states.push(None);
     core_states.push(state0);
     edges.push(HashMap::new());
 
-    // We maintain two lists of which nonterms and terms we've seen; when processing a given
-    // state there's no point processing a nonterm or term more than once.
-    let mut seen_nonterms = Vob::from_elem(usize::from(grm.nonterms_len()), false);
-    let mut seen_terms = Vob::from_elem(usize::from(grm.terms_len()), false);
+    // We maintain two lists of which rules and tokens we've seen; when processing a given
+    // state there's no point processing a rule or token more than once.
+    let mut seen_rules = Vob::from_elem(usize::from(grm.rules_len()), false);
+    let mut seen_tokens = Vob::from_elem(usize::from(grm.tokens_len()), false);
     // new_states is used to separate out iterating over states vs. mutating it
     let mut new_states = Vec::new();
-    // cnd_[nonterm|term]_weaklies represent which states are possible weakly compatible
+    // cnd_[rule|token]_weaklies represent which states are possible weakly compatible
     // matches for a given symbol.
-    let mut cnd_nonterm_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.nonterms_len()));
-    let mut cnd_term_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.terms_len()));
-    for _ in 0..usize::from(grm.terms_len()).checked_add(1).unwrap(){
-        cnd_term_weaklies.push(Vec::new());
+    let mut cnd_rule_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.rules_len()));
+    let mut cnd_token_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.tokens_len()));
+    for _ in 0..usize::from(grm.tokens_len()).checked_add(1).unwrap(){
+        cnd_token_weaklies.push(Vec::new());
     }
-    for _ in grm.iter_ntidxs() { cnd_nonterm_weaklies.push(Vec::new()); }
+    for _ in grm.iter_rules() { cnd_rule_weaklies.push(Vec::new()); }
 
     let mut todo = 1; // How many None values are there in closed_states?
     let mut todo_off = 0; // Offset in closed states to start searching for the next todo.
@@ -201,24 +201,24 @@ where usize: AsPrimitive<StorageT>
         {
             closed_states[state_i] = Some(core_states[state_i].close(grm, &firsts));
             let cl_state = &closed_states[state_i].as_ref().unwrap();
-            seen_nonterms.set_all(false);
-            seen_terms.set_all(false);
-            for &(prod_i, dot) in cl_state.items.keys() {
-                let prod = grm.prod(prod_i);
-                if dot == grm.prod_len(prod_i) { continue; }
+            seen_rules.set_all(false);
+            seen_tokens.set_all(false);
+            for &(pidx, dot) in cl_state.items.keys() {
+                let prod = grm.prod(pidx);
+                if dot == grm.prod_len(pidx) { continue; }
                 let sym = prod[usize::from(dot)];
                 match sym {
-                    Symbol::Nonterm(nonterm_i) => {
-                        if seen_nonterms[usize::from(nonterm_i)] {
+                    Symbol::Rule(s_ridx) => {
+                        if seen_rules[usize::from(s_ridx)] {
                             continue;
                         }
-                        seen_nonterms.set(usize::from(nonterm_i), true);
+                        seen_rules.set(usize::from(s_ridx), true);
                     },
-                    Symbol::Term(term_i) => {
-                        if seen_terms[usize::from(term_i)] {
+                    Symbol::Token(s_tidx) => {
+                        if seen_tokens[usize::from(s_tidx)] {
                             continue;
                         }
-                        seen_terms.set(usize::from(term_i), true);
+                        seen_tokens.set(usize::from(s_tidx), true);
                     }
                 }
                 let nstate = cl_state.goto(grm, &sym);
@@ -231,8 +231,8 @@ where usize: AsPrimitive<StorageT>
             {
                 // Try and compatible match for this state.
                 let cnd_states = match sym {
-                    Symbol::Nonterm(nonterm_i) => &cnd_nonterm_weaklies[usize::from(nonterm_i)],
-                    Symbol::Term(term_i) => &cnd_term_weaklies[usize::from(term_i)]
+                    Symbol::Rule(s_ridx) => &cnd_rule_weaklies[usize::from(s_ridx)],
+                    Symbol::Token(s_tidx) => &cnd_token_weaklies[usize::from(s_tidx)]
                 };
                 // First of all see if any of the candidate states are exactly the same as the
                 // new state, in which case we only need to add an edge to the candidate
@@ -276,10 +276,10 @@ where usize: AsPrimitive<StorageT>
                 },
                 None    => {
                     match sym {
-                        Symbol::Nonterm(nonterm_i) =>
-                            cnd_nonterm_weaklies[usize::from(nonterm_i)].push(core_states.len().into()),
-                        Symbol::Term(term_i) =>
-                            cnd_term_weaklies[usize::from(term_i)].push(core_states.len().into())
+                        Symbol::Rule(s_ridx) =>
+                            cnd_rule_weaklies[usize::from(s_ridx)].push(core_states.len().into()),
+                        Symbol::Token(s_tidx) =>
+                            cnd_token_weaklies[usize::from(s_tidx)].push(core_states.len().into())
                     }
                     edges[state_i].insert(sym, core_states.len().into());
                     edges.push(HashMap::new());
@@ -317,7 +317,7 @@ fn gc<StorageT: Eq + Hash + PrimInt>
     let mut seen = HashSet::new();
     while !todo.is_empty() {
         // XXX This is the clumsy way we're forced to do what we'd prefer to be:
-        //     "let &(prod_i, dot) = todo.pop()"
+        //     "let &(pidx, dot) = todo.pop()"
         let state_i = *todo.iter().next().unwrap();
         todo.remove(&state_i);
         seen.insert(state_i);
@@ -439,33 +439,33 @@ mod test {
         state_exists(&grm, &sg.closed_state(StIdx(0)), "S", 0, SIdx(0), vec!["$", "b"]);
         state_exists(&grm, &sg.closed_state(StIdx(0)), "S", 1, SIdx(0), vec!["$", "b"]);
 
-        let s1 = sg.edge(StIdx(0), Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
+        let s1 = sg.edge(StIdx(0), Symbol::Rule(grm.rule_idx("S").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s1).items.len(), 2);
         state_exists(&grm, &sg.closed_state(s1), "^", 0, SIdx(1), vec!["$"]);
         state_exists(&grm, &sg.closed_state(s1), "S", 0, SIdx(1), vec!["$", "b"]);
 
-        let s2 = sg.edge(s1, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s2 = sg.edge(s1, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s2).items.len(), 1);
         state_exists(&grm, &sg.closed_state(s2), "S", 0, SIdx(2), vec!["$", "b"]);
 
-        let s3 = sg.edge(StIdx(0), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s3 = sg.edge(StIdx(0), Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s3).items.len(), 4);
         state_exists(&grm, &sg.closed_state(s3), "S", 1, SIdx(1), vec!["$", "b", "c"]);
         state_exists(&grm, &sg.closed_state(s3), "A", 0, SIdx(0), vec!["a"]);
         state_exists(&grm, &sg.closed_state(s3), "A", 1, SIdx(0), vec!["a"]);
         state_exists(&grm, &sg.closed_state(s3), "A", 2, SIdx(0), vec!["a"]);
 
-        let s4 = sg.edge(s3, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
+        let s4 = sg.edge(s3, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s4).items.len(), 1);
         state_exists(&grm, &sg.closed_state(s4), "S", 1, SIdx(2), vec!["$", "b", "c"]);
 
-        let s5 = sg.edge(s4, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        let s5 = sg.edge(s4, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s5).items.len(), 1);
         state_exists(&grm, &sg.closed_state(s5), "S", 1, SIdx(3), vec!["$", "b", "c"]);
 
-        let s6 = sg.edge(s3, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        let s6 = sg.edge(s3, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
         // result from merging 10 into 3
-        assert_eq!(s3, sg.edge(s6, Symbol::Term(grm.term_idx("b").unwrap())).unwrap());
+        assert_eq!(s3, sg.edge(s6, Symbol::Token(grm.token_idx("b").unwrap())).unwrap());
         assert_eq!(sg.closed_state(s6).items.len(), 5);
         state_exists(&grm, &sg.closed_state(s6), "A", 0, SIdx(1), vec!["a"]);
         state_exists(&grm, &sg.closed_state(s6), "A", 1, SIdx(1), vec!["a"]);
@@ -473,17 +473,17 @@ mod test {
         state_exists(&grm, &sg.closed_state(s6), "S", 0, SIdx(0), vec!["b", "c"]);
         state_exists(&grm, &sg.closed_state(s6), "S", 1, SIdx(0), vec!["b", "c"]);
 
-        let s7 = sg.edge(s6, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
+        let s7 = sg.edge(s6, Symbol::Rule(grm.rule_idx("S").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s7).items.len(), 3);
         state_exists(&grm, &sg.closed_state(s7), "A", 0, SIdx(2), vec!["a"]);
         state_exists(&grm, &sg.closed_state(s7), "A", 2, SIdx(2), vec!["a"]);
         state_exists(&grm, &sg.closed_state(s7), "S", 0, SIdx(1), vec!["b", "c"]);
 
-        let s8 = sg.edge(s7, Symbol::Term(grm.term_idx("c").unwrap())).unwrap();
+        let s8 = sg.edge(s7, Symbol::Token(grm.token_idx("c").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s8).items.len(), 1);
         state_exists(&grm, &sg.closed_state(s8), "A", 0, SIdx(3), vec!["a"]);
 
-        let s9 = sg.edge(s7, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s9 = sg.edge(s7, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s9).items.len(), 2);
         state_exists(&grm, &sg.closed_state(s9), "A", 2, SIdx(3), vec!["a"]);
         state_exists(&grm, &sg.closed_state(s9), "S", 0, SIdx(2), vec!["b", "c"]);
@@ -519,7 +519,7 @@ mod test {
         state_exists(&grm, &sg.closed_state(StIdx(0)), "X", 4, SIdx(0), vec!["$"]);
         state_exists(&grm, &sg.closed_state(StIdx(0)), "X", 5, SIdx(0), vec!["$"]);
 
-        let s1 = sg.edge(StIdx(0), Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        let s1 = sg.edge(StIdx(0), Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s1).items.len(), 7);
         state_exists(&grm, &sg.closed_state(s1), "X", 0, SIdx(1), vec!["a", "d", "e", "$"]);
         state_exists(&grm, &sg.closed_state(s1), "X", 1, SIdx(1), vec!["a", "d", "e", "$"]);
@@ -529,7 +529,7 @@ mod test {
         state_exists(&grm, &sg.closed_state(s1), "Z", 0, SIdx(0), vec!["c"]);
         state_exists(&grm, &sg.closed_state(s1), "T", 0, SIdx(0), vec!["a", "d", "e", "$"]);
 
-        let s7 = sg.edge(StIdx(0), Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
+        let s7 = sg.edge(StIdx(0), Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s7).items.len(), 7);
         state_exists(&grm, &sg.closed_state(s7), "X", 3, SIdx(1), vec!["a", "d", "e", "$"]);
         state_exists(&grm, &sg.closed_state(s7), "X", 4, SIdx(1), vec!["a", "d", "e", "$"]);
@@ -539,9 +539,9 @@ mod test {
         state_exists(&grm, &sg.closed_state(s1), "Z", 0, SIdx(0), vec!["c"]);
         state_exists(&grm, &sg.closed_state(s1), "T", 0, SIdx(0), vec!["a", "d", "e", "$"]);
 
-        let s4 = sg.edge(s1, Symbol::Term(grm.term_idx("u").unwrap())).unwrap();
+        let s4 = sg.edge(s1, Symbol::Token(grm.token_idx("u").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s4).items.len(), 8);
-        assert_eq!(s4, sg.edge(s7, Symbol::Term(grm.term_idx("u").unwrap())).unwrap());
+        assert_eq!(s4, sg.edge(s7, Symbol::Token(grm.token_idx("u").unwrap())).unwrap());
         state_exists(&grm, &sg.closed_state(s4), "Y", 1, SIdx(1), vec!["d", "e"]);
         state_exists(&grm, &sg.closed_state(s4), "T", 0, SIdx(1), vec!["a", "d", "e", "$"]);
         state_exists(&grm, &sg.closed_state(s4), "X", 0, SIdx(0), vec!["a", "d", "e"]);
@@ -551,37 +551,37 @@ mod test {
         state_exists(&grm, &sg.closed_state(s4), "X", 4, SIdx(0), vec!["a", "d", "e"]);
         state_exists(&grm, &sg.closed_state(s4), "X", 5, SIdx(0), vec!["a", "d", "e"]);
 
-        assert_eq!(s1, sg.edge(s4, Symbol::Term(grm.term_idx("a").unwrap())).unwrap());
-        assert_eq!(s7, sg.edge(s4, Symbol::Term(grm.term_idx("b").unwrap())).unwrap());
+        assert_eq!(s1, sg.edge(s4, Symbol::Token(grm.token_idx("a").unwrap())).unwrap());
+        assert_eq!(s7, sg.edge(s4, Symbol::Token(grm.token_idx("b").unwrap())).unwrap());
 
-        let s2 = sg.edge(s1, Symbol::Term(grm.term_idx("t").unwrap())).unwrap();
+        let s2 = sg.edge(s1, Symbol::Token(grm.token_idx("t").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s2).items.len(), 3);
         state_exists(&grm, &sg.closed_state(s2), "Y", 0, SIdx(1), vec!["d"]);
         state_exists(&grm, &sg.closed_state(s2), "Z", 0, SIdx(1), vec!["c"]);
         state_exists(&grm, &sg.closed_state(s2), "W", 0, SIdx(0), vec!["d"]);
 
-        let s3 = sg.edge(s2, Symbol::Term(grm.term_idx("u").unwrap())).unwrap();
+        let s3 = sg.edge(s2, Symbol::Token(grm.token_idx("u").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s3).items.len(), 3);
         state_exists(&grm, &sg.closed_state(s3), "Z", 0, SIdx(2), vec!["c"]);
         state_exists(&grm, &sg.closed_state(s3), "W", 0, SIdx(1), vec!["d"]);
         state_exists(&grm, &sg.closed_state(s3), "V", 0, SIdx(0), vec!["d"]);
 
-        let s5 = sg.edge(s4, Symbol::Nonterm(grm.nonterm_idx("X").unwrap())).unwrap();
+        let s5 = sg.edge(s4, Symbol::Rule(grm.rule_idx("X").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s5).items.len(), 2);
         state_exists(&grm, &sg.closed_state(s5), "Y", 1, SIdx(2), vec!["d", "e"]);
         state_exists(&grm, &sg.closed_state(s5), "T", 0, SIdx(2), vec!["a", "d", "e", "$"]);
 
-        let s6 = sg.edge(s5, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
+        let s6 = sg.edge(s5, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s6).items.len(), 1);
         state_exists(&grm, &sg.closed_state(s6), "T", 0, SIdx(3), vec!["a", "d", "e", "$"]);
 
-        let s8 = sg.edge(s7, Symbol::Term(grm.term_idx("t").unwrap())).unwrap();
+        let s8 = sg.edge(s7, Symbol::Token(grm.token_idx("t").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s8).items.len(), 3);
         state_exists(&grm, &sg.closed_state(s8), "Y", 0, SIdx(1), vec!["e"]);
         state_exists(&grm, &sg.closed_state(s8), "Z", 0, SIdx(1), vec!["d"]);
         state_exists(&grm, &sg.closed_state(s8), "W", 0, SIdx(0), vec!["e"]);
 
-        let s9 = sg.edge(s8, Symbol::Term(grm.term_idx("u").unwrap())).unwrap();
+        let s9 = sg.edge(s8, Symbol::Token(grm.token_idx("u").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s9).items.len(), 3);
         state_exists(&grm, &sg.closed_state(s9), "Z", 0, SIdx(2), vec!["d"]);
         state_exists(&grm, &sg.closed_state(s9), "W", 0, SIdx(1), vec!["e"]);
@@ -590,49 +590,49 @@ mod test {
         // Ommitted successors from the graph in Fig.3
 
         // X-successor of S0
-        let s0x = sg.edge(StIdx(0), Symbol::Nonterm(grm.nonterm_idx("X").unwrap())).unwrap();
+        let s0x = sg.edge(StIdx(0), Symbol::Rule(grm.rule_idx("X").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s0x), "^", 0, SIdx(1), vec!["$"]);
 
         // Y-successor of S1 (and it's d-successor)
-        let s1y = sg.edge(s1, Symbol::Nonterm(grm.nonterm_idx("Y").unwrap())).unwrap();
+        let s1y = sg.edge(s1, Symbol::Rule(grm.rule_idx("Y").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s1y), "X", 0, SIdx(2), vec!["a", "d", "e", "$"]);
-        let s1yd = sg.edge(s1y, Symbol::Term(grm.term_idx("d").unwrap())).unwrap();
+        let s1yd = sg.edge(s1y, Symbol::Token(grm.token_idx("d").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s1yd), "X", 0, SIdx(3), vec!["a", "d", "e", "$"]);
 
         // Z-successor of S1 (and it's successor)
-        let s1z = sg.edge(s1, Symbol::Nonterm(grm.nonterm_idx("Z").unwrap())).unwrap();
+        let s1z = sg.edge(s1, Symbol::Rule(grm.rule_idx("Z").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s1z), "X", 1, SIdx(2), vec!["a", "d", "e", "$"]);
-        let s1zc = sg.edge(s1z, Symbol::Term(grm.term_idx("c").unwrap())).unwrap();
+        let s1zc = sg.edge(s1z, Symbol::Token(grm.token_idx("c").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s1zc), "X", 1, SIdx(3), vec!["a", "d", "e", "$"]);
 
         // T-successor of S1
-        let s1t = sg.edge(s1, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
+        let s1t = sg.edge(s1, Symbol::Rule(grm.rule_idx("T").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s1t), "X", 2, SIdx(2), vec!["a", "d", "e", "$"]);
 
         // Y-successor of S7 (and it's d-successor)
-        let s7y = sg.edge(s7, Symbol::Nonterm(grm.nonterm_idx("Y").unwrap())).unwrap();
+        let s7y = sg.edge(s7, Symbol::Rule(grm.rule_idx("Y").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s7y), "X", 3, SIdx(2), vec!["a", "d", "e", "$"]);
-        let s7ye = sg.edge(s7y, Symbol::Term(grm.term_idx("e").unwrap())).unwrap();
+        let s7ye = sg.edge(s7y, Symbol::Token(grm.token_idx("e").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s7ye), "X", 3, SIdx(3), vec!["a", "d", "e", "$"]);
 
         // Z-successor of S7 (and it's successor)
-        let s7z = sg.edge(s7, Symbol::Nonterm(grm.nonterm_idx("Z").unwrap())).unwrap();
+        let s7z = sg.edge(s7, Symbol::Rule(grm.rule_idx("Z").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s7z), "X", 4, SIdx(2), vec!["a", "d", "e", "$"]);
-        let s7zd = sg.edge(s7z, Symbol::Term(grm.term_idx("d").unwrap())).unwrap();
+        let s7zd = sg.edge(s7z, Symbol::Token(grm.token_idx("d").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s7zd), "X", 4, SIdx(3), vec!["a", "d", "e", "$"]);
 
         // T-successor of S7
-        let s7t = sg.edge(s7, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
+        let s7t = sg.edge(s7, Symbol::Rule(grm.rule_idx("T").unwrap())).unwrap();
         state_exists(&grm, &sg.closed_state(s7t), "X", 5, SIdx(2), vec!["a", "d", "e", "$"]);
 
         // W-successor of S2 and S8 (merged)
-        let s8w = sg.edge(s8, Symbol::Nonterm(grm.nonterm_idx("W").unwrap())).unwrap();
-        assert_eq!(s8w, sg.edge(s2, Symbol::Nonterm(grm.nonterm_idx("W").unwrap())).unwrap());
+        let s8w = sg.edge(s8, Symbol::Rule(grm.rule_idx("W").unwrap())).unwrap();
+        assert_eq!(s8w, sg.edge(s2, Symbol::Rule(grm.rule_idx("W").unwrap())).unwrap());
         state_exists(&grm, &sg.closed_state(s8w), "Y", 0, SIdx(2), vec!["d", "e"]);
 
         // V-successor of S3 and S9 (merged)
-        let s9v = sg.edge(s9, Symbol::Nonterm(grm.nonterm_idx("V").unwrap())).unwrap();
-        assert_eq!(s9v, sg.edge(s3, Symbol::Nonterm(grm.nonterm_idx("V").unwrap())).unwrap());
+        let s9v = sg.edge(s9, Symbol::Rule(grm.rule_idx("V").unwrap())).unwrap();
+        assert_eq!(s9v, sg.edge(s3, Symbol::Rule(grm.rule_idx("V").unwrap())).unwrap());
         state_exists(&grm, &sg.closed_state(s9v), "W", 0, SIdx(2), vec!["d", "e"]);
     }
 

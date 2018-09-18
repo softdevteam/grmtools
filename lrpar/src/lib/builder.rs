@@ -75,9 +75,9 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
     /// Create a new `ParserBuilder`.
     ///
     /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough to index
-    /// (separately) all the tokens, nonterminals, and productions in the grammar and less than or
+    /// (separately) all the tokens, rules, and productions in the grammar and less than or
     /// equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too big). In other
-    /// words, if you have a grammar with 256 tokens, 256 nonterminals, and 256 productions, you
+    /// words, if you have a grammar with 256 tokens, 256 rules, and 256 productions, you
     /// can safely specify `u8` here; but if any of those counts becomes 256 you will need to
     /// specify `u16`. If you are parsing large files, the additional storage requirements of
     /// larger integer types can be noticeable, and in such cases it can be worth specifying a
@@ -113,7 +113,7 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
     ///
     /// # Panics
     ///
-    /// If `StorageT` is not big enough to index the grammar's tokens, nonterminals, or
+    /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
     /// productions.
     pub fn process_file_in_src(&self, srcp: &str)
                             -> Result<(HashMap<String, StorageT>), Box<Error>>
@@ -137,7 +137,7 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
     ///
     /// # Panics
     ///
-    /// If `StorageT` is not big enough to index the grammar's tokens, nonterminals, or
+    /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
     /// productions.
     pub fn process_file<P, Q>(&self,
                               inp: P,
@@ -148,7 +148,7 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
     {
         let inc = read_to_string(&inp).unwrap();
         let grm = YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc)?;
-        let rule_ids = grm.terms_map().iter()
+        let rule_ids = grm.tokens_map().iter()
                                       .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
                                       .collect::<HashMap<_, _>>();
         let cache = self.rebuild_cache(&grm);
@@ -227,13 +227,13 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         outs.push_str("}\n");
         outs.push_str("}\n\n");
 
-        // The nonterminal constants
-        for ntidx in grm.iter_ntidxs() {
-            if !grm.nonterm_to_prods(ntidx).contains(&grm.start_prod()) {
-                outs.push_str(&format!("#[allow(dead_code)]\nconst NT_{}: {} = {:?};\n",
-                                       grm.nonterm_name(ntidx).to_ascii_uppercase(),
+        // The rule constants
+        for ridx in grm.iter_rules() {
+            if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
+                outs.push_str(&format!("#[allow(dead_code)]\nconst R_{}: {} = {:?};\n",
+                                       grm.rule_name(ridx).to_ascii_uppercase(),
                                        StorageT::type_name(),
-                                       usize::from(ntidx)));
+                                       usize::from(ridx)));
             }
         }
 
@@ -258,7 +258,7 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
 
         // Record the rule IDs map
         for tidx in grm.iter_tidxs() {
-            let n = match grm.term_name(tidx) {
+            let n = match grm.token_name(tidx) {
                 Some(n) => format!("'{}'", n),
                 None => format!("<unknown>")
             };

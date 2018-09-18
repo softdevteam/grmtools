@@ -35,7 +35,7 @@ use std::marker::PhantomData;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use {Firsts, Grammar, NTIdx, Symbol, TIdx};
+use {Firsts, Grammar, RIdx, Symbol, TIdx};
 use yacc::YaccGrammar;
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
@@ -50,10 +50,10 @@ use yacc::YaccGrammar;
 /// then the following assertions (and only the following assertions) about the firsts set are
 /// correct:
 /// ```ignore
-///   assert!(firsts.is_set(grm.nonterm_idx("S").unwrap(), grm.term_idx("a").unwrap()));
-///   assert!(firsts.is_set(grm.nonterm_idx("S").unwrap(), grm.term_idx("b").unwrap()));
-///   assert!(firsts.is_set(grm.nonterm_idx("A").unwrap(), grm.term_idx("a").unwrap()));
-///   assert!(firsts.is_epsilon_set(grm.nonterm_idx("A").unwrap()));
+///   assert!(firsts.is_set(grm.rule_idx("S").unwrap(), grm.token_idx("a").unwrap()));
+///   assert!(firsts.is_set(grm.rule_idx("S").unwrap(), grm.token_idx("b").unwrap()));
+///   assert!(firsts.is_set(grm.rule_idx("A").unwrap(), grm.token_idx("a").unwrap()));
+///   assert!(firsts.is_epsilon_set(grm.rule_idx("A").unwrap()));
 /// ```
 #[derive(Debug)]
 pub struct YaccFirsts<StorageT> {
@@ -67,62 +67,62 @@ where usize: AsPrimitive<StorageT>
 {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
-        let mut firsts = Vec::with_capacity(usize::from(grm.nonterms_len()));
-        for _ in grm.iter_ntidxs() {
-            firsts.push(Vob::from_elem(usize::from(grm.terms_len()), false));
+        let mut firsts = Vec::with_capacity(usize::from(grm.rules_len()));
+        for _ in grm.iter_rules() {
+            firsts.push(Vob::from_elem(usize::from(grm.tokens_len()), false));
         }
         let mut firsts = YaccFirsts {
             firsts,
-            epsilons: Vob::from_elem(usize::from(grm.nonterms_len()), false),
+            epsilons: Vob::from_elem(usize::from(grm.rules_len()), false),
             phantom      : PhantomData
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
-        // look at each rule E, and see if any of the nonterminals at the start of its productions
+        // look at each rule E, and see if any of the rules at the start of its productions
         // have new elements in since we last looked. If they do, we'll have to do another round.
         loop {
             let mut changed = false;
-            for rul_i in grm.iter_ntidxs() {
+            for ridx in grm.iter_rules() {
                 // For each rule E
-                for prod_i in grm.nonterm_to_prods(rul_i).iter() {
+                for &pidx in grm.rule_to_prods(ridx).iter() {
                     // ...and each production A
-                    let prod = grm.prod(*prod_i);
+                    let prod = grm.prod(pidx);
                     if prod.is_empty() {
-                        // if it's an empty production, ensure this nonterminal's epsilon bit is
+                        // if it's an empty production, ensure this rule's epsilon bit is
                         // set.
-                        if !firsts.is_epsilon_set(rul_i) {
-                            firsts.epsilons.set(usize::from(rul_i), true);
+                        if !firsts.is_epsilon_set(ridx) {
+                            firsts.epsilons.set(usize::from(ridx), true);
                             changed = true;
                         }
                         continue;
                     }
-                    for (sym_i, sym) in prod.iter().enumerate() {
+                    for (sidx, sym) in prod.iter().enumerate() {
                         match *sym {
-                            Symbol::Term(term_i) => {
-                                // if symbol is a Term, add to FIRSTS
-                                if !firsts.set(rul_i, term_i) {
+                            Symbol::Token(s_tidx) => {
+                                // if symbol is a token, add to FIRSTS
+                                if !firsts.set(ridx, s_tidx) {
                                     changed = true;
                                 }
                                 break;
                             },
-                            Symbol::Nonterm(nonterm_i) => {
-                                // if we're dealing with another Nonterm, union its FIRSTs
-                                // together with the current nonterminals FIRSTs. Note this is
-                                // (intentionally) a no-op if the two terminals are one and the
+                            Symbol::Rule(s_ridx) => {
+                                // if we're dealing with another rule, union its FIRSTs
+                                // together with the current rules FIRSTs. Note this is
+                                // (intentionally) a no-op if the two tokens are one and the
                                 // same.
                                 for tidx in grm.iter_tidxs() {
-                                    if firsts.is_set(nonterm_i, tidx) && !firsts.set(rul_i, tidx) {
+                                    if firsts.is_set(s_ridx, tidx) && !firsts.set(ridx, tidx) {
                                         changed = true;
                                     }
                                 }
 
-                                // If the epsilon bit in the nonterminal being referenced is set,
+                                // If the epsilon bit in the rule being referenced is set,
                                 // and if its the last symbol in the production, then add epsilon
                                 // to FIRSTs.
-                                if firsts.is_epsilon_set(nonterm_i) && sym_i == prod.len() - 1 {
+                                if firsts.is_epsilon_set(s_ridx) && sidx == prod.len() - 1 {
                                     // Only add epsilon if the symbol is the last in the production
-                                    if !firsts.epsilons[usize::from(rul_i)] {
-                                        firsts.epsilons.set(usize::from(rul_i), true);
+                                    if !firsts.epsilons[usize::from(ridx)] {
+                                        firsts.epsilons.set(usize::from(ridx), true);
                                         changed = true;
                                     }
                                 }
@@ -130,7 +130,7 @@ where usize: AsPrimitive<StorageT>
                                 // If FIRST(X) of production R : X Y2 Y3 doesn't contain epsilon,
                                 // then don't try and calculate the FIRSTS of Y2 or Y3 (i.e. stop
                                 // now).
-                                if !firsts.is_epsilon_set(nonterm_i) {
+                                if !firsts.is_epsilon_set(s_ridx) {
                                     break;
                                 }
                             },
@@ -149,25 +149,25 @@ impl<StorageT: 'static + PrimInt + Unsigned>
 Firsts<StorageT> for YaccFirsts<StorageT>
 where usize: AsPrimitive<StorageT>
 {
-    fn firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob {
-        &self.firsts[usize::from(ntidx)]
+    fn firsts(&self, ridx: RIdx<StorageT>) -> &Vob {
+        &self.firsts[usize::from(ridx)]
     }
 
-    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
-        self.firsts[usize::from(nidx)][usize::from(tidx)]
+    fn is_set(&self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+        self.firsts[usize::from(ridx)][usize::from(tidx)]
     }
 
-    fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool {
-        self.epsilons[usize::from(ntidx)]
+    fn is_epsilon_set(&self, ridx: RIdx<StorageT>) -> bool {
+        self.epsilons[usize::from(ridx)]
     }
 
-    fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
-        let nt = &mut self.firsts[usize::from(ntidx)];
-        if nt[usize::from(tidx)] {
+    fn set(&mut self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool {
+        let r = &mut self.firsts[usize::from(ridx)];
+        if r[usize::from(tidx)] {
             true
         }
         else {
-            nt.set(usize::from(tidx), true);
+            r.set(usize::from(tidx), true);
             false
         }
     }
@@ -183,27 +183,27 @@ mod test {
           (grm: &YaccGrammar<StorageT>, firsts: &Box<Firsts<StorageT>>, rn: &str, should_be: Vec<&str>)
      where usize: AsPrimitive<StorageT>
     {
-        let nt_i = grm.nonterm_idx(rn).unwrap();
+        let ridx = grm.rule_idx(rn).unwrap();
         for tidx in grm.iter_tidxs() {
-            let n = match grm.term_name(tidx) {
+            let n = match grm.token_name(tidx) {
                 Some(n) => n,
                 None => &"<no name>"
             };
             match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
-                    if !firsts.is_set(nt_i, tidx) {
+                    if !firsts.is_set(ridx, tidx) {
                         panic!("{} is not set in {}", n, rn);
                     }
                 }
                 None    => {
-                    if firsts.is_set(nt_i, tidx) {
+                    if firsts.is_set(ridx, tidx) {
                         panic!("{} is incorrectly set in {}", n, rn);
                     }
                 }
             }
         }
         if should_be.iter().position(|x| x == &"").is_some() {
-            assert!(firsts.is_epsilon_set(nt_i));
+            assert!(firsts.is_epsilon_set(ridx));
         }
     }
 
@@ -226,7 +226,7 @@ mod test {
     }
 
     #[test]
-    fn test_first_no_subsequent_nonterminals() {
+    fn test_first_no_subsequent_rules() {
         let grm = YaccGrammar::new(YaccKind::Original, &"
           %start C
           %token c d

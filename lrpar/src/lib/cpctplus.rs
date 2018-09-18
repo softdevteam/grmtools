@@ -48,7 +48,7 @@ const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum Repair<StorageT> {
-    /// Insert a `Symbol::Term` with idx `term_idx`.
+    /// Insert a `Symbol::Token` with idx `token_idx`.
     InsertTerm(TIdx<StorageT>),
     /// Delete a symbol.
     Delete,
@@ -66,7 +66,7 @@ enum RepairMerge<StorageT> {
 #[derive(Clone, Debug)]
 struct PathFNode<StorageT> {
     pstack: Cactus<StIdx>,
-    la_idx: usize,
+    laidx: usize,
     repairs: Cactus<RepairMerge<StorageT>>,
     cf: u16
 }
@@ -84,13 +84,13 @@ impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
 impl<StorageT: PrimInt + Unsigned> Hash for PathFNode<StorageT> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.pstack.hash(state);
-        self.la_idx.hash(state);
+        self.laidx.hash(state);
     }
 }
 
 impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
     fn eq(&self, other: &PathFNode<StorageT>) -> bool {
-        if self.la_idx != other.la_idx || self.pstack != other.pstack {
+        if self.laidx != other.laidx || self.pstack != other.pstack {
             return false;
         }
         // The rest of this function is subtle: we're not looking for repair sequences which are
@@ -143,7 +143,7 @@ where usize: AsPrimitive<StorageT>
     fn recover(&self,
                finish_by: Instant,
                parser: &Parser<StorageT>,
-               in_la_idx: usize,
+               in_laidx: usize,
                mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<StorageT>>)
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
@@ -170,7 +170,7 @@ where usize: AsPrimitive<StorageT>
         }
 
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
-                                   la_idx: in_la_idx,
+                                   laidx: in_laidx,
                                    repairs: Cactus::new().child(RepairMerge::Terminator),
                                    cf: 0};
         let astar_cnds = dijkstra(
@@ -230,33 +230,33 @@ where usize: AsPrimitive<StorageT>
                 }
 
                 match parser.stable.action(*n.pstack.val().unwrap(),
-                                           parser.next_tidx(n.la_idx)) {
+                                           parser.next_tidx(n.laidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }
             });
 
         if astar_cnds.is_empty() {
-            return (in_la_idx, vec![]);
+            return (in_laidx, vec![]);
         }
 
         let full_rprs = self.collect_repairs(astar_cnds);
         let mut rnk_rprs = rank_cnds(parser,
                                      finish_by,
-                                     in_la_idx,
+                                     in_laidx,
                                      &in_pstack,
                                      full_rprs);
         if rnk_rprs.is_empty() {
-            return (in_la_idx, vec![]);
+            return (in_laidx, vec![]);
         }
         simplify_repairs(&mut rnk_rprs);
-        let la_idx = apply_repairs(parser,
-                                   in_la_idx,
+        let laidx = apply_repairs(parser,
+                                   in_laidx,
                                    &mut in_pstack,
                                    &mut Some(&mut tstack),
                                    &rnk_rprs[0]);
 
-        (la_idx, rnk_rprs)
+        (laidx, rnk_rprs)
     }
 }
 
@@ -268,24 +268,24 @@ where usize: AsPrimitive<StorageT>
              n: &PathFNode<StorageT>,
              nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
-        let la_idx = n.la_idx;
-        for t_idx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
-            if t_idx == self.parser.grm.eof_term_idx() {
+        let laidx = n.laidx;
+        for tidx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
+            if tidx == self.parser.grm.eof_token_idx() {
                 continue;
             }
 
-            let next_lexeme = self.parser.next_lexeme(n.la_idx);
-            let new_lexeme = Lexeme::new(StorageT::from(u32::from(t_idx)).unwrap(),
+            let next_lexeme = self.parser.next_lexeme(n.laidx);
+            let new_lexeme = Lexeme::new(StorageT::from(u32::from(tidx)).unwrap(),
                                          next_lexeme.start(), 0);
-            let (new_la_idx, n_pstack) =
-                self.parser.lr_cactus(Some(new_lexeme), la_idx, la_idx + 1,
+            let (new_laidx, n_pstack) =
+                self.parser.lr_cactus(Some(new_lexeme), laidx, laidx + 1,
                                       n.pstack.clone(), &mut None);
-            if new_la_idx > la_idx {
+            if new_laidx > laidx {
                 let nn = PathFNode{
                     pstack: n_pstack,
-                    la_idx: n.la_idx,
-                    repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx))),
-                    cf: n.cf.checked_add(u16::from((self.parser.term_cost)(t_idx))).unwrap()};
+                    laidx: n.laidx,
+                    repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(tidx))),
+                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(tidx))).unwrap()};
                 nbrs.push((nn.cf, nn));
             }
         }
@@ -295,14 +295,14 @@ where usize: AsPrimitive<StorageT>
            n: &PathFNode<StorageT>,
            nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
     {
-        if n.la_idx == self.parser.lexemes.len() {
+        if n.laidx == self.parser.lexemes.len() {
             return;
         }
 
-        let la_tidx = self.parser.next_tidx(n.la_idx);
-        let cost = (self.parser.term_cost)(la_tidx);
+        let la_tidx = self.parser.next_tidx(n.laidx);
+        let cost = (self.parser.token_cost)(la_tidx);
         let nn = PathFNode{pstack: n.pstack.clone(),
-                           la_idx: n.la_idx + 1,
+                           laidx: n.laidx + 1,
                            repairs: n.repairs.child(RepairMerge::Repair(Repair::Delete)),
                            cf: n.cf.checked_add(u16::from(cost)).unwrap()};
         nbrs.push((nn.cf, nn));
@@ -335,21 +335,21 @@ where usize: AsPrimitive<StorageT>
         //   (S, I) \rightarrow_{LR*} (S', I')
         //   \wedge 0 <= j < 1 \wedge S != S'
 
-        let la_idx = n.la_idx;
-        let (new_la_idx, n_pstack) = self.parser.lr_cactus(None,
-                                                           la_idx,
-                                                           la_idx + 1,
+        let laidx = n.laidx;
+        let (new_laidx, n_pstack) = self.parser.lr_cactus(None,
+                                                           laidx,
+                                                           laidx + 1,
                                                            n.pstack.clone(),
                                                            &mut None);
         if n.pstack != n_pstack {
-            let n_repairs = if new_la_idx > la_idx {
+            let n_repairs = if new_laidx > laidx {
                 n.repairs.child(RepairMerge::Repair(Repair::Shift))
             } else {
                 n.repairs.clone()
             };
             let nn = PathFNode{
                 pstack: n_pstack,
-                la_idx: new_la_idx,
+                laidx: new_laidx,
                 repairs: n_repairs,
                 cf: n.cf};
             nbrs.push((nn.cf, nn));
@@ -409,8 +409,8 @@ where usize: AsPrimitive<StorageT>
         from.iter()
             .map(|y| {
                  match *y {
-                     Repair::InsertTerm(term_idx) =>
-                         ParseRepair::Insert(term_idx),
+                     Repair::InsertTerm(token_idx) =>
+                         ParseRepair::Insert(token_idx),
                      Repair::Delete => ParseRepair::Delete,
                      Repair::Shift => ParseRepair::Shift,
                  }
@@ -455,8 +455,8 @@ mod test {
         for r in repairs.iter() {
             match *r {
                 ParseRepair::InsertSeq{..} => panic!("Internal error"),
-                ParseRepair::Insert(term_idx) =>
-                    out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
+                ParseRepair::Insert(token_idx) =>
+                    out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>
@@ -535,7 +535,7 @@ E : 'N'
         }
 
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u32::from(grm.term_idx("N").unwrap()).to_u16().unwrap();
+        let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_all_repairs(&grm,
                           errs[0].repairs(),

@@ -61,8 +61,8 @@ where usize: AsPrimitive<StorageT>
 
     /// Add an item `(prod, dot)` with context `ctx` to this itemset. Returns true if this led to
     /// any changes in the itemset.
-    pub fn add(&mut self, prod: PIdx<StorageT>, dot: SIdx<StorageT>, ctx: &Ctx) -> bool {
-        let entry = self.items.entry((prod, dot));
+    pub fn add(&mut self, pidx: PIdx<StorageT>, dot: SIdx<StorageT>, ctx: &Ctx) -> bool {
+        let entry = self.items.entry((pidx, dot));
         match entry {
             Entry::Occupied(mut e) => {
                 e.get_mut().or(ctx)
@@ -82,14 +82,14 @@ where usize: AsPrimitive<StorageT>
         let mut new_is = self.clone(); // The new itemset we're building up
 
         // In a typical description of this algorithm, one would have a todo set which contains
-        // pairs (prod_i, dot). Unfortunately this is a slow way of doing things. Searching the set
+        // pairs (pidx, dot). Unfortunately this is a slow way of doing things. Searching the set
         // for the next item and removing it is slow; and, since we don't know how many potential
         // dots there are in a production, the set is of potentially unbounded size, so we can end
         // up resizing memory. Since this function is the most expensive in the table generation,
         // using a HashSet (which is the "obvious" solution) is slow.
         //
         // However, we can reduce these costs through two observations:
-        //   1) The initial todo set is populated with (prod_i, dot) pairs that all come from
+        //   1) The initial todo set is populated with (pidx, dot) pairs that all come from
         //      self.items.keys(). There's no point copying these into a todo list.
         //   2) All subsequent todo items are of the form (prod_off, 0). Since the dot in these
         //      cases is always 0, we don't need to store pairs: simply knowing which prod_off's we
@@ -99,33 +99,33 @@ where usize: AsPrimitive<StorageT>
 
         let mut keys_iter = self.items.keys(); // The initial todo list
         let mut zero_todos = Vob::from_elem(usize::from(grm.prods_len()), false); // Subsequent todos
-        let mut new_ctx = Vob::from_elem(usize::from(grm.terms_len()), false);
+        let mut new_ctx = Vob::from_elem(usize::from(grm.tokens_len()), false);
         loop {
-            let prod_i;
+            let pidx;
             let dot;
             // Find the next todo item or, if there are none, break the loop. First of all we try
             // pumping keys_iter for its next value. If there is none (i.e. we've exhausted that
             // part of the todo set), we iterate over zero_todos.
             match keys_iter.next() {
                 Some(&(x, y)) => {
-                    prod_i = x;
+                    pidx = x;
                     dot = y;
                 }
                 None => {
                     match zero_todos.iter_set_bits(..).next() {
                         Some(i) => {
                             // Since zero_todos.len() == grm.prods_len, the call to as_ is safe.
-                            prod_i = PIdx(i.as_())
+                            pidx = PIdx(i.as_())
                         },
                         None => break
                     }
                     dot = SIdx(StorageT::zero());
-                    zero_todos.set(prod_i.into(), false);
+                    zero_todos.set(pidx.into(), false);
                 }
             }
-            let prod = grm.prod(prod_i);
-            if dot == grm.prod_len(prod_i) { continue; }
-            if let Symbol::Nonterm(nonterm_i) = prod[usize::from(dot)] {
+            let prod = grm.prod(pidx);
+            if dot == grm.prod_len(pidx) { continue; }
+            if let Symbol::Rule(s_ridx) = prod[usize::from(dot)] {
                 // This if statement is, in essence, a fast version of what's called getContext in
                 // Chen's dissertation, folding in getTHeads at the same time. The particular
                 // formulation here is based as much on
@@ -136,14 +136,14 @@ where usize: AsPrimitive<StorageT>
                 let mut nullable = true;
                 for sym in prod.iter().skip(usize::from(dot) + 1) {
                     match *sym {
-                        Symbol::Term(term_j) => {
-                            new_ctx.set(usize::from(term_j), true);
+                        Symbol::Token(s_tidx) => {
+                            new_ctx.set(usize::from(s_tidx), true);
                             nullable = false;
                             break;
                         },
-                        Symbol::Nonterm(nonterm_j) => {
-                            new_ctx.or(firsts.firsts(nonterm_j));
-                            if !firsts.is_epsilon_set(nonterm_j) {
+                        Symbol::Rule(s_ridx) => {
+                            new_ctx.or(firsts.firsts(s_ridx));
+                            if !firsts.is_epsilon_set(s_ridx) {
                                 nullable = false;
                                 break;
                             }
@@ -151,12 +151,12 @@ where usize: AsPrimitive<StorageT>
                     }
                 }
                 if nullable {
-                    new_ctx.or(&new_is.items[&(prod_i, dot)]);
+                    new_ctx.or(&new_is.items[&(pidx, dot)]);
                 }
 
-                for ref_prod_i in grm.nonterm_to_prods(nonterm_i).iter() {
-                    if new_is.add(*ref_prod_i, SIdx(StorageT::zero()), &new_ctx) {
-                        zero_todos.set(usize::from(*ref_prod_i), true);
+                for ref_pidx in grm.rule_to_prods(s_ridx).iter() {
+                    if new_is.add(*ref_pidx, SIdx(StorageT::zero()), &new_ctx) {
+                        zero_todos.set(usize::from(*ref_pidx), true);
                     }
                 }
             }
@@ -169,11 +169,11 @@ where usize: AsPrimitive<StorageT>
         // This is called 'transition' in Chen's dissertation, though note that the definition
         // therein appears to get the dot in the input/output the wrong way around.
         let mut newis = Itemset::new(grm);
-        for (&(prod_i, dot), ctx) in &self.items {
-            let prod = grm.prod(prod_i);
-            if dot == grm.prod_len(prod_i) { continue; }
+        for (&(pidx, dot), ctx) in &self.items {
+            let prod = grm.prod(pidx);
+            if dot == grm.prod_len(pidx) { continue; }
             if sym == &prod[usize::from(dot)] {
-                newis.add(prod_i, SIdx(dot.as_storaget() + StorageT::one()), ctx);
+                newis.add(pidx, SIdx(dot.as_storaget() + StorageT::one()), ctx);
             }
         }
         newis
@@ -201,9 +201,9 @@ mod test {
         let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
-        let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
-        la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
+        let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
+        la.set(usize::from(grm.eof_token_idx()), true);
+        is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(cls_is.items.len(), 6);
@@ -235,9 +235,9 @@ mod test {
         let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
-        let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
-        la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
+        let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
+        la.set(usize::from(grm.eof_token_idx()), true);
+        is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, SIdx(0), vec!["$"]);
@@ -246,7 +246,7 @@ mod test {
         state_exists(&grm, &cls_is, "S", 2, SIdx(0), vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("F").unwrap())[0], SIdx(0), &la);
+        is.add(grm.rule_to_prods(grm.rule_idx("F").unwrap())[0], SIdx(0), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "F", 0, SIdx(0), vec!["$"]);
         state_exists(&grm, &cls_is, "C", 0, SIdx(0), vec!["d", "f"]);
@@ -277,9 +277,9 @@ mod test {
         let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
-        let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
-        la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
+        let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
+        la.set(usize::from(grm.eof_token_idx()), true);
+        is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let mut cls_is = is.close(&grm, &firsts);
 
         state_exists(&grm, &cls_is, "^", 0, SIdx(0), vec!["$"]);
@@ -287,19 +287,19 @@ mod test {
         state_exists(&grm, &cls_is, "S", 1, SIdx(0), vec!["b", "$"]);
 
         is = Itemset::new(&grm);
-        la = Vob::from_elem(usize::from(grm.terms_len()), false);
-        la.set(usize::from(grm.term_idx("b").unwrap()), true);
-        la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("S").unwrap())[1], SIdx(1), &la);
+        la = Vob::from_elem(usize::from(grm.tokens_len()), false);
+        la.set(usize::from(grm.token_idx("b").unwrap()), true);
+        la.set(usize::from(grm.eof_token_idx()), true);
+        is.add(grm.rule_to_prods(grm.rule_idx("S").unwrap())[1], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "A", 0, SIdx(0), vec!["a"]);
         state_exists(&grm, &cls_is, "A", 1, SIdx(0), vec!["a"]);
         state_exists(&grm, &cls_is, "A", 2, SIdx(0), vec!["a"]);
 
         is = Itemset::new(&grm);
-        la = Vob::from_elem(usize::from(grm.terms_len()), false);
-        la.set(usize::from(grm.term_idx("a").unwrap()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("A").unwrap())[0], SIdx(1), &la);
+        la = Vob::from_elem(usize::from(grm.tokens_len()), false);
+        la.set(usize::from(grm.token_idx("a").unwrap()), true);
+        is.add(grm.rule_to_prods(grm.rule_idx("A").unwrap())[0], SIdx(1), &la);
         cls_is = is.close(&grm, &firsts);
         state_exists(&grm, &cls_is, "S", 0, SIdx(0), vec!["b", "c"]);
         state_exists(&grm, &cls_is, "S", 1, SIdx(0), vec!["b", "c"]);
@@ -311,21 +311,21 @@ mod test {
         let firsts = grm.yacc_firsts();
 
         let mut is = Itemset::new(&grm);
-        let mut la = Vob::from_elem(usize::from(grm.terms_len()), false);
-        la.set(usize::from(grm.eof_term_idx()), true);
-        is.add(grm.nonterm_to_prods(grm.nonterm_idx("^").unwrap())[0], SIdx(0), &la);
+        let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
+        la.set(usize::from(grm.eof_token_idx()), true);
+        is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
         let cls_is = is.close(&grm, &firsts);
 
-        let goto1 = cls_is.goto(&grm, &Symbol::Nonterm(grm.nonterm_idx("S").unwrap()));
+        let goto1 = cls_is.goto(&grm, &Symbol::Rule(grm.rule_idx("S").unwrap()));
         state_exists(&grm, &goto1, "^", 0, SIdx(1), vec!["$"]);
         state_exists(&grm, &goto1, "S", 0, SIdx(1), vec!["$", "b"]);
 
         // follow 'b' from start set
-        let goto2 = cls_is.goto(&grm, &Symbol::Term(grm.term_idx("b").unwrap()));
+        let goto2 = cls_is.goto(&grm, &Symbol::Token(grm.token_idx("b").unwrap()));
         state_exists(&grm, &goto2, "S", 1, SIdx(1), vec!["$", "b"]);
 
         // continue by following 'a' from last goto, after it's been closed
-        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Term(grm.term_idx("a").unwrap()));
+        let goto3 = goto2.close(&grm, &firsts).goto(&grm, &Symbol::Token(grm.token_idx("a").unwrap()));
         state_exists(&grm, &goto3, "A", 1, SIdx(1), vec!["a"]);
         state_exists(&grm, &goto3, "A", 2, SIdx(1), vec!["a"]);
     }

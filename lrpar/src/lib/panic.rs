@@ -55,7 +55,7 @@ where usize: AsPrimitive<StorageT>
     fn recover(&self,
                finish_by: Instant,
                parser: &Parser<StorageT>,
-               in_la_idx: usize,
+               in_laidx: usize,
                in_pstack: &mut Vec<StIdx>,
                _: &mut Vec<Node<StorageT>>)
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
@@ -67,25 +67,25 @@ where usize: AsPrimitive<StorageT>
         // is no way the user can adjust their input to get the parser into the same state as the
         // recovery algorithm manages).
         let iter_pstack = in_pstack.clone();
-        for la_idx in in_la_idx..parser.lexemes.len() {
+        for laidx in in_laidx..parser.lexemes.len() {
             if Instant::now() >= finish_by {
                 break;
             }
             for (st_i, st) in iter_pstack.iter().enumerate().rev().skip(1) {
-                if parser.stable.action(*st, parser.next_tidx(la_idx)).is_some() {
-                    let mut rprs = Vec::with_capacity(la_idx - in_la_idx);
+                if parser.stable.action(*st, parser.next_tidx(laidx)).is_some() {
+                    let mut rprs = Vec::with_capacity(laidx - in_laidx);
                     // It's often possible that we found a state that will accept the lexeme at
-                    // in_la_idx, at which point there are no repairs the user can make which will
+                    // in_laidx, at which point there are no repairs the user can make which will
                     // emulate this panic mode (i.e. the list of actions they are advised to take
                     // will be empty). There isn't much we can do about this.
-                    for _ in in_la_idx..la_idx {
+                    for _ in in_laidx..laidx {
                         rprs.push(ParseRepair::Delete);
                     }
                     in_pstack.drain(st_i + 1..);
-                    return (la_idx, vec![rprs]);
+                    return (laidx, vec![rprs]);
                 }
             }
         }
-        return (in_la_idx, vec![]);
+        return (in_laidx, vec![]);
     }
 }

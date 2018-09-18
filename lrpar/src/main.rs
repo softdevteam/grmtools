@@ -151,7 +151,7 @@ fn main() {
     };
 
     {
-        let rule_ids = grm.terms_map().iter()
+        let rule_ids = grm.tokens_map().iter()
                                       .map(|(&n, &i)| (n, usize::from(i).to_u16().unwrap()))
                                       .collect();
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
@@ -181,8 +181,8 @@ fn main() {
     let input = read_file(&matches.free[2]);
     let lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
-    let term_cost = |_| 1; // Cost of inserting/deleting a terminal
-    match parse_rcvry::<u16, _>(recoverykind, &grm, &term_cost, &sgraph, &stable, &lexemes) {
+    let token_cost = |_| 1; // Cost of inserting/deleting a token
+    match parse_rcvry::<u16, _>(recoverykind, &grm, &token_cost, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err((o_pt, errs)) => {
             match o_pt {
@@ -208,18 +208,18 @@ fn main() {
                                     if i > 0 {
                                         s.push_str(", ");
                                     }
-                                    for (j, t_idx) in seq.iter().enumerate() {
+                                    for (j, tidx) in seq.iter().enumerate() {
                                         if j > 0 {
                                             s.push_str(" ");
                                         }
-                                        s.push_str(grm.term_name(*t_idx).unwrap());
+                                        s.push_str(grm.token_name(*tidx).unwrap());
                                     }
                                 }
                                 s.push_str("}");
                                 out.push(s);
                             },
-                            ParseRepair::Insert(term_idx) =>
-                                out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
+                            ParseRepair::Insert(token_idx) =>
+                                out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
                             ParseRepair::Delete | ParseRepair::Shift => {
                                 let l = lexemes[lex_idx];
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");

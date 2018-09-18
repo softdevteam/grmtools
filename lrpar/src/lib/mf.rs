@@ -52,7 +52,7 @@ const TRY_PARSE_AT_MOST: usize = 250;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum Repair<StorageT> {
-    /// Insert a `Symbol::Term` with idx `term_idx`.
+    /// Insert a `Symbol::Token` with idx `token_idx`.
     InsertTerm(TIdx<StorageT>),
     /// Delete a symbol.
     Delete,
@@ -70,7 +70,7 @@ enum RepairMerge<StorageT> {
 #[derive(Clone, Debug)]
 struct PathFNode<StorageT> {
     pstack: Cactus<StIdx>,
-    la_idx: usize,
+    laidx: usize,
     repairs: Cactus<RepairMerge<StorageT>>,
     cf: u16,
     cg: u16
@@ -89,13 +89,13 @@ impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
 impl<StorageT: PrimInt + Unsigned> Hash for PathFNode<StorageT> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.pstack.hash(state);
-        self.la_idx.hash(state);
+        self.laidx.hash(state);
     }
 }
 
 impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
     fn eq(&self, other: &PathFNode<StorageT>) -> bool {
-        if self.la_idx != other.la_idx || self.pstack != other.pstack {
+        if self.laidx != other.laidx || self.pstack != other.pstack {
             return false;
         }
         // The rest of this function is subtle: we're not looking for repair sequences which are
@@ -139,7 +139,7 @@ pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigne
                      -> Box<Recoverer<StorageT> + 'a>
            where usize: AsPrimitive<StorageT>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.term_cost);
+    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.token_cost);
     Box::new(MF{dist, parser})
 }
 
@@ -150,7 +150,7 @@ where usize: AsPrimitive<StorageT>
     fn recover(&self,
                finish_by: Instant,
                parser: &Parser<StorageT>,
-               in_la_idx: usize,
+               in_laidx: usize,
                mut in_pstack: &mut Vec<StIdx>,
                mut tstack: &mut Vec<Node<StorageT>>)
            -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
@@ -161,7 +161,7 @@ where usize: AsPrimitive<StorageT>
         }
 
         let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
-                                   la_idx: in_la_idx,
+                                   laidx: in_laidx,
                                    repairs: Cactus::new().child(RepairMerge::Terminator),
                                    cf: 0,
                                    cg: 0};
@@ -224,33 +224,33 @@ where usize: AsPrimitive<StorageT>
                 }
 
                 match parser.stable.action(*n.pstack.val().unwrap(),
-                                           parser.next_tidx(n.la_idx)) {
+                                           parser.next_tidx(n.laidx)) {
                     Some(Action::Accept) => true,
                     _ => false,
                 }
             });
 
         if astar_cnds.is_empty() {
-            return (in_la_idx, vec![]);
+            return (in_laidx, vec![]);
         }
 
         let full_rprs = self.collect_repairs(astar_cnds);
         let mut rnk_rprs = rank_cnds(parser,
                                      finish_by,
-                                     in_la_idx,
+                                     in_laidx,
                                      &in_pstack,
                                      full_rprs);
         if rnk_rprs.is_empty() {
-            return (in_la_idx, vec![]);
+            return (in_laidx, vec![]);
         }
         simplify_repairs(&mut rnk_rprs);
-        let la_idx = apply_repairs(parser,
-                                   in_la_idx,
+        let laidx = apply_repairs(parser,
+                                   in_laidx,
                                    &mut in_pstack,
                                    &mut Some(&mut tstack),
                                    &rnk_rprs[0]);
 
-        (la_idx, rnk_rprs)
+        (laidx, rnk_rprs)
     }
 }
 
@@ -263,23 +263,23 @@ where usize: AsPrimitive<StorageT>
               nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
-        for t_idx in self.parser.stable.state_shifts(top_pstack) {
-            if t_idx == self.parser.grm.eof_term_idx() {
+        for tidx in self.parser.stable.state_shifts(top_pstack) {
+            if tidx == self.parser.grm.eof_token_idx() {
                 continue;
             }
 
-            let t_st_idx = match self.parser.stable.action(top_pstack, t_idx).unwrap() {
-                Action::Shift(s_idx) => s_idx,
+            let t_stidx = match self.parser.stable.action(top_pstack, tidx).unwrap() {
+                Action::Shift(stidx) => stidx,
                 _ => unreachable!()
             };
-            let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(t_idx)));
-            if let Some(d) = self.dyn_dist(&n_repairs, t_st_idx, n.la_idx) {
-                assert!(n.cg == 0 || d >= n.cg - u16::from((self.parser.term_cost)(t_idx)));
+            let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(tidx)));
+            if let Some(d) = self.dyn_dist(&n_repairs, t_stidx, n.laidx) {
+                assert!(n.cg == 0 || d >= n.cg - u16::from((self.parser.token_cost)(tidx)));
                 let nn = PathFNode{
-                    pstack: n.pstack.child(t_st_idx),
-                    la_idx: n.la_idx,
+                    pstack: n.pstack.child(t_stidx),
+                    laidx: n.laidx,
                     repairs: n_repairs,
-                    cf: n.cf.checked_add(u16::from((self.parser.term_cost)(t_idx))).unwrap(),
+                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(tidx))).unwrap(),
                     cg: d};
                 nbrs.push((nn.cf, nn.cg, nn));
             }
@@ -291,45 +291,45 @@ where usize: AsPrimitive<StorageT>
               nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
         let top_pstack = *n.pstack.val().unwrap();
-        for p_idx in self.parser.stable.core_reduces(top_pstack) {
-            let sym_off = self.parser.grm.prod(p_idx).len();
-            let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
+        for pidx in self.parser.stable.core_reduces(top_pstack) {
+            let sym_off = self.parser.grm.prod(pidx).len();
+            let ridx = self.parser.grm.prod_to_rule(pidx);
             let mut qi_minus_alpha = n.pstack.clone();
             for _ in 0..sym_off {
                 qi_minus_alpha = qi_minus_alpha.parent().unwrap();
             }
 
-            if let Some(mut goto_st_idx) = self.parser.stable
+            if let Some(mut goto_stidx) = self.parser.stable
                                                   .goto(*qi_minus_alpha.val().unwrap(),
-                                                        nt_idx) {
-                // We want to reduce/goto goto_st_idx. However if that state only contains
+                                                        ridx) {
+                // We want to reduce/goto goto_stidx. However if that state only contains
                 // reductions and if all reductions are the same, we can skip over it.
-                while self.parser.stable.reduce_only_state(goto_st_idx) {
-                    let p_idx = self.parser.stable.core_reduces(goto_st_idx).last().unwrap();
-                    let sym_off = self.parser.grm.prod(p_idx).len();
-                    let nt_idx = self.parser.grm.prod_to_nonterm(p_idx);
-                    // Technically we should push goto_st_idx, and then pop sym_off elements, but
+                while self.parser.stable.reduce_only_state(goto_stidx) {
+                    let pidx = self.parser.stable.core_reduces(goto_stidx).last().unwrap();
+                    let sym_off = self.parser.grm.prod(pidx).len();
+                    let ridx = self.parser.grm.prod_to_rule(pidx);
+                    // Technically we should push goto_stidx, and then pop sym_off elements, but
                     // we can avoid the push in cases where sym_off is greater than 0, compensating
                     // for that by poping (sym_off - 1) elements.
                     if sym_off == 0 {
-                        qi_minus_alpha = qi_minus_alpha.child(goto_st_idx);
+                        qi_minus_alpha = qi_minus_alpha.child(goto_stidx);
                     } else {
                         for _ in 0..sym_off - 1 {
                             qi_minus_alpha = qi_minus_alpha.parent().unwrap();
                         }
                     }
                     if let Some(x) = self.parser.stable.goto(*qi_minus_alpha.val().unwrap(),
-                                                             nt_idx) {
-                        goto_st_idx = x;
+                                                             ridx) {
+                        goto_stidx = x;
                     } else {
                         return;
                     }
                 }
 
-                if let Some(d) = self.dyn_dist(&n.repairs, goto_st_idx, n.la_idx) {
+                if let Some(d) = self.dyn_dist(&n.repairs, goto_stidx, n.laidx) {
                     let nn = PathFNode{
-                        pstack: qi_minus_alpha.child(goto_st_idx),
-                        la_idx: n.la_idx,
+                        pstack: qi_minus_alpha.child(goto_stidx),
+                        laidx: n.laidx,
                         repairs: n.repairs.clone(),
                         cf: n.cf,
                         cg: d};
@@ -343,16 +343,16 @@ where usize: AsPrimitive<StorageT>
               n: &PathFNode<StorageT>,
               nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
-        if n.la_idx == self.parser.lexemes.len() {
+        if n.laidx == self.parser.lexemes.len() {
             return;
         }
 
         let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Delete));
-        if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.la_idx + 1) {
-            let la_tidx = self.parser.next_tidx(n.la_idx);
-            let cost = (self.parser.term_cost)(la_tidx);
+        if let Some(d) = self.dyn_dist(&n_repairs, *n.pstack.val().unwrap(), n.laidx + 1) {
+            let la_tidx = self.parser.next_tidx(n.laidx);
+            let cost = (self.parser.token_cost)(la_tidx);
             let nn = PathFNode{pstack: n.pstack.clone(),
-                               la_idx: n.la_idx + 1,
+                               laidx: n.laidx + 1,
                                repairs: n_repairs,
                                cf: n.cf.checked_add(u16::from(cost)).unwrap(),
                                cg: d};
@@ -364,16 +364,16 @@ where usize: AsPrimitive<StorageT>
              n: &PathFNode<StorageT>,
              nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>)
     {
-        let la_tidx = self.parser.next_tidx(n.la_idx);
+        let la_tidx = self.parser.next_tidx(n.laidx);
         let top_pstack = *n.pstack.val().unwrap();
         if let Some(Action::Shift(state_id)) = self.parser.stable.action(top_pstack,
                                                                          la_tidx) {
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Shift));
-            let new_la_idx = n.la_idx + 1;
-            if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_la_idx) {
+            let new_laidx = n.laidx + 1;
+            if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_laidx) {
                 let nn = PathFNode{
                     pstack: n.pstack.child(state_id),
-                    la_idx: new_la_idx,
+                    laidx: new_laidx,
                     repairs: n_repairs,
                     cf: n.cf,
                     cg: d};
@@ -437,8 +437,8 @@ where usize: AsPrimitive<StorageT>
         from.iter()
             .map(|y| {
                  match *y {
-                     Repair::InsertTerm(term_idx) =>
-                         ParseRepair::Insert(term_idx),
+                     Repair::InsertTerm(token_idx) =>
+                         ParseRepair::Insert(token_idx),
                      Repair::Delete => ParseRepair::Delete,
                      Repair::Shift => ParseRepair::Shift,
                  }
@@ -446,12 +446,12 @@ where usize: AsPrimitive<StorageT>
             .collect()
     }
 
-    /// Return the distance from `st_idx` at input position `la_idx`, given the current `repairs`.
+    /// Return the distance from `stidx` at input position `laidx`, given the current `repairs`.
     /// Returns `None` if no route can be found.
     fn dyn_dist(&self,
                 repairs: &Cactus<RepairMerge<StorageT>>,
-                st_idx: StIdx,
-                la_idx: usize)
+                stidx: StIdx,
+                laidx: usize)
               -> Option<u16>
     {
         // This function is very different than anything in KimYi: it estimates the distance to a
@@ -471,9 +471,9 @@ where usize: AsPrimitive<StorageT>
         }
 
         // Now we deal with the "main" case: dealing with distances in the face of possible
-        // deletions. Imagine that there are two lexemes starting at position la_idx: (in order) T
-        // and U, both with a term_cost of 1. Assume the dist() from st_idx to T is 2 and the
-        // dist() from st_idx to U is 0. If we delete T then the distance to U is 1, which is a
+        // deletions. Imagine that there are two lexemes starting at position laidx: (in order) T
+        // and U, both with a token_cost of 1. Assume the dist() from stidx to T is 2 and the
+        // dist() from stidx to U is 0. If we delete T then the distance to U is 1, which is a
         // shorter distance than T. We therefore need to return a distance of 1, even though that
         // is the distance to the second lexeme.
         //
@@ -484,13 +484,13 @@ where usize: AsPrimitive<StorageT>
         // 1.
         let mut ld = u16::max_value(); // ld == Current least distance
         let mut dc = 0; // Cumulative deletion cost
-        for i in la_idx..self.parser.lexemes.len() + 1 {
-            let t_idx = self.parser.next_tidx(i);
-            let d = self.dist.dist(st_idx, t_idx);
+        for i in laidx..self.parser.lexemes.len() + 1 {
+            let tidx = self.parser.next_tidx(i);
+            let d = self.dist.dist(stidx, tidx);
             if d < u16::max_value() && dc + d < ld {
                 ld = dc + d;
             }
-            dc += u16::from((self.parser.term_cost)(t_idx));
+            dc += u16::from((self.parser.token_cost)(tidx));
             if dc >= ld {
                 // Once the cumulative cost of deleting lexemes is bigger than the current least
                 // distance, there is no chance of finding a subsequent lexeme which could produce
@@ -530,7 +530,7 @@ fn ends_with_parse_at_least_shifts<StorageT>
 pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
                        (parser: &Parser<StorageT>,
                         finish_by: Instant,
-                        in_la_idx: usize,
+                        in_laidx: usize,
                         in_pstack: &Vec<StIdx>,
                         in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>)
                      -> Vec<Vec<ParseRepair<StorageT>>>
@@ -543,20 +543,20 @@ pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
             return vec![];
         }
         let mut pstack = in_pstack.clone();
-        let mut la_idx = apply_repairs(parser,
-                                       in_la_idx,
+        let mut laidx = apply_repairs(parser,
+                                       in_laidx,
                                        &mut pstack,
                                        &mut None,
                                        &rpr_seqs[0]);
-        la_idx = parser.lr_upto(None,
-                                la_idx,
-                                in_la_idx + TRY_PARSE_AT_MOST,
+        laidx = parser.lr_upto(None,
+                                laidx,
+                                in_laidx + TRY_PARSE_AT_MOST,
                                 &mut pstack,
                                 &mut None);
-        if la_idx >= furthest {
-            furthest = la_idx;
+        if laidx >= furthest {
+            furthest = laidx;
         }
-        cnds.push((pstack, la_idx, rpr_seqs));
+        cnds.push((pstack, laidx, rpr_seqs));
     }
 
     // Remove any elements except those which parsed as far as possible.
@@ -567,11 +567,11 @@ pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
         .collect::<Vec<_>>()
 }
 
-/// Apply the `repairs` to `pstack` starting at position `la_idx`: return the resulting parse
+/// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
 /// distance and a new pstack.
 pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
                            (parser: &Parser<StorageT>,
-                            mut la_idx: usize,
+                            mut laidx: usize,
                             mut pstack: &mut Vec<StIdx>,
                             mut tstack: &mut Option<&mut Vec<Node<StorageT>>>,
                             repairs: &[ParseRepair<StorageT>])
@@ -581,29 +581,29 @@ pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigne
     for r in repairs.iter() {
         match *r {
             ParseRepair::InsertSeq(_) => unreachable!(),
-            ParseRepair::Insert(t_idx) => {
-                let next_lexeme = parser.next_lexeme(la_idx);
-                let new_lexeme = Lexeme::new(StorageT::from(u32::from(t_idx)).unwrap(),
+            ParseRepair::Insert(tidx) => {
+                let next_lexeme = parser.next_lexeme(laidx);
+                let new_lexeme = Lexeme::new(StorageT::from(u32::from(tidx)).unwrap(),
                                              next_lexeme.start(), 0);
                 parser.lr_upto(Some(new_lexeme),
-                               la_idx,
-                               la_idx + 1,
+                               laidx,
+                               laidx + 1,
                                &mut pstack,
                                &mut tstack);
             },
             ParseRepair::Delete => {
-                la_idx += 1;
+                laidx += 1;
             }
             ParseRepair::Shift => {
-                la_idx = parser.lr_upto(None,
-                                        la_idx,
-                                        la_idx + 1,
+                laidx = parser.lr_upto(None,
+                                        laidx,
+                                        laidx + 1,
                                         &mut pstack,
                                         &mut tstack);
             }
         }
     }
-    la_idx
+    laidx
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.
@@ -630,7 +630,7 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>
 }
 
 pub(crate) struct Dist<StorageT> {
-    terms_len: TIdx<StorageT>,
+    tokens_len: TIdx<StorageT>,
     table: Vec<u16>,
     phantom: PhantomData<StorageT>
 }
@@ -642,7 +642,7 @@ where usize: AsPrimitive<StorageT>
                      (grm: &YaccGrammar<StorageT>,
                       sgraph: &StateGraph<StorageT>,
                       stable: &StateTable<StorageT>,
-                      term_cost: F)
+                      token_cost: F)
                    -> Dist<StorageT>
                    where F: Fn(TIdx<StorageT>) -> u8
     {
@@ -655,34 +655,34 @@ where usize: AsPrimitive<StorageT>
         // also has a reduction target of state 5: thus state state 0 ends up with the minimum
         // distances of itself and state 5.
 
-        let terms_len = usize::from(grm.terms_len());
+        let tokens_len = usize::from(grm.tokens_len());
         let states_len = usize::from(sgraph.all_states_len());
-        let sengen = grm.sentence_generator(&term_cost);
+        let sengen = grm.sentence_generator(&token_cost);
         let goto_states = Dist::goto_states(grm, sgraph, stable);
 
         let mut table = Vec::new();
-        table.resize(states_len * terms_len, u16::max_value());
-        table[usize::from(stable.final_state) * terms_len + usize::from(grm.eof_term_idx())] = 0;
+        table.resize(states_len * tokens_len, u16::max_value());
+        table[usize::from(stable.final_state) * tokens_len + usize::from(grm.eof_token_idx())] = 0;
         loop {
             let mut chgd = false;
-            for st_idx in sgraph.iter_stidxs() {
+            for stidx in sgraph.iter_stidxs() {
                 // The first phase is KimYi's dist algorithm.
-                for (&sym, &sym_st_idx) in sgraph.edges(st_idx).iter() {
+                for (&sym, &sym_stidx) in sgraph.edges(stidx).iter() {
                     let d = match sym {
-                        Symbol::Nonterm(nt_idx) => sengen.min_sentence_cost(nt_idx),
-                        Symbol::Term(t_idx) => {
-                            let off = usize::from(st_idx) * terms_len + usize::from(t_idx);
+                        Symbol::Rule(ridx) => sengen.min_sentence_cost(ridx),
+                        Symbol::Token(tidx) => {
+                            let off = usize::from(stidx) * tokens_len + usize::from(tidx);
                             if table[off] != 0 {
                                 table[off] = 0;
                                 chgd = true;
                             }
-                            u16::from(term_cost(t_idx))
+                            u16::from(token_cost(tidx))
                         }
                     };
 
                     for tidx in grm.iter_tidxs() {
-                        let this_off = usize::from(st_idx) * terms_len + usize::from(tidx);
-                        let other_off = usize::from(sym_st_idx) * terms_len + usize::from(tidx);
+                        let this_off = usize::from(stidx) * tokens_len + usize::from(tidx);
+                        let other_off = usize::from(sym_stidx) * tokens_len + usize::from(tidx);
 
                         if table[other_off] != u16::max_value()
                            && table[other_off] + d < table[this_off]
@@ -694,13 +694,13 @@ where usize: AsPrimitive<StorageT>
                 }
 
                 // The second phase takes into account reductions and gotos.
-                for goto_st_idx in goto_states[usize::from(st_idx)]
+                for goto_stidx in goto_states[usize::from(stidx)]
                                               .iter_set_bits(..)
                                               .map(|x| StIdx::from(x))
                 {
                     for tidx in grm.iter_tidxs() {
-                        let this_off = usize::from(st_idx) * terms_len + usize::from(tidx);
-                        let other_off = usize::from(goto_st_idx) * terms_len + usize::from(tidx);
+                        let this_off = usize::from(stidx) * tokens_len + usize::from(tidx);
+                        let other_off = usize::from(goto_stidx) * tokens_len + usize::from(tidx);
 
                         if table[other_off] != u16::max_value()
                            && table[other_off] < table[this_off]
@@ -716,11 +716,11 @@ where usize: AsPrimitive<StorageT>
             }
         }
 
-        Dist{terms_len: grm.terms_len(), table, phantom: PhantomData}
+        Dist{tokens_len: grm.tokens_len(), table, phantom: PhantomData}
     }
 
-    pub(crate) fn dist(&self, st_idx: StIdx, t_idx: TIdx<StorageT>) -> u16 {
-        self.table[usize::from(st_idx) * usize::from(self.terms_len) + usize::from(t_idx)]
+    pub(crate) fn dist(&self, stidx: StIdx, tidx: TIdx<StorageT>) -> u16 {
+        self.table[usize::from(stidx) * usize::from(self.tokens_len) + usize::from(tidx)]
     }
 
     /// rev_edges allows us to walk backwards over the stategraph.
@@ -730,9 +730,9 @@ where usize: AsPrimitive<StorageT>
         let mut rev_edges = Vec::with_capacity(usize::from(states_len));
         rev_edges.resize(usize::from(states_len),
                          Vob::from_elem(usize::from(sgraph.all_states_len()), false));
-        for st_idx in sgraph.iter_stidxs() {
-            for (_, &sym_st_idx) in sgraph.edges(st_idx).iter() {
-                rev_edges[usize::from(sym_st_idx)].set(usize::from(st_idx), true);
+        for stidx in sgraph.iter_stidxs() {
+            for (_, &sym_stidx) in sgraph.edges(stidx).iter() {
+                rev_edges[usize::from(sym_stidx)].set(usize::from(stidx), true);
             }
         }
         rev_edges
@@ -752,13 +752,13 @@ where usize: AsPrimitive<StorageT>
         // prev and next are hoist here to lessen memory allocation in a core loop below.
         let mut prev = Vob::from_elem(states_len, false);
         let mut next = Vob::from_elem(states_len, false);
-        for st_idx in sgraph.iter_stidxs() {
-            for &(p_idx, sym_off) in sgraph.core_state(st_idx).items.keys() {
-                let prod = grm.prod(p_idx);
+        for stidx in sgraph.iter_stidxs() {
+            for &(pidx, sym_off) in sgraph.core_state(stidx).items.keys() {
+                let prod = grm.prod(pidx);
                 if usize::from(sym_off) < prod.len() {
                     continue;
                 }
-                let nt_idx = grm.prod_to_nonterm(p_idx);
+                let ridx = grm.prod_to_rule(pidx);
 
                 // We've found an item in a core state where the dot is at the end of the rule:
                 // what we now do is reach backwards in the stategraph to find all of the
@@ -768,19 +768,19 @@ where usize: AsPrimitive<StorageT>
                 // back prod.len() states in the stategraph to do this: the final result will end
                 // up in prev.
                 prev.set_all(false);
-                prev.set(usize::from(st_idx), true);
+                prev.set(usize::from(stidx), true);
                 for _ in 0..prod.len() {
                     next.set_all(false);
-                    for prev_st_idx in prev.iter_set_bits(..) {
-                        next.or(&rev_edges[prev_st_idx]);
+                    for prev_stidx in prev.iter_set_bits(..) {
+                        next.or(&rev_edges[prev_stidx]);
                     }
                     mem::swap(&mut prev, &mut next);
                 }
 
                 // From the reduction states, find all the goto states.
-                for prev_st_idx in prev.iter_set_bits(..) {
-                    if let Some(goto_st_idx) = stable.goto(StIdx::from(prev_st_idx), nt_idx) {
-                        goto_states[usize::from(st_idx)].set(usize::from(goto_st_idx), true);
+                for prev_stidx in prev.iter_set_bits(..) {
+                    if let Some(goto_stidx) = stable.goto(StIdx::from(prev_stidx), ridx) {
+                        goto_states[usize::from(stidx)].set(usize::from(goto_stidx), true);
                     }
                 }
             }
@@ -823,18 +823,18 @@ mod test {
                         if i > 0 {
                             s.push_str(", ");
                         }
-                        for (j, t_idx) in seq.iter().enumerate() {
+                        for (j, tidx) in seq.iter().enumerate() {
                             if j > 0 {
                                 s.push_str(" ");
                             }
-                            s.push_str(&format!("\"{}\"", grm.term_name(*t_idx).unwrap()));
+                            s.push_str(&format!("\"{}\"", grm.token_name(*tidx).unwrap()));
                         }
                     }
                     s.push_str("}");
                     out.push(s);
                 },
-                ParseRepair::Insert(term_idx) =>
-                    out.push(format!("Insert \"{}\"", grm.term_name(term_idx).unwrap())),
+                ParseRepair::Insert(token_idx) =>
+                    out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
                 ParseRepair::Delete =>
                     out.push(format!("Delete")),
                 ParseRepair::Shift =>
@@ -858,53 +858,53 @@ A: '(' A ')'
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
         let s0 = StIdx::from(0u32);
-        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.eof_term_idx()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.eof_token_idx()), 1);
 
-        let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.eof_term_idx()), 0);
+        let s1 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx(")").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.eof_token_idx()), 0);
 
-        let s2 = sgraph.edge(s0, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.eof_term_idx()), 0);
+        let s2 = sgraph.edge(s0, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.eof_token_idx()), 0);
 
-        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s3, grm.eof_term_idx()), 0);
+        let s3 = sgraph.edge(s0, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s3, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s3, grm.token_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s3, grm.eof_token_idx()), 0);
 
-        let s5 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("(").unwrap()), 0);
-        assert_eq!(d.dist(s5, grm.term_idx(")").unwrap()), 1);
-        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), 0);
-        assert_eq!(d.dist(s5, grm.eof_term_idx()), 1);
+        let s5 = sgraph.edge(s0, Symbol::Token(grm.token_idx("(").unwrap())).unwrap();
+        assert_eq!(d.dist(s5, grm.token_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.token_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s5, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.token_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.eof_token_idx()), 1);
 
-        let s6 = sgraph.edge(s5, Symbol::Nonterm(grm.nonterm_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.eof_term_idx()), 1);
+        let s6 = sgraph.edge(s5, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap();
+        assert_eq!(d.dist(s6, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s6, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.eof_token_idx()), 1);
 
-        let s4 = sgraph.edge(s6, Symbol::Term(grm.term_idx(")").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("(").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.eof_term_idx()), 0);
+        let s4 = sgraph.edge(s6, Symbol::Token(grm.token_idx(")").unwrap())).unwrap();
+        assert_eq!(d.dist(s4, grm.token_idx("(").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s4, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.token_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.eof_token_idx()), 0);
     }
 
     #[test]
@@ -924,39 +924,39 @@ U: 'B';
         // more interesting edge cases that the example from the Kim/Yi paper.
 
         let s0 = StIdx::from(0u32);
-        assert_eq!(d.dist(s0, grm.term_idx("A").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx("B").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("C").unwrap()), 2);
+        assert_eq!(d.dist(s0, grm.token_idx("A").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("B").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("C").unwrap()), 2);
 
-        let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s1, grm.term_idx("B").unwrap()), 0);
-        assert_eq!(d.dist(s1, grm.term_idx("C").unwrap()), 1);
+        let s1 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("T").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s1, grm.token_idx("B").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.token_idx("C").unwrap()), 1);
 
-        let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("B").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("C").unwrap()), u16::max_value());
+        let s2 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("S").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("C").unwrap()), u16::max_value());
 
-        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("A").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s3, grm.term_idx("B").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("C").unwrap()), 1);
+        let s3 = sgraph.edge(s0, Symbol::Token(grm.token_idx("A").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s3, grm.token_idx("B").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("C").unwrap()), 1);
 
-        let s4 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("U").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx("B").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s4, grm.term_idx("C").unwrap()), 0);
+        let s4 = sgraph.edge(s1, Symbol::Rule(grm.rule_idx("U").unwrap())).unwrap();
+        assert_eq!(d.dist(s4, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.token_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s4, grm.token_idx("C").unwrap()), 0);
 
-        let s5 = sgraph.edge(s1, Symbol::Term(grm.term_idx("B").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s5, grm.term_idx("B").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s5, grm.term_idx("C").unwrap()), 0);
+        let s5 = sgraph.edge(s1, Symbol::Token(grm.token_idx("B").unwrap())).unwrap();
+        assert_eq!(d.dist(s5, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s5, grm.token_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s5, grm.token_idx("C").unwrap()), 0);
 
-        let s6 = sgraph.edge(s4, Symbol::Term(grm.term_idx("C").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("A").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("B").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s6, grm.term_idx("C").unwrap()), u16::max_value());
+        let s6 = sgraph.edge(s4, Symbol::Token(grm.token_idx("C").unwrap())).unwrap();
+        assert_eq!(d.dist(s6, grm.token_idx("A").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx("B").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s6, grm.token_idx("C").unwrap()), u16::max_value());
     }
 
     #[test]
@@ -981,32 +981,32 @@ Factor: '(' Expr ')'
         // more interesting edge cases that the example from the Kim/Yi paper.
 
         let s0 = StIdx::from(0u32);
-        assert_eq!(d.dist(s0, grm.term_idx("+").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("*").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("(").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx(")").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.term_idx("INT").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("+").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("*").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.token_idx("INT").unwrap()), 0);
 
-        let s1 = sgraph.edge(s0, Symbol::Term(grm.term_idx("(").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("+").unwrap()), 1);
-        assert_eq!(d.dist(s1, grm.term_idx("*").unwrap()), 1);
-        assert_eq!(d.dist(s1, grm.term_idx("(").unwrap()), 0);
-        assert_eq!(d.dist(s1, grm.term_idx(")").unwrap()), 1);
-        assert_eq!(d.dist(s1, grm.term_idx("INT").unwrap()), 0);
+        let s1 = sgraph.edge(s0, Symbol::Token(grm.token_idx("(").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.token_idx("+").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.token_idx("*").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.token_idx("(").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.token_idx(")").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.token_idx("INT").unwrap()), 0);
 
-        let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("Factor").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("+").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("*").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("(").unwrap()), 1);
-        assert_eq!(d.dist(s2, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s2, grm.term_idx("INT").unwrap()), 1);
+        let s2 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("Factor").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.token_idx("+").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.token_idx("*").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.token_idx("(").unwrap()), 1);
+        assert_eq!(d.dist(s2, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s2, grm.token_idx("INT").unwrap()), 1);
 
-        let s3 = sgraph.edge(s0, Symbol::Term(grm.term_idx("INT").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("+").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("*").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("(").unwrap()), 1);
-        assert_eq!(d.dist(s3, grm.term_idx(")").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.term_idx("INT").unwrap()), 1);
+        let s3 = sgraph.edge(s0, Symbol::Token(grm.token_idx("INT").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.token_idx("+").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("*").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("(").unwrap()), 1);
+        assert_eq!(d.dist(s3, grm.token_idx(")").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.token_idx("INT").unwrap()), 1);
     }
 
     #[test]
@@ -1042,44 +1042,44 @@ W: 'b' ;
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
         let s0 = StIdx::from(0u32);
-        assert_eq!(d.dist(s0, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s0, grm.term_idx("b").unwrap()), 1);
-        assert_eq!(d.dist(s0, grm.eof_term_idx()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s0, grm.token_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s0, grm.eof_token_idx()), 0);
 
-        let s1 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("T").unwrap())).unwrap();
-        assert_eq!(d.dist(s1, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s1, grm.term_idx("b").unwrap()), 1);
-        assert_eq!(d.dist(s1, grm.eof_term_idx()), 0);
+        let s1 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("T").unwrap())).unwrap();
+        assert_eq!(d.dist(s1, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s1, grm.token_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s1, grm.eof_token_idx()), 0);
 
-        let s2 = sgraph.edge(s0, Symbol::Nonterm(grm.nonterm_idx("S").unwrap())).unwrap();
-        assert_eq!(d.dist(s2, grm.term_idx("a").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.term_idx("b").unwrap()), u16::max_value());
-        assert_eq!(d.dist(s2, grm.eof_term_idx()), 0);
+        let s2 = sgraph.edge(s0, Symbol::Rule(grm.rule_idx("S").unwrap())).unwrap();
+        assert_eq!(d.dist(s2, grm.token_idx("a").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.token_idx("b").unwrap()), u16::max_value());
+        assert_eq!(d.dist(s2, grm.eof_token_idx()), 0);
 
-        let s3 = sgraph.edge(s1, Symbol::Term(grm.term_idx("a").unwrap())).unwrap();
-        assert_eq!(d.dist(s3, grm.term_idx("a").unwrap()), 1);
-        assert_eq!(d.dist(s3, grm.term_idx("b").unwrap()), 0);
-        assert_eq!(d.dist(s3, grm.eof_term_idx()), 1);
+        let s3 = sgraph.edge(s1, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
+        assert_eq!(d.dist(s3, grm.token_idx("a").unwrap()), 1);
+        assert_eq!(d.dist(s3, grm.token_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s3, grm.eof_token_idx()), 1);
 
-        let s4 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("U").unwrap())).unwrap();
-        assert_eq!(d.dist(s4, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s4, grm.term_idx("b").unwrap()), 1);
-        assert_eq!(d.dist(s4, grm.eof_term_idx()), 0);
+        let s4 = sgraph.edge(s1, Symbol::Rule(grm.rule_idx("U").unwrap())).unwrap();
+        assert_eq!(d.dist(s4, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s4, grm.token_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s4, grm.eof_token_idx()), 0);
 
-        let s5 = sgraph.edge(s1, Symbol::Nonterm(grm.nonterm_idx("V").unwrap())).unwrap();
-        assert_eq!(d.dist(s5, grm.term_idx("a").unwrap()), 1);
-        assert_eq!(d.dist(s5, grm.term_idx("b").unwrap()), 0);
-        assert_eq!(d.dist(s5, grm.eof_term_idx()), 1);
+        let s5 = sgraph.edge(s1, Symbol::Rule(grm.rule_idx("V").unwrap())).unwrap();
+        assert_eq!(d.dist(s5, grm.token_idx("a").unwrap()), 1);
+        assert_eq!(d.dist(s5, grm.token_idx("b").unwrap()), 0);
+        assert_eq!(d.dist(s5, grm.eof_token_idx()), 1);
 
-        let s6 = sgraph.edge(s5, Symbol::Term(grm.term_idx("b").unwrap())).unwrap();
-        assert_eq!(d.dist(s6, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s6, grm.term_idx("b").unwrap()), 1);
-        assert_eq!(d.dist(s6, grm.eof_term_idx()), 0);
+        let s6 = sgraph.edge(s5, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
+        assert_eq!(d.dist(s6, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s6, grm.token_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s6, grm.eof_token_idx()), 0);
 
-        let s7 = sgraph.edge(s5, Symbol::Nonterm(grm.nonterm_idx("W").unwrap())).unwrap();
-        assert_eq!(d.dist(s7, grm.term_idx("a").unwrap()), 0);
-        assert_eq!(d.dist(s7, grm.term_idx("b").unwrap()), 1);
-        assert_eq!(d.dist(s7, grm.eof_term_idx()), 0);
+        let s7 = sgraph.edge(s5, Symbol::Rule(grm.rule_idx("W").unwrap())).unwrap();
+        assert_eq!(d.dist(s7, grm.token_idx("a").unwrap()), 0);
+        assert_eq!(d.dist(s7, grm.token_idx("b").unwrap()), 1);
+        assert_eq!(d.dist(s7, grm.eof_token_idx()), 0);
     }
 
     #[bench]
@@ -1182,7 +1182,7 @@ E : 'N'
         }
 
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u32::from(grm.term_idx("N").unwrap()).to_u16().unwrap();
+        let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
         check_all_repairs(&grm,
                           errs[0].repairs(),
@@ -1214,8 +1214,8 @@ E : 'N'
 
     fn kimyi_lex_grm() -> (&'static str, &'static str) {
         // The example from the KimYi paper, with a bit of alpha-renaming to make it clearer. The
-        // paper uses "A" as a nonterminal name and "a" as a terminal name, which are then easily
-        // confused. Here we use "E" as the nonterminal name, and keep "a" as the terminal name.
+        // paper uses "A" as a rule name and "a" as a token name, which are then easily
+        // confused. Here we use "E" as the rule name, and keep "a" as the token name.
         let lexs = "%%
 \\( '('
 \\) ')'
@@ -1263,7 +1263,7 @@ E: '(' E ')'
             panic!("Can't find a match for {}", pp);
         }
         assert_eq!(errs.len(), 1);
-        let err_tok_id = u32::from(grm.eof_term_idx()).to_u16().unwrap();
+        let err_tok_id = u32::from(grm.eof_token_idx()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
         check_all_repairs(&grm,
                           errs[0].repairs(),

@@ -36,7 +36,7 @@ use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, NTIdx, TIdx};
+use cfgrammar::{Grammar, RIdx, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};
@@ -51,7 +51,7 @@ const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node<StorageT> {
     Term{lexeme: Lexeme<StorageT>},
-    Nonterm{nonterm_idx: NTIdx<StorageT>, nodes: Vec<Node<StorageT>>}
+    Nonterm{ridx: RIdx<StorageT>, nodes: Vec<Node<StorageT>>}
 }
 
 impl<StorageT: 'static + PrimInt + Unsigned> Node<StorageT>
@@ -68,13 +68,13 @@ where usize: AsPrimitive<StorageT>
             }
             match *e {
                 Node::Term{lexeme} => {
-                    let t_idx = TIdx(lexeme.tok_id());
-                    let tn = grm.term_name(t_idx).unwrap();
+                    let tidx = TIdx(lexeme.tok_id());
+                    let tn = grm.token_name(tidx).unwrap();
                     let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
-                Node::Nonterm{nonterm_idx, ref nodes} => {
-                    s.push_str(&format!("{}\n", grm.nonterm_name(nonterm_idx)));
+                Node::Nonterm{ridx, ref nodes} => {
+                    s.push_str(&format!("{}\n", grm.rule_name(ridx)));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }
@@ -93,7 +93,7 @@ pub(crate) type Errors<StorageT> = Vec<ParseError<StorageT>>;
 pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
     pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar<StorageT>,
-    pub term_cost: &'a Fn(TIdx<StorageT>) -> u8,
+    pub token_cost: &'a Fn(TIdx<StorageT>) -> u8,
     pub sgraph: &'a StateGraph<StorageT>,
     pub stable: &'a StateTable<StorageT>,
     pub lexemes: &'a [Lexeme<StorageT>]
@@ -105,7 +105,7 @@ where usize: AsPrimitive<StorageT>
 {
     fn parse<F>(rcvry_kind: RecoveryKind,
                 grm: &YaccGrammar<StorageT>,
-                term_cost: F,
+                token_cost: F,
                 sgraph: &StateGraph<StorageT>,
                 stable: &StateTable<StorageT>,
                 lexemes: &[Lexeme<StorageT>])
@@ -114,9 +114,9 @@ where usize: AsPrimitive<StorageT>
           where F: Fn(TIdx<StorageT>) -> u8
     {
         for tidx in grm.iter_tidxs() {
-            assert!(term_cost(tidx) > 0);
+            assert!(token_cost(tidx) > 0);
         }
-        let psr = Parser{rcvry_kind, grm, term_cost: &term_cost, sgraph, stable, lexemes};
+        let psr = Parser{rcvry_kind, grm, token_cost: &token_cost, sgraph, stable, lexemes};
         let mut pstack = vec![StIdx::from(0u32)];
         let mut tstack: Vec<Node<StorageT>> = Vec::new();
         let mut errors: Vec<ParseError<StorageT>> = Vec::new();
@@ -129,21 +129,21 @@ where usize: AsPrimitive<StorageT>
         }
     }
 
-    /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
-    /// as the first lexeme) up to (but excluding) `end_la_idx` (if it's specified). Parsing
+    /// Start parsing text at `laidx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
+    /// as the first lexeme) up to (but excluding) `end_laidx` (if it's specified). Parsing
     /// continues as long as possible (assuming that any errors encountered can be recovered from)
-    /// unless `end_la_idx` is `None`, at which point this function returns as soon as it
+    /// unless `end_laidx` is `None`, at which point this function returns as soon as it
     /// encounters an error.
     ///
-    /// Note that if `lexeme_prefix` is specified, `la_idx` will still be incremented, and thus
-    /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
-    /// lexeme at position `la_idx`.
+    /// Note that if `lexeme_prefix` is specified, `laidx` will still be incremented, and thus
+    /// `end_laidx` *must* be set to `laidx + 1` in order that the parser doesn't skip the real
+    /// lexeme at position `laidx`.
     ///
     /// Return `true` if the parse reached an accept state (i.e. all the input was consumed,
     /// possibly after making repairs) or `false` (i.e. some of the input was not consumed, even
     /// after possibly making repairs) otherwise.
     pub fn lr(&self,
-              mut la_idx: usize,
+              mut laidx: usize,
               pstack: &mut PStack,
               tstack: &mut TStack<StorageT>,
               errors: &mut Errors<StorageT>)
@@ -152,28 +152,28 @@ where usize: AsPrimitive<StorageT>
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
         loop {
-            let st = *pstack.last().unwrap();
-            let la_tidx = self.next_tidx(la_idx);
+            let stidx = *pstack.last().unwrap();
+            let la_tidx = self.next_tidx(laidx);
 
-            match self.stable.action(st, la_tidx) {
-                Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
-                    let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
+            match self.stable.action(stidx, la_tidx) {
+                Some(Action::Reduce(pidx)) => {
+                    let ridx = self.grm.prod_to_rule(pidx);
+                    let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
-                    tstack.push(Node::Nonterm{nonterm_idx, nodes});
+                    tstack.push(Node::Nonterm{ridx, nodes});
 
                     pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
-                    pstack.push(self.stable.goto(prior, nonterm_idx).unwrap());
+                    pstack.push(self.stable.goto(prior, ridx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
-                    let la_lexeme = self.next_lexeme(la_idx);
+                    let la_lexeme = self.next_lexeme(laidx);
                     tstack.push(Node::Term{lexeme: la_lexeme});
                     pstack.push(state_id);
-                    la_idx += 1;
+                    laidx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_tidx, self.grm.eof_term_idx());
+                    debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     debug_assert_eq!(tstack.len(), 1);
                     return true;
                 },
@@ -184,9 +184,9 @@ where usize: AsPrimitive<StorageT>
                                              RecoveryKind::MF => mf::recoverer(self),
                                              RecoveryKind::Panic => panic::recoverer(self),
                                              RecoveryKind::None => {
-                                                let la_lexeme = self.next_lexeme(la_idx);
-                                                errors.push(ParseError{state_idx: st,
-                                                                       lexeme_idx: la_idx,
+                                                let la_lexeme = self.next_lexeme(laidx);
+                                                errors.push(ParseError{stidx,
+                                                                       lexeme_idx: laidx,
                                                                        lexeme: la_lexeme,
                                                                        repairs: vec![]});
                                                 return false;
@@ -196,75 +196,75 @@ where usize: AsPrimitive<StorageT>
 
                     let before = Instant::now();
                     let finish_by = before + recovery_budget;
-                    let (new_la_idx, repairs) = recoverer.as_ref()
+                    let (new_laidx, repairs) = recoverer.as_ref()
                                                          .unwrap()
                                                          .as_ref()
                                                          .recover(finish_by,
                                                                   self,
-                                                                  la_idx,
+                                                                  laidx,
                                                                   pstack,
                                                                   tstack);
                     let after = Instant::now();
                     recovery_budget = recovery_budget.checked_sub(after - before)
                                                      .unwrap_or_else(|| Duration::new(0, 0));
                     let keep_going = !repairs.is_empty();
-                    let la_lexeme = self.next_lexeme(la_idx);
-                    errors.push(ParseError{state_idx: st, lexeme_idx: la_idx,
+                    let la_lexeme = self.next_lexeme(laidx);
+                    errors.push(ParseError{stidx, lexeme_idx: laidx,
                                            lexeme: la_lexeme, repairs});
                     if !keep_going {
                         return false;
                     }
-                    la_idx = new_la_idx;
+                    laidx = new_laidx;
                 }
             }
         }
     }
 
-    /// Parse from `la_idx` up to (but excluding) `end_la_idx` mutating `pstack` as parsing occurs.
-    /// Returns the index of the token it parsed up to (by definition <= end_la_idx: can be less if
-    /// the input is < end_la_idx, or if an error is encountered). Does not do any form of error
+    /// Parse from `laidx` up to (but excluding) `end_laidx` mutating `pstack` as parsing occurs.
+    /// Returns the index of the token it parsed up to (by definition <= end_laidx: can be less if
+    /// the input is < end_laidx, or if an error is encountered). Does not do any form of error
     /// recovery.
     pub fn lr_upto(&self,
                    lexeme_prefix: Option<Lexeme<StorageT>>,
-                   mut la_idx: usize,
-                   end_la_idx: usize,
+                   mut laidx: usize,
+                   end_laidx: usize,
                    pstack: &mut PStack,
                    tstack: &mut Option<&mut Vec<Node<StorageT>>>)
            -> usize
     {
-        assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
-        while la_idx != end_la_idx && la_idx <= self.lexemes.len() {
-            let st = *pstack.last().unwrap();
+        assert!(lexeme_prefix.is_none() || end_laidx == laidx + 1);
+        while laidx != end_laidx && laidx <= self.lexemes.len() {
+            let stidx = *pstack.last().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
                               TIdx(l.tok_id())
                           } else {
-                              self.next_tidx(la_idx)
+                              self.next_tidx(laidx)
                           };
 
-            match self.stable.action(st, la_tidx) {
-                Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
-                    let pop_idx = pstack.len() - self.grm.prod(prod_id).len();
+            match self.stable.action(stidx, la_tidx) {
+                Some(Action::Reduce(pidx)) => {
+                    let ridx = self.grm.prod_to_rule(pidx);
+                    let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
-                        tstack_uw.push(Node::Nonterm{nonterm_idx, nodes});
+                        tstack_uw.push(Node::Nonterm{ridx, nodes});
                     }
 
                     pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
-                    pstack.push(self.stable.goto(prior, nonterm_idx).unwrap());
+                    pstack.push(self.stable.goto(prior, ridx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     if let Some(ref mut tstack_uw) = *tstack {
                         let la_lexeme = if let Some(l) = lexeme_prefix {
                                             l
                                         } else {
-                                            self.next_lexeme(la_idx)
+                                            self.next_lexeme(laidx)
                                         };
                         tstack_uw.push(Node::Term{lexeme: la_lexeme});
                     }
                     pstack.push(state_id);
-                    la_idx += 1;
+                    laidx += 1;
                 },
                 Some(Action::Accept) => {
                     break;
@@ -274,97 +274,97 @@ where usize: AsPrimitive<StorageT>
                 }
             }
         }
-        la_idx
+        laidx
     }
 
-    /// Return a `Lexeme` for the next lemexe (if `la_idx` == `self.lexemes.len()` this will be
-    /// a lexeme constructed to look as if contains the EOF terminal).
-    pub(crate) fn next_lexeme(&self, la_idx: usize) -> Lexeme<StorageT>
+    /// Return a `Lexeme` for the next lemexe (if `laidx` == `self.lexemes.len()` this will be
+    /// a lexeme constructed to look as if contains the EOF token).
+    pub(crate) fn next_lexeme(&self, laidx: usize) -> Lexeme<StorageT>
     {
         let llen = self.lexemes.len();
-        debug_assert!(la_idx <= llen);
-        if la_idx < llen {
-            self.lexemes[la_idx]
+        debug_assert!(laidx <= llen);
+        if laidx < llen {
+            self.lexemes[laidx]
         } else {
             // We have to artificially construct a Lexeme for the EOF lexeme.
             let last_la_end = if llen == 0 {
                     0
                 } else {
-                    debug_assert!(la_idx > 0);
-                    let last_la = self.lexemes[la_idx - 1];
+                    debug_assert!(laidx > 0);
+                    let last_la = self.lexemes[laidx - 1];
                     last_la.start() + last_la.len()
                 };
 
-            Lexeme::new(StorageT::from(u32::from(self.grm.eof_term_idx())).unwrap(), last_la_end, 0)
+            Lexeme::new(StorageT::from(u32::from(self.grm.eof_token_idx())).unwrap(), last_la_end, 0)
         }
     }
 
-    /// Return the `TIdx` of the next lexeme (if `la_idx` == `self.lexemes.len()` this will be the
+    /// Return the `TIdx` of the next lexeme (if `laidx` == `self.lexemes.len()` this will be the
     /// EOF `TIdx`).
-    pub(crate) fn next_tidx(&self, la_idx: usize) -> TIdx<StorageT> {
+    pub(crate) fn next_tidx(&self, laidx: usize) -> TIdx<StorageT> {
         let ll = self.lexemes.len();
-        debug_assert!(la_idx <= ll);
-        if la_idx < ll {
-            TIdx(self.lexemes[la_idx].tok_id())
+        debug_assert!(laidx <= ll);
+        if laidx < ll {
+            TIdx(self.lexemes[laidx].tok_id())
         } else {
-            self.grm.eof_term_idx()
+            self.grm.eof_token_idx()
         }
     }
 
-    /// Start parsing text at `la_idx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
-    /// as the first lexeme) up to (but excluding) `end_la_idx`. If an error is encountered, parsing
+    /// Start parsing text at `laidx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
+    /// as the first lexeme) up to (but excluding) `end_laidx`. If an error is encountered, parsing
     /// immediately terminates (without recovery).
     ///
-    /// Note that if `lexeme_prefix` is specified, `la_idx` will still be incremented, and thus
-    /// `end_la_idx` *must* be set to `la_idx + 1` in order that the parser doesn't skip the real
-    /// lexeme at position `la_idx`.
+    /// Note that if `lexeme_prefix` is specified, `laidx` will still be incremented, and thus
+    /// `end_laidx` *must* be set to `laidx + 1` in order that the parser doesn't skip the real
+    /// lexeme at position `laidx`.
     pub(crate) fn lr_cactus(&self,
                             lexeme_prefix: Option<Lexeme<StorageT>>,
-                            mut la_idx: usize,
-                            end_la_idx: usize,
+                            mut laidx: usize,
+                            end_laidx: usize,
                             mut pstack: Cactus<StIdx>,
                             tstack: &mut Option<&mut Vec<Node<StorageT>>>)
       -> (usize, Cactus<StIdx>)
     {
-        assert!(lexeme_prefix.is_none() || end_la_idx == la_idx + 1);
-        while la_idx != end_la_idx {
-            let st = *pstack.val().unwrap();
+        assert!(lexeme_prefix.is_none() || end_laidx == laidx + 1);
+        while laidx != end_laidx {
+            let stidx = *pstack.val().unwrap();
             let la_tidx = if let Some(l) = lexeme_prefix {
                               TIdx(l.tok_id())
                           } else {
-                              self.next_tidx(la_idx)
+                              self.next_tidx(laidx)
                           };
 
-            match self.stable.action(st, la_tidx) {
-                Some(Action::Reduce(prod_id)) => {
-                    let nonterm_idx = self.grm.prod_to_nonterm(prod_id);
-                    let pop_num = self.grm.prod(prod_id).len();
+            match self.stable.action(stidx, la_tidx) {
+                Some(Action::Reduce(pidx)) => {
+                    let ridx = self.grm.prod_to_rule(pidx);
+                    let pop_num = self.grm.prod(pidx).len();
                     if let Some(ref mut tstack_uw) = *tstack {
                         let nodes = tstack_uw.drain(pstack.len() - pop_num - 1..)
                                              .collect::<Vec<Node<StorageT>>>();
-                        tstack_uw.push(Node::Nonterm{nonterm_idx, nodes});
+                        tstack_uw.push(Node::Nonterm{ridx, nodes});
                     }
 
                     for _ in 0..pop_num {
                         pstack = pstack.parent().unwrap();
                     }
                     let prior = *pstack.val().unwrap();
-                    pstack = pstack.child(self.stable.goto(prior, nonterm_idx).unwrap());
+                    pstack = pstack.child(self.stable.goto(prior, ridx).unwrap());
                 },
                 Some(Action::Shift(state_id)) => {
                     if let Some(ref mut tstack_uw) = *tstack {
                         let la_lexeme = if let Some(l) = lexeme_prefix {
                                             l
                                         } else {
-                                            self.next_lexeme(la_idx)
+                                            self.next_lexeme(laidx)
                                         };
                         tstack_uw.push(Node::Term{lexeme: la_lexeme});
                     }
                     pstack = pstack.child(state_id);
-                    la_idx += 1;
+                    laidx += 1;
                 },
                 Some(Action::Accept) => {
-                    debug_assert_eq!(la_tidx, self.grm.eof_term_idx());
+                    debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     if let Some(ref mut tstack_uw) = *tstack {
                         debug_assert_eq!(tstack_uw.len(), 1);
                     }
@@ -375,7 +375,7 @@ where usize: AsPrimitive<StorageT>
                 }
             }
         }
-        (la_idx, pstack)
+        (laidx, pstack)
     }
 }
 
@@ -414,7 +414,7 @@ pub fn parse_rcvry
        <StorageT: 'static + Debug + Hash + PrimInt + Unsigned, F>
        (rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
-        term_cost: F,
+        token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexemes: &[Lexeme<StorageT>])
@@ -422,16 +422,16 @@ pub fn parse_rcvry
     where F: Fn(TIdx<StorageT>) -> u8,
           usize: AsPrimitive<StorageT>
 {
-    Parser::parse(rcvry_kind, grm, term_cost, sgraph, stable, lexemes)
+    Parser::parse(rcvry_kind, grm, token_cost, sgraph, stable, lexemes)
 }
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
 /// in the sequence of repairs is represented by a `ParseRepair`.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ParseRepair<StorageT> {
-    /// Insert a `Symbol::Term`.
+    /// Insert a `Symbol::Token`.
     Insert(TIdx<StorageT>),
-    /// Insert one of the sequences of `Symbol::Term`s.
+    /// Insert one of the sequences of `Symbol::Token`s.
     InsertSeq(Vec<Vec<TIdx<StorageT>>>),
     /// Delete a symbol.
     Delete,
@@ -442,7 +442,7 @@ pub enum ParseRepair<StorageT> {
 /// Records a single parse error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParseError<StorageT> {
-    state_idx: StIdx,
+    stidx: StIdx,
     lexeme_idx: usize,
     lexeme: Lexeme<StorageT>,
     repairs: Vec<Vec<ParseRepair<StorageT>>>
@@ -458,8 +458,8 @@ impl<StorageT: Debug> Error for ParseError<StorageT> {}
 
 impl<StorageT: PrimInt + Unsigned> ParseError<StorageT> {
     /// Return the state table index where this error was detected.
-    pub fn state_idx(&self) -> StIdx {
-        self.state_idx
+    pub fn stidx(&self) -> StIdx {
+        self.stidx
     }
 
     /// Return the lexeme where this error was detected.
@@ -513,18 +513,18 @@ pub(crate) mod test {
         let grm = YaccGrammar::<u16>::new_with_storaget(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         {
-            let rule_ids = grm.terms_map().iter()
+            let rule_ids = grm.tokens_map().iter()
                                           .map(|(&n, &i)| (n, u32::from(i).to_u16().unwrap()))
                                           .collect();
             lexerdef.set_rule_ids(&rule_ids);
         }
         let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
         let costs_tidx = costs.iter()
-                              .map(|(k, v)| (grm.term_idx(k).unwrap(), v))
+                              .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
                               .collect::<HashMap<_, _>>();
         let pr = parse_rcvry(rcvry_kind,
                              &grm,
-                             move |t_idx| **costs_tidx.get(&t_idx).unwrap_or(&&1),
+                             move |tidx| **costs_tidx.get(&tidx).unwrap_or(&&1),
                              &sgraph,
                              &stable,
                              &lexemes);
@@ -648,13 +648,13 @@ Call: 'ID' '(' ')';";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
-        let err_tok_id = usize::from(grm.eof_term_idx()).to_u16().unwrap();
+        let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
-        let err_tok_id = usize::from(grm.term_idx("ID").unwrap()).to_u16().unwrap();
+        let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
      }
 }

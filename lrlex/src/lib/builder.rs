@@ -53,7 +53,7 @@ const RUST_FILE_EXT: &str = "rs";
 pub struct LexerBuilder<StorageT=u32> {
     rule_ids_map: Option<HashMap<String, StorageT>>,
     allow_missing_terms_in_lexer: bool,
-    allow_missing_terms_in_parser: bool
+    allow_missing_tokens_in_parser: bool
 }
 
 impl<StorageT> LexerBuilder<StorageT>
@@ -62,7 +62,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     /// Create a new `LexerBuilder`.
     ///
     /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough to index
-    /// all the tokens, nonterminals, and productions in the lexer and less than or equal in size
+    /// all the tokens, rules, and productions in the lexer and less than or equal in size
     /// to `usize` (e.g. on a 64-bit machine `u128` would be too big). If you are lexing large
     /// files, the additional storage requirements of larger integer types can be noticeable, and
     /// in such cases it can be worth specifying a smaller type. `StorageT` defaults to `u32` if
@@ -79,7 +79,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
         LexerBuilder{
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
-            allow_missing_terms_in_parser: true
+            allow_missing_tokens_in_parser: true
         }
     }
 
@@ -157,7 +157,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
 
         if !self.allow_missing_terms_in_lexer {
             if let Some(ref mfl) = missing_from_lexer {
-                eprintln!("Error: the following terminals are used in the grammar but are not defined in the lexer:");
+                eprintln!("Error: the following tokens are used in the grammar but are not defined in the lexer:");
                 for n in mfl {
                     eprintln!("    {}", n);
                 }
@@ -165,9 +165,9 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
                 panic!();
             }
         }
-        if !self.allow_missing_terms_in_parser {
+        if !self.allow_missing_tokens_in_parser {
             if let Some(ref mfp) = missing_from_parser {
-                eprintln!("Error: the following terminals are defined in the lexer but not used in the grammar:");
+                eprintln!("Error: the following tokens are defined in the lexer but not used in the grammar:");
                 for n in mfp {
                     eprintln!("    {}", n);
                 }
@@ -208,18 +208,18 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
         Ok((missing_from_lexer, missing_from_parser))
     }
 
-    /// If passed false, terminals used in the grammar but not defined in the lexer will cause a
+    /// If passed false, tokens used in the grammar but not defined in the lexer will cause a
     /// panic at lexer generation time. Defaults to false.
     pub fn allow_missing_terms_in_lexer(mut self, allow: bool) -> Self {
         self.allow_missing_terms_in_lexer = allow;
         self
     }
 
-    /// If passed false, terminals defined in the lexer but not used in the grammar will cause a
+    /// If passed false, tokens defined in the lexer but not used in the grammar will cause a
     /// panic at lexer generation time. Defaults to true (since lexers sometimes define tokens such
     /// as reserved words, which are intentionally not in the grammar).
-    pub fn allow_missing_terms_in_parser(mut self, allow: bool) -> Self {
-        self.allow_missing_terms_in_parser = allow;
+    pub fn allow_missing_tokens_in_parser(mut self, allow: bool) -> Self {
+        self.allow_missing_tokens_in_parser = allow;
         self
     }
 }

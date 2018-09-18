@@ -64,4 +64,4 @@ macro_rules! lrpar_mod {
 }
 
 #[doc(hidden)]
-pub use cfgrammar::NTIdx;
+pub use cfgrammar::RIdx;

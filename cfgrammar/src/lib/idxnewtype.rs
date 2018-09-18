@@ -66,19 +66,13 @@ macro_rules! IdxNewtype {
     }
 }
 
-// Will anyone create a grammar with more than 65535 non-terminals, productions, symbols within a
-// production, or terminals? Yes, now that I've said it out loud, they probably will. But all
-// practical grammars I know of are comfortably within these limits, so use narrow storage types
-// for now, knowing that we can transparently move the storage type from u16 to u32 in the future
-// without changing the user visible API.
-
 IdxNewtype!(
-    /// A type specifically for nonterminal indices.
+    /// A type specifically for rule indices.
     ///
-    /// It is guaranteed that `NTIdx` can be converted, without loss of precision, to `usize` with
-    /// the idiom `NTIdx::from(x_usize)`. `usize` values can be converted to `NTIdx`, causing a
-    /// panic if this would lead to a loss of precision with `usize::from(y_ntidx)`.
-    NTIdx);
+    /// It is guaranteed that `RIdx` can be converted, without loss of precision, to `usize` with
+    /// the idiom `RIdx::from(x_usize)`. `usize` values can be converted to `RIdx`, causing a
+    /// panic if this would lead to a loss of precision with `usize::from(y_ridx)`.
+    RIdx);
 IdxNewtype!(
     /// A type specifically for production indices (e.g. a rule `E::=A|B` would
     /// have two productions for the single rule `E`).
@@ -91,7 +85,7 @@ IdxNewtype!(
     /// A type specifically for symbol indices (within a production).
     ///
     /// It is guaranteed that `SIdx` can be converted, without loss of precision, to `usize` with
-    /// the idiom `SIdx::from(x_usize)`. `usize` values can be converted to `NTIdx`, causing a
+    /// the idiom `SIdx::from(x_usize)`. `usize` values can be converted to `RIdx`, causing a
     /// panic if this would lead to a loss of precision with `usize::from(y_sidx)`.
     SIdx);
 IdxNewtype!(

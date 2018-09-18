@@ -30,29 +30,44 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-//! A library for manipulating Context Free Grammars (CFG). At the moment it only really supports
-//! Yacc-style grammars (albeit several variants of Yacc grammars), but the long-term aim is to
-//! provide an API that, when possible, is agnostic about the type of grammar being manipulated.
+//! A library for manipulating Context Free Grammars (CFG). It is impractical to fully homogenise
+//! all the types of grammars out there, so the aim is for different grammar types
+//! to have completely separate implementations. Code that wants to be generic over more than one
+//! grammar type can then use an "adapter" to homogenise the particular grammar types of interest.
+//! Currently this is a little academic, since only Yacc-style grammars are supported (albeit
+//! several variants of Yacc grammars).
 //!
-//! A note on the terminology we use, since there's no universal standard (and EBNF, which is
-//! perhaps the closest we've got, uses terminology that now seems partially anachronistic):
+//! Unfortunately, CFG terminology is something of a mess. Some people use different terms for the
+//! same concept interchangeably; some use different terms to convey subtle differences of meaning
+//! (but without complete uniformity). "Token", "terminal", and "lexeme" are examples of this: they
+//! are synonyms in some tools and papers, but not in others.
 //!
-//!   * A rule is a mapping from a nonterminal name to 1 or more productions (the latter of which
-//!     is often called 'alternatives').
-//!   * A symbol is either a nonterminal or a terminal.
-//!   * A production is a (possibly empty) ordered sequence of symbols.
+//! In order to make this library somewhat coherent, we therefore use some basic terminology
+//! guidelines for major concepts (acknowledging that this will cause clashes with some grammar
+//! types).
 //!
-//! Every nonterminal has a corresponding rule (and thus the two concepts are interchangeable);
-//! however, terminals are not required to appear in any production (such terminals can be used to
-//! catch error conditions).
+//!   * A *grammar* is an ordered sequence of *productions*.
+//!   * A *production* is an ordered sequence of *symbols*.
+//!   * A *rule* maps a name to one or more productions.
+//!   * A *token* is the name of a syntactic element.
+//!
+//! For example, in the following Yacc grammar:
+//!
+//!   R1: "a" "b" | R2;
+//!   R2: "c";
+//!
+//! the following statements are true:
+//!
+//!   * There are 3 productions. 1: ["a", "b"] 2: ["R2"] 3: ["c"]`
+//!   * There are two rules: R1 and R2. The mapping to productions is {R1: {1, 2}, R2: {3}}
+//!   * There are three tokens: a, b, and c.
 //!
 //! cfgrammar makes the following guarantees about grammars:
 //!
-//!   * The grammar has a single start rule accessed by `start_rule_idx`.
-//!   * The non-terminals are numbered from `0` to `nonterms_len() - 1` (inclusive).
-//!   * The productions are numbered from `0` to `prods_len() - 1` (inclusive).
-//!   * The terminals are numbered from `0` to `terms_len() - 1` (inclusive).
-//!   * The StorageT type used to store terminals, nonterminals, and productions can be infallibly
+//!   * Productions are numbered from `0` to `prods_len() - 1` (inclusive).
+//!   * Rules are numbered from `0` to `rules_len() - 1` (inclusive).
+//!   * Tokens are numbered from `0` to `toks_len() - 1` (inclusive).
+//!   * The StorageT type used to store productions, rules, and token indices can be infallibly
 //!     converted into usize (see [`TIdx`](struct.TIdx.html) and friends for more details).
 //!
 //! For most current uses, the main function to investigate is
@@ -72,34 +87,34 @@ use vob::Vob;
 mod idxnewtype;
 pub mod yacc;
 
-/// A type specifically for nonterminal indices.
-pub use idxnewtype::{NTIdx, PIdx, SIdx, TIdx};
+/// A type specifically for rule indices.
+pub use idxnewtype::{RIdx, PIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Symbol<StorageT> {
-    Nonterm(NTIdx<StorageT>),
-    Term(TIdx<StorageT>)
+    Rule(RIdx<StorageT>),
+    Token(TIdx<StorageT>)
 }
 
 pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
     /// How many productions does this grammar have?
     fn prods_len(&self) -> PIdx<StorageT>;
-    /// How many nonterminals does this grammar have?
-    fn nonterms_len(&self) -> NTIdx<StorageT>;
+    /// How many rules does this grammar have?
+    fn rules_len(&self) -> RIdx<StorageT>;
     /// What is the index of the start rule?
-    fn start_rule_idx(&self) -> NTIdx<StorageT>;
-    /// How many terminals does this grammar have?
-    fn terms_len(&self) -> TIdx<StorageT>;
+    fn start_rule_idx(&self) -> RIdx<StorageT>;
+    /// How many tokens does this grammar have?
+    fn tokens_len(&self) -> TIdx<StorageT>;
 
-    /// Return an iterator which produces (in order from `0..self.nonterms_len()`) all this
-    /// grammar's valid `NTIdx`s.
-    fn iter_ntidxs(&self) -> Box<dyn Iterator<Item=NTIdx<StorageT>>>
+    /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
+    /// grammar's valid `RIdx`s.
+    fn iter_rules(&self) -> Box<dyn Iterator<Item=RIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.nonterms_len() and, since nonterms_len() returns an NTIdx<StorageT>, then by
+        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::from(self.nonterms_len())).map(|x| NTIdx(x.as_())))
+        Box::new((0..usize::from(self.rules_len())).map(|x| RIdx(x.as_())))
     }
 
     /// Return an iterator which produces (in order from `0..self.prods_len()`) all this
@@ -107,7 +122,7 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     fn iter_pidxs(&self) -> Box<dyn Iterator<Item=PIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.nonterms_len() and, since nonterms_len() returns an NTIdx<StorageT>, then by
+        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
         Box::new((0..usize::from(self.prods_len())).map(|x| PIdx(x.as_())))
     }
@@ -115,25 +130,25 @@ pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimiti
     fn iter_tidxs(&self) -> Box<dyn Iterator<Item=TIdx<StorageT>>>
     {
         // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.nonterms_len() and, since nonterms_len() returns an TIdx<StorageT>, then by
+        // 0..self.rules_len() and, since rules_len() returns an TIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::from(self.terms_len())).map(|x| TIdx(x.as_())))
+        Box::new((0..usize::from(self.tokens_len())).map(|x| TIdx(x.as_())))
     }
 
     fn firsts(&self) -> Box<dyn Firsts<StorageT>>;
 }
 
 pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
-    /// Return all the firsts for nonterminal `ntidx`.
-    fn firsts(&self, ntidx: NTIdx<StorageT>) -> &Vob;
+    /// Return all the firsts for rule `ridx`.
+    fn firsts(&self, ridx: RIdx<StorageT>) -> &Vob;
 
-    /// Returns true if the terminal `tidx` is in the first set for nonterminal `nidx`.
-    fn is_set(&self, nidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
+    /// Returns true if the token `tidx` is in the first set for rule `ridx`.
+    fn is_set(&self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 
-    /// Returns true if the nonterminal `ntidx` has epsilon in its first set.
-    fn is_epsilon_set(&self, ntidx: NTIdx<StorageT>) -> bool;
+    /// Returns true if the rule `ridx` has epsilon in its first set.
+    fn is_epsilon_set(&self, ridx: RIdx<StorageT>) -> bool;
 
-    /// Ensures that the firsts bit for terminal `tidx` nonterminal `nidx` is set. Returns true if
+    /// Ensures that the firsts bit for token `tidx` rule `ridx` is set. Returns true if
     /// it was already set, or false otherwise.
-    fn set(&mut self, ntidx: NTIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
+    fn set(&mut self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
 }

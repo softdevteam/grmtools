@@ -56,7 +56,7 @@ pub enum YaccParserErrorKind {
     ProgramsNotSupported,
     UnknownDeclaration,
     DuplicatePrecedence,
-    PrecNotFollowedByTerm,
+    PrecNotFollowedByToken,
     DuplicateImplicitTokensDeclaration,
     DuplicateStartDeclaration
 }
@@ -83,7 +83,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccParserErrorKind::UnknownDeclaration   => "Unknown declaration",
             YaccParserErrorKind::DuplicatePrecedence  => "Token already has a precedence",
-            YaccParserErrorKind::PrecNotFollowedByTerm
+            YaccParserErrorKind::PrecNotFollowedByToken
                                                       => "%prec not followed by token name",
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration
                                                       => "Duplicate %implicit_tokens declaration",
@@ -105,7 +105,7 @@ lazy_static! {
     static ref RE_NAME: Regex = {
         Regex::new(r"^[a-zA-Z_.][a-zA-Z0-9_.]*").unwrap()
     };
-    static ref RE_TERMINAL: Regex = {
+    static ref RE_TOKEN: Regex = {
         Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap()
     };
 }
@@ -155,7 +155,7 @@ impl YaccParser {
                     if self.lookahead_is("%", i).is_some() {
                         break;
                     }
-                    let (j, n) = try!(self.parse_terminal(i));
+                    let (j, n) = try!(self.parse_token(i));
                     self.ast.tokens.insert(n);
                     i = try!(self.parse_ws(j));
                 }
@@ -176,18 +176,18 @@ impl YaccParser {
                     if self.ast.implicit_tokens.is_some() {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicateImplicitTokensDeclaration, i));
                     }
-                    let mut implicit_terms = HashSet::new();
+                    let mut implicit_tokens = HashSet::new();
                     i = try!(self.parse_ws(j));
                     while j < self.src.len() {
                         if self.lookahead_is("%", i).is_some() {
                             break;
                         }
-                        let (j, n) = try!(self.parse_terminal(i));
+                        let (j, n) = try!(self.parse_token(i));
                         self.ast.tokens.insert(n.clone());
-                        implicit_terms.insert(n);
+                        implicit_tokens.insert(n);
                         i = try!(self.parse_ws(j));
                     }
-                    self.ast.implicit_tokens = Some(implicit_terms);
+                    self.ast.implicit_tokens = Some(implicit_tokens);
                     continue;
                 }
             }
@@ -210,7 +210,7 @@ impl YaccParser {
                 i = try!(self.parse_ws(k));
                 while i < self.src.len() {
                     if self.lookahead_is("%", i).is_some() { break; }
-                    let (j, n) = try!(self.parse_terminal(i));
+                    let (j, n) = try!(self.parse_token(i));
                     if self.ast.precs.contains_key(&n) {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
                     }
@@ -267,25 +267,25 @@ impl YaccParser {
             }
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
-                let (j, sym) = try!(self.parse_terminal(i));
+                let (j, sym) = try!(self.parse_token(i));
                 i = try!(self.parse_ws(j));
                 self.ast.tokens.insert(sym.clone());
-                syms.push(Symbol::Term(sym));
+                syms.push(Symbol::Token(sym));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = try!(self.parse_ws(j));
-                let (k, sym) = try!(self.parse_terminal(i));
+                let (k, sym) = try!(self.parse_token(i));
                 if self.ast.tokens.contains(&sym) {
                     prec = Some(sym);
                 } else {
-                    return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByTerm, i));
+                    return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByToken, i));
                 }
                 i = k;
             } else {
-                let (j, sym) = try!(self.parse_terminal(i));
+                let (j, sym) = try!(self.parse_token(i));
                 if self.ast.tokens.contains(&sym) {
-                    syms.push(Symbol::Term(sym));
+                    syms.push(Symbol::Token(sym));
                 } else {
-                    syms.push(Symbol::Nonterm(sym));
+                    syms.push(Symbol::Rule(sym));
                 }
                 i = j;
             }
@@ -306,8 +306,8 @@ impl YaccParser {
         }
     }
 
-    fn parse_terminal(&self, i: usize) -> YaccResult<(usize, String)> {
-        match RE_TERMINAL.find(&self.src[i..]) {
+    fn parse_token(&self, i: usize) -> YaccResult<(usize, String)> {
+        match RE_TOKEN.find(&self.src[i..]) {
             Some(m) => {
                 assert!(m.start() == 0 && m.end() > 0);
                 match self.src[i..].chars().next().unwrap() {
@@ -430,24 +430,24 @@ mod test {
         Ok(yp.ast())
     }
 
-    fn nonterminal(n: &str) -> Symbol {
-        Symbol::Nonterm(n.to_string())
+    fn rule(n: &str) -> Symbol {
+        Symbol::Rule(n.to_string())
     }
 
-    fn terminal(n: &str) -> Symbol {
-        Symbol::Term(n.to_string())
+    fn token(n: &str) -> Symbol {
+        Symbol::Token(n.to_string())
     }
 
     #[test]
     fn test_macro() {
-        assert_eq!(Symbol::Term("A".to_string()), terminal("A"));
+        assert_eq!(Symbol::Token("A".to_string()), token("A"));
     }
 
     #[test]
     fn test_symbol_eq() {
-        assert_eq!(nonterminal("A"), nonterminal("A"));
-        assert!(nonterminal("A") != nonterminal("B"));
-        assert!(nonterminal("A") != terminal("A"));
+        assert_eq!(rule("A"), rule("A"));
+        assert!(rule("A") != rule("B"));
+        assert!(rule("A") != token("A"));
     }
 
     #[test]
@@ -460,7 +460,7 @@ mod test {
         assert_eq!(*grm.get_rule("A").unwrap(),
                    vec![0]);
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a")],
+                   Production{symbols: vec![token("a")],
                               precedence: None});
     }
 
@@ -473,10 +473,10 @@ mod test {
         ".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a")],
+                   Production{symbols: vec![token("a")],
                               precedence: None});
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[1]],
-                   Production{symbols: vec![terminal("b")],
+                   Production{symbols: vec![token("b")],
                               precedence: None});
     }
 
@@ -495,7 +495,7 @@ mod test {
                               precedence: None});
 
         assert_eq!(grm.prods[grm.get_rule("B").unwrap()[0]],
-                   Production{symbols: vec![terminal("b")],
+                   Production{symbols: vec![token("b")],
                               precedence: None});
         assert_eq!(grm.prods[grm.get_rule("B").unwrap()[1]],
                    Production{symbols: vec![],
@@ -505,7 +505,7 @@ mod test {
                    Production{symbols: vec![],
                               precedence: None});
         assert_eq!(grm.prods[grm.get_rule("C").unwrap()[1]],
-                   Production{symbols: vec![terminal("c")],
+                   Production{symbols: vec![token("c")],
                               precedence: None});
     }
 
@@ -520,7 +520,7 @@ mod test {
         let src = "%%\nA : 'a' B;".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a"), nonterminal("B")],
+                   Production{symbols: vec![token("a"), rule("B")],
                               precedence: None});
     }
 
@@ -529,7 +529,7 @@ mod test {
         let src = "%%\nA : 'a' \"b\";".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("a"), terminal("b")],
+                   Production{symbols: vec![token("a"), token("b")],
                               precedence: None});
     }
 
@@ -576,7 +576,7 @@ mod test {
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert!(grm.has_token("T"));
         assert_eq!(grm.prods[grm.get_rule("A").unwrap()[0]],
-                   Production{symbols: vec![terminal("T")],
+                   Production{symbols: vec![token("T")],
                               precedence: None});
     }
 
@@ -809,7 +809,7 @@ x".to_string();
           B: ;
           ") {
                 Ok(_) => panic!("Incorrect %prec parsed"),
-                Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByTerm, line: 3, ..}) => (),
+                Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByToken, line: 3, ..}) => (),
                 Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
