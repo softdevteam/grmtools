@@ -81,9 +81,6 @@ extern crate num_traits;
 #[cfg(feature="serde")] #[macro_use] extern crate serde;
 extern crate vob;
 
-use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use vob::Vob;
-
 mod idxnewtype;
 pub mod yacc;
 
@@ -97,58 +94,3 @@ pub enum Symbol<StorageT> {
     Token(TIdx<StorageT>)
 }
 
-pub trait Grammar<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
-    /// How many productions does this grammar have?
-    fn prods_len(&self) -> PIdx<StorageT>;
-    /// How many rules does this grammar have?
-    fn rules_len(&self) -> RIdx<StorageT>;
-    /// What is the index of the start rule?
-    fn start_rule_idx(&self) -> RIdx<StorageT>;
-    /// How many tokens does this grammar have?
-    fn tokens_len(&self) -> TIdx<StorageT>;
-
-    /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
-    /// grammar's valid `RIdx`s.
-    fn iter_rules(&self) -> Box<dyn Iterator<Item=RIdx<StorageT>>>
-    {
-        // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
-        // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::from(self.rules_len())).map(|x| RIdx(x.as_())))
-    }
-
-    /// Return an iterator which produces (in order from `0..self.prods_len()`) all this
-    /// grammar's valid `PIdx`s.
-    fn iter_pidxs(&self) -> Box<dyn Iterator<Item=PIdx<StorageT>>>
-    {
-        // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
-        // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::from(self.prods_len())).map(|x| PIdx(x.as_())))
-    }
-
-    fn iter_tidxs(&self) -> Box<dyn Iterator<Item=TIdx<StorageT>>>
-    {
-        // We can use as_ safely, because we know that we're only generating integers from
-        // 0..self.rules_len() and, since rules_len() returns an TIdx<StorageT>, then by
-        // definition the integers we're creating fit within StorageT.
-        Box::new((0..usize::from(self.tokens_len())).map(|x| TIdx(x.as_())))
-    }
-
-    fn firsts(&self) -> Box<dyn Firsts<StorageT>>;
-}
-
-pub trait Firsts<StorageT: 'static + PrimInt + Unsigned> where usize: AsPrimitive<StorageT> {
-    /// Return all the firsts for rule `ridx`.
-    fn firsts(&self, ridx: RIdx<StorageT>) -> &Vob;
-
-    /// Returns true if the token `tidx` is in the first set for rule `ridx`.
-    fn is_set(&self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
-
-    /// Returns true if the rule `ridx` has epsilon in its first set.
-    fn is_epsilon_set(&self, ridx: RIdx<StorageT>) -> bool;
-
-    /// Ensures that the firsts bit for token `tidx` rule `ridx` is set. Returns true if
-    /// it was already set, or false otherwise.
-    fn set(&mut self, ridx: RIdx<StorageT>, tidx: TIdx<StorageT>) -> bool;
-}

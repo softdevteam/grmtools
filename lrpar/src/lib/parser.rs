@@ -36,7 +36,7 @@ use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{Grammar, RIdx, TIdx};
+use cfgrammar::{RIdx, TIdx};
 use cfgrammar::yacc::YaccGrammar;
 use lrlex::Lexeme;
 use lrtable::{Action, StateGraph, StateTable, StIdx};

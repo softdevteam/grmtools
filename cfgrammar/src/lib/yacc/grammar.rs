@@ -37,7 +37,7 @@ use std::fmt;
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 
-use {Firsts, Grammar, RIdx, PIdx, SIdx, Symbol, TIdx};
+use {RIdx, PIdx, SIdx, Symbol, TIdx};
 use super::YaccKind;
 use yacc::firsts::YaccFirsts;
 use yacc::parser::YaccParser;
@@ -332,19 +332,19 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         })
     }
 
-    /// Return the index of the end token.
-    pub fn eof_token_idx(&self) -> TIdx<StorageT> {
-        self.eof_token_idx
+    /// How many productions does this grammar have?
+    pub fn prods_len(&self) -> PIdx<StorageT> {
+        self.prods_len
     }
 
-    /// Return the productions for rule `ridx`. Panics if `ridx` doesn't exist.
-    pub fn rule_to_prods(&self, ridx: RIdx<StorageT>) -> &[PIdx<StorageT>] {
-        &self.rules_prods[usize::from(ridx)]
-    }
-
-    /// Return the name of rule `ridx`. Panics if `ridx` doesn't exist.
-    pub fn rule_name(&self, ridx: RIdx<StorageT>) -> &str {
-        &self.rule_names[usize::from(ridx)]
+    /// Return an iterator which produces (in order from `0..self.prods_len()`) all this
+    /// grammar's valid `PIdx`s.
+    pub fn iter_pidxs(&self) -> impl Iterator<Item=PIdx<StorageT>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.prods_len())).map(|x| PIdx(x.as_())))
     }
 
     /// Get the sequence of symbols for production `pidx`. Panics if `pidx` doesn't exist.
@@ -371,6 +371,77 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         self.prod_precs[usize::from(pidx)]
     }
 
+    /// Return the production index of the start rule's sole production (for Yacc grammars the
+    /// start rule is defined to have precisely one production).
+    pub fn start_prod(&self) -> PIdx<StorageT> {
+        self.start_prod
+    }
+
+    /// How many rules does this grammar have?
+    pub fn rules_len(&self) -> RIdx<StorageT> {
+        self.rules_len
+    }
+
+    /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
+    /// grammar's valid `RIdx`s.
+    pub fn iter_rules(&self) -> impl Iterator<Item=RIdx<StorageT>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.rules_len())).map(|x| RIdx(x.as_())))
+    }
+
+    /// Return the productions for rule `ridx`. Panics if `ridx` doesn't exist.
+    pub fn rule_to_prods(&self, ridx: RIdx<StorageT>) -> &[PIdx<StorageT>] {
+        &self.rules_prods[usize::from(ridx)]
+    }
+
+    /// Return the name of rule `ridx`. Panics if `ridx` doesn't exist.
+    pub fn rule_name(&self, ridx: RIdx<StorageT>) -> &str {
+        &self.rule_names[usize::from(ridx)]
+    }
+
+    /// Return the `RIdx` of the implict rule if it exists, or `None` otherwise.
+    pub fn implicit_rule(&self) -> Option<RIdx<StorageT>> {
+        self.implicit_rule
+    }
+
+    /// Return the index of the rule named `n` or `None` if it doesn't exist.
+    pub fn rule_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
+        self.rule_names.iter()
+                          .position(|x| x == n)
+                          // The call to as_() is safe because rule_names is guaranteed to be
+                          // small enough to fit into StorageT
+                          .map(|x| RIdx(x.as_()))
+    }
+
+    /// What is the index of the start rule?
+    pub fn start_rule_idx(&self) -> RIdx<StorageT>
+    {
+        self.prod_to_rule(self.start_prod)
+    }
+
+    /// How many tokens does this grammar have?
+    pub fn tokens_len(&self) -> TIdx<StorageT> {
+        self.tokens_len
+    }
+
+    /// Return an iterator which produces (in order from `0..self.tokens_len()`) all this
+    /// grammar's valid `TIdx`s.
+    pub fn iter_tidxs(&self) -> impl Iterator<Item=TIdx<StorageT>>
+    {
+        // We can use as_ safely, because we know that we're only generating integers from
+        // 0..self.rules_len() and, since rules_len() returns an TIdx<StorageT>, then by
+        // definition the integers we're creating fit within StorageT.
+        Box::new((0..usize::from(self.tokens_len())).map(|x| TIdx(x.as_())))
+    }
+
+    /// Return the index of the end token.
+    pub fn eof_token_idx(&self) -> TIdx<StorageT> {
+        self.eof_token_idx
+    }
+
     /// Return the name of token `tidx` (where `None` indicates "the rule has no name"). Panics if
     /// `tidx` doesn't exist.
     pub fn token_name(&self, tidx: TIdx<StorageT>) -> Option<&str> {
@@ -393,26 +464,6 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             }
         }
         m
-    }
-
-    /// Return the production index of the start rule's sole production (for Yacc grammars the
-    /// start rule is defined to have precisely one production).
-    pub fn start_prod(&self) -> PIdx<StorageT> {
-        self.start_prod
-    }
-
-    /// Return the `RIdx` of the implict rule if it exists, or `None` otherwise.
-    pub fn implicit_rule(&self) -> Option<RIdx<StorageT>> {
-        self.implicit_rule
-    }
-
-    /// Return the index of the rule named `n` or `None` if it doesn't exist.
-    pub fn rule_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
-        self.rule_names.iter()
-                          .position(|x| x == n)
-                          // The call to as_() is safe because rule_names is guaranteed to be
-                          // small enough to fit into StorageT
-                          .map(|x| RIdx(x.as_()))
     }
 
     /// Return the index of the token named `n` or `None` if it doesn't exist.
@@ -470,37 +521,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         SentenceGenerator::new(self, token_cost)
     }
 
-    /// Return a `YaccFirsts` struct, allowing static dispatch (rather than the `firsts()` method,
-    /// which returns `Box<Firsts>`).
-    pub fn yacc_firsts(&self) -> YaccFirsts<StorageT> {
+    /// Return a `YaccFirsts` struct for this grammar.
+    pub fn firsts(&self) -> YaccFirsts<StorageT> {
         YaccFirsts::new(self)
-    }
-}
-
-impl<StorageT: 'static + PrimInt + Unsigned> Grammar<StorageT>
-for YaccGrammar<StorageT>
-where usize: AsPrimitive<StorageT>
-{
-    fn prods_len(&self) -> PIdx<StorageT> {
-        self.prods_len
-    }
-
-    fn rules_len(&self) -> RIdx<StorageT> {
-        self.rules_len
-    }
-
-    /// Return the index of the start rule.
-    fn start_rule_idx(&self) -> RIdx<StorageT>
-    {
-        self.prod_to_rule(self.start_prod)
-    }
-
-    fn tokens_len(&self) -> TIdx<StorageT> {
-        self.tokens_len
-    }
-
-    fn firsts(&self) -> Box<dyn Firsts<StorageT>> {
-        Box::new(YaccFirsts::new(self))
     }
 }
 
@@ -914,7 +937,7 @@ impl fmt::Display for YaccGrammarError {
 mod test {
     use std::collections::HashMap;
     use super::{IMPLICIT_RULE, IMPLICIT_START_RULE, rule_max_costs, rule_min_costs};
-    use {Grammar, RIdx, PIdx, Symbol, TIdx};
+    use {RIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
 
     #[test]

@@ -36,7 +36,7 @@ use std::hash::{Hash, BuildHasherDefault};
 use std::fmt::{self, Debug};
 use std::marker::PhantomData;
 
-use cfgrammar::{Grammar, PIdx, RIdx, Symbol, TIdx};
+use cfgrammar::{PIdx, RIdx, Symbol, TIdx};
 use cfgrammar::yacc::{AssocKind, YaccGrammar};
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};

@@ -33,13 +33,12 @@
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::{BuildHasherDefault, Hash};
 
-use cfgrammar::{Grammar, PIdx, Symbol, SIdx};
+use cfgrammar::{PIdx, Symbol, SIdx};
 use cfgrammar::yacc::YaccGrammar;
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use cfgrammar::Firsts;
 use cfgrammar::yacc::firsts::YaccFirsts;
 
 /// The type of "context" (also known as "lookaheads")
@@ -184,7 +183,7 @@ where usize: AsPrimitive<StorageT>
 mod test {
     use vob::Vob;
     use super::Itemset;
-    use cfgrammar::{Grammar, SIdx, Symbol};
+    use cfgrammar::{SIdx, Symbol};
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use stategraph::state_exists;
 
@@ -198,7 +197,7 @@ mod test {
           L: '*' R | 'id';
           R: L;
           ").unwrap();
-        let firsts = grm.yacc_firsts();
+        let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
@@ -232,7 +231,7 @@ mod test {
     #[test]
     fn test_closure1_ecogrm() {
         let grm = eco_grammar();
-        let firsts = grm.yacc_firsts();
+        let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
@@ -274,7 +273,7 @@ mod test {
     #[test]
     fn test_closure1_grm3() {
         let grm = grammar3();
-        let firsts = grm.yacc_firsts();
+        let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);
@@ -308,7 +307,7 @@ mod test {
     #[test]
     fn test_goto1() {
         let grm = grammar3();
-        let firsts = grm.yacc_firsts();
+        let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);
         let mut la = Vob::from_elem(usize::from(grm.tokens_len()), false);

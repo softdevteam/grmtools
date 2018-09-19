@@ -208,7 +208,7 @@ where usize: AsPrimitive<StorageT>
 }
 
 #[cfg(test)]
-use cfgrammar::{Grammar, SIdx};
+use cfgrammar::SIdx;
 
 #[cfg(test)]
 pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>
