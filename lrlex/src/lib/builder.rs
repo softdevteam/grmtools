@@ -30,14 +30,16 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::{HashMap, HashSet};
-use std::convert::{AsRef, TryFrom};
-use std::env::{current_dir, var};
-use std::error::Error;
-use std::fmt::Debug;
-use std::fs::{self, File, read_to_string};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::{AsRef, TryFrom},
+    env::{current_dir, var},
+    error::Error,
+    fmt::Debug,
+    fs::{self, read_to_string, File},
+    io::Write,
+    path::{Path, PathBuf}
+};
 
 use typename::TypeName;
 
@@ -50,14 +52,15 @@ const RUST_FILE_EXT: &str = "rs";
 
 /// A `LexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
-pub struct LexerBuilder<StorageT=u32> {
+pub struct LexerBuilder<StorageT = u32> {
     rule_ids_map: Option<HashMap<String, StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool
 }
 
 impl<StorageT> LexerBuilder<StorageT>
-where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
+where
+    StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
 {
     /// Create a new `LexerBuilder`.
     ///
@@ -76,7 +79,7 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     ///     .unwrap();
     /// ```
     pub fn new() -> Self {
-        LexerBuilder{
+        LexerBuilder {
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true
@@ -103,15 +106,18 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     /// # Panics
     ///
     /// If the input filename does not end in `.l`.
-    pub fn process_file_in_src(self, srcp: &str)
-                            -> Result<(Option<HashSet<String>>, Option<HashSet<String>>),
-                                       Box<Error>>
-    {
+    pub fn process_file_in_src(
+        self,
+        srcp: &str
+    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<Error>> {
         let mut inp = current_dir()?;
         inp.push("src");
         inp.push(srcp);
         if Path::new(srcp).extension().unwrap().to_str().unwrap() != LEX_FILE_EXT {
-            panic!("File name passed to process_file_in_src must have extension '{}'.", LEX_FILE_EXT);
+            panic!(
+                "File name passed to process_file_in_src must have extension '{}'.",
+                LEX_FILE_EXT
+            );
         }
         let mut leaf = inp.file_stem().unwrap().to_str().unwrap().to_owned();
         leaf.push_str(&LEX_SUFFIX);
@@ -125,33 +131,31 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
     /// Statically compile the `.l` file `inp` into Rust, placing the output into `outp`. The
     /// latter defines a module with a function `lexerdef()`, which returns a
     /// [`LexerDef`](struct.LexerDef.html) that can then be used as normal.
-    pub fn process_file<P, Q>(self,
-                              inp: P,
-                              outp: Q)
-                           -> Result<(Option<HashSet<String>>, Option<HashSet<String>>),
-                                      Box<Error>>
-                               where P: AsRef<Path>,
-                                     Q: AsRef<Path>
+    pub fn process_file<P, Q>(
+        self,
+        inp: P,
+        outp: Q
+    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<Error>>
+    where
+        P: AsRef<Path>,
+        Q: AsRef<Path>
     {
         let inc = read_to_string(&inp).unwrap();
         let mut lexerdef = parse_lex::<StorageT>(&inc)?;
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
                 // Convert from HashMap<String, _> to HashMap<&str, _>
-                let owned_map = rim.iter()
-                                   .map(|(x, y)| (&**x, *y))
-                                   .collect::<HashMap<_, _>>();
+                let owned_map = rim
+                    .iter()
+                    .map(|(x, y)| (&**x, *y))
+                    .collect::<HashMap<_, _>>();
                 match lexerdef.set_rule_ids(&owned_map) {
-                    (x, y) => {
-                        (x.map(|a| a.iter()
-                                    .map(|b| b.to_string())
-                                    .collect::<HashSet<_>>()),
-                         y.map(|a| a.iter()
-                                    .map(|b| b.to_string())
-                                    .collect::<HashSet<_>>()))
-                    }
+                    (x, y) => (
+                        x.map(|a| a.iter().map(|b| b.to_string()).collect::<HashSet<_>>()),
+                        y.map(|a| a.iter().map(|b| b.to_string()).collect::<HashSet<_>>())
+                    )
                 }
-            },
+            }
             None => (None, None)
         };
 
@@ -185,10 +189,12 @@ where StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
         // Token IDs
         if let Some(ref rim) = self.rule_ids_map {
             for (n, id) in rim {
-                outs.push_str(&format!("#[allow(dead_code)]\nconst T_{}: {} = {:?};\n",
-                                       n.to_ascii_uppercase(),
-                                       StorageT::type_name(),
-                                       *id));
+                outs.push_str(&format!(
+                    "#[allow(dead_code)]\nconst T_{}: {} = {:?};\n",
+                    n.to_ascii_uppercase(),
+                    StorageT::type_name(),
+                    *id
+                ));
             }
         }
 

@@ -30,18 +30,18 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::HashSet;
-use std::collections::hash_map::HashMap;
-use std::hash::Hash;
+use std::{
+    collections::{hash_map::HashMap, HashSet},
+    hash::Hash
+};
 
-use cfgrammar::{Symbol, SIdx};
-use cfgrammar::yacc::YaccGrammar;
+use cfgrammar::{yacc::YaccGrammar, SIdx, Symbol};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use StIdx;
 use itemset::Itemset;
 use stategraph::StateGraph;
+use StIdx;
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -104,12 +104,14 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
             for j_key in keys.iter().take(len).skip(i + 1) {
                 // Condition 1 in the Pager paper
                 if !(vob_intersect(&self.items[*i_key], &other.items[*j_key])
-                    || vob_intersect(&self.items[*j_key], &other.items[*i_key])) {
+                    || vob_intersect(&self.items[*j_key], &other.items[*i_key]))
+                {
                     continue;
                 }
                 // Conditions 2 and 3 in the Pager paper
                 if vob_intersect(&self.items[*i_key], &self.items[*j_key])
-                   || vob_intersect(&other.items[*i_key], &other.items[*j_key]) {
+                    || vob_intersect(&other.items[*i_key], &other.items[*j_key])
+                {
                     continue;
                 }
                 return false;
@@ -137,16 +139,19 @@ fn vob_intersect(v1: &Vob, v2: &Vob) -> bool {
     // Iterating over integer sized blocks allows us to do this operation very quickly. Note that
     // the Vob implementation guarantees that the last block's unused bits will be zeroed out.
     for (b1, b2) in v1.iter_storage().zip(v2.iter_storage()) {
-        if b1 & b2 != 0 { return true; }
+        if b1 & b2 != 0 {
+            return true;
+        }
     }
     false
 }
 
 /// Create a `StateGraph` from 'grm'.
-pub fn pager_stategraph<StorageT: 'static + Hash + PrimInt + Unsigned>
-                       (grm: &YaccGrammar<StorageT>)
-                     -> StateGraph<StorageT>
-where usize: AsPrimitive<StorageT>
+pub fn pager_stategraph<StorageT: 'static + Hash + PrimInt + Unsigned>(
+    grm: &YaccGrammar<StorageT>
+) -> StateGraph<StorageT>
+where
+    usize: AsPrimitive<StorageT>
 {
     // This function can be seen as a modified version of items() from Chen's dissertation.
 
@@ -177,10 +182,12 @@ where usize: AsPrimitive<StorageT>
     // matches for a given symbol.
     let mut cnd_rule_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.rules_len()));
     let mut cnd_token_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.tokens_len()));
-    for _ in 0..usize::from(grm.tokens_len()).checked_add(1).unwrap(){
+    for _ in 0..usize::from(grm.tokens_len()).checked_add(1).unwrap() {
         cnd_token_weaklies.push(Vec::new());
     }
-    for _ in grm.iter_rules() { cnd_rule_weaklies.push(Vec::new()); }
+    for _ in grm.iter_rules() {
+        cnd_rule_weaklies.push(Vec::new());
+    }
 
     let mut todo = 1; // How many None values are there in closed_states?
     let mut todo_off = 0; // Offset in closed states to start searching for the next todo.
@@ -191,9 +198,13 @@ where usize: AsPrimitive<StorageT>
         // search from that point onwards, wrapping as necessary. Since processing a state x
         // disproportionately causes state x + 1 to require processing, this prevents the
         // search from becoming horribly non-linear.
-        let state_i = match closed_states.iter().skip(todo_off).position(|x| x.is_none()) {
+        let state_i = match closed_states
+            .iter()
+            .skip(todo_off)
+            .position(|x| x.is_none())
+        {
             Some(i) => todo_off + i,
-            None    => closed_states.iter().position(|x| x.is_none()).unwrap()
+            None => closed_states.iter().position(|x| x.is_none()).unwrap()
         };
         todo_off = state_i + 1;
         todo -= 1;
@@ -205,7 +216,9 @@ where usize: AsPrimitive<StorageT>
             seen_tokens.set_all(false);
             for &(pidx, dot) in cl_state.items.keys() {
                 let prod = grm.prod(pidx);
-                if dot == grm.prod_len(pidx) { continue; }
+                if dot == grm.prod_len(pidx) {
+                    continue;
+                }
                 let sym = prod[usize::from(dot)];
                 match sym {
                     Symbol::Rule(s_ridx) => {
@@ -213,7 +226,7 @@ where usize: AsPrimitive<StorageT>
                             continue;
                         }
                         seen_rules.set(usize::from(s_ridx), true);
-                    },
+                    }
                     Symbol::Token(s_tidx) => {
                         if seen_tokens[usize::from(s_tidx)] {
                             continue;
@@ -273,13 +286,15 @@ where usize: AsPrimitive<StorageT>
                             todo += 1;
                         }
                     }
-                },
-                None    => {
+                }
+                None => {
                     match sym {
-                        Symbol::Rule(s_ridx) =>
-                            cnd_rule_weaklies[usize::from(s_ridx)].push(core_states.len().into()),
-                        Symbol::Token(s_tidx) =>
+                        Symbol::Rule(s_ridx) => {
+                            cnd_rule_weaklies[usize::from(s_ridx)].push(core_states.len().into())
+                        }
+                        Symbol::Token(s_tidx) => {
                             cnd_token_weaklies[usize::from(s_tidx)].push(core_states.len().into())
+                        }
                     }
                     edges[state_i].insert(sym, core_states.len().into());
                     edges.push(HashMap::new());
@@ -297,19 +312,25 @@ where usize: AsPrimitive<StorageT>
     // 100 runs, 24 or 25 states will be created instead of 23). We thus need to weed out
     // unreachable states and update edges accordingly.
     debug_assert_eq!(core_states.len(), closed_states.len());
-    let (gc_states, gc_edges) = gc(core_states.drain(..)
-                                              .zip(closed_states.drain(..).map(|x| x.unwrap()))
-                                              .collect(),
-                                  edges);
+    let (gc_states, gc_edges) = gc(
+        core_states
+            .drain(..)
+            .zip(closed_states.drain(..).map(|x| x.unwrap()))
+            .collect(),
+        edges
+    );
     StateGraph::new(gc_states, gc_edges)
 }
 
 /// Garbage collect `zip_states` (of `(core_states, closed_state)`) and `edges`. Returns a new pair
 /// with unused states and their corresponding edges removed.
-fn gc<StorageT: Eq + Hash + PrimInt>
-     (mut states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-      mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>>)
-  -> (Vec<(Itemset<StorageT>, Itemset<StorageT>)>, Vec<HashMap<Symbol<StorageT>, StIdx>>) {
+fn gc<StorageT: Eq + Hash + PrimInt>(
+    mut states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
+    mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>>
+) -> (
+    Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
+    Vec<HashMap<Symbol<StorageT>, StIdx>>
+) {
     // First of all, do a simple pass over all states. All state indexes reachable from the
     // start state will be inserted into the 'seen' set.
     let mut todo = HashSet::new();
@@ -322,7 +343,11 @@ fn gc<StorageT: Eq + Hash + PrimInt>
         todo.remove(&state_i);
         seen.insert(state_i);
 
-        todo.extend(edges[usize::from(state_i)].values().filter(|x| !seen.contains(x)));
+        todo.extend(
+            edges[usize::from(state_i)]
+                .values()
+                .filter(|x| !seen.contains(x))
+        );
     }
 
     if states.len() == seen.len() {
@@ -344,11 +369,13 @@ fn gc<StorageT: Eq + Hash + PrimInt>
     // The way we do this is to first iterate over all states, working out what the mapping
     // from seen states to their new offsets is.
     let mut gc_states = Vec::with_capacity(seen.len());
-    let mut offsets   = Vec::with_capacity(states.len());
-    let mut offset    = 0;
-    for (state_i, zstate) in states.drain(..)
-                                   .enumerate()
-                                   .map(|(x, y)| (StIdx::from(x), y)) {
+    let mut offsets = Vec::with_capacity(states.len());
+    let mut offset = 0;
+    for (state_i, zstate) in states
+        .drain(..)
+        .enumerate()
+        .map(|(x, y)| (StIdx::from(x), y))
+    {
         offsets.push(StIdx::from(usize::from(state_i) - offset));
         if !seen.contains(&state_i) {
             offset += 1;
@@ -360,13 +387,20 @@ fn gc<StorageT: Eq + Hash + PrimInt>
     // At this point the offsets list will be [0, 1, 1]. We now create new edges where each
     // offset is corrected by looking it up in the offsets list.
     let mut gc_edges = Vec::with_capacity(seen.len());
-    for (st_edge_i, st_edges) in edges.drain(..)
-                                      .enumerate()
-                                      .map(|(x, y)| (StIdx::from(x), y)) {
+    for (st_edge_i, st_edges) in edges
+        .drain(..)
+        .enumerate()
+        .map(|(x, y)| (StIdx::from(x), y))
+    {
         if !seen.contains(&st_edge_i) {
             continue;
         }
-        gc_edges.push(st_edges.iter().map(|(&k, &v)| (k, offsets[usize::from(v)])).collect());
+        gc_edges.push(
+            st_edges
+                .iter()
+                .map(|(&k, &v)| (k, offsets[usize::from(v)]))
+                .collect()
+        );
     }
 
     (gc_states, gc_edges)
@@ -376,13 +410,15 @@ fn gc<StorageT: Eq + Hash + PrimInt>
 mod test {
     use vob::Vob;
 
-    use cfgrammar::{SIdx, Symbol};
-    use cfgrammar::yacc::{YaccGrammar, YaccKind};
+    use cfgrammar::{
+        yacc::{YaccGrammar, YaccKind},
+        SIdx, Symbol
+    };
     use pager::pager_stategraph;
     use stategraph::state_exists;
 
-    use StIdx;
     use super::vob_intersect;
+    use StIdx;
 
     #[test]
     fn test_vob_intersect() {
@@ -417,13 +453,16 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        YaccGrammar::new(YaccKind::Original, &"
+        YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start S
           %token a b c d
           %%
           S: S 'b' | 'b' A 'a';
           A: 'a' S 'c' | 'a' | 'a' S 'b';
-          ").unwrap()
+          "
+        ).unwrap()
     }
 
     #[test]
@@ -491,7 +530,9 @@ mod test {
 
     // Pager grammar
     fn grammar_pager() -> YaccGrammar {
-        YaccGrammar::new(YaccKind::Original, &"
+        YaccGrammar::new(
+            YaccKind::Original,
+            &"
             %start X
             %%
              X : 'a' Y 'd' | 'a' Z 'c' | 'a' T | 'b' Y 'e' | 'b' Z 'd' | 'b' T;
@@ -500,7 +541,8 @@ mod test {
              T : 'u' X 'a';
              W : 'u' V;
              V : ;
-          ").unwrap()
+          "
+        ).unwrap()
     }
 
     fn test_pager_graph(grm: &YaccGrammar) {

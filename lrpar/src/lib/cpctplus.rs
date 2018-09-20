@@ -30,9 +30,11 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
-use std::time::Instant;
+use std::{
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    time::Instant
+};
 
 use cactus::Cactus;
 use cfgrammar::TIdx;
@@ -42,7 +44,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use astar::dijkstra;
 use mf::{apply_repairs, rank_cnds, simplify_repairs};
-use parser::{Node, Parser, ParseRepair, Recoverer};
+use parser::{Node, ParseRepair, Parser, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 
@@ -109,8 +111,9 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
             let mut n = 0;
             for r in c.vals() {
                 match *r {
-                      RepairMerge::Repair(Repair::Shift)
-                    | RepairMerge::Merge(Repair::Shift, _) => n += 1,
+                    RepairMerge::Repair(Repair::Shift) | RepairMerge::Merge(Repair::Shift, _) => {
+                        n += 1
+                    }
                     _ => break
                 }
             }
@@ -122,32 +125,34 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
     }
 }
 
-impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> { }
+impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
 struct CPCTPlus<'a, StorageT: 'a + Eq + Hash> {
     parser: &'a Parser<'a, StorageT>
 }
 
-pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-                       (parser: &'a Parser<StorageT>)
-                     -> Box<Recoverer<StorageT> + 'a>
-                  where usize: AsPrimitive<StorageT>
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
+    parser: &'a Parser<StorageT>
+) -> Box<Recoverer<StorageT> + 'a>
+where
+    usize: AsPrimitive<StorageT>
 {
-    Box::new(CPCTPlus{parser})
+    Box::new(CPCTPlus { parser })
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-Recoverer<StorageT> for CPCTPlus<'a, StorageT>
-where usize: AsPrimitive<StorageT>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Recoverer<StorageT>
+    for CPCTPlus<'a, StorageT>
+where
+    usize: AsPrimitive<StorageT>
 {
-    fn recover(&self,
-               finish_by: Instant,
-               parser: &Parser<StorageT>,
-               in_laidx: usize,
-               mut in_pstack: &mut Vec<StIdx>,
-               mut tstack: &mut Vec<Node<StorageT>>)
-           -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
-    {
+    fn recover(
+        &self,
+        finish_by: Instant,
+        parser: &Parser<StorageT>,
+        in_laidx: usize,
+        mut in_pstack: &mut Vec<StIdx>,
+        mut tstack: &mut Vec<Node<StorageT>>
+    ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
         //
@@ -169,10 +174,12 @@ where usize: AsPrimitive<StorageT>
             start_cactus_pstack = start_cactus_pstack.child(*st);
         }
 
-        let start_node = PathFNode{pstack: start_cactus_pstack.clone(),
-                                   laidx: in_laidx,
-                                   repairs: Cactus::new().child(RepairMerge::Terminator),
-                                   cf: 0};
+        let start_node = PathFNode {
+            pstack: start_cactus_pstack.clone(),
+            laidx: in_laidx,
+            repairs: Cactus::new().child(RepairMerge::Terminator),
+            cf: 0
+        };
         let astar_cnds = dijkstra(
             start_node,
             |explore_all, n, nbrs| {
@@ -186,7 +193,7 @@ where usize: AsPrimitive<StorageT>
                     Some(Repair::Delete) => {
                         // We follow Corcheulo et al.'s suggestions and never follow Deletes with
                         // Inserts.
-                    },
+                    }
                     _ => {
                         if explore_all {
                             self.insert(n, nbrs);
@@ -209,10 +216,8 @@ where usize: AsPrimitive<StorageT>
                 let merge = match *old.repairs.val().unwrap() {
                     RepairMerge::Repair(r) => {
                         RepairMerge::Merge(r, Cactus::new().child(new.repairs))
-                    },
-                    RepairMerge::Merge(r, ref v) => {
-                        RepairMerge::Merge(r, v.child(new.repairs))
-                    },
+                    }
+                    RepairMerge::Merge(r, ref v) => RepairMerge::Merge(r, v.child(new.repairs)),
                     _ => unreachable!()
                 };
                 old.repairs = old.repairs.parent().unwrap().child(merge);
@@ -229,45 +234,43 @@ where usize: AsPrimitive<StorageT>
                     return true;
                 }
 
-                match parser.stable.action(*n.pstack.val().unwrap(),
-                                           parser.next_tidx(n.laidx)) {
+                match parser
+                    .stable
+                    .action(*n.pstack.val().unwrap(), parser.next_tidx(n.laidx))
+                {
                     Some(Action::Accept) => true,
-                    _ => false,
+                    _ => false
                 }
-            });
+            }
+        );
 
         if astar_cnds.is_empty() {
             return (in_laidx, vec![]);
         }
 
         let full_rprs = self.collect_repairs(astar_cnds);
-        let mut rnk_rprs = rank_cnds(parser,
-                                     finish_by,
-                                     in_laidx,
-                                     &in_pstack,
-                                     full_rprs);
+        let mut rnk_rprs = rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs);
         if rnk_rprs.is_empty() {
             return (in_laidx, vec![]);
         }
         simplify_repairs(&mut rnk_rprs);
-        let laidx = apply_repairs(parser,
-                                   in_laidx,
-                                   &mut in_pstack,
-                                   &mut Some(&mut tstack),
-                                   &rnk_rprs[0]);
+        let laidx = apply_repairs(
+            parser,
+            in_laidx,
+            &mut in_pstack,
+            &mut Some(&mut tstack),
+            &rnk_rprs[0]
+        );
 
         (laidx, rnk_rprs)
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-CPCTPlus<'a, StorageT>
-where usize: AsPrimitive<StorageT>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> CPCTPlus<'a, StorageT>
+where
+    usize: AsPrimitive<StorageT>
 {
-    fn insert(&self,
-             n: &PathFNode<StorageT>,
-             nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
-    {
+    fn insert(&self, n: &PathFNode<StorageT>, nbrs: &mut Vec<(u16, PathFNode<StorageT>)>) {
         let laidx = n.laidx;
         for tidx in self.parser.stable.state_actions(*n.pstack.val().unwrap()) {
             if tidx == self.parser.grm.eof_token_idx() {
@@ -275,43 +278,52 @@ where usize: AsPrimitive<StorageT>
             }
 
             let next_lexeme = self.parser.next_lexeme(n.laidx);
-            let new_lexeme = Lexeme::new(StorageT::from(u32::from(tidx)).unwrap(),
-                                         next_lexeme.start(), 0);
-            let (new_laidx, n_pstack) =
-                self.parser.lr_cactus(Some(new_lexeme), laidx, laidx + 1,
-                                      n.pstack.clone(), &mut None);
+            let new_lexeme = Lexeme::new(
+                StorageT::from(u32::from(tidx)).unwrap(),
+                next_lexeme.start(),
+                0
+            );
+            let (new_laidx, n_pstack) = self.parser.lr_cactus(
+                Some(new_lexeme),
+                laidx,
+                laidx + 1,
+                n.pstack.clone(),
+                &mut None
+            );
             if new_laidx > laidx {
-                let nn = PathFNode{
+                let nn = PathFNode {
                     pstack: n_pstack,
                     laidx: n.laidx,
-                    repairs: n.repairs.child(RepairMerge::Repair(Repair::InsertTerm(tidx))),
-                    cf: n.cf.checked_add(u16::from((self.parser.token_cost)(tidx))).unwrap()};
+                    repairs: n
+                        .repairs
+                        .child(RepairMerge::Repair(Repair::InsertTerm(tidx))),
+                    cf: n
+                        .cf
+                        .checked_add(u16::from((self.parser.token_cost)(tidx)))
+                        .unwrap()
+                };
                 nbrs.push((nn.cf, nn));
             }
         }
     }
 
-    fn delete(&self,
-           n: &PathFNode<StorageT>,
-           nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
-    {
+    fn delete(&self, n: &PathFNode<StorageT>, nbrs: &mut Vec<(u16, PathFNode<StorageT>)>) {
         if n.laidx == self.parser.lexemes.len() {
             return;
         }
 
         let la_tidx = self.parser.next_tidx(n.laidx);
         let cost = (self.parser.token_cost)(la_tidx);
-        let nn = PathFNode{pstack: n.pstack.clone(),
-                           laidx: n.laidx + 1,
-                           repairs: n.repairs.child(RepairMerge::Repair(Repair::Delete)),
-                           cf: n.cf.checked_add(u16::from(cost)).unwrap()};
+        let nn = PathFNode {
+            pstack: n.pstack.clone(),
+            laidx: n.laidx + 1,
+            repairs: n.repairs.child(RepairMerge::Repair(Repair::Delete)),
+            cf: n.cf.checked_add(u16::from(cost)).unwrap()
+        };
         nbrs.push((nn.cf, nn));
     }
 
-    fn shift(&self,
-             n: &PathFNode<StorageT>,
-             nbrs: &mut Vec<(u16, PathFNode<StorageT>)>)
-    {
+    fn shift(&self, n: &PathFNode<StorageT>, nbrs: &mut Vec<(u16, PathFNode<StorageT>)>) {
         // Forward move rule (ER3)
         //
         // Note the rule in Corchuelo et al. is confusing and, I think, wrong. It reads:
@@ -336,30 +348,33 @@ where usize: AsPrimitive<StorageT>
         //   \wedge 0 <= j < 1 \wedge S != S'
 
         let laidx = n.laidx;
-        let (new_laidx, n_pstack) = self.parser.lr_cactus(None,
-                                                           laidx,
-                                                           laidx + 1,
-                                                           n.pstack.clone(),
-                                                           &mut None);
+        let (new_laidx, n_pstack) =
+            self.parser
+                .lr_cactus(None, laidx, laidx + 1, n.pstack.clone(), &mut None);
         if n.pstack != n_pstack {
             let n_repairs = if new_laidx > laidx {
                 n.repairs.child(RepairMerge::Repair(Repair::Shift))
             } else {
                 n.repairs.clone()
             };
-            let nn = PathFNode{
+            let nn = PathFNode {
                 pstack: n_pstack,
                 laidx: new_laidx,
                 repairs: n_repairs,
-                cf: n.cf};
+                cf: n.cf
+            };
             nbrs.push((nn.cf, nn));
         }
     }
 
     /// Convert the output from `astar_all` into something more usable.
-    fn collect_repairs(&self, cnds: Vec<PathFNode<StorageT>>) -> Vec<Vec<Vec<ParseRepair<StorageT>>>>
-    {
-        fn traverse<StorageT: PrimInt>(rm: &Cactus<RepairMerge<StorageT>>) -> Vec<Vec<Repair<StorageT>>> {
+    fn collect_repairs(
+        &self,
+        cnds: Vec<PathFNode<StorageT>>
+    ) -> Vec<Vec<Vec<ParseRepair<StorageT>>>> {
+        fn traverse<StorageT: PrimInt>(
+            rm: &Cactus<RepairMerge<StorageT>>
+        ) -> Vec<Vec<Repair<StorageT>>> {
             let mut out = Vec::new();
             match *rm.val().unwrap() {
                 RepairMerge::Repair(r) => {
@@ -372,7 +387,7 @@ where usize: AsPrimitive<StorageT>
                             out.push(pc);
                         }
                     }
-                },
+                }
                 RepairMerge::Merge(r, ref vc) => {
                     let parents = traverse(&rm.parent().unwrap());
                     if parents.is_empty() {
@@ -396,34 +411,30 @@ where usize: AsPrimitive<StorageT>
 
         let mut all_rprs = Vec::with_capacity(cnds.len());
         for cnd in cnds {
-            all_rprs.push(traverse(&cnd.repairs).into_iter()
-                                                .map(|x| self.repair_to_parse_repair(&x))
-                                                .collect::<Vec<_>>());
+            all_rprs.push(
+                traverse(&cnd.repairs)
+                    .into_iter()
+                    .map(|x| self.repair_to_parse_repair(&x))
+                    .collect::<Vec<_>>()
+            );
         }
         all_rprs
     }
 
-    fn repair_to_parse_repair(&self,
-                              from: &[Repair<StorageT>])
-                           -> Vec<ParseRepair<StorageT>> {
+    fn repair_to_parse_repair(&self, from: &[Repair<StorageT>]) -> Vec<ParseRepair<StorageT>> {
         from.iter()
-            .map(|y| {
-                 match *y {
-                     Repair::InsertTerm(token_idx) =>
-                         ParseRepair::Insert(token_idx),
-                     Repair::Delete => ParseRepair::Delete,
-                     Repair::Shift => ParseRepair::Shift,
-                 }
-             })
-            .collect()
+            .map(|y| match *y {
+                Repair::InsertTerm(token_idx) => ParseRepair::Insert(token_idx),
+                Repair::Delete => ParseRepair::Delete,
+                Repair::Shift => ParseRepair::Shift
+            }).collect()
     }
 }
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?
-fn ends_with_parse_at_least_shifts<StorageT: PrimInt + Unsigned>
-                                  (repairs: &Cactus<RepairMerge<StorageT>>)
-                                -> bool
-{
+fn ends_with_parse_at_least_shifts<StorageT: PrimInt + Unsigned>(
+    repairs: &Cactus<RepairMerge<StorageT>>
+) -> bool {
     let mut shfts = 0;
     for x in repairs.vals().take(PARSE_AT_LEAST) {
         match *x {
@@ -443,39 +454,49 @@ mod test {
     use lrlex::Lexeme;
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
-    use parser::{ParseRepair, RecoveryKind};
-    use parser::test::do_parse;
+    use parser::{test::do_parse, ParseRepair, RecoveryKind};
 
-    fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>
-                 (grm: &YaccGrammar<StorageT>, repairs: &Vec<ParseRepair<StorageT>>)
-               -> String
-            where usize: AsPrimitive<StorageT>
+    fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>(
+        grm: &YaccGrammar<StorageT>,
+        repairs: &Vec<ParseRepair<StorageT>>
+    ) -> String
+    where
+        usize: AsPrimitive<StorageT>
     {
         let mut out = vec![];
         for r in repairs.iter() {
             match *r {
-                ParseRepair::InsertSeq{..} => panic!("Internal error"),
-                ParseRepair::Insert(token_idx) =>
-                    out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
-                ParseRepair::Delete =>
-                    out.push(format!("Delete")),
-                ParseRepair::Shift =>
-                    out.push(format!("Shift"))
+                ParseRepair::InsertSeq { .. } => panic!("Internal error"),
+                ParseRepair::Insert(token_idx) => {
+                    out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap()))
+                }
+                ParseRepair::Delete => out.push(format!("Delete")),
+                ParseRepair::Shift => out.push(format!("Shift"))
             }
         }
         out.join(", ")
     }
 
-    fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>
-                        (grm: &YaccGrammar<StorageT>,
-                         repairs: &Vec<Vec<ParseRepair<StorageT>>>,
-                         expected: &[&str])
-            where usize: AsPrimitive<StorageT>
+    fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>(
+        grm: &YaccGrammar<StorageT>,
+        repairs: &Vec<Vec<ParseRepair<StorageT>>>,
+        expected: &[&str]
+    ) where
+        usize: AsPrimitive<StorageT>
     {
-        assert_eq!(repairs.len(), expected.len(),
-                   "{:?}\nhas a different number of entries to:\n{:?}", repairs, expected);
+        assert_eq!(
+            repairs.len(),
+            expected.len(),
+            "{:?}\nhas a different number of entries to:\n{:?}",
+            repairs,
+            expected
+        );
         for i in 0..repairs.len() {
-            if expected.iter().find(|x| **x == pp_repairs(&grm, &repairs[i])).is_none() {
+            if expected
+                .iter()
+                .find(|x| **x == pp_repairs(&grm, &repairs[i]))
+                .is_none()
+            {
                 panic!("No match found for:\n  {}", pp_repairs(&grm, &repairs[i]));
             }
         }
@@ -537,32 +558,27 @@ E : 'N'
         assert_eq!(errs.len(), 1);
         let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
         assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
-        check_all_repairs(&grm,
-                          errs[0].repairs(),
-                          &vec!["Insert \")\", Insert \"+\"",
-                                "Insert \")\", Delete",
-                                "Insert \"+\", Shift, Insert \")\""]);
+        check_all_repairs(
+            &grm,
+            errs[0].repairs(),
+            &vec![
+                "Insert \")\", Insert \"+\"",
+                "Insert \")\", Delete",
+                "Insert \"+\", Shift, Insert \")\"",
+            ]
+        );
 
         let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm,
-                          errs[0].repairs(),
-                          &vec!["Delete"]);
-        check_all_repairs(&grm,
-                          errs[1].repairs(),
-                          &vec!["Delete"]);
+        check_all_repairs(&grm, errs[0].repairs(), &vec!["Delete"]);
+        check_all_repairs(&grm, errs[1].repairs(), &vec!["Delete"]);
 
         let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm,
-                          errs[0].repairs(),
-                          &vec!["Insert \"N\"",
-                                "Delete"]);
-        check_all_repairs(&grm,
-                          errs[1].repairs(),
-                          &vec!["Insert \")\""]);
+        check_all_repairs(&grm, errs[0].repairs(), &vec!["Insert \"N\"", "Delete"]);
+        check_all_repairs(&grm, errs[1].repairs(), &vec!["Insert \")\""]);
     }
 
     #[test]
@@ -586,10 +602,14 @@ U: 'd';
         let us = "";
         let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
-        check_all_repairs(&grm,
-                          errs[0].repairs(),
-                          &vec!["Insert \"a\", Insert \"d\"",
-                                "Insert \"b\", Insert \"d\"",
-                                "Insert \"c\", Insert \"d\""]);
+        check_all_repairs(
+            &grm,
+            errs[0].repairs(),
+            &vec![
+                "Insert \"a\", Insert \"d\"",
+                "Insert \"b\", Insert \"d\"",
+                "Insert \"c\", Insert \"d\"",
+            ]
+        );
     }
 }

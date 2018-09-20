@@ -85,7 +85,7 @@ mod idxnewtype;
 pub mod yacc;
 
 /// A type specifically for rule indices.
-pub use idxnewtype::{RIdx, PIdx, SIdx, TIdx};
+pub use idxnewtype::{PIdx, RIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

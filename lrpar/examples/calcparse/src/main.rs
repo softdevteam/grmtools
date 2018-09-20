@@ -41,10 +41,10 @@ fn main() {
                                 }
                             }
                         }
-                    },
+                    }
                     Err(e) => println!("Lexing error {:?}", e)
                 }
-            },
+            }
             _ => break
         }
     }
@@ -56,7 +56,7 @@ struct Eval<'a> {
 
 impl<'a> Eval<'a> {
     fn new(s: &'a str) -> Self {
-        Eval{s}
+        Eval { s }
     }
 
     fn eval(&self, n: &Node<u8>) -> i64 {

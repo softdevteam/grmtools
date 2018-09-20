@@ -33,20 +33,23 @@
 extern crate cfgrammar;
 extern crate getopts;
 extern crate lrlex;
-extern crate lrtable;
 extern crate lrpar;
+extern crate lrtable;
 extern crate num_traits;
 
-use std::{env, process};
-use std::fs::File;
-use std::io::{Read, stderr, Write};
-use std::path::Path;
+use std::{
+    env,
+    fs::File,
+    io::{stderr, Read, Write},
+    path::Path,
+    process
+};
 
-use getopts::Options;
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
+use getopts::Options;
 use lrlex::build_lex;
-use lrtable::{Minimiser, from_yacc};
 use lrpar::parser::{parse_rcvry, ParseRepair, RecoveryKind};
+use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
 
 fn usage(prog: &str, msg: &str) -> ! {
@@ -81,14 +84,19 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let prog = &args[0];
     let matches = match Options::new()
-                                .optflag("h", "help", "")
-                                .optopt("r", "recoverer",
-                                        "Recoverer to be used (default: mf)",
-                                        "cpctplus|mf|panic|none")
-                                .optopt("y", "yaccvariant",
-                                        "Yacc variant to be parsed (default: Original)",
-                                        "Original|Eco")
-                                .parse(&args[1..]) {
+        .optflag("h", "help", "")
+        .optopt(
+            "r",
+            "recoverer",
+            "Recoverer to be used (default: mf)",
+            "cpctplus|mf|panic|none"
+        ).optopt(
+            "y",
+            "yaccvariant",
+            "Yacc variant to be parsed (default: Original)",
+            "Original|Eco"
+        ).parse(&args[1..])
+    {
         Ok(m) => m,
         Err(f) => usage(prog, f.to_string().as_str())
     };
@@ -99,25 +107,21 @@ fn main() {
 
     let recoverykind = match matches.opt_str("r") {
         None => RecoveryKind::MF,
-        Some(s) => {
-            match &*s.to_lowercase() {
-                "cpctplus" => RecoveryKind::CPCTPlus,
-                "mf" => RecoveryKind::MF,
-                "panic" => RecoveryKind::Panic,
-                "none" => RecoveryKind::None,
-                _ => usage(prog, &format!("Unknown recoverer '{}'.", s))
-            }
+        Some(s) => match &*s.to_lowercase() {
+            "cpctplus" => RecoveryKind::CPCTPlus,
+            "mf" => RecoveryKind::MF,
+            "panic" => RecoveryKind::Panic,
+            "none" => RecoveryKind::None,
+            _ => usage(prog, &format!("Unknown recoverer '{}'.", s))
         }
     };
 
     let yacckind = match matches.opt_str("y") {
         None => YaccKind::Original,
-        Some(s) => {
-            match &*s.to_lowercase() {
-                "original" => YaccKind::Original,
-                "eco" => YaccKind::Eco,
-                _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s))
-            }
+        Some(s) => match &*s.to_lowercase() {
+            "original" => YaccKind::Original,
+            "eco" => YaccKind::Eco,
+            _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s))
         }
     };
 
@@ -151,25 +155,26 @@ fn main() {
     };
 
     {
-        let rule_ids = grm.tokens_map().iter()
-                                      .map(|(&n, &i)| (n, usize::from(i).to_u16().unwrap()))
-                                      .collect();
+        let rule_ids = grm
+            .tokens_map()
+            .iter()
+            .map(|(&n, &i)| (n, usize::from(i).to_u16().unwrap()))
+            .collect();
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
         if let Some(tokens) = missing_from_parser {
             writeln!(&mut stderr(), "Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:").ok();
-            let mut sorted = tokens.iter()
-                                   .cloned()
-                                   .collect::<Vec<&str>>();
+            let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
             sorted.sort();
             for n in sorted {
                 writeln!(&mut stderr(), "  {}", n).ok();
             }
         }
         if let Some(tokens) = missing_from_lexer {
-            writeln!(&mut stderr(), "Error: these tokens are referenced in the grammar but not defined in the lexer:").ok();
-            let mut sorted = tokens.iter()
-                                   .cloned()
-                                   .collect::<Vec<&str>>();
+            writeln!(
+                &mut stderr(),
+                "Error: these tokens are referenced in the grammar but not defined in the lexer:"
+            ).ok();
+            let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
             sorted.sort();
             for n in sorted {
                 writeln!(&mut stderr(), "  {}", n).ok();
@@ -187,7 +192,7 @@ fn main() {
         Err((o_pt, errs)) => {
             match o_pt {
                 Some(pt) => println!("{}", pt.pp(&grm, &input)),
-                None     => println!("Unable to repair input sufficiently to produce parse tree.\n")
+                None => println!("Unable to repair input sufficiently to produce parse tree.\n")
             }
             for e in errs {
                 let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
@@ -217,9 +222,9 @@ fn main() {
                                 }
                                 s.push_str("}");
                                 out.push(s);
-                            },
-                            ParseRepair::Insert(token_idx) =>
-                                out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
+                            }
+                            ParseRepair::Insert(token_idx) => out
+                                .push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
                             ParseRepair::Delete | ParseRepair::Shift => {
                                 let l = lexemes[lex_idx];
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");

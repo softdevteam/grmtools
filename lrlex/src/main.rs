@@ -34,10 +34,13 @@ extern crate getopts;
 extern crate lrlex;
 
 use getopts::Options;
-use std::{env, process};
-use std::fs::File;
-use std::io::{Read, stderr, Write};
-use std::path::Path;
+use std::{
+    env,
+    fs::File,
+    io::{stderr, Read, Write},
+    path::Path,
+    process
+};
 
 use lrlex::{build_lex, LexerDef};
 
@@ -70,9 +73,7 @@ fn read_file(path: &str) -> String {
 fn main() {
     let args: Vec<String> = env::args().collect();
     let prog = args[0].clone();
-    let matches = match Options::new()
-                                .optflag("h", "help", "")
-                                .parse(&args[1..]) {
+    let matches = match Options::new().optflag("h", "help", "").parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
             usage(&prog, f.to_string().as_str());
@@ -86,12 +87,16 @@ fn main() {
 
     let lex_l_path = &matches.free[0];
     let lexerdef: LexerDef<usize> = build_lex(&read_file(lex_l_path)).unwrap_or_else(|s| {
-            writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
-            process::exit(1);
-        });
+        writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
+        process::exit(1);
+    });
     let input = &read_file(&matches.free[1]);
     let lexemes = lexerdef.lexer(input).lexemes().unwrap();
     for l in &lexemes {
-        println!("{} {}", lexerdef.get_rule_by_id(l.tok_id()).name.as_ref().unwrap(), &input[l.start()..l.start() + l.len()]);
+        println!(
+            "{} {}",
+            lexerdef.get_rule_by_id(l.tok_id()).name.as_ref().unwrap(),
+            &input[l.start()..l.start() + l.len()]
+        );
     }
 }

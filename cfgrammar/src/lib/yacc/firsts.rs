@@ -63,7 +63,8 @@ pub struct YaccFirsts<StorageT> {
 }
 
 impl<StorageT: 'static + PrimInt + Unsigned> YaccFirsts<StorageT>
-where usize: AsPrimitive<StorageT>
+where
+    usize: AsPrimitive<StorageT>
 {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
@@ -74,7 +75,7 @@ where usize: AsPrimitive<StorageT>
         let mut firsts = YaccFirsts {
             firsts,
             epsilons: Vob::from_elem(usize::from(grm.rules_len()), false),
-            phantom      : PhantomData
+            phantom: PhantomData
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -165,8 +166,7 @@ where usize: AsPrimitive<StorageT>
         let r = &mut self.firsts[usize::from(ridx)];
         if r[usize::from(tidx)] {
             true
-        }
-        else {
+        } else {
             r.set(usize::from(tidx), true);
             false
         }
@@ -175,13 +175,17 @@ where usize: AsPrimitive<StorageT>
 
 #[cfg(test)]
 mod test {
-    use yacc::{YaccGrammar, YaccKind};
-    use num_traits::{AsPrimitive, PrimInt, Unsigned};
     use super::YaccFirsts;
+    use num_traits::{AsPrimitive, PrimInt, Unsigned};
+    use yacc::{YaccGrammar, YaccKind};
 
-    fn has<StorageT: 'static + PrimInt + Unsigned>
-          (grm: &YaccGrammar<StorageT>, firsts: &YaccFirsts<StorageT>, rn: &str, should_be: Vec<&str>)
-     where usize: AsPrimitive<StorageT>
+    fn has<StorageT: 'static + PrimInt + Unsigned>(
+        grm: &YaccGrammar<StorageT>,
+        firsts: &YaccFirsts<StorageT>,
+        rn: &str,
+        should_be: Vec<&str>
+    ) where
+        usize: AsPrimitive<StorageT>
     {
         let ridx = grm.rule_idx(rn).unwrap();
         for tidx in grm.iter_tidxs() {
@@ -195,7 +199,7 @@ mod test {
                         panic!("{} is not set in {}", n, rn);
                     }
                 }
-                None    => {
+                None => {
                     if firsts.is_set(ridx, tidx) {
                         panic!("{} is incorrectly set in {}", n, rn);
                     }
@@ -208,8 +212,10 @@ mod test {
     }
 
     #[test]
-    fn test_first(){
-        let grm = YaccGrammar::new(YaccKind::Original, &"
+    fn test_first() {
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start C
           %token c d
           %%
@@ -217,7 +223,8 @@ mod test {
           D: 'd';
           E: D | C;
           F: E;
-          ").unwrap();
+          "
+        ).unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "^", vec!["c"]);
         has(&grm, &firsts, "D", vec!["d"]);
@@ -227,21 +234,26 @@ mod test {
 
     #[test]
     fn test_first_no_subsequent_rules() {
-        let grm = YaccGrammar::new(YaccKind::Original, &"
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start C
           %token c d
           %%
           C: 'c';
           D: 'd';
           E: D C;
-          ").unwrap();
+          "
+        ).unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "E", vec!["d"]);
     }
 
     #[test]
     fn test_first_epsilon() {
-        let grm = YaccGrammar::new(YaccKind::Original, &"
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start A
           %token a b c
           %%
@@ -249,7 +261,8 @@ mod test {
           B: 'b' | ;
           C: 'c' | ;
           D: C;
-          ").unwrap();
+          "
+        ).unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b", "a"]);
         has(&grm, &firsts, "C", vec!["c", ""]);
@@ -258,14 +271,17 @@ mod test {
 
     #[test]
     fn test_last_epsilon() {
-        let grm = YaccGrammar::new(YaccKind::Original, &"
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start A
           %token b c
           %%
           A: B C;
           B: 'b' | ;
           C: B 'c' B;
-          ").unwrap();
+          "
+        ).unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b", "c"]);
         has(&grm, &firsts, "B", vec!["b", ""]);
@@ -274,19 +290,24 @@ mod test {
 
     #[test]
     fn test_first_no_multiples() {
-        let grm = YaccGrammar::new(YaccKind::Original, &"
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start A
           %token b c
           %%
           A: B 'b';
           B: 'b' | ;
-          ").unwrap();
+          "
+        ).unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b"]);
     }
 
     fn eco_grammar() -> YaccGrammar {
-        YaccGrammar::new(YaccKind::Original, &"
+        YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start S
           %token a b c d f
           %%
@@ -296,7 +317,8 @@ mod test {
           C: D A;
           D: 'd' | ;
           F: C D 'f';
-          ").unwrap()
+          "
+        ).unwrap()
     }
 
     #[test]
@@ -313,7 +335,9 @@ mod test {
 
     #[test]
     fn test_first_from_eco_bug() {
-        let grm = YaccGrammar::new(YaccKind::Original, &"
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start E
           %token a b c d e f
           %%
@@ -324,7 +348,8 @@ mod test {
           D: D 'd' | F;
           F: 'f' | ;
           G: C D;
-          ").unwrap();
+          "
+        ).unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "E", vec!["a"]);
         has(&grm, &firsts, "T", vec!["a"]);

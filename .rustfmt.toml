@@ -1,0 +1,6 @@
+indent_style="Block"
+imports_indent="Block"
+trailing_comma="Never"
+use_try_shorthand=true
+use_field_init_shorthand=true
+merge_imports=true

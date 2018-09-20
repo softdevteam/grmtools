@@ -35,16 +35,14 @@
 extern crate regex;
 extern crate typename;
 
-use std::convert::TryFrom;
-use std::error::Error;
-use std::fmt;
+use std::{convert::TryFrom, error::Error, fmt};
 
 mod builder;
 mod lexer;
 mod parser;
 
 pub use builder::LexerBuilder;
-pub use lexer::{Lexeme, LexerDef, Lexer, Rule};
+pub use lexer::{Lexeme, Lexer, LexerDef, Rule};
 use parser::parse_lex;
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
@@ -53,8 +51,8 @@ pub type LexBuildResult<T> = Result<T, LexBuildError>;
 #[derive(Debug)]
 pub struct LexBuildError {
     pub kind: LexErrorKind,
-    line: usize,
-    col: usize
+    line:     usize,
+    col:      usize
 }
 
 impl Error for LexBuildError {}
@@ -75,19 +73,21 @@ impl fmt::Display for LexBuildError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s;
         match self.kind {
-            LexErrorKind::PrematureEnd         => s = "File ends prematurely",
+            LexErrorKind::PrematureEnd => s = "File ends prematurely",
             LexErrorKind::RoutinesNotSupported => s = "Routines not currently supported",
-            LexErrorKind::UnknownDeclaration   => s = "Unknown declaration",
-            LexErrorKind::MissingSpace         => s = "Rule is missing a space",
-            LexErrorKind::InvalidName          => s = "Invalid rule name",
-            LexErrorKind::DuplicateName        => s = "Rule name already exists",
-            LexErrorKind::RegexError           => s = "Invalid regular expression"
+            LexErrorKind::UnknownDeclaration => s = "Unknown declaration",
+            LexErrorKind::MissingSpace => s = "Rule is missing a space",
+            LexErrorKind::InvalidName => s = "Invalid rule name",
+            LexErrorKind::DuplicateName => s = "Rule name already exists",
+            LexErrorKind::RegexError => s = "Invalid regular expression"
         }
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
 }
 
-pub fn build_lex<StorageT: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerDef<StorageT>, LexBuildError> {
+pub fn build_lex<StorageT: Copy + Eq + TryFrom<usize>>(
+    s: &str
+) -> Result<LexerDef<StorageT>, LexBuildError> {
     parse_lex(s)
 }
 
@@ -95,5 +95,7 @@ pub fn build_lex<StorageT: Copy + Eq + TryFrom<usize>>(s: &str) -> Result<LexerD
 /// statically compiled by lrlex can then be used in a crate with `lrlex_mod!(x)`.
 #[macro_export]
 macro_rules! lrlex_mod {
-    ($n:ident) => { include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs")); };
+    ($n:ident) => {
+        include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs"));
+    };
 }
