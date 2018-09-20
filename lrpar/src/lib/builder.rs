@@ -274,6 +274,11 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         let mut cache = String::new();
         cache.push_str(" \n/* CACHE INFORMATION\n");
 
+        // Record the time that this version of lrpar was built. If the source code changes and
+        // rustc forces a recompile, this will change this value, causing anything which depends on
+        // this build of lrpar to be recompiled too.
+        cache.push_str(&format!("   Build time: {:?}", env!("VERGEN_BUILD_TIMESTAMP")));
+
         // Record the recoverer
         cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));
 
