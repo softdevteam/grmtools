@@ -30,14 +30,15 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::rc::Rc;
-use std::slice::Iter;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    convert::TryFrom,
+    rc::Rc,
+    slice::Iter
+};
 
-use regex;
-use regex::{Regex, RegexBuilder};
+use regex::{self, Regex, RegexBuilder};
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -56,16 +57,21 @@ impl<StorageT> Rule<StorageT> {
     /// Create a new `Rule`. This interface is unstable and should only be used by code generated
     /// by lrlex itself.
     #[doc(hidden)]
-    pub fn new(tok_id: Option<StorageT>,
-           name: Option<String>,
-           re_str: String)
-        -> Result<Rule<StorageT>, regex::Error>
-    {
+    pub fn new(
+        tok_id: Option<StorageT>,
+        name: Option<String>,
+        re_str: String
+    ) -> Result<Rule<StorageT>, regex::Error> {
         let re = RegexBuilder::new(&format!("\\A(?:{})", &re_str))
-                              .multi_line(true)
-                              .dot_matches_new_line(true)
-                              .build()?;
-        Ok(Rule{tok_id, name, re_str, re})
+            .multi_line(true)
+            .dot_matches_new_line(true)
+            .build()?;
+        Ok(Rule {
+            tok_id,
+            name,
+            re_str,
+            re
+        })
     }
 }
 
@@ -82,7 +88,7 @@ pub struct LexerDef<StorageT> {
 
 impl<StorageT: Copy + Eq> LexerDef<StorageT> {
     pub fn new(rules: Vec<Rule<StorageT>>) -> LexerDef<StorageT> {
-        LexerDef{rules}
+        LexerDef { rules }
     }
 
     /// Get the `Rule` at index `idx`.
@@ -93,12 +99,18 @@ impl<StorageT: Copy + Eq> LexerDef<StorageT> {
     /// Get the `Rule` instance associated with a particular lexeme ID. Panics if no such rule
     /// exists.
     pub fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
-        &self.rules.iter().find(|r| r.tok_id == Some(tok_id)).unwrap()
+        &self
+            .rules
+            .iter()
+            .find(|r| r.tok_id == Some(tok_id))
+            .unwrap()
     }
 
     /// Get the `Rule` instance associated with a particular name.
     pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
-        self.rules.iter().find(|r| r.name.as_ref().map(|x| x.as_str()) == Some(n))
+        self.rules
+            .iter()
+            .find(|r| r.name.as_ref().map(|x| x.as_str()) == Some(n))
     }
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
@@ -116,8 +128,10 @@ impl<StorageT: Copy + Eq> LexerDef<StorageT> {
     /// benign: some lexers deliberately define tokens which are not used (e.g. reserving future
     /// keywords). A non-empty set #2 is more likely to be an error since there are parts of the
     /// grammar where nothing the user can input will be parseable.
-    pub fn set_rule_ids<'a>(&'a mut self, rule_ids_map: &HashMap<&'a str, StorageT>)
-                            -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
+    pub fn set_rule_ids<'a>(
+        &'a mut self,
+        rule_ids_map: &HashMap<&'a str, StorageT>
+    ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
         // recover the names later.
@@ -151,17 +165,21 @@ impl<StorageT: Copy + Eq> LexerDef<StorageT> {
         if rules_with_names - missing_from_parser_idxs.len() == rule_ids_map.len() {
             missing_from_lexer = None
         } else {
-            missing_from_lexer = Some(rule_ids_map.keys()
-                                                  .cloned()
-                                                  .collect::<HashSet<&str>>()
-                                                  .difference(&self.rules
-                                                                   .iter()
-                                                                   .filter(|x| x.name.is_some())
-                                                                   .map(|x| &**x.name.as_ref()
-                                                                                     .unwrap())
-                                                                   .collect::<HashSet<&str>>())
-                                                  .cloned()
-                                                  .collect::<HashSet<&str>>());
+            missing_from_lexer = Some(
+                rule_ids_map
+                    .keys()
+                    .cloned()
+                    .collect::<HashSet<&str>>()
+                    .difference(
+                        &self
+                            .rules
+                            .iter()
+                            .filter(|x| x.name.is_some())
+                            .map(|x| &**x.name.as_ref().unwrap())
+                            .collect::<HashSet<&str>>()
+                    ).cloned()
+                    .collect::<HashSet<&str>>()
+            );
         }
 
         (missing_from_lexer, missing_from_parser)
@@ -188,7 +206,11 @@ pub struct Lexer<'a, StorageT: 'a> {
 
 impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
     fn new(lexerdef: &'a LexerDef<StorageT>, s: &'a str) -> Lexer<'a, StorageT> {
-        Lexer {lexerdef, s, newlines: Rc::new(RefCell::new(Vec::new()))}
+        Lexer {
+            lexerdef,
+            s,
+            newlines: Rc::new(RefCell::new(Vec::new()))
+        }
     }
 
     /// Return all this lexer's lexemes or a `LexError` if there was a problem when lexing.
@@ -211,21 +233,23 @@ impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
                 }
             }
             if longest > 0 {
-                self.newlines.borrow_mut().extend(self.s[i..i + longest]
-                                                      .chars()
-                                                      .enumerate()
-                                                      .filter(|&(_, c)| c == '\n')
-                                                      .map(|(j, _)| i + j + 1));
+                self.newlines.borrow_mut().extend(
+                    self.s[i..i + longest]
+                        .chars()
+                        .enumerate()
+                        .filter(|&(_, c)| c == '\n')
+                        .map(|(j, _)| i + j + 1)
+                );
                 let r = &self.lexerdef.get_rule(longest_ridx).unwrap();
                 if r.name.is_some() {
                     match r.tok_id {
                         Some(tok_id) => lxs.push(Lexeme::new(tok_id, i, longest)),
-                        None => return Err(LexError{idx: i})
+                        None => return Err(LexError { idx: i })
                     }
                 }
                 i += longest;
             } else {
-                return Err(LexError{idx: i});
+                return Err(LexError { idx: i });
             }
         }
         Ok(lxs)
@@ -248,7 +272,10 @@ impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
                 return Ok((i + 2, l.start - newlines[i] + 1));
             }
         }
-        Ok((newlines.len() + 1, l.start - newlines[newlines.len() - 1] + 1))
+        Ok((
+            newlines.len() + 1,
+            l.start - newlines[newlines.len() - 1] + 1
+        ))
     }
 }
 
@@ -263,7 +290,7 @@ pub struct Lexeme<StorageT> {
 
 impl<StorageT: Copy> Lexeme<StorageT> {
     pub fn new(tok_id: StorageT, start: usize, len: usize) -> Lexeme<StorageT> {
-        Lexeme{
+        Lexeme {
             start,
             len: u32::try_from(len).unwrap(),
             tok_id
@@ -298,9 +325,9 @@ impl<StorageT: Copy> Lexeme<StorageT> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
     use super::*;
     use parser::parse_lex;
+    use std::collections::HashMap;
 
     #[test]
     fn test_basic() {
@@ -336,8 +363,8 @@ mod test {
         ".to_string();
         let lexer = parse_lex::<u8>(&src).unwrap();
         match lexer.lexer(&"abc").lexemes() {
-            Ok(_)  => panic!("Invalid input lexed"),
-            Err(LexError{idx: 0}) => (),
+            Ok(_) => panic!("Invalid input lexed"),
+            Err(LexError { idx: 0 }) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
         };
     }
@@ -347,7 +374,8 @@ mod test {
         let src = "%%
 if 'IF'
 [a-z]+ 'ID'
-[ ] ;".to_string();
+[ ] ;"
+            .to_string();
         let mut lexer = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("IF", 0);
@@ -370,7 +398,8 @@ if 'IF'
     fn test_line_and_col() {
         let src = "%%
 [a-z]+ 'ID'
-[ \\n] ;".to_string();
+[ \\n] ;"
+            .to_string();
         let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0);
@@ -394,7 +423,11 @@ if 'IF'
         assert_eq!(lexer.line_and_col(&lexemes[2]).unwrap(), (3, 3));
         assert_eq!(lexer.line_and_col(&lexemes[3]).unwrap(), (3, 5));
 
-        let fake_lexeme = Lexeme{start: 100, len: 1, tok_id: 0};
+        let fake_lexeme = Lexeme {
+            start: 100,
+            len: 1,
+            tok_id: 0
+        };
         if let Ok(_) = lexer.line_and_col(&fake_lexeme) {
             panic!("line_and_col returned Ok(_) when it should have returned Err.");
         }
@@ -404,7 +437,8 @@ if 'IF'
     fn test_missing_from_lexer_and_parser() {
         let src = "%%
 [a-z]+ 'ID'
-[ \\n] ;".to_string();
+[ \\n] ;"
+            .to_string();
         let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("INT", 0);
@@ -412,11 +446,14 @@ if 'IF'
         missing_from_lexer.insert("INT");
         let mut missing_from_parser = HashSet::new();
         missing_from_parser.insert("ID");
-        assert_eq!(lexerdef.set_rule_ids(&map), (Some(missing_from_lexer), Some(missing_from_parser)));
+        assert_eq!(
+            lexerdef.set_rule_ids(&map),
+            (Some(missing_from_lexer), Some(missing_from_parser))
+        );
 
         match lexerdef.lexer(&" a ").lexemes() {
-            Ok(_)  => panic!("Invalid input lexed"),
-            Err(LexError{idx: 1}) => (),
+            Ok(_) => panic!("Invalid input lexed"),
+            Err(LexError { idx: 1 }) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
         };
     }

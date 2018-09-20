@@ -30,11 +30,12 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::hash_map::{Entry, HashMap};
-use std::hash::{BuildHasherDefault, Hash};
+use std::{
+    collections::hash_map::{Entry, HashMap},
+    hash::{BuildHasherDefault, Hash}
+};
 
-use cfgrammar::{PIdx, Symbol, SIdx};
-use cfgrammar::yacc::YaccGrammar;
+use cfgrammar::{yacc::YaccGrammar, PIdx, SIdx, Symbol};
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
@@ -50,12 +51,15 @@ pub struct Itemset<StorageT: Eq + Hash> {
     pub items: HashMap<(PIdx<StorageT>, SIdx<StorageT>), Ctx, BuildHasherDefault<FnvHasher>>
 }
 
-impl<StorageT: 'static + Hash + PrimInt + Unsigned> Itemset<StorageT> 
-where usize: AsPrimitive<StorageT>
+impl<StorageT: 'static + Hash + PrimInt + Unsigned> Itemset<StorageT>
+where
+    usize: AsPrimitive<StorageT>
 {
     /// Create a blank Itemset.
     pub fn new(_: &YaccGrammar<StorageT>) -> Self {
-        Itemset {items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default())}
+        Itemset {
+            items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default())
+        }
     }
 
     /// Add an item `(prod, dot)` with context `ctx` to this itemset. Returns true if this led to
@@ -63,10 +67,8 @@ where usize: AsPrimitive<StorageT>
     pub fn add(&mut self, pidx: PIdx<StorageT>, dot: SIdx<StorageT>, ctx: &Ctx) -> bool {
         let entry = self.items.entry((pidx, dot));
         match entry {
-            Entry::Occupied(mut e) => {
-                e.get_mut().or(ctx)
-            }
-            Entry::Vacant(e)       => {
+            Entry::Occupied(mut e) => e.get_mut().or(ctx),
+            Entry::Vacant(e) => {
                 e.insert(ctx.clone());
                 true
             }
@@ -115,7 +117,7 @@ where usize: AsPrimitive<StorageT>
                         Some(i) => {
                             // Since zero_todos.len() == grm.prods_len, the call to as_ is safe.
                             pidx = PIdx(i.as_())
-                        },
+                        }
                         None => break
                     }
                     dot = SIdx(StorageT::zero());
@@ -123,7 +125,9 @@ where usize: AsPrimitive<StorageT>
                 }
             }
             let prod = grm.prod(pidx);
-            if dot == grm.prod_len(pidx) { continue; }
+            if dot == grm.prod_len(pidx) {
+                continue;
+            }
             if let Symbol::Rule(s_ridx) = prod[usize::from(dot)] {
                 // This if statement is, in essence, a fast version of what's called getContext in
                 // Chen's dissertation, folding in getTHeads at the same time. The particular
@@ -139,7 +143,7 @@ where usize: AsPrimitive<StorageT>
                             new_ctx.set(usize::from(s_tidx), true);
                             nullable = false;
                             break;
-                        },
+                        }
                         Symbol::Rule(s_ridx) => {
                             new_ctx.or(firsts.firsts(s_ridx));
                             if !firsts.is_epsilon_set(s_ridx) {
@@ -170,7 +174,9 @@ where usize: AsPrimitive<StorageT>
         let mut newis = Itemset::new(grm);
         for (&(pidx, dot), ctx) in &self.items {
             let prod = grm.prod(pidx);
-            if dot == grm.prod_len(pidx) { continue; }
+            if dot == grm.prod_len(pidx) {
+                continue;
+            }
             if sym == &prod[usize::from(dot)] {
                 newis.add(pidx, SIdx(dot.as_storaget() + StorageT::one()), ctx);
             }
@@ -181,22 +187,27 @@ where usize: AsPrimitive<StorageT>
 
 #[cfg(test)]
 mod test {
-    use vob::Vob;
     use super::Itemset;
-    use cfgrammar::{SIdx, Symbol};
-    use cfgrammar::yacc::{YaccGrammar, YaccKind};
+    use cfgrammar::{
+        yacc::{YaccGrammar, YaccKind},
+        SIdx, Symbol
+    };
     use stategraph::state_exists;
+    use vob::Vob;
 
     #[test]
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
-        let grm = &YaccGrammar::new(YaccKind::Original, &"
+        let grm = &YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start S
           %%
           S: L '=' R | R;
           L: '*' R | 'id';
           R: L;
-          ").unwrap();
+          "
+        ).unwrap();
         let firsts = grm.firsts();
 
         let mut is = Itemset::new(&grm);

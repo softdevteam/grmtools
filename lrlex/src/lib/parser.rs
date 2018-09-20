@@ -43,49 +43,55 @@ pub struct LexParser<StorageT> {
 
 impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
-        let mut p = LexParser{
+        let mut p = LexParser {
             src,
             newlines: vec![0],
-            rules   : Vec::new()
+            rules: Vec::new()
         };
-        try!(p.parse());
+        p.parse()?;
         Ok(p)
     }
 
     fn mk_error(&self, kind: LexErrorKind, off: usize) -> LexBuildError {
         let (line, col) = self.off_to_line_col(off);
-        LexBuildError{kind, line, col}
+        LexBuildError { kind, line, col }
     }
 
     fn off_to_line_col(&self, off: usize) -> (usize, usize) {
         if off == self.src.len() {
             let line_off = *self.newlines.iter().last().unwrap();
-            return (self.newlines.len(), self.src[line_off..].chars().count() + 1);
+            return (
+                self.newlines.len(),
+                self.src[line_off..].chars().count() + 1
+            );
         }
-        let (line_m1, &line_off) = self.newlines.iter()
-                                                .enumerate()
-                                                .rev()
-                                                .find(|&(_, &line_off)| line_off <= off)
-                                                .unwrap();
+        let (line_m1, &line_off) = self
+            .newlines
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|&(_, &line_off)| line_off <= off)
+            .unwrap();
         let c_off = self.src[line_off..]
-                        .char_indices()
-                        .position(|(c_off, _)| c_off == off - line_off)
-                        .unwrap();
+            .char_indices()
+            .position(|(c_off, _)| c_off == off - line_off)
+            .unwrap();
         (line_m1 + 1, c_off + 1)
     }
 
     fn parse(&mut self) -> LexBuildResult<usize> {
-        let mut i = try!(self.parse_declarations(0));
-        i = try!(self.parse_rules(i));
+        let mut i = self.parse_declarations(0)?;
+        i = self.parse_rules(i)?;
         // We don't currently support the subroutines part of a specification. One day we might...
         match self.lookahead_is("%%", i) {
             Some(j) => {
-                if try!(self.parse_ws(j)) == self.src.len() { Ok(i) }
-                else {
+                if self.parse_ws(j)? == self.src.len() {
+                    Ok(i)
+                } else {
                     Err(self.mk_error(LexErrorKind::RoutinesNotSupported, i))
                 }
             }
-            None    => {
+            None => {
                 assert_eq!(i, self.src.len());
                 Ok(i)
             }
@@ -93,34 +99,39 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     }
 
     fn parse_declarations(&mut self, mut i: usize) -> LexBuildResult<usize> {
-        i = try!(self.parse_ws(i));
-        if let Some(j) = self.lookahead_is("%%", i) { return Ok(j); }
+        i = self.parse_ws(i)?;
+        if let Some(j) = self.lookahead_is("%%", i) {
+            return Ok(j);
+        }
         if i < self.src.len() {
             Err(self.mk_error(LexErrorKind::UnknownDeclaration, i))
-        }
-        else {
+        } else {
             Err(self.mk_error(LexErrorKind::PrematureEnd, i - 1))
         }
     }
 
     fn parse_rules(&mut self, mut i: usize) -> LexBuildResult<usize> {
         loop {
-            i = try!(self.parse_ws(i));
-            if i == self.src.len() { break; }
-            if self.lookahead_is("%%", i).is_some() { break; }
-            i = try!(self.parse_rule(i));
+            i = self.parse_ws(i)?;
+            if i == self.src.len() {
+                break;
+            }
+            if self.lookahead_is("%%", i).is_some() {
+                break;
+            }
+            i = self.parse_rule(i)?;
         }
         Ok(i)
     }
 
     fn parse_rule(&mut self, i: usize) -> LexBuildResult<usize> {
         let line_len = self.src[i..]
-                           .find(|c| c == '\n')
-                           .unwrap_or(self.src.len() - i);
-        let line     = self.src[i..i + line_len].trim_right();
-        let rspace   = match line.rfind(' ') {
+            .find(|c| c == '\n')
+            .unwrap_or(self.src.len() - i);
+        let line = self.src[i..i + line_len].trim_right();
+        let rspace = match line.rfind(' ') {
             Some(j) => j,
-            None    => return Err(self.mk_error(LexErrorKind::MissingSpace, i))
+            None => return Err(self.mk_error(LexErrorKind::MissingSpace, i))
         };
 
         let name;
@@ -129,14 +140,17 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             name = None;
         } else {
             debug_assert!(!orig_name.is_empty());
-            if !(   (orig_name.starts_with('\'') && orig_name.ends_with('\''))
-                 || (orig_name.starts_with('\"') && orig_name.ends_with('"'))) {
+            if !((orig_name.starts_with('\'') && orig_name.ends_with('\''))
+                || (orig_name.starts_with('\"') && orig_name.ends_with('"')))
+            {
                 return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1));
             }
             name = Some(orig_name[1..orig_name.len() - 1].to_string());
-            if self.rules.iter().any(|r| r.name
-                                          .as_ref()
-                                          .map_or(false, |n| n == name.as_ref().unwrap())) {
+            if self.rules.iter().any(|r| {
+                r.name
+                    .as_ref()
+                    .map_or(false, |n| n == name.as_ref().unwrap())
+            }) {
                 return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1));
             }
         }
@@ -147,7 +161,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                            .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
 
         let rule = Rule::new(Some(tok_id), name, re_str)
-                        .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
+            .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
         self.rules.push(rule);
         Ok(i + line_len)
     }
@@ -156,9 +170,9 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let mut j = i;
         for c in self.src[i..].chars() {
             match c {
-                ' '  | '\t' => (),
+                ' ' | '\t' => (),
                 '\n' | '\r' => self.newlines.push(j + 1),
-                _           => break
+                _ => break
             }
             j += c.len_utf8();
         }
@@ -168,14 +182,15 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     fn lookahead_is(&self, s: &'static str, i: usize) -> Option<usize> {
         if self.src[i..].starts_with(s) {
             Some(i + s.len())
-        }
-        else {
+        } else {
             None
         }
     }
 }
 
-pub fn parse_lex<StorageT: Copy + Eq + TryFrom<usize>>(s: &str) -> LexBuildResult<LexerDef<StorageT>> {
+pub fn parse_lex<StorageT: Copy + Eq + TryFrom<usize>>(
+    s: &str
+) -> LexBuildResult<LexerDef<StorageT>> {
     LexParser::new(s.to_string()).map(|p| LexerDef::new(p.rules))
 }
 

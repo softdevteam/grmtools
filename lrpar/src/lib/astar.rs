@@ -30,8 +30,7 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::hash::Hash;
-use std::fmt::Debug;
+use std::{fmt::Debug, hash::Hash};
 
 use indexmap::map::{Entry, IndexMap};
 
@@ -45,15 +44,17 @@ use indexmap::map::{Entry, IndexMap};
 /// [`astar_bag_collect`](https://docs.rs/pathfinding/0.6.8/pathfinding/fn.astar_bag.html)
 /// in the `pathfinding` crate. Unlike `astar_bag_collect`, this `astar_all` does not record the
 /// path taken to reach a success node: this allows it to be substantially faster.
-pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
-                                       neighbours: FN,
-                                       merge: FM,
-                                       success: FS)
-                                    -> Vec<N>
-                                 where N: Debug + Clone + Hash + Eq + PartialEq,
-                                       FN: Fn(bool, &N, &mut Vec<(u16, u16, N)>) -> bool,
-                                       FM: Fn(&mut N, N),
-                                       FS: Fn(&N) -> bool,
+pub(crate) fn astar_all<N, FN, FM, FS>(
+    start_node: N,
+    neighbours: FN,
+    merge: FM,
+    success: FS
+) -> Vec<N>
+where
+    N: Debug + Clone + Hash + Eq + PartialEq,
+    FN: Fn(bool, &N, &mut Vec<(u16, u16, N)>) -> bool,
+    FM: Fn(&mut N, N),
+    FS: Fn(&N) -> bool
 {
     // We tackle the problem in two phases. In the first phase we search for a success node, with
     // the cost monotonically increasing. All neighbouring nodes are stored for future inspection,
@@ -99,8 +100,12 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
                 todo.push(IndexMap::new());
             }
             match todo[off].entry(nbr.clone()) {
-                Entry::Vacant(e) => { e.insert(nbr); },
-                Entry::Occupied(mut e) => { merge(&mut e.get_mut(), nbr); }
+                Entry::Vacant(e) => {
+                    e.insert(nbr);
+                }
+                Entry::Occupied(mut e) => {
+                    merge(&mut e.get_mut(), nbr);
+                }
             }
         }
     }
@@ -112,7 +117,10 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
     // That never leads to more interesting repairs from our perspective.
 
     // Free up all memory except for the cost todo that contains the first success node.
-    let mut scs_todo = todo.drain(usize::from(c)..usize::from(c) + 1).nth(0).unwrap();
+    let mut scs_todo = todo
+        .drain(usize::from(c)..usize::from(c) + 1)
+        .nth(0)
+        .unwrap();
     while !scs_todo.is_empty() {
         let n = scs_todo.pop().unwrap().1;
         if success(&n) {
@@ -128,8 +136,12 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
             // existing success nodes and an empty heuristic.
             if nbr_cost + nbr_hrstc == c {
                 match scs_todo.entry(nbr.clone()) {
-                    Entry::Vacant(e) => { e.insert(nbr); },
-                    Entry::Occupied(mut e) => { merge(&mut e.get_mut(), nbr); }
+                    Entry::Vacant(e) => {
+                        e.insert(nbr);
+                    }
+                    Entry::Occupied(mut e) => {
+                        merge(&mut e.get_mut(), nbr);
+                    }
                 }
             }
         }
@@ -147,15 +159,17 @@ pub(crate) fn astar_all<N, FN, FM, FS>(start_node: N,
 /// The name of this function isn't entirely accurate: this isn't Dijkstra's original algorithm or
 /// one of its well-known variants. However, unlike the astar_all function it doesn't expect a
 /// heuristic and it also filters out some duplicates.
-pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
-                                      neighbours: FN,
-                                      merge: FM,
-                                      success: FS)
-                                   -> Vec<N>
-                                where N: Debug + Clone + Hash + Eq + PartialEq,
-                                      FN: Fn(bool, &N, &mut Vec<(u16, N)>) -> bool,
-                                      FM: Fn(&mut N, N),
-                                      FS: Fn(&N) -> bool,
+pub(crate) fn dijkstra<N, FM, FN, FS>(
+    start_node: N,
+    neighbours: FN,
+    merge: FM,
+    success: FS
+) -> Vec<N>
+where
+    N: Debug + Clone + Hash + Eq + PartialEq,
+    FN: Fn(bool, &N, &mut Vec<(u16, N)>) -> bool,
+    FM: Fn(&mut N, N),
+    FS: Fn(&N) -> bool
 {
     let mut scs_nodes = Vec::new();
     let mut todo: Vec<IndexMap<N, N>> = vec![indexmap![start_node.clone() => start_node]];
@@ -185,13 +199,20 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
                 todo.push(IndexMap::new());
             }
             match todo[off].entry(nbr.clone()) {
-                Entry::Vacant(e) => { e.insert(nbr); },
-                Entry::Occupied(mut e) => { merge(&mut e.get_mut(), nbr); }
+                Entry::Vacant(e) => {
+                    e.insert(nbr);
+                }
+                Entry::Occupied(mut e) => {
+                    merge(&mut e.get_mut(), nbr);
+                }
             }
         }
     }
 
-    let mut scs_todo = todo.drain(usize::from(c)..usize::from(c) + 1).nth(0).unwrap();
+    let mut scs_todo = todo
+        .drain(usize::from(c)..usize::from(c) + 1)
+        .nth(0)
+        .unwrap();
     while !scs_todo.is_empty() {
         let n = scs_todo.pop().unwrap().1;
         if success(&n) {
@@ -204,8 +225,12 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(start_node: N,
         for (nbr_cost, nbr) in next.drain(..) {
             if nbr_cost == c {
                 match scs_todo.entry(nbr.clone()) {
-                    Entry::Vacant(e) => { e.insert(nbr); },
-                    Entry::Occupied(mut e) => { merge(&mut e.get_mut(), nbr); }
+                    Entry::Vacant(e) => {
+                        e.insert(nbr);
+                    }
+                    Entry::Occupied(mut e) => {
+                        merge(&mut e.get_mut(), nbr);
+                    }
                 }
             }
         }

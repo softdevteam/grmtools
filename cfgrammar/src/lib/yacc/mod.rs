@@ -35,9 +35,11 @@ pub mod firsts;
 pub mod grammar;
 pub mod parser;
 
-pub use self::ast::{GrammarValidationError, GrammarValidationErrorKind};
-pub use self::parser::{YaccParserError, YaccParserErrorKind};
-pub use self::grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar, YaccGrammarError};
+pub use self::{
+    ast::{GrammarValidationError, GrammarValidationErrorKind},
+    grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar, YaccGrammarError},
+    parser::{YaccParserError, YaccParserErrorKind}
+};
 
 /// The particular Yacc variant this grammar makes use of.
 #[derive(Clone, Copy)]

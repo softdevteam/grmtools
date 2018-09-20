@@ -30,36 +30,36 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::time::Instant;
+use std::{fmt::Debug, hash::Hash, time::Instant};
 
 use lrtable::StIdx;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use parser::{Node, Parser, ParseRepair, Recoverer};
+use parser::{Node, ParseRepair, Parser, Recoverer};
 
 struct Panic;
 
-pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-                       (_: &'a Parser<StorageT>)
-                     -> Box<Recoverer<StorageT> + 'a>
-                  where usize: AsPrimitive<StorageT>
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
+    _: &'a Parser<StorageT>
+) -> Box<Recoverer<StorageT> + 'a>
+where
+    usize: AsPrimitive<StorageT>
 {
     Box::new(Panic)
 }
 
 impl<StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Recoverer<StorageT> for Panic
-where usize: AsPrimitive<StorageT>
+where
+    usize: AsPrimitive<StorageT>
 {
-    fn recover(&self,
-               finish_by: Instant,
-               parser: &Parser<StorageT>,
-               in_laidx: usize,
-               in_pstack: &mut Vec<StIdx>,
-               _: &mut Vec<Node<StorageT>>)
-           -> (usize, Vec<Vec<ParseRepair<StorageT>>>)
-    {
+    fn recover(
+        &self,
+        finish_by: Instant,
+        parser: &Parser<StorageT>,
+        in_laidx: usize,
+        in_pstack: &mut Vec<StIdx>,
+        _: &mut Vec<Node<StorageT>>
+    ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This recoverer is based on that in Compiler Design in C by Allen I. Holub p.348.
         //
         // It doesn't really fit into our recoverer mould very well: it can't always flesh out a

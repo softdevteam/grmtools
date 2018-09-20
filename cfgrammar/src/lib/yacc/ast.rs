@@ -30,9 +30,11 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
-use std::fmt;
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt
+};
 
 use indexmap::{IndexMap, IndexSet};
 
@@ -91,9 +93,7 @@ impl Error for GrammarValidationError {}
 impl fmt::Display for GrammarValidationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
-            GrammarValidationErrorKind::NoStartRule => {
-                write!(f, "No start rule specified")
-            },
+            GrammarValidationErrorKind::NoStartRule => write!(f, "No start rule specified"),
             GrammarValidationErrorKind::InvalidStartRule => {
                 write!(f, "Start rule '{}' does not appear in grammar", self.sym.as_ref().unwrap())
             },
@@ -114,7 +114,7 @@ impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Symbol::Rule(ref s) => write!(f, "{}", s),
-            Symbol::Token(ref s)    => write!(f, "{}", s)
+            Symbol::Token(ref s) => write!(f, "{}", s)
         }
     }
 }
@@ -122,24 +122,28 @@ impl fmt::Display for Symbol {
 impl GrammarAST {
     pub fn new() -> GrammarAST {
         GrammarAST {
-            start:  None,
-            rules:  IndexMap::new(), // Using an IndexMap means that we retain the order
-                                     // of rules as they're found in the input file.
-            prods:  Vec::new(),
+            start: None,
+            rules: IndexMap::new(), // Using an IndexMap means that we retain the order
+            // of rules as they're found in the input file.
+            prods: Vec::new(),
             tokens: IndexSet::new(),
-            precs:  HashMap::new(),
+            precs: HashMap::new(),
             implicit_tokens: None
         }
     }
 
     pub fn add_prod(&mut self, key: String, symbols: Vec<Symbol>, precedence: Option<String>) {
-        self.rules.entry(key)
-                  .or_insert_with(Vec::new)
-                  .push(self.prods.len());
-        self.prods.push(Production{symbols, precedence});
+        self.rules
+            .entry(key)
+            .or_insert_with(Vec::new)
+            .push(self.prods.len());
+        self.prods.push(Production {
+            symbols,
+            precedence
+        });
     }
 
-    pub fn get_rule(&self, key: &str) -> Option<&Vec<usize>>{
+    pub fn get_rule(&self, key: &str) -> Option<&Vec<usize>> {
         self.rules.get(key)
     }
 
@@ -157,13 +161,17 @@ impl GrammarAST {
     pub(crate) fn complete_and_validate(&mut self) -> Result<(), GrammarValidationError> {
         match self.start {
             None => {
-                return Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoStartRule,
-                                                  sym: None})
-            },
+                return Err(GrammarValidationError {
+                    kind: GrammarValidationErrorKind::NoStartRule,
+                    sym: None
+                })
+            }
             Some(ref s) => {
                 if !self.rules.contains_key(s) {
-                    return Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule,
-                                               sym: Some(Symbol::Rule(s.clone()))});
+                    return Err(GrammarValidationError {
+                        kind: GrammarValidationErrorKind::InvalidStartRule,
+                        sym: Some(Symbol::Rule(s.clone()))
+                    });
                 }
             }
         }
@@ -172,26 +180,34 @@ impl GrammarAST {
                 let prod = &self.prods[pidx];
                 if let Some(ref n) = prod.precedence {
                     if !self.tokens.contains(n) {
-                        return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
-                            sym: Some(Symbol::Token(n.clone()))});
+                        return Err(GrammarValidationError {
+                            kind: GrammarValidationErrorKind::UnknownToken,
+                            sym: Some(Symbol::Token(n.clone()))
+                        });
                     }
                     if !self.precs.contains_key(n) {
-                        return Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoPrecForToken,
-                            sym: Some(Symbol::Token(n.clone()))});
+                        return Err(GrammarValidationError {
+                            kind: GrammarValidationErrorKind::NoPrecForToken,
+                            sym: Some(Symbol::Token(n.clone()))
+                        });
                     }
                 }
                 for sym in &prod.symbols {
                     match *sym {
                         Symbol::Rule(ref name) => {
                             if !self.rules.contains_key(name) {
-                                return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef,
-                                    sym: Some(sym.clone())});
+                                return Err(GrammarValidationError {
+                                    kind: GrammarValidationErrorKind::UnknownRuleRef,
+                                    sym: Some(sym.clone())
+                                });
                             }
                         }
                         Symbol::Token(ref name) => {
                             if !self.tokens.contains(name) {
-                                return Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken,
-                                    sym: Some(sym.clone())});
+                                return Err(GrammarValidationError {
+                                    kind: GrammarValidationErrorKind::UnknownToken,
+                                    sym: Some(sym.clone())
+                                });
                             }
                         }
                     }
@@ -216,117 +232,144 @@ mod test {
     }
 
     #[test]
-    fn test_empty_grammar(){
+    fn test_empty_grammar() {
         let mut grm = GrammarAST::new();
         match grm.complete_and_validate() {
-            Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoStartRule, ..}) => (),
+            Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::NoStartRule,
+                ..
+            }) => (),
             _ => panic!("Validation error")
         }
     }
 
     #[test]
-    fn test_invalid_start_rule(){
+    fn test_invalid_start_rule() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("B".to_string(), vec!(), None);
+        grm.add_prod("B".to_string(), vec![], None);
         match grm.complete_and_validate() {
-            Err(GrammarValidationError{kind: GrammarValidationErrorKind::InvalidStartRule, ..}) => (),
+            Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::InvalidStartRule,
+                ..
+            }) => (),
             _ => panic!("Validation error")
         }
     }
 
     #[test]
-    fn test_valid_start_rule(){
+    fn test_valid_start_rule() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(), None);
+        grm.add_prod("A".to_string(), vec![], None);
         assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
-    fn test_valid_rule_ref(){
+    fn test_valid_rule_ref() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(rule("B")), None);
-        grm.add_prod("B".to_string(), vec!(), None);
+        grm.add_prod("A".to_string(), vec![rule("B")], None);
+        grm.add_prod("B".to_string(), vec![], None);
         assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
-    fn test_invalid_rule_ref(){
+    fn test_invalid_rule_ref() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(rule("B")), None);
+        grm.add_prod("A".to_string(), vec![rule("B")], None);
         match grm.complete_and_validate() {
-            Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
+            Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::UnknownRuleRef,
+                ..
+            }) => (),
             _ => panic!("Validation error")
         }
     }
 
     #[test]
-    fn test_valid_token_ref(){
+    fn test_valid_token_ref() {
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(token("b")), None);
+        grm.add_prod("A".to_string(), vec![token("b")], None);
         assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
-    fn test_redefine_rules_as_tokens(){
+    fn test_redefine_rules_as_tokens() {
         // for now we won't support the YACC feature that allows
         // to redefine rules as tokens by adding them to '%token'
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(rule("b")), None);
+        grm.add_prod("A".to_string(), vec![rule("b")], None);
         assert!(grm.complete_and_validate().is_err());
     }
 
     #[test]
-    fn test_invalid_token_ref(){
+    fn test_invalid_token_ref() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(token("b")), None);
+        grm.add_prod("A".to_string(), vec![token("b")], None);
         match grm.complete_and_validate() {
-            Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
+            Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::UnknownToken,
+                ..
+            }) => (),
             _ => panic!("Validation error")
         }
     }
 
     #[test]
-    fn test_invalid_rule_forgotten_token(){
+    fn test_invalid_rule_forgotten_token() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(rule("b"), token("b")), None);
+        grm.add_prod("A".to_string(), vec![rule("b"), token("b")], None);
         match grm.complete_and_validate() {
-            Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownRuleRef, ..}) => (),
+            Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::UnknownRuleRef,
+                ..
+            }) => (),
             _ => panic!("Validation error")
         }
     }
 
     #[test]
-    fn test_precedence_override(){
+    fn test_precedence_override() {
         let mut grm = GrammarAST::new();
-        grm.precs.insert("b".to_string(), Precedence{level: 1, kind: AssocKind::Left});
+        grm.precs.insert(
+            "b".to_string(),
+            Precedence {
+                level: 1,
+                kind: AssocKind::Left
+            }
+        );
         grm.start = Some("A".to_string());
         grm.tokens.insert("b".to_string());
-        grm.add_prod("A".to_string(), vec!(token("b")), Some("b".to_string()));
+        grm.add_prod("A".to_string(), vec![token("b")], Some("b".to_string()));
         assert!(grm.complete_and_validate().is_ok());
     }
 
     #[test]
-    fn test_invalid_precedence_override(){
+    fn test_invalid_precedence_override() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec!(token("b")), Some("b".to_string()));
+        grm.add_prod("A".to_string(), vec![token("b")], Some("b".to_string()));
         match grm.complete_and_validate() {
-            Err(GrammarValidationError{kind: GrammarValidationErrorKind::UnknownToken, ..}) => (),
+            Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::UnknownToken,
+                ..
+            }) => (),
             _ => panic!("Validation error")
         }
         grm.tokens.insert("b".to_string());
         match grm.complete_and_validate() {
-            Err(GrammarValidationError{kind: GrammarValidationErrorKind::NoPrecForToken, ..}) => (),
+            Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::NoPrecForToken,
+                ..
+            }) => (),
             _ => panic!("Validation error")
         }
     }

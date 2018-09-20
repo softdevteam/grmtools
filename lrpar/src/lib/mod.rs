@@ -51,16 +51,18 @@ mod builder;
 mod cpctplus;
 mod panic;
 pub mod parser;
-pub use parser::{Node, parse_rcvry, ParseError, ParseRepair, RecoveryKind};
+pub use parser::{parse_rcvry, Node, ParseError, ParseRepair, RecoveryKind};
 mod mf;
 
-pub use builder::{ParserBuilder, reconstitute};
+pub use builder::{reconstitute, ParserBuilder};
 
 /// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
 /// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.
 #[macro_export]
 macro_rules! lrpar_mod {
-    ($n:ident) => { include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs")); };
+    ($n:ident) => {
+        include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs"));
+    };
 }
 
 #[doc(hidden)]

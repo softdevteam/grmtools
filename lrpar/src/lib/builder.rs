@@ -30,21 +30,23 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::collections::HashMap;
-use std::convert::AsRef;
-use std::env::{current_dir, var};
-use std::error::Error;
-use std::fmt::Debug;
-use std::fs::{self, File, read_to_string};
-use std::hash::Hash;
-use std::io::Write;
-use std::marker::PhantomData;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    convert::AsRef,
+    env::{current_dir, var},
+    error::Error,
+    fmt::Debug,
+    fs::{self, read_to_string, File},
+    hash::Hash,
+    io::Write,
+    marker::PhantomData,
+    path::{Path, PathBuf}
+};
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use filetime::FileTime;
-use lrtable::{Minimiser, from_yacc, StateGraph, StateTable};
+use lrtable::{from_yacc, Minimiser, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use serde::{Deserialize, Serialize};
 use typename::TypeName;
@@ -60,7 +62,7 @@ const STABLE_FILE_EXT: &str = "stable";
 
 /// A `ParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
-pub struct ParserBuilder<StorageT=u32> {
+pub struct ParserBuilder<StorageT = u32> {
     // Anything stored in here almost certainly needs to be included as part of the rebuild_cache
     // function below so that, if it's changed, the grammar is rebuilt.
     recoverer: RecoveryKind,
@@ -68,8 +70,9 @@ pub struct ParserBuilder<StorageT=u32> {
 }
 
 impl<StorageT> ParserBuilder<StorageT>
-where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
-      usize: AsPrimitive<StorageT>
+where
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+    usize: AsPrimitive<StorageT>
 {
     /// Create a new `ParserBuilder`.
     ///
@@ -90,7 +93,7 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
     ///     .unwrap();
     /// ```
     pub fn new() -> Self {
-        ParserBuilder{
+        ParserBuilder {
             recoverer: RecoveryKind::MF,
             phantom: PhantomData
         }
@@ -114,9 +117,10 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
     /// productions.
-    pub fn process_file_in_src(&self, srcp: &str)
-                            -> Result<(HashMap<String, StorageT>), Box<Error>>
-    {
+    pub fn process_file_in_src(
+        &self,
+        srcp: &str
+    ) -> Result<(HashMap<String, StorageT>), Box<Error>> {
         let mut inp = current_dir()?;
         inp.push("src");
         inp.push(srcp);
@@ -138,24 +142,34 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
     /// productions.
-    pub fn process_file<P, Q>(&self,
-                              inp: P,
-                              outd: Q)
-                           -> Result<(HashMap<String, StorageT>), Box<Error>>
-                        where P: AsRef<Path>,
-                              Q: AsRef<Path>
+    pub fn process_file<P, Q>(
+        &self,
+        inp: P,
+        outd: Q
+    ) -> Result<(HashMap<String, StorageT>), Box<Error>>
+    where
+        P: AsRef<Path>,
+        Q: AsRef<Path>
     {
         let inc = read_to_string(&inp).unwrap();
         let grm = YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc)?;
-        let rule_ids = grm.tokens_map().iter()
-                                      .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
-                                      .collect::<HashMap<_, _>>();
+        let rule_ids = grm
+            .tokens_map()
+            .iter()
+            .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
+            .collect::<HashMap<_, _>>();
         let cache = self.rebuild_cache(&grm);
 
         // out_base is the base filename for the output (e.g. /path/to/target/out/grm_y) to which
         // we will write filenames with various extensions below.
         let mut outp_base = outd.as_ref().to_path_buf();
-        let mut leaf = inp.as_ref().file_stem().unwrap().to_str().unwrap().to_owned();
+        let mut leaf = inp
+            .as_ref()
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
         leaf.push_str(YACC_SUFFIX);
         outp_base.push(leaf);
 
@@ -170,8 +184,9 @@ where StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsign
         // cases.
         if let Ok(ref inmd) = fs::metadata(&inp) {
             if let Ok(ref out_rs_md) = fs::metadata(&outp_rs) {
-                if FileTime::from_last_modification_time(out_rs_md) >
-                   FileTime::from_last_modification_time(inmd) {
+                if FileTime::from_last_modification_time(out_rs_md)
+                    > FileTime::from_last_modification_time(inmd)
+                {
                     if let Ok(outc) = read_to_string(&outp_rs) {
                         if outc.contains(&cache) {
                             return Ok(rule_ids);
@@ -221,7 +236,12 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
                                              include_bytes!(\"{}\"),
                                              include_bytes!(\"{}\"));
     parse_rcvry(RecoveryKind::{}, &grm, |_| 1, &sgraph, &stable, lexemes)
-", out_grm.to_str().unwrap(), out_sgraph.to_str().unwrap(), out_stable.to_str().unwrap(), recoverer));
+",
+            out_grm.to_str().unwrap(),
+            out_sgraph.to_str().unwrap(),
+            out_stable.to_str().unwrap(),
+            recoverer
+        ));
 
         outs.push_str("}\n");
         outs.push_str("}\n\n");
@@ -229,10 +249,12 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         // The rule constants
         for ridx in grm.iter_rules() {
             if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
-                outs.push_str(&format!("#[allow(dead_code)]\nconst R_{}: {} = {:?};\n",
-                                       grm.rule_name(ridx).to_ascii_uppercase(),
-                                       StorageT::type_name(),
-                                       usize::from(ridx)));
+                outs.push_str(&format!(
+                    "#[allow(dead_code)]\nconst R_{}: {} = {:?};\n",
+                    grm.rule_name(ridx).to_ascii_uppercase(),
+                    StorageT::type_name(),
+                    usize::from(ridx)
+                ));
             }
         }
 
@@ -269,9 +291,12 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
     }
 
     /// Output the structure `d` to the file `outp_base.ext`.
-    fn bin_output<P: AsRef<Path>, T: Serialize>
-                 (&self, outp_base: P, ext: &str, d: &T)
-               -> Result<PathBuf, Box<Error>> {
+    fn bin_output<P: AsRef<Path>, T: Serialize>(
+        &self,
+        outp_base: P,
+        ext: &str,
+        d: &T
+    ) -> Result<PathBuf, Box<Error>> {
         let mut outp = outp_base.as_ref().to_path_buf();
         outp.set_extension(ext);
         let f = File::create(&outp)?;
@@ -283,10 +308,15 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
 /// This function is called by generated files; it exists so that generated files don't require a
 /// dependency on serde and rmps.
 #[doc(hidden)]
-pub fn reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>
-                   (grm_buf: &'a [u8], sgraph_buf: &'a [u8], stable_buf: &'a [u8])
-                -> (YaccGrammar<StorageT>, StateGraph<StorageT>, StateTable<StorageT>)
-{
+pub fn reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
+    grm_buf: &'a [u8],
+    sgraph_buf: &'a [u8],
+    stable_buf: &'a [u8]
+) -> (
+    YaccGrammar<StorageT>,
+    StateGraph<StorageT>,
+    StateTable<StorageT>
+) {
     let grm = deserialize(grm_buf).unwrap();
     let sgraph = deserialize(sgraph_buf).unwrap();
     let stable = deserialize(stable_buf).unwrap();

@@ -55,7 +55,7 @@ pub type PrecedenceLevel = u64;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Precedence {
     pub level: PrecedenceLevel,
-    pub kind:  AssocKind
+    pub kind: AssocKind
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -69,7 +69,7 @@ pub enum AssocKind {
 /// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
 /// guarantees this struct makes about rules, tokens, productions, and symbols.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct YaccGrammar<StorageT=u32> {
+pub struct YaccGrammar<StorageT = u32> {
     /// How many rules does this grammar have?
     rules_len: RIdx<StorageT>,
     /// A mapping from `RIdx` -> `String`.
@@ -111,7 +111,10 @@ impl YaccGrammar<u32> {
     }
 }
 
-impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: AsPrimitive<StorageT> {
+impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT>
+where
+    usize: AsPrimitive<StorageT>
+{
     /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
     /// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
     /// ([`YaccGrammarError`](grammar/enum.YaccGrammarError.html) on error).
@@ -119,13 +122,11 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str)
-                          -> Result<Self, YaccGrammarError>
-    {
+    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
         let ast = match yacc_kind {
             YaccKind::Original | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
-                try!(yp.parse());
+                yp.parse()?;
                 let mut ast = yp.ast();
                 ast.complete_and_validate()?;
                 ast
@@ -182,8 +183,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                     }
                     rule_names.push(n2.clone());
                     implicit_start_rule = Some(n2);
-                }
-                else {
+                } else {
                     implicit_rule = None;
                     implicit_start_rule = None;
                 }
@@ -193,7 +193,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         for k in ast.rules.keys() {
             rule_names.push(k.clone());
         }
-        let mut rules_prods:Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(rule_names.len());
+        let mut rules_prods: Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(rule_names.len());
         let mut rule_map = HashMap::<String, RIdx<StorageT>>::new();
         for (i, v) in rule_names.iter().enumerate() {
             rules_prods.push(Vec::new());
@@ -212,7 +212,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
         let mut token_map = HashMap::<String, TIdx<StorageT>>::new();
         for (i, v) in token_names.iter().enumerate() {
             if let Some(n) = v.as_ref() {
-               token_map.insert(n.clone(), TIdx(i.as_()));
+                token_map.insert(n.clone(), TIdx(i.as_()));
             }
         }
 
@@ -227,8 +227,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
             if astrulename == &start_rule {
                 // Add the special start rule which has a single production which references a
                 // single rule.
-                rules_prods[usize::from(rule_map[astrulename])]
-                    .push(PIdx(prods.len().as_()));
+                rules_prods[usize::from(rule_map[astrulename])].push(PIdx(prods.len().as_()));
                 let start_prod = match implicit_start_rule {
                     None => {
                         // Add ^: S;
@@ -245,20 +244,22 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(ridx));
                 continue;
-            }
-            else if implicit_start_rule.as_ref().map_or(false, |s| s == astrulename) {
+            } else if implicit_start_rule
+                .as_ref()
+                .map_or(false, |s| s == astrulename)
+            {
                 // Add the intermediate start rule (handling implicit tokens at the beginning of
                 // the file):
                 //   ^~: ~ S;
-                rules_prods[usize::from(rule_map[astrulename])]
-                    .push(PIdx(prods.len().as_()));
-                prods.push(Some(vec![Symbol::Rule(rule_map[implicit_rule.as_ref().unwrap()]),
-                                     Symbol::Rule(rule_map[ast.start.as_ref().unwrap()])]));
+                rules_prods[usize::from(rule_map[astrulename])].push(PIdx(prods.len().as_()));
+                prods.push(Some(vec![
+                    Symbol::Rule(rule_map[implicit_rule.as_ref().unwrap()]),
+                    Symbol::Rule(rule_map[ast.start.as_ref().unwrap()]),
+                ]));
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(ridx));
                 continue;
-            }
-            else if implicit_rule.as_ref().map_or(false, |s| s == astrulename) {
+            } else if implicit_rule.as_ref().map_or(false, |s| s == astrulename) {
                 // Add the implicit rule: ~: "IMPLICIT_TOKEN_1" ~ | ... | "IMPLICIT_TOKEN_N" ~ | ;
                 let implicit_prods = &mut rules_prods[usize::from(rule_map[astrulename])];
                 // Add a production for each implicit token
@@ -315,19 +316,19 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
         assert!(!token_names.is_empty());
         assert!(!rule_names.is_empty());
-        Ok(YaccGrammar{
-            rules_len:        RIdx(rule_names.len().as_()),
+        Ok(YaccGrammar {
+            rules_len: RIdx(rule_names.len().as_()),
             rule_names,
-            tokens_len:       TIdx(token_names.len().as_()),
+            tokens_len: TIdx(token_names.len().as_()),
             eof_token_idx,
             token_names,
             token_precs,
-            prods_len:        PIdx(prods.len().as_()),
-            start_prod:       rules_prods[usize::from(rule_map[&start_rule])][0],
+            prods_len: PIdx(prods.len().as_()),
+            start_prod: rules_prods[usize::from(rule_map[&start_rule])][0],
             rules_prods,
-            prods_rules:      prods_rules.into_iter().map(|x| x.unwrap()).collect(),
-            prods:            prods.into_iter().map(|x| x.unwrap()).collect(),
-            prod_precs:       prod_precs.into_iter().map(|x| x.unwrap()).collect(),
+            prods_rules: prods_rules.into_iter().map(|x| x.unwrap()).collect(),
+            prods: prods.into_iter().map(|x| x.unwrap()).collect(),
+            prod_precs: prod_precs.into_iter().map(|x| x.unwrap()).collect(),
             implicit_rule: implicit_rule.and_then(|x| Some(rule_map[&x]))
         })
     }
@@ -339,8 +340,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return an iterator which produces (in order from `0..self.prods_len()`) all this
     /// grammar's valid `PIdx`s.
-    pub fn iter_pidxs(&self) -> impl Iterator<Item=PIdx<StorageT>>
-    {
+    pub fn iter_pidxs(&self) -> impl Iterator<Item = PIdx<StorageT>> {
         // We can use as_ safely, because we know that we're only generating integers from
         // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
@@ -360,8 +360,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// Return the rule index of the production `pidx`. Panics if `pidx` doesn't exist.
-    pub fn prod_to_rule(&self, pidx: PIdx<StorageT>) -> RIdx<StorageT>
-    {
+    pub fn prod_to_rule(&self, pidx: PIdx<StorageT>) -> RIdx<StorageT> {
         self.prods_rules[usize::from(pidx)]
     }
 
@@ -384,8 +383,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
     /// grammar's valid `RIdx`s.
-    pub fn iter_rules(&self) -> impl Iterator<Item=RIdx<StorageT>>
-    {
+    pub fn iter_rules(&self) -> impl Iterator<Item = RIdx<StorageT>> {
         // We can use as_ safely, because we know that we're only generating integers from
         // 0..self.rules_len() and, since rules_len() returns an RIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
@@ -417,8 +415,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     }
 
     /// What is the index of the start rule?
-    pub fn start_rule_idx(&self) -> RIdx<StorageT>
-    {
+    pub fn start_rule_idx(&self) -> RIdx<StorageT> {
         self.prod_to_rule(self.start_prod)
     }
 
@@ -429,8 +426,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
 
     /// Return an iterator which produces (in order from `0..self.tokens_len()`) all this
     /// grammar's valid `TIdx`s.
-    pub fn iter_tidxs(&self) -> impl Iterator<Item=TIdx<StorageT>>
-    {
+    pub fn iter_tidxs(&self) -> impl Iterator<Item = TIdx<StorageT>> {
         // We can use as_ safely, because we know that we're only generating integers from
         // 0..self.rules_len() and, since rules_len() returns an TIdx<StorageT>, then by
         // definition the integers we're creating fit within StorageT.
@@ -445,7 +441,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     /// Return the name of token `tidx` (where `None` indicates "the rule has no name"). Panics if
     /// `tidx` doesn't exist.
     pub fn token_name(&self, tidx: TIdx<StorageT>) -> Option<&str> {
-        self.token_names[usize::from(tidx)].as_ref().and_then(|x| Some(x.as_str()))
+        self.token_names[usize::from(tidx)]
+            .as_ref()
+            .and_then(|x| Some(x.as_str()))
     }
 
     /// Return the precedence of token `tidx` (where `None` indicates "no precedence specified").
@@ -516,7 +514,8 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT> where usize: 
     /// generating each token (where the cost must be greater than 0). Note that multiple
     /// tokens can have the same score. The simplest cost function is thus `|_| 1`.
     pub fn sentence_generator<F>(&self, token_cost: F) -> SentenceGenerator<StorageT>
-                        where F: Fn(TIdx<StorageT>) -> u8
+    where
+        F: Fn(TIdx<StorageT>) -> u8
     {
         SentenceGenerator::new(self, token_cost)
     }
@@ -555,39 +554,42 @@ pub struct SentenceGenerator<'a, StorageT: 'a> {
 }
 
 impl<'a, StorageT: 'static + PrimInt + Unsigned> SentenceGenerator<'a, StorageT>
-where usize: AsPrimitive<StorageT>
+where
+    usize: AsPrimitive<StorageT>
 {
     fn new<F>(grm: &'a YaccGrammar<StorageT>, token_cost: F) -> Self
-        where F: Fn(TIdx<StorageT>) -> u8
+    where
+        F: Fn(TIdx<StorageT>) -> u8
     {
         let mut token_costs = Vec::with_capacity(usize::from(grm.tokens_len()));
         for tidx in grm.iter_tidxs() {
             token_costs.push(token_cost(tidx));
         }
-        SentenceGenerator{grm,
-                          token_costs,
-                          rule_min_costs: RefCell::new(None),
-                          rule_max_costs: RefCell::new(None)}
+        SentenceGenerator {
+            grm,
+            token_costs,
+            rule_min_costs: RefCell::new(None),
+            rule_max_costs: RefCell::new(None)
+        }
     }
 
     /// What is the cost of a minimal sentence for the rule `ridx`? Note that, unlike
     /// `min_sentence`, this function does not actually *build* a sentence and it is thus much
     /// faster.
     pub fn min_sentence_cost(&self, ridx: RIdx<StorageT>) -> u16 {
-        self.rule_min_costs.borrow_mut()
-                              .get_or_insert_with(|| rule_min_costs(self.grm,
-                                                                       &self.token_costs))
-                              [usize::from(ridx)]
+        self.rule_min_costs
+            .borrow_mut()
+            .get_or_insert_with(|| rule_min_costs(self.grm, &self.token_costs))[usize::from(ridx)]
     }
 
     /// What is the cost of a maximal sentence for the rule `ridx`? Rules which can generate
     /// sentences of unbounded length return None; rules which can only generate maximal strings of
     /// a finite length return a `Some(u16)`.
     pub fn max_sentence_cost(&self, ridx: RIdx<StorageT>) -> Option<u16> {
-        let v = self.rule_max_costs.borrow_mut()
-                                      .get_or_insert_with(||
-                                           rule_max_costs(self.grm, &self.token_costs))
-                                      [usize::from(ridx)];
+        let v = self
+            .rule_max_costs
+            .borrow_mut()
+            .get_or_insert_with(|| rule_max_costs(self.grm, &self.token_costs))[usize::from(ridx)];
         if v == u16::max_value() {
             None
         } else {
@@ -606,7 +608,7 @@ where usize: AsPrimitive<StorageT>
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Rule(i) => self.min_sentence_cost(i),
-                        Symbol::Token(i)    => u16::from(self.token_costs[usize::from(i)])
+                        Symbol::Token(i) => u16::from(self.token_costs[usize::from(i)])
                     };
                 }
                 if low_sc.is_none() || sc < low_sc.unwrap() {
@@ -741,9 +743,12 @@ where usize: AsPrimitive<StorageT>
 
 /// Return the cost of a minimal string for each rule in this grammar. The cost of a
 /// token is specified by the user-defined `token_cost` function.
-fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
-                    (grm: &YaccGrammar<StorageT>, token_costs: &[u8]) -> Vec<u16>
-              where usize: AsPrimitive<StorageT>
+fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>(
+    grm: &YaccGrammar<StorageT>,
+    token_costs: &[u8]
+) -> Vec<u16>
+where
+    usize: AsPrimitive<StorageT>
 {
     // We use a simple(ish) fixed-point algorithm to determine costs. We maintain two lists
     // "costs" and "done". An integer costs[i] starts at 0 and monotonically increments
@@ -787,17 +792,17 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
                 let mut cmplt = true;
                 for sym in grm.prod(*pidx) {
                     let sc = match *sym {
-                                 Symbol::Token(tidx) =>
-                                     u16::from(token_costs[usize::from(tidx)]),
-                                 Symbol::Rule(ridx) => {
-                                     if !done[usize::from(ridx)] {
-                                         cmplt = false;
-                                     }
-                                     costs[usize::from(ridx)]
-                                 }
-                             };
-                    c = c.checked_add(sc).expect(
-                            "Overflow occurred when calculating rule costs");
+                        Symbol::Token(tidx) => u16::from(token_costs[usize::from(tidx)]),
+                        Symbol::Rule(ridx) => {
+                            if !done[usize::from(ridx)] {
+                                cmplt = false;
+                            }
+                            costs[usize::from(ridx)]
+                        }
+                    };
+                    c = c
+                        .checked_add(sc)
+                        .expect("Overflow occurred when calculating rule costs");
                 }
                 if cmplt && (ls_cmplt.is_none() || c < ls_cmplt.unwrap()) {
                     ls_cmplt = Some(c);
@@ -822,13 +827,15 @@ fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>
     costs
 }
 
-
 /// Return the cost of the maximal string for each rule in this grammar (u32::max_val()
 /// representing "this rule can generate strings of infinite length"). The cost of a
 /// token is specified by the user-defined `token_cost` function.
-fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
-                    (grm: &YaccGrammar<StorageT>, token_costs: &[u8]) -> Vec<u16>
-               where usize: AsPrimitive<StorageT>
+fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>(
+    grm: &YaccGrammar<StorageT>,
+    token_costs: &[u8]
+) -> Vec<u16>
+where
+    usize: AsPrimitive<StorageT>
 {
     let mut done = vec![];
     done.resize(usize::from(grm.rules_len()), false);
@@ -860,23 +867,23 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>
                 let mut cmplt = true;
                 for sym in grm.prod(*pidx) {
                     let sc = match *sym {
-                                 Symbol::Token(s_tidx) =>
-                                     u16::from(token_costs[usize::from(s_tidx)]),
-                                 Symbol::Rule(s_ridx) => {
-                                     if costs[usize::from(s_ridx)] == u16::max_value() {
-                                         // As soon as we find reference to an infinite rule, we
-                                         // can stop looking.
-                                         hs_cmplt = Some(u16::max_value());
-                                         break 'a;
-                                     }
-                                     if !done[usize::from(s_ridx)] {
-                                         cmplt = false;
-                                     }
-                                     costs[usize::from(s_ridx)]
-                                 }
-                             };
-                    c = c.checked_add(sc).expect(
-                            "Overflow occurred when calculating rule costs");
+                        Symbol::Token(s_tidx) => u16::from(token_costs[usize::from(s_tidx)]),
+                        Symbol::Rule(s_ridx) => {
+                            if costs[usize::from(s_ridx)] == u16::max_value() {
+                                // As soon as we find reference to an infinite rule, we
+                                // can stop looking.
+                                hs_cmplt = Some(u16::max_value());
+                                break 'a;
+                            }
+                            if !done[usize::from(s_ridx)] {
+                                cmplt = false;
+                            }
+                            costs[usize::from(s_ridx)]
+                        }
+                    };
+                    c = c
+                        .checked_add(sc)
+                        .expect("Overflow occurred when calculating rule costs");
                     if c == u16::max_value() {
                         panic!("Unable to represent cost in 64 bits.");
                     }
@@ -942,8 +949,7 @@ mod test {
 
     #[test]
     fn test_minimal() {
-        let grm = YaccGrammar::new(YaccKind::Original,
-                           "%start R %token T %% R: 'T';").unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original, "%start R %token T %% R: 'T';").unwrap();
 
         assert_eq!(grm.start_prod, PIdx(1));
         assert_eq!(grm.implicit_rule(), None);
@@ -992,8 +998,10 @@ mod test {
 
     #[test]
     fn test_long_prod() {
-        let grm = YaccGrammar::new(YaccKind::Original,
-                           "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';").unwrap();
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';"
+        ).unwrap();
 
         grm.rule_idx("^").unwrap();
         grm.rule_idx("R").unwrap();
@@ -1021,7 +1029,9 @@ mod test {
 
     #[test]
     fn test_prods_rules() {
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start A
             %%
             A: B
@@ -1029,19 +1039,20 @@ mod test {
             B: 'x';
             C: 'y'
              | 'z';
-          ").unwrap();
+          "
+        ).unwrap();
 
-        assert_eq!(grm.prods_rules, vec![RIdx(1),
-                                         RIdx(1),
-                                         RIdx(2),
-                                         RIdx(3),
-                                         RIdx(3),
-                                         RIdx(0)]);
+        assert_eq!(
+            grm.prods_rules,
+            vec![RIdx(1), RIdx(1), RIdx(2), RIdx(3), RIdx(3), RIdx(0)]
+        );
     }
 
     #[test]
     fn test_left_right_nonassoc_precs() {
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start Expr
             %right '='
             %left '+' '-'
@@ -1071,7 +1082,9 @@ mod test {
 
     #[test]
     fn test_prec_override() {
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start expr
             %left '+' '-'
             %left '*' '/'
@@ -1082,7 +1095,8 @@ mod test {
                  | expr '/' expr
                  | '-'  expr %prec '*'
                  | 'id' ;
-        ").unwrap();
+        "
+        ).unwrap();
         assert_eq!(grm.prod_precs.len(), 7);
         assert_eq!(grm.prod_precs[0].unwrap(), Precedence{level: 0, kind: AssocKind::Left});
         assert_eq!(grm.prod_precs[1].unwrap(), Precedence{level: 0, kind: AssocKind::Left});
@@ -1095,13 +1109,16 @@ mod test {
 
     #[test]
     fn test_implicit_tokens_rewrite() {
-        let grm = YaccGrammar::new(YaccKind::Eco, "
+        let grm = YaccGrammar::new(
+            YaccKind::Eco,
+            "
           %implicit_tokens ws1 ws2
           %start S
           %%
           S: 'a' | T;
           T: 'c' |;
-          ").unwrap();
+          "
+        ).unwrap();
 
         // Check that the above grammar has been rewritten to:
         //   ^ : ^~;
@@ -1152,10 +1169,14 @@ mod test {
         assert_eq!(i_prod2.len(), 2);
         // We don't know what order the implicit rule will contain our tokens in,
         // hence the awkward dance below.
-        let cnd1 = vec![Symbol::Token(grm.token_idx("ws1").unwrap()),
-                        Symbol::Rule(grm.implicit_rule().unwrap())];
-        let cnd2 = vec![Symbol::Token(grm.token_idx("ws2").unwrap()),
-                        Symbol::Rule(grm.implicit_rule().unwrap())];
+        let cnd1 = vec![
+            Symbol::Token(grm.token_idx("ws1").unwrap()),
+            Symbol::Rule(grm.implicit_rule().unwrap()),
+        ];
+        let cnd2 = vec![
+            Symbol::Token(grm.token_idx("ws2").unwrap()),
+            Symbol::Rule(grm.implicit_rule().unwrap()),
+        ];
         assert!((*i_prod1 == cnd1 && *i_prod2 == cnd2) || (*i_prod1 == cnd2 && *i_prod2 == cnd1));
         let i_prod3 = &grm.prods[usize::from(grm.rules_prods[usize::from(i_rule_idx)][2])];
         assert_eq!(i_prod3.len(), 0);
@@ -1163,13 +1184,16 @@ mod test {
 
     #[test]
     fn test_has_path() {
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start A
             %%
             A: B;
             B: B 'x' | C;
             C: C 'y' | ;
-          ").unwrap();
+          "
+        ).unwrap();
 
         let a_ridx = grm.rule_idx(&"A").unwrap();
         let b_ridx = grm.rule_idx(&"B").unwrap();
@@ -1186,7 +1210,9 @@ mod test {
 
     #[test]
     fn test_rule_min_costs() {
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start A
             %%
             A: A B | ;
@@ -1194,7 +1220,8 @@ mod test {
             C: 'x' B | 'x';
             D: 'y' B | 'y' 'z';
             E: 'x' A | 'x' 'y';
-          ").unwrap();
+          "
+        ).unwrap();
 
         let scores = rule_min_costs(&grm, &vec![1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx(&"A").unwrap())], 0);
@@ -1206,24 +1233,28 @@ mod test {
 
     #[test]
     fn test_min_sentences() {
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start A
             %%
             A: A B | ;
             B: C | D;
             C: 'x' B | 'x';
             D: 'y' B | 'y' 'z';
-          ").unwrap();
+          "
+        ).unwrap();
 
         let sg = grm.sentence_generator(|_| 1);
 
         let find = |nt_name: &str, str_cnds: Vec<Vec<&str>>| {
-            let cnds = str_cnds.iter()
-                               .map(|x| x.iter()
-                                         .map(|y| grm.token_idx(y)
-                                                     .unwrap())
-                                         .collect::<Vec<_>>())
-                               .collect::<Vec<_>>();
+            let cnds = str_cnds
+                .iter()
+                .map(|x| {
+                    x.iter()
+                        .map(|y| grm.token_idx(y).unwrap())
+                        .collect::<Vec<_>>()
+                }).collect::<Vec<_>>();
 
             let ms = sg.min_sentence(grm.rule_idx(nt_name).unwrap());
             if !cnds.iter().any(|x| x == &ms) {
@@ -1247,7 +1278,9 @@ mod test {
 
     #[test]
     fn test_rule_max_costs1() {
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start A
             %%
             A: A B | ;
@@ -1255,7 +1288,8 @@ mod test {
             C: 'x' B | 'x';
             D: 'y' B | 'y' 'z';
             E: 'x' A | 'x' 'y';
-          ").unwrap();
+          "
+        ).unwrap();
 
         let scores = rule_max_costs(&grm, &vec![1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
@@ -1267,14 +1301,17 @@ mod test {
 
     #[test]
     fn test_rule_max_costs2() {
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start A
             %%
             A: A B | B;
             B: C | D;
             C: 'x' 'y' | 'x';
             D: 'y' 'x' | 'y' 'x' 'z';
-          ").unwrap();
+          "
+        ).unwrap();
 
         let scores = rule_max_costs(&grm, &vec![1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
@@ -1286,7 +1323,9 @@ mod test {
     #[test]
     fn test_out_of_order_productions() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let grm = YaccGrammar::new(YaccKind::Original, "
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            "
             %start S
             %%
             S: A 'c' 'd'
@@ -1295,14 +1334,20 @@ mod test {
             B: 'a'
              | 'b';
             A: 'b';
-            ").unwrap();
+            "
+        ).unwrap();
 
-        assert_eq!(grm.prods_rules, vec![RIdx(1),
-                                         RIdx(1),
-                                         RIdx(2),
-                                         RIdx(3),
-                                         RIdx(3),
-                                         RIdx(2),
-                                         RIdx(0)]);
+        assert_eq!(
+            grm.prods_rules,
+            vec![
+                RIdx(1),
+                RIdx(1),
+                RIdx(2),
+                RIdx(3),
+                RIdx(3),
+                RIdx(2),
+                RIdx(0)
+            ]
+        );
     }
 }
