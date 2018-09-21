@@ -36,7 +36,8 @@ extern crate bincode;
 extern crate cactus;
 extern crate cfgrammar;
 extern crate filetime;
-#[macro_use] extern crate indexmap;
+#[macro_use]
+extern crate indexmap;
 extern crate lrlex;
 extern crate lrtable;
 extern crate num_traits;

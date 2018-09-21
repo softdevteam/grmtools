@@ -269,6 +269,7 @@ mod test {
     use StIdx;
 
     #[test]
+    #[rustfmt::skip]
     fn test_statetable_core() {
         // Taken from p13 of https://link.springer.com/article/10.1007/s00236-010-0115-6
         let grm = YaccGrammar::new(

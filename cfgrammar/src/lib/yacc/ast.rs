@@ -94,18 +94,24 @@ impl fmt::Display for GrammarValidationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
             GrammarValidationErrorKind::NoStartRule => write!(f, "No start rule specified"),
-            GrammarValidationErrorKind::InvalidStartRule => {
-                write!(f, "Start rule '{}' does not appear in grammar", self.sym.as_ref().unwrap())
-            },
-            GrammarValidationErrorKind::UnknownRuleRef => {
-                write!(f, "Unknown reference to rule '{}'", self.sym.as_ref().unwrap())
-            },
+            GrammarValidationErrorKind::InvalidStartRule => write!(
+                f,
+                "Start rule '{}' does not appear in grammar",
+                self.sym.as_ref().unwrap()
+            ),
+            GrammarValidationErrorKind::UnknownRuleRef => write!(
+                f,
+                "Unknown reference to rule '{}'",
+                self.sym.as_ref().unwrap()
+            ),
             GrammarValidationErrorKind::UnknownToken => {
                 write!(f, "Unknown token '{}'", self.sym.as_ref().unwrap())
-            },
-            GrammarValidationErrorKind::NoPrecForToken => {
-                write!(f, "Token '{}' used in %prec has no precedence attached", self.sym.as_ref().unwrap())
             }
+            GrammarValidationErrorKind::NoPrecForToken => write!(
+                f,
+                "Token '{}' used in %prec has no precedence attached",
+                self.sym.as_ref().unwrap()
+            )
         }
     }
 }

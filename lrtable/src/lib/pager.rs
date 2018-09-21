@@ -466,6 +466,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_stategraph() {
         let grm = grammar3();
         let sg = pager_stategraph(&grm);
@@ -545,6 +546,7 @@ mod test {
         ).unwrap()
     }
 
+    #[rustfmt::skip]
     fn test_pager_graph(grm: &YaccGrammar) {
         let sg = pager_stategraph(&grm);
 
@@ -695,6 +697,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_pager_graph_core_states() {
         let grm = grammar_pager();
         let sg = pager_stategraph(&grm);

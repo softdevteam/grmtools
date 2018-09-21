@@ -247,11 +247,16 @@ mod test {
     fn test_broken_rule() {
         let src = "%%
 [0-9]
-'int'".to_string();
+'int'"
+            .to_string();
         assert!(parse_lex::<u8>(&src).is_err());
         match parse_lex::<u8>(&src) {
-            Ok(_)  => panic!("Broken rule parsed"),
-            Err(LexBuildError{kind: LexErrorKind::MissingSpace, line: 2, col: 1}) => (),
+            Ok(_) => panic!("Broken rule parsed"),
+            Err(LexBuildError {
+                kind: LexErrorKind::MissingSpace,
+                line: 2,
+                col: 1
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -259,11 +264,16 @@ mod test {
     #[test]
     fn test_broken_rule2() {
         let src = "%%
-[0-9] ".to_string();
+[0-9] "
+            .to_string();
         assert!(parse_lex::<u8>(&src).is_err());
         match parse_lex::<u8>(&src) {
-            Ok(_)  => panic!("Broken rule parsed"),
-            Err(LexBuildError{kind: LexErrorKind::MissingSpace, line: 2, col: 1}) => (),
+            Ok(_) => panic!("Broken rule parsed"),
+            Err(LexBuildError {
+                kind: LexErrorKind::MissingSpace,
+                line: 2,
+                col: 1
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -271,11 +281,16 @@ mod test {
     #[test]
     fn test_broken_rule3() {
         let src = "%%
-[0-9] int".to_string();
+[0-9] int"
+            .to_string();
         assert!(parse_lex::<u8>(&src).is_err());
         match parse_lex::<u8>(&src) {
-            Ok(_)  => panic!("Broken rule parsed"),
-            Err(LexBuildError{kind: LexErrorKind::InvalidName, line: 2, col: 7}) => (),
+            Ok(_) => panic!("Broken rule parsed"),
+            Err(LexBuildError {
+                kind: LexErrorKind::InvalidName,
+                line: 2,
+                col: 7
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -283,11 +298,16 @@ mod test {
     #[test]
     fn test_broken_rule4() {
         let src = "%%
-[0-9] 'int".to_string();
+[0-9] 'int"
+            .to_string();
         assert!(parse_lex::<u8>(&src).is_err());
         match parse_lex::<u8>(&src) {
-            Ok(_)  => panic!("Broken rule parsed"),
-            Err(LexBuildError{kind: LexErrorKind::InvalidName, line: 2, col: 7}) => (),
+            Ok(_) => panic!("Broken rule parsed"),
+            Err(LexBuildError {
+                kind: LexErrorKind::InvalidName,
+                line: 2,
+                col: 7
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
@@ -296,10 +316,15 @@ mod test {
     fn test_duplicate_rule() {
         let src = "%%
 [0-9] 'int'
-[0-9] 'int'".to_string();
+[0-9] 'int'"
+            .to_string();
         match parse_lex::<u8>(&src) {
-            Ok(_)  => panic!("Duplicate rule parsed"),
-            Err(LexBuildError{kind: LexErrorKind::DuplicateName, line: 3, col: 7}) => (),
+            Ok(_) => panic!("Duplicate rule parsed"),
+            Err(LexBuildError {
+                kind: LexErrorKind::DuplicateName,
+                line: 3,
+                col: 7
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }

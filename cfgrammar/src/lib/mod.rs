@@ -75,10 +75,15 @@
 //! [`YaccGrammar::new_with_storaget()`](yacc/grammar/struct.YaccGrammar.html#method.new_with_storaget)
 //! which take as input a Yacc grammar.
 
-#[macro_use] extern crate lazy_static;
+#![feature(tool_attributes)]
+
+#[macro_use]
+extern crate lazy_static;
 extern crate indexmap;
 extern crate num_traits;
-#[cfg(feature="serde")] #[macro_use] extern crate serde;
+#[cfg(feature = "serde")]
+#[macro_use]
+extern crate serde;
 extern crate vob;
 
 mod idxnewtype;
@@ -93,4 +98,3 @@ pub enum Symbol<StorageT> {
     Rule(RIdx<StorageT>),
     Token(TIdx<StorageT>)
 }
-

@@ -788,6 +788,7 @@ x".to_string();
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_unknown_declaration() {
         let src = "%woo".to_string();
         match parse(YaccKind::Original, &src) {
@@ -802,6 +803,7 @@ x".to_string();
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_precs() {
         let src = "
           %left '+' '-'
@@ -824,47 +826,52 @@ x".to_string();
     #[test]
     fn test_dup_precs() {
         let srcs = vec![
-          "
+            "
           %left 'x'
           %left 'x'
           %%
           ",
-          "
+            "
           %left 'x'
           %right 'x'
           %%
           ",
-          "
+            "
           %right 'x'
           %right 'x'
           %%
           ",
-          "
+            "
           %nonassoc 'x'
           %nonassoc 'x'
           %%
           ",
-          "
+            "
           %left 'x'
           %nonassoc 'x'
           %%
           ",
-          "
+            "
           %right 'x'
           %nonassoc 'x'
           %%
-          "
-          ];
+          ",
+        ];
         for src in srcs.iter() {
             match parse(YaccKind::Original, &src.to_string()) {
                 Ok(_) => panic!("Duplicate precedence parsed"),
-                Err(YaccParserError{kind: YaccParserErrorKind::DuplicatePrecedence, line: 3, ..}) => (),
+                Err(YaccParserError {
+                    kind: YaccParserErrorKind::DuplicatePrecedence,
+                    line: 3,
+                    ..
+                }) => (),
                 Err(e) => panic!("Incorrect error returned {}", e)
             }
         }
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_prec_override() {
         // Taken from the Yacc manual
         let src = "
@@ -888,85 +895,134 @@ x".to_string();
 
     #[test]
     fn test_bad_prec_overrides() {
-        match parse(YaccKind::Original, &"
+        match parse(
+            YaccKind::Original,
+            &"
           %%
           S: 'A' %prec ;
-          ") {
-                Ok(_) => panic!("Incorrect %prec parsed"),
-                Err(YaccParserError{kind: YaccParserErrorKind::IllegalString, line: 3, ..}) => (),
-                Err(e) => panic!("Incorrect error returned {}", e)
+          "
+        ) {
+            Ok(_) => panic!("Incorrect %prec parsed"),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::IllegalString,
+                line: 3,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
         }
 
-        match parse(YaccKind::Original, &"
+        match parse(
+            YaccKind::Original,
+            &"
           %%
           S: 'A' %prec B;
           B: ;
-          ") {
-                Ok(_) => panic!("Incorrect %prec parsed"),
-                Err(YaccParserError{kind: YaccParserErrorKind::PrecNotFollowedByToken, line: 3, ..}) => (),
-                Err(e) => panic!("Incorrect error returned {}", e)
+          "
+        ) {
+            Ok(_) => panic!("Incorrect %prec parsed"),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::PrecNotFollowedByToken,
+                line: 3,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
 
     #[test]
     fn test_no_implicit_tokens_in_original_yacc() {
-        match parse(YaccKind::Original, &"
+        match parse(
+            YaccKind::Original,
+            &"
           %implicit_tokens X
           %%
-          ") {
+          "
+        ) {
             Ok(_) => panic!(),
-            Err(YaccParserError{kind: YaccParserErrorKind::UnknownDeclaration, line: 2, ..}) => (),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::UnknownDeclaration,
+                line: 2,
+                ..
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
 
     #[test]
     fn test_parse_implicit_tokens() {
-        let ast = parse(YaccKind::Eco, &"
+        let ast = parse(
+            YaccKind::Eco,
+            &"
           %implicit_tokens ws1 ws2
           %start R
           %%
           R: 'a';
-          ").unwrap();
-        assert_eq!(ast.implicit_tokens, Some(["ws1".to_string(), "ws2".to_string()].iter().cloned().collect()));
+          "
+        ).unwrap();
+        assert_eq!(
+            ast.implicit_tokens,
+            Some(
+                ["ws1".to_string(), "ws2".to_string()]
+                    .iter()
+                    .cloned()
+                    .collect()
+            )
+        );
         assert!(ast.tokens.get("ws1").is_some());
         assert!(ast.tokens.get("ws2").is_some());
     }
 
     #[test]
     fn test_duplicate_implicit_tokens() {
-        match parse(YaccKind::Eco, &"
+        match parse(
+            YaccKind::Eco,
+            &"
           %implicit_tokens X
           %implicit_tokens Y
           %%
-          ") {
+          "
+        ) {
             Ok(_) => panic!(),
-            Err(YaccParserError{kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration, line: 3, ..}) => (),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
+                line: 3,
+                ..
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
 
     #[test]
     fn test_duplicate_start() {
-        match parse(YaccKind::Eco, &"
+        match parse(
+            YaccKind::Eco,
+            &"
           %start X
           %start X
           %%
-          ") {
+          "
+        ) {
             Ok(_) => panic!(),
-            Err(YaccParserError{kind: YaccParserErrorKind::DuplicateStartDeclaration, line: 3, ..}) => (),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateStartDeclaration,
+                line: 3,
+                ..
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }
 
     #[test]
     fn test_implicit_start() {
-        let ast = parse(YaccKind::Eco, &"
+        let ast = parse(
+            YaccKind::Eco,
+            &"
           %%
           R: ;
           R2: ;
           R3: ;
-          ").unwrap();
+          "
+        ).unwrap();
         assert_eq!(ast.start, Some("R".to_string()));
     }
 
@@ -981,39 +1037,57 @@ x".to_string();
         let grm = parse(YaccKind::Original, src).unwrap();
         assert!(grm.has_token("a"));
 
-        match parse(YaccKind::Original, &"
+        match parse(
+            YaccKind::Original,
+            &"
             /* An invalid comment * /
             %token   a
             %%\n
-            A : a;")
-        {
+            A : a;"
+        ) {
             Ok(_) => panic!(),
-            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteComment, line: 2, ..}) => (),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::IncompleteComment,
+                line: 2,
+                ..
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
 
-        match parse(YaccKind::Original, &"
+        match parse(
+            YaccKind::Original,
+            &"
             %token   a
             %%
             /* A valid
              * multi-line comment
              */
             /* An invalid comment * /
-            A : a;")
-        {
+            A : a;"
+        ) {
             Ok(_) => panic!(),
-            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteComment, line: 7, ..}) => (),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::IncompleteComment,
+                line: 7,
+                ..
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
 
-        match parse(YaccKind::Original, &"
+        match parse(
+            YaccKind::Original,
+            &"
             %token   a
             %%
             // Valid comment
-            A : a")
-        {
+            A : a"
+        ) {
             Ok(_) => panic!(),
-            Err(YaccParserError{kind: YaccParserErrorKind::IncompleteRule, line: 5, ..}) => (),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::IncompleteRule,
+                line: 5,
+                ..
+            }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
     }

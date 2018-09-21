@@ -217,12 +217,15 @@ where
         // Header
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
         outs.push_str(&format!("mod {}_y {{", mod_name));
-        outs.push_str(&format!("use lrpar::{{Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
+        outs.push_str(&format!(
+            "use lrpar::{{Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
 use lrlex::Lexeme;
 
 pub fn parse(lexemes: &[Lexeme<{storaget}>])
           -> Result<Node<{storaget}>, (Option<Node<{storaget}>>, Vec<ParseError<{storaget}>>)>
-{{", storaget=StorageT::type_name()));
+{{",
+            storaget = StorageT::type_name()
+        ));
 
         // grm, sgraph, stable
         let recoverer = match self.recoverer {
@@ -231,7 +234,8 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
             RecoveryKind::Panic => "Panic",
             RecoveryKind::None => "None"
         };
-        outs.push_str(&format!("
+        outs.push_str(&format!(
+            "
     let (grm, sgraph, stable) = reconstitute(include_bytes!(\"{}\"),
                                              include_bytes!(\"{}\"),
                                              include_bytes!(\"{}\"));
@@ -277,7 +281,10 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         // Record the time that this version of lrpar was built. If the source code changes and
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
-        cache.push_str(&format!("   Build time: {:?}", env!("VERGEN_BUILD_TIMESTAMP")));
+        cache.push_str(&format!(
+            "   Build time: {:?}",
+            env!("VERGEN_BUILD_TIMESTAMP")
+        ));
 
         // Record the recoverer
         cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));

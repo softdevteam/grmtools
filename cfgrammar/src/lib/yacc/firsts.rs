@@ -105,7 +105,7 @@ where
                                     changed = true;
                                 }
                                 break;
-                            },
+                            }
                             Symbol::Rule(s_ridx) => {
                                 // if we're dealing with another rule, union its FIRSTs
                                 // together with the current rules FIRSTs. Note this is
@@ -134,7 +134,7 @@ where
                                 if !firsts.is_epsilon_set(s_ridx) {
                                     break;
                                 }
-                            },
+                            }
                         }
                     }
                 }
