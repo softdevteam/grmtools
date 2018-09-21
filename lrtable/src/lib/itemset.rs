@@ -227,7 +227,9 @@ mod test {
     }
 
     fn eco_grammar() -> YaccGrammar {
-        YaccGrammar::new(YaccKind::Original, &"
+        YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start S
           %token a b c d f
           %%
@@ -237,7 +239,8 @@ mod test {
           C: D A;
           D: 'd' | ;
           F: C D 'f';
-          ").unwrap()
+          "
+        ).unwrap()
     }
 
     #[test]
@@ -274,13 +277,16 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        YaccGrammar::new(YaccKind::Original, &"
+        YaccGrammar::new(
+            YaccKind::Original,
+            &"
           %start S
           %token a b c d
           %%
           S: S 'b' | 'b' A 'a';
           A: 'a' S 'c' | 'a' | 'a' S 'b';
-          ").unwrap()
+          "
+        ).unwrap()
     }
 
     #[test]

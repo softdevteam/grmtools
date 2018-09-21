@@ -168,7 +168,7 @@ where
             YaccKind::Original => {
                 implicit_rule = None;
                 implicit_start_rule = None;
-            },
+            }
             YaccKind::Eco => {
                 if ast.implicit_tokens.is_some() {
                     let mut n1 = IMPLICIT_RULE.to_string();
@@ -285,7 +285,7 @@ where
                     match *astsym {
                         ast::Symbol::Rule(ref n) => {
                             prod.push(Symbol::Rule(rule_map[n]));
-                        },
+                        }
                         ast::Symbol::Token(ref n) => {
                             prod.push(Symbol::Token(token_map[n]));
                             if implicit_rule.is_some() {
@@ -629,7 +629,7 @@ where
                     Symbol::Rule(s_ridx) => {
                         st.push((pidx, sidx + 1));
                         st.push((cheapest_prod(*s_ridx), 0));
-                    },
+                    }
                     Symbol::Token(s_tidx) => {
                         s.push(*s_tidx);
                     }
@@ -964,18 +964,20 @@ mod test {
         assert_eq!(*r_prod, [Symbol::Token(grm.token_idx("T").unwrap())]);
         assert_eq!(grm.prods_rules, vec![RIdx(1), RIdx(0)]);
 
-        assert_eq!(grm.tokens_map(),
-                   [("T", TIdx(0))].iter()
-                                                .cloned()
-                                                .collect::<HashMap<&str, TIdx<_>>>());
-        assert_eq!(grm.iter_rules().collect::<Vec<_>>(),
-                   vec![RIdx(0), RIdx(1)]);
+        assert_eq!(
+            grm.tokens_map(),
+            [("T", TIdx(0))]
+                .iter()
+                .cloned()
+                .collect::<HashMap<&str, TIdx<_>>>()
+        );
+        assert_eq!(grm.iter_rules().collect::<Vec<_>>(), vec![RIdx(0), RIdx(1)]);
     }
 
     #[test]
     fn test_rule_ref() {
-        let grm = YaccGrammar::new(YaccKind::Original,
-                           "%start R %token T %% R : S; S: 'T';").unwrap();
+        let grm =
+            YaccGrammar::new(YaccKind::Original, "%start R %token T %% R : S; S: 'T';").unwrap();
 
         grm.rule_idx("^").unwrap();
         grm.rule_idx("R").unwrap();
@@ -983,9 +985,10 @@ mod test {
         grm.token_idx("T").unwrap();
         assert!(grm.token_name(grm.eof_token_idx()).is_none());
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
-                                         vec![PIdx(0)],
-                                         vec![PIdx(1)]]);
+        assert_eq!(
+            grm.rules_prods,
+            vec![vec![PIdx(2)], vec![PIdx(0)], vec![PIdx(1)]]
+        );
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Rule(grm.rule_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);

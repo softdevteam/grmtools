@@ -77,10 +77,13 @@
 
 #![feature(tool_attributes)]
 
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 extern crate indexmap;
 extern crate num_traits;
-#[cfg(feature="serde")] #[macro_use] extern crate serde;
+#[cfg(feature = "serde")]
+#[macro_use]
+extern crate serde;
 extern crate vob;
 
 mod idxnewtype;
@@ -95,4 +98,3 @@ pub enum Symbol<StorageT> {
     Rule(RIdx<StorageT>),
     Token(TIdx<StorageT>)
 }
-

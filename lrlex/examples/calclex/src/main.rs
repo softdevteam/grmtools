@@ -1,6 +1,7 @@
 use std::io::{self, BufRead, Write};
 
-#[macro_use] extern crate lrlex;
+#[macro_use]
+extern crate lrlex;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
@@ -21,7 +22,7 @@ fn main() {
                     Ok(lexemes) => println!("{:?}", lexemes),
                     Err(e) => println!("{:?}", e)
                 }
-            },
+            }
             _ => break
         }
     }

@@ -1261,7 +1261,7 @@ E: '(' E ')'
         let (pt, errs) = pr.unwrap_err();
         let pp = pt.unwrap().pp(&grm, &us);
         if !vec![
-"E
+            "E
  ( (
  E
   ( (
@@ -1270,7 +1270,7 @@ E: '(' E ')'
   ) 
  ) 
 ",
-"E
+            "E
  ( (
  E
   ( (
@@ -1278,9 +1278,10 @@ E: '(' E ')'
    B 
   ) 
  ) 
-"]
-            .iter()
-            .any(|x| *x == pp) {
+",
+        ].iter()
+        .any(|x| *x == pp)
+        {
             panic!("Can't find a match for {}", pp);
         }
         assert_eq!(errs.len(), 1);

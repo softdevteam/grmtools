@@ -576,25 +576,27 @@ pub(crate) mod test {
     #[test]
     fn simple_parse() {
         // From p4 of https://www.cs.umd.edu/class/spring2014/cmsc430/lectures/lec07.pdf
-        check_parse_output("%%
+        check_parse_output(
+            "%%
 [a-zA-Z_] 'ID'
 \\+ '+'",
-"
+            "
 %start E
 %%
 E: T '+' E
  | T;
 T: 'ID';
 ",
-"a+b",
-"E
+            "a+b",
+            "E
  T
   ID a
  + +
  E
   T
    ID b
-");
+"
+        );
     }
 
     #[test]
@@ -607,16 +609,21 @@ S: L;
 L: 'ID'
  | ;
 ";
-        check_parse_output(&lexs, &grms, "",
-"S
+        check_parse_output(
+            &lexs, &grms, "", "S
  L
-");
+",
+        );
 
-        check_parse_output(&lexs, &grms, "x",
-"S
+        check_parse_output(
+            &lexs,
+            &grms,
+            "x",
+            "S
  L
   ID x
-");
+"
+        );
     }
 
     #[test]
@@ -632,8 +639,11 @@ Expr : Term '+' Expr | Term;
 Term : Factor '*' Term | Factor;
 Factor : 'INT';";
 
-        check_parse_output(&lexs, &grms, "2+3*4",
-"Expr
+        check_parse_output(
+            &lexs,
+            &grms,
+            "2+3*4",
+            "Expr
  Term
   Factor
    INT 2
@@ -646,9 +656,13 @@ Factor : 'INT';";
    Term
     Factor
      INT 4
-");
-        check_parse_output(&lexs, &grms, "2*3+4",
-"Expr
+"
+        );
+        check_parse_output(
+            &lexs,
+            &grms,
+            "2*3+4",
+            "Expr
  Term
   Factor
    INT 2
@@ -661,7 +675,8 @@ Factor : 'INT';";
   Term
    Factor
     INT 4
-");
+"
+        );
     }
 
     #[test]
@@ -675,12 +690,16 @@ Factor : 'INT';";
 %%
 Call: 'ID' '(' ')';";
 
-        check_parse_output(&lexs, &grms, "f()",
-"Call
+        check_parse_output(
+            &lexs,
+            &grms,
+            "f()",
+            "Call
  ID f
  ( (
  ) )
-");
+"
+        );
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(");
         let (_, errs) = pr.unwrap_err();

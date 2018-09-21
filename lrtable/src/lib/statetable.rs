@@ -807,16 +807,25 @@ mod test {
 
     #[test]
     fn accept_reduce_conflict() {
-        let grm = YaccGrammar::new(YaccKind::Original, &"
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            &"
 %start D
 %%
 D : D;
-          ").unwrap();
+          "
+        ).unwrap();
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
-            Err(StateTableError{kind: StateTableErrorKind::AcceptReduceConflict, pidx})
-                if pidx == PIdx(1) => (),
+            Err(StateTableError {
+                kind: StateTableErrorKind::AcceptReduceConflict,
+                pidx
+            })
+                if pidx == PIdx(1) =>
+            {
+                ()
+            }
             Err(e) => panic!("Incorrect error returned {:?}", e)
         }
     }

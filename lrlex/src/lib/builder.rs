@@ -233,10 +233,13 @@ where
 impl<StorageT: Copy + Debug + Eq + TypeName> LexerDef<StorageT> {
     pub(crate) fn rust_pp(&self, outs: &mut String) {
         // Header
-        outs.push_str(&format!("use lrlex::{{LexerDef, Rule}};
+        outs.push_str(&format!(
+            "use lrlex::{{LexerDef, Rule}};
 
 pub fn lexerdef() -> LexerDef<{}> {{
-    let rules = vec![", StorageT::type_name()));
+    let rules = vec![",
+            StorageT::type_name()
+        ));
 
         // Individual rules
         for r in &self.rules {
@@ -248,16 +251,22 @@ pub fn lexerdef() -> LexerDef<{}> {{
                 Some(ref n) => format!("Some({:?}.to_string())", n),
                 None => "None".to_owned()
             };
-            outs.push_str(&format!("
+            outs.push_str(&format!(
+                "
 Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
-                tok_id, n, r.re_str.replace("\\", "\\\\").replace("\"", "\\\"")));
+                tok_id,
+                n,
+                r.re_str.replace("\\", "\\\\").replace("\"", "\\\"")
+            ));
         }
 
         // Footer
-        outs.push_str("
+        outs.push_str(
+            "
 ];
     LexerDef::new(rules)
 }
-");
+"
+        );
     }
 }

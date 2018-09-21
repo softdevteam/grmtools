@@ -529,19 +529,19 @@ E : 'N'
         //    E
         //     E
         //      N n
-        //     + 
+        //     +
         //     N n
         //    )
         // is also the result of a valid minimal-cost repair, but, since the repair involves a
         // Shift, rank_cnds will always put this too low down the list for us to ever see it.
         if !vec![
-"E
+            "E
  ( (
  E
   N n
  ) 
 ",
-"E
+            "E
  E
   ( (
   E
@@ -549,9 +549,10 @@ E : 'N'
   ) 
  + 
  N n
-"]
-            .iter()
-            .any(|x| *x == pp) {
+",
+        ].iter()
+        .any(|x| *x == pp)
+        {
             panic!("Can't find a match for {}", pp);
         }
 

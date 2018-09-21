@@ -51,8 +51,8 @@ pub type LexBuildResult<T> = Result<T, LexBuildError>;
 #[derive(Debug)]
 pub struct LexBuildError {
     pub kind: LexErrorKind,
-    line:     usize,
-    col:      usize
+    line: usize,
+    col: usize
 }
 
 impl Error for LexBuildError {}
