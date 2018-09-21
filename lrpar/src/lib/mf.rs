@@ -851,6 +851,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn dist_kimyi() {
         let grms = "%start A
 %%
@@ -914,6 +915,7 @@ A: '(' A ')'
     }
 
     #[test]
+    #[rustfmt::skip]
     fn dist_short() {
         let grms = "%start S
 %%
@@ -966,6 +968,7 @@ U: 'B';
     }
 
     #[test]
+    #[rustfmt::skip]
     fn dist_large() {
         let grms = "%start Expr
 %%
@@ -1016,6 +1019,7 @@ Factor: '(' Expr ')'
     }
 
     #[test]
+    #[rustfmt::skip]
     fn dist_nested() {
         let grms = "%start S
 %%
@@ -1150,6 +1154,7 @@ A: '(' A ')'
     }
 
     #[test]
+    #[rustfmt::skip]
     fn corchuelo_example() {
         // The example from the Corchuelo paper
         let lexs = "%%

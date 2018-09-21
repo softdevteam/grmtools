@@ -997,6 +997,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_long_prod() {
         let grm = YaccGrammar::new(
             YaccKind::Original,
@@ -1049,6 +1050,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_left_right_nonassoc_precs() {
         let grm = YaccGrammar::new(
             YaccKind::Original,
@@ -1081,6 +1083,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_prec_override() {
         let grm = YaccGrammar::new(
             YaccKind::Original,
@@ -1108,6 +1111,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_implicit_tokens_rewrite() {
         let grm = YaccGrammar::new(
             YaccKind::Eco,
@@ -1183,6 +1187,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_has_path() {
         let grm = YaccGrammar::new(
             YaccKind::Original,
@@ -1209,6 +1214,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_rule_min_costs() {
         let grm = YaccGrammar::new(
             YaccKind::Original,
@@ -1277,6 +1283,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_rule_max_costs1() {
         let grm = YaccGrammar::new(
             YaccKind::Original,
@@ -1300,6 +1307,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_rule_max_costs2() {
         let grm = YaccGrammar::new(
             YaccKind::Original,

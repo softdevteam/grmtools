@@ -480,6 +480,7 @@ mod test {
     use StIdx;
 
     #[test]
+    #[rustfmt::skip]
     fn test_statetable() {
         // Taken from p19 of www.cs.umd.edu/~mvz/cmsc430-s07/M10lr.pdf
         let grm = YaccGrammar::new(
@@ -562,6 +563,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_default_reduce_reduce() {
         let grm = YaccGrammar::new(YaccKind::Original, &"
             %start A
@@ -583,6 +585,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_default_shift_reduce() {
         let grm = YaccGrammar::new(YaccKind::Original, &"
             %start Expr
@@ -610,6 +613,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_conflict_resolution() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
         let grm = YaccGrammar::new(YaccKind::Original, &"
@@ -635,6 +639,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_left_associativity() {
         let grm = YaccGrammar::new(YaccKind::Original, &"
             %start Expr
@@ -672,6 +677,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_left_right_associativity() {
         let grm = &YaccGrammar::new(YaccKind::Original, &"
             %start Expr
@@ -726,6 +732,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_left_right_nonassoc_associativity() {
         let grm = YaccGrammar::new(YaccKind::Original, &"
             %start Expr

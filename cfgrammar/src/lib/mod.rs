@@ -75,6 +75,8 @@
 //! [`YaccGrammar::new_with_storaget()`](yacc/grammar/struct.YaccGrammar.html#method.new_with_storaget)
 //! which take as input a Yacc grammar.
 
+#![feature(tool_attributes)]
+
 #[macro_use] extern crate lazy_static;
 extern crate indexmap;
 extern crate num_traits;

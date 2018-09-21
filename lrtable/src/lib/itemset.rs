@@ -196,6 +196,7 @@ mod test {
     use vob::Vob;
 
     #[test]
+    #[rustfmt::skip]
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
         let grm = &YaccGrammar::new(
@@ -240,6 +241,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_closure1_ecogrm() {
         let grm = eco_grammar();
         let firsts = grm.firsts();
@@ -282,6 +284,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_closure1_grm3() {
         let grm = grammar3();
         let firsts = grm.firsts();
@@ -316,6 +319,7 @@ mod test {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_goto1() {
         let grm = grammar3();
         let firsts = grm.firsts();

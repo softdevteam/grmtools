@@ -788,6 +788,7 @@ x".to_string();
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_unknown_declaration() {
         let src = "%woo".to_string();
         match parse(YaccKind::Original, &src) {
@@ -802,6 +803,7 @@ x".to_string();
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_precs() {
         let src = "
           %left '+' '-'
@@ -865,6 +867,7 @@ x".to_string();
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_prec_override() {
         // Taken from the Yacc manual
         let src = "
