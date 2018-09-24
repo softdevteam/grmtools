@@ -5,7 +5,8 @@ members=[
     "lrlex/examples/calclex",
     "lrpar",
     "lrpar/examples/calcparse",
-    "lrtable"
+    "lrtable",
+    "nimbleparse"
 ]
 
 [profile.release]

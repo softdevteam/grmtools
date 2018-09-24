@@ -4,10 +4,6 @@ version = "0.1.0"
 authors = ["Lukas Diekmann <http://lukasdiekmann.com/>", "Laurence Tratt <http://tratt.net/laurie/>"]
 build = "build.rs"
 
-[[bin]]
-doc = false
-name = "lrpar"
-
 [lib]
 name = "lrpar"
 path = "src/lib/mod.rs"

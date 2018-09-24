@@ -1,0 +1,16 @@
+[package]
+name = "nimbleparse"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+
+[[bin]]
+doc = false
+name = "nimbleparse"
+
+[dependencies]
+cfgrammar = { path="../cfgrammar" }
+getopts = "0.2"
+lrlex = { path="../lrlex" }
+lrpar = { path="../lrpar" }
+lrtable = { path="../lrtable" }
+num-traits = "0.2"
