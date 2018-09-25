@@ -33,12 +33,13 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    convert::TryFrom,
     rc::Rc,
     slice::Iter
 };
 
 use regex::{self, Regex, RegexBuilder};
+
+use lrpar::Lexeme;
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -258,68 +259,24 @@ impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
     /// Return the line and column number of a `Lexeme`, or `Err` if it is clearly out of bounds
     /// for this lexer.
     pub fn line_and_col(&self, l: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
-        if l.start > self.s.len() {
+        if l.start() > self.s.len() {
             return Err(());
         }
 
         let newlines = self.newlines.borrow();
-        if newlines.len() == 0 || l.start < newlines[0] {
-            return Ok((1, l.start + 1));
+        if newlines.len() == 0 || l.start() < newlines[0] {
+            return Ok((1, l.start() + 1));
         }
 
         for i in 0..newlines.len() - 1 {
-            if newlines[i + 1] > l.start {
-                return Ok((i + 2, l.start - newlines[i] + 1));
+            if newlines[i + 1] > l.start() {
+                return Ok((i + 2, l.start() - newlines[i] + 1));
             }
         }
         Ok((
             newlines.len() + 1,
-            l.start - newlines[newlines.len() - 1] + 1
+            l.start() - newlines[newlines.len() - 1] + 1
         ))
-    }
-}
-
-/// A lexeme has a starting position in a string, a length, and a token id. It is a deliberately
-/// small data-structure to large input files to be stored efficiently.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Lexeme<StorageT> {
-    start: usize,
-    len: u32,
-    tok_id: StorageT
-}
-
-impl<StorageT: Copy> Lexeme<StorageT> {
-    pub fn new(tok_id: StorageT, start: usize, len: usize) -> Lexeme<StorageT> {
-        Lexeme {
-            start,
-            len: u32::try_from(len).unwrap(),
-            tok_id
-        }
-    }
-
-    /// The token ID.
-    pub fn tok_id(&self) -> StorageT {
-        self.tok_id
-    }
-
-    /// Byte offset of the start of the lexeme
-    pub fn start(&self) -> usize {
-        self.start
-    }
-
-    /// Byte offset of the start of the lexeme
-    pub fn end(&self) -> usize {
-        self.start() + self.len()
-    }
-
-    /// Length in bytes of the lexeme
-    pub fn len(&self) -> usize {
-        debug_assert!(usize::try_from(u32::max_value()).is_ok());
-        self.len as usize
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
     }
 }
 
@@ -346,13 +303,13 @@ mod test {
         let lexemes = lexer.lexer(&"abc 123").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
-        assert_eq!(lex1.tok_id, 1);
-        assert_eq!(lex1.start, 0);
-        assert_eq!(lex1.len, 3);
+        assert_eq!(lex1.tok_id(), 1);
+        assert_eq!(lex1.start(), 0);
+        assert_eq!(lex1.len(), 3);
         let lex2 = lexemes[1];
-        assert_eq!(lex2.tok_id, 0);
-        assert_eq!(lex2.start, 4);
-        assert_eq!(lex2.len, 3);
+        assert_eq!(lex2.tok_id(), 0);
+        assert_eq!(lex2.start(), 4);
+        assert_eq!(lex2.len(), 3);
     }
 
     #[test]
@@ -385,13 +342,13 @@ if 'IF'
         let lexemes = lexer.lexer(&"iff if").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
-        assert_eq!(lex1.tok_id, 1);
-        assert_eq!(lex1.start, 0);
-        assert_eq!(lex1.len, 3);
+        assert_eq!(lex1.tok_id(), 1);
+        assert_eq!(lex1.start(), 0);
+        assert_eq!(lex1.len(), 3);
         let lex2 = lexemes[1];
-        assert_eq!(lex2.tok_id, 0);
-        assert_eq!(lex2.start, 4);
-        assert_eq!(lex2.len, 2);
+        assert_eq!(lex2.tok_id(), 0);
+        assert_eq!(lex2.start(), 4);
+        assert_eq!(lex2.len(), 2);
     }
 
     #[test]
@@ -423,11 +380,7 @@ if 'IF'
         assert_eq!(lexer.line_and_col(&lexemes[2]).unwrap(), (3, 3));
         assert_eq!(lexer.line_and_col(&lexemes[3]).unwrap(), (3, 5));
 
-        let fake_lexeme = Lexeme {
-            start: 100,
-            len: 1,
-            tok_id: 0
-        };
+        let fake_lexeme = Lexeme::new(0, 100, 1);
         if let Ok(_) = lexer.line_and_col(&fake_lexeme) {
             panic!("line_and_col returned Ok(_) when it should have returned Err.");
         }

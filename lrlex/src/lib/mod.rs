@@ -32,6 +32,7 @@
 
 #![feature(try_from)]
 
+extern crate lrpar;
 extern crate regex;
 extern crate typename;
 
@@ -42,7 +43,7 @@ mod lexer;
 mod parser;
 
 pub use builder::LexerBuilder;
-pub use lexer::{Lexeme, Lexer, LexerDef, Rule};
+pub use lexer::{Lexer, LexerDef, Rule};
 use parser::parse_lex;
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
