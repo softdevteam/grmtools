@@ -87,7 +87,7 @@ pub struct StateTable<StorageT> {
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
     actions: HashMap<u32, Action<StorageT>, BuildHasherDefault<FnvHasher>>,
     state_actions: Vob,
-    gotos: HashMap<u32, StIdx, BuildHasherDefault<FnvHasher>>,
+    gotos: Vec<StIdx>,
     core_reduces: Vob,
     state_shifts: Vob,
     reduce_states: Vob,
@@ -127,7 +127,11 @@ where
                 .unwrap(),
             false
         );
-        let mut gotos = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
+        let max = usize::from(grm.rules_len()) * usize::from(sg.all_states_len());
+        assert!(usize::from(sg.all_states_len()) < usize::from(StIdx::max_value()));
+        let mut gotos: Vec<StIdx> = Vec::with_capacity(max);
+        gotos.resize(max, StIdx::max_value());
+
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce = 0; // How many automatically resolved shift/reduces were made?
         let mut final_state = None;
@@ -206,9 +210,9 @@ where
                 match sym {
                     Symbol::Rule(s_ridx) => {
                         // Populate gotos
-                        let off = (u32::from(stidx) * u32::from(nt_len)) + u32::from(s_ridx);
-                        debug_assert!(gotos.get(&off).is_none());
-                        gotos.insert(off, *ref_stidx);
+                        let off = ((u32::from(stidx) * u32::from(nt_len)) + u32::from(s_ridx)) as usize;
+                        debug_assert!(gotos[off] == StIdx::max_value());
+                        gotos[off] = *ref_stidx;
                     }
                     Symbol::Token(s_tidx) => {
                         // Populate shifts
@@ -364,8 +368,13 @@ where
 
     /// Return the goto state for `stidx` and `ridx`, or `None` if there isn't any.
     pub fn goto(&self, stidx: StIdx, ridx: RIdx<StorageT>) -> Option<StIdx> {
-        let off = (u32::from(stidx) * self.rules_len) + u32::from(ridx);
-        self.gotos.get(&off).and_then(|x| Some(*x))
+        let off = ((u32::from(stidx) * self.rules_len) + u32::from(ridx)) as usize;
+        if self.gotos[off] == StIdx::max_value() {
+            None
+        }
+        else {
+            Some(self.gotos[off])
+        }
     }
 }
 
@@ -551,7 +560,7 @@ mod test {
         assert_eq!(st.core_reduces(s4).collect::<HashSet<_>>(), *s4_core_reduces);
 
         // Gotos
-        assert_eq!(st.gotos.len(), 8);
+        assert_eq!(st.gotos.len(), 9*4);
         assert_eq!(st.goto(s0, grm.rule_idx("Expr").unwrap()).unwrap(), s1);
         assert_eq!(st.goto(s0, grm.rule_idx("Term").unwrap()).unwrap(), s2);
         assert_eq!(st.goto(s0, grm.rule_idx("Factor").unwrap()).unwrap(), s3);

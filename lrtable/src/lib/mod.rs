@@ -66,6 +66,12 @@ type StIdxStorageT = u32;
 // we can change our storage to u32 later transparently.
 pub struct StIdx(u16);
 
+impl StIdx {
+    fn max_value() -> StIdx {
+        StIdx(u16::max_value())
+    }
+}
+
 impl From<StIdxStorageT> for StIdx {
     fn from(v: StIdxStorageT) -> Self {
         if v > StIdxStorageT::from(u16::max_value()) {
