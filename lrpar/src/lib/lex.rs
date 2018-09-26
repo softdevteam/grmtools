@@ -1,4 +1,21 @@
-use std::mem::size_of;
+use std::{error::Error, fmt, mem::size_of};
+
+#[derive(Debug)]
+pub struct LexError {
+    pub idx: usize
+}
+
+impl Error for LexError {
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
+impl fmt::Display for LexError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Couldn't lex input at position {}", self.idx)
+    }
+}
 
 use num_traits;
 

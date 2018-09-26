@@ -39,7 +39,7 @@ use std::{
 
 use regex::{self, Regex, RegexBuilder};
 
-use lrpar::Lexeme;
+use lrpar::{LexError, Lexeme};
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -74,11 +74,6 @@ impl<StorageT> Rule<StorageT> {
             re
         })
     }
-}
-
-#[derive(Debug)]
-pub struct LexError {
-    idx: usize
 }
 
 /// This struct represents, in essence, a .l file in memory. From it one can produce a `Lexer`
