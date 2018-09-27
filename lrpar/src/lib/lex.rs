@@ -1,4 +1,6 @@
-use std::{error::Error, fmt, mem::size_of};
+use std::{error::Error, fmt, hash::Hash, mem::size_of};
+
+use num_traits::{self, PrimInt, Unsigned};
 
 #[derive(Debug)]
 pub struct LexError {
@@ -17,7 +19,10 @@ impl fmt::Display for LexError {
     }
 }
 
-use num_traits;
+pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
+    fn lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError>;
+    fn line_and_col(&self, &Lexeme<StorageT>) -> Result<(usize, usize), ()>;
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Lexeme<StorageT> {

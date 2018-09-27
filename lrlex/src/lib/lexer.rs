@@ -33,13 +33,15 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    hash::Hash,
     rc::Rc,
     slice::Iter
 };
 
+use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 
-use lrpar::{LexError, Lexeme};
+use lrpar::{LexError, Lexer, Lexeme};
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -82,7 +84,7 @@ pub struct LexerDef<StorageT> {
     pub(crate) rules: Vec<Rule<StorageT>>
 }
 
-impl<StorageT: Copy + Eq> LexerDef<StorageT> {
+impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     pub fn new(rules: Vec<Rule<StorageT>>) -> LexerDef<StorageT> {
         LexerDef { rules }
     }
@@ -187,30 +189,32 @@ impl<StorageT: Copy + Eq> LexerDef<StorageT> {
     }
 
     /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
-    pub fn lexer<'a>(&'a self, s: &'a str) -> Lexer<'a, StorageT> {
-        Lexer::new(self, s)
+    pub fn lexer<'a>(&'a self, s: &'a str) -> impl Lexer<StorageT> + 'a {
+        LRLexer::new(self, s)
     }
 }
 
 /// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
 /// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
-pub struct Lexer<'a, StorageT: 'a> {
+pub struct LRLexer<'a, StorageT: 'a> {
     lexerdef: &'a LexerDef<StorageT>,
     s: &'a str,
     newlines: Rc<RefCell<Vec<usize>>>
 }
 
-impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
-    fn new(lexerdef: &'a LexerDef<StorageT>, s: &'a str) -> Lexer<'a, StorageT> {
-        Lexer {
+impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
+    fn new(lexerdef: &'a LexerDef<StorageT>, s: &'a str) -> LRLexer<'a, StorageT> {
+        LRLexer {
             lexerdef,
             s,
             newlines: Rc::new(RefCell::new(Vec::new()))
         }
     }
+}
 
+impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT> for LRLexer <'a, StorageT> {
     /// Return all this lexer's lexemes or a `LexError` if there was a problem when lexing.
-    pub fn lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
+    fn lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
         let mut i = 0; // byte index into s
         let mut lxs = Vec::new(); // lexemes
 
@@ -253,7 +257,7 @@ impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
 
     /// Return the line and column number of a `Lexeme`, or `Err` if it is clearly out of bounds
     /// for this lexer.
-    pub fn line_and_col(&self, l: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
+    fn line_and_col(&self, l: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
         if l.start() > self.s.len() {
             return Err(());
         }
@@ -298,7 +302,7 @@ mod test {
         let lexemes = lexer.lexer(&"abc 123").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
-        assert_eq!(lex1.tok_id(), 1);
+        assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.start(), 0);
         assert_eq!(lex1.len(), 3);
         let lex2 = lexemes[1];
@@ -337,7 +341,7 @@ if 'IF'
         let lexemes = lexer.lexer(&"iff if").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
-        assert_eq!(lex1.tok_id(), 1);
+        assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.start(), 0);
         assert_eq!(lex1.len(), 3);
         let lex2 = lexemes[1];
@@ -354,7 +358,7 @@ if 'IF'
             .to_string();
         let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
-        map.insert("ID", 0);
+        map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let lexer = lexerdef.lexer("a b c");
@@ -389,7 +393,7 @@ if 'IF'
             .to_string();
         let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
-        map.insert("INT", 0);
+        map.insert("INT", 0u8);
         let mut missing_from_lexer = HashSet::new();
         missing_from_lexer.insert("INT");
         let mut missing_from_parser = HashSet::new();

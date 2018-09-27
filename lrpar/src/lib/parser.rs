@@ -513,13 +513,13 @@ impl<StorageT: PrimInt + Unsigned> ParseError<StorageT> {
 pub(crate) mod test {
     use std::collections::HashMap;
 
-    use super::*;
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
     use lrtable::{from_yacc, Minimiser};
     use num_traits::ToPrimitive;
     use regex::Regex;
 
-    use super::Lexeme;
+    use ::lex::Lexeme;
+    use super::*;
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,

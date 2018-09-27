@@ -48,6 +48,7 @@ use std::{
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use getopts::Options;
 use lrlex::build_lex;
+use lrpar::Lexer;
 use lrpar::parser::{parse_rcvry, ParseRepair, RecoveryKind};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;

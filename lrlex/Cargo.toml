@@ -15,4 +15,5 @@ path = "src/lib/mod.rs"
 getopts = "0.2.15" # only needed for src/main.rs
 lrpar = { path = "../lrpar" }
 regex = "1.0"
+num-traits = "0.2"
 typename = "0.1"

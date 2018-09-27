@@ -33,17 +33,20 @@
 #![feature(try_from)]
 
 extern crate lrpar;
+extern crate num_traits;
 extern crate regex;
 extern crate typename;
 
-use std::{convert::TryFrom, error::Error, fmt};
+use std::{convert::TryFrom, error::Error, fmt, hash::Hash};
+
+use num_traits::{PrimInt, Unsigned};
 
 mod builder;
 mod lexer;
 mod parser;
 
 pub use builder::LexerBuilder;
-pub use lexer::{Lexer, LexerDef, Rule};
+pub use lexer::{LexerDef, Rule};
 use parser::parse_lex;
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
@@ -86,7 +89,7 @@ impl fmt::Display for LexBuildError {
     }
 }
 
-pub fn build_lex<StorageT: Copy + Eq + TryFrom<usize>>(
+pub fn build_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>(
     s: &str
 ) -> Result<LexerDef<StorageT>, LexBuildError> {
     parse_lex(s)

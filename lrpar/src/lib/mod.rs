@@ -52,7 +52,7 @@ mod astar;
 mod builder;
 mod cpctplus;
 pub mod lex;
-pub use lex::{Lexeme, LexError};
+pub use lex::{Lexeme, Lexer, LexError};
 mod panic;
 pub mod parser;
 pub use parser::{parse_rcvry, Node, ParseError, ParseRepair, RecoveryKind};

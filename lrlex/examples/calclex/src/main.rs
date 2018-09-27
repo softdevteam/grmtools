@@ -2,6 +2,9 @@ use std::io::{self, BufRead, Write};
 
 #[macro_use]
 extern crate lrlex;
+extern crate lrpar;
+
+use lrpar::Lexer;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
