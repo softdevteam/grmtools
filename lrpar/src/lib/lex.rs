@@ -2,7 +2,7 @@ use std::{error::Error, fmt, hash::Hash, mem::size_of};
 
 use num_traits::{self, PrimInt, Unsigned};
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct LexError {
     pub idx: usize
 }
@@ -19,9 +19,27 @@ impl fmt::Display for LexError {
     }
 }
 
+/// Roughly speaking, `Lexer` is an iterator which collectively produces `Lexeme`s, as well as
+/// collecting the newlines encountered so that it can later optionally answer queries of the form
+/// "what's the line and column number of lexeme L".
 pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
-    fn lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError>;
+    /// Return the next `Lexeme` in the input or a `LexError`. Returns `None` if the input has been
+    /// fully lexed (or if an error occurred which prevents further lexing).
+    fn next(&mut self) -> Option<Result<Lexeme<StorageT>, LexError>>;
+    /// Return the line and column number of a `Lexeme`, or `Err` if it is out of bounds, or no
+    /// line number information was collected.
     fn line_and_col(&self, &Lexeme<StorageT>) -> Result<(usize, usize), ()>;
+
+    /// Return all this lexer's remaining lexemes or a `LexError` if there was a problem when lexing.
+    fn all_lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
+        let mut lxs = Vec::new();
+        let mut n = self.next();
+        while let Some(r) = n {
+            lxs.push(r?);
+            n = self.next();
+        }
+        Ok(lxs)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

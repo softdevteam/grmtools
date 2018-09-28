@@ -29,7 +29,7 @@ fn main() {
                 // Now we create a lexer with the `lexer` method with which we can lex an input.
                 // Note that each lexer can only lex one input in its lifetime.
                 let mut lexer = lexerdef.lexer(l);
-                match lexer.lexemes() {
+                match lexer.all_lexemes() {
                     Ok(lexemes) => {
                         // Now parse the stream of lexemes into a tree
                         match calc_y::parse(&lexemes) {

@@ -528,8 +528,8 @@ pub(crate) mod test {
     use num_traits::ToPrimitive;
     use regex::Regex;
 
-    use ::lex::Lexeme;
     use super::*;
+    use lex::Lexeme;
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,
@@ -591,9 +591,12 @@ pub(crate) mod test {
         for l in lexs.split("\n").map(|x| x.trim()).filter(|x| !x.is_empty()) {
             assert!(l.rfind("'") == Some(l.len() - 1));
             let i = l[..l.len() - 1].rfind("'").unwrap();
-            let name = &l[i + 1 .. l.len() - 1];
+            let name = &l[i + 1..l.len() - 1];
             let re = &l[..i - 1].trim();
-            rules.push((ids_map[name], Regex::new(&format!("\\A(?:{})", re)).unwrap()));
+            rules.push((
+                ids_map[name],
+                Regex::new(&format!("\\A(?:{})", re)).unwrap()
+            ));
         }
         rules
     }

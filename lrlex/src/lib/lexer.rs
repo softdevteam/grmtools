@@ -197,6 +197,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
 pub struct LRLexer<'a, StorageT: 'a> {
     lexerdef: &'a LexerDef<StorageT>,
     s: &'a str,
+    i: usize,
     newlines: Vec<usize>
 }
 
@@ -205,6 +206,7 @@ impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
         LRLexer {
             lexerdef,
             s,
+            i: 0,
             newlines: Vec::new()
         }
     }
@@ -213,16 +215,13 @@ impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
 impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
     for LRLexer<'a, StorageT>
 {
-    /// Return all this lexer's lexemes or a `LexError` if there was a problem when lexing.
-    fn lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
-        let mut i = 0; // byte index into s
-        let mut lxs = Vec::new(); // lexemes
-
-        while i < self.s.len() {
+    fn next(&mut self) -> Option<Result<Lexeme<StorageT>, LexError>> {
+        while self.i < self.s.len() {
+            let old_i = self.i;
             let mut longest = 0; // Length of the longest match
             let mut longest_ridx = 0; // This is only valid iff longest != 0
             for (ridx, r) in self.lexerdef.iter_rules().enumerate() {
-                if let Some(m) = r.re.find(&self.s[i..]) {
+                if let Some(m) = r.re.find(&self.s[old_i..]) {
                     let len = m.end();
                     // Note that by using ">", we implicitly prefer an earlier over a later rule, if
                     // both match an input of the same length.
@@ -234,29 +233,34 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
             }
             if longest > 0 {
                 self.newlines.extend(
-                    self.s[i..i + longest]
+                    self.s[old_i..old_i + longest]
                         .chars()
                         .enumerate()
                         .filter(|&(_, c)| c == '\n')
-                        .map(|(j, _)| i + j + 1)
+                        .map(|(j, _)| old_i + j + 1)
                 );
                 let r = &self.lexerdef.get_rule(longest_ridx).unwrap();
                 if r.name.is_some() {
                     match r.tok_id {
-                        Some(tok_id) => lxs.push(Lexeme::new(tok_id, i, longest)),
-                        None => return Err(LexError { idx: i })
+                        Some(tok_id) => {
+                            self.i += longest;
+                            return Some(Ok(Lexeme::new(tok_id, old_i, longest)));
+                        }
+                        None => {
+                            self.i = self.s.len();
+                            return Some(Err(LexError { idx: old_i }));
+                        }
                     }
                 }
-                i += longest;
+                self.i += longest;
             } else {
-                return Err(LexError { idx: i });
+                self.i = self.s.len();
+                return Some(Err(LexError { idx: old_i }));
             }
         }
-        Ok(lxs)
+        None
     }
 
-    /// Return the line and column number of a `Lexeme`, or `Err` if it is clearly out of bounds
-    /// for this lexer.
     fn line_and_col(&self, l: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
         if l.start() > self.s.len() {
             return Err(());
@@ -298,7 +302,7 @@ mod test {
         map.insert("id", 1);
         assert_eq!(lexer.set_rule_ids(&map), (None, None));
 
-        let lexemes = lexer.lexer(&"abc 123").lexemes().unwrap();
+        let lexemes = lexer.lexer(&"abc 123").all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
@@ -317,7 +321,7 @@ mod test {
 [0-9]+ 'int'
         ".to_string();
         let lexer = parse_lex::<u8>(&src).unwrap();
-        match lexer.lexer(&"abc").lexemes() {
+        match lexer.lexer(&"abc").all_lexemes() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(LexError { idx: 0 }) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
@@ -337,7 +341,7 @@ if 'IF'
         map.insert("ID", 1);
         assert_eq!(lexer.set_rule_ids(&map), (None, None));
 
-        let lexemes = lexer.lexer(&"iff if").lexemes().unwrap();
+        let lexemes = lexer.lexer(&"iff if").all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
@@ -361,17 +365,17 @@ if 'IF'
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let mut lexer = lexerdef.lexer("a b c");
-        let lexemes = lexer.lexemes().unwrap();
+        let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (1, 3));
 
         let mut lexer = lexerdef.lexer("a b c\n");
-        let lexemes = lexer.lexemes().unwrap();
+        let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (1, 3));
 
         let mut lexer = lexerdef.lexer(" a\nb\n  c d");
-        let lexemes = lexer.lexemes().unwrap();
+        let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 4);
         assert_eq!(lexer.line_and_col(&lexemes[0]).unwrap(), (1, 2));
         assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (2, 1));
@@ -402,7 +406,7 @@ if 'IF'
             (Some(missing_from_lexer), Some(missing_from_parser))
         );
 
-        match lexerdef.lexer(&" a ").lexemes() {
+        match lexerdef.lexer(&" a ").all_lexemes() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(LexError { idx: 1 }) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)

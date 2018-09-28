@@ -188,7 +188,7 @@ fn main() {
 
     let input = read_file(&matches.free[2]);
     let mut lexer = lexerdef.lexer(&input);
-    let lexemes = lexer.lexemes().unwrap();
+    let lexemes = lexer.all_lexemes().unwrap();
     let token_cost = |_| 1; // Cost of inserting/deleting a token
     match parse_rcvry::<u16, _>(recoverykind, &grm, &token_cost, &sgraph, &stable, &lexemes) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
