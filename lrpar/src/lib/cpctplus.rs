@@ -38,11 +38,11 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::TIdx;
-use lrlex::Lexeme;
 use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use astar::dijkstra;
+use lex::Lexeme;
 use mf::{apply_repairs, rank_cnds, simplify_repairs};
 use parser::{Node, ParseRepair, Parser, Recoverer};
 
@@ -451,9 +451,9 @@ mod test {
     use std::fmt::Debug;
 
     use cfgrammar::yacc::YaccGrammar;
-    use lrlex::Lexeme;
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
+    use lex::Lexeme;
     use parser::{test::do_parse, ParseRepair, RecoveryKind};
 
     fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>(
@@ -505,12 +505,10 @@ mod test {
     #[test]
     fn corchuelo_example() {
         // The example from the Curchuelo paper
-        let lexs = "%%
-\\( '('
-\\) ')'
-\\+ '+'
-n 'N'
-";
+        let lexs = "\\( '('
+                    \\) ')'
+                    \\+ '+'
+                    n 'N'";
         let grms = "%start E
 %%
 E : 'N'
@@ -584,12 +582,10 @@ E : 'N'
 
     #[test]
     fn test_merge() {
-        let lexs = "%%
-a 'a'
-b 'b'
-c 'c'
-d 'd'
-";
+        let lexs = "a 'a'
+                    b 'b'
+                    c 'c'
+                    d 'd'";
 
         let grms = "%start S
 %%

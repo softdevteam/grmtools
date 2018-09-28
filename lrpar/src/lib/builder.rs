@@ -218,8 +218,7 @@ where
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
         outs.push_str(&format!("mod {}_y {{", mod_name));
         outs.push_str(&format!(
-            "use lrpar::{{Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
-use lrlex::Lexeme;
+            "use lrpar::{{Lexeme, Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
 
 pub fn parse(lexemes: &[Lexeme<{storaget}>])
           -> Result<Node<{storaget}>, (Option<Node<{storaget}>>, Vec<ParseError<{storaget}>>)>

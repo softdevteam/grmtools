@@ -38,9 +38,10 @@ extern crate cfgrammar;
 extern crate filetime;
 #[macro_use]
 extern crate indexmap;
-extern crate lrlex;
 extern crate lrtable;
 extern crate num_traits;
+#[cfg(test)]
+extern crate regex;
 extern crate rmp_serde as rmps;
 extern crate serde;
 extern crate test;
@@ -50,6 +51,8 @@ extern crate vob;
 mod astar;
 mod builder;
 mod cpctplus;
+pub mod lex;
+pub use lex::{Lexeme, Lexer, LexError};
 mod panic;
 pub mod parser;
 pub use parser::{parse_rcvry, Node, ParseError, ParseRepair, RecoveryKind};

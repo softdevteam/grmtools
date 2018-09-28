@@ -12,3 +12,4 @@ lrlex = { path = "../.." }
 
 [dependencies]
 lrlex = { path = "../.." }
+lrpar = { path = "../../../lrpar" }

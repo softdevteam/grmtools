@@ -5,7 +5,7 @@ extern crate cfgrammar;
 #[macro_use] extern crate lrpar;
 
 use cfgrammar::RIdx;
-use lrpar::Node;
+use lrpar::{Lexer, Node};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);

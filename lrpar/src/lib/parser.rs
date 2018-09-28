@@ -39,11 +39,11 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
-use lrlex::Lexeme;
 use lrtable::{Action, StIdx, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use cpctplus;
+use lex::Lexeme;
 use mf;
 use panic;
 
@@ -513,11 +513,13 @@ impl<StorageT: PrimInt + Unsigned> ParseError<StorageT> {
 pub(crate) mod test {
     use std::collections::HashMap;
 
-    use super::*;
     use cfgrammar::yacc::{YaccGrammar, YaccKind};
-    use lrlex::{build_lex, Lexeme};
     use lrtable::{from_yacc, Minimiser};
     use num_traits::ToPrimitive;
+    use regex::Regex;
+
+    use ::lex::Lexeme;
+    use super::*;
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,
@@ -541,18 +543,15 @@ pub(crate) mod test {
         YaccGrammar<u16>,
         Result<Node<u16>, (Option<Node<u16>>, Vec<ParseError<u16>>)>
     ) {
-        let mut lexerdef = build_lex(lexs).unwrap();
         let grm = YaccGrammar::<u16>::new_with_storaget(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
-        {
-            let rule_ids = grm
-                .tokens_map()
-                .iter()
-                .map(|(&n, &i)| (n, u32::from(i).to_u16().unwrap()))
-                .collect();
-            lexerdef.set_rule_ids(&rule_ids);
-        }
-        let lexemes = lexerdef.lexer(&input).lexemes().unwrap();
+        let rule_ids = grm
+            .tokens_map()
+            .iter()
+            .map(|(&n, &i)| (n.to_owned(), u32::from(i).to_u16().unwrap()))
+            .collect();
+        let lexer_rules = small_lexer(lexs, rule_ids);
+        let lexemes = small_lex(lexer_rules, input);
         let costs_tidx = costs
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
@@ -573,13 +572,50 @@ pub(crate) mod test {
         assert_eq!(expected, pt.unwrap().pp(&grm, &input));
     }
 
+    // small_lexer and small_lex are our highly simplified version of lrlex (allowing us to avoid
+    // having to have lrlex as a dependency of lrpar). The format is the same as lrlex *except*:
+    //   * The initial "%%" isn't needed, and only "'" is valid as a rule name delimiter.
+    //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
+    fn small_lexer(lexs: &str, ids_map: HashMap<String, u16>) -> Vec<(u16, Regex)> {
+        let mut rules = Vec::new();
+        for l in lexs.split("\n").map(|x| x.trim()).filter(|x| !x.is_empty()) {
+            assert!(l.rfind("'") == Some(l.len() - 1));
+            let i = l[..l.len() - 1].rfind("'").unwrap();
+            let name = &l[i + 1 .. l.len() - 1];
+            let re = &l[..i - 1].trim();
+            rules.push((ids_map[name], Regex::new(&format!("\\A(?:{})", re)).unwrap()));
+        }
+        rules
+    }
+
+    fn small_lex(rules: Vec<(u16, Regex)>, input: &str) -> Vec<Lexeme<u16>> {
+        let mut lexemes = vec![];
+        let mut i = 0;
+        while i < input.len() {
+            let mut longest = 0; // Length of the longest match
+            let mut longest_tok_id = 0; // This is only valid iff longest != 0
+            for (tok_id, r) in rules.iter() {
+                if let Some(m) = r.find(&input[i..]) {
+                    let len = m.end();
+                    if len > longest {
+                        longest = len;
+                        longest_tok_id = *tok_id;
+                    }
+                }
+            }
+            assert!(longest > 0);
+            lexemes.push(Lexeme::new(longest_tok_id, i, longest));
+            i += longest;
+        }
+        lexemes
+    }
+
     #[test]
     fn simple_parse() {
         // From p4 of https://www.cs.umd.edu/class/spring2014/cmsc430/lectures/lec07.pdf
         check_parse_output(
-            "%%
-[a-zA-Z_] 'ID'
-\\+ '+'",
+            "[a-zA-Z_] 'ID'
+             \\+ '+'",
             "
 %start E
 %%
@@ -601,8 +637,7 @@ T: 'ID';
 
     #[test]
     fn parse_empty_rules() {
-        let lexs = "%%
-[a-zA-Z_] 'ID'";
+        let lexs = "[a-zA-Z_] 'ID'";
         let grms = "%start S
 %%
 S: L;
@@ -628,11 +663,9 @@ L: 'ID'
 
     #[test]
     fn recursive_parse() {
-        let lexs = "%%
-\\+ '+'
-\\* '*'
-[0-9]+ 'INT'
-";
+        let lexs = "\\+ '+'
+                    \\* '*'
+                    [0-9]+ 'INT'";
         let grms = "%start Expr
 %%
 Expr : Term '+' Expr | Term;
@@ -681,11 +714,9 @@ Factor : 'INT';";
 
     #[test]
     fn parse_error() {
-        let lexs = "%%
-\\( '('
-\\) ')'
-[a-zA-Z_][a-zA-Z_0-9]* 'ID'
-";
+        let lexs = "\\( '('
+                    \\) ')'
+                    [a-zA-Z_][a-zA-Z_0-9]* 'ID'";
         let grms = "%start Call
 %%
 Call: 'ID' '(' ')';";

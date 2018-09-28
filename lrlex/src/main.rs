@@ -32,6 +32,7 @@
 
 extern crate getopts;
 extern crate lrlex;
+extern crate lrpar;
 
 use getopts::Options;
 use std::{
@@ -43,6 +44,7 @@ use std::{
 };
 
 use lrlex::{build_lex, LexerDef};
+use lrpar::Lexer;
 
 fn usage(prog: &str, msg: &str) {
     let path = Path::new(prog);

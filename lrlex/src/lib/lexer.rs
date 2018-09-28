@@ -33,12 +33,15 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    convert::TryFrom,
+    hash::Hash,
     rc::Rc,
     slice::Iter
 };
 
+use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
+
+use lrpar::{LexError, Lexer, Lexeme};
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -75,18 +78,13 @@ impl<StorageT> Rule<StorageT> {
     }
 }
 
-#[derive(Debug)]
-pub struct LexError {
-    idx: usize
-}
-
 /// This struct represents, in essence, a .l file in memory. From it one can produce a `Lexer`
 /// which actually lexes inputs.
 pub struct LexerDef<StorageT> {
     pub(crate) rules: Vec<Rule<StorageT>>
 }
 
-impl<StorageT: Copy + Eq> LexerDef<StorageT> {
+impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     pub fn new(rules: Vec<Rule<StorageT>>) -> LexerDef<StorageT> {
         LexerDef { rules }
     }
@@ -191,30 +189,32 @@ impl<StorageT: Copy + Eq> LexerDef<StorageT> {
     }
 
     /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
-    pub fn lexer<'a>(&'a self, s: &'a str) -> Lexer<'a, StorageT> {
-        Lexer::new(self, s)
+    pub fn lexer<'a>(&'a self, s: &'a str) -> impl Lexer<StorageT> + 'a {
+        LRLexer::new(self, s)
     }
 }
 
 /// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
 /// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
-pub struct Lexer<'a, StorageT: 'a> {
+pub struct LRLexer<'a, StorageT: 'a> {
     lexerdef: &'a LexerDef<StorageT>,
     s: &'a str,
     newlines: Rc<RefCell<Vec<usize>>>
 }
 
-impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
-    fn new(lexerdef: &'a LexerDef<StorageT>, s: &'a str) -> Lexer<'a, StorageT> {
-        Lexer {
+impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
+    fn new(lexerdef: &'a LexerDef<StorageT>, s: &'a str) -> LRLexer<'a, StorageT> {
+        LRLexer {
             lexerdef,
             s,
             newlines: Rc::new(RefCell::new(Vec::new()))
         }
     }
+}
 
+impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT> for LRLexer <'a, StorageT> {
     /// Return all this lexer's lexemes or a `LexError` if there was a problem when lexing.
-    pub fn lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
+    fn lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
         let mut i = 0; // byte index into s
         let mut lxs = Vec::new(); // lexemes
 
@@ -257,69 +257,25 @@ impl<'a, StorageT: Copy + Eq> Lexer<'a, StorageT> {
 
     /// Return the line and column number of a `Lexeme`, or `Err` if it is clearly out of bounds
     /// for this lexer.
-    pub fn line_and_col(&self, l: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
-        if l.start > self.s.len() {
+    fn line_and_col(&self, l: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
+        if l.start() > self.s.len() {
             return Err(());
         }
 
         let newlines = self.newlines.borrow();
-        if newlines.len() == 0 || l.start < newlines[0] {
-            return Ok((1, l.start + 1));
+        if newlines.len() == 0 || l.start() < newlines[0] {
+            return Ok((1, l.start() + 1));
         }
 
         for i in 0..newlines.len() - 1 {
-            if newlines[i + 1] > l.start {
-                return Ok((i + 2, l.start - newlines[i] + 1));
+            if newlines[i + 1] > l.start() {
+                return Ok((i + 2, l.start() - newlines[i] + 1));
             }
         }
         Ok((
             newlines.len() + 1,
-            l.start - newlines[newlines.len() - 1] + 1
+            l.start() - newlines[newlines.len() - 1] + 1
         ))
-    }
-}
-
-/// A lexeme has a starting position in a string, a length, and a token id. It is a deliberately
-/// small data-structure to large input files to be stored efficiently.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Lexeme<StorageT> {
-    start: usize,
-    len: u32,
-    tok_id: StorageT
-}
-
-impl<StorageT: Copy> Lexeme<StorageT> {
-    pub fn new(tok_id: StorageT, start: usize, len: usize) -> Lexeme<StorageT> {
-        Lexeme {
-            start,
-            len: u32::try_from(len).unwrap(),
-            tok_id
-        }
-    }
-
-    /// The token ID.
-    pub fn tok_id(&self) -> StorageT {
-        self.tok_id
-    }
-
-    /// Byte offset of the start of the lexeme
-    pub fn start(&self) -> usize {
-        self.start
-    }
-
-    /// Byte offset of the start of the lexeme
-    pub fn end(&self) -> usize {
-        self.start() + self.len()
-    }
-
-    /// Length in bytes of the lexeme
-    pub fn len(&self) -> usize {
-        debug_assert!(usize::try_from(u32::max_value()).is_ok());
-        self.len as usize
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
     }
 }
 
@@ -346,13 +302,13 @@ mod test {
         let lexemes = lexer.lexer(&"abc 123").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
-        assert_eq!(lex1.tok_id, 1);
-        assert_eq!(lex1.start, 0);
-        assert_eq!(lex1.len, 3);
+        assert_eq!(lex1.tok_id(), 1u8);
+        assert_eq!(lex1.start(), 0);
+        assert_eq!(lex1.len(), 3);
         let lex2 = lexemes[1];
-        assert_eq!(lex2.tok_id, 0);
-        assert_eq!(lex2.start, 4);
-        assert_eq!(lex2.len, 3);
+        assert_eq!(lex2.tok_id(), 0);
+        assert_eq!(lex2.start(), 4);
+        assert_eq!(lex2.len(), 3);
     }
 
     #[test]
@@ -385,13 +341,13 @@ if 'IF'
         let lexemes = lexer.lexer(&"iff if").lexemes().unwrap();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
-        assert_eq!(lex1.tok_id, 1);
-        assert_eq!(lex1.start, 0);
-        assert_eq!(lex1.len, 3);
+        assert_eq!(lex1.tok_id(), 1u8);
+        assert_eq!(lex1.start(), 0);
+        assert_eq!(lex1.len(), 3);
         let lex2 = lexemes[1];
-        assert_eq!(lex2.tok_id, 0);
-        assert_eq!(lex2.start, 4);
-        assert_eq!(lex2.len, 2);
+        assert_eq!(lex2.tok_id(), 0);
+        assert_eq!(lex2.start(), 4);
+        assert_eq!(lex2.len(), 2);
     }
 
     #[test]
@@ -402,7 +358,7 @@ if 'IF'
             .to_string();
         let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
-        map.insert("ID", 0);
+        map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let lexer = lexerdef.lexer("a b c");
@@ -423,11 +379,7 @@ if 'IF'
         assert_eq!(lexer.line_and_col(&lexemes[2]).unwrap(), (3, 3));
         assert_eq!(lexer.line_and_col(&lexemes[3]).unwrap(), (3, 5));
 
-        let fake_lexeme = Lexeme {
-            start: 100,
-            len: 1,
-            tok_id: 0
-        };
+        let fake_lexeme = Lexeme::new(0, 100, 1);
         if let Ok(_) = lexer.line_and_col(&fake_lexeme) {
             panic!("line_and_col returned Ok(_) when it should have returned Err.");
         }
@@ -441,7 +393,7 @@ if 'IF'
             .to_string();
         let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
-        map.insert("INT", 0);
+        map.insert("INT", 0u8);
         let mut missing_from_lexer = HashSet::new();
         missing_from_lexer.insert("INT");
         let mut missing_from_parser = HashSet::new();

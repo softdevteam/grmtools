@@ -40,12 +40,12 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
-use lrlex::Lexeme;
 use lrtable::{Action, StIdx, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
 use astar::astar_all;
+use lex::Lexeme;
 use parser::{Node, ParseRepair, Parser, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
@@ -803,9 +803,9 @@ mod test {
         yacc::{YaccGrammar, YaccKind},
         Symbol
     };
-    use lrlex::Lexeme;
     use lrtable::{from_yacc, Minimiser, StIdx};
 
+    use lex::Lexeme;
     use parser::{
         test::{do_parse, do_parse_with_costs},
         ParseRepair, RecoveryKind
@@ -1157,12 +1157,10 @@ A: '(' A ')'
     #[rustfmt::skip]
     fn corchuelo_example() {
         // The example from the Corchuelo paper
-        let lexs = "%%
-\\( '('
-\\) ')'
-\\+ '+'
-n 'N'
-";
+        let lexs = "\\( '('
+                    \\) ')'
+                    \\+ '+'
+                    n 'N'";
         let grms = "%start E
 %%
 E : 'N'
@@ -1237,12 +1235,10 @@ E : 'N'
         // The example from the KimYi paper, with a bit of alpha-renaming to make it clearer. The
         // paper uses "A" as a rule name and "a" as a token name, which are then easily
         // confused. Here we use "E" as the rule name, and keep "a" as the token name.
-        let lexs = "%%
-\\( '('
-\\) ')'
-a 'A'
-b 'B'
-";
+        let lexs = "\\( '('
+                    \\) ')'
+                    a 'A'
+                    b 'B'";
         let grms = "%start E
 %%
 E: '(' E ')'
@@ -1299,14 +1295,11 @@ E: '(' E ')'
 
     #[test]
     fn expr_grammar() {
-        let lexs = "%%
-\\( '('
-\\) ')'
-\\+ '+'
-\\* '*'
-[0-9]+ 'INT'
-[ ] ;
-";
+        let lexs = "\\( '('
+                    \\) ')'
+                    \\+ '+'
+                    \\* '*'
+                    [0-9] 'INT'";
 
         let grms = "%start Expr
 %%
@@ -1320,7 +1313,7 @@ Factor: '(' Expr ')'
       | 'INT' ;
 ";
 
-        let us = "(2 3";
+        let us = "(23";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
@@ -1347,11 +1340,9 @@ Factor: '(' Expr ')'
 
     #[test]
     fn find_shortest() {
-        let lexs = "%%
-a 'A'
-b 'B'
-c 'C'
-";
+        let lexs = "a 'A'
+                    b 'B'
+                    c 'C'";
 
         let grms = "%start S
 %%
@@ -1368,12 +1359,10 @@ U: 'B';
 
     #[test]
     fn deletes_after_inserts() {
-        let lexs = "%%
-a 'A'
-b 'B'
-c 'C'
-d 'D'
-";
+        let lexs = "a 'A'
+                    b 'B'
+                    c 'C'
+                    d 'D'";
 
         let grms = "%start S
 %%
@@ -1388,9 +1377,7 @@ S:  'A' 'B' 'D' | 'A' 'B' 'C' 'A' 'A' 'D';
 
     #[test]
     fn repair_empty_string() {
-        let lexs = "%%
-a 'A'
-";
+        let lexs = "a 'A'";
 
         let grms = "%start S
 %%
@@ -1405,12 +1392,10 @@ S: 'A';
 
     #[test]
     fn test_merge() {
-        let lexs = "%%
-a 'a'
-b 'b'
-c 'c'
-d 'd'
-";
+        let lexs = "a 'a'
+                    b 'b'
+                    c 'c'
+                    d 'd'";
 
         let grms = "%start S
 %%
@@ -1438,11 +1423,9 @@ U: 'd';
     #[test]
     fn test_cerecke_loop_limit() {
         // Example taken from p57 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let lexs = "%%
-a 'a'
-b 'b'
-c 'c'
-";
+        let lexs = "a 'a'
+                    b 'b'
+                    c 'c'";
 
         let grms = "%start S
 %%
@@ -1467,13 +1450,11 @@ S: 'a' S 'b'
     #[test]
     fn test_cerecke_lr2() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let lexs = "%%
-a 'a'
-b 'b'
-c 'c'
-d 'd'
-e 'e'
-";
+        let lexs = "a 'a'
+                    b 'b'
+                    c 'c'
+                    d 'd'
+                    e 'e'";
 
         let grms = "%start S
 %%
@@ -1501,12 +1482,10 @@ A: 'b';
     fn test_bertsch_nederhof1() {
         // Example from p5 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
         // Repair in Shift-reduce Parsers'"
-        let lexs = "%%
-a 'a'
-b 'b'
-c 'c'
-d 'd'
-";
+        let lexs = "a 'a'
+                    b 'b'
+                    c 'c'
+                    d 'd'";
 
         let grms = "%start S
 %%
@@ -1533,11 +1512,9 @@ A: 'c' 'd';
     fn test_bertsch_nederhof2() {
         // Example from p5 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
         // Repair in Shift-reduce Parsers'"
-        let lexs = "%%
-a 'a'
-c 'c'
-d 'd'
-";
+        let lexs = "a 'a'
+                    c 'c'
+                    d 'd'";
 
         let grms = "%start S
 %%
@@ -1559,12 +1536,10 @@ A: 'c' 'd';
     fn test_bertsch_nederhof3() {
         // Example from p8 of Bertsch and Nederhof "On Failure of the Pruning Technique in 'Error
         // Repair in Shift-reduce Parsers'"
-        let lexs = "%%
-a 'a'
-b 'b'
-c 'c'
-d 'd'
-";
+        let lexs = "a 'a'
+                    b 'b'
+                    c 'c'
+                    d 'd'";
 
         let grms = "%start S
 %%

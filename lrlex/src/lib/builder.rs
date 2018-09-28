@@ -37,10 +37,12 @@ use std::{
     error::Error,
     fmt::Debug,
     fs::{self, read_to_string, File},
+    hash::Hash,
     io::Write,
     path::{Path, PathBuf}
 };
 
+use num_traits::{PrimInt, Unsigned};
 use typename::TypeName;
 
 use lexer::LexerDef;
@@ -60,7 +62,7 @@ pub struct LexerBuilder<StorageT = u32> {
 
 impl<StorageT> LexerBuilder<StorageT>
 where
-    StorageT: Copy + Debug + Eq + TryFrom<usize> + TypeName
+    StorageT: Copy + Debug + Eq + Hash + PrimInt + TryFrom<usize> + TypeName + Unsigned
 {
     /// Create a new `LexerBuilder`.
     ///
