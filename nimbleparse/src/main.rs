@@ -48,8 +48,10 @@ use std::{
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use getopts::Options;
 use lrlex::build_lex;
-use lrpar::Lexer;
-use lrpar::parser::{parse_rcvry, ParseRepair, RecoveryKind};
+use lrpar::{
+    parser::{parse_rcvry, ParseRepair, RecoveryKind},
+    Lexer
+};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
 
@@ -185,7 +187,7 @@ fn main() {
     }
 
     let input = read_file(&matches.free[2]);
-    let lexer = lexerdef.lexer(&input);
+    let mut lexer = lexerdef.lexer(&input);
     let lexemes = lexer.lexemes().unwrap();
     let token_cost = |_| 1; // Cost of inserting/deleting a token
     match parse_rcvry::<u16, _>(recoverykind, &grm, &token_cost, &sgraph, &stable, &lexemes) {

@@ -31,17 +31,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{
-    cell::RefCell,
     collections::{HashMap, HashSet},
     hash::Hash,
-    rc::Rc,
     slice::Iter
 };
 
 use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 
-use lrpar::{LexError, Lexer, Lexeme};
+use lrpar::{LexError, Lexeme, Lexer};
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -199,7 +197,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
 pub struct LRLexer<'a, StorageT: 'a> {
     lexerdef: &'a LexerDef<StorageT>,
     s: &'a str,
-    newlines: Rc<RefCell<Vec<usize>>>
+    newlines: Vec<usize>
 }
 
 impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
@@ -207,14 +205,16 @@ impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
         LRLexer {
             lexerdef,
             s,
-            newlines: Rc::new(RefCell::new(Vec::new()))
+            newlines: Vec::new()
         }
     }
 }
 
-impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT> for LRLexer <'a, StorageT> {
+impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
+    for LRLexer<'a, StorageT>
+{
     /// Return all this lexer's lexemes or a `LexError` if there was a problem when lexing.
-    fn lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
+    fn lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
         let mut i = 0; // byte index into s
         let mut lxs = Vec::new(); // lexemes
 
@@ -233,7 +233,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT> for LR
                 }
             }
             if longest > 0 {
-                self.newlines.borrow_mut().extend(
+                self.newlines.extend(
                     self.s[i..i + longest]
                         .chars()
                         .enumerate()
@@ -262,19 +262,18 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT> for LR
             return Err(());
         }
 
-        let newlines = self.newlines.borrow();
-        if newlines.len() == 0 || l.start() < newlines[0] {
+        if self.newlines.len() == 0 || l.start() < self.newlines[0] {
             return Ok((1, l.start() + 1));
         }
 
-        for i in 0..newlines.len() - 1 {
-            if newlines[i + 1] > l.start() {
-                return Ok((i + 2, l.start() - newlines[i] + 1));
+        for i in 0..self.newlines.len() - 1 {
+            if self.newlines[i + 1] > l.start() {
+                return Ok((i + 2, l.start() - self.newlines[i] + 1));
             }
         }
         Ok((
-            newlines.len() + 1,
-            l.start() - newlines[newlines.len() - 1] + 1
+            self.newlines.len() + 1,
+            l.start() - self.newlines[self.newlines.len() - 1] + 1
         ))
     }
 }
@@ -361,17 +360,17 @@ if 'IF'
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
-        let lexer = lexerdef.lexer("a b c");
+        let mut lexer = lexerdef.lexer("a b c");
         let lexemes = lexer.lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (1, 3));
 
-        let lexer = lexerdef.lexer("a b c\n");
+        let mut lexer = lexerdef.lexer("a b c\n");
         let lexemes = lexer.lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (1, 3));
 
-        let lexer = lexerdef.lexer(" a\nb\n  c d");
+        let mut lexer = lexerdef.lexer(" a\nb\n  c d");
         let lexemes = lexer.lexemes().unwrap();
         assert_eq!(lexemes.len(), 4);
         assert_eq!(lexer.line_and_col(&lexemes[0]).unwrap(), (1, 2));

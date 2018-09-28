@@ -20,7 +20,7 @@ impl fmt::Display for LexError {
 }
 
 pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
-    fn lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError>;
+    fn lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError>;
     fn line_and_col(&self, &Lexeme<StorageT>) -> Result<(usize, usize), ()>;
 }
 
@@ -67,4 +67,3 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         self.len == 0
     }
 }
-

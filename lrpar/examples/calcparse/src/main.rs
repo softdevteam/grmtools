@@ -1,8 +1,10 @@
 use std::io::{self, BufRead, Write};
 
 extern crate cfgrammar;
-#[macro_use] extern crate lrlex;
-#[macro_use] extern crate lrpar;
+#[macro_use]
+extern crate lrlex;
+#[macro_use]
+extern crate lrpar;
 
 use cfgrammar::RIdx;
 use lrpar::{Lexer, Node};
@@ -26,7 +28,7 @@ fn main() {
                 }
                 // Now we create a lexer with the `lexer` method with which we can lex an input.
                 // Note that each lexer can only lex one input in its lifetime.
-                let lexer = lexerdef.lexer(l);
+                let mut lexer = lexerdef.lexer(l);
                 match lexer.lexemes() {
                     Ok(lexemes) => {
                         // Now parse the stream of lexemes into a tree
