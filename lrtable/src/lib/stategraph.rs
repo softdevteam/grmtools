@@ -115,12 +115,16 @@ where
         self.edges.iter().fold(0, |a, x| a + x.len())
     }
 
-    fn pp(&self, grm: &YaccGrammar<StorageT>, core_states: bool) -> String {
+    /// Pretty print this stategraph as a `String`. If `core_states` is set to true, only the core
+    /// states are pretty printed; if set to false, all states (including non-core states) are
+    /// pretty printed.
+    pub fn pp(&self, grm: &YaccGrammar<StorageT>, core_states: bool) -> String {
         fn num_digits(i: StIdx) -> usize {
-            // In an ideal world, we'd do ((i as f64).log10() as usize) + 1, but we then hit
-            // floating point rounding errors (e.g. 1000.0.log10() == 2.999999999ish, not
-            // 3). So we do the lazy thing, convert the number to a string and do things that way.
-            usize::from(i).to_string().len()
+            if usize::from(i) == 0 {
+                1
+            } else {
+                ((usize::from(i) as f64).log10() as usize) + 1
+            }
         }
 
         fn fmt_sym<StorageT: 'static + PrimInt + Unsigned>(
