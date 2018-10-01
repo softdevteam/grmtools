@@ -192,7 +192,7 @@ where
                     debug_assert_eq!(tstack.len(), 1);
                     return true;
                 }
-                None => {
+                Some(Action::Error) => {
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
                             RecoveryKind::CPCTPlus => cpctplus::recoverer(self),
@@ -234,7 +234,8 @@ where
                         return false;
                     }
                     laidx = new_laidx;
-                }
+                },
+                None => ()
             }
         }
     }
@@ -288,6 +289,9 @@ where
                     laidx += 1;
                 }
                 Some(Action::Accept) => {
+                    break;
+                }
+                Some(Action::Error) => {
                     break;
                 }
                 None => {
@@ -395,6 +399,9 @@ where
                     }
                     break;
                 }
+                Some(Action::Error) => {
+                    break;
+                },
                 None => {
                     break;
                 }
