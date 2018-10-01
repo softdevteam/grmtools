@@ -34,6 +34,7 @@ use std::{
     error::Error,
     fmt::{self, Debug, Display},
     hash::Hash,
+    marker::PhantomData,
     time::{Duration, Instant}
 };
 
@@ -43,7 +44,7 @@ use lrtable::{Action, StIdx, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use cpctplus;
-use lex::Lexeme;
+use lex::{LexError, Lexeme, Lexer};
 use mf;
 use panic;
 
@@ -95,7 +96,6 @@ where
 pub(crate) type Lexemes<StorageT> = Vec<Lexeme<StorageT>>;
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TStack<StorageT> = Vec<Node<StorageT>>; // Parse tree stack
-pub(crate) type Errors<StorageT> = Vec<ParseError<StorageT>>;
 
 pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
     pub rcvry_kind: RecoveryKind,
@@ -163,7 +163,7 @@ where
         mut laidx: usize,
         pstack: &mut PStack,
         tstack: &mut TStack<StorageT>,
-        errors: &mut Errors<StorageT>
+        errors: &mut Vec<ParseError<StorageT>>
     ) -> bool {
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
@@ -423,12 +423,93 @@ pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned> {
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>);
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum RecoveryKind {
     CPCTPlus,
     MF,
     Panic,
     None
+}
+
+#[derive(Debug)]
+pub enum LexParseError<StorageT> {
+    LexError(LexError),
+    ParseError((Option<Node<StorageT>>, Vec<ParseError<StorageT>>))
+}
+
+impl<StorageT: Debug> Error for LexParseError<StorageT> {}
+
+impl<StorageT: Debug> fmt::Display for LexParseError<StorageT> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LexParseError::LexError(ref e) => Display::fmt(e, f),
+            LexParseError::ParseError(ref e) => e.fmt(f)
+        }
+    }
+}
+
+impl<StorageT> From<LexError> for LexParseError<StorageT> {
+    fn from(err: LexError) -> LexParseError<StorageT> {
+        LexParseError::LexError(err)
+    }
+}
+
+impl<StorageT> From<(Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
+    for LexParseError<StorageT>
+{
+    fn from(err: (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)) -> LexParseError<StorageT> {
+        LexParseError::ParseError(err)
+    }
+}
+
+pub struct RTParserBuilder<'a, StorageT: Eq + Hash> {
+    grm: &'a YaccGrammar<StorageT>,
+    sgraph: &'a StateGraph<StorageT>,
+    stable: &'a StateTable<StorageT>,
+    recoverer: RecoveryKind,
+    phantom: PhantomData<StorageT>
+}
+
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> RTParserBuilder<'a, StorageT>
+where
+    usize: AsPrimitive<StorageT>
+{
+    pub fn new(
+        grm: &'a YaccGrammar<StorageT>,
+        sgraph: &'a StateGraph<StorageT>,
+        stable: &'a StateTable<StorageT>
+    ) -> Self {
+        RTParserBuilder {
+            grm,
+            sgraph,
+            stable,
+            recoverer: RecoveryKind::MF,
+            phantom: PhantomData
+        }
+    }
+
+    /// Set the recoverer for this parser to `rk`.
+    pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
+        self.recoverer = rk;
+        self
+    }
+
+    /// Parse input. On success return a parse tree. On failure, return a `LexParseError`: a
+    /// `LexError` means that no parse tree was produced; a `ParseError` may (if its first element
+    /// is `Some(...)`) return a parse tree (with parts filled in by this builder's recoverer).
+    pub fn parse(
+        &self,
+        lexer: &mut Lexer<StorageT>
+    ) -> Result<Node<StorageT>, LexParseError<StorageT>> {
+        Ok(Parser::parse(
+            self.recoverer,
+            self.grm,
+            |_| 1,
+            self.sgraph,
+            self.stable,
+            &lexer.all_lexemes()?[..]
+        )?)
+    }
 }
 
 /// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the

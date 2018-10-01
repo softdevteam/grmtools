@@ -7,11 +7,7 @@ pub struct LexError {
     pub idx: usize
 }
 
-impl Error for LexError {
-    fn cause(&self) -> Option<&Error> {
-        None
-    }
-}
+impl Error for LexError {}
 
 impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
