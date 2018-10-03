@@ -72,7 +72,8 @@ pub struct ParserBuilder<StorageT = u32> {
 impl<StorageT> ParserBuilder<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     /// Create a new `ParserBuilder`.
     ///

@@ -35,7 +35,8 @@ use std::{
     error::Error,
     fmt::{self, Debug},
     hash::{Hash},
-    marker::PhantomData
+    marker::PhantomData,
+    convert::TryFrom
 };
 
 use cfgrammar::{
@@ -119,7 +120,8 @@ const ERROR: u8 = 0;
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateTable<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     pub fn new(
         grm: &YaccGrammar<StorageT>,
@@ -134,7 +136,7 @@ where
         let maxa = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         let maxg = usize::from(grm.rules_len()) * usize::from(sg.all_states_len());
         // We only have 30 bits to store state IDs
-        assert!(usize::from(sg.all_states_len()) < (u32::max_value() - 4) as usize);
+        assert!(u32::try_from(sg.all_states_len()) < Ok(u32::max_value() - 4));
         let mut actions: Vec<u32> = Vec::with_capacity(maxa);
         actions.resize(maxa, 0);
         let mut gotos: Vec<StIdx> = Vec::with_capacity(maxg);
@@ -314,7 +316,7 @@ where
 
         match action {
             SHIFT => Action::Shift(StIdx::from(val)),
-            REDUCE => Action::Reduce(PIdx(StorageT::from(val).unwrap())),
+            REDUCE => Action::Reduce(PIdx(val.as_())),
             ACCEPT => Action::Accept,
             ERROR => Action::Error,
             _ => unreachable!()
@@ -462,7 +464,8 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     stidx: StIdx
 ) -> u64
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     let mut shift_reduce = 0;
     let tidx_prec = grm.token_precedence(tidx);

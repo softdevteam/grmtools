@@ -108,7 +108,8 @@ pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
 
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     fn parse<F>(
         rcvry_kind: RecoveryKind,
@@ -439,7 +440,8 @@ pub fn parse<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
     lexemes: &Lexemes<StorageT>
 ) -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     parse_rcvry(RecoveryKind::MF, grm, |_| 1, sgraph, stable, lexemes)
 }
@@ -457,7 +459,8 @@ pub fn parse_rcvry<StorageT: 'static + Debug + Hash + PrimInt + Unsigned, F>(
 ) -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
 where
     F: Fn(TIdx<StorageT>) -> u8,
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     Parser::parse(rcvry_kind, grm, token_cost, sgraph, stable, lexemes)
 }

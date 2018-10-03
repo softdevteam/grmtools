@@ -43,14 +43,16 @@ pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigne
     _: &'a Parser<StorageT>
 ) -> Box<Recoverer<StorageT> + 'a>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     Box::new(Panic)
 }
 
 impl<StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Recoverer<StorageT> for Panic
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     fn recover(
         &self,
