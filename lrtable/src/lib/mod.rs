@@ -39,6 +39,7 @@ extern crate num_traits;
 #[macro_use]
 extern crate serde;
 extern crate vob;
+extern crate packed_vec;
 
 use std::{hash::Hash, mem::size_of};
 

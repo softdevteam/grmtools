@@ -45,6 +45,7 @@ use cfgrammar::{
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::{IterSetBits, Vob};
+use packed_vec::PackedVec;
 
 use {StIdx, StIdxStorageT};
 use stategraph::StateGraph;
@@ -85,7 +86,7 @@ pub struct StateTable<StorageT> {
     //   0  shift 1
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
-    actions: Vec<u32>,
+    actions: PackedVec<u32>,
     state_actions: Vob,
     gotos: Vec<StIdx>,
     core_reduces: Vob,
@@ -294,6 +295,8 @@ where
             }
         }
 
+        let actions = PackedVec::new(actions);
+
         Ok(StateTable {
             actions,
             state_actions,
@@ -338,7 +341,7 @@ where
     pub fn action(&self, stidx: StIdx, tidx: TIdx<StorageT>) -> Option<Action<StorageT>> {
         let off = actions_offset(self.tokens_len, stidx, tidx);
         // For now leave this as an option so we don't need to touch all the other libraries
-        Some(StateTable::decode(self.actions[off as usize]))
+        Some(StateTable::decode(self.actions.get(off as usize).unwrap()))
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `stidx`.
