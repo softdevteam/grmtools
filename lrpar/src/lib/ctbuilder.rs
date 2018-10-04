@@ -219,11 +219,11 @@ where
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
         outs.push_str(&format!("mod {}_y {{", mod_name));
         outs.push_str(&format!(
-            "use lrpar::{{Lexeme, Node, parse_rcvry, ParseError, RecoveryKind}};
+            "use lrpar::{{Lexer, Node, LexParseError, RecoveryKind, RTParserBuilder}};
 use lrpar::ctbuilder::_reconstitute;
 
-pub fn parse(lexemes: &[Lexeme<{storaget}>])
-          -> Result<Node<{storaget}>, (Option<Node<{storaget}>>, Vec<ParseError<{storaget}>>)>
+pub fn parse(lexer: &mut Lexer<{storaget}>)
+          -> Result<Node<{storaget}>, LexParseError<{storaget}>>
 {{",
             storaget = StorageT::type_name()
         ));
@@ -240,7 +240,9 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
     let (grm, sgraph, stable) = _reconstitute(include_bytes!(\"{}\"),
                                               include_bytes!(\"{}\"),
                                               include_bytes!(\"{}\"));
-    parse_rcvry(RecoveryKind::{}, &grm, |_| 1, &sgraph, &stable, lexemes)
+    RTParserBuilder::new(&grm, &sgraph, &stable)
+        .recoverer(RecoveryKind::{})
+        .parse(lexer)
 ",
             out_grm.to_str().unwrap(),
             out_sgraph.to_str().unwrap(),

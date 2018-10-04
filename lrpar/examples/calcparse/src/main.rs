@@ -7,7 +7,7 @@ extern crate lrlex;
 extern crate lrpar;
 
 use cfgrammar::RIdx;
-use lrpar::{Lexer, Node};
+use lrpar::{Lexer, LexParseError, Node};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
@@ -27,24 +27,25 @@ fn main() {
                     continue;
                 }
                 // Now we create a lexer with the `lexer` method with which we can lex an input.
-                // Note that each lexer can only lex one input in its lifetime.
                 let mut lexer = lexerdef.lexer(l);
-                match lexer.all_lexemes() {
-                    Ok(lexemes) => {
-                        // Now parse the stream of lexemes into a tree
-                        match calc_y::parse(&lexemes) {
-                            Ok(pt) => println!("{}", Eval::new(l).eval(&pt)),
-                            Err((_, errs)) => {
-                                // One or more errors were detected during parsing.
-                                for e in errs {
-                                    let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
-                                    assert_eq!(line, 1);
-                                    println!("Error at column {}.", col);
-                                }
-                            }
+                // Pass the lexer to the parser and lex and parse the input.
+                match calc_y::parse(&mut lexer) {
+                    // Success! We parsed the input and created a parse tree.
+                    Ok(pt) => println!("{}", Eval::new(l).eval(&pt)),
+                    // We weren't able to fully lex the input, so all we can do is tell the user
+                    // at what index the lexer gave up at.
+                    Err(LexParseError::LexError(e)) => println!("Lexing error at column {:?}", e.idx),
+                    // Parsing failed, but with the help of error recovery a parse tree was
+                    // produced. However, we simply report the error to the user and don't attempt
+                    // to do any sort of evaluation.
+                    Err(LexParseError::ParseError(_, errs)) => {
+                        // One or more errors were detected during parsing.
+                        for e in errs {
+                            let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
+                            assert_eq!(line, 1);
+                            println!("Parsing error at column {}.", col);
                         }
                     }
-                    Err(e) => println!("Lexing error {:?}", e)
                 }
             }
             _ => break
