@@ -93,7 +93,7 @@ fn main() {
         process::exit(1);
     });
     let input = &read_file(&matches.free[1]);
-    let lexemes = lexerdef.lexer(input).lexemes().unwrap();
+    let lexemes = lexerdef.lexer(input).all_lexemes().unwrap();
     for l in &lexemes {
         println!(
             "{} {}",

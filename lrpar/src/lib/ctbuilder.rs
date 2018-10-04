@@ -60,22 +60,22 @@ const RUST_FILE_EXT: &str = "rs";
 const SGRAPH_FILE_EXT: &str = "sgraph";
 const STABLE_FILE_EXT: &str = "stable";
 
-/// A `ParserBuilder` allows one to specify the criteria for building a statically generated
+/// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
-pub struct ParserBuilder<StorageT = u32> {
+pub struct CTParserBuilder<StorageT = u32> {
     // Anything stored in here almost certainly needs to be included as part of the rebuild_cache
     // function below so that, if it's changed, the grammar is rebuilt.
     recoverer: RecoveryKind,
     phantom: PhantomData<StorageT>
 }
 
-impl<StorageT> ParserBuilder<StorageT>
+impl<StorageT> CTParserBuilder<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    /// Create a new `ParserBuilder`.
+    /// Create a new `CTParserBuilder`.
     ///
     /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough to index
     /// (separately) all the tokens, rules, and productions in the grammar and less than or
@@ -89,12 +89,12 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// ParserBuilder::<u8>::new()
+    /// CTParserBuilder::<u8>::new()
     ///     .process_file_in_src("grm.y")
     ///     .unwrap();
     /// ```
     pub fn new() -> Self {
-        ParserBuilder {
+        CTParserBuilder {
             recoverer: RecoveryKind::MF,
             phantom: PhantomData
         }
@@ -108,7 +108,7 @@ where
 
     /// Given the filename `x/y.z` as input, statically compile the grammar `src/x/y.z` into a Rust
     /// module which can then be imported using `lrpar_mod!(x_y)`. This is a convenience function
-    /// around [`process_file`](struct.ParserBuilder.html#method.process_file) which makes it
+    /// around [`process_file`](struct.CTParserBuilder.html#method.process_file) which makes it
     /// easier to compile `.y` files stored in a project's `src/` directory. Note that leaf names
     /// must be unique within a single project, even if they are in different directories: in other
     /// words, `y.z` and `x/y.z` will both be mapped to the same module `y_z` (and it is undefined
@@ -219,10 +219,11 @@ where
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
         outs.push_str(&format!("mod {}_y {{", mod_name));
         outs.push_str(&format!(
-            "use lrpar::{{Lexeme, Node, parse_rcvry, ParseError, reconstitute, RecoveryKind}};
+            "use lrpar::{{Lexer, Node, LexParseError, RecoveryKind, RTParserBuilder}};
+use lrpar::ctbuilder::_reconstitute;
 
-pub fn parse(lexemes: &[Lexeme<{storaget}>])
-          -> Result<Node<{storaget}>, (Option<Node<{storaget}>>, Vec<ParseError<{storaget}>>)>
+pub fn parse(lexer: &mut Lexer<{storaget}>)
+          -> Result<Node<{storaget}>, LexParseError<{storaget}>>
 {{",
             storaget = StorageT::type_name()
         ));
@@ -236,10 +237,12 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
         };
         outs.push_str(&format!(
             "
-    let (grm, sgraph, stable) = reconstitute(include_bytes!(\"{}\"),
-                                             include_bytes!(\"{}\"),
-                                             include_bytes!(\"{}\"));
-    parse_rcvry(RecoveryKind::{}, &grm, |_| 1, &sgraph, &stable, lexemes)
+    let (grm, sgraph, stable) = _reconstitute(include_bytes!(\"{}\"),
+                                              include_bytes!(\"{}\"),
+                                              include_bytes!(\"{}\"));
+    RTParserBuilder::new(&grm, &sgraph, &stable)
+        .recoverer(RecoveryKind::{})
+        .parse(lexer)
 ",
             out_grm.to_str().unwrap(),
             out_sgraph.to_str().unwrap(),
@@ -320,7 +323,7 @@ pub fn parse(lexemes: &[Lexeme<{storaget}>])
 /// This function is called by generated files; it exists so that generated files don't require a
 /// dependency on serde and rmps.
 #[doc(hidden)]
-pub fn reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
+pub fn _reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
     grm_buf: &'a [u8],
     sgraph_buf: &'a [u8],
     stable_buf: &'a [u8]

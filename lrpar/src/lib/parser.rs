@@ -34,6 +34,7 @@ use std::{
     error::Error,
     fmt::{self, Debug, Display},
     hash::Hash,
+    marker::PhantomData,
     time::{Duration, Instant}
 };
 
@@ -43,7 +44,7 @@ use lrtable::{Action, StIdx, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use cpctplus;
-use lex::Lexeme;
+use lex::{LexError, Lexeme, Lexer};
 use mf;
 use panic;
 
@@ -92,10 +93,8 @@ where
     }
 }
 
-pub(crate) type Lexemes<StorageT> = Vec<Lexeme<StorageT>>;
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TStack<StorageT> = Vec<Node<StorageT>>; // Parse tree stack
-pub(crate) type Errors<StorageT> = Vec<ParseError<StorageT>>;
 
 pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
     pub rcvry_kind: RecoveryKind,
@@ -163,7 +162,7 @@ where
         mut laidx: usize,
         pstack: &mut PStack,
         tstack: &mut TStack<StorageT>,
-        errors: &mut Errors<StorageT>
+        errors: &mut Vec<ParseError<StorageT>>
     ) -> bool {
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
@@ -203,7 +202,6 @@ where
                                 let la_lexeme = self.next_lexeme(laidx);
                                 errors.push(ParseError {
                                     stidx,
-                                    lexeme_idx: laidx,
                                     lexeme: la_lexeme,
                                     repairs: vec![]
                                 });
@@ -227,7 +225,6 @@ where
                     let la_lexeme = self.next_lexeme(laidx);
                     errors.push(ParseError {
                         stidx,
-                        lexeme_idx: laidx,
                         lexeme: la_lexeme,
                         repairs
                     });
@@ -423,7 +420,7 @@ pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned> {
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>);
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum RecoveryKind {
     CPCTPlus,
     MF,
@@ -431,38 +428,93 @@ pub enum RecoveryKind {
     None
 }
 
-/// Parse the lexemes. On success return a parse tree. On failure, return a parse tree (if all the
-/// input was consumed) or `None` otherwise, and a vector of `ParseError`s.
-pub fn parse<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
-    grm: &YaccGrammar<StorageT>,
-    sgraph: &StateGraph<StorageT>,
-    stable: &StateTable<StorageT>,
-    lexemes: &Lexemes<StorageT>
-) -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
-where
-    usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
-{
-    parse_rcvry(RecoveryKind::MF, grm, |_| 1, sgraph, stable, lexemes)
+#[derive(Debug)]
+pub enum LexParseError<StorageT> {
+    LexError(LexError),
+    ParseError(Option<Node<StorageT>>, Vec<ParseError<StorageT>>)
 }
 
-/// Parse the lexemes, specifying a particularly type of error recovery. On success return a parse
-/// tree. On failure, return a parse tree (if all the input was consumed) or `None` otherwise, and
-/// a vector of `ParseError`s.
-pub fn parse_rcvry<StorageT: 'static + Debug + Hash + PrimInt + Unsigned, F>(
-    rcvry_kind: RecoveryKind,
-    grm: &YaccGrammar<StorageT>,
-    token_cost: F,
-    sgraph: &StateGraph<StorageT>,
-    stable: &StateTable<StorageT>,
-    lexemes: &[Lexeme<StorageT>]
-) -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
+impl<StorageT: Debug> Error for LexParseError<StorageT> {}
+
+impl<StorageT: Debug> fmt::Display for LexParseError<StorageT> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LexParseError::LexError(ref e) => Display::fmt(e, f),
+            LexParseError::ParseError(_, ref e) => e.fmt(f)
+        }
+    }
+}
+
+impl<StorageT> From<LexError> for LexParseError<StorageT> {
+    fn from(err: LexError) -> LexParseError<StorageT> {
+        LexParseError::LexError(err)
+    }
+}
+
+impl<StorageT> From<(Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
+    for LexParseError<StorageT>
+{
+    fn from(err: (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)) -> LexParseError<StorageT> {
+        LexParseError::ParseError(err.0, err.1)
+    }
+}
+
+pub struct RTParserBuilder<'a, StorageT: Eq + Hash> {
+    grm: &'a YaccGrammar<StorageT>,
+    sgraph: &'a StateGraph<StorageT>,
+    stable: &'a StateTable<StorageT>,
+    recoverer: RecoveryKind,
+    term_costs: &'a Fn(TIdx<StorageT>) -> u8,
+    phantom: PhantomData<StorageT>
+}
+
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> RTParserBuilder<'a, StorageT>
 where
-    F: Fn(TIdx<StorageT>) -> u8,
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    Parser::parse(rcvry_kind, grm, token_cost, sgraph, stable, lexemes)
+    pub fn new(
+        grm: &'a YaccGrammar<StorageT>,
+        sgraph: &'a StateGraph<StorageT>,
+        stable: &'a StateTable<StorageT>
+    ) -> Self {
+        RTParserBuilder {
+            grm,
+            sgraph,
+            stable,
+            recoverer: RecoveryKind::MF,
+            term_costs: &|_| 1,
+            phantom: PhantomData
+        }
+    }
+
+    /// Set the recoverer for this parser to `rk`.
+    pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
+        self.recoverer = rk;
+        self
+    }
+
+    pub fn term_costs(mut self, f: &'a Fn(TIdx<StorageT>) -> u8) -> Self {
+        self.term_costs = f;
+        self
+    }
+
+    /// Parse input. On success return a parse tree. On failure, return a `LexParseError`: a
+    /// `LexError` means that no parse tree was produced; a `ParseError` may (if its first element
+    /// is `Some(...)`) return a parse tree (with parts filled in by this builder's recoverer).
+    pub fn parse(
+        &self,
+        lexer: &mut Lexer<StorageT>
+    ) -> Result<Node<StorageT>, LexParseError<StorageT>> {
+        Ok(Parser::parse(
+            self.recoverer,
+            self.grm,
+            self.term_costs,
+            self.sgraph,
+            self.stable,
+            &lexer.all_lexemes()?[..]
+        )?)
+    }
 }
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
@@ -483,7 +535,6 @@ pub enum ParseRepair<StorageT> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParseError<StorageT> {
     stidx: StIdx,
-    lexeme_idx: usize,
     lexeme: Lexeme<StorageT>,
     repairs: Vec<Vec<ParseRepair<StorageT>>>
 }
@@ -500,11 +551,6 @@ impl<StorageT: PrimInt + Unsigned> ParseError<StorageT> {
     /// Return the state table index where this error was detected.
     pub fn stidx(&self) -> StIdx {
         self.stidx
-    }
-
-    /// Return the lexeme where this error was detected.
-    pub fn lexeme_idx(&self) -> usize {
-        self.lexeme_idx
     }
 
     /// Return the lexeme where this error was detected.
@@ -528,8 +574,8 @@ pub(crate) mod test {
     use num_traits::ToPrimitive;
     use regex::Regex;
 
-    use ::lex::Lexeme;
     use super::*;
+    use lex::Lexeme;
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,
@@ -562,19 +608,22 @@ pub(crate) mod test {
             .collect();
         let lexer_rules = small_lexer(lexs, rule_ids);
         let lexemes = small_lex(lexer_rules, input);
+        let mut lexer = SmallLexer{lexemes, i: 0};
         let costs_tidx = costs
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
             .collect::<HashMap<_, _>>();
-        let pr = parse_rcvry(
-            rcvry_kind,
-            &grm,
-            move |tidx| **costs_tidx.get(&tidx).unwrap_or(&&1),
+        let r = match RTParserBuilder::new(&grm,
             &sgraph,
-            &stable,
-            &lexemes
-        );
-        (grm, pr)
+            &stable)
+            .recoverer(rcvry_kind)
+            .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
+            .parse(&mut lexer) {
+            Ok(r) => Ok(r),
+            Err(LexParseError::ParseError(r1, r2)) => Err((r1, r2)),
+            _ => unreachable!()
+        };
+        (grm, r)
     }
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
@@ -582,18 +631,41 @@ pub(crate) mod test {
         assert_eq!(expected, pt.unwrap().pp(&grm, &input));
     }
 
-    // small_lexer and small_lex are our highly simplified version of lrlex (allowing us to avoid
-    // having to have lrlex as a dependency of lrpar). The format is the same as lrlex *except*:
+    // SmallLexer is our highly simplified version of lrlex (allowing us to avoid having to have
+    // lrlex as a dependency of lrpar). The format is the same as lrlex *except*:
     //   * The initial "%%" isn't needed, and only "'" is valid as a rule name delimiter.
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
+    struct SmallLexer<StorageT> {
+        lexemes: Vec<Lexeme<StorageT>>,
+        i: usize
+    }
+
+    impl<StorageT: Hash + PrimInt + Unsigned> Lexer<StorageT> for SmallLexer<StorageT> {
+        fn next(&mut self) -> Option<Result<Lexeme<StorageT>, LexError>> {
+            let old_i = self.i;
+            if old_i < self.lexemes.len() {
+                self.i = old_i + 1;
+                return Some(Ok(self.lexemes[old_i]));
+            }
+            None
+        }
+
+        fn line_and_col(&self, _: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
+            unreachable!();
+        }
+    }
+
     fn small_lexer(lexs: &str, ids_map: HashMap<String, u16>) -> Vec<(u16, Regex)> {
         let mut rules = Vec::new();
         for l in lexs.split("\n").map(|x| x.trim()).filter(|x| !x.is_empty()) {
             assert!(l.rfind("'") == Some(l.len() - 1));
             let i = l[..l.len() - 1].rfind("'").unwrap();
-            let name = &l[i + 1 .. l.len() - 1];
+            let name = &l[i + 1..l.len() - 1];
             let re = &l[..i - 1].trim();
-            rules.push((ids_map[name], Regex::new(&format!("\\A(?:{})", re)).unwrap()));
+            rules.push((
+                ids_map[name],
+                Regex::new(&format!("\\A(?:{})", re)).unwrap()
+            ));
         }
         rules
     }

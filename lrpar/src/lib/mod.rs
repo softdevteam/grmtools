@@ -49,16 +49,16 @@ extern crate typename;
 extern crate vob;
 
 mod astar;
-mod builder;
 mod cpctplus;
+pub mod ctbuilder;
 pub mod lex;
-pub use lex::{Lexeme, Lexer, LexError};
+pub use lex::{LexError, Lexeme, Lexer};
 mod panic;
 pub mod parser;
-pub use parser::{parse_rcvry, Node, ParseError, ParseRepair, RecoveryKind};
+pub use parser::{Node, LexParseError, RTParserBuilder, ParseError, ParseRepair, RecoveryKind};
 mod mf;
 
-pub use builder::{reconstitute, ParserBuilder};
+pub use ctbuilder::CTParserBuilder;
 
 /// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
 /// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.

@@ -48,8 +48,10 @@ use std::{
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use getopts::Options;
 use lrlex::build_lex;
-use lrpar::Lexer;
-use lrpar::parser::{parse_rcvry, ParseRepair, RecoveryKind};
+use lrpar::{
+    parser::{LexParseError, ParseRepair, RecoveryKind, RTParserBuilder},
+    Lexer
+};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
 
@@ -185,12 +187,16 @@ fn main() {
     }
 
     let input = read_file(&matches.free[2]);
-    let lexer = lexerdef.lexer(&input);
-    let lexemes = lexer.lexemes().unwrap();
-    let token_cost = |_| 1; // Cost of inserting/deleting a token
-    match parse_rcvry::<u16, _>(recoverykind, &grm, &token_cost, &sgraph, &stable, &lexemes) {
+    let mut lexer = lexerdef.lexer(&input);
+    let pb = RTParserBuilder::new(&grm, &sgraph, &stable)
+        .recoverer(recoverykind);
+    match pb.parse(&mut lexer) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
-        Err((o_pt, errs)) => {
+        Err(LexParseError::LexError(e)) => {
+            println!("Lexing error at position {}", e.idx);
+            process::exit(1);
+        },
+        Err(LexParseError::ParseError(o_pt, errs)) => {
             match o_pt {
                 Some(pt) => println!("{}", pt.pp(&grm, &input)),
                 None => println!("Unable to repair input sufficiently to produce parse tree.\n")
@@ -203,7 +209,6 @@ fn main() {
                 }
                 println!("Error at line {} col {}. Repairs found:", line, col);
                 for repair in e.repairs() {
-                    let mut lex_idx = e.lexeme_idx();
                     let mut out = vec![];
                     for r in repair.iter() {
                         match *r {
@@ -227,14 +232,13 @@ fn main() {
                             ParseRepair::Insert(token_idx) => out
                                 .push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
                             ParseRepair::Delete | ParseRepair::Shift => {
-                                let l = lexemes[lex_idx];
+                                let l = e.lexeme();
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
                                 if let ParseRepair::Delete = *r {
                                     out.push(format!("Delete \"{}\"", t));
                                 } else {
                                     out.push(format!("Shift \"{}\"", t));
                                 }
-                                lex_idx += 1;
                             }
                         }
                     }
