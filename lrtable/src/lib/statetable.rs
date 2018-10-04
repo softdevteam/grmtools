@@ -327,14 +327,12 @@ where
     }
 
     fn encode(action: Action<StorageT>) -> u32 {
-        let enc:u32;
         match action {
-            Action::Shift(stidx) => { enc = SHIFT as u32 | (u32::from(stidx) << 2); },
-            Action::Reduce(r_pidx) => { enc = REDUCE as u32 | (u32::from(r_pidx) << 2); },
-            Action::Accept => { enc = ACCEPT as u32; },
-            Action::Error => { enc = ERROR as u32; }
+            Action::Shift(stidx) => SHIFT as u32 | (u32::from(stidx) << 2),
+            Action::Reduce(ridx) => REDUCE as u32 | (u32::from(ridx) << 2),
+            Action::Accept => ACCEPT as u32,
+            Action::Error => ERROR as u32
         }
-        enc
     }
 
     /// Return the action for `stidx` and `sym`, or `None` if there isn't any.
