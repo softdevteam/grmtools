@@ -40,7 +40,7 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
-use lrtable::{Action, StIdx, StateGraph, StateTable};
+use lrtable::{Action, StIdx, StateGraph, StateTable, StIdxStorageT};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
@@ -699,7 +699,9 @@ where
                 // The second phase takes into account reductions and gotos.
                 for goto_stidx in goto_states[usize::from(stidx)]
                     .iter_set_bits(..)
-                    .map(|x| StIdx::from(x))
+                    // goto_states[i].len() == states.len(), which we know fits into StIdxStorageT,
+                    // hence the cast below is safe.
+                    .map(|x| StIdx::from(x as StIdxStorageT))
                 {
                     for tidx in grm.iter_tidxs() {
                         let this_off = usize::from(stidx) * tokens_len + usize::from(tidx);
@@ -787,7 +789,9 @@ where
 
                 // From the reduction states, find all the goto states.
                 for prev_stidx in prev.iter_set_bits(..) {
-                    if let Some(goto_stidx) = stable.goto(StIdx::from(prev_stidx), ridx) {
+                    // prev.len() == states_len, which we know fits into StIdxStorageT, hence the
+                    // cast below is safe.
+                    if let Some(goto_stidx) = stable.goto(StIdx::from(prev_stidx as StIdxStorageT), ridx) {
                         goto_states[usize::from(stidx)].set(usize::from(goto_stidx), true);
                     }
                 }

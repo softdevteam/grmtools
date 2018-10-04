@@ -41,7 +41,7 @@ use vob::Vob;
 
 use itemset::Itemset;
 use stategraph::StateGraph;
-use StIdx;
+use {StIdx, StIdxStorageT};
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -288,15 +288,18 @@ where
                     }
                 }
                 None => {
+                    assert!(core_states.len() <= usize::from(StIdxStorageT::max_value()));
+                    // The assert above guarantees that the cast below is safe.
+                    let stidx = StIdx(core_states.len() as StIdxStorageT);
                     match sym {
                         Symbol::Rule(s_ridx) => {
-                            cnd_rule_weaklies[usize::from(s_ridx)].push(core_states.len().into())
+                            cnd_rule_weaklies[usize::from(s_ridx)].push(stidx);
                         }
                         Symbol::Token(s_tidx) => {
-                            cnd_token_weaklies[usize::from(s_tidx)].push(core_states.len().into())
+                            cnd_token_weaklies[usize::from(s_tidx)].push(stidx);
                         }
                     }
-                    edges[state_i].insert(sym, core_states.len().into());
+                    edges[state_i].insert(sym, stidx);
                     edges.push(HashMap::new());
                     closed_states.push(None);
                     core_states.push(nstate);
@@ -374,9 +377,13 @@ fn gc<StorageT: Eq + Hash + PrimInt>(
     for (state_i, zstate) in states
         .drain(..)
         .enumerate()
-        .map(|(x, y)| (StIdx::from(x), y))
+        // edges goes from 0..states_len(), and we know the latter can safely fit into an
+        // StIdxStorageT, so the cast is safe.
+        .map(|(x, y)| (StIdx(x as StIdxStorageT), y))
     {
-        offsets.push(StIdx::from(usize::from(state_i) - offset));
+        // state_i <= states_len(), which fits in StIdxStorageT, so state_i - offset must also be
+        // <= states_len, making the cast safe
+        offsets.push(StIdx((usize::from(state_i) - offset) as StIdxStorageT));
         if !seen.contains(&state_i) {
             offset += 1;
             continue;
@@ -390,7 +397,9 @@ fn gc<StorageT: Eq + Hash + PrimInt>(
     for (st_edge_i, st_edges) in edges
         .drain(..)
         .enumerate()
-        .map(|(x, y)| (StIdx::from(x), y))
+        // edges goes from 0..states_len(), and we know the latter can safely fit into an
+        // StIdxStorageT, so the cast is safe.
+        .map(|(x, y)| (StIdx(x as StIdxStorageT), y))
     {
         if !seen.contains(&st_edge_i) {
             continue;

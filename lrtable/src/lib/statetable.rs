@@ -151,7 +151,9 @@ where
         for (stidx, state) in sg
             .iter_closed_states()
             .enumerate()
-            .map(|(x, y)| (StIdx::from(x), y))
+            // x goes from 0..states_len(), and we know the latter can safely fit into an
+            // StIdxStorageT, so the cast is safe.
+            .map(|(x, y)| (StIdx(x as StIdxStorageT), y))
         {
             // Populate reduce and accepts
             for (&(pidx, dot), ctx) in &state.items {

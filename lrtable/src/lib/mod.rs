@@ -79,15 +79,6 @@ impl From<StIdxStorageT> for StIdx {
     }
 }
 
-impl From<usize> for StIdx {
-    fn from(v: usize) -> Self {
-        if v > usize::from(StIdxStorageT::max_value()) {
-            panic!("Overflow");
-        }
-        StIdx(v as StIdxStorageT)
-    }
-}
-
 impl From<StIdx> for usize {
     fn from(st: StIdx) -> Self {
         debug_assert!(size_of::<usize>() >= size_of::<StIdxStorageT>());
