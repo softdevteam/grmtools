@@ -92,7 +92,7 @@ pub struct StateTable<StorageT> {
     core_reduces: Vob,
     state_shifts: Vob,
     reduce_states: Vob,
-    rules_len: u32,
+    rules_len: RIdx<StorageT>,
     prods_len: PIdx<StorageT>,
     tokens_len: TIdx<StorageT>,
     /// The number of reduce/reduce errors encountered.
@@ -304,7 +304,7 @@ where
             state_shifts,
             core_reduces,
             reduce_states,
-            rules_len: u32::from(grm.rules_len()),
+            rules_len: grm.rules_len(),
             prods_len: grm.prods_len(),
             tokens_len: grm.tokens_len(),
             reduce_reduce,
@@ -400,7 +400,7 @@ where
 
     /// Return the goto state for `stidx` and `ridx`, or `None` if there isn't any.
     pub fn goto(&self, stidx: StIdx, ridx: RIdx<StorageT>) -> Option<StIdx> {
-        let off = ((u32::from(stidx) * self.rules_len) + u32::from(ridx)) as usize;
+        let off = ((u32::from(stidx) * u32::from(self.rules_len)) + u32::from(ridx)) as usize;
         if self.gotos[off] == StIdx::max_value() {
             None
         }
