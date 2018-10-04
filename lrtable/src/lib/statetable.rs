@@ -31,12 +31,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{
-    collections::hash_map::{HashMap},
+    collections::hash_map::HashMap,
+    convert::TryFrom,
     error::Error,
     fmt::{self, Debug},
-    hash::{Hash},
-    marker::PhantomData,
-    convert::TryFrom
+    hash::Hash,
+    marker::PhantomData
 };
 
 use cfgrammar::{
@@ -44,8 +44,8 @@ use cfgrammar::{
     PIdx, RIdx, Symbol, TIdx
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use vob::{IterSetBits, Vob};
 use packed_vec::PackedVec;
+use vob::{IterSetBits, Vob};
 
 use {StIdx, StIdxStorageT};
 use stategraph::StateGraph;
@@ -170,41 +170,40 @@ where
                     );
                     state_actions.set(off as usize, true);
                     match StateTable::decode(actions[off as usize]) {
-                                Action::Reduce(r_pidx) => {
-                                    if pidx == grm.start_prod()
-                                        && tidx == usize::from(grm.eof_token_idx())
-                                    {
-                                        return Err(StateTableError {
-                                            kind: StateTableErrorKind::AcceptReduceConflict,
-                                            pidx
-                                        });
-                                    }
-                                    // By default, Yacc resolves reduce/reduce conflicts in favour
-                                    // of the earlier production in the grammar.
-                                    if pidx < r_pidx {
-                                        reduce_reduce += 1;
-                                        actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
-                                    } else if pidx > r_pidx {
-                                        reduce_reduce += 1;
-                                    }
-                                }
-                                Action::Accept => {
-                                    return Err(StateTableError {
-                                        kind: StateTableErrorKind::AcceptReduceConflict,
-                                        pidx
-                                    })
-                                }
-                                Action::Error => {
-                                    if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
-                                    {
-                                        assert!(final_state.is_none());
-                                        final_state = Some(stidx);
-                                        actions[off as usize] = StateTable::encode(Action::Accept);
-                                    } else {
-                                        actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
-                                    }
-                                }
-                                _ => panic!("Internal error")
+                        Action::Reduce(r_pidx) => {
+                            if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
+                            {
+                                return Err(StateTableError {
+                                    kind: StateTableErrorKind::AcceptReduceConflict,
+                                    pidx
+                                });
+                            }
+                            // By default, Yacc resolves reduce/reduce conflicts in favour
+                            // of the earlier production in the grammar.
+                            if pidx < r_pidx {
+                                reduce_reduce += 1;
+                                actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
+                            } else if pidx > r_pidx {
+                                reduce_reduce += 1;
+                            }
+                        }
+                        Action::Accept => {
+                            return Err(StateTableError {
+                                kind: StateTableErrorKind::AcceptReduceConflict,
+                                pidx
+                            })
+                        }
+                        Action::Error => {
+                            if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
+                            {
+                                assert!(final_state.is_none());
+                                final_state = Some(stidx);
+                                actions[off as usize] = StateTable::encode(Action::Accept);
+                            } else {
+                                actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
+                            }
+                        }
+                        _ => panic!("Internal error")
                     }
                 }
             }
@@ -225,12 +224,19 @@ where
                         match StateTable::decode(actions[off as usize]) {
                             Action::Shift(x) => assert_eq!(*ref_stidx, x),
                             Action::Reduce(r_pidx) => {
-                                shift_reduce +=
-                                    resolve_shift_reduce(grm, &mut actions, off as usize, s_tidx, r_pidx, *ref_stidx);
+                                shift_reduce += resolve_shift_reduce(
+                                    grm,
+                                    &mut actions,
+                                    off as usize,
+                                    s_tidx,
+                                    r_pidx,
+                                    *ref_stidx
+                                );
                             }
                             Action::Accept => panic!("Internal error"),
                             Action::Error => {
-                                actions[off as usize] = StateTable::encode(Action::Shift(*ref_stidx));
+                                actions[off as usize] =
+                                    StateTable::encode(Action::Shift(*ref_stidx));
                             }
                         }
                     }
@@ -319,7 +325,7 @@ where
                 // Since val was originally stored in an StIdxStorageT, we know that it's safe to
                 // cast it back to an StIdxStorageT here.
                 Action::Shift(StIdx::from(val as StIdxStorageT))
-            },
+            }
             REDUCE => Action::Reduce(PIdx(val.as_())),
             ACCEPT => Action::Accept,
             ERROR => Action::Error,
@@ -402,8 +408,7 @@ where
         let off = (usize::from(stidx) * usize::from(self.rules_len)) + usize::from(ridx);
         if self.gotos[off] == StIdx::max_value() {
             None
-        }
-        else {
+        } else {
             Some(self.gotos[off])
         }
     }
@@ -416,8 +421,6 @@ fn actions_offset<StorageT: PrimInt + Unsigned>(
 ) -> usize {
     usize::from(stidx) * usize::from(tokens_len) + usize::from(tidx)
 }
-
-
 
 pub struct StateActionsIterator<'a, StorageT> {
     iter: IterSetBits<'a, usize>,

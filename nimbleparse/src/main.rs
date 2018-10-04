@@ -49,7 +49,7 @@ use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use getopts::Options;
 use lrlex::build_lex;
 use lrpar::{
-    parser::{LexParseError, ParseRepair, RecoveryKind, RTParserBuilder},
+    parser::{LexParseError, ParseRepair, RTParserBuilder, RecoveryKind},
     Lexer
 };
 use lrtable::{from_yacc, Minimiser};
@@ -188,14 +188,13 @@ fn main() {
 
     let input = read_file(&matches.free[2]);
     let mut lexer = lexerdef.lexer(&input);
-    let pb = RTParserBuilder::new(&grm, &sgraph, &stable)
-        .recoverer(recoverykind);
+    let pb = RTParserBuilder::new(&grm, &sgraph, &stable).recoverer(recoverykind);
     match pb.parse(&mut lexer) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err(LexParseError::LexError(e)) => {
             println!("Lexing error at position {}", e.idx);
             process::exit(1);
-        },
+        }
         Err(LexParseError::ParseError(o_pt, errs)) => {
             match o_pt {
                 Some(pt) => println!("{}", pt.pp(&grm, &input)),

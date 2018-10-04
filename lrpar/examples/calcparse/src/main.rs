@@ -7,7 +7,7 @@ extern crate lrlex;
 extern crate lrpar;
 
 use cfgrammar::RIdx;
-use lrpar::{Lexer, LexParseError, Node};
+use lrpar::{LexParseError, Lexer, Node};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
@@ -34,7 +34,9 @@ fn main() {
                     Ok(pt) => println!("{}", Eval::new(l).eval(&pt)),
                     // We weren't able to fully lex the input, so all we can do is tell the user
                     // at what index the lexer gave up at.
-                    Err(LexParseError::LexError(e)) => println!("Lexing error at column {:?}", e.idx),
+                    Err(LexParseError::LexError(e)) => {
+                        println!("Lexing error at column {:?}", e.idx)
+                    }
                     // Parsing failed, but with the help of error recovery a parse tree was
                     // produced. However, we simply report the error to the user and don't attempt
                     // to do any sort of evaluation.

@@ -40,7 +40,7 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
-use lrtable::{Action, StIdx, StateGraph, StateTable, StIdxStorageT};
+use lrtable::{Action, StIdx, StIdxStorageT, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
@@ -791,7 +791,9 @@ where
                 for prev_stidx in prev.iter_set_bits(..) {
                     // prev.len() == states_len, which we know fits into StIdxStorageT, hence the
                     // cast below is safe.
-                    if let Some(goto_stidx) = stable.goto(StIdx::from(prev_stidx as StIdxStorageT), ridx) {
+                    if let Some(goto_stidx) =
+                        stable.goto(StIdx::from(prev_stidx as StIdxStorageT), ridx)
+                    {
                         goto_states[usize::from(stidx)].set(usize::from(goto_stidx), true);
                     }
                 }

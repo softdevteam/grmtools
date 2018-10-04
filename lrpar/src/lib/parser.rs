@@ -40,7 +40,7 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
-use lrtable::{Action, StIdx, StateGraph, StateTable, StIdxStorageT};
+use lrtable::{Action, StIdx, StIdxStorageT, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned, Zero};
 
 use cpctplus;
@@ -232,7 +232,7 @@ where
                         return false;
                     }
                     laidx = new_laidx;
-                },
+                }
                 None => ()
             }
         }
@@ -399,7 +399,7 @@ where
                 }
                 Some(Action::Error) => {
                     break;
-                },
+                }
                 None => {
                     break;
                 }
@@ -608,17 +608,16 @@ pub(crate) mod test {
             .collect();
         let lexer_rules = small_lexer(lexs, rule_ids);
         let lexemes = small_lex(lexer_rules, input);
-        let mut lexer = SmallLexer{lexemes, i: 0};
+        let mut lexer = SmallLexer { lexemes, i: 0 };
         let costs_tidx = costs
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
             .collect::<HashMap<_, _>>();
-        let r = match RTParserBuilder::new(&grm,
-            &sgraph,
-            &stable)
+        let r = match RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
-            .parse(&mut lexer) {
+            .parse(&mut lexer)
+        {
             Ok(r) => Ok(r),
             Err(LexParseError::ParseError(r1, r2)) => Err((r1, r2)),
             _ => unreachable!()

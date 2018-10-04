@@ -55,7 +55,7 @@ pub mod lex;
 pub use lex::{LexError, Lexeme, Lexer};
 mod panic;
 pub mod parser;
-pub use parser::{Node, LexParseError, RTParserBuilder, ParseError, ParseRepair, RecoveryKind};
+pub use parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind};
 mod mf;
 
 pub use ctbuilder::CTParserBuilder;
