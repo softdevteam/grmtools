@@ -88,7 +88,7 @@ pub struct StateTable<StorageT> {
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
     actions: PackedVec<usize>,
     state_actions: Vob,
-    gotos: Vec<StIdx>,
+    gotos: PackedVec<usize>,
     core_reduces: Vob,
     state_shifts: Vob,
     reduce_states: Vob,
@@ -142,8 +142,12 @@ where
         assert!(usize::try_from(grm.rules_len()) < Ok(usize::max_value() - 4));
         let mut actions: Vec<usize> = Vec::with_capacity(maxa);
         actions.resize(maxa, 0);
-        let mut gotos: Vec<StIdx> = Vec::with_capacity(maxg);
-        gotos.resize(maxg, StIdx::max_value());
+        let mut gotos: Vec<usize> = Vec::with_capacity(maxg);
+
+        // Since 0 is reserved for the error type, and states are encoded by adding 1, we can only
+        // store max_value - 1 states within the goto table
+        assert!(usize::try_from(sg.all_states_len()) < Ok(usize::from(StIdx::max_value()) - 1));
+        gotos.resize(maxg, 0);
 
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce = 0; // How many automatically resolved shift/reduces were made?
@@ -215,8 +219,9 @@ where
                     Symbol::Rule(s_ridx) => {
                         // Populate gotos
                         let off = (usize::from(stidx) * usize::from(nt_len)) + usize::from(s_ridx);
-                        debug_assert!(gotos[off] == StIdx::max_value());
-                        gotos[off] = *ref_stidx;
+                        debug_assert!(gotos[off] == 0);
+                        // Since 0 is reserved for no entry, encode states by adding 1
+                        gotos[off] = usize::from(*ref_stidx) + 1;
                     }
                     Symbol::Token(s_tidx) => {
                         // Populate shifts
@@ -300,6 +305,7 @@ where
         }
 
         let actions = PackedVec::new(actions);
+        let gotos = PackedVec::new(gotos);
 
         Ok(StateTable {
             actions,
@@ -406,10 +412,14 @@ where
     /// Return the goto state for `stidx` and `ridx`, or `None` if there isn't any.
     pub fn goto(&self, stidx: StIdx, ridx: RIdx<StorageT>) -> Option<StIdx> {
         let off = (usize::from(stidx) * usize::from(self.rules_len)) + usize::from(ridx);
-        if self.gotos[off] == StIdx::max_value() {
-            None
-        } else {
-            Some(self.gotos[off])
+        // Goto entries are encoded by adding 1 to their value, while 0 is reserved for no entry
+        // (i.e. error)
+        match self.gotos.get(off) {
+            Some(0) => None,
+            // gotos can only contain state id's which we know can fit into StIdxStorageT so this
+            // cast is safe
+            Some(i) => Some(StIdx((i - 1) as StIdxStorageT)),
+            None => unreachable!()
         }
     }
 }
