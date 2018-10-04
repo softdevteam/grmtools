@@ -86,13 +86,13 @@ pub struct StateTable<StorageT> {
     //   0  shift 1
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
-    actions: PackedVec<u32>,
+    actions: PackedVec<usize>,
     state_actions: Vob,
     gotos: Vec<StIdx>,
     core_reduces: Vob,
     state_shifts: Vob,
     reduce_states: Vob,
-    rules_len: u32,
+    rules_len: RIdx<StorageT>,
     prods_len: PIdx<StorageT>,
     tokens_len: TIdx<StorageT>,
     /// The number of reduce/reduce errors encountered.
@@ -114,10 +114,10 @@ pub enum Action<StorageT> {
     Error
 }
 
-const SHIFT: u8 = 1;
-const REDUCE: u8 = 2;
-const ACCEPT: u8 = 3;
-const ERROR: u8 = 0;
+const SHIFT: usize = 1;
+const REDUCE: usize = 2;
+const ACCEPT: usize = 3;
+const ERROR: usize = 0;
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateTable<StorageT>
 where
@@ -136,9 +136,10 @@ where
         );
         let maxa = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         let maxg = usize::from(grm.rules_len()) * usize::from(sg.all_states_len());
-        // We only have 30 bits to store state IDs
-        assert!(u32::try_from(sg.all_states_len()) < Ok(u32::max_value() - 4));
-        let mut actions: Vec<u32> = Vec::with_capacity(maxa);
+        // We only have usize-2 bits to store state IDs and rule indexes
+        assert!(usize::try_from(sg.all_states_len()) < Ok(usize::max_value() - 4));
+        assert!(usize::try_from(grm.rules_len()) < Ok(usize::max_value() - 4));
+        let mut actions: Vec<usize> = Vec::with_capacity(maxa);
         actions.resize(maxa, 0);
         let mut gotos: Vec<StIdx> = Vec::with_capacity(maxg);
         gotos.resize(maxg, StIdx::max_value());
@@ -207,17 +208,11 @@ where
             }
 
             let nt_len = grm.rules_len();
-            // Assert that we can fit the goto table into an StIdxStorageT
-            assert!(
-                StIdxStorageT::from(sg.all_states_len())
-                    .checked_mul(nt_len.into())
-                    .is_some()
-            );
             for (&sym, ref_stidx) in sg.edges(stidx) {
                 match sym {
                     Symbol::Rule(s_ridx) => {
                         // Populate gotos
-                        let off = ((u32::from(stidx) * u32::from(nt_len)) + u32::from(s_ridx)) as usize;
+                        let off = (usize::from(stidx) * usize::from(nt_len)) + usize::from(s_ridx);
                         debug_assert!(gotos[off] == StIdx::max_value());
                         gotos[off] = *ref_stidx;
                     }
@@ -304,7 +299,7 @@ where
             state_shifts,
             core_reduces,
             reduce_states,
-            rules_len: u32::from(grm.rules_len()),
+            rules_len: grm.rules_len(),
             prods_len: grm.prods_len(),
             tokens_len: grm.tokens_len(),
             reduce_reduce,
@@ -313,12 +308,16 @@ where
         })
     }
 
-    fn decode(bits: u32) -> Action<StorageT> {
-        let action = (bits & 0b11) as u8;
-        let val: u32 = bits >> 2;
+    fn decode(bits: usize) -> Action<StorageT> {
+        let action = bits & 0b11;
+        let val = bits >> 2;
 
         match action {
-            SHIFT => Action::Shift(StIdx::from(val)),
+            SHIFT => {
+                // Since val was originally stored in an StIdxStorageT, we know that it's safe to
+                // cast it back to an StIdxStorageT here.
+                Action::Shift(StIdx::from(val as StIdxStorageT))
+            },
             REDUCE => Action::Reduce(PIdx(val.as_())),
             ACCEPT => Action::Accept,
             ERROR => Action::Error,
@@ -326,15 +325,13 @@ where
         }
     }
 
-    fn encode(action: Action<StorageT>) -> u32 {
-        let enc:u32;
+    fn encode(action: Action<StorageT>) -> usize {
         match action {
-            Action::Shift(stidx) => { enc = SHIFT as u32 | (u32::from(stidx) << 2); },
-            Action::Reduce(r_pidx) => { enc = REDUCE as u32 | (u32::from(r_pidx) << 2); },
-            Action::Accept => { enc = ACCEPT as u32; },
-            Action::Error => { enc = ERROR as u32; }
+            Action::Shift(stidx) => SHIFT | (usize::from(stidx) << 2),
+            Action::Reduce(ridx) => REDUCE | (usize::from(ridx) << 2),
+            Action::Accept => ACCEPT,
+            Action::Error => ERROR
         }
-        enc
     }
 
     /// Return the action for `stidx` and `sym`, or `None` if there isn't any.
@@ -400,7 +397,7 @@ where
 
     /// Return the goto state for `stidx` and `ridx`, or `None` if there isn't any.
     pub fn goto(&self, stidx: StIdx, ridx: RIdx<StorageT>) -> Option<StIdx> {
-        let off = ((u32::from(stidx) * self.rules_len) + u32::from(ridx)) as usize;
+        let off = (usize::from(stidx) * usize::from(self.rules_len)) + usize::from(ridx);
         if self.gotos[off] == StIdx::max_value() {
             None
         }
@@ -414,8 +411,8 @@ fn actions_offset<StorageT: PrimInt + Unsigned>(
     tokens_len: TIdx<StorageT>,
     stidx: StIdx,
     tidx: TIdx<StorageT>
-) -> StIdxStorageT {
-    StIdxStorageT::from(stidx) * StIdxStorageT::from(tokens_len) + StIdxStorageT::from(tidx)
+) -> usize {
+    usize::from(stidx) * usize::from(tokens_len) + usize::from(tidx)
 }
 
 
@@ -460,7 +457,7 @@ where
 
 fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
-    actions: &mut Vec<u32>,
+    actions: &mut Vec<usize>,
     off: usize,
     tidx: TIdx<StorageT>,
     pidx: PIdx<StorageT>,
