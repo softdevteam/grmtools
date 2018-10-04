@@ -40,8 +40,8 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
-use lrtable::{Action, StIdx, StateGraph, StateTable};
-use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use lrtable::{Action, StIdx, StateGraph, StateTable, StIdxStorageT};
+use num_traits::{AsPrimitive, PrimInt, Unsigned, Zero};
 
 use cpctplus;
 use lex::{LexError, Lexeme, Lexer};
@@ -132,7 +132,7 @@ where
             stable,
             lexemes
         };
-        let mut pstack = vec![StIdx::from(0u32)];
+        let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
         let mut tstack: Vec<Node<StorageT>> = Vec::new();
         let mut errors: Vec<ParseError<StorageT>> = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors);

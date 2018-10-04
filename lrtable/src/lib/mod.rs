@@ -54,40 +54,37 @@ use cfgrammar::yacc::YaccGrammar;
 pub use stategraph::StateGraph;
 pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
-type StIdxStorageT = u32;
+/// The type of the inner value of an StIdx.
+pub type StIdxStorageT = u16;
 
-/// StIdx is a wrapper for a 32-bit state index.
-///
-/// We guarantee that this value can be infallibly converted to usize.
+/// StIdx is a wrapper for a state index. Its internal type is `StIdxStorageT`. The only guarantee
+/// we make about `StIdx' is that it can be infallibly converted to usize.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-// The biggest grammars I'm currently aware of have just over 1000 states, so in practise it
-// looks like a u16 is always big enough to store state indexes. So, for as long as we can get
-// away with it, we only store u16. Nevertheless, we tell the world we only deal in u32 so that
-// we can change our storage to u32 later transparently.
-pub struct StIdx(u16);
+
+pub struct StIdx(StIdxStorageT);
 
 impl StIdx {
     fn max_value() -> StIdx {
-        StIdx(u16::max_value())
+        StIdx(StIdxStorageT::max_value())
     }
 }
 
 impl From<StIdxStorageT> for StIdx {
     fn from(v: StIdxStorageT) -> Self {
-        if v > StIdxStorageT::from(u16::max_value()) {
+        if v > StIdxStorageT::max_value() {
             panic!("Overflow");
         }
-        StIdx(v as u16)
+        StIdx(v as StIdxStorageT)
     }
 }
 
 impl From<usize> for StIdx {
     fn from(v: usize) -> Self {
-        if v > usize::from(u16::max_value()) {
+        if v > usize::from(StIdxStorageT::max_value()) {
             panic!("Overflow");
         }
-        StIdx(v as u16)
+        StIdx(v as StIdxStorageT)
     }
 }
 
