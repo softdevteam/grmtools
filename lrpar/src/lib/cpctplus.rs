@@ -135,7 +135,8 @@ pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigne
     parser: &'a Parser<StorageT>
 ) -> Box<Recoverer<StorageT> + 'a>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     Box::new(CPCTPlus { parser })
 }
@@ -143,7 +144,8 @@ where
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Recoverer<StorageT>
     for CPCTPlus<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     fn recover(
         &self,
@@ -268,7 +270,8 @@ where
 
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> CPCTPlus<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     fn insert(&self, n: &PathFNode<StorageT>, nbrs: &mut Vec<(u16, PathFNode<StorageT>)>) {
         let laidx = n.laidx;

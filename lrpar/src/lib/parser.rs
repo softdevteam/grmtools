@@ -108,7 +108,8 @@ pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
 
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     fn parse<F>(
         rcvry_kind: RecoveryKind,
@@ -192,7 +193,7 @@ where
                     debug_assert_eq!(tstack.len(), 1);
                     return true;
                 }
-                None => {
+                Some(Action::Error) => {
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
                             RecoveryKind::CPCTPlus => cpctplus::recoverer(self),
@@ -234,7 +235,8 @@ where
                         return false;
                     }
                     laidx = new_laidx;
-                }
+                },
+                None => ()
             }
         }
     }
@@ -288,6 +290,9 @@ where
                     laidx += 1;
                 }
                 Some(Action::Accept) => {
+                    break;
+                }
+                Some(Action::Error) => {
                     break;
                 }
                 None => {
@@ -395,6 +400,9 @@ where
                     }
                     break;
                 }
+                Some(Action::Error) => {
+                    break;
+                },
                 None => {
                     break;
                 }
@@ -432,7 +440,8 @@ pub fn parse<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
     lexemes: &Lexemes<StorageT>
 ) -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     parse_rcvry(RecoveryKind::MF, grm, |_| 1, sgraph, stable, lexemes)
 }
@@ -450,7 +459,8 @@ pub fn parse_rcvry<StorageT: 'static + Debug + Hash + PrimInt + Unsigned, F>(
 ) -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
 where
     F: Fn(TIdx<StorageT>) -> u8,
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     Parser::parse(rcvry_kind, grm, token_cost, sgraph, stable, lexemes)
 }

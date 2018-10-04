@@ -39,6 +39,7 @@ extern crate num_traits;
 #[macro_use]
 extern crate serde;
 extern crate vob;
+extern crate packed_vec;
 
 use std::{hash::Hash, mem::size_of};
 
@@ -65,6 +66,12 @@ type StIdxStorageT = u32;
 // away with it, we only store u16. Nevertheless, we tell the world we only deal in u32 so that
 // we can change our storage to u32 later transparently.
 pub struct StIdx(u16);
+
+impl StIdx {
+    fn max_value() -> StIdx {
+        StIdx(u16::max_value())
+    }
+}
 
 impl From<StIdxStorageT> for StIdx {
     fn from(v: StIdxStorageT) -> Self {
@@ -107,7 +114,8 @@ pub fn from_yacc<StorageT: 'static + Hash + PrimInt + Unsigned>(
     m: Minimiser
 ) -> Result<(StateGraph<StorageT>, StateTable<StorageT>), StateTableError<StorageT>>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     match m {
         Minimiser::Pager => {

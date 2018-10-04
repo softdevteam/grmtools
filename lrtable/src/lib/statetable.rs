@@ -31,20 +31,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::{
-    collections::hash_map::{Entry, HashMap, OccupiedEntry},
+    collections::hash_map::{HashMap},
     error::Error,
     fmt::{self, Debug},
-    hash::{BuildHasherDefault, Hash},
-    marker::PhantomData
+    hash::{Hash},
+    marker::PhantomData,
+    convert::TryFrom
 };
 
 use cfgrammar::{
     yacc::{AssocKind, YaccGrammar},
     PIdx, RIdx, Symbol, TIdx
 };
-use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::{IterSetBits, Vob};
+use packed_vec::PackedVec;
 
 use {StIdx, StIdxStorageT};
 use stategraph::StateGraph;
@@ -85,9 +86,9 @@ pub struct StateTable<StorageT> {
     //   0  shift 1
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
-    actions: HashMap<u32, Action<StorageT>, BuildHasherDefault<FnvHasher>>,
+    actions: PackedVec<u32>,
     state_actions: Vob,
-    gotos: HashMap<u32, StIdx, BuildHasherDefault<FnvHasher>>,
+    gotos: Vec<StIdx>,
     core_reduces: Vob,
     state_shifts: Vob,
     reduce_states: Vob,
@@ -109,25 +110,39 @@ pub enum Action<StorageT> {
     /// Reduce production X in the grammar.
     Reduce(PIdx<StorageT>),
     /// Accept this input.
-    Accept
+    Accept,
+    Error
 }
+
+const SHIFT: u8 = 1;
+const REDUCE: u8 = 2;
+const ACCEPT: u8 = 3;
+const ERROR: u8 = 0;
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateTable<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     pub fn new(
         grm: &YaccGrammar<StorageT>,
         sg: &StateGraph<StorageT>
     ) -> Result<Self, StateTableError<StorageT>> {
-        let mut actions = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
         let mut state_actions = Vob::from_elem(
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.tokens_len()))
                 .unwrap(),
             false
         );
-        let mut gotos = HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default());
+        let maxa = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
+        let maxg = usize::from(grm.rules_len()) * usize::from(sg.all_states_len());
+        // We only have 30 bits to store state IDs
+        assert!(u32::try_from(sg.all_states_len()) < Ok(u32::max_value() - 4));
+        let mut actions: Vec<u32> = Vec::with_capacity(maxa);
+        actions.resize(maxa, 0);
+        let mut gotos: Vec<StIdx> = Vec::with_capacity(maxg);
+        gotos.resize(maxg, StIdx::max_value());
+
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
         let mut shift_reduce = 0; // How many automatically resolved shift/reduces were made?
         let mut final_state = None;
@@ -151,9 +166,7 @@ where
                         TIdx(tidx.as_())
                     );
                     state_actions.set(off as usize, true);
-                    match actions.entry(off) {
-                        Entry::Occupied(mut e) => {
-                            match *e.get_mut() {
+                    match StateTable::decode(actions[off as usize]) {
                                 Action::Reduce(r_pidx) => {
                                     if pidx == grm.start_prod()
                                         && tidx == usize::from(grm.eof_token_idx())
@@ -167,7 +180,7 @@ where
                                     // of the earlier production in the grammar.
                                     if pidx < r_pidx {
                                         reduce_reduce += 1;
-                                        e.insert(Action::Reduce(pidx));
+                                        actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
                                     } else if pidx > r_pidx {
                                         reduce_reduce += 1;
                                     }
@@ -178,19 +191,17 @@ where
                                         pidx
                                     })
                                 }
+                                Action::Error => {
+                                    if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
+                                    {
+                                        assert!(final_state.is_none());
+                                        final_state = Some(stidx);
+                                        actions[off as usize] = StateTable::encode(Action::Accept);
+                                    } else {
+                                        actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
+                                    }
+                                }
                                 _ => panic!("Internal error")
-                            }
-                        }
-                        Entry::Vacant(e) => {
-                            if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
-                            {
-                                assert!(final_state.is_none());
-                                final_state = Some(stidx);
-                                e.insert(Action::Accept);
-                            } else {
-                                e.insert(Action::Reduce(pidx));
-                            }
-                        }
                     }
                 }
             }
@@ -206,25 +217,23 @@ where
                 match sym {
                     Symbol::Rule(s_ridx) => {
                         // Populate gotos
-                        let off = (u32::from(stidx) * u32::from(nt_len)) + u32::from(s_ridx);
-                        debug_assert!(gotos.get(&off).is_none());
-                        gotos.insert(off, *ref_stidx);
+                        let off = ((u32::from(stidx) * u32::from(nt_len)) + u32::from(s_ridx)) as usize;
+                        debug_assert!(gotos[off] == StIdx::max_value());
+                        gotos[off] = *ref_stidx;
                     }
                     Symbol::Token(s_tidx) => {
                         // Populate shifts
                         let off = actions_offset(grm.tokens_len(), stidx, s_tidx);
                         state_actions.set(off as usize, true);
-                        match actions.entry(off) {
-                            Entry::Occupied(mut e) => match *e.get_mut() {
-                                Action::Shift(x) => assert_eq!(*ref_stidx, x),
-                                Action::Reduce(r_pidx) => {
-                                    shift_reduce +=
-                                        resolve_shift_reduce(grm, e, s_tidx, r_pidx, *ref_stidx);
-                                }
-                                Action::Accept => panic!("Internal error")
-                            },
-                            Entry::Vacant(e) => {
-                                e.insert(Action::Shift(*ref_stidx));
+                        match StateTable::decode(actions[off as usize]) {
+                            Action::Shift(x) => assert_eq!(*ref_stidx, x),
+                            Action::Reduce(r_pidx) => {
+                                shift_reduce +=
+                                    resolve_shift_reduce(grm, &mut actions, off as usize, s_tidx, r_pidx, *ref_stidx);
+                            }
+                            Action::Accept => panic!("Internal error"),
+                            Action::Error => {
+                                actions[off as usize] = StateTable::encode(Action::Shift(*ref_stidx));
                             }
                         }
                     }
@@ -252,20 +261,20 @@ where
             let mut only_reduces = true;
             for tidx in grm.iter_tidxs() {
                 let off = actions_offset(grm.tokens_len(), stidx, tidx);
-                match actions.get(&off) {
-                    Some(&Action::Reduce(pidx)) => {
+                match StateTable::decode(actions[off as usize]) {
+                    Action::Reduce(pidx) => {
                         let prod_len = grm.prod(pidx).len();
                         let ridx = grm.prod_to_rule(pidx);
                         nt_depth.insert((ridx, prod_len), pidx);
                     }
-                    Some(&Action::Shift(_)) => {
+                    Action::Shift(_) => {
                         only_reduces = false;
                         state_shifts.set(off as usize, true);
                     }
-                    Some(&Action::Accept) => {
+                    Action::Accept => {
                         only_reduces = false;
                     }
-                    None => ()
+                    Action::Error => ()
                 }
             }
 
@@ -286,6 +295,8 @@ where
             }
         }
 
+        let actions = PackedVec::new(actions);
+
         Ok(StateTable {
             actions,
             state_actions,
@@ -302,10 +313,35 @@ where
         })
     }
 
+    fn decode(bits: u32) -> Action<StorageT> {
+        let action = (bits & 0b11) as u8;
+        let val: u32 = bits >> 2;
+
+        match action {
+            SHIFT => Action::Shift(StIdx::from(val)),
+            REDUCE => Action::Reduce(PIdx(val.as_())),
+            ACCEPT => Action::Accept,
+            ERROR => Action::Error,
+            _ => unreachable!()
+        }
+    }
+
+    fn encode(action: Action<StorageT>) -> u32 {
+        let enc:u32;
+        match action {
+            Action::Shift(stidx) => { enc = SHIFT as u32 | (u32::from(stidx) << 2); },
+            Action::Reduce(r_pidx) => { enc = REDUCE as u32 | (u32::from(r_pidx) << 2); },
+            Action::Accept => { enc = ACCEPT as u32; },
+            Action::Error => { enc = ERROR as u32; }
+        }
+        enc
+    }
+
     /// Return the action for `stidx` and `sym`, or `None` if there isn't any.
     pub fn action(&self, stidx: StIdx, tidx: TIdx<StorageT>) -> Option<Action<StorageT>> {
         let off = actions_offset(self.tokens_len, stidx, tidx);
-        self.actions.get(&off).and_then(|x| Some(*x))
+        // For now leave this as an option so we don't need to touch all the other libraries
+        Some(StateTable::decode(self.actions.get(off as usize).unwrap()))
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `stidx`.
@@ -364,8 +400,13 @@ where
 
     /// Return the goto state for `stidx` and `ridx`, or `None` if there isn't any.
     pub fn goto(&self, stidx: StIdx, ridx: RIdx<StorageT>) -> Option<StIdx> {
-        let off = (u32::from(stidx) * self.rules_len) + u32::from(ridx);
-        self.gotos.get(&off).and_then(|x| Some(*x))
+        let off = ((u32::from(stidx) * self.rules_len) + u32::from(ridx)) as usize;
+        if self.gotos[off] == StIdx::max_value() {
+            None
+        }
+        else {
+            Some(self.gotos[off])
+        }
     }
 }
 
@@ -376,6 +417,8 @@ fn actions_offset<StorageT: PrimInt + Unsigned>(
 ) -> StIdxStorageT {
     StIdxStorageT::from(stidx) * StIdxStorageT::from(tokens_len) + StIdxStorageT::from(tidx)
 }
+
+
 
 pub struct StateActionsIterator<'a, StorageT> {
     iter: IterSetBits<'a, usize>,
@@ -417,13 +460,15 @@ where
 
 fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
-    mut e: OccupiedEntry<u32, Action<StorageT>>,
+    actions: &mut Vec<u32>,
+    off: usize,
     tidx: TIdx<StorageT>,
     pidx: PIdx<StorageT>,
     stidx: StIdx
 ) -> u64
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     let mut shift_reduce = 0;
     let tidx_prec = grm.token_precedence(tidx);
@@ -432,7 +477,7 @@ where
         (_, None) | (None, _) => {
             // If the token and production don't both have precedences, we use Yacc's default
             // resolution, which is in favour of the shift.
-            e.insert(Action::Shift(stidx));
+            actions[off] = StateTable::encode(Action::Shift(stidx));
             shift_reduce += 1;
         }
         (Some(token_prec), Some(prod_prec)) => {
@@ -446,12 +491,12 @@ where
                     }
                     (AssocKind::Right, AssocKind::Right) => {
                         // Right associativity is resolved in favour of the shift.
-                        e.insert(Action::Shift(stidx));
+                        actions[off] = StateTable::encode(Action::Shift(stidx));
                     }
                     (AssocKind::Nonassoc, AssocKind::Nonassoc) => {
                         // Nonassociativity leads to a run-time parsing error, so we need to remove
                         // the action entirely.
-                        e.remove();
+                        actions[off] = StateTable::encode(Action::Error);
                     }
                     (_, _) => {
                         panic!("Not supported.");
@@ -459,7 +504,7 @@ where
                 }
             } else if token_prec.level > prod_prec.level {
                 // The token has higher level precedence, so resolve in favour of shift.
-                e.insert(Action::Shift(stidx));
+                actions[off] = StateTable::encode(Action::Shift(stidx));
             }
             // If token_lev < prod_lev, then the production has higher level precedence and we keep
             // the reduce as-is.
@@ -509,7 +554,7 @@ mod test {
         let st = StateTable::new(&grm, &sg).unwrap();
 
         // Actions
-        assert_eq!(st.actions.len(), 15);
+        assert_eq!(st.actions.len(), 9*4);
         let assert_reduce = |stidx: StIdx, tidx: TIdx<_>, rule: &str, prod_off: usize| {
             let pidx = grm.rule_to_prods(grm.rule_idx(rule).unwrap())[prod_off];
             assert_eq!(st.action(stidx, tidx).unwrap(), Action::Reduce(pidx.into()));
@@ -551,7 +596,7 @@ mod test {
         assert_eq!(st.core_reduces(s4).collect::<HashSet<_>>(), *s4_core_reduces);
 
         // Gotos
-        assert_eq!(st.gotos.len(), 8);
+        assert_eq!(st.gotos.len(), 9*4);
         assert_eq!(st.goto(s0, grm.rule_idx("Expr").unwrap()).unwrap(), s1);
         assert_eq!(st.goto(s0, grm.rule_idx("Term").unwrap()).unwrap(), s2);
         assert_eq!(st.goto(s0, grm.rule_idx("Factor").unwrap()).unwrap(), s3);
@@ -574,7 +619,9 @@ mod test {
           ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
-        assert_eq!(st.actions.len(), 8);
+
+        let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
+        assert_eq!(st.actions.len(), len);
 
         // We only extract the states necessary to test those rules affected by the reduce/reduce.
         let s0 = StIdx(0);
@@ -596,7 +643,8 @@ mod test {
           ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
-        assert_eq!(st.actions.len(), 15);
+        let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
+        assert_eq!(st.actions.len(), len);
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
@@ -652,7 +700,8 @@ mod test {
           ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
-        assert_eq!(st.actions.len(), 15);
+        let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
+        assert_eq!(st.actions.len(), len);
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
@@ -692,7 +741,8 @@ mod test {
           ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
-        assert_eq!(st.actions.len(), 24);
+        let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
+        assert_eq!(st.actions.len(), len);
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
@@ -749,7 +799,8 @@ mod test {
           ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
-        assert_eq!(st.actions.len(), 34);
+        let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
+        assert_eq!(st.actions.len(), len);
 
         let s0 = StIdx(0);
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();

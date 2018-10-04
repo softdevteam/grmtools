@@ -140,7 +140,8 @@ pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigne
     parser: &'a Parser<StorageT>
 ) -> Box<Recoverer<StorageT> + 'a>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.token_cost);
     Box::new(MF { dist, parser })
@@ -149,7 +150,8 @@ where
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Recoverer<StorageT>
     for MF<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     fn recover(
         &self,
@@ -261,7 +263,8 @@ where
 
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> MF<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     fn insert(&self, n: &PathFNode<StorageT>, nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>) {
         let top_pstack = *n.pstack.val().unwrap();
@@ -538,7 +541,8 @@ pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
     in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>
 ) -> Vec<Vec<ParseRepair<StorageT>>>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     let mut cnds = Vec::new();
     let mut furthest = 0;
@@ -580,7 +584,8 @@ pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigne
     repairs: &[ParseRepair<StorageT>]
 ) -> usize
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     for r in repairs.iter() {
         match *r {
@@ -632,7 +637,8 @@ pub(crate) struct Dist<StorageT> {
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> Dist<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
 {
     pub(crate) fn new<F>(
         grm: &YaccGrammar<StorageT>,
