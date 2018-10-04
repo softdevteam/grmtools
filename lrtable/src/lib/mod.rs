@@ -72,10 +72,7 @@ impl StIdx {
 
 impl From<StIdxStorageT> for StIdx {
     fn from(v: StIdxStorageT) -> Self {
-        if v > StIdxStorageT::max_value() {
-            panic!("Overflow");
-        }
-        StIdx(v as StIdxStorageT)
+        StIdx(v)
     }
 }
 
