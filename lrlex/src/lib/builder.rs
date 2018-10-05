@@ -192,7 +192,7 @@ where
         if let Some(ref rim) = self.rule_ids_map {
             for (n, id) in rim {
                 outs.push_str(&format!(
-                    "#[allow(dead_code)]\nconst T_{}: {} = {:?};\n",
+                    "#[allow(dead_code)]\npub const T_{}: {} = {:?};\n",
                     n.to_ascii_uppercase(),
                     StorageT::type_name(),
                     *id

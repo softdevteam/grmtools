@@ -251,19 +251,20 @@ pub fn parse(lexer: &mut Lexer<{storaget}>)
         ));
 
         outs.push_str("}\n");
-        outs.push_str("}\n\n");
 
         // The rule constants
         for ridx in grm.iter_rules() {
             if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
                 outs.push_str(&format!(
-                    "#[allow(dead_code)]\nconst R_{}: {} = {:?};\n",
+                    "#[allow(dead_code)]\npub const R_{}: {} = {:?};\n",
                     grm.rule_name(ridx).to_ascii_uppercase(),
                     StorageT::type_name(),
                     usize::from(ridx)
                 ));
             }
         }
+
+        outs.push_str("}\n\n");
 
         // Output the cache so that we can check whether the IDs map is stable.
         outs.push_str(&cache);
