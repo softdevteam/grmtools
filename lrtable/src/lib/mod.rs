@@ -38,8 +38,8 @@ extern crate num_traits;
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
-extern crate vob;
 extern crate packed_vec;
+extern crate vob;
 
 use std::{hash::Hash, mem::size_of};
 
@@ -72,19 +72,7 @@ impl StIdx {
 
 impl From<StIdxStorageT> for StIdx {
     fn from(v: StIdxStorageT) -> Self {
-        if v > StIdxStorageT::max_value() {
-            panic!("Overflow");
-        }
-        StIdx(v as StIdxStorageT)
-    }
-}
-
-impl From<usize> for StIdx {
-    fn from(v: usize) -> Self {
-        if v > usize::from(StIdxStorageT::max_value()) {
-            panic!("Overflow");
-        }
-        StIdx(v as StIdxStorageT)
+        StIdx(v)
     }
 }
 

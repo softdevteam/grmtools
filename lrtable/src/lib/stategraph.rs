@@ -65,9 +65,9 @@ where
     /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
     /// grammar's valid `RIdx`s.
     pub fn iter_stidxs(&self) -> Box<dyn Iterator<Item = StIdx>> {
-        // We can use as_ safely, because we know that we're only generating integers from
+        // We can use as safely, because we know that we're only generating integers from
         // 0..self.states.len() which we've already checked fits within StIdxStorageT.
-        Box::new((0..self.states.len()).map(|x| StIdx::from(x)))
+        Box::new((0..self.states.len()).map(|x| StIdx(x as StIdxStorageT)))
     }
 
     /// Return the itemset for closed state `stidx`. Panics if `stidx` doesn't exist.

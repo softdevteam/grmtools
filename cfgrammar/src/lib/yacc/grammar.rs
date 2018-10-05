@@ -46,9 +46,10 @@ const START_RULE         : &str = "^";
 const IMPLICIT_RULE      : &str = "~";
 const IMPLICIT_START_RULE: &str = "^~";
 
-use yacc::ast;
-use yacc::ast::GrammarValidationError;
-use yacc::parser::YaccParserError;
+use yacc::{
+    ast::{self, GrammarValidationError},
+    parser::YaccParserError
+};
 
 pub type PrecedenceLevel = u64;
 #[derive(Clone, Copy, Debug, PartialEq)]
