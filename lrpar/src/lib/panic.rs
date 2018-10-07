@@ -73,7 +73,7 @@ where
             if Instant::now() >= finish_by {
                 break;
             }
-            for (st_i, st) in iter_pstack.iter().enumerate().rev().skip(1) {
+            for (st_i, st) in iter_pstack.iter().enumerate().rev() {
                 match parser.stable.action(*st, parser.next_tidx(laidx)) {
                     Action::Error => (),
                     _ => {
