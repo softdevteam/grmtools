@@ -240,7 +240,7 @@ where
                     .stable
                     .action(*n.pstack.val().unwrap(), parser.next_tidx(n.laidx))
                 {
-                    Some(Action::Accept) => true,
+                    Action::Accept => true,
                     _ => false
                 }
             }

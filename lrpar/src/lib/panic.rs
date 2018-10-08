@@ -32,7 +32,7 @@
 
 use std::{fmt::Debug, hash::Hash, time::Instant};
 
-use lrtable::StIdx;
+use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use parser::{Node, ParseRepair, Parser, Recoverer};
@@ -74,17 +74,20 @@ where
                 break;
             }
             for (st_i, st) in iter_pstack.iter().enumerate().rev().skip(1) {
-                if parser.stable.action(*st, parser.next_tidx(laidx)).is_some() {
-                    let mut rprs = Vec::with_capacity(laidx - in_laidx);
-                    // It's often possible that we found a state that will accept the lexeme at
-                    // in_laidx, at which point there are no repairs the user can make which will
-                    // emulate this panic mode (i.e. the list of actions they are advised to take
-                    // will be empty). There isn't much we can do about this.
-                    for _ in in_laidx..laidx {
-                        rprs.push(ParseRepair::Delete);
+                match parser.stable.action(*st, parser.next_tidx(laidx)) {
+                    Action::Error => (),
+                    _ => {
+                        let mut rprs = Vec::with_capacity(laidx - in_laidx);
+                        // It's often possible that we found a state that will accept the lexeme at
+                        // in_laidx, at which point there are no repairs the user can make which will
+                        // emulate this panic mode (i.e. the list of actions they are advised to take
+                        // will be empty). There isn't much we can do about this.
+                        for _ in in_laidx..laidx {
+                            rprs.push(ParseRepair::Delete);
+                        }
+                        in_pstack.drain(st_i + 1..);
+                        return (laidx, vec![rprs]);
                     }
-                    in_pstack.drain(st_i + 1..);
-                    return (laidx, vec![rprs]);
                 }
             }
         }

@@ -171,7 +171,7 @@ where
             let la_tidx = self.next_tidx(laidx);
 
             match self.stable.action(stidx, la_tidx) {
-                Some(Action::Reduce(pidx)) => {
+                Action::Reduce(pidx) => {
                     let ridx = self.grm.prod_to_rule(pidx);
                     let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     let nodes = tstack.drain(pop_idx - 1..).collect::<Vec<Node<StorageT>>>();
@@ -181,18 +181,18 @@ where
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
                 }
-                Some(Action::Shift(state_id)) => {
+                Action::Shift(state_id) => {
                     let la_lexeme = self.next_lexeme(laidx);
                     tstack.push(Node::Term { lexeme: la_lexeme });
                     pstack.push(state_id);
                     laidx += 1;
                 }
-                Some(Action::Accept) => {
+                Action::Accept => {
                     debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     debug_assert_eq!(tstack.len(), 1);
                     return true;
                 }
-                Some(Action::Error) => {
+                Action::Error => {
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
                             RecoveryKind::CPCTPlus => cpctplus::recoverer(self),
@@ -233,7 +233,6 @@ where
                     }
                     laidx = new_laidx;
                 }
-                None => ()
             }
         }
     }
@@ -260,7 +259,7 @@ where
             };
 
             match self.stable.action(stidx, la_tidx) {
-                Some(Action::Reduce(pidx)) => {
+                Action::Reduce(pidx) => {
                     let ridx = self.grm.prod_to_rule(pidx);
                     let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     if let Some(ref mut tstack_uw) = *tstack {
@@ -274,7 +273,7 @@ where
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
                 }
-                Some(Action::Shift(state_id)) => {
+                Action::Shift(state_id) => {
                     if let Some(ref mut tstack_uw) = *tstack {
                         let la_lexeme = if let Some(l) = lexeme_prefix {
                             l
@@ -286,13 +285,10 @@ where
                     pstack.push(state_id);
                     laidx += 1;
                 }
-                Some(Action::Accept) => {
+                Action::Accept => {
                     break;
                 }
-                Some(Action::Error) => {
-                    break;
-                }
-                None => {
+                Action::Error => {
                     break;
                 }
             }
@@ -362,7 +358,7 @@ where
             };
 
             match self.stable.action(stidx, la_tidx) {
-                Some(Action::Reduce(pidx)) => {
+                Action::Reduce(pidx) => {
                     let ridx = self.grm.prod_to_rule(pidx);
                     let pop_num = self.grm.prod(pidx).len();
                     if let Some(ref mut tstack_uw) = *tstack {
@@ -378,7 +374,7 @@ where
                     let prior = *pstack.val().unwrap();
                     pstack = pstack.child(self.stable.goto(prior, ridx).unwrap());
                 }
-                Some(Action::Shift(state_id)) => {
+                Action::Shift(state_id) => {
                     if let Some(ref mut tstack_uw) = *tstack {
                         let la_lexeme = if let Some(l) = lexeme_prefix {
                             l
@@ -390,17 +386,14 @@ where
                     pstack = pstack.child(state_id);
                     laidx += 1;
                 }
-                Some(Action::Accept) => {
+                Action::Accept => {
                     debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     if let Some(ref mut tstack_uw) = *tstack {
                         debug_assert_eq!(tstack_uw.len(), 1);
                     }
                     break;
                 }
-                Some(Action::Error) => {
-                    break;
-                }
-                None => {
+                Action::Error => {
                     break;
                 }
             }

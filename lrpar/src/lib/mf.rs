@@ -233,7 +233,7 @@ where
                     .stable
                     .action(*n.pstack.val().unwrap(), parser.next_tidx(n.laidx))
                 {
-                    Some(Action::Accept) => true,
+                    Action::Accept => true,
                     _ => false
                 }
             }
@@ -273,7 +273,7 @@ where
                 continue;
             }
 
-            let t_stidx = match self.parser.stable.action(top_pstack, tidx).unwrap() {
+            let t_stidx = match self.parser.stable.action(top_pstack, tidx) {
                 Action::Shift(stidx) => stidx,
                 _ => unreachable!()
             };
@@ -376,7 +376,7 @@ where
     fn shift(&self, n: &PathFNode<StorageT>, nbrs: &mut Vec<(u16, u16, PathFNode<StorageT>)>) {
         let la_tidx = self.parser.next_tidx(n.laidx);
         let top_pstack = *n.pstack.val().unwrap();
-        if let Some(Action::Shift(state_id)) = self.parser.stable.action(top_pstack, la_tidx) {
+        if let Action::Shift(state_id) = self.parser.stable.action(top_pstack, la_tidx) {
             let n_repairs = n.repairs.child(RepairMerge::Repair(Repair::Shift));
             let new_laidx = n.laidx + 1;
             if let Some(d) = self.dyn_dist(&n_repairs, state_id, new_laidx) {
