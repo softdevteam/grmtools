@@ -304,8 +304,8 @@ where
             }
         }
 
-        let actions = PackedVec::new(actions);
-        let gotos = PackedVec::new(gotos);
+        let actions = PackedVec::<usize, usize>::new(actions);
+        let gotos = PackedVec::<usize, usize>::new(gotos);
 
         Ok(StateTable {
             actions,
