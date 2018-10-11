@@ -16,4 +16,4 @@ num-traits = "0.2"
 cfgrammar = { path="../cfgrammar", features=["serde"] }
 serde = { version="1.0", features=["derive"], optional=true }
 vob = { version="1.3", features=["serde"] }
-packed_vec = { git = "https://github.com/gabi-250/packed-vec", features=["serde"] }
+packed_vec = { git = "https://github.com/softdevteam/packed-vec", features=["serde"] }
