@@ -44,7 +44,7 @@ use cfgrammar::{
     PIdx, RIdx, Symbol, TIdx
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use packed_vec::PackedVec;
+use packedvec::PackedVec;
 use vob::{IterSetBits, Vob};
 
 use {StIdx, StIdxStorageT};
