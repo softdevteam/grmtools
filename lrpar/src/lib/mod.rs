@@ -40,6 +40,7 @@ extern crate filetime;
 extern crate indexmap;
 extern crate lrtable;
 extern crate num_traits;
+extern crate packedvec;
 #[cfg(test)]
 extern crate regex;
 extern crate rmp_serde as rmps;
