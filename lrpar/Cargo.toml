@@ -20,6 +20,7 @@ getopts = "0.2"
 indexmap = "1.0"
 lrtable = { path="../lrtable", features=["serde"] }
 num-traits = "0.2"
+packedvec = "1.0"
 rmp-serde = "0.13"
 serde = { version="1.0", features=["derive"] }
 typename = "0.1"

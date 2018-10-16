@@ -42,6 +42,7 @@ use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
 use lrtable::{Action, StIdx, StIdxStorageT, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use packedvec::PackedVec;
 use vob::Vob;
 
 use astar::astar_all;
@@ -631,7 +632,8 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>(
 
 pub(crate) struct Dist<StorageT> {
     tokens_len: TIdx<StorageT>,
-    table: Vec<u16>,
+    table: PackedVec<u16>,
+    infinity: u16,
     phantom: PhantomData<StorageT>
 }
 
@@ -721,15 +723,38 @@ where
             }
         }
 
+        // If we keep u16::max_value() as our signifier of infinity, PackedVec can't do anything
+        // useful with the distance table. We therefore map infinity to the largest value in the
+        // table + 1.
+        let m = *table
+            .iter()
+            .max_by_key(|&x| if *x == u16::max_value() { 0 } else { *x })
+            .unwrap()
+            + 1;
+        let table = PackedVec::<u16, _>::new(
+            table
+                .iter()
+                .map(|&x| if x == u16::max_value() { m } else { x })
+                .collect()
+        );
         Dist {
             tokens_len: grm.tokens_len(),
+            infinity: m,
             table,
             phantom: PhantomData
         }
     }
 
     pub(crate) fn dist(&self, stidx: StIdx, tidx: TIdx<StorageT>) -> u16 {
-        self.table[usize::from(stidx) * usize::from(self.tokens_len) + usize::from(tidx)]
+        let d = self
+            .table
+            .get(usize::from(stidx) * usize::from(self.tokens_len) + usize::from(tidx))
+            .unwrap();
+        if d == self.infinity {
+            u16::max_value()
+        } else {
+            d
+        }
     }
 
     /// rev_edges allows us to walk backwards over the stategraph.
