@@ -44,8 +44,8 @@ use cfgrammar::{
     PIdx, RIdx, Symbol, TIdx
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use packedvec::PackedVec;
 use vob::{IterSetBits, Vob};
+use sparsevec::SparseVec;
 
 use {StIdx, StIdxStorageT};
 use stategraph::StateGraph;
@@ -86,9 +86,9 @@ pub struct StateTable<StorageT> {
     //   0  shift 1
     //   1  shift 0  reduce B
     // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
-    actions: PackedVec<usize>,
+    actions: SparseVec<usize>,
     state_actions: Vob,
-    gotos: PackedVec<usize>,
+    gotos: SparseVec<usize>,
     core_reduces: Vob,
     state_shifts: Vob,
     reduce_states: Vob,
@@ -294,7 +294,7 @@ where
                     .unwrap()
                     .checked_add(usize::from(pidx))
                     .unwrap();
-                if core_reduces.set(off, true) == Some(true) {
+                if core_reduces.set(off, true) == true {
                     distinct_reduces += 1;
                 }
             }
@@ -304,13 +304,13 @@ where
             }
         }
 
-        let actions = PackedVec::<usize, usize>::new(actions);
-        let gotos = PackedVec::<usize, usize>::new(gotos);
+        let actions_sv = SparseVec::<usize>::from(&actions, 0, usize::from(grm.tokens_len()));
+        let gotos_sv = SparseVec::<usize>::from(&gotos, 0, usize::from(grm.rules_len()));
 
         Ok(StateTable {
-            actions,
+            actions: actions_sv,
             state_actions,
-            gotos,
+            gotos: gotos_sv,
             state_shifts,
             core_reduces,
             reduce_states,
@@ -351,8 +351,7 @@ where
 
     /// Return the action for `stidx` and `sym`, or `None` if there isn't any.
     pub fn action(&self, stidx: StIdx, tidx: TIdx<StorageT>) -> Action<StorageT> {
-        let off = actions_offset(self.tokens_len, stidx, tidx);
-        StateTable::decode(self.actions.get(usize::from(off)).unwrap())
+        StateTable::decode(self.actions.get(usize::from(stidx), usize::from(tidx)).unwrap())
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `stidx`.
@@ -411,10 +410,9 @@ where
 
     /// Return the goto state for `stidx` and `ridx`, or `None` if there isn't any.
     pub fn goto(&self, stidx: StIdx, ridx: RIdx<StorageT>) -> Option<StIdx> {
-        let off = (usize::from(stidx) * usize::from(self.rules_len)) + usize::from(ridx);
         // Goto entries are encoded by adding 1 to their value, while 0 is reserved for no entry
         // (i.e. error)
-        match self.gotos.get(off) {
+        match self.gotos.get(usize::from(stidx), usize::from(ridx)) {
             Some(0) => None,
             // gotos can only contain state id's which we know can fit into StIdxStorageT so this
             // cast is safe
