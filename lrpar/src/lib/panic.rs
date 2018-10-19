@@ -69,7 +69,7 @@ where
         // is no way the user can adjust their input to get the parser into the same state as the
         // recovery algorithm manages).
         let iter_pstack = in_pstack.clone();
-        for laidx in in_laidx..parser.lexemes.len() {
+        for laidx in in_laidx..parser.lexemes.len() + 1 {
             if Instant::now() >= finish_by {
                 break;
             }
