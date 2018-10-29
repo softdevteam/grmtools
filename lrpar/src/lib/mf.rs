@@ -626,8 +626,18 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>(
         }
     }
 
-    all_rprs.sort_unstable_by(|x, y| x.len().cmp(&y.len()).then_with(|| x.cmp(&y)));
-    all_rprs.dedup();
+    // Deduplicate
+    let mut i = 0;
+    while i < all_rprs.len() {
+        if let Some(j) = all_rprs.iter().skip(i + 1).position(|x| *x == all_rprs[i]) {
+            all_rprs.remove(j);
+        } else {
+            i += 1;
+        }
+    }
+
+    // Sort repair sequences by the number of repairs they contain
+    all_rprs.sort_unstable_by(|x, y| x.len().cmp(&y.len()));
 }
 
 pub(crate) struct Dist<StorageT> {
