@@ -250,7 +250,7 @@ where
             return (in_laidx, vec![]);
         }
 
-        let full_rprs = self.collect_repairs(astar_cnds);
+        let full_rprs = self.collect_repairs(in_laidx, astar_cnds);
         let mut rnk_rprs = rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs);
         if rnk_rprs.is_empty() {
             return (in_laidx, vec![]);
@@ -373,6 +373,7 @@ where
     /// Convert the output from `astar_all` into something more usable.
     fn collect_repairs(
         &self,
+        in_laidx: usize,
         cnds: Vec<PathFNode<StorageT>>
     ) -> Vec<Vec<Vec<ParseRepair<StorageT>>>> {
         fn traverse<StorageT: PrimInt>(
@@ -417,19 +418,27 @@ where
             all_rprs.push(
                 traverse(&cnd.repairs)
                     .into_iter()
-                    .map(|x| self.repair_to_parse_repair(&x))
+                    .map(|x| self.repair_to_parse_repair(in_laidx, &x))
                     .collect::<Vec<_>>()
             );
         }
         all_rprs
     }
 
-    fn repair_to_parse_repair(&self, from: &[Repair<StorageT>]) -> Vec<ParseRepair<StorageT>> {
+    fn repair_to_parse_repair(&self, mut laidx: usize, from: &[Repair<StorageT>]) -> Vec<ParseRepair<StorageT>> {
         from.iter()
             .map(|y| match *y {
                 Repair::InsertTerm(token_idx) => ParseRepair::Insert(token_idx),
-                Repair::Delete => ParseRepair::Delete,
-                Repair::Shift => ParseRepair::Shift
+                Repair::Delete => {
+                    let rpr = ParseRepair::Delete(self.parser.next_lexeme(laidx));
+                    laidx += 1;
+                    rpr
+                }
+                Repair::Shift => {
+                    let rpr = ParseRepair::Shift(self.parser.next_lexeme(laidx));
+                    laidx += 1;
+                    rpr
+                }
             }).collect()
     }
 }
@@ -473,8 +482,8 @@ mod test {
                 ParseRepair::Insert(token_idx) => {
                     out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap()))
                 }
-                ParseRepair::Delete => out.push(format!("Delete")),
-                ParseRepair::Shift => out.push(format!("Shift"))
+                ParseRepair::Delete(_) => out.push(format!("Delete")),
+                ParseRepair::Shift(_) => out.push(format!("Shift"))
             }
         }
         out.join(", ")

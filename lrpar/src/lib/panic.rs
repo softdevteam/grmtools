@@ -82,8 +82,8 @@ where
                         // in_laidx, at which point there are no repairs the user can make which will
                         // emulate this panic mode (i.e. the list of actions they are advised to take
                         // will be empty). There isn't much we can do about this.
-                        for _ in in_laidx..laidx {
-                            rprs.push(ParseRepair::Delete);
+                        for j in in_laidx..laidx {
+                            rprs.push(ParseRepair::Delete(parser.next_lexeme(j)));
                         }
                         in_pstack.drain(st_i + 1..);
                         return (laidx, vec![rprs]);

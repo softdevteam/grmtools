@@ -519,9 +519,9 @@ pub enum ParseRepair<StorageT> {
     /// Insert one of the sequences of `Symbol::Token`s.
     InsertSeq(Vec<Vec<TIdx<StorageT>>>),
     /// Delete a symbol.
-    Delete,
+    Delete(Lexeme<StorageT>),
     /// Shift a symbol.
-    Shift
+    Shift(Lexeme<StorageT>)
 }
 
 /// Records a single parse error.
