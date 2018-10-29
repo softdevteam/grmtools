@@ -40,6 +40,7 @@ use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 use {RIdx, PIdx, SIdx, Symbol, TIdx};
 use super::YaccKind;
 use yacc::firsts::YaccFirsts;
+use yacc::follows::YaccFollows;
 use yacc::parser::YaccParser;
 
 const START_RULE         : &str = "^";
@@ -524,6 +525,11 @@ where
     /// Return a `YaccFirsts` struct for this grammar.
     pub fn firsts(&self) -> YaccFirsts<StorageT> {
         YaccFirsts::new(self)
+    }
+
+    /// Return a `YaccFirsts` struct for this grammar.
+    pub fn follows(&self) -> YaccFollows<StorageT> {
+        YaccFollows::new(self)
     }
 }
 
