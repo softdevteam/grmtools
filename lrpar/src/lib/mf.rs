@@ -244,7 +244,7 @@ where
             return (in_laidx, vec![]);
         }
 
-        let full_rprs = self.collect_repairs(astar_cnds);
+        let full_rprs = self.collect_repairs(in_laidx, astar_cnds);
         let mut rnk_rprs = rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs);
         if rnk_rprs.is_empty() {
             return (in_laidx, vec![]);
@@ -396,6 +396,7 @@ where
     /// Convert the output from `astar_all` into something more usable.
     fn collect_repairs(
         &self,
+        in_laidx: usize,
         cnds: Vec<PathFNode<StorageT>>
     ) -> Vec<Vec<Vec<ParseRepair<StorageT>>>> {
         fn traverse<StorageT: PrimInt + Unsigned>(
@@ -440,19 +441,27 @@ where
             all_rprs.push(
                 traverse(&cnd.repairs)
                     .into_iter()
-                    .map(|x| self.repair_to_parse_repair(&x))
+                    .map(|x| self.repair_to_parse_repair(in_laidx, &x))
                     .collect::<Vec<_>>()
             );
         }
         all_rprs
     }
 
-    fn repair_to_parse_repair(&self, from: &[Repair<StorageT>]) -> Vec<ParseRepair<StorageT>> {
+    fn repair_to_parse_repair(&self, mut laidx: usize, from: &[Repair<StorageT>]) -> Vec<ParseRepair<StorageT>> {
         from.iter()
             .map(|y| match *y {
                 Repair::InsertTerm(token_idx) => ParseRepair::Insert(token_idx),
-                Repair::Delete => ParseRepair::Delete,
-                Repair::Shift => ParseRepair::Shift
+                Repair::Delete => {
+                    let rpr = ParseRepair::Delete(self.parser.next_lexeme(laidx));
+                    laidx += 1;
+                    rpr
+                }
+                Repair::Shift => {
+                    let rpr = ParseRepair::Shift(self.parser.next_lexeme(laidx));
+                    laidx += 1;
+                    rpr
+                }
             }).collect()
     }
 
@@ -600,10 +609,10 @@ where
                 );
                 parser.lr_upto(Some(new_lexeme), laidx, laidx + 1, &mut pstack, &mut tstack);
             }
-            ParseRepair::Delete => {
+            ParseRepair::Delete(_) => {
                 laidx += 1;
             }
-            ParseRepair::Shift => {
+            ParseRepair::Shift(_) => {
                 laidx = parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut tstack);
             }
         }
@@ -618,7 +627,7 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>(
     for rprs in &mut all_rprs.iter_mut() {
         // Remove shifts from the end of repairs
         while !rprs.is_empty() {
-            if let ParseRepair::Shift = rprs[rprs.len() - 1] {
+            if let ParseRepair::Shift(_) = rprs[rprs.len() - 1] {
                 rprs.pop();
             } else {
                 break;
@@ -626,8 +635,18 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>(
         }
     }
 
-    all_rprs.sort_unstable_by(|x, y| x.len().cmp(&y.len()).then_with(|| x.cmp(&y)));
-    all_rprs.dedup();
+    // Deduplicate
+    let mut i = 0;
+    while i < all_rprs.len() {
+        if let Some(j) = all_rprs.iter().skip(i + 1).position(|x| *x == all_rprs[i]) {
+            all_rprs.remove(j);
+        } else {
+            i += 1;
+        }
+    }
+
+    // Sort repair sequences by the number of repairs they contain
+    all_rprs.sort_unstable_by(|x, y| x.len().cmp(&y.len()));
 }
 
 pub(crate) struct Dist<StorageT> {
@@ -880,8 +899,8 @@ mod test {
                 ParseRepair::Insert(token_idx) => {
                     out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap()))
                 }
-                ParseRepair::Delete => out.push(format!("Delete")),
-                ParseRepair::Shift => out.push(format!("Shift"))
+                ParseRepair::Delete(_) => out.push(format!("Delete")),
+                ParseRepair::Shift(_) => out.push(format!("Shift"))
             }
         }
         out.join(", ")

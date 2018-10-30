@@ -512,16 +512,16 @@ where
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
 /// in the sequence of repairs is represented by a `ParseRepair`.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ParseRepair<StorageT> {
     /// Insert a `Symbol::Token`.
     Insert(TIdx<StorageT>),
     /// Insert one of the sequences of `Symbol::Token`s.
     InsertSeq(Vec<Vec<TIdx<StorageT>>>),
     /// Delete a symbol.
-    Delete,
+    Delete(Lexeme<StorageT>),
     /// Shift a symbol.
-    Shift
+    Shift(Lexeme<StorageT>)
 }
 
 /// Records a single parse error.
