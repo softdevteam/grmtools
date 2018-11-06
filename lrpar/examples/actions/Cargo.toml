@@ -1,0 +1,17 @@
+[package]
+name = "actions"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+
+[[bin]]
+doc = false
+name = "actions"
+
+[build-dependencies]
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }
+
+[dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }

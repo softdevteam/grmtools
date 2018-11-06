@@ -280,6 +280,10 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
             l.start() - self.newlines[self.newlines.len() - 1] + 1
         ))
     }
+
+    fn input(&self) -> &str {
+        &self.s
+    }
 }
 
 #[cfg(test)]

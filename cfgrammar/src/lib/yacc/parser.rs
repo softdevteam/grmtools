@@ -125,18 +125,7 @@ impl YaccParser {
         // every byte within the string is also a valid character).
         let mut i = self.parse_declarations(0)?;
         i = self.parse_rules(i)?;
-        // We don't currently support the programs part of a specification. One day we might...
-        match self.lookahead_is("%%", i) {
-            Some(j) => {
-                if self.parse_ws(j)? == self.src.len() {
-                    Ok(i)
-                } else {
-                    i = self.parse_programs(i)?;
-                    Ok(i)
-                }
-            }
-            None => Ok(i)
-        }
+        self.parse_programs(i)
     }
 
     pub(crate) fn ast(self) -> GrammarAST {
@@ -233,10 +222,7 @@ impl YaccParser {
 
     fn parse_rules(&mut self, mut i: usize) -> YaccResult<usize> {
         // self.parse_declarations should have left the input at '%%'
-        match self.lookahead_is("%%", i) {
-            Some(j) => i = j,
-            None => panic!("Internal error.")
-        }
+        i = self.lookahead_is("%%", i).unwrap();
         i = self.parse_ws(i)?;
         while i < self.src.len() {
             if self.lookahead_is("%%", i).is_some() {
@@ -342,12 +328,13 @@ impl YaccParser {
             let ch = self.src[j..].chars().next().unwrap();
             c += match ch {
                 '{' => 1,
+                '}' if c == 1 => {
+                    c = 0;
+                    break;
+                }
                 '}' => -1,
                 _ => 0
             };
-            if c == 0 {
-                break;
-            }
             j += ch.len_utf8();
         }
         if c > 0 {
@@ -358,13 +345,21 @@ impl YaccParser {
         }
     }
 
-    fn parse_programs(&mut self, i: usize) -> YaccResult<usize> {
-        let mut j = i + 2; // Skip %%
-        j = self.parse_ws(j)?;
-        let prog = self.src[j..].to_string();
-        j = j + prog.len();
-        self.ast.add_programs(prog);
-        Ok(j)
+    fn parse_programs(&mut self, mut i: usize) -> YaccResult<usize> {
+        if let Some(j) = self.lookahead_is("%%", i) {
+            i = self.parse_ws(j)?;
+            if i == self.src.len() {
+                Ok(i)
+            } else {
+                let prog = self.src[i..].to_string();
+                i = i + prog.len();
+                self.ast.add_programs(prog);
+                Ok(i)
+            }
+        }
+        else {
+            Ok(i)
+        }
     }
 
     fn parse_ws(&mut self, mut i: usize) -> YaccResult<usize> {

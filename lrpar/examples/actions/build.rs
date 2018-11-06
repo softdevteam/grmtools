@@ -1,4 +1,4 @@
-// Copyright (c) 2017 King's College London
+// Copyright (c) 2018 King's College London
 // created by the Software Development Team <http://soft-dev.org/>
 //
 // The Universal Permissive License (UPL), Version 1.0
@@ -30,45 +30,22 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#![feature(test)]
+extern crate lrlex;
+extern crate lrpar;
 
-extern crate bincode;
-extern crate cactus;
-extern crate cfgrammar;
-extern crate filetime;
-#[macro_use]
-extern crate indexmap;
-extern crate lrtable;
-extern crate num_traits;
-extern crate packedvec;
-extern crate regex;
-extern crate rmp_serde as rmps;
-extern crate serde;
-extern crate test;
-extern crate typename;
-extern crate vob;
+use lrlex::LexerBuilder;
+use lrpar::{CTParserBuilder, ActionKind};
 
-mod astar;
-mod cpctplus;
-pub mod ctbuilder;
-pub mod lex;
-pub use lex::{LexError, Lexeme, Lexer};
-mod panic;
-pub mod parser;
-pub use parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind};
-mod mf;
-
-pub use ctbuilder::CTParserBuilder;
-pub use ctbuilder::ActionKind;
-
-/// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
-/// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.
-#[macro_export]
-macro_rules! lrpar_mod {
-    ($n:ident) => {
-        include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs"));
-    };
+fn main() -> Result<(), Box<std::error::Error>> {
+    // First we create the parser, which returns a HashMap of all the tokens used, then we pass
+    // that HashMap to the lexer.
+    //
+    // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
+    // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
+    // ".l" for lrlex).
+    let lex_rule_ids_map = CTParserBuilder::<u8>::new().action_kind(ActionKind::CustomAction).process_file_in_src("calc.y")?;
+    LexerBuilder::new()
+        .rule_ids_map(lex_rule_ids_map)
+        .process_file_in_src("calc.l")?;
+    Ok(())
 }
-
-#[doc(hidden)]
-pub use cfgrammar::RIdx;
