@@ -31,3 +31,16 @@ in your `Cargo.toml` file e.g.:
 [build-dependencies]
 lrpar = { git="https://github.com/softdevteam/grmtools/", rev="12345678" }
 ```
+
+
+## nimbleparse
+
+`nimbleparse` is a simple binary for dynamically testing lex files, grammars,
+and inputs (which, internally, uses the above libraries). Use it as follows:
+
+```sh
+cargo run --release --bin nimbleparse <lex.l> <grm.y> <input file>
+```
+
+`nimbleparse` produces a parse tree as output and, if errors were encountered,
+the repair sequences found.
