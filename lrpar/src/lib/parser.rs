@@ -96,6 +96,11 @@ where
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TStack<StorageT> = Vec<Node<StorageT>>; // Parse tree stack
 
+pub enum AStackType<UserT, StorageT> {
+    ActionType(UserT),
+    Lexeme(Lexeme<StorageT>)
+}
+
 pub struct Parser<'a, StorageT: 'a + Eq + Hash> {
     pub rcvry_kind: RecoveryKind,
     pub grm: &'a YaccGrammar<StorageT>,
@@ -144,17 +149,16 @@ where
         }
     }
 
-    fn parse2<F, K>(
+    fn parse2<F, UserT>(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexemes: &[Lexeme<StorageT>],
-        actions: Vec<Option<&Fn(Vec<K>) -> K>>,
+        actions: Vec<Option<&Fn(&str, Vec<AStackType<UserT, StorageT>>) -> UserT>>,
         input: &str,
-        convert: &Fn(&str) -> K
-    ) -> Result<K, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
+    ) -> Result<UserT, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
     where
         F: Fn(TIdx<StorageT>) -> u8
     {
@@ -172,10 +176,15 @@ where
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
         let mut tstack: Vec<Node<StorageT>> = Vec::new();
         let mut errors: Vec<ParseError<StorageT>> = Vec::new();
-        let mut astack: Vec<K> = Vec::new();
-        let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors, Some((&actions, &mut astack, &input, convert)));
+        let mut astack: Vec<AStackType<UserT, StorageT>> = Vec::new();
+        let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors, Some((&actions, &mut astack, &input)));
         match (accpt, errors.is_empty()) {
-            (true, true) => Ok(astack.drain(..).nth(0).unwrap()),
+            (true, true) => {
+                match astack.drain(..).nth(0).unwrap() {
+                    AStackType::ActionType(u) => Ok(u),
+                    AStackType::Lexeme(_) => unreachable!()
+                }
+            },
             (true, false) => Err((Some(tstack.drain(..).nth(0).unwrap()), errors)),
             (false, false) => Err((None, errors)),
             (false, true) => panic!("Internal error")
@@ -195,13 +204,13 @@ where
     /// Return `true` if the parse reached an accept state (i.e. all the input was consumed,
     /// possibly after making repairs) or `false` (i.e. some of the input was not consumed, even
     /// after possibly making repairs) otherwise.
-    pub fn lr<K>(
+    pub fn lr<UserT>(
         &self,
         mut laidx: usize,
         pstack: &mut PStack,
         tstack: &mut TStack<StorageT>,
         errors: &mut Vec<ParseError<StorageT>>,
-        mut actiondata: Option<(&Vec<Option<&Fn(Vec<K>) -> K>>, &mut Vec<K>, &str, &Fn(&str) -> K)>
+        mut actiondata: Option<(&Vec<Option<&Fn(&str, Vec<AStackType<UserT, StorageT>>) -> UserT>>, &mut Vec<AStackType<UserT, StorageT>>, &str)>
     ) -> bool {
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
@@ -221,10 +230,10 @@ where
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
 
                     // Process actions
-                    if let Some((actions, ref mut astack, _, _)) = actiondata {
-                            let args: Vec<K> = astack.drain(pop_idx -1..).collect();
+                    if let Some((actions, ref mut astack, input)) = actiondata {
+                            let args: Vec<AStackType<UserT, StorageT>> = astack.drain(pop_idx -1..).collect();
                             if let Some(f) = actions[usize::from(pidx)] {
-                                astack.push(f(args));
+                                astack.push(AStackType::ActionType(f(input, args)));
                             }
                     }
                 }
@@ -233,8 +242,8 @@ where
                     tstack.push(Node::Term { lexeme: la_lexeme });
                     pstack.push(state_id);
                     match actiondata {
-                        Some((_, ref mut astack, input, convert)) => {
-                            astack.push(convert(&input[la_lexeme.start()..la_lexeme.end()]))
+                        Some((_, ref mut astack, _)) => {
+                            astack.push(AStackType::Lexeme(la_lexeme))
                         },
                         None => ()
                     };
@@ -565,13 +574,12 @@ where
     /// Parse input. On success return a parse tree. On failure, return a `LexParseError`: a
     /// `LexError` means that no parse tree was produced; a `ParseError` may (if its first element
     /// is `Some(...)`) return a parse tree (with parts filled in by this builder's recoverer).
-    pub fn parse2<K>(
+    pub fn parse2<UserT>(
         &self,
         lexer: &mut Lexer<StorageT>,
-        actions: Vec<Option<&Fn(Vec<K>) -> K>>,
+        actions: Vec<Option<&Fn(&str, Vec<AStackType<UserT, StorageT>>) -> UserT>>,
         input: &str,
-        convert: &Fn(&str) -> K
-    ) -> Result<K, LexParseError<StorageT>> {
+    ) -> Result<UserT, LexParseError<StorageT>> {
         Ok(Parser::parse2(
             self.recoverer,
             self.grm,
@@ -581,7 +589,6 @@ where
             &lexer.all_lexemes()?[..],
             actions,
             input,
-            convert
         )?)
     }
 }

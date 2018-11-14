@@ -1,24 +1,24 @@
 %start Expr
 %%
-Expr: Term 'PLUS' Expr { add($0, $2) }
-    | Term { $0 }
+Expr: Term 'PLUS' Expr { add($1, $3) }
+    | Term { $1 }
     ;
 
-Term: Factor 'MUL' Term { mul ($0, $2) }
-    | Factor { $0 }
+Term: Factor 'MUL' Term { mul ($1, $3) }
+    | Factor { $1 }
     ;
 
-Factor: 'LBRACK' Expr 'RBRACK' { $1 }
-      | 'INT' { $0 }
+Factor: 'LBRACK' Expr 'RBRACK' { $2 }
+      | 'INT' { int($1) }
       ;
 %%
 
 type TYPE = u64;
 
-fn convert(s: &str) -> TYPE {
+fn int(s: &str) -> TYPE {
     match s.parse::<u64>() {
     	Ok(val) => val as TYPE,
-	Err(_) => 0 as TYPE
+	Err(_) => unreachable!()
     }
 }
 
