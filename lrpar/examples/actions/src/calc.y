@@ -1,4 +1,5 @@
 %start Expr
+%type MYTYPE
 %%
 Expr: Term 'PLUS' Expr { add($1, $3) }
     | Term { $1 }
@@ -13,11 +14,11 @@ Factor: 'LBRACK' Expr 'RBRACK' { $2 }
       ;
 %%
 
-type TYPE = u64;
+type MYTYPE = u64;
 
-fn int(s: &str) -> TYPE {
+fn int(s: &str) -> MYTYPE {
     match s.parse::<u64>() {
-    	Ok(val) => val as TYPE,
+    	Ok(val) => val as MYTYPE,
 	Err(_) => unreachable!()
     }
 }

@@ -104,7 +104,8 @@ pub struct YaccGrammar<StorageT = u32> {
     implicit_rule: Option<RIdx<StorageT>>,
     /// User defined Rust programs which can be called within actions
     actions: Vec<Option<String>>,
-    programs: Option<String>
+    programs: Option<String>,
+    actiontype: Option<String>
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -342,13 +343,19 @@ where
             prod_precs: prod_precs.into_iter().map(|x| x.unwrap()).collect(),
             implicit_rule: implicit_rule.and_then(|x| Some(rule_map[&x])),
             actions,
-            programs: ast.programs
+            programs: ast.programs,
+            actiontype: ast.actiontype
         })
     }
 
     /// Get the programs part of the grammar
     pub fn programs(&self) -> &Option<String> {
         &self.programs
+    }
+
+    /// Get the action return type as defined by the user
+    pub fn actiontype(&self) -> &Option<String> {
+        &self.actiontype
     }
 
     /// How many productions does this grammar have?

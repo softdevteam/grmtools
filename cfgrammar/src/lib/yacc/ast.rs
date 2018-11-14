@@ -51,7 +51,8 @@ pub struct GrammarAST {
     pub tokens: IndexSet<String>,
     pub precs: HashMap<String, Precedence>,
     pub implicit_tokens: Option<HashSet<String>>,
-    pub programs: Option<String>
+    pub programs: Option<String>,
+    pub actiontype: Option<String>
 }
 
 #[derive(Debug)]
@@ -137,7 +138,8 @@ impl GrammarAST {
             tokens: IndexSet::new(),
             precs: HashMap::new(),
             implicit_tokens: None,
-            programs: None
+            programs: None,
+            actiontype: None
         }
     }
 

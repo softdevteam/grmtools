@@ -236,6 +236,19 @@ where
         let mut outs = String::new();
         // Header
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
+        let actiontype = match grm.actiontype() {
+            Some(t) => t,
+            None => {
+                match self.actionkind {
+                    ActionKind::CustomAction => {
+                        panic!("Action return type not defined!")
+                    }
+                    ActionKind::GenericParseTree => {
+                        "" // Dummy string that will never be used
+                    }
+                }
+            }
+        };
         outs.push_str(&format!("mod {}_y {{\n", mod_name));
         outs.push_str("    use lrpar::{{Lexer, Node, LexParseError, RecoveryKind, RTParserBuilder}};
     use lrpar::ctbuilder::_reconstitute;",
@@ -246,9 +259,10 @@ where
                 outs.push_str(&format!("use lrpar::parser::AStackType;
 
     pub fn parse(lexer: &mut Lexer<{storaget}>)
-          -> Result<TYPE, LexParseError<{storaget}>>
+          -> Result<{actiont}, LexParseError<{storaget}>>
     {{",
-                storaget = StorageT::type_name()
+                storaget = StorageT::type_name(),
+                actiont = actiontype
                 ));
             }
             ActionKind::GenericParseTree => {
@@ -280,7 +294,10 @@ where
         match self.actionkind {
             ActionKind::CustomAction => {
                 // action function references
-                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(&str, Vec<AStackType<TYPE, {}>>) -> TYPE>> = Vec::new();\n", StorageT::type_name()));
+                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(&str, Vec<AStackType<{actiont}, {}>>) -> {actiont}>> = Vec::new();\n",
+                    StorageT::type_name(),
+                    actiont=actiontype)
+                );
                 for pidx in grm.iter_pidxs() {
                     if grm.action(pidx).is_some() {
                         outs.push_str(&format!("        actions.push(Some(&{prefix}action_{}));\n", usize::from(pidx), prefix=ACTION_PREFIX))
@@ -335,8 +352,12 @@ where
                     if let Some(s) = grm.action(pidx) {
                         // Iterate over all $-arguments and replace them with their respective
                         // element from the argument vector (e.g. $1 is replaced by args[0]). At
-                        // the same time extract &str from tokens and usertype from nonterminals.
-                        outs.push_str(&format!("fn {prefix}action_{}({prefix}input: &str, {prefix}args: Vec<AStackType<TYPE, {}>>) -> TYPE {{\n", usize::from(pidx), StorageT::type_name(), prefix=ACTION_PREFIX));
+                        // the same time extract &str from tokens and actiontype from nonterminals.
+                        outs.push_str(&format!("fn {prefix}action_{}({prefix}input: &str, {prefix}args: Vec<AStackType<{actiont}, {}>>) -> {actiont} {{\n",
+                            usize::from(pidx),
+                            StorageT::type_name(),
+                            prefix=ACTION_PREFIX,
+                            actiont=actiontype));
                         for m in re.find_iter(s) {
                             let num = match &s[m.start()+1..m.end()].parse::<usize>() {
                                 Ok(val) => val - 1,

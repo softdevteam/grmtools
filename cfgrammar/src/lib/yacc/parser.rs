@@ -151,6 +151,18 @@ impl YaccParser {
                 }
                 continue;
             }
+            if let Some(j) = self.lookahead_is("%type", i) {
+                i = self.parse_ws(j)?;
+                while i < self.src.len() {
+                    if self.lookahead_is("%", i).is_some() {
+                        break;
+                    }
+                    let (j, n) = self.parse_name(i)?;
+                    self.ast.actiontype = Some(n);
+                    i = self.parse_ws(j)?;
+                }
+                continue;
+            }
             if let Some(j) = self.lookahead_is("%start", i) {
                 if self.ast.start.is_some() {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateStartDeclaration, i));
