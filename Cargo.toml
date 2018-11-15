@@ -5,6 +5,7 @@ members=[
     "lrlex/examples/calclex",
     "lrpar",
     "lrpar/examples/calcparse",
+    "lrpar/examples/actions",
     "lrtable",
     "nimbleparse"
 ]

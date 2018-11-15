@@ -51,6 +51,7 @@ pub enum YaccParserErrorKind {
     IllegalString,
     IncompleteRule,
     IncompleteComment,
+    IncompleteAction,
     MissingColon,
     PrematureEnd,
     ProgramsNotSupported,
@@ -78,6 +79,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::IllegalString => "Illegal string",
             YaccParserErrorKind::IncompleteRule => "Incomplete rule",
             YaccParserErrorKind::IncompleteComment => "Incomplete comment",
+            YaccParserErrorKind::IncompleteAction => "Incomplete action",
             YaccParserErrorKind::MissingColon => "Missing colon",
             YaccParserErrorKind::PrematureEnd => "File ends prematurely",
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
@@ -123,17 +125,7 @@ impl YaccParser {
         // every byte within the string is also a valid character).
         let mut i = self.parse_declarations(0)?;
         i = self.parse_rules(i)?;
-        // We don't currently support the programs part of a specification. One day we might...
-        match self.lookahead_is("%%", i) {
-            Some(j) => {
-                if self.parse_ws(j)? == self.src.len() {
-                    Ok(i)
-                } else {
-                    Err(self.mk_error(YaccParserErrorKind::ProgramsNotSupported, i))
-                }
-            }
-            None => Ok(i)
-        }
+        self.parse_programs(i)
     }
 
     pub(crate) fn ast(self) -> GrammarAST {
@@ -155,6 +147,18 @@ impl YaccParser {
                     }
                     let (j, n) = self.parse_token(i)?;
                     self.ast.tokens.insert(n);
+                    i = self.parse_ws(j)?;
+                }
+                continue;
+            }
+            if let Some(j) = self.lookahead_is("%type", i) {
+                i = self.parse_ws(j)?;
+                while i < self.src.len() {
+                    if self.lookahead_is("%", i).is_some() {
+                        break;
+                    }
+                    let (j, n) = self.parse_name(i)?;
+                    self.ast.actiontype = Some(n);
                     i = self.parse_ws(j)?;
                 }
                 continue;
@@ -230,10 +234,7 @@ impl YaccParser {
 
     fn parse_rules(&mut self, mut i: usize) -> YaccResult<usize> {
         // self.parse_declarations should have left the input at '%%'
-        match self.lookahead_is("%%", i) {
-            Some(j) => i = j,
-            None => panic!("Internal error.")
-        }
+        i = self.lookahead_is("%%", i).unwrap();
         i = self.parse_ws(i)?;
         while i < self.src.len() {
             if self.lookahead_is("%%", i).is_some() {
@@ -259,16 +260,18 @@ impl YaccParser {
         }
         let mut syms = Vec::new();
         let mut prec = None;
+        let mut action = None;
         i = self.parse_ws(i)?;
         while i < self.src.len() {
             if let Some(j) = self.lookahead_is("|", i) {
-                self.ast.add_prod(rn.clone(), syms, prec);
+                self.ast.add_prod(rn.clone(), syms, prec, action);
                 syms = Vec::new();
                 prec = None;
+                action = None;
                 i = self.parse_ws(j)?;
                 continue;
             } else if let Some(j) = self.lookahead_is(";", i) {
-                self.ast.add_prod(rn.clone(), syms, prec);
+                self.ast.add_prod(rn.clone(), syms, prec, action);
                 return Ok(j);
             }
 
@@ -286,6 +289,10 @@ impl YaccParser {
                     return Err(self.mk_error(YaccParserErrorKind::PrecNotFollowedByToken, i));
                 }
                 i = k;
+            } else if self.lookahead_is("{", i).is_some() {
+                let (j, a) = self.parse_action(i)?;
+                i = j;
+                action = Some(a);
             } else {
                 let (j, sym) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
@@ -323,6 +330,47 @@ impl YaccParser {
                 }
             }
             None => Err(self.mk_error(YaccParserErrorKind::IllegalString, i))
+        }
+    }
+
+    fn parse_action(&mut self, i: usize) -> YaccResult<(usize, String)> {
+        let mut j = i;
+        let mut c = 0; // Count braces
+        while j < self.src.len() {
+            let ch = self.src[j..].chars().next().unwrap();
+            c += match ch {
+                '{' => 1,
+                '}' if c == 1 => {
+                    c = 0;
+                    break;
+                }
+                '}' => -1,
+                _ => 0
+            };
+            j += ch.len_utf8();
+        }
+        if c > 0 {
+            Err(self.mk_error(YaccParserErrorKind::IncompleteAction, j))
+        } else {
+            let s = self.src[i + 1..j - 1].trim().to_string();
+            Ok((j + 1, s))
+        }
+    }
+
+    fn parse_programs(&mut self, mut i: usize) -> YaccResult<usize> {
+        if let Some(j) = self.lookahead_is("%%", i) {
+            i = self.parse_ws(j)?;
+            if i == self.src.len() {
+                Ok(i)
+            } else {
+                let prog = self.src[i..].to_string();
+                i = i + prog.len();
+                self.ast.add_programs(prog);
+                Ok(i)
+            }
+        }
+        else {
+            Ok(i)
         }
     }
 
@@ -472,7 +520,8 @@ mod test {
             grm.prods[grm.get_rule("A").unwrap()[0]],
             Production {
                 symbols: vec![token("a")],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
     }
@@ -489,14 +538,16 @@ mod test {
             grm.prods[grm.get_rule("A").unwrap()[0]],
             Production {
                 symbols: vec![token("a")],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap()[1]],
             Production {
                 symbols: vec![token("b")],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
     }
@@ -515,7 +566,8 @@ mod test {
             grm.prods[grm.get_rule("A").unwrap()[0]],
             Production {
                 symbols: vec![],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
 
@@ -523,14 +575,16 @@ mod test {
             grm.prods[grm.get_rule("B").unwrap()[0]],
             Production {
                 symbols: vec![token("b")],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
         assert_eq!(
             grm.prods[grm.get_rule("B").unwrap()[1]],
             Production {
                 symbols: vec![],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
 
@@ -538,14 +592,16 @@ mod test {
             grm.prods[grm.get_rule("C").unwrap()[0]],
             Production {
                 symbols: vec![],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
         assert_eq!(
             grm.prods[grm.get_rule("C").unwrap()[1]],
             Production {
                 symbols: vec![token("c")],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
     }
@@ -564,7 +620,8 @@ mod test {
             grm.prods[grm.get_rule("A").unwrap()[0]],
             Production {
                 symbols: vec![token("a"), rule("B")],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
     }
@@ -577,7 +634,8 @@ mod test {
             grm.prods[grm.get_rule("A").unwrap()[0]],
             Production {
                 symbols: vec![token("a"), token("b")],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
     }
@@ -628,7 +686,8 @@ mod test {
             grm.prods[grm.get_rule("A").unwrap()[0]],
             Production {
                 symbols: vec![token("T")],
-                precedence: None
+                precedence: None,
+                action: None
             }
         );
     }
@@ -767,21 +826,6 @@ A:
                 kind: YaccParserErrorKind::PrematureEnd,
                 line: 1,
                 col: 8
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
-        }
-    }
-
-    #[test]
-    fn test_programs_not_supported() {
-        let src = "%% %%
-x".to_string();
-        match parse(YaccKind::Original, &src) {
-            Ok(_) => panic!("Programs parsed"),
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::ProgramsNotSupported,
-                line: 1,
-                col: 4
             }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
@@ -1024,6 +1068,37 @@ x".to_string();
           "
         ).unwrap();
         assert_eq!(ast.start, Some("R".to_string()));
+    }
+
+    #[test]
+    fn test_action() {
+        let grm = parse(
+            YaccKind::Original,
+            &"
+          %%
+          A: 'a' B { println!(\"test\"); }
+           ;
+          B: 'b' 'c' { add($1, $2); }
+           | 'd'
+           ;
+          "
+        ).unwrap();
+        assert_eq!(grm.prods[grm.rules["A"][0]].action, Some("println!(\"test\");".to_string()));
+        assert_eq!(grm.prods[grm.rules["B"][0]].action, Some("add($1, $2);".to_string()));
+        assert_eq!(grm.prods[grm.rules["B"][1]].action, None);
+    }
+
+    #[test]
+    fn test_programs() {
+        let grm = parse(
+            YaccKind::Original,
+            &"
+         %%
+         A: 'a';
+         %%
+         fn foo() {}"
+        ).unwrap();
+        assert_eq!(grm.programs, Some("fn foo() {}".to_string()));
     }
 
     #[test]

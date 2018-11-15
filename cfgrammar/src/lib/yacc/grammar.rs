@@ -101,7 +101,11 @@ pub struct YaccGrammar<StorageT = u32> {
     prod_precs: Vec<Option<Precedence>>,
     /// The index of the rule added for implicit tokens, if they were specified; otherwise
     /// `None`.
-    implicit_rule: Option<RIdx<StorageT>>
+    implicit_rule: Option<RIdx<StorageT>>,
+    /// User defined Rust programs which can be called within actions
+    actions: Vec<Option<String>>,
+    programs: Option<String>,
+    actiontype: Option<String>
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -224,6 +228,7 @@ where
         let mut prods = vec![None; ast.prods.len()];
         let mut prod_precs: Vec<Option<Option<Precedence>>> = vec![None; ast.prods.len()];
         let mut prods_rules = vec![None; ast.prods.len()];
+        let mut actions = vec![None; ast.prods.len()];
         for astrulename in &rule_names {
             let ridx = rule_map[astrulename];
             if astrulename == &start_rule {
@@ -245,6 +250,7 @@ where
                 prods.push(Some(start_prod));
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(ridx));
+                actions.push(None);
                 continue;
             } else if implicit_start_rule
                 .as_ref()
@@ -313,6 +319,10 @@ where
                 prods[prod_idx] = Some(prod);
                 prod_precs[prod_idx] = Some(prec);
                 prods_rules[prod_idx] = Some(ridx);
+                match astprod.action {
+                    Some(ref s) => actions[prod_idx] = Some(String::from(s.clone())),
+                    None => ()
+                };
             }
         }
 
@@ -331,8 +341,21 @@ where
             prods_rules: prods_rules.into_iter().map(|x| x.unwrap()).collect(),
             prods: prods.into_iter().map(|x| x.unwrap()).collect(),
             prod_precs: prod_precs.into_iter().map(|x| x.unwrap()).collect(),
-            implicit_rule: implicit_rule.and_then(|x| Some(rule_map[&x]))
+            implicit_rule: implicit_rule.and_then(|x| Some(rule_map[&x])),
+            actions,
+            programs: ast.programs,
+            actiontype: ast.actiontype
         })
+    }
+
+    /// Get the programs part of the grammar
+    pub fn programs(&self) -> &Option<String> {
+        &self.programs
+    }
+
+    /// Get the action return type as defined by the user
+    pub fn actiontype(&self) -> &Option<String> {
+        &self.actiontype
     }
 
     /// How many productions does this grammar have?
@@ -352,6 +375,11 @@ where
     /// Get the sequence of symbols for production `pidx`. Panics if `pidx` doesn't exist.
     pub fn prod(&self, pidx: PIdx<StorageT>) -> &[Symbol<StorageT>] {
         &self.prods[usize::from(pidx)]
+    }
+
+    /// Get the action for production `pidx`. Panics if `pidx` doesn't exist.
+    pub fn action(&self, pidx: PIdx<StorageT>) -> &Option<String> {
+        &self.actions[usize::from(pidx)]
     }
 
     /// How many symbols does production `pidx` have? Panics if `pidx` doesn't exist.

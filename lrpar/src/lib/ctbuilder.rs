@@ -45,20 +45,32 @@ use std::{
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
+use cfgrammar::Symbol;
 use filetime::FileTime;
 use lrtable::{from_yacc, Minimiser, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use serde::{Deserialize, Serialize};
 use typename::TypeName;
+use regex::Regex;
 
 use RecoveryKind;
 
 const YACC_SUFFIX: &str = "_y";
+const ACTION_PREFIX: &str = "__gt_";
 
 const GRM_FILE_EXT: &str = "grm";
 const RUST_FILE_EXT: &str = "rs";
 const SGRAPH_FILE_EXT: &str = "sgraph";
 const STABLE_FILE_EXT: &str = "stable";
+
+
+/// By default `CTParserBuilder` generates a parse tree which is returned after a successful parse.
+/// If the user wants to supply custom actions to be executed during reductions and return their
+/// results, they may change `ActionKind` to `CustomAction` instead.
+pub enum ActionKind {
+    CustomAction,
+    GenericParseTree
+}
 
 /// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
@@ -66,7 +78,8 @@ pub struct CTParserBuilder<StorageT = u32> {
     // Anything stored in here almost certainly needs to be included as part of the rebuild_cache
     // function below so that, if it's changed, the grammar is rebuilt.
     recoverer: RecoveryKind,
-    phantom: PhantomData<StorageT>
+    phantom: PhantomData<StorageT>,
+    actionkind: ActionKind
 }
 
 impl<StorageT> CTParserBuilder<StorageT>
@@ -96,7 +109,8 @@ where
     pub fn new() -> Self {
         CTParserBuilder {
             recoverer: RecoveryKind::MF,
-            phantom: PhantomData
+            phantom: PhantomData,
+            actionkind: ActionKind::GenericParseTree
         }
     }
 
@@ -128,6 +142,11 @@ where
         let mut outd = PathBuf::new();
         outd.push(var("OUT_DIR").unwrap());
         self.process_file(inp, outd)
+    }
+
+    pub fn action_kind(mut self, ak: ActionKind) -> Self {
+        self.actionkind = ak;
+        self
     }
 
     /// Statically compile the Yacc file `inp` into Rust, placing the output file(s) into
@@ -217,16 +236,44 @@ where
         let mut outs = String::new();
         // Header
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
-        outs.push_str(&format!("mod {}_y {{", mod_name));
-        outs.push_str(&format!(
-            "use lrpar::{{Lexer, Node, LexParseError, RecoveryKind, RTParserBuilder}};
-use lrpar::ctbuilder::_reconstitute;
+        let actiontype = match grm.actiontype() {
+            Some(t) => t,
+            None => {
+                match self.actionkind {
+                    ActionKind::CustomAction => {
+                        panic!("Action return type not defined!")
+                    }
+                    ActionKind::GenericParseTree => {
+                        "" // Dummy string that will never be used
+                    }
+                }
+            }
+        };
+        outs.push_str(&format!("mod {}_y {{\n", mod_name));
+        outs.push_str("    use lrpar::{{Lexer, Node, LexParseError, RecoveryKind, RTParserBuilder}};
+    use lrpar::ctbuilder::_reconstitute;",
+        );
 
-pub fn parse(lexer: &mut Lexer<{storaget}>)
+        match self.actionkind {
+            ActionKind::CustomAction => {
+                outs.push_str(&format!("use lrpar::parser::AStackType;
+
+    pub fn parse(lexer: &mut Lexer<{storaget}>)
+          -> Result<{actiont}, LexParseError<{storaget}>>
+    {{",
+                storaget = StorageT::type_name(),
+                actiont = actiontype
+                ));
+            }
+            ActionKind::GenericParseTree => {
+                outs.push_str(&format!("
+    pub fn parse(lexer: &mut Lexer<{storaget}>)
           -> Result<Node<{storaget}>, LexParseError<{storaget}>>
-{{",
-            storaget = StorageT::type_name()
-        ));
+    {{",
+                storaget = StorageT::type_name()
+                ));
+            }
+        };
 
         // grm, sgraph, stable
         let recoverer = match self.recoverer {
@@ -235,34 +282,113 @@ pub fn parse(lexer: &mut Lexer<{storaget}>)
             RecoveryKind::Panic => "Panic",
             RecoveryKind::None => "None"
         };
-        outs.push_str(&format!(
-            "
-    let (grm, sgraph, stable) = _reconstitute(include_bytes!(\"{}\"),
-                                              include_bytes!(\"{}\"),
-                                              include_bytes!(\"{}\"));
-    RTParserBuilder::new(&grm, &sgraph, &stable)
-        .recoverer(RecoveryKind::{})
-        .parse(lexer)
-",
-            out_grm.to_str().unwrap(),
-            out_sgraph.to_str().unwrap(),
-            out_stable.to_str().unwrap(),
-            recoverer
-        ));
 
-        outs.push_str("}\n");
+        outs.push_str(&format!("
+        let (grm, sgraph, stable) = _reconstitute(include_bytes!(\"{}\"),
+                                                  include_bytes!(\"{}\"),
+                                                  include_bytes!(\"{}\"));",
+                out_grm.to_str().unwrap(),
+                out_sgraph.to_str().unwrap(),
+                out_stable.to_str().unwrap()));
+
+        match self.actionkind {
+            ActionKind::CustomAction => {
+                // action function references
+                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(&str, &Vec<AStackType<{actiont}, {}>>) -> {actiont}>> = Vec::new();\n",
+                    StorageT::type_name(),
+                    actiont=actiontype)
+                );
+                for pidx in grm.iter_pidxs() {
+                    if grm.action(pidx).is_some() {
+                        outs.push_str(&format!("        actions.push(Some(&{prefix}action_{}));\n", usize::from(pidx), prefix=ACTION_PREFIX))
+                    }
+                    else {
+                        outs.push_str("        actions.push(None);")
+                    };
+                }
+                outs.push_str(&format!("
+        let s = lexer.input().to_string();
+        RTParserBuilder::new(&grm, &sgraph, &stable)
+            .recoverer(RecoveryKind::{})
+            .parse2(lexer, actions, &s)\n",
+                recoverer,
+                ));
+            },
+            ActionKind::GenericParseTree => {
+                outs.push_str(&format!("
+        RTParserBuilder::new(&grm, &sgraph, &stable)
+            .recoverer(RecoveryKind::{})
+            .parse(lexer)\n",
+                recoverer
+                ));
+            }
+        };
+
+        outs.push_str("    }\n\n");
 
         // The rule constants
         for ridx in grm.iter_rules() {
             if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
                 outs.push_str(&format!(
-                    "#[allow(dead_code)]\npub const R_{}: {} = {:?};\n",
+                    "    #[allow(dead_code)]\n    pub const R_{}: {} = {:?};\n",
                     grm.rule_name(ridx).to_ascii_uppercase(),
                     StorageT::type_name(),
                     usize::from(ridx)
                 ));
             }
         }
+
+        match self.actionkind {
+            ActionKind::CustomAction => {
+                let re: Regex = { Regex::new(r"\$([0-9]+)").unwrap() };
+                if let Some(s) = grm.programs() {
+                    outs.push_str("\n/* User code */\n\n");
+                    outs.push_str(s);
+                }
+
+                // Convert actions to functions
+                outs.push_str("\n/* Converted actions */\n\n");
+                for pidx in grm.iter_pidxs() {
+                    if let Some(s) = grm.action(pidx) {
+                        // Iterate over all $-arguments and replace them with their respective
+                        // element from the argument vector (e.g. $1 is replaced by args[0]). At
+                        // the same time extract &str from tokens and actiontype from nonterminals.
+                        outs.push_str(&format!("fn {prefix}action_{}({prefix}input: &str, {prefix}args: &Vec<AStackType<{actiont}, {}>>) -> {actiont} {{\n",
+                            usize::from(pidx),
+                            StorageT::type_name(),
+                            prefix=ACTION_PREFIX,
+                            actiont=actiontype));
+                        for m in re.find_iter(s) {
+                            let num = match &s[m.start()+1..m.end()].parse::<usize>() {
+                                Ok(val) => val - 1,
+                                Err(_) => unreachable!()
+                            };
+                            outs.push_str(&format!("    let {prefix}arg_{} = match {prefix}args[{}] {{", num+1, num, prefix=ACTION_PREFIX));
+                            match grm.prod(pidx)[num] {
+                                Symbol::Rule(_) => {
+                                    outs.push_str("
+        AStackType::ActionType(v) => v,
+        AStackType::Lexeme(_) => unreachable!()
+    };
+")
+                                },
+                                Symbol::Token(_) => {
+                                    outs.push_str(&format!("
+        AStackType::ActionType(_) => unreachable!(),
+        AStackType::Lexeme(l) => &{prefix}input[l.start()..l.end()]
+    }};
+", prefix=ACTION_PREFIX))
+                                }
+                            };
+                        }
+                        let ns = re.replace_all(s, format!("{prefix}arg_$1", prefix=ACTION_PREFIX).as_str());
+                        outs.push_str(&format!("    {}", &ns, ));
+                        outs.push_str("\n}\n\n");
+                    }
+                }
+            },
+            ActionKind::GenericParseTree => ()
+        };
 
         outs.push_str("}\n\n");
 
@@ -280,7 +406,7 @@ pub fn parse(lexer: &mut Lexer<{storaget}>)
         // We don't need to be particularly clever here: we just need to record the various things
         // that could change between builds.
         let mut cache = String::new();
-        cache.push_str(" \n/* CACHE INFORMATION\n");
+        cache.push_str("\n/* CACHE INFORMATION\n");
 
         // Record the time that this version of lrpar was built. If the source code changes and
         // rustc forces a recompile, this will change this value, causing anything which depends on
