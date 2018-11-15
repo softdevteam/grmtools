@@ -156,7 +156,7 @@ where
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexemes: &[Lexeme<StorageT>],
-        actions: Vec<Option<&Fn(&str, Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
+        actions: Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
         input: &str,
     ) -> Result<ActionT, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
     where
@@ -210,10 +210,11 @@ where
         pstack: &mut PStack,
         tstack: &mut TStack<StorageT>,
         errors: &mut Vec<ParseError<StorageT>>,
-        mut actiondata: Option<(&Vec<Option<&Fn(&str, Vec<AStackType<ActionT, StorageT>>) -> ActionT>>, &mut Vec<AStackType<ActionT, StorageT>>, &str)>
+        mut actiondata: Option<(&Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>, &mut Vec<AStackType<ActionT, StorageT>>, &str)>
     ) -> bool {
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
+        let mut action_vec: Vec<AStackType<ActionT, StorageT>> = Vec::new();
         loop {
             let stidx = *pstack.last().unwrap();
             let la_tidx = self.next_tidx(laidx);
@@ -231,9 +232,10 @@ where
 
                     // Process actions
                     if let Some((actions, ref mut astack, input)) = actiondata {
-                            let args: Vec<AStackType<ActionT, StorageT>> = astack.drain(pop_idx -1..).collect();
+                            action_vec.clear();
+                            action_vec.extend(astack.drain(pop_idx -1..));
                             if let Some(f) = actions[usize::from(pidx)] {
-                                astack.push(AStackType::ActionType(f(input, args)));
+                                astack.push(AStackType::ActionType(f(input, &action_vec)));
                             }
                     }
                 }
@@ -577,7 +579,7 @@ where
     pub fn parse2<ActionT>(
         &self,
         lexer: &mut Lexer<StorageT>,
-        actions: Vec<Option<&Fn(&str, Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
+        actions: Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
         input: &str,
     ) -> Result<ActionT, LexParseError<StorageT>> {
         Ok(Parser::parse2(

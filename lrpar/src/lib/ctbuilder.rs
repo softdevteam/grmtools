@@ -294,7 +294,7 @@ where
         match self.actionkind {
             ActionKind::CustomAction => {
                 // action function references
-                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(&str, Vec<AStackType<{actiont}, {}>>) -> {actiont}>> = Vec::new();\n",
+                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(&str, &Vec<AStackType<{actiont}, {}>>) -> {actiont}>> = Vec::new();\n",
                     StorageT::type_name(),
                     actiont=actiontype)
                 );
@@ -353,7 +353,7 @@ where
                         // Iterate over all $-arguments and replace them with their respective
                         // element from the argument vector (e.g. $1 is replaced by args[0]). At
                         // the same time extract &str from tokens and actiontype from nonterminals.
-                        outs.push_str(&format!("fn {prefix}action_{}({prefix}input: &str, {prefix}args: Vec<AStackType<{actiont}, {}>>) -> {actiont} {{\n",
+                        outs.push_str(&format!("fn {prefix}action_{}({prefix}input: &str, {prefix}args: &Vec<AStackType<{actiont}, {}>>) -> {actiont} {{\n",
                             usize::from(pidx),
                             StorageT::type_name(),
                             prefix=ACTION_PREFIX,
