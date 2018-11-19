@@ -250,7 +250,7 @@ where
             }
         };
         outs.push_str(&format!("mod {}_y {{\n", mod_name));
-        outs.push_str("    use lrpar::{{Lexer, Node, LexParseError, RecoveryKind, RTParserBuilder}};
+        outs.push_str("    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
     use lrpar::ctbuilder::_reconstitute;",
         );
 
@@ -266,7 +266,8 @@ where
                 ));
             }
             ActionKind::GenericParseTree => {
-                outs.push_str(&format!("
+                outs.push_str(&format!("use lrpar::Node;
+
     pub fn parse(lexer: &mut Lexer<{storaget}>)
           -> Result<Node<{storaget}>, LexParseError<{storaget}>>
     {{",
