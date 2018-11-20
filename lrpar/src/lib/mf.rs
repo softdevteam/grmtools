@@ -599,7 +599,6 @@ where
 {
     for r in repairs.iter() {
         match *r {
-            ParseRepair::InsertSeq(_) => unreachable!(),
             ParseRepair::Insert(tidx) => {
                 let next_lexeme = parser.next_lexeme(laidx);
                 let new_lexeme = Lexeme::new(
@@ -879,23 +878,6 @@ mod test {
         let mut out = vec![];
         for r in repairs.iter() {
             match *r {
-                ParseRepair::InsertSeq(ref seqs) => {
-                    let mut s = String::new();
-                    s.push_str("Insert {");
-                    for (i, seq) in seqs.iter().enumerate() {
-                        if i > 0 {
-                            s.push_str(", ");
-                        }
-                        for (j, tidx) in seq.iter().enumerate() {
-                            if j > 0 {
-                                s.push_str(" ");
-                            }
-                            s.push_str(&format!("\"{}\"", grm.token_name(*tidx).unwrap()));
-                        }
-                    }
-                    s.push_str("}");
-                    out.push(s);
-                }
                 ParseRepair::Insert(token_idx) => {
                     out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap()))
                 }

@@ -601,8 +601,6 @@ where
 pub enum ParseRepair<StorageT> {
     /// Insert a `Symbol::Token`.
     Insert(TIdx<StorageT>),
-    /// Insert one of the sequences of `Symbol::Token`s.
-    InsertSeq(Vec<Vec<TIdx<StorageT>>>),
     /// Delete a symbol.
     Delete(Lexeme<StorageT>),
     /// Shift a symbol.
