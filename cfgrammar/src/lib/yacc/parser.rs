@@ -183,7 +183,17 @@ impl YaccParser {
                 if self.ast.epp.contains_key(&n) {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateEPP, i));
                 }
-                i = self.parse_ws(j, false)?;
+                i = j;
+                // We can't use the normal whitespace skipping function here, because users might
+                // want to write something that looks like a comment. This is a bit evil, but
+                // the only other choice is to force them to escape everything to death...
+                while i < self.src.len() {
+                    let c = self.src[i..].chars().nth(0).unwrap();
+                    match c {
+                        ' ' | '\t' => i += c.len_utf8(),
+                        _ => break
+                    }
+                }
                 let (j, v) = self.parse_to_eol(i)?;
                 self.ast.epp.insert(n, v);
                 i = self.parse_ws(j, true)?;
@@ -1122,26 +1132,6 @@ x".to_string();
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateEPP,
                 line: 3,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
-        }
-    }
-
-    #[test]
-    fn test_epp_eol() {
-        match parse(
-            YaccKind::Eco,
-            &"
-          %epp A
-          a
-          %%
-          "
-        ) {
-            Ok(_) => panic!(),
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::ReachedEOL,
-                line: 2,
                 ..
             }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
