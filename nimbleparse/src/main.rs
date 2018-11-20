@@ -216,9 +216,9 @@ fn main() {
                             ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
                                 if let ParseRepair::Delete(_) = *r {
-                                    out.push(format!("Delete \"{}\"", t));
+                                    out.push(format!("Delete {}", t));
                                 } else {
-                                    out.push(format!("Shift \"{}\"", t));
+                                    out.push(format!("Shift {}", t));
                                 }
                             }
                         }
