@@ -81,6 +81,12 @@ pub struct YaccGrammar<StorageT = u32> {
     token_names: Vec<Option<String>>,
     /// A mapping from `TIdx` -> `Option<Precedence>`
     token_precs: Vec<Option<Precedence>>,
+    /// A mapping from `TIdx` -> `Option<String>` for the %epp declaration, giving pretty-printed
+    /// versions of token names that can be presented to the user in case of an error. Every
+    /// user-specified token will have a name that can be presented to the user (if a token doesn't
+    /// have an %epp entry, the token name will be used in lieu), but tokens inserted by cfgrammar
+    /// (e.g. the EOF token) won't.
+    token_epp: Vec<Option<String>>,
     /// How many tokens does this grammar have?
     tokens_len: TIdx<StorageT>,
     /// The offset of the EOF token.
@@ -208,13 +214,16 @@ where
 
         let mut token_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut token_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
+        let mut token_epp: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
         for k in &ast.tokens {
             token_names.push(Some(k.clone()));
             token_precs.push(ast.precs.get(k).cloned());
+            token_epp.push(Some(ast.epp.get(k).unwrap_or(k).clone()));
         }
         let eof_token_idx = TIdx(token_names.len().as_());
         token_names.push(None);
         token_precs.push(None);
+        token_epp.push(None);
         let mut token_map = HashMap::<String, TIdx<StorageT>>::new();
         for (i, v) in token_names.iter().enumerate() {
             if let Some(n) = v.as_ref() {
@@ -335,6 +344,7 @@ where
             eof_token_idx,
             token_names,
             token_precs,
+            token_epp,
             prods_len: PIdx(prods.len().as_()),
             start_prod: rules_prods[usize::from(rule_map[&start_rule])][0],
             rules_prods,
@@ -480,6 +490,14 @@ where
     /// Panics if `tidx` doesn't exist.
     pub fn token_precedence(&self, tidx: TIdx<StorageT>) -> Option<Precedence> {
         self.token_precs[usize::from(tidx)]
+    }
+
+    /// Return the %epp entry for token `tidx` (where `None` indicates "the token has no
+    /// pretty-printed value"). Panics if `tidx` doesn't exist.
+    pub fn token_epp(&self, tidx: TIdx<StorageT>) -> Option<&str> {
+        self.token_epp[usize::from(tidx)]
+            .as_ref()
+            .and_then(|x| Some(x.as_str()))
     }
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid

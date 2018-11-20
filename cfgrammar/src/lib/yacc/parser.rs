@@ -59,7 +59,8 @@ pub enum YaccParserErrorKind {
     DuplicatePrecedence,
     PrecNotFollowedByToken,
     DuplicateImplicitTokensDeclaration,
-    DuplicateStartDeclaration
+    DuplicateStartDeclaration,
+    DuplicateEPP
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -89,7 +90,8 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration => {
                 "Duplicate %implicit_tokens declaration"
             }
-            YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration"
+            YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
+            YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token"
         };
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -170,6 +172,18 @@ impl YaccParser {
                 i = self.parse_ws(j)?;
                 let (j, n) = self.parse_name(i)?;
                 self.ast.start = Some(n);
+                i = self.parse_ws(j)?;
+                continue;
+            }
+            if let Some(j) = self.lookahead_is("%epp", i) {
+                i = self.parse_ws(j)?;
+                let (j, n) = self.parse_token(i)?;
+                if self.ast.epp.contains_key(&n) {
+                    return Err(self.mk_error(YaccParserErrorKind::DuplicateEPP, i));
+                }
+                i = self.parse_ws(j)?;
+                let (j, v) = self.parse_to_eol(i)?;
+                self.ast.epp.insert(n, v);
                 i = self.parse_ws(j)?;
                 continue;
             }
@@ -376,6 +390,19 @@ impl YaccParser {
         else {
             Ok(i)
         }
+    }
+
+    /// Parse from `i` until the end of line (or end of file if that comes first).
+    fn parse_to_eol(&mut self, i: usize) -> YaccResult<(usize, String)> {
+        let mut j = i;
+        while j < self.src.len() {
+            let c = self.src[j..].chars().nth(0).unwrap();
+            match c {
+                '\n' | '\r' => break,
+                _ => j += c.len_utf8()
+            }
+        }
+        Ok((j, self.src[i..j].to_string()))
     }
 
     fn parse_ws(&mut self, mut i: usize) -> YaccResult<usize> {
@@ -1033,6 +1060,40 @@ A:
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
+                line: 3,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_parse_epp() {
+        let ast = parse(
+            YaccKind::Eco,
+            &"
+          %epp A a
+          %%
+          R: 'A';
+          "
+        ).unwrap();
+        assert_eq!(ast.epp.len(), 1);
+        assert_eq!(ast.epp["A"], "a");
+    }
+
+    #[test]
+    fn test_duplicate_epp() {
+        match parse(
+            YaccKind::Eco,
+            &"
+          %epp A a
+          %epp A a
+          %%
+          "
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateEPP,
                 line: 3,
                 ..
             }) => (),

@@ -51,6 +51,8 @@ pub struct GrammarAST {
     pub tokens: IndexSet<String>,
     pub precs: HashMap<String, Precedence>,
     pub implicit_tokens: Option<HashSet<String>>,
+    // Error pretty-printers
+    pub epp: HashMap<String, String>,
     pub programs: Option<String>,
     pub actiontype: Option<String>
 }
@@ -81,7 +83,8 @@ pub enum GrammarValidationErrorKind {
     InvalidStartRule,
     UnknownRuleRef,
     UnknownToken,
-    NoPrecForToken
+    NoPrecForToken,
+    UnknownEPP
 }
 
 /// `GrammarAST` validation errors return an instance of this struct.
@@ -114,7 +117,10 @@ impl fmt::Display for GrammarValidationError {
                 f,
                 "Token '{}' used in %prec has no precedence attached",
                 self.sym.as_ref().unwrap()
-            )
+            ),
+            GrammarValidationErrorKind::UnknownEPP => {
+                write!(f, "Unknown token '{}' in %epp declaration", self.sym.as_ref().unwrap())
+            }
         }
     }
 }
@@ -138,6 +144,7 @@ impl GrammarAST {
             tokens: IndexSet::new(),
             precs: HashMap::new(),
             implicit_tokens: None,
+            epp: HashMap::new(),
             programs: None,
             actiontype: None
         }
@@ -173,6 +180,7 @@ impl GrammarAST {
     ///   2) Every rule reference references a rule in the grammar
     ///   3) Every token reference references a declared token
     ///   4) If a production has a precedence token, then it references a declared token
+    ///   5) Every token declared with %epp matches a known token
     /// If the validation succeeds, None is returned.
     pub(crate) fn complete_and_validate(&mut self) -> Result<(), GrammarValidationError> {
         match self.start {
@@ -229,6 +237,20 @@ impl GrammarAST {
                     }
                 }
             }
+        }
+        for k in self.epp.keys() {
+            if self.tokens.contains(k) {
+                continue;
+            }
+            if let Some(ref it) = self.implicit_tokens {
+                if it.contains(k) {
+                    continue;
+                }
+            }
+            return Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::UnknownEPP,
+                sym: Some(Symbol::Token(k.clone()))
+            });
         }
         Ok(())
     }
@@ -346,6 +368,21 @@ mod test {
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
                 kind: GrammarValidationErrorKind::UnknownRuleRef,
+                ..
+            }) => (),
+            _ => panic!("Validation error")
+        }
+    }
+
+    #[test]
+    fn test_invalid_epp() {
+        let mut grm = GrammarAST::new();
+        grm.start = Some("A".to_string());
+        grm.add_prod("A".to_string(), vec![], None, None);
+        grm.epp.insert("k".to_owned(), "v".to_owned());
+        match grm.complete_and_validate() {
+            Err(GrammarValidationError {
+                kind: GrammarValidationErrorKind::UnknownEPP,
                 ..
             }) => (),
             _ => panic!("Validation error")

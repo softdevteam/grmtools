@@ -222,14 +222,14 @@ fn main() {
                                         if j > 0 {
                                             s.push_str(" ");
                                         }
-                                        s.push_str(grm.token_name(*tidx).unwrap());
+                                        s.push_str(grm.token_epp(*tidx).unwrap());
                                     }
                                 }
                                 s.push_str("}");
                                 out.push(s);
                             }
                             ParseRepair::Insert(token_idx) => out
-                                .push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap())),
+                                .push(format!("Insert {}", grm.token_epp(token_idx).unwrap())),
                             ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
                                 if let ParseRepair::Delete(_) = *r {
