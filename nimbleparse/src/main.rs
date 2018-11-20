@@ -206,8 +206,9 @@ fn main() {
                     println!("Error at line {} col {}. No repairs found.", line, col);
                     continue;
                 }
-                println!("Error at line {} col {}. Repairs found:", line, col);
-                for repair in e.repairs() {
+                println!("Error at line {} col {}. Repair sequences found:", line, col);
+                let repairs_len = e.repairs().len();
+                for (i, repair) in e.repairs().iter().enumerate() {
                     let mut out = vec![];
                     for r in repair.iter() {
                         match *r {
@@ -223,7 +224,9 @@ fn main() {
                             }
                         }
                     }
-                    println!("  {}", out.join(", "));
+                    let padding = ((repairs_len as f64).log10() as usize) - (((i + 1) as f64).log10() as
+                                                                             usize) + 1;
+                    println!("  {}{}: {}", " ".repeat(padding), i + 1, out.join(", "));
                 }
             }
             process::exit(1);
