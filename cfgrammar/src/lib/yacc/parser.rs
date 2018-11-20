@@ -345,6 +345,10 @@ impl YaccParser {
                     break;
                 }
                 '}' => -1,
+                '\n' | '\r' => {
+                    self.newlines.push(j + 1);
+                    0
+                },
                 _ => 0
             };
             j += ch.len_utf8();
@@ -1100,6 +1104,25 @@ A:
         ).unwrap();
         assert_eq!(grm.programs, Some("fn foo() {}".to_string()));
     }
+
+    #[test]
+    fn test_actions_with_newlines() {
+        match parse(
+            YaccKind::Original,
+            &"
+         %%
+         A: 'a' { foo();
+                  bar(); }
+         ;
+         B: b';") {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                line: 6,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+     }
 
     #[test]
     fn test_comments() {
