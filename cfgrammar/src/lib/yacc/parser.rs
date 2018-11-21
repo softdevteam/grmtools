@@ -60,7 +60,8 @@ pub enum YaccParserErrorKind {
     PrecNotFollowedByToken,
     DuplicateImplicitTokensDeclaration,
     DuplicateStartDeclaration,
-    DuplicateEPP
+    DuplicateEPP,
+    ReachedEOL
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -91,7 +92,8 @@ impl fmt::Display for YaccParserError {
                 "Duplicate %implicit_tokens declaration"
             }
             YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
-            YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token"
+            YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
+            YaccParserErrorKind::ReachedEOL => "Reached end of line without finding expected content"
         };
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -135,33 +137,33 @@ impl YaccParser {
     }
 
     fn parse_declarations(&mut self, mut i: usize) -> YaccResult<usize> {
-        i = self.parse_ws(i)?;
+        i = self.parse_ws(i, true)?;
         let mut prec_level = 0;
         while i < self.src.len() {
             if self.lookahead_is("%%", i).is_some() {
                 return Ok(i);
             }
             if let Some(j) = self.lookahead_is("%token", i) {
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, false)?;
                 while i < self.src.len() {
                     if self.lookahead_is("%", i).is_some() {
                         break;
                     }
                     let (j, n) = self.parse_token(i)?;
                     self.ast.tokens.insert(n);
-                    i = self.parse_ws(j)?;
+                    i = self.parse_ws(j, true)?;
                 }
                 continue;
             }
             if let Some(j) = self.lookahead_is("%type", i) {
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, false)?;
                 while i < self.src.len() {
                     if self.lookahead_is("%", i).is_some() {
                         break;
                     }
                     let (j, n) = self.parse_name(i)?;
                     self.ast.actiontype = Some(n);
-                    i = self.parse_ws(j)?;
+                    i = self.parse_ws(j, true)?;
                 }
                 continue;
             }
@@ -169,22 +171,32 @@ impl YaccParser {
                 if self.ast.start.is_some() {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateStartDeclaration, i));
                 }
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, false)?;
                 let (j, n) = self.parse_name(i)?;
                 self.ast.start = Some(n);
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, true)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%epp", i) {
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, false)?;
                 let (j, n) = self.parse_token(i)?;
                 if self.ast.epp.contains_key(&n) {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateEPP, i));
                 }
-                i = self.parse_ws(j)?;
+                i = j;
+                // We can't use the normal whitespace skipping function here, because users might
+                // want to write something that looks like a comment. This is a bit evil, but
+                // the only other choice is to force them to escape everything to death...
+                while i < self.src.len() {
+                    let c = self.src[i..].chars().nth(0).unwrap();
+                    match c {
+                        ' ' | '\t' => i += c.len_utf8(),
+                        _ => break
+                    }
+                }
                 let (j, v) = self.parse_to_eol(i)?;
                 self.ast.epp.insert(n, v);
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, true)?;
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
@@ -194,15 +206,13 @@ impl YaccParser {
                             .mk_error(YaccParserErrorKind::DuplicateImplicitTokensDeclaration, i));
                     }
                     let mut implicit_tokens = HashSet::new();
-                    i = self.parse_ws(j)?;
-                    while j < self.src.len() {
-                        if self.lookahead_is("%", i).is_some() {
-                            break;
-                        }
+                    i = self.parse_ws(j, false)?;
+                    let num_newlines = self.newlines.len();
+                    while j < self.src.len() && self.newlines.len() == num_newlines {
                         let (j, n) = self.parse_token(i)?;
                         self.ast.tokens.insert(n.clone());
                         implicit_tokens.insert(n);
-                        i = self.parse_ws(j)?;
+                        i = self.parse_ws(j, true)?;
                     }
                     self.ast.implicit_tokens = Some(implicit_tokens);
                     continue;
@@ -224,11 +234,9 @@ impl YaccParser {
                     return Err(self.mk_error(YaccParserErrorKind::UnknownDeclaration, i));
                 }
 
-                i = self.parse_ws(k)?;
-                while i < self.src.len() {
-                    if self.lookahead_is("%", i).is_some() {
-                        break;
-                    }
+                i = self.parse_ws(k, false)?;
+                let num_newlines = self.newlines.len();
+                while i < self.src.len() && num_newlines == self.newlines.len() {
                     let (j, n) = self.parse_token(i)?;
                     if self.ast.precs.contains_key(&n) {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
@@ -238,7 +246,7 @@ impl YaccParser {
                         kind
                     };
                     self.ast.precs.insert(n, prec);
-                    i = self.parse_ws(j)?;
+                    i = self.parse_ws(j, true)?;
                 }
                 prec_level += 1;
             }
@@ -249,13 +257,13 @@ impl YaccParser {
     fn parse_rules(&mut self, mut i: usize) -> YaccResult<usize> {
         // self.parse_declarations should have left the input at '%%'
         i = self.lookahead_is("%%", i).unwrap();
-        i = self.parse_ws(i)?;
+        i = self.parse_ws(i, true)?;
         while i < self.src.len() {
             if self.lookahead_is("%%", i).is_some() {
                 break;
             }
             i = self.parse_rule(i)?;
-            i = self.parse_ws(i)?;
+            i = self.parse_ws(i, true)?;
         }
         Ok(i)
     }
@@ -265,7 +273,7 @@ impl YaccParser {
         if self.ast.start.is_none() {
             self.ast.start = Some(rn.clone());
         }
-        i = self.parse_ws(j)?;
+        i = self.parse_ws(j, true)?;
         match self.lookahead_is(":", i) {
             Some(j) => i = j,
             None => {
@@ -275,14 +283,14 @@ impl YaccParser {
         let mut syms = Vec::new();
         let mut prec = None;
         let mut action = None;
-        i = self.parse_ws(i)?;
+        i = self.parse_ws(i, true)?;
         while i < self.src.len() {
             if let Some(j) = self.lookahead_is("|", i) {
                 self.ast.add_prod(rn.clone(), syms, prec, action);
                 syms = Vec::new();
                 prec = None;
                 action = None;
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, true)?;
                 continue;
             } else if let Some(j) = self.lookahead_is(";", i) {
                 self.ast.add_prod(rn.clone(), syms, prec, action);
@@ -291,11 +299,11 @@ impl YaccParser {
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
                 let (j, sym) = self.parse_token(i)?;
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, true)?;
                 self.ast.tokens.insert(sym.clone());
                 syms.push(Symbol::Token(sym));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
-                i = self.parse_ws(j)?;
+                i = self.parse_ws(j, true)?;
                 let (k, sym) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
                     prec = Some(sym);
@@ -316,7 +324,7 @@ impl YaccParser {
                 }
                 i = j;
             }
-            i = self.parse_ws(i)?;
+            i = self.parse_ws(i, true)?;
         }
         Err(self.mk_error(YaccParserErrorKind::IncompleteRule, i))
     }
@@ -377,7 +385,7 @@ impl YaccParser {
 
     fn parse_programs(&mut self, mut i: usize) -> YaccResult<usize> {
         if let Some(j) = self.lookahead_is("%%", i) {
-            i = self.parse_ws(j)?;
+            i = self.parse_ws(j, true)?;
             if i == self.src.len() {
                 Ok(i)
             } else {
@@ -405,12 +413,19 @@ impl YaccParser {
         Ok((j, self.src[i..j].to_string()))
     }
 
-    fn parse_ws(&mut self, mut i: usize) -> YaccResult<usize> {
+    /// Skip whitespace from `i` onwards. If `inc_newlines` is `false`, will return `Err` if a
+    /// newline is encountered; otherwise newlines are consumed and skipped.
+    fn parse_ws(&mut self, mut i: usize, inc_newlines: bool) -> YaccResult<usize> {
         while i < self.src.len() {
             let c = self.src[i..].chars().nth(0).unwrap();
             match c {
                 ' ' | '\t' => i += c.len_utf8(),
                 '\n' | '\r' => {
+                    if !inc_newlines {
+                        return Err(
+                            self.mk_error(YaccParserErrorKind::ReachedEOL, i)
+                        );
+                    }
                     self.newlines.push(i + 1);
                     i += c.len_utf8();
                 }
@@ -440,7 +455,14 @@ impl YaccParser {
                                     let c = self.src[k..].chars().nth(0).unwrap();
                                     k += c.len_utf8();
                                     match c {
-                                        '\n' | '\r' => self.newlines.push(i + 1),
+                                        '\n' | '\r' => {
+                                            if !inc_newlines {
+                                                return Err(
+                                                    self.mk_error(YaccParserErrorKind::ReachedEOL, i)
+                                                );
+                                            }
+                                            self.newlines.push(i + 1);
+                                        },
                                         '*' => (),
                                         _ => continue
                                     }
@@ -857,6 +879,21 @@ A:
                 kind: YaccParserErrorKind::PrematureEnd,
                 line: 1,
                 col: 8
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_same_line() {
+        let src = "%token
+x".to_string();
+        match parse(YaccKind::Original, &src) {
+            Ok(_) => panic!("Incomplete rule parsed"),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::ReachedEOL,
+                line: 1,
+                col: 7
             }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
