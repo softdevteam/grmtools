@@ -3,6 +3,4 @@ rust: nightly
 script:
     - cargo test --all
     - cd $TRAVIS_BUILD_DIR/cfgrammar && cargo test --features "serde"
-    - cd $TRAVIS_BUILD_DIR/lrlex/examples/calc && cargo build
-    - cd $TRAVIS_BUILD_DIR/lrpar/examples/calc && cargo build
     - cd $TRAVIS_BUILD_DIR/lrtable && cargo test --features "serde"
