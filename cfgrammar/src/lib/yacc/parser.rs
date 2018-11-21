@@ -61,7 +61,8 @@ pub enum YaccParserErrorKind {
     DuplicateImplicitTokensDeclaration,
     DuplicateStartDeclaration,
     DuplicateEPP,
-    ReachedEOL
+    ReachedEOL,
+    InvalidString
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -93,7 +94,8 @@ impl fmt::Display for YaccParserError {
             }
             YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
             YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
-            YaccParserErrorKind::ReachedEOL => "Reached end of line without finding expected content"
+            YaccParserErrorKind::ReachedEOL => "Reached end of line without finding expected content",
+            YaccParserErrorKind::InvalidString => "Invalid string",
         };
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -183,18 +185,8 @@ impl YaccParser {
                 if self.ast.epp.contains_key(&n) {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateEPP, i));
                 }
-                i = j;
-                // We can't use the normal whitespace skipping function here, because users might
-                // want to write something that looks like a comment. This is a bit evil, but
-                // the only other choice is to force them to escape everything to death...
-                while i < self.src.len() {
-                    let c = self.src[i..].chars().nth(0).unwrap();
-                    match c {
-                        ' ' | '\t' => i += c.len_utf8(),
-                        _ => break
-                    }
-                }
-                let (j, v) = self.parse_to_eol(i)?;
+                i = self.parse_ws(j, false)?;
+                let (j, v) = self.parse_string(i)?;
                 self.ast.epp.insert(n, v);
                 i = self.parse_ws(j, true)?;
                 continue;
@@ -345,7 +337,7 @@ impl YaccParser {
                 assert!(m.start() == 0 && m.end() > 0);
                 match self.src[i..].chars().next().unwrap() {
                     '"' | '\'' => {
-                        assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
+                        debug_assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
                         Ok((i + m.end(), self.src[i + 1..i + m.end() - 1].to_string()))
                     }
                     _ => Ok((i + m.end(), self.src[i..i + m.end()].to_string()))
@@ -400,17 +392,49 @@ impl YaccParser {
         }
     }
 
-    /// Parse from `i` until the end of line (or end of file if that comes first).
-    fn parse_to_eol(&mut self, i: usize) -> YaccResult<(usize, String)> {
+    /// Parse a quoted string, allowing escape characters.
+    fn parse_string(&mut self, mut i: usize) -> YaccResult<(usize, String)> {
+        let qc = if self.lookahead_is("'", i).is_some() { '\'' }
+            else if self.lookahead_is("\"", i).is_some() { '"' }
+            else {
+                return Err(self.mk_error(YaccParserErrorKind::InvalidString, i));
+            };
+
+        debug_assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
+        // Because we can encounter escape characters, we can't simply match text and slurp it into
+        // a String in one go (otherwise we'd include the escape characters). Conceptually we have
+        // to build the String up byte by byte, skipping escape characters, but that's slow.
+        // Instead we append chunks of the string up to (but excluding) escape characters.
+        let mut s = String::new();
+        i += 1;
         let mut j = i;
         while j < self.src.len() {
             let c = self.src[j..].chars().nth(0).unwrap();
             match c {
-                '\n' | '\r' => break,
+                '\n' | '\r' => {
+                    return Err(self.mk_error(YaccParserErrorKind::InvalidString, j));
+                }
+                x if x == qc => {
+                    s.push_str(&self.src[i..j]);
+                    return Ok((j + 1, s));
+                }
+                '\\' => {
+                    debug_assert!('\\'.len_utf8() == 1);
+                    match self.src[j + 1..].chars().nth(0).unwrap() {
+                        '\'' | '"' => {
+                            s.push_str(&self.src[i..j]);
+                            i = j + 1;
+                            j += 2;
+                        }
+                        _ => {
+                            return Err(self.mk_error(YaccParserErrorKind::InvalidString, j));
+                        }
+                    }
+                }
                 _ => j += c.len_utf8()
             }
         }
-        Ok((j, self.src[i..j].to_string()))
+        Err(self.mk_error(YaccParserErrorKind::InvalidString, j))
     }
 
     /// Skip whitespace from `i` onwards. If `inc_newlines` is `false`, will return `Err` if a
@@ -1109,13 +1133,25 @@ x".to_string();
         let ast = parse(
             YaccKind::Eco,
             &"
-          %epp A a
+          %epp A \"a\"
+          %epp B 'a'
+          %epp C '\"'
+          %epp D \"'\"
+          %epp E \"\\\"\"
+          %epp F '\\''
+          %epp G \"a\\\"b\"
           %%
           R: 'A';
           "
         ).unwrap();
-        assert_eq!(ast.epp.len(), 1);
+        assert_eq!(ast.epp.len(), 7);
         assert_eq!(ast.epp["A"], "a");
+        assert_eq!(ast.epp["B"], "a");
+        assert_eq!(ast.epp["C"], "\"");
+        assert_eq!(ast.epp["D"], "'");
+        assert_eq!(ast.epp["E"], "\"");
+        assert_eq!(ast.epp["F"], "'");
+        assert_eq!(ast.epp["G"], "a\"b");
     }
 
     #[test]
@@ -1123,8 +1159,8 @@ x".to_string();
         match parse(
             YaccKind::Eco,
             &"
-          %epp A a
-          %epp A a
+          %epp A \"a\"
+          %epp A \"a\"
           %%
           "
         ) {
@@ -1132,6 +1168,39 @@ x".to_string();
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateEPP,
                 line: 3,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_broken_string() {
+        match parse(
+            YaccKind::Eco,
+            &"
+          %epp A \"a
+          %%
+          "
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::InvalidString,
+                line: 2,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+
+        match parse(
+            YaccKind::Eco,
+            &"
+          %epp A \"a"
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::InvalidString,
+                line: 2,
                 ..
             }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
