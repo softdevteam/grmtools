@@ -211,23 +211,6 @@ fn main() {
                     let mut out = vec![];
                     for r in repair.iter() {
                         match *r {
-                            ParseRepair::InsertSeq(ref seqs) => {
-                                let mut s = String::new();
-                                s.push_str("Insert {");
-                                for (i, seq) in seqs.iter().enumerate() {
-                                    if i > 0 {
-                                        s.push_str(", ");
-                                    }
-                                    for (j, tidx) in seq.iter().enumerate() {
-                                        if j > 0 {
-                                            s.push_str(" ");
-                                        }
-                                        s.push_str(grm.token_epp(*tidx).unwrap());
-                                    }
-                                }
-                                s.push_str("}");
-                                out.push(s);
-                            }
                             ParseRepair::Insert(token_idx) => out
                                 .push(format!("Insert {}", grm.token_epp(token_idx).unwrap())),
                             ParseRepair::Shift(l) | ParseRepair::Delete(l) => {

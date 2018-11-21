@@ -478,7 +478,6 @@ mod test {
         let mut out = vec![];
         for r in repairs.iter() {
             match *r {
-                ParseRepair::InsertSeq { .. } => panic!("Internal error"),
                 ParseRepair::Insert(token_idx) => {
                     out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap()))
                 }
