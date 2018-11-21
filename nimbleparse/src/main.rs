@@ -93,12 +93,14 @@ fn main() {
             "recoverer",
             "Recoverer to be used (default: mf)",
             "cpctplus|mf|panic|none"
-        ).optopt(
+        )
+        .optopt(
             "y",
             "yaccvariant",
             "Yacc variant to be parsed (default: Original)",
             "Original|Eco"
-        ).parse(&args[1..])
+        )
+        .parse(&args[1..])
     {
         Ok(m) => m,
         Err(f) => usage(prog, f.to_string().as_str())
@@ -176,7 +178,8 @@ fn main() {
             writeln!(
                 &mut stderr(),
                 "Error: these tokens are referenced in the grammar but not defined in the lexer:"
-            ).ok();
+            )
+            .ok();
             let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
             sorted.sort();
             for n in sorted {
@@ -206,24 +209,32 @@ fn main() {
                     println!("Error at line {} col {}. No repairs found.", line, col);
                     continue;
                 }
-                println!("Error at line {} col {}. Repairs found:", line, col);
-                for repair in e.repairs() {
+                println!(
+                    "Error at line {} col {}. Repair sequences found:",
+                    line, col
+                );
+                let repairs_len = e.repairs().len();
+                for (i, repair) in e.repairs().iter().enumerate() {
                     let mut out = vec![];
                     for r in repair.iter() {
                         match *r {
-                            ParseRepair::Insert(token_idx) => out
-                                .push(format!("Insert {}", grm.token_epp(token_idx).unwrap())),
+                            ParseRepair::Insert(token_idx) => {
+                                out.push(format!("Insert {}", grm.token_epp(token_idx).unwrap()))
+                            }
                             ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
                                 let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
                                 if let ParseRepair::Delete(_) = *r {
-                                    out.push(format!("Delete \"{}\"", t));
+                                    out.push(format!("Delete {}", t));
                                 } else {
-                                    out.push(format!("Shift \"{}\"", t));
+                                    out.push(format!("Shift {}", t));
                                 }
                             }
                         }
                     }
-                    println!("  {}", out.join(", "));
+                    let padding = ((repairs_len as f64).log10() as usize)
+                        - (((i + 1) as f64).log10() as usize)
+                        + 1;
+                    println!("  {}{}: {}", " ".repeat(padding), i + 1, out.join(", "));
                 }
             }
             process::exit(1);
