@@ -4,8 +4,8 @@ members=[
     "lrlex",
     "lrlex/examples/calclex",
     "lrpar",
-    "lrpar/examples/calcparse",
-    "lrpar/examples/actions",
+    "lrpar/examples/calc_parsetree",
+    "lrpar/examples/calc_actions",
     "lrtable",
     "nimbleparse"
 ]
