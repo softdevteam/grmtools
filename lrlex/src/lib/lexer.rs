@@ -267,7 +267,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
             return Err(());
         }
 
-        if self.newlines.len() == 0 || l.start() < self.newlines[0] {
+        if self.newlines.is_empty() || l.start() < self.newlines[0] {
             return Ok((1, l.start() + 1));
         }
 

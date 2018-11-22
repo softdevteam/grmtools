@@ -299,7 +299,7 @@ where
         match self.actionkind {
             ActionKind::CustomAction => {
                 // action function references
-                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(&str, &Vec<AStackType<{actiont}, {}>>) -> {actiont}>> = Vec::new();\n",
+                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(&str, &[AStackType<{actiont}, {}>]) -> {actiont}>> = Vec::new();\n",
                     StorageT::type_name(),
                     actiont=actiontype)
                 );
@@ -319,7 +319,7 @@ where
         let s = lexer.input().to_string();
         RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(RecoveryKind::{})
-            .parse2(lexer, actions, &s)\n",
+            .parse2(lexer, &actions, &s)\n",
                     recoverer,
                 ));
             }
@@ -363,7 +363,9 @@ where
                         // Iterate over all $-arguments and replace them with their respective
                         // element from the argument vector (e.g. $1 is replaced by args[0]). At
                         // the same time extract &str from tokens and actiontype from nonterminals.
-                        outs.push_str(&format!("fn {prefix}action_{}({prefix}input: &str, {prefix}args: &Vec<AStackType<{actiont}, {}>>) -> {actiont} {{\n",
+                        outs.push_str(&format!("#[allow(clippy::let_and_return)]
+fn {prefix}action_{}({prefix}input: &str, {prefix}args: &[AStackType<{actiont}, {}>]) -> {actiont} {{
+",
                             usize::from(pidx),
                             StorageT::type_name(),
                             prefix=ACTION_PREFIX,
@@ -442,7 +444,7 @@ where
         for tidx in grm.iter_tidxs() {
             let n = match grm.token_name(tidx) {
                 Some(n) => format!("'{}'", n),
-                None => format!("<unknown>")
+                None => "<unknown>".to_string()
             };
             cache.push_str(&format!("   {} {}\n", usize::from(tidx), n));
         }

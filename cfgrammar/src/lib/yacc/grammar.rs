@@ -327,10 +327,9 @@ where
                 prods[prod_idx] = Some(prod);
                 prod_precs[prod_idx] = Some(prec);
                 prods_rules[prod_idx] = Some(ridx);
-                match astprod.action {
-                    Some(ref s) => actions[prod_idx] = Some(String::from(s.clone())),
-                    None => ()
-                };
+                if let Some(ref s) = astprod.action {
+                    actions[prod_idx] = Some(s.clone());
+                }
             }
         }
 

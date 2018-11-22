@@ -156,7 +156,7 @@ where
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexemes: &[Lexeme<StorageT>],
-        actions: Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
+        actions: &[Option<&Fn(&str, &[AStackType<ActionT, StorageT>]) -> ActionT>],
         input: &str
     ) -> Result<ActionT, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
     where
@@ -215,7 +215,7 @@ where
         tstack: &mut TStack<StorageT>,
         errors: &mut Vec<ParseError<StorageT>>,
         mut actiondata: Option<(
-            &Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
+            &[Option<&Fn(&str, &[AStackType<ActionT, StorageT>]) -> ActionT>],
             &mut Vec<AStackType<ActionT, StorageT>>,
             &str
         )>
@@ -251,10 +251,9 @@ where
                     let la_lexeme = self.next_lexeme(laidx);
                     tstack.push(Node::Term { lexeme: la_lexeme });
                     pstack.push(state_id);
-                    match actiondata {
-                        Some((_, ref mut astack, _)) => astack.push(AStackType::Lexeme(la_lexeme)),
-                        None => ()
-                    };
+                    if let Some((_, ref mut astack, _)) = actiondata {
+                        astack.push(AStackType::Lexeme(la_lexeme));
+                    }
                     laidx += 1;
                 }
                 Action::Accept => {
@@ -585,7 +584,7 @@ where
     pub fn parse2<ActionT>(
         &self,
         lexer: &mut Lexer<StorageT>,
-        actions: Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
+        actions: &[Option<&Fn(&str, &[AStackType<ActionT, StorageT>]) -> ActionT>],
         input: &str
     ) -> Result<ActionT, LexParseError<StorageT>> {
         Ok(Parser::parse2(

@@ -552,7 +552,7 @@ pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
     parser: &Parser<StorageT>,
     finish_by: Instant,
     in_laidx: usize,
-    in_pstack: &Vec<StIdx>,
+    in_pstack: &[StIdx],
     in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>
 ) -> Vec<Vec<ParseRepair<StorageT>>>
 where
@@ -565,7 +565,7 @@ where
         if Instant::now() >= finish_by {
             return vec![];
         }
-        let mut pstack = in_pstack.clone();
+        let mut pstack = in_pstack.to_owned();
         let mut laidx = apply_repairs(parser, in_laidx, &mut pstack, &mut None, &rpr_seqs[0]);
         laidx = parser.lr_upto(
             None,
