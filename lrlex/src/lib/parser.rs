@@ -34,8 +34,10 @@ use std::{convert::TryFrom, hash::Hash};
 
 use num_traits::{PrimInt, Unsigned};
 
-use {LexErrorKind, LexBuildError, LexBuildResult};
 use lexer::{LexerDef, Rule};
+use LexBuildError;
+use LexBuildResult;
+use LexErrorKind;
 
 pub struct LexParser<StorageT> {
     src: String,
@@ -199,13 +201,15 @@ pub fn parse_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigne
 #[cfg(test)]
 mod test {
     use super::*;
-    use {LexBuildError, LexErrorKind};
+    use LexBuildError;
+    use LexErrorKind;
 
     #[test]
     fn test_nooptions() {
         let src = "
 %option nounput
-        ".to_string();
+        "
+        .to_string();
         assert!(parse_lex::<u8>(&src).is_err());
     }
 
@@ -221,7 +225,8 @@ mod test {
 [0-9]+ 'int'
 [a-zA-Z]+ 'id'
 \\+ '+'
-".to_string();
+"
+        .to_string();
         let ast = parse_lex::<u8>(&src).unwrap();
         let intrule = ast.get_rule_by_name("int").unwrap();
         assert_eq!("int", intrule.name.as_ref().unwrap());
@@ -238,7 +243,8 @@ mod test {
     fn test_no_name() {
         let src = "%%
 [0-9]+ ;
-".to_string();
+"
+        .to_string();
         let ast = parse_lex::<u8>(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
         assert!(intrule.name.is_none());
@@ -335,7 +341,8 @@ mod test {
     #[should_panic]
     fn exceed_tok_id_capacity() {
         let mut src = "%%
-".to_string();
+"
+        .to_string();
         for i in 0..257 {
             src.push_str(&format!("x 'x{}'\n", i));
         }

@@ -35,8 +35,10 @@ use std::marker::PhantomData;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use {RIdx, Symbol, TIdx};
 use yacc::YaccGrammar;
+use RIdx;
+use Symbol;
+use TIdx;
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
 /// grammar:
@@ -224,7 +226,8 @@ mod test {
           E: D | C;
           F: E;
           "
-        ).unwrap();
+        )
+        .unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "^", vec!["c"]);
         has(&grm, &firsts, "D", vec!["d"]);
@@ -244,7 +247,8 @@ mod test {
           D: 'd';
           E: D C;
           "
-        ).unwrap();
+        )
+        .unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "E", vec!["d"]);
     }
@@ -262,7 +266,8 @@ mod test {
           C: 'c' | ;
           D: C;
           "
-        ).unwrap();
+        )
+        .unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b", "a"]);
         has(&grm, &firsts, "C", vec!["c", ""]);
@@ -281,7 +286,8 @@ mod test {
           B: 'b' | ;
           C: B 'c' B;
           "
-        ).unwrap();
+        )
+        .unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b", "c"]);
         has(&grm, &firsts, "B", vec!["b", ""]);
@@ -299,7 +305,8 @@ mod test {
           A: B 'b';
           B: 'b' | ;
           "
-        ).unwrap();
+        )
+        .unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "A", vec!["b"]);
     }
@@ -318,7 +325,8 @@ mod test {
           D: 'd' | ;
           F: C D 'f';
           "
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     #[test]
@@ -349,7 +357,8 @@ mod test {
           F: 'f' | ;
           G: C D;
           "
-        ).unwrap();
+        )
+        .unwrap();
         let firsts = grm.firsts();
         has(&grm, &firsts, "E", vec!["a"]);
         has(&grm, &firsts, "T", vec!["a"]);

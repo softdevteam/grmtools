@@ -44,14 +44,16 @@ use std::{
 };
 
 use bincode::{deserialize, serialize_into};
-use cfgrammar::yacc::{YaccGrammar, YaccKind};
-use cfgrammar::Symbol;
+use cfgrammar::{
+    yacc::{YaccGrammar, YaccKind},
+    Symbol
+};
 use filetime::FileTime;
 use lrtable::{from_yacc, Minimiser, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use typename::TypeName;
-use regex::Regex;
 
 use RecoveryKind;
 
@@ -62,7 +64,6 @@ const GRM_FILE_EXT: &str = "grm";
 const RUST_FILE_EXT: &str = "rs";
 const SGRAPH_FILE_EXT: &str = "sgraph";
 const STABLE_FILE_EXT: &str = "stable";
-
 
 /// By default `CTParserBuilder` generates a parse tree which is returned after a successful parse.
 /// If the user wants to supply custom actions to be executed during reductions and return their
@@ -240,9 +241,7 @@ where
             Some(t) => t,
             None => {
                 match self.actionkind {
-                    ActionKind::CustomAction => {
-                        panic!("Action return type not defined!")
-                    }
+                    ActionKind::CustomAction => panic!("Action return type not defined!"),
                     ActionKind::GenericParseTree => {
                         "" // Dummy string that will never be used
                     }
@@ -250,28 +249,31 @@ where
             }
         };
         outs.push_str(&format!("mod {}_y {{\n", mod_name));
-        outs.push_str("    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
-    use lrpar::ctbuilder::_reconstitute;",
+        outs.push_str(
+            "    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
+    use lrpar::ctbuilder::_reconstitute;"
         );
 
         match self.actionkind {
             ActionKind::CustomAction => {
-                outs.push_str(&format!("use lrpar::parser::AStackType;
+                outs.push_str(&format!(
+                    "use lrpar::parser::AStackType;
 
     pub fn parse(lexer: &mut Lexer<{storaget}>)
           -> Result<{actiont}, LexParseError<{storaget}>>
     {{",
-                storaget = StorageT::type_name(),
-                actiont = actiontype
+                    storaget = StorageT::type_name(),
+                    actiont = actiontype
                 ));
             }
             ActionKind::GenericParseTree => {
-                outs.push_str(&format!("use lrpar::Node;
+                outs.push_str(&format!(
+                    "use lrpar::Node;
 
     pub fn parse(lexer: &mut Lexer<{storaget}>)
           -> Result<Node<{storaget}>, LexParseError<{storaget}>>
     {{",
-                storaget = StorageT::type_name()
+                    storaget = StorageT::type_name()
                 ));
             }
         };
@@ -284,13 +286,15 @@ where
             RecoveryKind::None => "None"
         };
 
-        outs.push_str(&format!("
+        outs.push_str(&format!(
+            "
         let (grm, sgraph, stable) = _reconstitute(include_bytes!(\"{}\"),
                                                   include_bytes!(\"{}\"),
                                                   include_bytes!(\"{}\"));",
-                out_grm.to_str().unwrap(),
-                out_sgraph.to_str().unwrap(),
-                out_stable.to_str().unwrap()));
+            out_grm.to_str().unwrap(),
+            out_sgraph.to_str().unwrap(),
+            out_stable.to_str().unwrap()
+        ));
 
         match self.actionkind {
             ActionKind::CustomAction => {
@@ -301,26 +305,31 @@ where
                 );
                 for pidx in grm.iter_pidxs() {
                     if grm.action(pidx).is_some() {
-                        outs.push_str(&format!("        actions.push(Some(&{prefix}action_{}));\n", usize::from(pidx), prefix=ACTION_PREFIX))
-                    }
-                    else {
+                        outs.push_str(&format!(
+                            "        actions.push(Some(&{prefix}action_{}));\n",
+                            usize::from(pidx),
+                            prefix = ACTION_PREFIX
+                        ))
+                    } else {
                         outs.push_str("        actions.push(None);")
                     };
                 }
-                outs.push_str(&format!("
+                outs.push_str(&format!(
+                    "
         let s = lexer.input().to_string();
         RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(RecoveryKind::{})
             .parse2(lexer, actions, &s)\n",
-                recoverer,
+                    recoverer,
                 ));
-            },
+            }
             ActionKind::GenericParseTree => {
-                outs.push_str(&format!("
+                outs.push_str(&format!(
+                    "
         RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(RecoveryKind::{})
             .parse(lexer)\n",
-                recoverer
+                    recoverer
                 ));
             }
         };
@@ -360,34 +369,43 @@ where
                             prefix=ACTION_PREFIX,
                             actiont=actiontype));
                         for m in re.find_iter(s) {
-                            let num = match &s[m.start()+1..m.end()].parse::<usize>() {
+                            let num = match &s[m.start() + 1..m.end()].parse::<usize>() {
                                 Ok(val) => val - 1,
                                 Err(_) => unreachable!()
                             };
-                            outs.push_str(&format!("    let {prefix}arg_{} = match {prefix}args[{}] {{", num+1, num, prefix=ACTION_PREFIX));
+                            outs.push_str(&format!(
+                                "    let {prefix}arg_{} = match {prefix}args[{}] {{",
+                                num + 1,
+                                num,
+                                prefix = ACTION_PREFIX
+                            ));
                             match grm.prod(pidx)[num] {
-                                Symbol::Rule(_) => {
-                                    outs.push_str("
+                                Symbol::Rule(_) => outs.push_str(
+                                    "
         AStackType::ActionType(v) => v,
         AStackType::Lexeme(_) => unreachable!()
     };
-")
-                                },
-                                Symbol::Token(_) => {
-                                    outs.push_str(&format!("
+"
+                                ),
+                                Symbol::Token(_) => outs.push_str(&format!(
+                                    "
         AStackType::ActionType(_) => unreachable!(),
         AStackType::Lexeme(l) => &{prefix}input[l.start()..l.end()]
     }};
-", prefix=ACTION_PREFIX))
-                                }
+",
+                                    prefix = ACTION_PREFIX
+                                ))
                             };
                         }
-                        let ns = re.replace_all(s, format!("{prefix}arg_$1", prefix=ACTION_PREFIX).as_str());
-                        outs.push_str(&format!("    {}", &ns, ));
+                        let ns = re.replace_all(
+                            s,
+                            format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
+                        );
+                        outs.push_str(&format!("    {}", &ns,));
                         outs.push_str("\n}\n\n");
                     }
                 }
-            },
+            }
             ActionKind::GenericParseTree => ()
         };
 

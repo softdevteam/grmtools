@@ -157,7 +157,7 @@ where
         stable: &StateTable<StorageT>,
         lexemes: &[Lexeme<StorageT>],
         actions: Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
-        input: &str,
+        input: &str
     ) -> Result<ActionT, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
     where
         F: Fn(TIdx<StorageT>) -> u8
@@ -177,13 +177,17 @@ where
         let mut tstack: Vec<Node<StorageT>> = Vec::new();
         let mut errors: Vec<ParseError<StorageT>> = Vec::new();
         let mut astack: Vec<AStackType<ActionT, StorageT>> = Vec::new();
-        let accpt = psr.lr(0, &mut pstack, &mut tstack, &mut errors, Some((&actions, &mut astack, &input)));
+        let accpt = psr.lr(
+            0,
+            &mut pstack,
+            &mut tstack,
+            &mut errors,
+            Some((&actions, &mut astack, &input))
+        );
         match (accpt, errors.is_empty()) {
-            (true, true) => {
-                match astack.drain(..).nth(0).unwrap() {
-                    AStackType::ActionType(u) => Ok(u),
-                    AStackType::Lexeme(_) => unreachable!()
-                }
+            (true, true) => match astack.drain(..).nth(0).unwrap() {
+                AStackType::ActionType(u) => Ok(u),
+                AStackType::Lexeme(_) => unreachable!()
             },
             (true, false) => Err((Some(tstack.drain(..).nth(0).unwrap()), errors)),
             (false, false) => Err((None, errors)),
@@ -210,7 +214,11 @@ where
         pstack: &mut PStack,
         tstack: &mut TStack<StorageT>,
         errors: &mut Vec<ParseError<StorageT>>,
-        mut actiondata: Option<(&Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>, &mut Vec<AStackType<ActionT, StorageT>>, &str)>
+        mut actiondata: Option<(
+            &Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
+            &mut Vec<AStackType<ActionT, StorageT>>,
+            &str
+        )>
     ) -> bool {
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
@@ -232,11 +240,11 @@ where
 
                     // Process actions
                     if let Some((actions, ref mut astack, input)) = actiondata {
-                            action_vec.clear();
-                            action_vec.extend(astack.drain(pop_idx -1..));
-                            if let Some(f) = actions[usize::from(pidx)] {
-                                astack.push(AStackType::ActionType(f(input, &action_vec)));
-                            }
+                        action_vec.clear();
+                        action_vec.extend(astack.drain(pop_idx - 1..));
+                        if let Some(f) = actions[usize::from(pidx)] {
+                            astack.push(AStackType::ActionType(f(input, &action_vec)));
+                        }
                     }
                 }
                 Action::Shift(state_id) => {
@@ -244,9 +252,7 @@ where
                     tstack.push(Node::Term { lexeme: la_lexeme });
                     pstack.push(state_id);
                     match actiondata {
-                        Some((_, ref mut astack, _)) => {
-                            astack.push(AStackType::Lexeme(la_lexeme))
-                        },
+                        Some((_, ref mut astack, _)) => astack.push(AStackType::Lexeme(la_lexeme)),
                         None => ()
                     };
                     laidx += 1;
@@ -580,7 +586,7 @@ where
         &self,
         lexer: &mut Lexer<StorageT>,
         actions: Vec<Option<&Fn(&str, &Vec<AStackType<ActionT, StorageT>>) -> ActionT>>,
-        input: &str,
+        input: &str
     ) -> Result<ActionT, LexParseError<StorageT>> {
         Ok(Parser::parse2(
             self.recoverer,
@@ -590,7 +596,7 @@ where
             self.stable,
             &lexer.all_lexemes()?[..],
             actions,
-            input,
+            input
         )?)
     }
 }

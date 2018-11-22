@@ -118,9 +118,11 @@ impl fmt::Display for GrammarValidationError {
                 "Token '{}' used in %prec has no precedence attached",
                 self.sym.as_ref().unwrap()
             ),
-            GrammarValidationErrorKind::UnknownEPP => {
-                write!(f, "Unknown token '{}' in %epp declaration", self.sym.as_ref().unwrap())
-            }
+            GrammarValidationErrorKind::UnknownEPP => write!(
+                f,
+                "Unknown token '{}' in %epp declaration",
+                self.sym.as_ref().unwrap()
+            )
         }
     }
 }
@@ -150,7 +152,13 @@ impl GrammarAST {
         }
     }
 
-    pub fn add_prod(&mut self, key: String, symbols: Vec<Symbol>, precedence: Option<String>, action: Option<String>) {
+    pub fn add_prod(
+        &mut self,
+        key: String,
+        symbols: Vec<Symbol>,
+        precedence: Option<String>,
+        action: Option<String>
+    ) {
         self.rules
             .entry(key)
             .or_insert_with(Vec::new)
@@ -401,7 +409,12 @@ mod test {
         );
         grm.start = Some("A".to_string());
         grm.tokens.insert("b".to_string());
-        grm.add_prod("A".to_string(), vec![token("b")], Some("b".to_string()), None);
+        grm.add_prod(
+            "A".to_string(),
+            vec![token("b")],
+            Some("b".to_string()),
+            None
+        );
         assert!(grm.complete_and_validate().is_ok());
     }
 
@@ -409,7 +422,12 @@ mod test {
     fn test_invalid_precedence_override() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_prod("A".to_string(), vec![token("b")], Some("b".to_string()), None);
+        grm.add_prod(
+            "A".to_string(),
+            vec![token("b")],
+            Some("b".to_string()),
+            None
+        );
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
                 kind: GrammarValidationErrorKind::UnknownToken,

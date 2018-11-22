@@ -38,8 +38,8 @@ extern crate num_traits;
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
-extern crate vob;
 extern crate sparsevec;
+extern crate vob;
 
 use std::{hash::Hash, mem::size_of};
 

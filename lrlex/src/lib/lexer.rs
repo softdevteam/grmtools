@@ -173,7 +173,8 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
                             .filter(|x| x.name.is_some())
                             .map(|x| &**x.name.as_ref().unwrap())
                             .collect::<HashSet<&str>>()
-                    ).cloned()
+                    )
+                    .cloned()
                     .collect::<HashSet<&str>>()
             );
         }
@@ -299,7 +300,8 @@ mod test {
 [0-9]+ 'int'
 [a-zA-Z]+ 'id'
 [ \t] ;
-        ".to_string();
+        "
+        .to_string();
         let mut lexer = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("int", 0);
@@ -323,7 +325,8 @@ mod test {
         let src = "
 %%
 [0-9]+ 'int'
-        ".to_string();
+        "
+        .to_string();
         let lexer = parse_lex::<u8>(&src).unwrap();
         match lexer.lexer(&"abc").all_lexemes() {
             Ok(_) => panic!("Invalid input lexed"),

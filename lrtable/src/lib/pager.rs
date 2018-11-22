@@ -41,7 +41,8 @@ use vob::Vob;
 
 use itemset::Itemset;
 use stategraph::StateGraph;
-use {StIdx, StIdxStorageT};
+use StIdx;
+use StIdxStorageT;
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -471,7 +472,8 @@ mod test {
           S: S 'b' | 'b' A 'a';
           A: 'a' S 'c' | 'a' | 'a' S 'b';
           "
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     #[test]
@@ -552,7 +554,8 @@ mod test {
              W : 'u' V;
              V : ;
           "
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     #[rustfmt::skip]

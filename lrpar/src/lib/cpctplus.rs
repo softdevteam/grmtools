@@ -425,7 +425,11 @@ where
         all_rprs
     }
 
-    fn repair_to_parse_repair(&self, mut laidx: usize, from: &[Repair<StorageT>]) -> Vec<ParseRepair<StorageT>> {
+    fn repair_to_parse_repair(
+        &self,
+        mut laidx: usize,
+        from: &[Repair<StorageT>]
+    ) -> Vec<ParseRepair<StorageT>> {
         from.iter()
             .map(|y| match *y {
                 Repair::InsertTerm(token_idx) => ParseRepair::Insert(token_idx),
@@ -439,7 +443,8 @@ where
                     laidx += 1;
                     rpr
                 }
-            }).collect()
+            })
+            .collect()
     }
 }
 
@@ -559,7 +564,8 @@ E : 'N'
  + 
  N n
 ",
-        ].iter()
+        ]
+        .iter()
         .any(|x| *x == pp)
         {
             panic!("Can't find a match for {}", pp);

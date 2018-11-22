@@ -35,8 +35,10 @@ use std::marker::PhantomData;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use {RIdx, Symbol, TIdx};
 use yacc::YaccGrammar;
+use RIdx;
+use Symbol;
+use TIdx;
 
 /// `Follows` stores all the Follow sets for a given grammar. For example, given this code and
 /// grammar:
@@ -93,8 +95,9 @@ where
                         Symbol::Rule(s_ridx) => {
                             if epsilon {
                                 for tidx in grm.iter_tidxs() {
-                                    if follows[usize::from(ridx)][usize::from(tidx)] &&
-                                        follows[usize::from(s_ridx)].set(usize::from(tidx), true) {
+                                    if follows[usize::from(ridx)][usize::from(tidx)]
+                                        && follows[usize::from(s_ridx)].set(usize::from(tidx), true)
+                                    {
                                         changed = true;
                                     }
                                 }
@@ -105,12 +108,15 @@ where
                             if sidx < prod.len() - 1 {
                                 match prod[sidx + 1] {
                                     Symbol::Token(nxt_tidx) => {
-                                        if follows[usize::from(s_ridx)].set(usize::from(nxt_tidx), true) {
+                                        if follows[usize::from(s_ridx)]
+                                            .set(usize::from(nxt_tidx), true)
+                                        {
                                             changed = true;
                                         }
                                     }
                                     Symbol::Rule(nxt_ridx) => {
-                                        if follows[usize::from(s_ridx)].or(firsts.firsts(nxt_ridx)) {
+                                        if follows[usize::from(s_ridx)].or(firsts.firsts(nxt_ridx))
+                                        {
                                             changed = true;
                                         }
                                     }
@@ -121,7 +127,10 @@ where
                 }
             }
             if !changed {
-                return YaccFollows{follows, phantom: PhantomData};
+                return YaccFollows {
+                    follows,
+                    phantom: PhantomData
+                };
             }
         }
     }
@@ -183,7 +192,9 @@ mod test {
                 T: F T2 ;
                 T2: '*' F T2 | ;
                 F: '(' E ')' | 'ID' ;
-          ").unwrap();
+          "
+        )
+        .unwrap();
         let follows = grm.follows();
         has(&grm, &follows, "E", vec![")", "$"]);
         has(&grm, &follows, "E2", vec![")", "$"]);
@@ -205,7 +216,9 @@ mod test {
                 B2: 'w' B | 'u' 'w' B ;
                 D : 'v' D2 ;
                 D2: 'x' B D2 | ;
-          ").unwrap();
+          "
+        )
+        .unwrap();
         let follows = grm.follows();
         has(&grm, &follows, "A", vec!["$"]);
         has(&grm, &follows, "B", vec!["v", "x", "$"]);
@@ -223,7 +236,9 @@ mod test {
                 %%
                 S: A 'b';
                 A: 'b' | ;
-          ").unwrap();
+          "
+        )
+        .unwrap();
         let follows = grm.follows();
         has(&grm, &follows, "S", vec!["$"]);
         has(&grm, &follows, "A", vec!["b"]);
@@ -240,7 +255,9 @@ mod test {
                   | E '+' 'N'
                   | '(' E ')'
                   ;
-          ").unwrap();
+          "
+        )
+        .unwrap();
         let follows = grm.follows();
         has(&grm, &follows, "E", vec!["+", ")", "$"]);
     }
