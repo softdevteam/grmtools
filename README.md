@@ -1,5 +1,7 @@
 # Grammar and parsing libraries for Rust
 
+[![Build Status](https://api.travis-ci.org/softdevteam/sparsevec.svg?branch=master)](https://travis-ci.org/softdevteam/sparsevec)
+
 This repository contains four Rust libraries for operating on Context-Free
 Grammars (CFGs) and parsing. Although they make use of each other, each library
 can be used individually. The libraries are neither complete nor stable, but
@@ -44,3 +46,8 @@ cargo run --release --bin nimbleparse <lex.l> <grm.y> <input file>
 
 `nimbleparse` produces a parse tree as output and, if errors were encountered,
 the repair sequences found.
+
+## Documentation
+
+Please refer to the [grmtools book](https://softdevteam.github.io/grmtools) for
+a guide on how to get started.
