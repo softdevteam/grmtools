@@ -856,7 +856,6 @@ mod test {
     use std::{collections::HashMap, fmt::Debug};
 
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned, Zero};
-    use test::{black_box, Bencher};
 
     use cactus::Cactus;
     use cfgrammar::{
@@ -1133,24 +1132,6 @@ W: 'b' ;
         assert_eq!(d.dist(s7, grm.token_idx("a").unwrap()), 0);
         assert_eq!(d.dist(s7, grm.token_idx("b").unwrap()), 1);
         assert_eq!(d.dist(s7, grm.eof_token_idx()), 0);
-    }
-
-    #[bench]
-    fn bench_dist(b: &mut Bencher) {
-        let grms = "%start A
-%%
-A: '(' A ')'
- | 'a'
- | 'b'
- ;
-";
-        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
-        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
-        b.iter(|| {
-            for _ in 0..10000 {
-                black_box(Dist::new(&grm, &sgraph, &stable, |_| 1));
-            }
-        });
     }
 
     fn check_some_repairs<StorageT: 'static + PrimInt + Unsigned>(

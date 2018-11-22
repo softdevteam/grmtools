@@ -521,7 +521,7 @@ impl<StorageT> From<(Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
     }
 }
 
-pub struct RTParserBuilder<'a, StorageT: Eq + Hash> {
+pub struct RTParserBuilder<'a, StorageT: Eq + Hash + 'a> {
     grm: &'a YaccGrammar<StorageT>,
     sgraph: &'a StateGraph<StorageT>,
     stable: &'a StateTable<StorageT>,

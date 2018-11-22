@@ -30,8 +30,6 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#![feature(try_from)]
-
 extern crate cfgrammar;
 extern crate fnv;
 extern crate num_traits;
@@ -39,6 +37,7 @@ extern crate num_traits;
 #[macro_use]
 extern crate serde;
 extern crate sparsevec;
+extern crate try_from;
 extern crate vob;
 
 use std::{hash::Hash, mem::size_of};

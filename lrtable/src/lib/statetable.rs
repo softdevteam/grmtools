@@ -32,7 +32,6 @@
 
 use std::{
     collections::hash_map::HashMap,
-    convert::TryFrom,
     error::Error,
     fmt::{self, Debug},
     hash::Hash,
@@ -139,15 +138,15 @@ where
         let maxa = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         let maxg = usize::from(grm.rules_len()) * usize::from(sg.all_states_len());
         // We only have usize-2 bits to store state IDs and rule indexes
-        assert!(usize::try_from(sg.all_states_len()) < Ok(usize::max_value() - 4));
-        assert!(usize::try_from(grm.rules_len()) < Ok(usize::max_value() - 4));
+        assert!(usize::from(sg.all_states_len()) < (usize::max_value() - 4));
+        assert!(usize::from(grm.rules_len()) < (usize::max_value() - 4));
         let mut actions: Vec<usize> = Vec::with_capacity(maxa);
         actions.resize(maxa, 0);
         let mut gotos: Vec<usize> = Vec::with_capacity(maxg);
 
         // Since 0 is reserved for the error type, and states are encoded by adding 1, we can only
         // store max_value - 1 states within the goto table
-        assert!(usize::try_from(sg.all_states_len()) < Ok(usize::from(StIdx::max_value()) - 1));
+        assert!(usize::from(sg.all_states_len()) < (usize::from(StIdx::max_value()) - 1));
         gotos.resize(maxg, 0);
 
         let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?

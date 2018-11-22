@@ -30,8 +30,6 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#![feature(test)]
-
 extern crate bincode;
 extern crate cactus;
 extern crate cfgrammar;
@@ -44,7 +42,6 @@ extern crate packedvec;
 extern crate regex;
 extern crate rmp_serde as rmps;
 extern crate serde;
-extern crate test;
 extern crate typename;
 extern crate vob;
 
