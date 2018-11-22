@@ -4,16 +4,18 @@ cache:
     - cargo
 install:
     - cargo install --list | grep mdbook || cargo install mdbook --vers "0.2.2"
+before_script:
+    - rustup component add rustfmt-preview
 script:
+    - cargo fmt --all -- --check
     - cargo test --all
     - cd $TRAVIS_BUILD_DIR/cfgrammar && cargo test --features "serde"
     - cd $TRAVIS_BUILD_DIR/lrtable && cargo test --features "serde"
     - cd $TRAVIS_BUILD_DIR/doc && mdbook build
-
 deploy:
-   provider: pages
-   skip-cleanup: true
-   github-token: $GITHUB_TOKEN
-   local-dir: doc/book
-   on:
-      branch: master
+    provider: pages
+    skip-cleanup: true
+    github-token: $GITHUB_TOKEN
+    local-dir: doc/book
+    on:
+        branch: master
