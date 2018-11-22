@@ -384,7 +384,7 @@ impl YaccParser {
                 Ok(i)
             } else {
                 let prog = self.src[i..].to_string();
-                i = i + prog.len();
+                i += prog.len();
                 self.ast.add_programs(prog);
                 Ok(i)
             }

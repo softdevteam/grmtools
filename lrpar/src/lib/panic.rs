@@ -91,6 +91,6 @@ where
                 }
             }
         }
-        return (in_laidx, vec![]);
+        (in_laidx, vec![])
     }
 }

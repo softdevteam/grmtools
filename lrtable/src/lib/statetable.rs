@@ -295,7 +295,7 @@ where
                     .unwrap()
                     .checked_add(usize::from(pidx))
                     .unwrap();
-                if core_reduces.set(off, true) == true {
+                if core_reduces.set(off, true) {
                     distinct_reduces += 1;
                 }
             }
