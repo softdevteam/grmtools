@@ -1,32 +1,22 @@
 %start Expr
-%type MYTYPE
+%type u64
 %%
-Expr: Term 'PLUS' Expr { add($1, $3) }
+Expr: Term 'PLUS' Expr { $1 + $3 }
     | Term { $1 }
     ;
 
-Term: Factor 'MUL' Term { mul ($1, $3) }
+Term: Factor 'MUL' Term { $1 * $3 }
     | Factor { $1 }
     ;
 
 Factor: 'LBRACK' Expr 'RBRACK' { $2 }
-      | 'INT' { int($1) }
+      | 'INT' { parse_int($1) }
       ;
 %%
 
-type MYTYPE = u64;
-
-fn int(s: &str) -> MYTYPE {
+fn parse_int(s: &str) -> u64 {
     match s.parse::<u64>() {
-    	Ok(val) => val as MYTYPE,
-	Err(_) => unreachable!()
+    	Ok(val) => val as u64,
+        Err(_) => panic!("{} cannot be represented as a u64", s)
     }
-}
-
-fn add(arg1: u64, arg2: u64) -> u64 {
-    arg1 + arg2
-}
-
-fn mul(arg1: u64, arg2: u64) -> u64 {
-    arg1 * arg2
 }
