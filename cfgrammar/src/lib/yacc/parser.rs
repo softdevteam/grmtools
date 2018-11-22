@@ -94,8 +94,10 @@ impl fmt::Display for YaccParserError {
             }
             YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
             YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
-            YaccParserErrorKind::ReachedEOL => "Reached end of line without finding expected content",
-            YaccParserErrorKind::InvalidString => "Invalid string",
+            YaccParserErrorKind::ReachedEOL => {
+                "Reached end of line without finding expected content"
+            }
+            YaccParserErrorKind::InvalidString => "Invalid string"
         };
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -362,7 +364,7 @@ impl YaccParser {
                 '\n' | '\r' => {
                     self.newlines.push(j + 1);
                     0
-                },
+                }
                 _ => 0
             };
             j += ch.len_utf8();
@@ -386,19 +388,20 @@ impl YaccParser {
                 self.ast.add_programs(prog);
                 Ok(i)
             }
-        }
-        else {
+        } else {
             Ok(i)
         }
     }
 
     /// Parse a quoted string, allowing escape characters.
     fn parse_string(&mut self, mut i: usize) -> YaccResult<(usize, String)> {
-        let qc = if self.lookahead_is("'", i).is_some() { '\'' }
-            else if self.lookahead_is("\"", i).is_some() { '"' }
-            else {
-                return Err(self.mk_error(YaccParserErrorKind::InvalidString, i));
-            };
+        let qc = if self.lookahead_is("'", i).is_some() {
+            '\''
+        } else if self.lookahead_is("\"", i).is_some() {
+            '"'
+        } else {
+            return Err(self.mk_error(YaccParserErrorKind::InvalidString, i));
+        };
 
         debug_assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
         // Because we can encounter escape characters, we can't simply match text and slurp it into
@@ -446,9 +449,7 @@ impl YaccParser {
                 ' ' | '\t' => i += c.len_utf8(),
                 '\n' | '\r' => {
                     if !inc_newlines {
-                        return Err(
-                            self.mk_error(YaccParserErrorKind::ReachedEOL, i)
-                        );
+                        return Err(self.mk_error(YaccParserErrorKind::ReachedEOL, i));
                     }
                     self.newlines.push(i + 1);
                     i += c.len_utf8();
@@ -481,12 +482,11 @@ impl YaccParser {
                                     match c {
                                         '\n' | '\r' => {
                                             if !inc_newlines {
-                                                return Err(
-                                                    self.mk_error(YaccParserErrorKind::ReachedEOL, i)
-                                                );
+                                                return Err(self
+                                                    .mk_error(YaccParserErrorKind::ReachedEOL, i));
                                             }
                                             self.newlines.push(i + 1);
-                                        },
+                                        }
                                         '*' => (),
                                         _ => continue
                                     }
@@ -590,7 +590,8 @@ mod test {
         let src = "
             %%
             A : 'a';
-        ".to_string();
+        "
+        .to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(*grm.get_rule("A").unwrap(), vec![0]);
         assert_eq!(
@@ -609,7 +610,8 @@ mod test {
             %%
             A : 'a';
             A : 'b';
-        ".to_string();
+        "
+        .to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap()[0]],
@@ -636,7 +638,8 @@ mod test {
             A : ;
             B : 'b' | ;
             C : | 'c';
-        ".to_string();
+        "
+        .to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
 
         assert_eq!(
@@ -835,7 +838,8 @@ mod test {
     #[test]
     fn test_line_col_report1() {
         let src = "%%
-A:".to_string();
+A:"
+        .to_string();
         match parse(YaccKind::Original, &src) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
@@ -851,7 +855,8 @@ A:".to_string();
     fn test_line_col_report2() {
         let src = "%%
 A:
-".to_string();
+"
+        .to_string();
         match parse(YaccKind::Original, &src) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
@@ -911,7 +916,8 @@ A:
     #[test]
     fn test_same_line() {
         let src = "%token
-x".to_string();
+x"
+        .to_string();
         match parse(YaccKind::Original, &src) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
@@ -1094,7 +1100,8 @@ x".to_string();
           %%
           R: 'a';
           "
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(
             ast.implicit_tokens,
             Some(
@@ -1143,7 +1150,8 @@ x".to_string();
           %%
           R: 'A';
           "
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(ast.epp.len(), 7);
         assert_eq!(ast.epp["A"], "a");
         assert_eq!(ast.epp["B"], "a");
@@ -1237,7 +1245,8 @@ x".to_string();
           R2: ;
           R3: ;
           "
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(ast.start, Some("R".to_string()));
     }
 
@@ -1253,9 +1262,16 @@ x".to_string();
            | 'd'
            ;
           "
-        ).unwrap();
-        assert_eq!(grm.prods[grm.rules["A"][0]].action, Some("println!(\"test\");".to_string()));
-        assert_eq!(grm.prods[grm.rules["B"][0]].action, Some("add($1, $2);".to_string()));
+        )
+        .unwrap();
+        assert_eq!(
+            grm.prods[grm.rules["A"][0]].action,
+            Some("println!(\"test\");".to_string())
+        );
+        assert_eq!(
+            grm.prods[grm.rules["B"][0]].action,
+            Some("add($1, $2);".to_string())
+        );
         assert_eq!(grm.prods[grm.rules["B"][1]].action, None);
     }
 
@@ -1268,7 +1284,8 @@ x".to_string();
          A: 'a';
          %%
          fn foo() {}"
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(grm.programs, Some("fn foo() {}".to_string()));
     }
 
@@ -1281,15 +1298,13 @@ x".to_string();
          A: 'a' { foo();
                   bar(); }
          ;
-         B: b';") {
+         B: b';"
+        ) {
             Ok(_) => panic!(),
-            Err(YaccParserError {
-                line: 6,
-                ..
-            }) => (),
+            Err(YaccParserError { line: 6, .. }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
         }
-     }
+    }
 
     #[test]
     fn test_comments() {

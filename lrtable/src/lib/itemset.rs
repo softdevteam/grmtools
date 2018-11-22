@@ -240,7 +240,8 @@ mod test {
           D: 'd' | ;
           F: C D 'f';
           "
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     #[test]
@@ -286,7 +287,8 @@ mod test {
           S: S 'b' | 'b' A 'a';
           A: 'a' S 'c' | 'a' | 'a' S 'b';
           "
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     #[test]

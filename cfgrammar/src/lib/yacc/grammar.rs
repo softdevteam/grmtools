@@ -30,21 +30,20 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
+use std::{cell::RefCell, collections::HashMap, error::Error, fmt};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 
-use {RIdx, PIdx, SIdx, Symbol, TIdx};
 use super::YaccKind;
-use yacc::firsts::YaccFirsts;
-use yacc::follows::YaccFollows;
-use yacc::parser::YaccParser;
+use yacc::{firsts::YaccFirsts, follows::YaccFollows, parser::YaccParser};
+use PIdx;
+use RIdx;
+use SIdx;
+use Symbol;
+use TIdx;
 
-const START_RULE         : &str = "^";
-const IMPLICIT_RULE      : &str = "~";
+const START_RULE: &str = "^";
+const IMPLICIT_RULE: &str = "~";
 const IMPLICIT_START_RULE: &str = "^~";
 
 use yacc::{
@@ -997,10 +996,13 @@ impl fmt::Display for YaccGrammarError {
 
 #[cfg(test)]
 mod test {
+    use super::{rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE};
     use std::collections::HashMap;
-    use super::{IMPLICIT_RULE, IMPLICIT_START_RULE, rule_max_costs, rule_min_costs};
-    use {RIdx, PIdx, Symbol, TIdx};
     use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
+    use PIdx;
+    use RIdx;
+    use Symbol;
+    use TIdx;
 
     #[test]
     fn test_minimal() {
@@ -1099,7 +1101,8 @@ mod test {
             C: 'y'
              | 'z';
           "
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(
             grm.prods_rules,
@@ -1307,7 +1310,8 @@ mod test {
             C: 'x' B | 'x';
             D: 'y' B | 'y' 'z';
           "
-        ).unwrap();
+        )
+        .unwrap();
 
         let sg = grm.sentence_generator(|_| 1);
 
@@ -1318,7 +1322,8 @@ mod test {
                     x.iter()
                         .map(|y| grm.token_idx(y).unwrap())
                         .collect::<Vec<_>>()
-                }).collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
 
             let ms = sg.min_sentence(grm.rule_idx(nt_name).unwrap());
             if !cnds.iter().any(|x| x == &ms) {
@@ -1401,7 +1406,8 @@ mod test {
              | 'b';
             A: 'b';
             "
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(
             grm.prods_rules,

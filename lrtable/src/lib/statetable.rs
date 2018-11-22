@@ -44,11 +44,12 @@ use cfgrammar::{
     PIdx, RIdx, Symbol, TIdx
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use vob::{IterSetBits, Vob};
 use sparsevec::SparseVec;
+use vob::{IterSetBits, Vob};
 
-use {StIdx, StIdxStorageT};
 use stategraph::StateGraph;
+use StIdx;
+use StIdxStorageT;
 
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
@@ -351,7 +352,11 @@ where
 
     /// Return the action for `stidx` and `sym`, or `None` if there isn't any.
     pub fn action(&self, stidx: StIdx, tidx: TIdx<StorageT>) -> Action<StorageT> {
-        StateTable::decode(self.actions.get(usize::from(stidx), usize::from(tidx)).unwrap())
+        StateTable::decode(
+            self.actions
+                .get(usize::from(stidx), usize::from(tidx))
+                .unwrap()
+        )
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `stidx`.
@@ -875,18 +880,15 @@ mod test {
 %%
 D : D;
           "
-        ).unwrap();
+        )
+        .unwrap();
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
             Err(StateTableError {
                 kind: StateTableErrorKind::AcceptReduceConflict,
                 pidx
-            })
-                if pidx == PIdx(1) =>
-            {
-                ()
-            }
+            }) if pidx == PIdx(1) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
         }
     }
