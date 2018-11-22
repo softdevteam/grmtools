@@ -67,7 +67,7 @@ where
 
     // First phase: search for the first success node.
 
-    let mut scs_nodes = Vec::new(); // Store success nodes
+    let mut scs_nodes = Vec::new();
     // todo is a map from "original node" to "merged node". We never change "original node", but,
     // as we find compatible repairs, continually update merged node. This means that when we pop
     // things off the todo we *must* use "merged node" as our node to work with.

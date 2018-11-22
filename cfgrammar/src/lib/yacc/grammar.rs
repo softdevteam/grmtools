@@ -838,6 +838,7 @@ where
             all_done = false;
             let mut ls_cmplt = None; // lowest completed cost
             let mut ls_noncmplt = None; // lowest non-completed cost
+
             // The call to as_() is guaranteed safe because done.len() == grm.rules_len(), and
             // we guarantee that grm.rules_len() can fit in StorageT.
             for pidx in grm.rule_to_prods(RIdx(i.as_())).iter() {
@@ -913,6 +914,7 @@ where
             all_done = false;
             let mut hs_cmplt = None; // highest completed cost
             let mut hs_noncmplt = None; // highest non-completed cost
+
             // The call to as_() is guaranteed safe because done.len() == grm.rules_len(), and
             // we guarantee that grm.rules_len() can fit in StorageT.
             'a: for pidx in grm.rule_to_prods(RIdx(i.as_())).iter() {
