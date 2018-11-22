@@ -363,8 +363,7 @@ where
                         // Iterate over all $-arguments and replace them with their respective
                         // element from the argument vector (e.g. $1 is replaced by args[0]). At
                         // the same time extract &str from tokens and actiontype from nonterminals.
-                        outs.push_str(&format!("#[allow(clippy::let_and_return)]
-fn {prefix}action_{}({prefix}input: &str, {prefix}args: &[AStackType<{actiont}, {}>]) -> {actiont} {{
+                        outs.push_str(&format!("fn {prefix}action_{}({prefix}input: &str, {prefix}args: &[AStackType<{actiont}, {}>]) -> {actiont} {{
 ",
                             usize::from(pidx),
                             StorageT::type_name(),

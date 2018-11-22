@@ -30,16 +30,16 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#![feature(try_from)]
-
 extern crate lrpar;
 extern crate num_traits;
 extern crate regex;
+extern crate try_from;
 extern crate typename;
 
-use std::{convert::TryFrom, error::Error, fmt, hash::Hash};
+use std::{error::Error, fmt, hash::Hash};
 
 use num_traits::{PrimInt, Unsigned};
+use try_from::TryFrom;
 
 mod builder;
 mod lexer;

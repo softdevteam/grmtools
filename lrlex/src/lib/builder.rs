@@ -32,7 +32,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    convert::{AsRef, TryFrom},
+    convert::AsRef,
     env::{current_dir, var},
     error::Error,
     fmt::Debug,
@@ -43,6 +43,7 @@ use std::{
 };
 
 use num_traits::{PrimInt, Unsigned};
+use try_from::TryFrom;
 use typename::TypeName;
 
 use lexer::LexerDef;

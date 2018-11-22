@@ -30,10 +30,11 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::{collections::hash_map::HashMap, convert::TryFrom, hash::Hash};
+use std::{collections::hash_map::HashMap, hash::Hash};
 
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use try_from::TryFrom;
 
 use itemset::Itemset;
 use StIdx;
