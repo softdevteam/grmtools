@@ -140,7 +140,7 @@ where
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
         let mut tstack: Vec<Node<StorageT>> = Vec::new();
         let mut errors: Vec<ParseError<StorageT>> = Vec::new();
-        let accpt = psr.lr::<u64>(0, &mut pstack, &mut tstack, &mut errors, None);
+        let accpt = psr.lr::<StorageT>(0, &mut pstack, &mut tstack, &mut errors, None);
         match (accpt, errors.is_empty()) {
             (true, true) => Ok(tstack.drain(..).nth(0).unwrap()),
             (true, false) => Err((Some(tstack.drain(..).nth(0).unwrap()), errors)),
