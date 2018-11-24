@@ -64,9 +64,12 @@ fn usage(prog: &str, msg: &str) -> ! {
     if !msg.is_empty() {
         writeln!(&mut stderr(), "{}", msg).ok();
     }
-    writeln!(&mut stderr(),
-             "Usage: {} [-r <cpctplus|mf|panic|none>] [-y <eco|original>] <lexer.l> <parser.y> <input file>",
-             leaf).ok();
+    writeln!(
+        &mut stderr(),
+        "Usage: {} [-r <cpctplus|mf|none>] [-y <eco|original>] <lexer.l> <parser.y> <input file>",
+        leaf
+    )
+    .ok();
     process::exit(1);
 }
 
@@ -92,7 +95,7 @@ fn main() {
             "r",
             "recoverer",
             "Recoverer to be used (default: mf)",
-            "cpctplus|mf|panic|none"
+            "cpctplus|mf|none"
         )
         .optopt(
             "y",
