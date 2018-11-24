@@ -195,7 +195,7 @@ fn main() {
     let input = read_file(&matches.free[2]);
     let mut lexer = lexerdef.lexer(&input);
     let pb = RTParserBuilder::new(&grm, &sgraph, &stable).recoverer(recoverykind);
-    match pb.parse(&mut lexer) {
+    match pb.parse_generictree(&mut lexer) {
         Ok(pt) => println!("{}", pt.pp(&grm, &input)),
         Err(LexParseError::LexError(e)) => {
             println!("Lexing error at position {}", e.idx);

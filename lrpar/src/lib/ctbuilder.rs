@@ -319,7 +319,7 @@ where
         let s = lexer.input().to_string();
         RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(RecoveryKind::{})
-            .parse2(lexer, &actions, &s)\n",
+            .parse_actions(lexer, &actions, &s)\n",
                     recoverer,
                 ));
             }
@@ -328,7 +328,7 @@ where
                     "
         RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(RecoveryKind::{})
-            .parse(lexer)\n",
+            .parse_generictree(lexer)\n",
                     recoverer
                 ));
             }

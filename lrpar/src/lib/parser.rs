@@ -115,7 +115,7 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    fn parse<F>(
+    fn parse_generictree<F>(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         token_cost: F,
@@ -149,7 +149,7 @@ where
         }
     }
 
-    fn parse2<F, ActionT>(
+    fn parse_actions<F, ActionT>(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         token_cost: F,
@@ -564,11 +564,11 @@ where
     /// Parse input. On success return a parse tree. On failure, return a `LexParseError`: a
     /// `LexError` means that no parse tree was produced; a `ParseError` may (if its first element
     /// is `Some(...)`) return a parse tree (with parts filled in by this builder's recoverer).
-    pub fn parse(
+    pub fn parse_generictree(
         &self,
         lexer: &mut Lexer<StorageT>
     ) -> Result<Node<StorageT>, LexParseError<StorageT>> {
-        Ok(Parser::parse(
+        Ok(Parser::parse_generictree(
             self.recoverer,
             self.grm,
             self.term_costs,
@@ -578,16 +578,16 @@ where
         )?)
     }
 
-    /// Parse input. On success return a parse tree. On failure, return a `LexParseError`: a
-    /// `LexError` means that no parse tree was produced; a `ParseError` may (if its first element
-    /// is `Some(...)`) return a parse tree (with parts filled in by this builder's recoverer).
-    pub fn parse2<ActionT>(
+    /// Parse input, execute actions, and return the associated value. On failure, return a
+    /// `LexParseError`: a `LexError` means that no value was produced; a `ParseError` may (if its
+    /// first element is `Some(...)`) return a value.
+    pub fn parse_actions<ActionT>(
         &self,
         lexer: &mut Lexer<StorageT>,
         actions: &[Option<&Fn(&str, &[AStackType<ActionT, StorageT>]) -> ActionT>],
         input: &str
     ) -> Result<ActionT, LexParseError<StorageT>> {
-        Ok(Parser::parse2(
+        Ok(Parser::parse_actions(
             self.recoverer,
             self.grm,
             self.term_costs,
@@ -697,7 +697,7 @@ pub(crate) mod test {
         let r = match RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
-            .parse(&mut lexer)
+            .parse_generictree(&mut lexer)
         {
             Ok(r) => Ok(r),
             Err(LexParseError::ParseError(r1, r2)) => Err((r1, r2)),
