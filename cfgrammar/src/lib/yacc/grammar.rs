@@ -356,16 +356,6 @@ where
         })
     }
 
-    /// Get the programs part of the grammar
-    pub fn programs(&self) -> &Option<String> {
-        &self.programs
-    }
-
-    /// Get the action return type as defined by the user
-    pub fn actiontype(&self) -> &Option<String> {
-        &self.actiontype
-    }
-
     /// How many productions does this grammar have?
     pub fn prods_len(&self) -> PIdx<StorageT> {
         self.prods_len
@@ -383,11 +373,6 @@ where
     /// Get the sequence of symbols for production `pidx`. Panics if `pidx` doesn't exist.
     pub fn prod(&self, pidx: PIdx<StorageT>) -> &[Symbol<StorageT>] {
         &self.prods[usize::from(pidx)]
-    }
-
-    /// Get the action for production `pidx`. Panics if `pidx` doesn't exist.
-    pub fn action(&self, pidx: PIdx<StorageT>) -> &Option<String> {
-        &self.actions[usize::from(pidx)]
     }
 
     /// How many symbols does production `pidx` have? Panics if `pidx` doesn't exist.
@@ -496,6 +481,21 @@ where
         self.token_epp[usize::from(tidx)]
             .as_ref()
             .and_then(|x| Some(x.as_str()))
+    }
+
+    /// Get the action for production `pidx`. Panics if `pidx` doesn't exist.
+    pub fn action(&self, pidx: PIdx<StorageT>) -> &Option<String> {
+        &self.actions[usize::from(pidx)]
+    }
+
+    /// Get the action return type as defined by the user
+    pub fn actiontype(&self) -> &Option<String> {
+        &self.actiontype
+    }
+
+    /// Get the programs part of the grammar
+    pub fn programs(&self) -> &Option<String> {
+        &self.programs
     }
 
     /// Returns a map from names to `TIdx`s of all tokens that a lexer will need to generate valid
