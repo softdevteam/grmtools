@@ -258,9 +258,11 @@ where
             ActionKind::CustomAction => {
                 outs.push_str(&format!(
                     "use lrpar::parser::AStackType;
+    use cfgrammar::RIdx;
+    use std::vec;
 
     pub fn parse(lexer: &mut Lexer<{storaget}>)
-          -> Result<{actiont}, LexParseError<{storaget}>>
+          -> Result<{actiont}, LexParseError<{storaget}, {actiont}>>
     {{",
                     storaget = StorageT::type_name(),
                     actiont = actiontype
@@ -271,7 +273,7 @@ where
                     "use lrpar::Node;
 
     pub fn parse(lexer: &mut Lexer<{storaget}>)
-          -> Result<Node<{storaget}>, LexParseError<{storaget}>>
+          -> Result<Node<{storaget}>, LexParseError<{storaget}, Node<{storaget}>>>
     {{",
                     storaget = StorageT::type_name()
                 ));
@@ -299,8 +301,8 @@ where
         match self.actionkind {
             ActionKind::CustomAction => {
                 // action function references
-                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(&str, &[AStackType<{actiont}, {}>]) -> {actiont}>> = Vec::new();\n",
-                    StorageT::type_name(),
+                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(RIdx<{storaget}>, &str, vec::Drain<AStackType<{actiont}, {storaget}>>) -> {actiont}>> = Vec::new();\n",
+                    storaget=StorageT::type_name(),
                     actiont=actiontype)
                 );
                 for pidx in grm.iter_pidxs() {
@@ -363,24 +365,19 @@ where
                         // Iterate over all $-arguments and replace them with their respective
                         // element from the argument vector (e.g. $1 is replaced by args[0]). At
                         // the same time extract &str from tokens and actiontype from nonterminals.
-                        outs.push_str(&format!("fn {prefix}action_{}({prefix}input: &str, {prefix}args: &[AStackType<{actiont}, {}>]) -> {actiont} {{
+                        outs.push_str(&format!("fn {prefix}action_{}(_ridx: RIdx<{storaget}>, {prefix}input: &str, mut {prefix}args: vec::Drain<AStackType<{actiont}, {storaget}>>) -> {actiont} {{
 ",
                             usize::from(pidx),
-                            StorageT::type_name(),
+                            storaget=StorageT::type_name(),
                             prefix=ACTION_PREFIX,
                             actiont=actiontype));
-                        for m in re.find_iter(s) {
-                            let num = match &s[m.start() + 1..m.end()].parse::<usize>() {
-                                Ok(val) => val - 1,
-                                Err(_) => unreachable!()
-                            };
+                        for i in 0..grm.prod(pidx).len() {
                             outs.push_str(&format!(
-                                "    let {prefix}arg_{} = match {prefix}args[{}] {{",
-                                num + 1,
-                                num,
+                                "    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{",
+                                i + 1,
                                 prefix = ACTION_PREFIX
                             ));
-                            match grm.prod(pidx)[num] {
+                            match grm.prod(pidx)[i] {
                                 Symbol::Rule(_) => outs.push_str(
                                     "
         AStackType::ActionType(v) => v,
