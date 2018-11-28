@@ -35,7 +35,7 @@ use std::{
     convert::AsRef,
     env::{current_dir, var},
     error::Error,
-    fmt::Debug,
+    fmt::{self, Debug},
     fs::{self, read_to_string, File},
     hash::Hash,
     io::Write,
@@ -49,7 +49,7 @@ use cfgrammar::{
     Symbol
 };
 use filetime::FileTime;
-use lrtable::{from_yacc, Minimiser, StateGraph, StateTable};
+use lrtable::{from_yacc, statetable::Conflicts, Minimiser, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -79,14 +79,72 @@ pub enum ActionKind {
     GenericParseTree
 }
 
+struct CTConflictsError<StorageT: Eq + Hash> {
+    pub grm: YaccGrammar<StorageT>,
+    pub sgraph: StateGraph<StorageT>,
+    pub stable: StateTable<StorageT>
+}
+
+impl<StorageT> fmt::Display for CTConflictsError<StorageT>
+where
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let conflicts = self.stable.conflicts().unwrap();
+        write!(
+            f,
+            "CTConflictsError{{{} Shift/Reduce, {} Reduce/Reduce}}",
+            conflicts.sr_len(),
+            conflicts.rr_len()
+        )
+    }
+}
+
+impl<StorageT> fmt::Debug for CTConflictsError<StorageT>
+where
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let conflicts = self.stable.conflicts().unwrap();
+        write!(
+            f,
+            "CTConflictsError{{{} Shift/Reduce, {} Reduce/Reduce}}",
+            conflicts.sr_len(),
+            conflicts.rr_len()
+        )
+    }
+}
+
+impl<StorageT> Error for CTConflictsError<StorageT>
+where
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
+{
+}
+
 /// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
-pub struct CTParserBuilder<StorageT = u32> {
-    // Anything stored in here almost certainly needs to be included as part of the rebuild_cache
-    // function below so that, if it's changed, the grammar is rebuilt.
+pub struct CTParserBuilder<StorageT = u32>
+where
+    StorageT: Eq + Hash
+{
+    // Anything stored in here (except `conflicts` and `error_on_conflict`) almost certainly needs
+    // to be included as part of the rebuild_cache function below so that, if it's changed, the
+    // grammar is rebuilt.
     recoverer: RecoveryKind,
     phantom: PhantomData<StorageT>,
-    actionkind: ActionKind
+    actionkind: ActionKind,
+    error_on_conflicts: bool,
+    conflicts: Option<(
+        YaccGrammar<StorageT>,
+        StateGraph<StorageT>,
+        StateTable<StorageT>
+    )>
 }
 
 impl CTParserBuilder<u32> {
@@ -132,7 +190,9 @@ where
         CTParserBuilder {
             recoverer: RecoveryKind::MF,
             phantom: PhantomData,
-            actionkind: ActionKind::GenericParseTree
+            actionkind: ActionKind::GenericParseTree,
+            error_on_conflicts: true,
+            conflicts: None
         }
     }
 
@@ -156,9 +216,9 @@ where
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
     /// productions.
     pub fn process_file_in_src(
-        &self,
+        &mut self,
         srcp: &str
-    ) -> Result<(HashMap<String, StorageT>), Box<Error>> {
+    ) -> Result<HashMap<String, StorageT>, Box<Error>> {
         let mut inp = current_dir()?;
         inp.push("src");
         inp.push(srcp);
@@ -171,6 +231,30 @@ where
     pub fn action_kind(mut self, ak: ActionKind) -> Self {
         self.actionkind = ak;
         self
+    }
+
+    /// If set to true, `process_file_in_src` will return an error if the given grammar contains
+    /// any Shift/Reduce or Reduce/Reduce conflicts. Defaults to `true`.
+    pub fn error_on_conflicts(mut self, b: bool) -> Self {
+        self.error_on_conflicts = b;
+        self
+    }
+
+    /// If there are any conflicts in the grammar, return a tuple which allows users to inspect
+    /// and pretty print them; otherwise returns `None`. Note: The conflicts feature is currently
+    /// unstable and may change in the future.
+    pub fn conflicts(
+        &self
+    ) -> Option<(
+        &YaccGrammar<StorageT>,
+        &StateGraph<StorageT>,
+        &StateTable<StorageT>,
+        &Conflicts<StorageT>
+    )> {
+        if let Some((grm, sgraph, stable)) = &self.conflicts {
+            return Some((grm, sgraph, stable, &stable.conflicts().unwrap()));
+        }
+        None
     }
 
     /// Statically compile the Yacc file `inp` into Rust, placing the output file(s) into
@@ -194,10 +278,10 @@ where
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
     /// productions.
     pub fn process_file<P, Q>(
-        &self,
+        &mut self,
         inp: P,
         outd: Q
-    ) -> Result<(HashMap<String, StorageT>), Box<Error>>
+    ) -> Result<HashMap<String, StorageT>, Box<Error>>
     where
         P: AsRef<Path>,
         Q: AsRef<Path>
@@ -256,6 +340,15 @@ where
         fs::remove_file(&outp_rs).ok();
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
+
+        if stable.conflicts().is_some() && self.error_on_conflicts {
+            return Err(Box::new(CTConflictsError {
+                grm,
+                sgraph,
+                stable
+            }));
+        }
+
         // Because we're lazy, we don't write our own serializer. We use serde and bincode to
         // create files $out_base.grm, $out_base.sgraph, and $out_base.out_stable which contain
         // binary versions of the relevant structs, and then include those binary files into the
@@ -268,12 +361,12 @@ where
         // Header
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
         let actiontype = match grm.actiontype() {
-            Some(t) => t,
+            Some(t) => t.clone(), // Probably unneeded once NLL is in stable
             None => {
                 match self.actionkind {
                     ActionKind::CustomAction => panic!("Action return type not defined!"),
                     ActionKind::GenericParseTree => {
-                        "" // Dummy string that will never be used
+                        String::new() // Dummy string that will never be used
                     }
                 }
             }
@@ -475,6 +568,10 @@ where
 
         let mut f = File::create(outp_rs)?;
         f.write_all(outs.as_bytes())?;
+
+        if stable.conflicts().is_some() {
+            self.conflicts = Some((grm, sgraph, stable));
+        }
         Ok(rule_ids)
     }
 
@@ -564,4 +661,70 @@ pub fn _reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
     let sgraph = deserialize(sgraph_buf).unwrap();
     let stable = deserialize(stable_buf).unwrap();
     (grm, sgraph, stable)
+}
+
+#[cfg(test)]
+mod test {
+    extern crate temp_testdir;
+    use std::{fs::File, io::Write, path::PathBuf};
+
+    use self::temp_testdir::TempDir;
+    use super::{ActionKind, CTConflictsError, CTParserBuilder};
+
+    #[test]
+    fn test_conflicts() {
+        let temp = TempDir::default();
+        let mut file_path = PathBuf::from(temp.as_ref());
+        file_path.push("grm.y");
+        let mut f = File::create(&file_path).unwrap();
+        let _ = f.write_all(
+            "%start A
+%%
+A : 'a' 'b' | B 'b';
+B : 'a' | C;
+C : 'a';"
+                .as_bytes()
+        );
+
+        let mut ct = CTParserBuilder::new()
+            .error_on_conflicts(false)
+            .action_kind(ActionKind::GenericParseTree);
+        ct.process_file_in_src(file_path.to_str().unwrap()).unwrap();
+
+        match ct.conflicts() {
+            Some((_, _, _, conflicts)) => {
+                assert_eq!(conflicts.sr_len(), 1);
+                assert_eq!(conflicts.rr_len(), 1);
+            }
+            None => panic!("Expected error data")
+        }
+    }
+
+    #[test]
+    fn test_conflicts_error() {
+        let temp = TempDir::default();
+        let mut file_path = PathBuf::from(temp.as_ref());
+        file_path.push("grm.y");
+        let mut f = File::create(&file_path).unwrap();
+        let _ = f.write_all(
+            "%start A
+%%
+A : 'a' 'b' | B 'b';
+B : 'a' | C;
+C : 'a';"
+                .as_bytes()
+        );
+
+        match CTParserBuilder::new()
+            .action_kind(ActionKind::GenericParseTree)
+            .process_file_in_src(file_path.to_str().unwrap())
+        {
+            Ok(_) => panic!("Expected error"),
+            Err(e) => {
+                let cs = e.downcast_ref::<CTConflictsError<u32>>();
+                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
+                assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
+            }
+        }
+    }
 }

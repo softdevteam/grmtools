@@ -491,8 +491,8 @@ where
     }
 
     /// Get the action return type as defined by the user
-    pub fn actiontype(&self) -> &Option<String> {
-        &self.actiontype
+    pub fn actiontype(&self) -> Option<&String> {
+        self.actiontype.as_ref()
     }
 
     /// Get the programs part of the grammar
@@ -555,6 +555,22 @@ where
                 return false;
             }
         }
+    }
+
+    /// Returns the string representation of a given production `pidx`.
+    pub fn pp_prod(&self, pidx: PIdx<StorageT>) -> String {
+        let mut sprod = String::new();
+        let ridx = self.prod_to_rule(pidx);
+        sprod.push_str(self.rule_name(ridx));
+        sprod.push_str(":");
+        for sym in self.prod(pidx) {
+            let s = match sym {
+                Symbol::Token(tidx) => self.token_name(*tidx).unwrap(),
+                Symbol::Rule(ridx) => self.rule_name(*ridx)
+            };
+            sprod.push_str(&format!(" \"{}\"", s));
+        }
+        sprod
     }
 
     /// Return a `SentenceGenerator` which can then generate minimal sentences for any rule
