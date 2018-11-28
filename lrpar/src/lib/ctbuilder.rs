@@ -301,7 +301,7 @@ where
         match self.actionkind {
             ActionKind::CustomAction => {
                 // action function references
-                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(RIdx<{storaget}>, &str, vec::Drain<AStackType<{actiont}, {storaget}>>) -> {actiont}>> = Vec::new();\n",
+                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(RIdx<{storaget}>, &Lexer<{storaget}>, vec::Drain<AStackType<{actiont}, {storaget}>>) -> {actiont}>> = Vec::new();\n",
                     storaget=StorageT::type_name(),
                     actiont=actiontype)
                 );
@@ -318,10 +318,9 @@ where
                 }
                 outs.push_str(&format!(
                     "
-        let s = lexer.input().to_string();
         RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(RecoveryKind::{})
-            .parse_actions(lexer, &actions, &s)\n",
+            .parse_actions(lexer, &actions)\n",
                     recoverer,
                 ));
             }
@@ -365,7 +364,7 @@ where
                         // Iterate over all $-arguments and replace them with their respective
                         // element from the argument vector (e.g. $1 is replaced by args[0]). At
                         // the same time extract &str from tokens and actiontype from nonterminals.
-                        outs.push_str(&format!("fn {prefix}action_{}(_ridx: RIdx<{storaget}>, {prefix}input: &str, mut {prefix}args: vec::Drain<AStackType<{actiont}, {storaget}>>) -> {actiont} {{
+                        outs.push_str(&format!("fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>, {prefix}lexer: &Lexer<{storaget}>, mut {prefix}args: vec::Drain<AStackType<{actiont}, {storaget}>>) -> {actiont} {{
 ",
                             usize::from(pidx),
                             storaget=StorageT::type_name(),
@@ -388,7 +387,7 @@ where
                                 Symbol::Token(_) => outs.push_str(&format!(
                                     "
         AStackType::ActionType(_) => unreachable!(),
-        AStackType::Lexeme(l) => &{prefix}input[l.start()..l.end()]
+        AStackType::Lexeme(ref l) => {prefix}lexer.lexeme_str(l)
     }};
 ",
                                     prefix = ACTION_PREFIX
