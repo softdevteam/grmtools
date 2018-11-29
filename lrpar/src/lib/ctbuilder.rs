@@ -301,20 +301,20 @@ where
         match self.actionkind {
             ActionKind::CustomAction => {
                 // action function references
-                outs.push_str(&format!("\n        let mut actions: Vec<Option<&Fn(RIdx<{storaget}>, &Lexer<{storaget}>, vec::Drain<AStackType<{actiont}, {storaget}>>) -> {actiont}>> = Vec::new();\n",
-                    storaget=StorageT::type_name(),
-                    actiont=actiontype)
-                );
+                outs.push_str(&format!(
+                    "\n        let mut actions: Vec<&Fn(RIdx<{storaget}>,
+                       &Lexer<{storaget}>,
+                       vec::Drain<AStackType<{actiont}, {storaget}>>)
+                    -> {actiont}> = Vec::new();\n",
+                    storaget = StorageT::type_name(),
+                    actiont = actiontype
+                ));
                 for pidx in grm.iter_pidxs() {
-                    if grm.action(pidx).is_some() {
-                        outs.push_str(&format!(
-                            "        actions.push(Some(&{prefix}action_{}));\n",
-                            usize::from(pidx),
-                            prefix = ACTION_PREFIX
-                        ))
-                    } else {
-                        outs.push_str("        actions.push(None);")
-                    };
+                    outs.push_str(&format!(
+                        "        actions.push(&{prefix}action_{});\n",
+                        usize::from(pidx),
+                        prefix = ACTION_PREFIX
+                    ))
                 }
                 outs.push_str(&format!(
                     "
@@ -360,47 +360,62 @@ where
                 // Convert actions to functions
                 outs.push_str("\n/* Converted actions */\n\n");
                 for pidx in grm.iter_pidxs() {
-                    if let Some(s) = grm.action(pidx) {
-                        // Iterate over all $-arguments and replace them with their respective
-                        // element from the argument vector (e.g. $1 is replaced by args[0]). At
-                        // the same time extract &str from tokens and actiontype from nonterminals.
-                        outs.push_str(&format!("fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>, {prefix}lexer: &Lexer<{storaget}>, mut {prefix}args: vec::Drain<AStackType<{actiont}, {storaget}>>) -> {actiont} {{
-",
-                            usize::from(pidx),
-                            storaget=StorageT::type_name(),
-                            prefix=ACTION_PREFIX,
-                            actiont=actiontype));
-                        for i in 0..grm.prod(pidx).len() {
-                            outs.push_str(&format!(
-                                "    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{",
-                                i + 1,
-                                prefix = ACTION_PREFIX
-                            ));
-                            match grm.prod(pidx)[i] {
-                                Symbol::Rule(_) => outs.push_str(
-                                    "
+                    // Iterate over all $-arguments and replace them with their respective
+                    // element from the argument vector (e.g. $1 is replaced by args[0]). At
+                    // the same time extract &str from tokens and actiontype from nonterminals.
+                    outs.push_str(&format!(
+                        "fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
+                                {prefix}lexer: &Lexer<{storaget}>,
+                                mut {prefix}args: vec::Drain<AStackType<{actiont}, {storaget}>>)
+                            -> {actiont} {{\n",
+                        usize::from(pidx),
+                        storaget = StorageT::type_name(),
+                        prefix = ACTION_PREFIX,
+                        actiont = actiontype
+                    ));
+                    for i in 0..grm.prod(pidx).len() {
+                        outs.push_str(&format!(
+                            "    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{",
+                            i + 1,
+                            prefix = ACTION_PREFIX
+                        ));
+                        match grm.prod(pidx)[i] {
+                            Symbol::Rule(_) => outs.push_str(
+                                "
         AStackType::ActionType(v) => v,
         AStackType::Lexeme(_) => unreachable!()
     };
 "
-                                ),
-                                Symbol::Token(_) => outs.push_str(&format!(
-                                    "
+                            ),
+                            Symbol::Token(_) => outs.push_str(&format!(
+                                "
         AStackType::ActionType(_) => unreachable!(),
         AStackType::Lexeme(ref l) => {prefix}lexer.lexeme_str(l)
     }};
 ",
-                                    prefix = ACTION_PREFIX
-                                ))
-                            };
-                        }
+                                prefix = ACTION_PREFIX
+                            ))
+                        };
+                    }
+                    if let Some(s) = grm.action(pidx) {
                         let ns = re.replace_all(
                             s,
                             format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
                         );
                         outs.push_str(&format!("    {}", &ns,));
-                        outs.push_str("\n}\n\n");
+                    } else if pidx == grm.start_prod() {
+                        // The action for the start production (i.e. the extra rule/production
+                        // added by lrpar) will never be executed, so a dummy function is all
+                        // that's required. We add "unreachable" as a check in case some other
+                        // detail of lrpar changes in the future.
+                        outs.push_str("    unreachable!()");
+                    } else {
+                        panic!(
+                            "Production in rule '{}' must have an action body.",
+                            grm.rule_name(grm.prod_to_rule(pidx))
+                        );
                     }
+                    outs.push_str("\n}\n\n");
                 }
             }
             ActionKind::GenericParseTree => ()

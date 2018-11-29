@@ -111,13 +111,11 @@ pub struct Parser<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: &'a [Lexeme<StorageT>],
-    actions: &'a [Option<
-        &'a Fn(
-            RIdx<StorageT>,
-            &Lexer<StorageT>,
-            vec::Drain<AStackType<ActionT, StorageT>>
-        ) -> ActionT
-    >]
+    actions: &'a [&'a Fn(
+        RIdx<StorageT>,
+        &Lexer<StorageT>,
+        vec::Drain<AStackType<ActionT, StorageT>>
+    ) -> ActionT]
 }
 
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, StorageT, Node<StorageT>>
@@ -141,15 +139,13 @@ where
             assert!(token_cost(tidx) > 0);
         }
         let mut actions: Vec<
-            Option<
-                &'a Fn(
-                    RIdx<StorageT>,
-                    &Lexer<StorageT>,
-                    vec::Drain<AStackType<Node<StorageT>, StorageT>>
-                ) -> Node<StorageT>
-            >
+            &'a Fn(
+                RIdx<StorageT>,
+                &Lexer<StorageT>,
+                vec::Drain<AStackType<Node<StorageT>, StorageT>>
+            ) -> Node<StorageT>
         > = Vec::new();
-        actions.resize(usize::from(grm.prods_len()), Some(&Parser::generic_ptree));
+        actions.resize(usize::from(grm.prods_len()), &Parser::generic_ptree);
         let psr = Parser {
             rcvry_kind,
             grm,
@@ -202,13 +198,11 @@ where
         stable: &StateTable<StorageT>,
         lexer: &mut Lexer<StorageT>,
         lexemes: &[Lexeme<StorageT>],
-        actions: &[Option<
-            &Fn(
-                RIdx<StorageT>,
-                &Lexer<StorageT>,
-                vec::Drain<AStackType<ActionT, StorageT>>
-            ) -> ActionT
-        >]
+        actions: &[&Fn(
+            RIdx<StorageT>,
+            &Lexer<StorageT>,
+            vec::Drain<AStackType<ActionT, StorageT>>
+        ) -> ActionT]
     ) -> Result<ActionT, (Option<ActionT>, Vec<ParseError<StorageT>>)>
     where
         F: Fn(TIdx<StorageT>) -> u8
@@ -273,15 +267,12 @@ where
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
 
-                    // Process actions
-                    if let Some(f) = self.actions[usize::from(pidx)] {
-                        let v = AStackType::ActionType(f(
-                            ridx,
-                            self.lexer,
-                            astack.drain(pop_idx - 1..)
-                        ));
-                        astack.push(v);
-                    }
+                    let v = AStackType::ActionType(self.actions[usize::from(pidx)](
+                        ridx,
+                        self.lexer,
+                        astack.drain(pop_idx - 1..)
+                    ));
+                    astack.push(v);
                 }
                 Action::Shift(state_id) => {
                     let la_lexeme = self.next_lexeme(laidx);
@@ -368,14 +359,12 @@ where
                     let ridx = self.grm.prod_to_rule(pidx);
                     let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     if let Some(ref mut astack_uw) = *astack {
-                        if let Some(f) = self.actions[usize::from(pidx)] {
-                            let v = AStackType::ActionType(f(
-                                ridx,
-                                self.lexer,
-                                astack_uw.drain(pop_idx - 1..)
-                            ));
-                            astack_uw.push(v);
-                        }
+                        let v = AStackType::ActionType(self.actions[usize::from(pidx)](
+                            ridx,
+                            self.lexer,
+                            astack_uw.drain(pop_idx - 1..)
+                        ));
+                        astack_uw.push(v);
                     }
 
                     pstack.drain(pop_idx..);
@@ -626,13 +615,11 @@ where
     pub fn parse_actions<ActionT: 'static>(
         &self,
         lexer: &mut Lexer<StorageT>,
-        actions: &[Option<
-            &Fn(
-                RIdx<StorageT>,
-                &Lexer<StorageT>,
-                vec::Drain<AStackType<ActionT, StorageT>>
-            ) -> ActionT
-        >]
+        actions: &[&Fn(
+            RIdx<StorageT>,
+            &Lexer<StorageT>,
+            vec::Drain<AStackType<ActionT, StorageT>>
+        ) -> ActionT]
     ) -> Result<ActionT, LexParseError<StorageT, ActionT>> {
         let lexemes = lexer.all_lexemes()?;
         Ok(Parser::parse_actions(
