@@ -25,7 +25,9 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// Return the line and column number of a `Lexeme`, or `Err` if it is out of bounds, or no
     /// line number information was collected.
     fn line_and_col(&self, &Lexeme<StorageT>) -> Result<(usize, usize), ()>;
-    fn input(&self) -> &str;
+    /// Return the user input associated with a lexeme. Panics if the lexeme is invalid (i.e. was
+    /// not produced by next()).
+    fn lexeme_str(&self, &Lexeme<StorageT>) -> &str;
 
     /// Return all this lexer's remaining lexemes or a `LexError` if there was a problem when lexing.
     fn all_lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError> {

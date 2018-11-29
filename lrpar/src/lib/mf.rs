@@ -47,7 +47,7 @@ use vob::Vob;
 
 use astar::astar_all;
 use lex::Lexeme;
-use parser::{Node, ParseRepair, Parser, Recoverer};
+use parser::{AStackType, ParseRepair, Parser, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
@@ -132,14 +132,18 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct MF<'a, StorageT: 'a + Eq + Hash> {
+struct MF<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
     dist: Dist<StorageT>,
-    parser: &'a Parser<'a, StorageT>
+    parser: &'a Parser<'a, StorageT, ActionT>
 }
 
-pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
-    parser: &'a Parser<StorageT>
-) -> Box<Recoverer<StorageT> + 'a>
+pub(crate) fn recoverer<
+    'a,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'static
+>(
+    parser: &'a Parser<StorageT, ActionT>
+) -> Box<Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -148,8 +152,8 @@ where
     Box::new(MF { dist, parser })
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Recoverer<StorageT>
-    for MF<'a, StorageT>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+    Recoverer<StorageT, ActionT> for MF<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -157,10 +161,10 @@ where
     fn recover(
         &self,
         finish_by: Instant,
-        parser: &Parser<StorageT>,
+        parser: &Parser<StorageT, ActionT>,
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
-        mut tstack: &mut Vec<Node<StorageT>>
+        mut astack: &mut Vec<AStackType<ActionT, StorageT>>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         let mut start_cactus_pstack = Cactus::new();
         for st in in_pstack.iter() {
@@ -254,7 +258,7 @@ where
             parser,
             in_laidx,
             &mut in_pstack,
-            &mut Some(&mut tstack),
+            &mut Some(&mut astack),
             &rnk_rprs[0]
         );
 
@@ -262,7 +266,8 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> MF<'a, StorageT>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+    MF<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -548,8 +553,8 @@ fn ends_with_parse_at_least_shifts<StorageT>(repairs: &Cactus<RepairMerge<Storag
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
-    parser: &Parser<StorageT>,
+pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>(
+    parser: &Parser<StorageT, ActionT>,
     finish_by: Instant,
     in_laidx: usize,
     in_pstack: &[StIdx],
@@ -591,11 +596,14 @@ where
 
 /// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
 /// distance and a new pstack.
-pub(crate) fn apply_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
-    parser: &Parser<StorageT>,
+pub(crate) fn apply_repairs<
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'static
+>(
+    parser: &Parser<StorageT, ActionT>,
     mut laidx: usize,
     mut pstack: &mut Vec<StIdx>,
-    mut tstack: &mut Option<&mut Vec<Node<StorageT>>>,
+    mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
     repairs: &[ParseRepair<StorageT>]
 ) -> usize
 where
@@ -611,13 +619,13 @@ where
                     next_lexeme.start(),
                     0
                 );
-                parser.lr_upto(Some(new_lexeme), laidx, laidx + 1, &mut pstack, &mut tstack);
+                parser.lr_upto(Some(new_lexeme), laidx, laidx + 1, &mut pstack, &mut astack);
             }
             ParseRepair::Delete(_) => {
                 laidx += 1;
             }
             ParseRepair::Shift(_) => {
-                laidx = parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut tstack);
+                laidx = parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack);
             }
         }
     }

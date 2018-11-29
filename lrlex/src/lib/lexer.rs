@@ -282,8 +282,8 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         ))
     }
 
-    fn input(&self) -> &str {
-        &self.s
+    fn lexeme_str(&self, l: &Lexeme<StorageT>) -> &str {
+        &self.s[l.start()..l.end()]
     }
 }
 

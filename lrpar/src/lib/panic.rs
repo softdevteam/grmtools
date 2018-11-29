@@ -35,13 +35,17 @@ use std::{fmt::Debug, hash::Hash, time::Instant};
 use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use parser::{Node, ParseRepair, Parser, Recoverer};
+use parser::{AStackType, ParseRepair, Parser, Recoverer};
 
 struct Panic;
 
-pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
-    _: &'a Parser<StorageT>
-) -> Box<Recoverer<StorageT> + 'a>
+pub(crate) fn recoverer<
+    'a,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'static
+>(
+    _: &'a Parser<StorageT, ActionT>
+) -> Box<Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -49,7 +53,8 @@ where
     Box::new(Panic)
 }
 
-impl<StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Recoverer<StorageT> for Panic
+impl<StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+    Recoverer<StorageT, ActionT> for Panic
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -57,10 +62,10 @@ where
     fn recover(
         &self,
         finish_by: Instant,
-        parser: &Parser<StorageT>,
+        parser: &Parser<StorageT, ActionT>,
         in_laidx: usize,
         in_pstack: &mut Vec<StIdx>,
-        _: &mut Vec<Node<StorageT>>
+        _: &mut Vec<AStackType<ActionT, StorageT>>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This recoverer is based on that in Compiler Design in C by Allen I. Holub p.348.
         //

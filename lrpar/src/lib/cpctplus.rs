@@ -44,7 +44,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use astar::dijkstra;
 use lex::Lexeme;
 use mf::{apply_repairs, rank_cnds, simplify_repairs};
-use parser::{Node, ParseRepair, Parser, Recoverer};
+use parser::{AStackType, ParseRepair, Parser, Recoverer};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 
@@ -127,13 +127,17 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct CPCTPlus<'a, StorageT: 'a + Eq + Hash> {
-    parser: &'a Parser<'a, StorageT>
+struct CPCTPlus<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
+    parser: &'a Parser<'a, StorageT, ActionT>
 }
 
-pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
-    parser: &'a Parser<StorageT>
-) -> Box<Recoverer<StorageT> + 'a>
+pub(crate) fn recoverer<
+    'a,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'static
+>(
+    parser: &'a Parser<StorageT, ActionT>
+) -> Box<Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -141,8 +145,8 @@ where
     Box::new(CPCTPlus { parser })
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Recoverer<StorageT>
-    for CPCTPlus<'a, StorageT>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+    Recoverer<StorageT, ActionT> for CPCTPlus<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -150,10 +154,10 @@ where
     fn recover(
         &self,
         finish_by: Instant,
-        parser: &Parser<StorageT>,
+        parser: &Parser<StorageT, ActionT>,
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
-        mut tstack: &mut Vec<Node<StorageT>>
+        mut astack: &mut Vec<AStackType<ActionT, StorageT>>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
@@ -260,7 +264,7 @@ where
             parser,
             in_laidx,
             &mut in_pstack,
-            &mut Some(&mut tstack),
+            &mut Some(&mut astack),
             &rnk_rprs[0]
         );
 
@@ -268,7 +272,8 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> CPCTPlus<'a, StorageT>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+    CPCTPlus<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>

@@ -53,3 +53,34 @@ fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use lrpar::LexParseError;
+
+    #[test]
+    fn test_basic_actions() {
+        let lexerdef = calc_l::lexerdef();
+        let mut lexer = lexerdef.lexer("2+3");
+        match calc_y::parse(&mut lexer) {
+            Ok(5) => (),
+            _ => unreachable!()
+        }
+    }
+
+    #[test]
+    fn test_error_recovery_and_actions() {
+        let lexerdef = calc_l::lexerdef();
+        let mut lexer = lexerdef.lexer("2++3");
+        match calc_y::parse(&mut lexer) {
+            Err(LexParseError::ParseError(Some(5), ..)) => (),
+            _ => unreachable!()
+        }
+        let mut lexer = lexerdef.lexer("2+3)");
+        match calc_y::parse(&mut lexer) {
+            Err(LexParseError::ParseError(Some(5), ..)) => (),
+            _ => unreachable!()
+        }
+    }
+}
