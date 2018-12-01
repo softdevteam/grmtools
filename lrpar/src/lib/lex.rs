@@ -1,6 +1,6 @@
 use std::{error::Error, fmt, hash::Hash, mem::size_of};
 
-use num_traits::{self, PrimInt, Unsigned};
+use num_traits::{PrimInt, Unsigned};
 
 #[derive(Copy, Clone, Debug)]
 pub struct LexError {
@@ -41,6 +41,12 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     }
 }
 
+/// A `Lexeme` represents a segment of the user's input that conforms to a known type. All lexemes
+/// have a starting position in the user's input: lexemes that result from error recovery, however,
+/// do not have a length (or, therefore, an end). This allows us to differentiate between lexemes
+/// that are always of zero length (which are required in some grammars) from lexemes that result
+/// from error recovery (where an error recovery algorithm can know the type that a lexeme should
+/// have been, but can't know what its contents should have been).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Lexeme<StorageT> {
     // The long-term aim is to pack this struct so that len can be longer than u32 while everything
@@ -51,12 +57,20 @@ pub struct Lexeme<StorageT> {
 }
 
 impl<StorageT: Copy> Lexeme<StorageT> {
-    pub fn new(tok_id: StorageT, start: usize, len: usize) -> Self {
-        Lexeme {
-            start,
-            len: num_traits::cast(len).unwrap(),
-            tok_id
-        }
+    /// Create a new token with ID `tok_id` and a starting position in the input `start`. If the
+    /// token is the result of user input, then `Some(n)` should be passed to `len`; if the token
+    /// is the result of error recovery, then `None` should be passed to `len`.
+    pub fn new(tok_id: StorageT, start: usize, len: Option<usize>) -> Self {
+        debug_assert!(size_of::<usize>() >= size_of::<u32>());
+        let len = if let Some(l) = len {
+            if l >= u32::max_value() as usize {
+                panic!("Can't currently represent lexeme of length {}.", l);
+            }
+            l as u32
+        } else {
+            u32::max_value()
+        };
+        Lexeme { start, len, tok_id }
     }
 
     /// The token ID.
@@ -69,18 +83,23 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         self.start
     }
 
-    /// Byte offset of the start of the lexeme
-    pub fn end(&self) -> usize {
-        self.start() + self.len()
+    /// Byte offset of the end of the lexeme, or `None` if this lexeme is the result of error
+    /// recovery.
+    pub fn end(&self) -> Option<usize> {
+        if let Some(l) = self.len() {
+            Some(self.start() + l)
+        } else {
+            None
+        }
     }
 
-    /// Length in bytes of the lexeme
-    pub fn len(&self) -> usize {
-        debug_assert!(size_of::<usize>() >= size_of::<u32>());
-        self.len as usize
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
+    /// Length in bytes of the lexeme, or `None` if this lexeme is the result of error recovery.
+    pub fn len(&self) -> Option<usize> {
+        if self.len == u32::max_value() {
+            None
+        } else {
+            debug_assert!(size_of::<usize>() >= size_of::<u32>());
+            Some(self.len as usize)
+        }
     }
 }

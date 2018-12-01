@@ -245,7 +245,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
                     match r.tok_id {
                         Some(tok_id) => {
                             self.i += longest;
-                            return Some(Ok(Lexeme::new(tok_id, old_i, longest)));
+                            return Some(Ok(Lexeme::new(tok_id, old_i, Some(longest))));
                         }
                         None => {
                             self.i = self.s.len();
@@ -283,7 +283,8 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
     }
 
     fn lexeme_str(&self, l: &Lexeme<StorageT>) -> &str {
-        &self.s[l.start()..l.end()]
+        let st = l.start();
+        &self.s[st..l.end().unwrap_or(st)]
     }
 }
 
@@ -313,11 +314,11 @@ mod test {
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.start(), 0);
-        assert_eq!(lex1.len(), 3);
+        assert_eq!(lex1.len(), Some(3));
         let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.start(), 4);
-        assert_eq!(lex2.len(), 3);
+        assert_eq!(lex2.len(), Some(3));
     }
 
     #[test]
@@ -353,11 +354,11 @@ if 'IF'
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.start(), 0);
-        assert_eq!(lex1.len(), 3);
+        assert_eq!(lex1.len(), Some(3));
         let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.start(), 4);
-        assert_eq!(lex2.len(), 2);
+        assert_eq!(lex2.len(), Some(2));
     }
 
     #[test]
@@ -389,7 +390,7 @@ if 'IF'
         assert_eq!(lexer.line_and_col(&lexemes[2]).unwrap(), (3, 3));
         assert_eq!(lexer.line_and_col(&lexemes[3]).unwrap(), (3, 5));
 
-        let fake_lexeme = Lexeme::new(0, 100, 1);
+        let fake_lexeme = Lexeme::new(0, 100, Some(1));
         if let Ok(_) = lexer.line_and_col(&fake_lexeme) {
             panic!("line_and_col returned Ok(_) when it should have returned Err.");
         }

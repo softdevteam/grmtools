@@ -79,7 +79,7 @@ where
                 Node::Term { lexeme } => {
                     let tidx = TIdx(lexeme.tok_id());
                     let tn = grm.token_name(tidx).unwrap();
-                    let lt = &input[lexeme.start()..lexeme.start() + lexeme.len()];
+                    let lt = &input[lexeme.start()..lexeme.end().unwrap_or(lexeme.start())];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
                 Node::Nonterm { ridx, ref nodes } => {
@@ -408,13 +408,13 @@ where
             } else {
                 debug_assert!(laidx > 0);
                 let last_la = self.lexemes[laidx - 1];
-                last_la.start() + last_la.len()
+                last_la.start() + last_la.len().unwrap_or(0)
             };
 
             Lexeme::new(
                 StorageT::from(u32::from(self.grm.eof_token_idx())).unwrap(),
                 last_la_end,
-                0
+                None
             )
         }
     }
@@ -805,7 +805,7 @@ pub(crate) mod test {
                 }
             }
             assert!(longest > 0);
-            lexemes.push(Lexeme::new(longest_tok_id, i, longest));
+            lexemes.push(Lexeme::new(longest_tok_id, i, Some(longest)));
             i += longest;
         }
         lexemes
@@ -937,12 +937,12 @@ Call: 'ID' '(' ')';";
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
+        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, None));
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
+        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)));
     }
 }

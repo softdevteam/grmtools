@@ -225,7 +225,8 @@ fn main() {
                                 out.push(format!("Insert {}", grm.token_epp(token_idx).unwrap()))
                             }
                             ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
-                                let t = &input[l.start()..l.start() + l.len()].replace("\n", "\\n");
+                                let t = &input[l.start()..l.end().unwrap_or(l.start())]
+                                    .replace("\n", "\\n");
                                 if let ParseRepair::Delete(_) = *r {
                                     out.push(format!("Delete {}", t));
                                 } else {

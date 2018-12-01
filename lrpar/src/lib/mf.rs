@@ -617,7 +617,7 @@ where
                 let new_lexeme = Lexeme::new(
                     StorageT::from(u32::from(tidx)).unwrap(),
                     next_lexeme.start(),
-                    0
+                    None
                 );
                 parser.lr_upto(Some(new_lexeme), laidx, laidx + 1, &mut pstack, &mut astack);
             }
@@ -1239,7 +1239,7 @@ E : 'N'
 
         assert_eq!(errs.len(), 1);
         let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
+        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)));
         check_all_repairs(
             &grm,
             errs[0].repairs(),
@@ -1315,7 +1315,7 @@ E: '(' E ')'
         }
         assert_eq!(errs.len(), 1);
         let err_tok_id = u32::from(grm.eof_token_idx()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 0));
+        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, None));
         check_all_repairs(
             &grm,
             errs[0].repairs(),
