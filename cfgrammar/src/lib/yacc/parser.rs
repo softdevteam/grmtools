@@ -60,6 +60,7 @@ pub enum YaccParserErrorKind {
     PrecNotFollowedByToken,
     DuplicateImplicitTokensDeclaration,
     DuplicateStartDeclaration,
+    DuplicateTypeDeclaration,
     DuplicateEPP,
     ReachedEOL,
     InvalidString
@@ -93,6 +94,7 @@ impl fmt::Display for YaccParserError {
                 "Duplicate %implicit_tokens declaration"
             }
             YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
+            YaccParserErrorKind::DuplicateTypeDeclaration => "Duplicate %type declaration",
             YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
             YaccParserErrorKind::ReachedEOL => {
                 "Reached end of line without finding expected content"
@@ -160,15 +162,13 @@ impl YaccParser {
                 continue;
             }
             if let Some(j) = self.lookahead_is("%type", i) {
-                i = self.parse_ws(j, false)?;
-                while i < self.src.len() {
-                    if self.lookahead_is("%", i).is_some() {
-                        break;
-                    }
-                    let (j, n) = self.parse_name(i)?;
-                    self.ast.actiontype = Some(n);
-                    i = self.parse_ws(j, true)?;
+                if self.ast.actiontype.is_some() {
+                    return Err(self.mk_error(YaccParserErrorKind::DuplicateTypeDeclaration, i));
                 }
+                i = self.parse_ws(j, false)?;
+                let (j, n) = self.parse_to_eol(i)?;
+                self.ast.actiontype = Some(n);
+                i = self.parse_ws(j, true)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%start", i) {
@@ -391,6 +391,19 @@ impl YaccParser {
         } else {
             Ok(i)
         }
+    }
+
+    /// Parse up to (but do not include) the end of line (or, if it comes sooner, the end of file).
+    fn parse_to_eol(&mut self, i: usize) -> YaccResult<(usize, String)> {
+        let mut j = i;
+        while j < self.src.len() {
+            let c = self.src[j..].chars().nth(0).unwrap();
+            match c {
+                '\n' | '\r' => break,
+                _ => j += c.len_utf8()
+            }
+        }
+        Ok((j, self.src[i..j].to_string()))
     }
 
     /// Parse a quoted string, allowing escape characters.
@@ -1366,6 +1379,41 @@ x"
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
                 line: 5,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_type() {
+        let grm = parse(
+            YaccKind::Original,
+            &"
+         %type T
+         %%
+         A: 'a';
+         %%
+         fn foo() {}"
+        )
+        .unwrap();
+        assert_eq!(grm.actiontype, Some("T".to_string()));
+    }
+
+    #[test]
+    fn test_only_one_type() {
+        match parse(
+            YaccKind::Original,
+            &"
+         %type T1
+         %type T2
+         %%
+         A: 'a';"
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                line: 3,
+                kind: YaccParserErrorKind::DuplicateTypeDeclaration,
                 ..
             }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)

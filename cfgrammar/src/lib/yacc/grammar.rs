@@ -109,7 +109,9 @@ pub struct YaccGrammar<StorageT = u32> {
     implicit_rule: Option<RIdx<StorageT>>,
     /// User defined Rust programs which can be called within actions
     actions: Vec<Option<String>>,
+    /// The programs section of a grammar, if specified; otherwise `None`.
     programs: Option<String>,
+    /// The %actiontype declaration value, if specified; otherwise `None`.
     actiontype: Option<String>
 }
 
