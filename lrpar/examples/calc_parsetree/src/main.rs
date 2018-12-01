@@ -43,7 +43,7 @@ fn main() {
                     Err(LexParseError::ParseError(_, errs)) => {
                         // One or more errors were detected during parsing.
                         for e in errs {
-                            let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
+                            let (line, col) = lexer.line_and_col(e.lexeme());
                             assert_eq!(line, 1);
                             println!("Parsing error at column {}.", col);
                         }

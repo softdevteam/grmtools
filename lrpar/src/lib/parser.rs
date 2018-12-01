@@ -765,7 +765,7 @@ pub(crate) mod test {
             None
         }
 
-        fn line_and_col(&self, _: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
+        fn line_and_col(&self, _: &Lexeme<StorageT>) -> (usize, usize) {
             unreachable!();
         }
 

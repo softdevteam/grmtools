@@ -22,9 +22,9 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// Return the next `Lexeme` in the input or a `LexError`. Returns `None` if the input has been
     /// fully lexed (or if an error occurred which prevents further lexing).
     fn next(&mut self) -> Option<Result<Lexeme<StorageT>, LexError>>;
-    /// Return the line and column number of a `Lexeme`, or `Err` if it is out of bounds, or no
-    /// line number information was collected.
-    fn line_and_col(&self, &Lexeme<StorageT>) -> Result<(usize, usize), ()>;
+    /// Return the line and column number of a `Lexeme`. Panics if the lexeme is invalid (i.e. was
+    /// not produced by next()).
+    fn line_and_col(&self, &Lexeme<StorageT>) -> (usize, usize);
     /// Return the user input associated with a lexeme. Panics if the lexeme is invalid (i.e. was
     /// not produced by next()).
     fn lexeme_str(&self, &Lexeme<StorageT>) -> &str;

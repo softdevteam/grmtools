@@ -207,7 +207,7 @@ fn main() {
                 None => println!("Unable to repair input sufficiently to produce parse tree.\n")
             }
             for e in errs {
-                let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
+                let (line, col) = lexer.line_and_col(e.lexeme());
                 if e.repairs().is_empty() {
                     println!("Error at line {} col {}. No repairs found.", line, col);
                     continue;
