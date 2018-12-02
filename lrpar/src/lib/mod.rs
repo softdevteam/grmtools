@@ -36,6 +36,8 @@ extern crate cfgrammar;
 extern crate filetime;
 #[macro_use]
 extern crate indexmap;
+#[macro_use]
+extern crate lazy_static;
 extern crate lrtable;
 extern crate num_traits;
 extern crate packedvec;

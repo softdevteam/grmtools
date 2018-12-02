@@ -65,6 +65,11 @@ const RUST_FILE_EXT: &str = "rs";
 const SGRAPH_FILE_EXT: &str = "sgraph";
 const STABLE_FILE_EXT: &str = "stable";
 
+lazy_static! {
+    static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
+    static ref RE_DOL_LEXER: Regex = Regex::new(r"\$lexer").unwrap();
+}
+
 /// By default `CTParserBuilder` generates a parse tree which is returned after a successful parse.
 /// If the user wants to supply custom actions to be executed during reductions and return their
 /// results, they may change `ActionKind` to `CustomAction` instead.
@@ -351,7 +356,6 @@ where
 
         match self.actionkind {
             ActionKind::CustomAction => {
-                let re: Regex = { Regex::new(r"\$([0-9]+)").unwrap() };
                 if let Some(s) = grm.programs() {
                     outs.push_str("\n/* User code */\n\n");
                     outs.push_str(s);
@@ -398,11 +402,19 @@ where
                         };
                     }
                     if let Some(s) = grm.action(pidx) {
-                        let ns = re.replace_all(
-                            s,
-                            format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
+                        // Replace $1 ... $n with the correct local variable
+                        let s = RE_DOL_NUM
+                            .replace_all(
+                                s,
+                                format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
+                            )
+                            .into_owned();
+                        // Replace $lexer with a reference to the lexer variable
+                        let s = RE_DOL_LEXER.replace_all(
+                            &s,
+                            format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
                         );
-                        outs.push_str(&format!("    {}", &ns,));
+                        outs.push_str(&format!("    {}", &s));
                     } else if pidx == grm.start_prod() {
                         // The action for the start production (i.e. the extra rule/production
                         // added by lrpar) will never be executed, so a dummy function is all
