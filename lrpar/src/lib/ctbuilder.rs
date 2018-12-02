@@ -256,13 +256,14 @@ where
         outs.push_str(&format!("mod {}_y {{\n", mod_name));
         outs.push_str(
             "    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
-    use lrpar::ctbuilder::_reconstitute;"
+    use lrpar::ctbuilder::_reconstitute;
+"
         );
 
         match self.actionkind {
             ActionKind::CustomAction => {
                 outs.push_str(&format!(
-                    "use lrpar::parser::AStackType;
+                    "use lrpar::{{Lexeme, parser::AStackType}};
     use cfgrammar::RIdx;
     use std::vec;
 
@@ -378,28 +379,34 @@ where
                         actiont = actiontype
                     ));
                     for i in 0..grm.prod(pidx).len() {
-                        outs.push_str(&format!(
-                            "    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{",
-                            i + 1,
-                            prefix = ACTION_PREFIX
-                        ));
                         match grm.prod(pidx)[i] {
-                            Symbol::Rule(_) => outs.push_str(
+                            Symbol::Rule(_) => outs.push_str(&format!(
                                 "
+    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
         AStackType::ActionType(v) => v,
         AStackType::Lexeme(_) => unreachable!()
-    };
-"
-                            ),
-                            Symbol::Token(_) => outs.push_str(&format!(
-                                "
-        AStackType::ActionType(_) => unreachable!(),
-        AStackType::Lexeme(ref l) => {prefix}lexer.lexeme_str(l)
     }};
 ",
+                                i + 1,
+                                prefix = ACTION_PREFIX
+                            )),
+                            Symbol::Token(_) => outs.push_str(&format!(
+                                "
+    let {prefix}arg_{}: Result<Lexeme<_>, Lexeme<_>> = match {prefix}args.next().unwrap() {{
+        AStackType::ActionType(_) => unreachable!(),
+        AStackType::Lexeme(l) => {{
+            if l.len().is_some() {{
+                Ok(l)
+            }} else {{
+                Err(l)
+            }}
+        }}
+    }};
+",
+                                i + 1,
                                 prefix = ACTION_PREFIX
                             ))
-                        };
+                        }
                     }
                     if let Some(s) = grm.action(pidx) {
                         // Replace $1 ... $n with the correct local variable
