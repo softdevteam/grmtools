@@ -51,11 +51,12 @@ use panic;
 
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
+/// A generic parse tree.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node<StorageT> {
-    Term {
-        lexeme: Lexeme<StorageT>
-    },
+    /// Terminals store a single lexeme.
+    Term { lexeme: Lexeme<StorageT> },
+    /// Nonterminals reference a rule and have zero or more `Node`s as children.
     Nonterm {
         ridx: RIdx<StorageT>,
         nodes: Vec<Node<StorageT>>
@@ -131,7 +132,7 @@ where
         stable: &StateTable<StorageT>,
         lexer: &mut Lexer<StorageT>,
         lexemes: &[Lexeme<StorageT>]
-    ) -> Result<Node<StorageT>, (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
+    ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
     where
         F: Fn(TIdx<StorageT>) -> u8
     {
@@ -158,14 +159,9 @@ where
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
         let mut astack: Vec<AStackType<Node<StorageT>, StorageT>> = Vec::new();
-        let mut errors: Vec<ParseError<StorageT>> = Vec::new();
+        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors);
-        match (accpt, errors.is_empty()) {
-            (Some(v), true) => Ok(v),
-            (Some(v), false) => Err((Some(v), errors)),
-            (None, false) => Err((None, errors)),
-            (None, true) => unreachable!()
-        }
+        (accpt, errors)
     }
 
     fn generic_ptree(
@@ -203,7 +199,7 @@ where
             &Lexer<StorageT>,
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
-    ) -> Result<ActionT, (Option<ActionT>, Vec<ParseError<StorageT>>)>
+    ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
     where
         F: Fn(TIdx<StorageT>) -> u8
     {
@@ -222,14 +218,9 @@ where
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
         let mut astack: Vec<AStackType<ActionT, StorageT>> = Vec::new();
-        let mut errors: Vec<ParseError<StorageT>> = Vec::new();
+        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors);
-        match (accpt, errors.is_empty()) {
-            (Some(v), true) => Ok(v),
-            (Some(v), false) => Err((Some(v), errors)),
-            (None, false) => Err((None, errors)),
-            (None, true) => unreachable!()
-        }
+        (accpt, errors)
     }
 
     /// Start parsing text at `laidx` (using the lexeme in `lexeme_prefix`, if it is not `None`,
@@ -250,7 +241,7 @@ where
         mut laidx: usize,
         pstack: &mut PStack,
         astack: &mut Vec<AStackType<ActionT, StorageT>>,
-        errors: &mut Vec<ParseError<StorageT>>
+        errors: &mut Vec<LexParseError<StorageT>>
     ) -> Option<ActionT> {
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
@@ -296,11 +287,14 @@ where
                             RecoveryKind::Panic => panic::recoverer(self),
                             RecoveryKind::None => {
                                 let la_lexeme = self.next_lexeme(laidx);
-                                errors.push(ParseError {
-                                    stidx,
-                                    lexeme: la_lexeme,
-                                    repairs: vec![]
-                                });
+                                errors.push(
+                                    ParseError {
+                                        stidx,
+                                        lexeme: la_lexeme,
+                                        repairs: vec![]
+                                    }
+                                    .into()
+                                );
                                 return None;
                             }
                         });
@@ -319,11 +313,14 @@ where
                         .unwrap_or_else(|| Duration::new(0, 0));
                     let keep_going = !repairs.is_empty();
                     let la_lexeme = self.next_lexeme(laidx);
-                    errors.push(ParseError {
-                        stidx,
-                        lexeme: la_lexeme,
-                        repairs
-                    });
+                    errors.push(
+                        ParseError {
+                            stidx,
+                            lexeme: la_lexeme,
+                            repairs
+                        }
+                        .into()
+                    );
                     if !keep_going {
                         return None;
                     }
@@ -519,37 +516,39 @@ pub enum RecoveryKind {
     None
 }
 
+/// A lexing or parsing error. Although the two are quite distinct in terms of what can be reported
+/// to users, both can (at least conceptually) occur at any point of the intertwined lexing/parsing
+/// process.
 #[derive(Debug)]
-pub enum LexParseError<StorageT, ActionT> {
+pub enum LexParseError<StorageT> {
     LexError(LexError),
-    ParseError(Option<ActionT>, Vec<ParseError<StorageT>>)
+    ParseError(ParseError<StorageT>)
 }
 
-impl<StorageT: Debug, ActionT: Debug> Error for LexParseError<StorageT, ActionT> {}
+impl<StorageT: Debug> Error for LexParseError<StorageT> {}
 
-impl<StorageT: Debug, ActionT: Debug> fmt::Display for LexParseError<StorageT, ActionT> {
+impl<StorageT: Debug> fmt::Display for LexParseError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             LexParseError::LexError(ref e) => Display::fmt(e, f),
-            LexParseError::ParseError(_, ref e) => e.fmt(f)
+            LexParseError::ParseError(ref e) => Display::fmt(e, f)
         }
     }
 }
 
-impl<StorageT, ActionT> From<LexError> for LexParseError<StorageT, ActionT> {
-    fn from(err: LexError) -> LexParseError<StorageT, ActionT> {
+impl<StorageT> From<LexError> for LexParseError<StorageT> {
+    fn from(err: LexError) -> LexParseError<StorageT> {
         LexParseError::LexError(err)
     }
 }
 
-impl<StorageT, ActionT> From<(Option<ActionT>, Vec<ParseError<StorageT>>)>
-    for LexParseError<StorageT, ActionT>
-{
-    fn from(err: (Option<ActionT>, Vec<ParseError<StorageT>>)) -> LexParseError<StorageT, ActionT> {
-        LexParseError::ParseError(err.0, err.1)
+impl<StorageT> From<ParseError<StorageT>> for LexParseError<StorageT> {
+    fn from(err: ParseError<StorageT>) -> LexParseError<StorageT> {
+        LexParseError::ParseError(err)
     }
 }
 
+/// A run-time parser builder.
 pub struct RTParserBuilder<'a, StorageT: Eq + Hash + 'a> {
     grm: &'a YaccGrammar<StorageT>,
     sgraph: &'a StateGraph<StorageT>,
@@ -564,6 +563,7 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
+    /// Create a new run-time parser from a `YaccGrammar`, a `StateGraph`, and a `StateTable`.
     pub fn new(
         grm: &'a YaccGrammar<StorageT>,
         sgraph: &'a StateGraph<StorageT>,
@@ -590,15 +590,17 @@ where
         self
     }
 
-    /// Parse input. On success return a parse tree. On failure, return a `LexParseError`: a
-    /// `LexError` means that no parse tree was produced; a `ParseError` may (if its first element
-    /// is `Some(...)`) return a parse tree (with parts filled in by this builder's recoverer).
+    /// Parse input, and (if possible) return a generic parse tree. See the arguments for
+    /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_generictree(
         &self,
         lexer: &mut Lexer<StorageT>
-    ) -> Result<Node<StorageT>, LexParseError<StorageT, Node<StorageT>>> {
-        let lexemes = lexer.all_lexemes()?;
-        Ok(Parser::<StorageT, Node<StorageT>>::parse_generictree(
+    ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
+        let lexemes = match lexer.all_lexemes() {
+            Ok(ls) => ls,
+            Err(e) => return (None, vec![e.into()])
+        };
+        Parser::<StorageT, Node<StorageT>>::parse_generictree(
             self.recoverer,
             self.grm,
             self.term_costs,
@@ -606,12 +608,15 @@ where
             self.stable,
             lexer,
             &lexemes
-        )?)
+        )
     }
 
-    /// Parse input, execute actions, and return the associated value. On failure, return a
-    /// `LexParseError`: a `LexError` means that no value was produced; a `ParseError` may (if its
-    /// first element is `Some(...)`) return a value.
+    /// Parse input, execute actions, and return the associated value (if possible) and/or any
+    /// lexing/parsing errors encountered. Note that the two parts of the (value, errors) return
+    /// pair are entirely independent: one can encounter errors without a value being produced
+    /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
+    /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
+    /// be a mix of lexing and parsing errors.
     pub fn parse_actions<ActionT: 'static>(
         &self,
         lexer: &mut Lexer<StorageT>,
@@ -620,9 +625,12 @@ where
             &Lexer<StorageT>,
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
-    ) -> Result<ActionT, LexParseError<StorageT, ActionT>> {
-        let lexemes = lexer.all_lexemes()?;
-        Ok(Parser::parse_actions(
+    ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
+        let lexemes = match lexer.all_lexemes() {
+            Ok(ls) => ls,
+            Err(e) => return (None, vec![e.into()])
+        };
+        Parser::parse_actions(
             self.recoverer,
             self.grm,
             self.term_costs,
@@ -631,7 +639,7 @@ where
             lexer,
             &lexemes,
             actions
-        )?)
+        )
     }
 }
 
@@ -700,7 +708,7 @@ pub(crate) mod test {
         input: &str
     ) -> (
         YaccGrammar<u16>,
-        Result<Node<u16>, (Option<Node<u16>>, Vec<ParseError<u16>>)>
+        Result<Node<u16>, (Option<Node<u16>>, Vec<LexParseError<u16>>)>
     ) {
         do_parse_with_costs(rcvry_kind, lexs, grms, input, &HashMap::new())
     }
@@ -713,7 +721,7 @@ pub(crate) mod test {
         costs: &HashMap<&str, u8>
     ) -> (
         YaccGrammar<u16>,
-        Result<Node<u16>, (Option<Node<u16>>, Vec<ParseError<u16>>)>
+        Result<Node<u16>, (Option<Node<u16>>, Vec<LexParseError<u16>>)>
     ) {
         let grm = YaccGrammar::<u16>::new_with_storaget(YaccKind::Original, grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
@@ -729,16 +737,17 @@ pub(crate) mod test {
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
             .collect::<HashMap<_, _>>();
-        let r = match RTParserBuilder::new(&grm, &sgraph, &stable)
+        let (r, errs) = RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
-            .parse_generictree(&mut lexer)
-        {
-            Ok(r) => Ok(r),
-            Err(LexParseError::ParseError(r1, r2)) => Err((r1, r2)),
-            _ => unreachable!()
-        };
-        (grm, r)
+            .parse_generictree(&mut lexer);
+        if r.is_some() && errs.is_empty() {
+            (grm, Ok(r.unwrap()))
+        } else if r.is_some() && !errs.is_empty() {
+            (grm, Err((Some(r.unwrap()), errs)))
+        } else {
+            (grm, Err((None, errs)))
+        }
     }
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
@@ -937,12 +946,22 @@ Call: 'ID' '(' ')';";
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, None));
+        match &errs[0] {
+            LexParseError::ParseError(e) => {
+                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, None))
+            }
+            _ => unreachable!()
+        }
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)));
+        match &errs[0] {
+            LexParseError::ParseError(e) => {
+                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)))
+            }
+            _ => unreachable!()
+        }
     }
 }
