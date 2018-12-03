@@ -233,8 +233,8 @@ where
     /// `end_laidx` *must* be set to `laidx + 1` in order that the parser doesn't skip the real
     /// lexeme at position `laidx`.
     ///
-    /// Return `true` if the parse reached an accept state (i.e. all the input was consumed,
-    /// possibly after making repairs) or `false` (i.e. some of the input was not consumed, even
+    /// Return `Some(value)` if the parse reached an accept state (i.e. all the input was consumed,
+    /// possibly after making repairs) or `None` (i.e. some of the input was not consumed, even
     /// after possibly making repairs) otherwise.
     pub fn lr(
         &self,
