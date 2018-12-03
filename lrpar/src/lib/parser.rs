@@ -774,7 +774,7 @@ pub(crate) mod test {
             None
         }
 
-        fn line_and_col(&self, _: &Lexeme<StorageT>) -> (usize, usize) {
+        fn offset_line_col(&self, _: usize) -> (usize, usize) {
             unreachable!();
         }
 

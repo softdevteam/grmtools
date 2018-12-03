@@ -35,7 +35,7 @@ fn main() {
                             eprintln!("Lexing error at column {:?}", e.idx)
                         }
                         LexParseError::ParseError(e) => {
-                            let (line, col) = lexer.line_and_col(e.lexeme());
+                            let (line, col) = lexer.offset_line_col(e.lexeme().start());
                             assert_eq!(line, 1);
                             eprintln!("Parsing error at column {}", col);
                         }

@@ -204,7 +204,7 @@ fn main() {
         match e {
             LexParseError::LexError(e) => println!("Lexing error at position {}", e.idx),
             LexParseError::ParseError(e) => {
-                let (line, col) = lexer.line_and_col(e.lexeme());
+                let (line, col) = lexer.offset_line_col(e.lexeme().start());
                 if e.repairs().is_empty() {
                     println!("Error at line {} col {}. No repairs found.", line, col);
                     continue;

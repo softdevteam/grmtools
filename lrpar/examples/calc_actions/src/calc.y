@@ -15,7 +15,7 @@ Factor: 'LBRACK' Expr 'RBRACK' { $2 }
             match $lexer.lexeme_str(&l).parse::<u64>() {
                 Ok(v) => Ok(v),
                 Err(_) => {
-                    let (_, col) = $lexer.line_and_col(&l);
+                    let (_, col) = $lexer.offset_line_col(l.start());
                     eprintln!("Error at column {}: '{}' cannot be represented as a u64",
                               col,
                               $lexer.lexeme_str(&l));

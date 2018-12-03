@@ -262,23 +262,23 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         None
     }
 
-    fn line_and_col(&self, l: &Lexeme<StorageT>) -> (usize, usize) {
-        if l.start() + l.len().unwrap_or(0) > self.s.len() {
-            panic!("Invalid lexeme");
+    fn offset_line_col(&self, i: usize) -> (usize, usize) {
+        if i > self.s.len() {
+            panic!("Offset {} exceeds known input length {}", i, self.s.len());
         }
 
-        if self.newlines.is_empty() || l.start() < self.newlines[0] {
-            return (1, l.start() + 1);
+        if self.newlines.is_empty() || i < self.newlines[0] {
+            return (1, i + 1);
         }
 
-        for i in 0..self.newlines.len() - 1 {
-            if self.newlines[i + 1] > l.start() {
-                return (i + 2, l.start() - self.newlines[i] + 1);
+        for j in 0..self.newlines.len() - 1 {
+            if self.newlines[j + 1] > i {
+                return (j + 2, i - self.newlines[j] + 1);
             }
         }
         (
             self.newlines.len() + 1,
-            l.start() - self.newlines[self.newlines.len() - 1] + 1
+            i - self.newlines[self.newlines.len() - 1] + 1
         )
     }
 
@@ -362,7 +362,7 @@ if 'IF'
     }
 
     #[test]
-    fn test_line_and_col() {
+    fn test_offset_line_col() {
         let src = "%%
 [a-z]+ 'ID'
 [ \\n] ;"
@@ -375,25 +375,25 @@ if 'IF'
         let mut lexer = lexerdef.lexer("a b c");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
-        assert_eq!(lexer.line_and_col(&lexemes[1]), (1, 3));
+        assert_eq!(lexer.offset_line_col(lexemes[1].start()), (1, 3));
 
         let mut lexer = lexerdef.lexer("a b c\n");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
-        assert_eq!(lexer.line_and_col(&lexemes[1]), (1, 3));
+        assert_eq!(lexer.offset_line_col(lexemes[1].start()), (1, 3));
 
         let mut lexer = lexerdef.lexer(" a\nb\n  c d");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 4);
-        assert_eq!(lexer.line_and_col(&lexemes[0]), (1, 2));
-        assert_eq!(lexer.line_and_col(&lexemes[1]), (2, 1));
-        assert_eq!(lexer.line_and_col(&lexemes[2]), (3, 3));
-        assert_eq!(lexer.line_and_col(&lexemes[3]), (3, 5));
+        assert_eq!(lexer.offset_line_col(lexemes[0].start()), (1, 2));
+        assert_eq!(lexer.offset_line_col(lexemes[1].start()), (2, 1));
+        assert_eq!(lexer.offset_line_col(lexemes[2].start()), (3, 3));
+        assert_eq!(lexer.offset_line_col(lexemes[3].start()), (3, 5));
     }
 
     #[test]
     #[should_panic]
-    fn test_bad_line_and_col() {
+    fn test_bad_offset_line_col() {
         let src = "%%
 [a-z]+ 'ID'
 [ \\n] ;"
@@ -405,8 +405,7 @@ if 'IF'
 
         let lexer = lexerdef.lexer("a b c");
 
-        let fake_lexeme = Lexeme::new(0, 100, Some(1));
-        lexer.line_and_col(&fake_lexeme);
+        lexer.offset_line_col(100);
     }
 
     #[test]
