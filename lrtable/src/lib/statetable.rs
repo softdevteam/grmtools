@@ -196,7 +196,7 @@ where
                             return Err(StateTableError {
                                 kind: StateTableErrorKind::AcceptReduceConflict,
                                 pidx
-                            })
+                            });
                         }
                         Action::Error => {
                             if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())

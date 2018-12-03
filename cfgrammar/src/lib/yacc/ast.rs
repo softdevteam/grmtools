@@ -196,7 +196,7 @@ impl GrammarAST {
                 return Err(GrammarValidationError {
                     kind: GrammarValidationErrorKind::NoStartRule,
                     sym: None
-                })
+                });
             }
             Some(ref s) => {
                 if !self.rules.contains_key(s) {

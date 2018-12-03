@@ -289,7 +289,7 @@ where
             let new_lexeme = Lexeme::new(
                 StorageT::from(u32::from(tidx)).unwrap(),
                 next_lexeme.start(),
-                0
+                None
             );
             let (new_laidx, n_pstack) = self.parser.lr_cactus(
                 Some(new_lexeme),
@@ -578,7 +578,7 @@ E : 'N'
 
         assert_eq!(errs.len(), 1);
         let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, 1));
+        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)));
         check_all_repairs(
             &grm,
             errs[0].repairs(),

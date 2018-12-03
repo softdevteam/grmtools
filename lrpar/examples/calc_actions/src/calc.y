@@ -1,22 +1,26 @@
 %start Expr
-%type u64
+%type Result<u64, ()>
 %%
-Expr: Term 'PLUS' Expr { $1 + $3 }
+Expr: Term 'PLUS' Expr { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
-Term: Factor 'MUL' Term { $1 * $3 }
+Term: Factor 'MUL' Term { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
 Factor: 'LBRACK' Expr 'RBRACK' { $2 }
-      | 'INT' { parse_int($1) }
+      | 'INT' {
+            let l = $1.map_err(|_| ())?;
+            match $lexer.lexeme_str(&l).parse::<u64>() {
+                Ok(v) => Ok(v),
+                Err(_) => {
+                    let (_, col) = $lexer.line_and_col(&l);
+                    eprintln!("Error at column {}: '{}' cannot be represented as a u64",
+                              col,
+                              $lexer.lexeme_str(&l));
+                    Err(())
+                }
+            }
+        }
       ;
-%%
-
-fn parse_int(s: &str) -> u64 {
-    match s.parse::<u64>() {
-    	Ok(val) => val as u64,
-        Err(_) => panic!("{} cannot be represented as a u64", s)
-    }
-}

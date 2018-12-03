@@ -29,22 +29,26 @@ fn main() {
                 let mut lexer = lexerdef.lexer(l);
                 // Pass the lexer to the parser and lex and parse the input.
                 match calc_y::parse(&mut lexer) {
-                    // Success! We parsed the input and created a parse tree.
-                    Ok(pt) => println!("Result: {}", pt),
+                    // Success! We parsed the input and evaluated a result.
+                    Ok(Ok(v)) => println!("Result: {}", v),
+                    Ok(Err(_)) => eprintln!("Unable to evaluate a result."),
                     // We weren't able to fully lex the input, so all we can do is tell the user
                     // at what index the lexer gave up at.
                     Err(LexParseError::LexError(e)) => {
-                        println!("Lexing error at column {:?}", e.idx)
+                        eprintln!("Lexing error at column {:?}", e.idx)
                     }
-                    // Parsing failed, but with the help of error recovery a parse tree was
-                    // produced. However, we simply report the error to the user and don't attempt
-                    // to do any sort of evaluation.
-                    Err(LexParseError::ParseError(_, errs)) => {
+                    // Parsing failed, but with the help of error recovery a value was
+                    // produced.
+                    Err(LexParseError::ParseError(v, errs)) => {
                         // One or more errors were detected during parsing.
                         for e in errs {
-                            let (line, col) = lexer.line_and_col(e.lexeme()).unwrap();
+                            let (line, col) = lexer.line_and_col(e.lexeme());
                             assert_eq!(line, 1);
-                            println!("Parsing error at column {}.", col);
+                            eprintln!("Parsing error at column {}.", col);
+                        }
+                        match v {
+                            Some(Ok(v)) => println!("Result: {}", v),
+                            _ => eprintln!("Unable to evaluate a result.")
                         }
                     }
                 }
@@ -64,7 +68,7 @@ mod test {
         let lexerdef = calc_l::lexerdef();
         let mut lexer = lexerdef.lexer("2+3");
         match calc_y::parse(&mut lexer) {
-            Ok(5) => (),
+            Ok(Ok(5)) => (),
             _ => unreachable!()
         }
     }
@@ -74,12 +78,17 @@ mod test {
         let lexerdef = calc_l::lexerdef();
         let mut lexer = lexerdef.lexer("2++3");
         match calc_y::parse(&mut lexer) {
-            Err(LexParseError::ParseError(Some(5), ..)) => (),
+            Err(LexParseError::ParseError(Some(Ok(5)), ..)) => (),
             _ => unreachable!()
         }
         let mut lexer = lexerdef.lexer("2+3)");
         match calc_y::parse(&mut lexer) {
-            Err(LexParseError::ParseError(Some(5), ..)) => (),
+            Err(LexParseError::ParseError(Some(Ok(5)), ..)) => (),
+            _ => unreachable!()
+        }
+        let mut lexer = lexerdef.lexer("2+3+18446744073709551616");
+        match calc_y::parse(&mut lexer) {
+            Ok(Err(_)) => (),
             _ => unreachable!()
         }
     }

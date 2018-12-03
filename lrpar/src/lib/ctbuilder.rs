@@ -65,6 +65,11 @@ const RUST_FILE_EXT: &str = "rs";
 const SGRAPH_FILE_EXT: &str = "sgraph";
 const STABLE_FILE_EXT: &str = "stable";
 
+lazy_static! {
+    static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
+    static ref RE_DOL_LEXER: Regex = Regex::new(r"\$lexer").unwrap();
+}
+
 /// By default `CTParserBuilder` generates a parse tree which is returned after a successful parse.
 /// If the user wants to supply custom actions to be executed during reductions and return their
 /// results, they may change `ActionKind` to `CustomAction` instead.
@@ -251,13 +256,14 @@ where
         outs.push_str(&format!("mod {}_y {{\n", mod_name));
         outs.push_str(
             "    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
-    use lrpar::ctbuilder::_reconstitute;"
+    use lrpar::ctbuilder::_reconstitute;
+"
         );
 
         match self.actionkind {
             ActionKind::CustomAction => {
                 outs.push_str(&format!(
-                    "use lrpar::parser::AStackType;
+                    "use lrpar::{{Lexeme, parser::AStackType}};
     use cfgrammar::RIdx;
     use std::vec;
 
@@ -351,7 +357,6 @@ where
 
         match self.actionkind {
             ActionKind::CustomAction => {
-                let re: Regex = { Regex::new(r"\$([0-9]+)").unwrap() };
                 if let Some(s) = grm.programs() {
                     outs.push_str("\n/* User code */\n\n");
                     outs.push_str(s);
@@ -374,35 +379,49 @@ where
                         actiont = actiontype
                     ));
                     for i in 0..grm.prod(pidx).len() {
-                        outs.push_str(&format!(
-                            "    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{",
-                            i + 1,
-                            prefix = ACTION_PREFIX
-                        ));
                         match grm.prod(pidx)[i] {
-                            Symbol::Rule(_) => outs.push_str(
+                            Symbol::Rule(_) => outs.push_str(&format!(
                                 "
+    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
         AStackType::ActionType(v) => v,
         AStackType::Lexeme(_) => unreachable!()
-    };
-"
-                            ),
-                            Symbol::Token(_) => outs.push_str(&format!(
-                                "
-        AStackType::ActionType(_) => unreachable!(),
-        AStackType::Lexeme(ref l) => {prefix}lexer.lexeme_str(l)
     }};
 ",
+                                i + 1,
+                                prefix = ACTION_PREFIX
+                            )),
+                            Symbol::Token(_) => outs.push_str(&format!(
+                                "
+    let {prefix}arg_{}: Result<Lexeme<_>, Lexeme<_>> = match {prefix}args.next().unwrap() {{
+        AStackType::ActionType(_) => unreachable!(),
+        AStackType::Lexeme(l) => {{
+            if l.len().is_some() {{
+                Ok(l)
+            }} else {{
+                Err(l)
+            }}
+        }}
+    }};
+",
+                                i + 1,
                                 prefix = ACTION_PREFIX
                             ))
-                        };
+                        }
                     }
                     if let Some(s) = grm.action(pidx) {
-                        let ns = re.replace_all(
-                            s,
-                            format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
+                        // Replace $1 ... $n with the correct local variable
+                        let s = RE_DOL_NUM
+                            .replace_all(
+                                s,
+                                format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
+                            )
+                            .into_owned();
+                        // Replace $lexer with a reference to the lexer variable
+                        let s = RE_DOL_LEXER.replace_all(
+                            &s,
+                            format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
                         );
-                        outs.push_str(&format!("    {}", &ns,));
+                        outs.push_str(&format!("    {}", &s));
                     } else if pidx == grm.start_prod() {
                         // The action for the start production (i.e. the extra rule/production
                         // added by lrpar) will never be executed, so a dummy function is all

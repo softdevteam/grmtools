@@ -245,7 +245,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
                     match r.tok_id {
                         Some(tok_id) => {
                             self.i += longest;
-                            return Some(Ok(Lexeme::new(tok_id, old_i, longest)));
+                            return Some(Ok(Lexeme::new(tok_id, old_i, Some(longest))));
                         }
                         None => {
                             self.i = self.s.len();
@@ -262,28 +262,29 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         None
     }
 
-    fn line_and_col(&self, l: &Lexeme<StorageT>) -> Result<(usize, usize), ()> {
-        if l.start() > self.s.len() {
-            return Err(());
+    fn line_and_col(&self, l: &Lexeme<StorageT>) -> (usize, usize) {
+        if l.start() + l.len().unwrap_or(0) > self.s.len() {
+            panic!("Invalid lexeme");
         }
 
         if self.newlines.is_empty() || l.start() < self.newlines[0] {
-            return Ok((1, l.start() + 1));
+            return (1, l.start() + 1);
         }
 
         for i in 0..self.newlines.len() - 1 {
             if self.newlines[i + 1] > l.start() {
-                return Ok((i + 2, l.start() - self.newlines[i] + 1));
+                return (i + 2, l.start() - self.newlines[i] + 1);
             }
         }
-        Ok((
+        (
             self.newlines.len() + 1,
             l.start() - self.newlines[self.newlines.len() - 1] + 1
-        ))
+        )
     }
 
     fn lexeme_str(&self, l: &Lexeme<StorageT>) -> &str {
-        &self.s[l.start()..l.end()]
+        let st = l.start();
+        &self.s[st..l.end().unwrap_or(st)]
     }
 }
 
@@ -313,11 +314,11 @@ mod test {
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.start(), 0);
-        assert_eq!(lex1.len(), 3);
+        assert_eq!(lex1.len(), Some(3));
         let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.start(), 4);
-        assert_eq!(lex2.len(), 3);
+        assert_eq!(lex2.len(), Some(3));
     }
 
     #[test]
@@ -353,11 +354,11 @@ if 'IF'
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.start(), 0);
-        assert_eq!(lex1.len(), 3);
+        assert_eq!(lex1.len(), Some(3));
         let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.start(), 4);
-        assert_eq!(lex2.len(), 2);
+        assert_eq!(lex2.len(), Some(2));
     }
 
     #[test]
@@ -374,25 +375,38 @@ if 'IF'
         let mut lexer = lexerdef.lexer("a b c");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
-        assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (1, 3));
+        assert_eq!(lexer.line_and_col(&lexemes[1]), (1, 3));
 
         let mut lexer = lexerdef.lexer("a b c\n");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
-        assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (1, 3));
+        assert_eq!(lexer.line_and_col(&lexemes[1]), (1, 3));
 
         let mut lexer = lexerdef.lexer(" a\nb\n  c d");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 4);
-        assert_eq!(lexer.line_and_col(&lexemes[0]).unwrap(), (1, 2));
-        assert_eq!(lexer.line_and_col(&lexemes[1]).unwrap(), (2, 1));
-        assert_eq!(lexer.line_and_col(&lexemes[2]).unwrap(), (3, 3));
-        assert_eq!(lexer.line_and_col(&lexemes[3]).unwrap(), (3, 5));
+        assert_eq!(lexer.line_and_col(&lexemes[0]), (1, 2));
+        assert_eq!(lexer.line_and_col(&lexemes[1]), (2, 1));
+        assert_eq!(lexer.line_and_col(&lexemes[2]), (3, 3));
+        assert_eq!(lexer.line_and_col(&lexemes[3]), (3, 5));
+    }
 
-        let fake_lexeme = Lexeme::new(0, 100, 1);
-        if let Ok(_) = lexer.line_and_col(&fake_lexeme) {
-            panic!("line_and_col returned Ok(_) when it should have returned Err.");
-        }
+    #[test]
+    #[should_panic]
+    fn test_bad_line_and_col() {
+        let src = "%%
+[a-z]+ 'ID'
+[ \\n] ;"
+            .to_string();
+        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut map = HashMap::new();
+        map.insert("ID", 0u8);
+        assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
+
+        let lexer = lexerdef.lexer("a b c");
+
+        let fake_lexeme = Lexeme::new(0, 100, Some(1));
+        lexer.line_and_col(&fake_lexeme);
     }
 
     #[test]
