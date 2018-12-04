@@ -89,6 +89,21 @@ pub struct CTParserBuilder<StorageT = u32> {
     actionkind: ActionKind
 }
 
+impl CTParserBuilder<u32> {
+    /// Create a new `CTParserBuilder`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// CTParserBuilder::new()
+    ///     .process_file_in_src("grm.y")
+    ///     .unwrap();
+    /// ```
+    pub fn new() -> Self {
+        CTParserBuilder::<u32>::new_with_storaget()
+    }
+}
+
 impl<StorageT> CTParserBuilder<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
@@ -109,11 +124,11 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// CTParserBuilder::<u8>::new()
+    /// CTParserBuilder::<u8>::new_with_storaget()
     ///     .process_file_in_src("grm.y")
     ///     .unwrap();
     /// ```
-    pub fn new() -> Self {
+    pub fn new_with_storaget() -> Self {
         CTParserBuilder {
             recoverer: RecoveryKind::MF,
             phantom: PhantomData,
