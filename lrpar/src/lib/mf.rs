@@ -875,7 +875,7 @@ mod test {
     use lex::Lexeme;
     use parser::{
         test::{do_parse, do_parse_with_costs},
-        ParseRepair, RecoveryKind
+        LexParseError, ParseRepair, RecoveryKind
     };
 
     use super::{ends_with_parse_at_least_shifts, Dist, Repair, RepairMerge, PARSE_AT_LEAST};
@@ -1144,44 +1144,57 @@ W: 'b' ;
 
     fn check_some_repairs<StorageT: 'static + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
-        repairs: &Vec<Vec<ParseRepair<StorageT>>>,
+        err: &LexParseError<StorageT>,
         expected: &[&str]
     ) where
         usize: AsPrimitive<StorageT>
     {
-        for i in 0..expected.len() {
-            if repairs
-                .iter()
-                .find(|x| pp_repairs(&grm, x) == expected[i])
-                .is_none()
-            {
-                panic!("No match found for:\n  {}", expected[i]);
+        match err {
+            LexParseError::ParseError(e) => {
+                for i in 0..expected.len() {
+                    if e.repairs()
+                        .iter()
+                        .find(|x| pp_repairs(&grm, x) == expected[i])
+                        .is_none()
+                    {
+                        panic!("No match found for:\n  {}", expected[i]);
+                    }
+                }
             }
+            _ => unreachable!()
         }
     }
 
     fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
-        repairs: &Vec<Vec<ParseRepair<StorageT>>>,
+        err: &LexParseError<StorageT>,
         expected: &[&str]
     ) where
         usize: AsPrimitive<StorageT>
     {
-        assert_eq!(
-            repairs.len(),
-            expected.len(),
-            "{:?}\nhas a different number of entries to:\n{:?}",
-            repairs,
-            expected
-        );
-        for i in 0..repairs.len() {
-            if expected
-                .iter()
-                .find(|x| **x == pp_repairs(&grm, &repairs[i]))
-                .is_none()
-            {
-                panic!("No match found for:\n  {}", pp_repairs(&grm, &repairs[i]));
+        match err {
+            LexParseError::ParseError(e) => {
+                assert_eq!(
+                    e.repairs().len(),
+                    expected.len(),
+                    "{:?}\nhas a different number of entries to:\n{:?}",
+                    e.repairs(),
+                    expected
+                );
+                for i in 0..e.repairs().len() {
+                    if expected
+                        .iter()
+                        .find(|x| **x == pp_repairs(&grm, &e.repairs()[i]))
+                        .is_none()
+                    {
+                        panic!(
+                            "No match found for:\n  {}",
+                            pp_repairs(&grm, &e.repairs()[i])
+                        );
+                    }
+                }
             }
+            _ => unreachable!()
         }
     }
 
@@ -1239,10 +1252,13 @@ E : 'N'
 
         assert_eq!(errs.len(), 1);
         let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)));
+        match &errs[0] {
+            LexParseError::ParseError(e) => assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, Some(1))),
+            _ => unreachable!()
+        }
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec![
                 "Insert \")\", Insert \"+\"",
                 "Insert \")\", Delete",
@@ -1253,14 +1269,14 @@ E : 'N'
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Delete"]);
-        check_all_repairs(&grm, errs[1].repairs(), &vec!["Delete"]);
+        check_all_repairs(&grm, &errs[0], &vec!["Delete"]);
+        check_all_repairs(&grm, &errs[1], &vec!["Delete"]);
 
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Insert \"N\"", "Delete"]);
-        check_all_repairs(&grm, errs[1].repairs(), &vec!["Insert \")\""]);
+        check_all_repairs(&grm, &errs[0], &vec!["Insert \"N\"", "Delete"]);
+        check_all_repairs(&grm, &errs[1], &vec!["Insert \")\""]);
     }
 
     fn kimyi_lex_grm() -> (&'static str, &'static str) {
@@ -1315,10 +1331,15 @@ E: '(' E ')'
         }
         assert_eq!(errs.len(), 1);
         let err_tok_id = u32::from(grm.eof_token_idx()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, None));
+        match &errs[0] {
+            LexParseError::ParseError(e) => {
+                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, None))
+            }
+            _ => unreachable!()
+        }
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec![
                 "Insert \"A\", Insert \")\", Insert \")\"",
                 "Insert \"B\", Insert \")\", Insert \")\"",
@@ -1351,7 +1372,7 @@ Factor: '(' Expr ')'
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec![
                 "Insert \")\", Insert \"+\"",
                 "Insert \")\", Insert \"*\"",
@@ -1366,7 +1387,7 @@ Factor: '(' Expr ')'
         let (_, errs) = pr.unwrap_err();
         check_some_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec!["Insert \"INT\", Delete, Delete, Delete, Delete, Delete"]
         );
     }
@@ -1387,7 +1408,7 @@ U: 'B';
         let us = "c";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Insert \"A\", Insert \"B\""]);
+        check_all_repairs(&grm, &errs[0], &vec!["Insert \"A\", Insert \"B\""]);
     }
 
     #[test]
@@ -1405,7 +1426,7 @@ S:  'A' 'B' 'D' | 'A' 'B' 'C' 'A' 'A' 'D';
         let us = "acd";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Insert \"B\", Delete"]);
+        check_all_repairs(&grm, &errs[0], &vec!["Insert \"B\", Delete"]);
     }
 
     #[test]
@@ -1420,7 +1441,7 @@ S: 'A';
         let us = "";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Insert \"A\""]);
+        check_all_repairs(&grm, &errs[0], &vec!["Insert \"A\""]);
     }
 
     #[test]
@@ -1444,7 +1465,7 @@ U: 'd';
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec![
                 "Insert \"a\", Insert \"d\"",
                 "Insert \"b\", Insert \"d\"",
@@ -1476,7 +1497,7 @@ S: 'a' S 'b'
         let (grm, pr) = do_parse_with_costs(RecoveryKind::MF, &lexs, &grms, &us, &costs);
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(&grm,
-                          errs[0].repairs(),
+                          &errs[0],
                           &vec!["Insert \"a\", Insert \"a\", Insert \"a\", Insert \"a\", Insert \"a\", Insert \"a\", Insert \"a\""]);
     }
 
@@ -1504,11 +1525,11 @@ A: 'b';
         let us = "ce";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Insert \"b\""]);
+        check_all_repairs(&grm, &errs[0], &vec!["Insert \"b\""]);
         let us = "cd";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Insert \"a\""]);
+        check_all_repairs(&grm, &errs[0], &vec!["Insert \"a\""]);
     }
 
     #[test]
@@ -1536,7 +1557,7 @@ A: 'c' 'd';
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec!["Insert \"c\", Insert \"d\", Insert \"c\", Insert \"d\", Insert \"a\""]
         );
     }
@@ -1560,7 +1581,7 @@ A: 'c' 'd';
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec!["Insert \"c\", Insert \"d\", Insert \"c\", Insert \"d\", Insert \"a\""]
         );
     }
@@ -1586,7 +1607,7 @@ D: 'd';
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec![
                 "Insert \"c\", Insert \"d\", Insert \"a\"",
                 "Insert \"d\", Insert \"c\", Insert \"b\"",

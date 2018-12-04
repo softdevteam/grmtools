@@ -195,18 +195,15 @@ fn main() {
     let input = read_file(&matches.free[2]);
     let mut lexer = lexerdef.lexer(&input);
     let pb = RTParserBuilder::new(&grm, &sgraph, &stable).recoverer(recoverykind);
-    match pb.parse_generictree(&mut lexer) {
-        Ok(pt) => println!("{}", pt.pp(&grm, &input)),
-        Err(LexParseError::LexError(e)) => {
-            println!("Lexing error at position {}", e.idx);
-            process::exit(1);
-        }
-        Err(LexParseError::ParseError(o_pt, errs)) => {
-            match o_pt {
-                Some(pt) => println!("{}", pt.pp(&grm, &input)),
-                None => println!("Unable to repair input sufficiently to produce parse tree.\n")
-            }
-            for e in errs {
+    let (pt, errs) = pb.parse_generictree(&mut lexer);
+    match pt {
+        Some(pt) => println!("{}", pt.pp(&grm, &input)),
+        None => println!("Unable to repair input sufficiently to produce parse tree.\n")
+    }
+    for e in &errs {
+        match e {
+            LexParseError::LexError(e) => println!("Lexing error at position {}", e.idx),
+            LexParseError::ParseError(e) => {
                 let (line, col) = lexer.line_and_col(e.lexeme());
                 if e.repairs().is_empty() {
                     println!("Error at line {} col {}. No repairs found.", line, col);
@@ -241,7 +238,9 @@ fn main() {
                     println!("  {}{}: {}", " ".repeat(padding), i + 1, out.join(", "));
                 }
             }
-            process::exit(1);
         }
+    }
+    if !errs.is_empty() {
+        process::exit(1);
     }
 }

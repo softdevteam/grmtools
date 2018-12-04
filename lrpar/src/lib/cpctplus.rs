@@ -476,7 +476,7 @@ mod test {
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
     use lex::Lexeme;
-    use parser::{test::do_parse, ParseRepair, RecoveryKind};
+    use parser::{test::do_parse, LexParseError, ParseRepair, RecoveryKind};
 
     fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
@@ -500,26 +500,34 @@ mod test {
 
     fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
-        repairs: &Vec<Vec<ParseRepair<StorageT>>>,
+        err: &LexParseError<StorageT>,
         expected: &[&str]
     ) where
         usize: AsPrimitive<StorageT>
     {
-        assert_eq!(
-            repairs.len(),
-            expected.len(),
-            "{:?}\nhas a different number of entries to:\n{:?}",
-            repairs,
-            expected
-        );
-        for i in 0..repairs.len() {
-            if expected
-                .iter()
-                .find(|x| **x == pp_repairs(&grm, &repairs[i]))
-                .is_none()
-            {
-                panic!("No match found for:\n  {}", pp_repairs(&grm, &repairs[i]));
+        match err {
+            LexParseError::ParseError(e) => {
+                assert_eq!(
+                    e.repairs().len(),
+                    expected.len(),
+                    "{:?}\nhas a different number of entries to:\n{:?}",
+                    e.repairs(),
+                    expected
+                );
+                for i in 0..e.repairs().len() {
+                    if expected
+                        .iter()
+                        .find(|x| **x == pp_repairs(&grm, &e.repairs()[i]))
+                        .is_none()
+                    {
+                        panic!(
+                            "No match found for:\n  {}",
+                            pp_repairs(&grm, &e.repairs()[i])
+                        );
+                    }
+                }
             }
+            _ => unreachable!()
         }
     }
 
@@ -578,10 +586,15 @@ E : 'N'
 
         assert_eq!(errs.len(), 1);
         let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
-        assert_eq!(errs[0].lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)));
+        match &errs[0] {
+            LexParseError::ParseError(e) => {
+                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)))
+            }
+            _ => unreachable!()
+        }
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec![
                 "Insert \")\", Insert \"+\"",
                 "Insert \")\", Delete",
@@ -592,14 +605,14 @@ E : 'N'
         let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Delete"]);
-        check_all_repairs(&grm, errs[1].repairs(), &vec!["Delete"]);
+        check_all_repairs(&grm, &errs[0], &vec!["Delete"]);
+        check_all_repairs(&grm, &errs[1], &vec!["Delete"]);
 
         let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm, errs[0].repairs(), &vec!["Insert \"N\"", "Delete"]);
-        check_all_repairs(&grm, errs[1].repairs(), &vec!["Insert \")\""]);
+        check_all_repairs(&grm, &errs[0], &vec!["Insert \"N\"", "Delete"]);
+        check_all_repairs(&grm, &errs[1], &vec!["Insert \")\""]);
     }
 
     #[test]
@@ -623,7 +636,7 @@ U: 'd';
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,
-            errs[0].repairs(),
+            &errs[0],
             &vec![
                 "Insert \"a\", Insert \"d\"",
                 "Insert \"b\", Insert \"d\"",

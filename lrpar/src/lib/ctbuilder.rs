@@ -128,11 +128,12 @@ where
 
     /// Given the filename `x/y.z` as input, statically compile the grammar `src/x/y.z` into a Rust
     /// module which can then be imported using `lrpar_mod!(x_y)`. This is a convenience function
-    /// around [`process_file`](struct.CTParserBuilder.html#method.process_file) which makes it
-    /// easier to compile `.y` files stored in a project's `src/` directory. Note that leaf names
-    /// must be unique within a single project, even if they are in different directories: in other
-    /// words, `y.z` and `x/y.z` will both be mapped to the same module `y_z` (and it is undefined
-    /// which of the input files will "win" the compilation race).
+    /// around [`process_file`](#method.process_file) which makes it easier to compile `.y` files
+    /// stored in a project's `src/` directory.
+    ///
+    /// Note that leaf names must be unique within a single project, even if they are in different
+    /// directories: in other words, `y.z` and `x/y.z` will both be mapped to the same module `y_z`
+    /// (and it is undefined which of the input files will "win" the compilation race).
     ///
     /// # Panics
     ///
@@ -150,6 +151,7 @@ where
         self.process_file(inp, outd)
     }
 
+    /// Set the action kind for this parser to `ak`.
     pub fn action_kind(mut self, ak: ActionKind) -> Self {
         self.actionkind = ak;
         self
@@ -160,9 +162,14 @@ where
     ///
     /// ```rust,ignore
     ///      parser(lexemes: &Vec<Lexeme<StorageT>>)
-    ///   -> Result<Node<StorageT>,
-    ///            (Option<Node<StorageT>>, Vec<ParseError<StorageT>>)>
+    ///   -> (Option<ActionT>, Vec<LexParseError<StorageT>>)>
     /// ```
+    ///
+    /// Where `ActionT` is either:
+    ///
+    ///   * the `%type` value given to the grammar
+    ///   * or, if the `action_kind` was set to `ActionKind::GenericParseTree`, it is
+    ///     [`Node<StorageT>`](../parser/enum.Node.html)
     ///
     /// # Panics
     ///
@@ -268,7 +275,7 @@ where
     use std::vec;
 
     pub fn parse(lexer: &mut Lexer<{storaget}>)
-          -> Result<{actiont}, LexParseError<{storaget}, {actiont}>>
+          -> (Option<{actiont}>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
                     actiont = actiontype
@@ -279,7 +286,7 @@ where
                     "use lrpar::Node;
 
     pub fn parse(lexer: &mut Lexer<{storaget}>)
-          -> Result<Node<{storaget}>, LexParseError<{storaget}, Node<{storaget}>>>
+          -> (Option<Node<{storaget}>>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name()
                 ));
