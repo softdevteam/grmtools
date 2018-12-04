@@ -891,7 +891,7 @@ mod test {
         for r in repairs.iter() {
             match *r {
                 ParseRepair::Insert(token_idx) => {
-                    out.push(format!("Insert \"{}\"", grm.token_name(token_idx).unwrap()))
+                    out.push(format!("Insert \"{}\"", grm.token_epp(token_idx).unwrap()))
                 }
                 ParseRepair::Delete(_) => out.push(format!("Delete")),
                 ParseRepair::Shift(_) => out.push(format!("Shift"))

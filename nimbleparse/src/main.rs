@@ -48,10 +48,7 @@ use std::{
 use cfgrammar::yacc::{YaccGrammar, YaccKind};
 use getopts::Options;
 use lrlex::build_lex;
-use lrpar::{
-    parser::{LexParseError, ParseRepair, RTParserBuilder, RecoveryKind},
-    Lexer
-};
+use lrpar::parser::{RTParserBuilder, RecoveryKind};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
 
@@ -201,44 +198,7 @@ fn main() {
         None => println!("Unable to repair input sufficiently to produce parse tree.\n")
     }
     for e in &errs {
-        match e {
-            LexParseError::LexError(e) => println!("Lexing error at position {}", e.idx),
-            LexParseError::ParseError(e) => {
-                let (line, col) = lexer.offset_line_col(e.lexeme().start());
-                if e.repairs().is_empty() {
-                    println!("Error at line {} col {}. No repairs found.", line, col);
-                    continue;
-                }
-                println!(
-                    "Error at line {} col {}. Repair sequences found:",
-                    line, col
-                );
-                let repairs_len = e.repairs().len();
-                for (i, repair) in e.repairs().iter().enumerate() {
-                    let mut out = vec![];
-                    for r in repair.iter() {
-                        match *r {
-                            ParseRepair::Insert(token_idx) => {
-                                out.push(format!("Insert {}", grm.token_epp(token_idx).unwrap()))
-                            }
-                            ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
-                                let t = &input[l.start()..l.end().unwrap_or(l.start())]
-                                    .replace("\n", "\\n");
-                                if let ParseRepair::Delete(_) = *r {
-                                    out.push(format!("Delete {}", t));
-                                } else {
-                                    out.push(format!("Shift {}", t));
-                                }
-                            }
-                        }
-                    }
-                    let padding = ((repairs_len as f64).log10() as usize)
-                        - (((i + 1) as f64).log10() as usize)
-                        + 1;
-                    println!("  {}{}: {}", " ".repeat(padding), i + 1, out.join(", "));
-                }
-            }
-        }
+        println!("{}", e.pp(&lexer, &|t| grm.token_epp(t)));
     }
     if !errs.is_empty() {
         process::exit(1);
