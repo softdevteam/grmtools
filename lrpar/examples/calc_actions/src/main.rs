@@ -6,8 +6,6 @@ extern crate lrlex;
 #[macro_use]
 extern crate lrpar;
 
-use lrpar::{LexParseError, Lexer};
-
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
 // Using `lrpar_mod!` brings the lexer for `calc.l` into scope.
@@ -30,16 +28,7 @@ fn main() {
                 // Pass the lexer to the parser and lex and parse the input.
                 let (res, errs) = calc_y::parse(&mut lexer);
                 for e in errs {
-                    match e {
-                        LexParseError::LexError(e) => {
-                            eprintln!("Lexing error at column {:?}", e.idx)
-                        }
-                        LexParseError::ParseError(e) => {
-                            let (line, col) = lexer.line_and_col(e.lexeme());
-                            assert_eq!(line, 1);
-                            eprintln!("Parsing error at column {}", col);
-                        }
-                    }
+                    println!("{}", e.pp(&lexer, &calc_y::token_epp));
                 }
                 match res {
                     Some(Ok(r)) => println!("Result: {}", r),

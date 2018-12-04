@@ -59,6 +59,7 @@ use RecoveryKind;
 
 const YACC_SUFFIX: &str = "_y";
 const ACTION_PREFIX: &str = "__gt_";
+const GLOBAL_PREFIX: &str = "__GT_";
 
 const GRM_FILE_EXT: &str = "grm";
 const RUST_FILE_EXT: &str = "rs";
@@ -158,11 +159,13 @@ where
     }
 
     /// Statically compile the Yacc file `inp` into Rust, placing the output file(s) into
-    /// the directory `outd`. The latter defines a module with the following function:
+    /// the directory `outd`. The latter defines a module with the following functions:
     ///
     /// ```rust,ignore
-    ///      parser(lexemes: &Vec<Lexeme<StorageT>>)
-    ///   -> (Option<ActionT>, Vec<LexParseError<StorageT>>)>
+    ///    fn parser(lexemes: &Vec<Lexeme<StorageT>>)
+    ///          -> (Option<ActionT>, Vec<LexParseError<StorageT>>)>
+    ///
+    ///    fn token_epp<'a>(tidx: TIdx<StorageT>) -> Option<&'a str>
     /// ```
     ///
     /// Where `ActionT` is either:
@@ -264,13 +267,14 @@ where
         outs.push_str(
             "    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
     use lrpar::ctbuilder::_reconstitute;
+    use cfgrammar::TIdx;
 "
         );
 
         match self.actionkind {
             ActionKind::CustomAction => {
                 outs.push_str(&format!(
-                    "use lrpar::{{Lexeme, parser::AStackType}};
+                    "    use lrpar::{{Lexeme, parser::AStackType}};
     use cfgrammar::RIdx;
     use std::vec;
 
@@ -361,6 +365,8 @@ where
                 ));
             }
         }
+
+        outs.push_str(&self.gen_token_epp(&grm));
 
         match self.actionkind {
             ActionKind::CustomAction => {
@@ -487,6 +493,29 @@ where
 
         cache.push_str("*/\n");
         cache
+    }
+
+    fn gen_token_epp(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut tidxs = Vec::new();
+        for tidx in grm.iter_tidxs() {
+            match grm.token_name(tidx) {
+                Some(n) => tidxs.push(format!("Some(\"{}\")", n)),
+                None => tidxs.push("None".to_string())
+            }
+        }
+        format!(
+            "    const {prefix}EPP: &[Option<&str>] = &[{}];
+
+    /// Return the %epp entry for token `tidx` (where `None` indicates \"the token has no
+    /// pretty-printed value\"). Panics if `tidx` doesn't exist.
+    #[allow(dead_code)]
+    pub fn token_epp<'a>(tidx: TIdx<{storaget}>) -> Option<&'a str> {{
+        {prefix}EPP[usize::from(tidx)]
+    }}",
+            tidxs.join(", "),
+            storaget = StorageT::type_name(),
+            prefix = GLOBAL_PREFIX
+        )
     }
 
     /// Output the structure `d` to the file `outp_base.ext`.

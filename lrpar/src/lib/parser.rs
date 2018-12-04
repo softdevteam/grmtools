@@ -233,8 +233,8 @@ where
     /// `end_laidx` *must* be set to `laidx + 1` in order that the parser doesn't skip the real
     /// lexeme at position `laidx`.
     ///
-    /// Return `true` if the parse reached an accept state (i.e. all the input was consumed,
-    /// possibly after making repairs) or `false` (i.e. some of the input was not consumed, even
+    /// Return `Some(value)` if the parse reached an accept state (i.e. all the input was consumed,
+    /// possibly after making repairs) or `None` (i.e. some of the input was not consumed, even
     /// after possibly making repairs) otherwise.
     pub fn lr(
         &self,
@@ -525,7 +525,70 @@ pub enum LexParseError<StorageT> {
     ParseError(ParseError<StorageT>)
 }
 
-impl<StorageT: Debug> Error for LexParseError<StorageT> {}
+impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
+    /// A pretty-printer of a lexer/parser error. This isn't suitable for all purposes, but it's
+    /// often good enough. The output format is not guaranteed to be stable but is likely to be of
+    /// the form:
+    ///
+    /// ```text,ignore
+    /// Parsing error at line 3 column 8. Repair sequences found:
+    ///   1: Insert ID
+    ///   2: Delete +, Shift 3
+    /// ```
+    ///
+    /// If you are using the compile-time parse system, your `grm_y` module exposes a suitable
+    /// [`epp`](../ctbuilder/struct.CTParserBuilder.html#method.process_file) function; if you are
+    /// using the run-time system,
+    /// [`YaccGrammar`](../../cfgrammar/yacc/grammar/struct.YaccGrammar.html) exposes a suitable
+    /// [`epp`](../../cfgrammar/yacc/grammar/struct.YaccGrammar.html#method.token_epp) function,
+    /// though you will have to wrap it in a closure e.g. `&|t| grm.token_epp(t)`.
+    pub fn pp<'a>(
+        &self,
+        lexer: &Lexer<StorageT>,
+        epp: &Fn(TIdx<StorageT>) -> Option<&'a str>
+    ) -> String {
+        match self {
+            LexParseError::LexError(e) => {
+                let (line, col) = lexer.offset_line_col(e.idx);
+                format!("Lexing error at line {} column {}.", line, col)
+            }
+            LexParseError::ParseError(e) => {
+                let (line, col) = lexer.offset_line_col(e.lexeme().start());
+                let mut out = format!("Parsing error at line {} column {}.", line, col);
+                let repairs_len = e.repairs().len();
+                if repairs_len == 0 {
+                    out.push_str(" No repair sequences found.");
+                } else {
+                    out.push_str(" Repair sequences found:");
+                    for (i, rs) in e.repairs().iter().enumerate() {
+                        let padding = ((repairs_len as f64).log10() as usize)
+                            - (((i + 1) as f64).log10() as usize)
+                            + 1;
+                        out.push_str(&format!("\n  {}{}: ", " ".repeat(padding), i + 1));
+                        let mut rs_out = Vec::new();
+                        for r in rs {
+                            match r {
+                                ParseRepair::Insert(tidx) => {
+                                    rs_out.push(format!("Insert {}", epp(*tidx).unwrap()));
+                                }
+                                ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
+                                    let t = &lexer.lexeme_str(l).replace("\n", "\\n");
+                                    if let ParseRepair::Delete(_) = *r {
+                                        rs_out.push(format!("Delete {}", t));
+                                    } else {
+                                        rs_out.push(format!("Shift {}", t));
+                                    }
+                                }
+                            }
+                        }
+                        out.push_str(&rs_out.join(", "));
+                    }
+                }
+                out
+            }
+        }
+    }
+}
 
 impl<StorageT: Debug> fmt::Display for LexParseError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -535,6 +598,8 @@ impl<StorageT: Debug> fmt::Display for LexParseError<StorageT> {
         }
     }
 }
+
+impl<StorageT: Debug> Error for LexParseError<StorageT> {}
 
 impl<StorageT> From<LexError> for LexParseError<StorageT> {
     fn from(err: LexError) -> LexParseError<StorageT> {
@@ -774,7 +839,7 @@ pub(crate) mod test {
             None
         }
 
-        fn line_and_col(&self, _: &Lexeme<StorageT>) -> (usize, usize) {
+        fn offset_line_col(&self, _: usize) -> (usize, usize) {
             unreachable!();
         }
 
