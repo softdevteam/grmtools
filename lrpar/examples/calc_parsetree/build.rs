@@ -43,7 +43,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
     // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
-    let lex_rule_ids_map = CTParserBuilder::<u8>::new().process_file_in_src("calc.y")?;
+    let lex_rule_ids_map =
+        CTParserBuilder::<u8>::new_with_storaget().process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
         .process_file_in_src("calc.l")?;
