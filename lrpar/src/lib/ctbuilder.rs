@@ -513,7 +513,7 @@ where
     fn gen_token_epp(&self, grm: &YaccGrammar<StorageT>) -> String {
         let mut tidxs = Vec::new();
         for tidx in grm.iter_tidxs() {
-            match grm.token_name(tidx) {
+            match grm.token_epp(tidx) {
                 Some(n) => tidxs.push(format!("Some(\"{}\")", n)),
                 None => tidxs.push("None".to_string())
             }
