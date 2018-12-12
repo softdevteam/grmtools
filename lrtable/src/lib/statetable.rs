@@ -50,6 +50,68 @@ use stategraph::StateGraph;
 use StIdx;
 use StIdxStorageT;
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug)]
+pub struct Conflicts<StorageT> {
+    reduce_reduce: Vec<(PIdx<StorageT>, PIdx<StorageT>, StIdx)>,
+    shift_reduce: Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx)>
+}
+
+impl<StorageT: 'static + Hash + PrimInt + Unsigned> Conflicts<StorageT>
+where
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
+{
+    /// Return an iterator over all shift/reduce conflicts.
+    pub fn sr_conflicts(&self) -> impl Iterator<Item = &(TIdx<StorageT>, PIdx<StorageT>, StIdx)> {
+        self.shift_reduce.iter()
+    }
+
+    /// Return an iterator over all reduce/reduce conflicts.
+    pub fn rr_conflicts(&self) -> impl Iterator<Item = &(PIdx<StorageT>, PIdx<StorageT>, StIdx)> {
+        self.reduce_reduce.iter()
+    }
+
+    /// How many shift/reduce conflicts are there?
+    pub fn sr_len(&self) -> usize {
+        self.shift_reduce.len()
+    }
+
+    /// How many reduce/reduce conflicts are there?
+    pub fn rr_len(&self) -> usize {
+        self.reduce_reduce.len()
+    }
+
+    /// Returns a pretty-printed version of the conflicts.
+    pub fn pp(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut s = String::new();
+        if self.sr_len() > 0 {
+            s.push_str("Shift/Reduce conflicts:\n");
+            for (tidx, pidx, stidx) in self.sr_conflicts() {
+                s.push_str(&format!(
+                    "   State {:?}: Shift(\"{}\") / Reduce({})\n",
+                    usize::from(*stidx),
+                    grm.token_name(*tidx).unwrap(),
+                    grm.pp_prod(*pidx)
+                ));
+            }
+        }
+
+        if self.rr_len() > 0 {
+            s.push_str("Reduce/Reduce conflicts:\n");
+            for (pidx, r_pidx, stidx) in self.rr_conflicts() {
+                s.push_str(&format!(
+                    "   State {:?}: Reduce({}) / Reduce({})\n",
+                    usize::from(*stidx),
+                    grm.pp_prod(*pidx),
+                    grm.pp_prod(*r_pidx)
+                ));
+            }
+        }
+        s
+    }
+}
+
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
 pub enum StateTableErrorKind {
@@ -95,10 +157,7 @@ pub struct StateTable<StorageT> {
     rules_len: RIdx<StorageT>,
     prods_len: PIdx<StorageT>,
     tokens_len: TIdx<StorageT>,
-    /// The number of reduce/reduce errors encountered.
-    pub reduce_reduce: u64,
-    /// The number of shift/reduce errors encountered.
-    pub shift_reduce: u64,
+    conflicts: Option<Conflicts<StorageT>>,
     pub final_state: StIdx
 }
 
@@ -149,8 +208,9 @@ where
         assert!(usize::from(sg.all_states_len()) < (usize::from(StIdx::max_value()) - 1));
         gotos.resize(maxg, 0);
 
-        let mut reduce_reduce = 0; // How many automatically resolved reduce/reduces were made?
-        let mut shift_reduce = 0; // How many automatically resolved shift/reduces were made?
+        // Store automatically resolved conflicts, so we can print them out later
+        let mut reduce_reduce = Vec::new();
+        let mut shift_reduce = Vec::new();
         let mut final_state = None;
 
         for (stidx, state) in sg
@@ -186,10 +246,10 @@ where
                             // By default, Yacc resolves reduce/reduce conflicts in favour
                             // of the earlier production in the grammar.
                             if pidx < r_pidx {
-                                reduce_reduce += 1;
+                                reduce_reduce.push((pidx, r_pidx, stidx));
                                 actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
                             } else if pidx > r_pidx {
-                                reduce_reduce += 1;
+                                reduce_reduce.push((r_pidx, pidx, stidx));
                             }
                         }
                         Action::Accept => {
@@ -230,13 +290,15 @@ where
                         match StateTable::decode(actions[off as usize]) {
                             Action::Shift(x) => assert_eq!(*ref_stidx, x),
                             Action::Reduce(r_pidx) => {
-                                shift_reduce += resolve_shift_reduce(
+                                resolve_shift_reduce(
                                     grm,
                                     &mut actions,
                                     off as usize,
                                     s_tidx,
                                     r_pidx,
-                                    *ref_stidx
+                                    *ref_stidx,
+                                    &mut shift_reduce,
+                                    stidx
                                 );
                             }
                             Action::Accept => panic!("Internal error"),
@@ -307,6 +369,14 @@ where
         let actions_sv = SparseVec::<usize>::from(&actions, 0, usize::from(grm.tokens_len()));
         let gotos_sv = SparseVec::<usize>::from(&gotos, 0, usize::from(grm.rules_len()));
 
+        let mut conflicts = None;
+        if !(reduce_reduce.is_empty() && shift_reduce.is_empty()) {
+            conflicts = Some(Conflicts {
+                reduce_reduce,
+                shift_reduce
+            });
+        }
+
         Ok(StateTable {
             actions: actions_sv,
             state_actions,
@@ -317,8 +387,7 @@ where
             rules_len: grm.rules_len(),
             prods_len: grm.prods_len(),
             tokens_len: grm.tokens_len(),
-            reduce_reduce,
-            shift_reduce,
+            conflicts,
             final_state: final_state.unwrap()
         })
     }
@@ -424,6 +493,11 @@ where
             None => unreachable!()
         }
     }
+
+    /// Return a struct containing all conflicts or `None` if there aren't any.
+    pub fn conflicts(&self) -> Option<&Conflicts<StorageT>> {
+        self.conflicts.as_ref()
+    }
 }
 
 fn actions_offset<StorageT: PrimInt + Unsigned>(
@@ -478,13 +552,13 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     off: usize,
     tidx: TIdx<StorageT>,
     pidx: PIdx<StorageT>,
-    stidx: StIdx
-) -> u64
-where
+    stidx: StIdx, // State we want to shift to
+    shift_reduce: &mut Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx)>,
+    conflict_stidx: StIdx // State in which the conflict occured
+) where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    let mut shift_reduce = 0;
     let tidx_prec = grm.token_precedence(tidx);
     let pidx_prec = grm.prod_precedence(pidx);
     match (tidx_prec, pidx_prec) {
@@ -492,7 +566,7 @@ where
             // If the token and production don't both have precedences, we use Yacc's default
             // resolution, which is in favour of the shift.
             actions[off] = StateTable::encode(Action::Shift(stidx));
-            shift_reduce += 1;
+            shift_reduce.push((tidx, pidx, conflict_stidx));
         }
         (Some(token_prec), Some(prod_prec)) => {
             if token_prec.level == prod_prec.level {
@@ -524,7 +598,6 @@ where
             // the reduce as-is.
         }
     }
-    shift_reduce
 }
 
 #[cfg(test)]
@@ -868,6 +941,42 @@ mod test {
                    Action::Shift(s6));
         assert_eq!(st.action(s10, grm.eof_token_idx()),
                    Action::Reduce(grm.rule_to_prods(grm.rule_idx("Expr").unwrap())[0]));
+    }
+
+    #[test]
+    fn conflicts() {
+        let grm = YaccGrammar::new(
+            YaccKind::Original,
+            &"
+%start A
+%%
+A : 'a' 'b' | B 'b';
+B : 'a' | C;
+C : 'a';
+          "
+        )
+        .unwrap();
+        let sg = pager_stategraph(&grm);
+        let st = StateTable::new(&grm, &sg).unwrap();
+        let conflicts = st.conflicts().unwrap();
+        assert_eq!(conflicts.sr_len(), 1);
+        assert_eq!(conflicts.rr_len(), 1);
+        assert_eq!(
+            conflicts.sr_conflicts().next().unwrap(),
+            &(
+                grm.token_idx("b").unwrap(),
+                grm.rule_to_prods(grm.rule_idx("B").unwrap())[0],
+                StIdx::from(2)
+            )
+        );
+        assert_eq!(
+            conflicts.rr_conflicts().next().unwrap(),
+            &(
+                grm.rule_to_prods(grm.rule_idx("B").unwrap())[0],
+                grm.rule_to_prods(grm.rule_idx("C").unwrap())[0],
+                StIdx::from(2)
+            )
+        );
     }
 
     #[test]

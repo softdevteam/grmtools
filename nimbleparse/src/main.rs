@@ -159,6 +159,11 @@ fn main() {
         }
     };
 
+    if let Some(c) = stable.conflicts() {
+        println!("{}", c.pp(&grm));
+        println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
+    }
+
     {
         let rule_ids = grm
             .tokens_map()
