@@ -5,8 +5,7 @@ install:
     - cargo install --list | grep mdbook || cargo install mdbook --vers "0.2.2"
 before_script:
     - rustup toolchain install nightly
-    - rustup component add --toolchain nightly rustfmt-preview
-    - which rustfmt || cargo install --force rustfmt-nightly
+    - rustup component add --toolchain nightly rustfmt-preview || cargo +nightly install --force rustfmt-nightly
 script:
     - cargo +nightly fmt --all -- --check
     - cargo test --all
