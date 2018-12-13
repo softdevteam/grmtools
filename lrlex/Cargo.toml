@@ -1,7 +1,14 @@
 [package]
 name = "lrlex"
+description = "Simple lexer generator"
+repository = "https://github.com/softdevteam/grmtools"
 version = "0.1.0"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+readme = "README.md"
+# This should be "Apache-2.0 OR MIT OR UPL-1.0" but crates.io doesn't know about
+# UPL-1.0.
+license = "Apache-2.0 OR MIT"
+categories = ["parsing"]
 
 [[bin]]
 doc = false
@@ -13,7 +20,7 @@ path = "src/lib/mod.rs"
 
 [dependencies]
 getopts = "0.2.15" # only needed for src/main.rs
-lrpar = { path = "../lrpar" }
+lrpar = { path = "../lrpar", version = "0.1.0" }
 regex = "1.0"
 num-traits = "0.2"
 try_from = "0.2"
