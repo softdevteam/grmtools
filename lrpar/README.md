@@ -3,17 +3,17 @@
 `lrpar` provides a Yacc-compatible parser (where grammars can be generated at
 compile-time or run-time). It can take in traditional `.y` files and convert
 them into an idiomatic Rust parser. More details can be found in the [grmtools
-book](https://softdevteam.github.io/grmtools/) which includes a quickstart
-guide.
+book](https://softdevteam.github.io/grmtools/master/book) which includes a
+quickstart guide.
 
 
 ## Example
 
 Let's assume we want to statically generate a parser for a simple calculator
 language (and let's also assume we are able to use
-[`lrlex`](https://softdevteam.github.io/grmtools/lrlex.html) for the lexer). We
-need to add a `build.rs` file to our project which tells `lrpar` to statically
-compile the lexer and parser files:
+[`lrlex`](https://softdevteam.github.io/grmtools/master/book/lrlex.html) for the
+lexer). We need to add a `build.rs` file to our project which tells `lrpar` to
+statically compile the lexer and parser files:
 
 ```rust
 extern crate lrlex;
@@ -133,7 +133,7 @@ Result: 20
 ```
 
 `lrpar` also comes with advanced [error
-recovery](https://softdevteam.github.io/grmtools/errorrecovery.html) built-in:
+recovery](https://softdevteam.github.io/grmtools/master/book/errorrecovery.html) built-in:
 
 ```
 >>> 2 + + 3
