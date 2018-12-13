@@ -331,18 +331,17 @@ impl YaccParser {
         let mut c = 0; // Count braces
         while j < self.src.len() {
             let ch = self.src[j..].chars().next().unwrap();
-            c += match ch {
-                '{' => 1,
+            match ch {
+                '{' => c += 1,
                 '}' if c == 1 => {
                     c = 0;
                     break;
                 }
-                '}' => -1,
+                '}' => c -= 1,
                 '\n' | '\r' => {
                     self.newlines.push(j + 1);
-                    0
                 }
-                _ => 0
+                _ => ()
             };
             j += ch.len_utf8();
         }

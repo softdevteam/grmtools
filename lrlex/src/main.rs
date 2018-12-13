@@ -75,7 +75,7 @@ fn main() {
         println!(
             "{} {}",
             lexerdef.get_rule_by_id(l.tok_id()).name.as_ref().unwrap(),
-            &input[l.start()..l.end().unwrap_or(l.start())]
+            &input[l.start()..l.end().unwrap_or_else(|| l.start())]
         );
     }
 }

@@ -100,7 +100,7 @@ impl<'a> Eval<'a> {
             } if ridx == calc_y::R_FACTOR => {
                 if nodes.len() == 1 {
                     if let Node::Term { lexeme } = nodes[0] {
-                        self.s[lexeme.start()..lexeme.end().unwrap_or(lexeme.start())]
+                        self.s[lexeme.start()..lexeme.end().unwrap_or_else(|| lexeme.start())]
                             .parse()
                             .unwrap()
                     } else {
