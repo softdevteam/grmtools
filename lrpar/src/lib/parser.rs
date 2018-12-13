@@ -57,7 +57,7 @@ where
                 Node::Term { lexeme } => {
                     let tidx = TIdx(lexeme.tok_id());
                     let tn = grm.token_name(tidx).unwrap();
-                    let lt = &input[lexeme.start()..lexeme.end().unwrap_or(lexeme.start())];
+                    let lt = &input[lexeme.start()..lexeme.end().unwrap_or_else(|| lexeme.start())];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
                 Node::Nonterm { ridx, ref nodes } => {

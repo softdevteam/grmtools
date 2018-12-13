@@ -346,13 +346,14 @@ where
         let actions_sv = SparseVec::<usize>::from(&actions, 0, usize::from(grm.tokens_len()));
         let gotos_sv = SparseVec::<usize>::from(&gotos, 0, usize::from(grm.rules_len()));
 
-        let mut conflicts = None;
-        if !(reduce_reduce.is_empty() && shift_reduce.is_empty()) {
-            conflicts = Some(Conflicts {
+        let conflicts = if !(reduce_reduce.is_empty() && shift_reduce.is_empty()) {
+            Some(Conflicts {
                 reduce_reduce,
                 shift_reduce
-            });
-        }
+            })
+        } else {
+            None
+        };
 
         Ok(StateTable {
             actions: actions_sv,
