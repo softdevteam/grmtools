@@ -2,7 +2,7 @@ language: rust
 cache:
     - cargo
 install:
-    - cargo install --list | grep mdbook || cargo install mdbook --vers "0.2.2"
+    - cargo install --list | grep mdbook || cargo install mdbook --vers "=0.2"
 before_script:
     - rustup toolchain install nightly
     - rustup component add --toolchain nightly rustfmt-preview || cargo +nightly install --force rustfmt-nightly
@@ -11,11 +11,11 @@ script:
     - cargo test --all
     - cd $TRAVIS_BUILD_DIR/cfgrammar && cargo test --features "serde"
     - cd $TRAVIS_BUILD_DIR/lrtable && cargo test --features "serde"
-    - cd $TRAVIS_BUILD_DIR/doc && mdbook build
+    - cd $TRAVIS_BUILD_DIR/doc && ./build.sh
 deploy:
     provider: pages
     skip-cleanup: true
     github-token: $GITHUB_TOKEN
-    local-dir: doc/book
+    local-dir: doc/release/
     on:
         branch: master
