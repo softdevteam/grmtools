@@ -642,15 +642,15 @@ pub fn _reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    extern crate temp_testdir;
+    extern crate tempfile;
     use std::{fs::File, io::Write, path::PathBuf};
 
-    use self::temp_testdir::TempDir;
+    use self::tempfile::TempDir;
     use super::{ActionKind, CTConflictsError, CTParserBuilder};
 
     #[test]
     fn test_conflicts() {
-        let temp = TempDir::default();
+        let temp = TempDir::new().unwrap();
         let mut file_path = PathBuf::from(temp.as_ref());
         file_path.push("grm.y");
         let mut f = File::create(&file_path).unwrap();
@@ -679,7 +679,7 @@ C : 'a';"
 
     #[test]
     fn test_conflicts_error() {
-        let temp = TempDir::default();
+        let temp = TempDir::new().unwrap();
         let mut file_path = PathBuf::from(temp.as_ref());
         file_path.push("grm.y");
         let mut f = File::create(&file_path).unwrap();
