@@ -507,7 +507,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     /// often good enough. The output format is not guaranteed to be stable but is likely to be of
     /// the form:
     ///
-    /// ```text,ignore
+    /// ```text
     /// Parsing error at line 3 column 8. Repair sequences found:
     ///   1: Insert ID
     ///   2: Delete +, Shift 3

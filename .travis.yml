@@ -9,6 +9,7 @@ before_script:
 script:
     - cargo +nightly fmt --all -- --check
     - cargo test --all
+    - cargo test --all -- --ignored
     - cd $TRAVIS_BUILD_DIR/cfgrammar && cargo test --features "serde"
     - cd $TRAVIS_BUILD_DIR/lrtable && cargo test --features "serde"
     - cd $TRAVIS_BUILD_DIR/doc && ./build.sh

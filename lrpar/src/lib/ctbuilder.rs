@@ -129,7 +129,7 @@ impl CTParserBuilder<u32> {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```text
     /// CTParserBuilder::new()
     ///     .process_file_in_src("grm.y")
     ///     .unwrap();
@@ -158,7 +158,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```text
     /// CTParserBuilder::<u8>::new_with_storaget()
     ///     .process_file_in_src("grm.y")
     ///     .unwrap();
@@ -237,7 +237,7 @@ where
     /// Statically compile the Yacc file `inp` into Rust, placing the output file(s) into
     /// the directory `outd`. The latter defines a module with the following functions:
     ///
-    /// ```rust,ignore
+    /// ```text
     ///    fn parser(lexemes: &Vec<Lexeme<StorageT>>)
     ///          -> (Option<ActionT>, Vec<LexParseError<StorageT>>)>
     ///
@@ -588,7 +588,7 @@ where
         let mut tidxs = Vec::new();
         for tidx in grm.iter_tidxs() {
             match grm.token_epp(tidx) {
-                Some(n) => tidxs.push(format!("Some(\"{}\")", n)),
+                Some(n) => tidxs.push(format!("Some(\"{}\")", str_escape(n))),
                 None => tidxs.push("None".to_string())
             }
         }
@@ -620,6 +620,11 @@ where
         serialize_into(f, d)?;
         Ok(outp)
     }
+}
+
+/// Return a version of the string `s` which is safe to embed in source code as a string.
+fn str_escape(s: &str) -> String {
+    s.replace("\\", "\\\\").replace("\"", "\\\"")
 }
 
 /// This function is called by generated files; it exists so that generated files don't require a

@@ -53,7 +53,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```text
     /// LexerBuilder::<u8>::new()
     ///     .process_file_in_src("grm.l", None)
     ///     .unwrap();

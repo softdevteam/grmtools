@@ -19,7 +19,7 @@ use TIdx;
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
 /// grammar:
-/// ```ignore
+/// ```text
 ///   let grm = YaccGrammar::new(YaccKind::Original, "
 ///     S: A 'b';
 ///     A: 'a'
@@ -28,7 +28,7 @@ use TIdx;
 /// ```
 /// then the following assertions (and only the following assertions) about the firsts set are
 /// correct:
-/// ```ignore
+/// ```text
 ///   assert!(firsts.is_set(grm.rule_idx("S").unwrap(), grm.token_idx("a").unwrap()));
 ///   assert!(firsts.is_set(grm.rule_idx("S").unwrap(), grm.token_idx("b").unwrap()));
 ///   assert!(firsts.is_set(grm.rule_idx("A").unwrap(), grm.token_idx("a").unwrap()));

@@ -19,7 +19,7 @@ use TIdx;
 
 /// `Follows` stores all the Follow sets for a given grammar. For example, given this code and
 /// grammar:
-/// ```ignore
+/// ```text
 ///   let grm = YaccGrammar::new(YaccKind::Original, "
 ///       S: A 'b';
 ///       A: 'a' | ;
@@ -28,7 +28,7 @@ use TIdx;
 /// ```
 /// then the following assertions (and only the following assertions) about the Follows set are
 /// correct:
-/// ```ignore
+/// ```text
 ///   assert!(follows.is_set(grm.rule_idx("S").unwrap(), grm.eof_token_idx());
 ///   assert!(follows.is_set(grm.rule_idx("A").unwrap(), grm.token_idx("b").unwrap()));
 /// ```
