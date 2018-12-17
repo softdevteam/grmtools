@@ -129,7 +129,7 @@ impl CTParserBuilder<u32> {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```text
     /// CTParserBuilder::new()
     ///     .process_file_in_src("grm.y")
     ///     .unwrap();
@@ -158,7 +158,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```text
     /// CTParserBuilder::<u8>::new_with_storaget()
     ///     .process_file_in_src("grm.y")
     ///     .unwrap();
@@ -237,7 +237,7 @@ where
     /// Statically compile the Yacc file `inp` into Rust, placing the output file(s) into
     /// the directory `outd`. The latter defines a module with the following functions:
     ///
-    /// ```rust,ignore
+    /// ```text
     ///    fn parser(lexemes: &Vec<Lexeme<StorageT>>)
     ///          -> (Option<ActionT>, Vec<LexParseError<StorageT>>)>
     ///
@@ -588,7 +588,7 @@ where
         let mut tidxs = Vec::new();
         for tidx in grm.iter_tidxs() {
             match grm.token_epp(tidx) {
-                Some(n) => tidxs.push(format!("Some(\"{}\")", n)),
+                Some(n) => tidxs.push(format!("Some(\"{}\")", str_escape(n))),
                 None => tidxs.push("None".to_string())
             }
         }
@@ -622,6 +622,11 @@ where
     }
 }
 
+/// Return a version of the string `s` which is safe to embed in source code as a string.
+fn str_escape(s: &str) -> String {
+    s.replace("\\", "\\\\").replace("\"", "\\\"")
+}
+
 /// This function is called by generated files; it exists so that generated files don't require a
 /// dependency on serde and rmps.
 #[doc(hidden)]
@@ -642,15 +647,15 @@ pub fn _reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    extern crate temp_testdir;
+    extern crate tempfile;
     use std::{fs::File, io::Write, path::PathBuf};
 
-    use self::temp_testdir::TempDir;
+    use self::tempfile::TempDir;
     use super::{ActionKind, CTConflictsError, CTParserBuilder};
 
     #[test]
     fn test_conflicts() {
-        let temp = TempDir::default();
+        let temp = TempDir::new().unwrap();
         let mut file_path = PathBuf::from(temp.as_ref());
         file_path.push("grm.y");
         let mut f = File::create(&file_path).unwrap();
@@ -679,7 +684,7 @@ C : 'a';"
 
     #[test]
     fn test_conflicts_error() {
-        let temp = TempDir::default();
+        let temp = TempDir::new().unwrap();
         let mut file_path = PathBuf::from(temp.as_ref());
         file_path.push("grm.y");
         let mut f = File::create(&file_path).unwrap();
