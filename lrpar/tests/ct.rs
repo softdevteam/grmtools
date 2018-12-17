@@ -148,17 +148,117 @@ fn main() {{
     .unwrap();
 }
 
-fn build_dummy(tdir: &TempDir) {
+fn init_calc(tdir: &TempDir, main: &str) {
+    // Write build.rs
+    let mut p = PathBuf::from(tdir.as_ref());
+    p.push("build.rs");
+    fs::write(
+        p,
+        "
+extern crate lrlex;
+extern crate lrpar;
+
+use lrlex::LexerBuilder;
+use lrpar::{{CTParserBuilder, ActionKind}};
+
+fn main() -> Result<(), Box<std::error::Error>> {
+    let lex_rule_ids_map = CTParserBuilder::new()
+        .action_kind(ActionKind::CustomAction)
+        .process_file_in_src(\"calc.y\")?;
+    LexerBuilder::new()
+        .rule_ids_map(lex_rule_ids_map)
+        .process_file_in_src(\"calc.l\")?;
+    Ok(())
+}"
+    )
+    .unwrap();
+
+    // Write src/calc.y
+    let mut p = PathBuf::from(tdir.as_ref());
+    p.push("src");
+    p.push("calc.y");
+    fs::write(
+        p,
+        "%start Expr
+%type Result<u64, ()>
+%%
+Expr: Term 'PLUS' Expr { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+
+Term: Factor 'MUL' Term { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor: 'LBRACK' Expr 'RBRACK' { $2 }
+      | 'INT' {
+            let l = $1.map_err(|_| ())?;
+            match $lexer.lexeme_str(&l).parse::<u64>() {
+                Ok(v) => Ok(v),
+                Err(_) => {
+                    let (_, col) = $lexer.offset_line_col(l.start());
+                    eprintln!(\"Error at column {}: '{}' cannot be represented as a u64\",
+                              col,
+                              $lexer.lexeme_str(&l));
+                    Err(())
+                }
+            }
+        }
+      ;"
+    )
+    .unwrap();
+
+    // Write src/calc.l
+    let mut p = PathBuf::from(tdir.as_ref());
+    p.push("src");
+    p.push("calc.l");
+    fs::write(
+        p,
+        " %%
+[0-9]+ \"INT\"
+\\+ \"PLUS\"
+\\* \"MUL\"
+\\( \"LBRACK\"
+\\) \"RBRACK\"
+[\\t ]+ ;"
+    )
+    .unwrap();
+
+    // Write src/main.rs
+    let mut p = PathBuf::from(tdir.as_ref());
+    p.push("src");
+    p.push("main.rs");
+    fs::write(
+        p,
+        &format!(
+            "extern crate cfgrammar;
+#[macro_use] extern crate lrpar;
+#[macro_use] extern crate lrlex;
+
+lrlex_mod!(calc_l);
+lrpar_mod!(calc_y);
+
+fn main() {{
+{}
+}}
+",
+            main
+        )
+    )
+    .unwrap();
+}
+
+fn run_dummy(tdir: &TempDir) {
     let c = Command::new(env!("CARGO"))
-        .args(&["build"])
+        .args(&["run"])
         .current_dir(PathBuf::from(tdir.as_ref()))
         .output()
-        .unwrap();
+        .expect("Command execution failed");
     if !c.status.success() {
         println!("{}", String::from_utf8_lossy(&c.stdout));
         eprintln!("{}", String::from_utf8_lossy(&c.stderr));
     }
-    assert!(c.status.success());
+    assert!(c.status.success(), "Command executed unsuccessfully");
 }
 
 #[test]
@@ -177,6 +277,62 @@ fn test_epp_str() {
                 .as_bytes()
         )
         .ok();
-        build_dummy(&tdir);
+        run_dummy(&tdir);
+    });
+}
+
+#[test]
+#[ignore]
+fn test_basic_actions() {
+    run_in_dummy(|tdir| {
+        init_calc(
+            &tdir,
+            "
+    let lexerdef = calc_l::lexerdef();
+    let mut lexer = lexerdef.lexer(\"2+3\");
+    match calc_y::parse(&mut lexer) {
+        (Some(Ok(5)), ref errs) if errs.len() == 0 => (),
+        _ => unreachable!()
+    }"
+        );
+        run_dummy(&tdir);
+    });
+}
+
+#[test]
+#[ignore]
+fn test_error_recovery_and_actions() {
+    run_in_dummy(|tdir| {
+        init_calc(
+            &tdir,
+            "
+    use lrpar::LexParseError;
+
+    let lexerdef = calc_l::lexerdef();
+
+    let mut lexer = lexerdef.lexer(\"2++3\");
+    let (r, errs) = calc_y::parse(&mut lexer);
+    assert_eq!(r, Some(Ok(5)));
+    assert_eq!(errs.len(), 1);
+    match errs[0] {
+        LexParseError::ParseError(..) => (),
+        _ => unreachable!()
+    }
+
+    let mut lexer = lexerdef.lexer(\"2+3)\");
+    let (r, errs) = calc_y::parse(&mut lexer);
+    assert_eq!(r, Some(Ok(5)));
+    assert_eq!(errs.len(), 1);
+    match errs[0] {
+        LexParseError::ParseError(..) => (),
+        _ => unreachable!()
+    }
+
+    let mut lexer = lexerdef.lexer(\"2+3+18446744073709551616\");
+    let (r, errs) = calc_y::parse(&mut lexer);
+    assert_eq!(r, Some(Err(())));
+    assert!(errs.is_empty());"
+        );
+        run_dummy(&tdir);
     });
 }
