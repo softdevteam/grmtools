@@ -71,7 +71,9 @@ where
 
     // If we're the last thread to be waiting on DUMMY_TESTDIR, then drop it.
     if DUMMY_WAITING.fetch_sub(1, Ordering::SeqCst) == 1 {
-        unsafe { DUMMY_TESTDIR = None; }
+        unsafe {
+            DUMMY_TESTDIR = None;
+        }
     }
     DUMMY_SPINLOCK.store(false, Ordering::SeqCst);
     match r {
