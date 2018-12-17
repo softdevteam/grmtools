@@ -7,8 +7,6 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-#[macro_use]
-extern crate lazy_static;
 extern crate lrpar;
 extern crate tempfile;
 
@@ -17,28 +15,31 @@ use std::{
     panic::{catch_unwind, resume_unwind, UnwindSafe},
     path::PathBuf,
     process::Command,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     thread,
     time::Duration
 };
 
 use self::tempfile::TempDir;
 
-/// How long to wait, in ms, when spinning for DUMMY_RUNNING to become false?
+// How long to wait, in ms, when spinning for DUMMY_SPINLOCK to become false?
 const SPIN_WAIT: u64 = 250;
 
 // This is ugly, but effective: compiling a dummy project is slow because we have to compile
-// dependencies. We thus cheat and only create one dummy project, which we continually refresh,
-// leaving only its target/ directory behind. In order to do that, we use the `DUMMY_RUNNING` bool
-// as a simple spin-lock to prevent more than one test trying to make use of the dummy test
-// directory at once.
-lazy_static! {
-    static ref DUMMY_TESTDIR: TempDir = TempDir::new().unwrap();
-}
-// This is our spin-lock mutex: we don't use a Rust-level Mutex, because we anticipate that tests
-// might fail, at which point a "real" Mutex would be poisoned: we are quite capable of continuing,
-// even if one test/thread fails.
-static DUMMY_RUNNING: AtomicBool = AtomicBool::new(false);
+// dependencies. We thus cheat and try to only create one dummy project, which we continually
+// refresh, leaving only its target/ directory behind. However, there are two complicating factors:
+// first, only one test can use DUMMY_TESTDIR at a time; second, static items don't call Drop (so
+// we have to manually garbage collect DUMMY_TESTDIR). We might like to solve #1 with a normal Rust
+// Mutex, but those become poisoned when a panic happens, and if a test fails, we'd like other
+// tests to be able to continue working. So, we solve #1 with a hand-crafted spin-lock
+// DUMMY_SPINLOCK and #2 with a count DUMMY_WAITING. Note that it is possible for DUMMY_TESTDIR to
+// be dropped and recreated multiple times, because it might look like there are no remaining tests
+// wanting to use it, only for that to change later: we could only change by adding some sort of
+// brittle "how many DUMMY_TESTDIR-using tests have yet to run?" count. This dynamic approach,
+// despite its limitations and complexity, seems a better bet.
+static mut DUMMY_TESTDIR: Option<TempDir> = None;
+static DUMMY_SPINLOCK: AtomicBool = AtomicBool::new(false);
+static DUMMY_WAITING: AtomicUsize = AtomicUsize::new(0);
 
 /// Run the function `f` with a guaranteed fresh dummy test directory that no-one else is using.
 fn run_in_dummy<F, T>(f: F) -> T
@@ -47,15 +48,32 @@ where
     F: Send + UnwindSafe + 'static,
     T: Send + 'static
 {
+    // First of all, we make sure that, if another thread has populated DUMMY_TESTDIR, that it
+    // won't be emptied.
+    DUMMY_WAITING.fetch_add(1, Ordering::SeqCst);
+    // Grab the spinlock.
     loop {
-        if !DUMMY_RUNNING.swap(true, Ordering::Relaxed) {
+        if !DUMMY_SPINLOCK.swap(true, Ordering::SeqCst) {
             break;
         }
         thread::sleep(Duration::from_millis(SPIN_WAIT));
     }
-    reset_dummy(&DUMMY_TESTDIR);
-    let r = catch_unwind(|| f(&DUMMY_TESTDIR));
-    DUMMY_RUNNING.store(false, Ordering::Relaxed);
+    // Create DUMMY_TESTDIR if it doesn't exist.
+    let dtd = unsafe {
+        if DUMMY_TESTDIR.is_none() {
+            DUMMY_TESTDIR = Some(TempDir::new().unwrap());
+        }
+        DUMMY_TESTDIR.as_ref().unwrap()
+    };
+    reset_dummy(dtd);
+
+    let r = catch_unwind(|| f(dtd));
+
+    // If we're the last thread to be waiting on DUMMY_TESTDIR, then drop it.
+    if DUMMY_WAITING.fetch_sub(1, Ordering::SeqCst) == 1 {
+        unsafe { DUMMY_TESTDIR = None; }
+    }
+    DUMMY_SPINLOCK.store(false, Ordering::SeqCst);
     match r {
         Ok(r) => r,
         Err(e) => resume_unwind(e)
