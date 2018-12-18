@@ -157,6 +157,55 @@ where
     }
 }
 
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, StorageT, ()>
+where
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>
+{
+    fn parse_noaction<F>(
+        rcvry_kind: RecoveryKind,
+        grm: &YaccGrammar<StorageT>,
+        token_cost: F,
+        sgraph: &StateGraph<StorageT>,
+        stable: &StateTable<StorageT>,
+        lexer: &mut Lexer<StorageT>,
+        lexemes: &[Lexeme<StorageT>]
+    ) -> Vec<LexParseError<StorageT>>
+    where
+        F: Fn(TIdx<StorageT>) -> u8
+    {
+        for tidx in grm.iter_tidxs() {
+            assert!(token_cost(tidx) > 0);
+        }
+        let mut actions: Vec<
+            &'a Fn(RIdx<StorageT>, &Lexer<StorageT>, vec::Drain<AStackType<(), StorageT>>) -> ()
+        > = Vec::new();
+        actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
+        let psr = Parser {
+            rcvry_kind,
+            grm,
+            token_cost: &token_cost,
+            sgraph,
+            stable,
+            lexer,
+            lexemes,
+            actions: actions.as_slice()
+        };
+        let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
+        let mut astack: Vec<AStackType<(), StorageT>> = Vec::new();
+        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
+        psr.lr(0, &mut pstack, &mut astack, &mut errors);
+        errors
+    }
+
+    fn noaction(
+        _ridx: RIdx<StorageT>,
+        _lexer: &Lexer<StorageT>,
+        _astack: vec::Drain<AStackType<(), StorageT>>
+    ) -> () {
+    }
+}
+
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
     Parser<'a, StorageT, ActionT>
 where
@@ -643,6 +692,24 @@ where
             Err(e) => return (None, vec![e.into()])
         };
         Parser::<StorageT, Node<StorageT>>::parse_generictree(
+            self.recoverer,
+            self.grm,
+            self.term_costs,
+            self.sgraph,
+            self.stable,
+            lexer,
+            &lexemes
+        )
+    }
+
+    /// Parse input, returning any errors found. See the arguments for
+    /// [`parse_actions`](#method.parse_actions) for more details about the return value.
+    pub fn parse_noaction(&self, lexer: &mut Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
+        let lexemes = match lexer.all_lexemes() {
+            Ok(ls) => ls,
+            Err(e) => return vec![e.into()]
+        };
+        Parser::<StorageT, ()>::parse_noaction(
             self.recoverer,
             self.grm,
             self.term_costs,
