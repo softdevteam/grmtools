@@ -2,7 +2,7 @@
 name = "cfgrammar"
 description = "Grammar manipulation"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 readme = "README.md"
 # This should be "Apache-2.0 OR MIT OR UPL-1.0" but crates.io doesn't know about
