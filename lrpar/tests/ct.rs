@@ -168,28 +168,31 @@ fn main() {{
     .unwrap();
 }
 
-fn init_calc(tdir: &TempDir, main: &str) {
+fn init_calc(tdir: &TempDir, actionkind: &str, main: &str) {
     // Write build.rs
     let mut p = PathBuf::from(tdir.as_ref());
     p.push("build.rs");
     fs::write(
         p,
-        "
+        &format!(
+            "
 extern crate lrlex;
 extern crate lrpar;
 
 use lrlex::LexerBuilder;
 use lrpar::{{CTParserBuilder, ActionKind}};
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<std::error::Error>> {{
     let lex_rule_ids_map = CTParserBuilder::new()
-        .action_kind(ActionKind::CustomAction)
+        .action_kind({})
         .process_file_in_src(\"calc.y\")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
         .process_file_in_src(\"calc.l\")?;
     Ok(())
-}"
+}}",
+            actionkind
+        )
     )
     .unwrap();
 
@@ -303,10 +306,34 @@ fn test_epp_str() {
 
 #[test]
 #[ignore]
+fn test_no_actions() {
+    run_in_dummy(|tdir| {
+        init_calc(
+            &tdir,
+            "ActionKind::NoAction",
+            "
+    let lexerdef = calc_l::lexerdef();
+    let mut lexer = lexerdef.lexer(\"2+3\");
+    if !calc_y::parse(&mut lexer).is_empty() {
+        panic!();
+    }
+    let mut lexer = lexerdef.lexer(\"2++3\");
+    if calc_y::parse(&mut lexer).len() != 1 {
+        panic!();
+    }
+    "
+        );
+        run_dummy(&tdir);
+    });
+}
+
+#[test]
+#[ignore]
 fn test_basic_actions() {
     run_in_dummy(|tdir| {
         init_calc(
             &tdir,
+            "ActionKind::CustomAction",
             "
     let lexerdef = calc_l::lexerdef();
     let mut lexer = lexerdef.lexer(\"2+3\");
@@ -325,6 +352,7 @@ fn test_error_recovery_and_actions() {
     run_in_dummy(|tdir| {
         init_calc(
             &tdir,
+            "ActionKind::CustomAction",
             "
     use lrpar::LexParseError;
 
