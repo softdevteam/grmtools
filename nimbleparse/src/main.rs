@@ -40,7 +40,7 @@ fn usage(prog: &str, msg: &str) -> ! {
     }
     writeln!(
         &mut stderr(),
-        "Usage: {} [-r <cpctplus|mf|none>] [-y <eco|original>] <lexer.l> <parser.y> <input file>",
+        "Usage: {} [-r <cpctplus|mf|none>] [-y <eco|original>] [-q] <lexer.l> <parser.y> <input file>",
         leaf
     )
     .ok();
@@ -65,6 +65,7 @@ fn main() {
     let prog = &args[0];
     let matches = match Options::new()
         .optflag("h", "help", "")
+        .optflag("q", "quiet", "Don't print warnings such as conflicts")
         .optopt(
             "r",
             "recoverer",
@@ -86,6 +87,8 @@ fn main() {
     if matches.opt_present("h") {
         usage(prog, "");
     }
+
+    let quiet = matches.opt_present("q");
 
     let recoverykind = match matches.opt_str("r") {
         None => RecoveryKind::MF,
@@ -136,9 +139,11 @@ fn main() {
         }
     };
 
-    if let Some(c) = stable.conflicts() {
-        println!("{}", c.pp(&grm));
-        println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
+    if !quiet {
+        if let Some(c) = stable.conflicts() {
+            println!("{}", c.pp(&grm));
+            println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
+        }
     }
 
     {
@@ -148,26 +153,28 @@ fn main() {
             .map(|(&n, &i)| (n, usize::from(i).to_u16().unwrap()))
             .collect();
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
-        if let Some(tokens) = missing_from_parser {
-            writeln!(&mut stderr(), "Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:").ok();
-            let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
-            sorted.sort();
-            for n in sorted {
-                writeln!(&mut stderr(), "  {}", n).ok();
+        if !quiet {
+            if let Some(tokens) = missing_from_parser {
+                writeln!(&mut stderr(), "Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:").ok();
+                let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
+                sorted.sort();
+                for n in sorted {
+                    writeln!(&mut stderr(), "  {}", n).ok();
+                }
             }
-        }
-        if let Some(tokens) = missing_from_lexer {
-            writeln!(
-                &mut stderr(),
-                "Error: these tokens are referenced in the grammar but not defined in the lexer:"
-            )
-            .ok();
-            let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
-            sorted.sort();
-            for n in sorted {
-                writeln!(&mut stderr(), "  {}", n).ok();
+            if let Some(tokens) = missing_from_lexer {
+                writeln!(
+                    &mut stderr(),
+                    "Error: these tokens are referenced in the grammar but not defined in the lexer:"
+                )
+                .ok();
+                let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
+                sorted.sort();
+                for n in sorted {
+                    writeln!(&mut stderr(), "  {}", n).ok();
+                }
+                process::exit(1);
             }
-            process::exit(1);
         }
     }
 
