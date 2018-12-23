@@ -11,3 +11,4 @@
   - [cfgrammar](cfgrammar.md)
   - [lrtable](lrtable.md)
 - [Error recovery](errorrecovery.md)
+- [Other Rust parsing tools](othertools.md)
