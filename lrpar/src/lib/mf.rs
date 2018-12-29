@@ -8,8 +8,10 @@
 // terms.
 
 use std::{
+    collections::HashSet,
     fmt::Debug,
     hash::{Hash, Hasher},
+    iter::FromIterator,
     marker::PhantomData,
     mem,
     time::Instant
@@ -610,7 +612,7 @@ where
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.
-pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>(
+pub(crate) fn simplify_repairs<StorageT: Hash + PrimInt + Unsigned>(
     all_rprs: &mut Vec<Vec<ParseRepair<StorageT>>>
 ) {
     for rprs in &mut all_rprs.iter_mut() {
@@ -624,15 +626,11 @@ pub(crate) fn simplify_repairs<StorageT: PrimInt + Unsigned>(
         }
     }
 
-    // Deduplicate
-    let mut i = 0;
-    while i < all_rprs.len() {
-        if let Some(j) = all_rprs.iter().skip(i + 1).position(|x| *x == all_rprs[i]) {
-            all_rprs.remove(j);
-        } else {
-            i += 1;
-        }
-    }
+    // Use a HashSet as a quick way of deduplicating repair sequences: occasionally we can end up
+    // with hundreds of thousands (!), and we don't have a sensible ordering on ParseRepair to make
+    // it plausible to do a sort and dedup.
+    let mut hs: HashSet<Vec<ParseRepair<StorageT>>> = HashSet::from_iter(all_rprs.drain(..));
+    all_rprs.extend(hs.drain());
 
     // Sort repair sequences by the number of repairs they contain
     all_rprs.sort_unstable_by(|x, y| x.len().cmp(&y.len()));
@@ -838,7 +836,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, fmt::Debug};
+    use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned, Zero};
 
@@ -857,7 +855,7 @@ mod test {
 
     use super::{ends_with_parse_at_least_shifts, Dist, Repair, RepairMerge, PARSE_AT_LEAST};
 
-    fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>(
+    fn pp_repairs<StorageT: 'static + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
         repairs: &Vec<ParseRepair<StorageT>>
     ) -> String
@@ -1119,7 +1117,7 @@ W: 'b' ;
         assert_eq!(d.dist(s7, grm.eof_token_idx()), 0);
     }
 
-    fn check_some_repairs<StorageT: 'static + PrimInt + Unsigned>(
+    fn check_some_repairs<StorageT: 'static + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
         err: &LexParseError<StorageT>,
         expected: &[&str]
@@ -1142,7 +1140,7 @@ W: 'b' ;
         }
     }
 
-    fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>(
+    fn check_all_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
         err: &LexParseError<StorageT>,
         expected: &[&str]

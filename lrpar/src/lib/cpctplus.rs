@@ -447,7 +447,7 @@ fn ends_with_parse_at_least_shifts<StorageT: PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    use std::fmt::Debug;
+    use std::{fmt::Debug, hash::Hash};
 
     use cfgrammar::yacc::YaccGrammar;
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
@@ -455,7 +455,7 @@ mod test {
     use lex::Lexeme;
     use parser::{test::do_parse, LexParseError, ParseRepair, RecoveryKind};
 
-    fn pp_repairs<StorageT: 'static + PrimInt + Unsigned>(
+    fn pp_repairs<StorageT: 'static + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
         repairs: &Vec<ParseRepair<StorageT>>
     ) -> String
@@ -475,7 +475,7 @@ mod test {
         out.join(", ")
     }
 
-    fn check_all_repairs<StorageT: 'static + Debug + PrimInt + Unsigned>(
+    fn check_all_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
         err: &LexParseError<StorageT>,
         expected: &[&str]

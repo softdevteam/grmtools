@@ -58,7 +58,7 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
 /// that are always of zero length (which are required in some grammars) from lexemes that result
 /// from error recovery (where an error recovery algorithm can know the type that a lexeme should
 /// have been, but can't know what its contents should have been).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Lexeme<StorageT> {
     // The long-term aim is to pack this struct so that len can be longer than u32 while everything
     // still fitting into 2 64-bit words.
