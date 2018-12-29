@@ -336,7 +336,7 @@ this happens in less than 2% of real-world inputs, so it is not a significant
 worry.
 
 
-### Some “obvious” repair sequences with `Delete` aren’t reported
+### Some “obvious” repair sequences aren't reported at the end of a file
 
 The second surprising condition is more subtle. Before we can show the issue, we
 need to introduce the concept of repair sequence ranking: `MF` only presents the
@@ -347,11 +347,8 @@ In an ideal world, `MF` would find repair sequences that allow a file to parse
 completely successfully. In practice, this is only feasible if a syntax error
 occurs near the very end of the input. In most cases, `MF` is happy with a
 weaker condition, which is that a repair sequence ends with 3 `Shift` repairs,
-showing that parsing has got back on track, at least for a little bit.
-\[Inevitably we need to gloss over several of the subtleties of the algorithm,
-though one is worth mentioning here: `Shift`s at the end of a repair sequence
-are stripped before being reported to the user, as they don't aid
-understanding.\] This condition explains the following:
+showing that parsing has got back on track, at least for a little bit. This
+condition explains the following:
 
 ```ignore
 >>> 2 + + 3
@@ -371,19 +368,24 @@ For `2 + + 3` we match the human intuition that the input could have been `2 +
 3` or `2 + <some int> + 3`. However, for the input `2 + + 3 +` we do not report
 a `Delete +` repair sequence for the first error in the input. Why?
 
-For `2 + + 3`, the two repair sequences found are `Delete +, Shift 3` and
-`Insert Int, Shift +, Shift 3`, both of which cause the entire input to parse
-successfully, and both of which have the same cost.
+The first thing we need to know is that repair sequences are always reported
+with trailing `Shift` repairs pruned: for the rest of this subsection it aids
+understanding to leave them unpruned. Thus, for `2 + + 3`, the two repair
+sequences found are `Delete +, Shift 3` and `Insert Int, Shift +, Shift 3`, both
+of which cause the entire input to parse successfully, and both of which have
+the same cost.
 
 For `2 + + 3 +`, however, the first error leads to 3 repair sequences, `Insert
 Int, Shift +, Shift 3, Shift +`, `Delete +, Shift 3, Delete` or `Delete +, Shift
 3, Shift +, Insert Int`: the latter two are not even completed since they're
-provably higher than the `Insert Int` repair sequence.
+provably higher than the `Insert Int` repair sequence and thus aren’t reported
+to the user.
 
-In practise, this situation is much rarer than the timeout problem, to the point
-that it's not worth worrying about. Even when it happens, the repair sequences
-that `MF` reports are always correct and it will always report at least one
-repair sequence at a given syntax error location.
+In practise, this situation is rarer than the timeout problem, to the point that
+it’s arguably not worth worrying about or explaining to end users. Even when it
+happens, the repair sequences that `MF` reports are always correct and at least
+one repair sequence will be reported (assuming that error recovery doesn't time
+out!).
 
 
 ## Error recovery on real-world grammars
