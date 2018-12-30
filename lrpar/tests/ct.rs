@@ -360,8 +360,10 @@ fn test_error_recovery_and_actions() {
 
     let mut lexer = lexerdef.lexer(\"2++3\");
     let (r, errs) = calc_y::parse(&mut lexer);
-    assert_eq!(r, Some(Ok(5)));
-    assert_eq!(errs.len(), 1);
+    match r {
+        Some(Ok(5)) | Some(Err(())) => (),
+        _ => unreachable!()
+    }
     match errs[0] {
         LexParseError::ParseError(..) => (),
         _ => unreachable!()

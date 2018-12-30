@@ -546,7 +546,7 @@ pub enum RecoveryKind {
 /// to users, both can (at least conceptually) occur at any point of the intertwined lexing/parsing
 /// process.
 #[derive(Debug)]
-pub enum LexParseError<StorageT> {
+pub enum LexParseError<StorageT: Hash> {
     LexError(LexError),
     ParseError(ParseError<StorageT>)
 }
@@ -616,7 +616,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     }
 }
 
-impl<StorageT: Debug> fmt::Display for LexParseError<StorageT> {
+impl<StorageT: Debug + Hash> fmt::Display for LexParseError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             LexParseError::LexError(ref e) => Display::fmt(e, f),
@@ -625,15 +625,15 @@ impl<StorageT: Debug> fmt::Display for LexParseError<StorageT> {
     }
 }
 
-impl<StorageT: Debug> Error for LexParseError<StorageT> {}
+impl<StorageT: Debug + Hash> Error for LexParseError<StorageT> {}
 
-impl<StorageT> From<LexError> for LexParseError<StorageT> {
+impl<StorageT: Hash> From<LexError> for LexParseError<StorageT> {
     fn from(err: LexError) -> LexParseError<StorageT> {
         LexParseError::LexError(err)
     }
 }
 
-impl<StorageT> From<ParseError<StorageT>> for LexParseError<StorageT> {
+impl<StorageT: Hash> From<ParseError<StorageT>> for LexParseError<StorageT> {
     fn from(err: ParseError<StorageT>) -> LexParseError<StorageT> {
         LexParseError::ParseError(err)
     }
@@ -754,8 +754,8 @@ where
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
 /// in the sequence of repairs is represented by a `ParseRepair`.
-#[derive(Clone, Debug, PartialEq)]
-pub enum ParseRepair<StorageT> {
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum ParseRepair<StorageT: Hash> {
     /// Insert a `Symbol::Token`.
     Insert(TIdx<StorageT>),
     /// Delete a symbol.
@@ -766,21 +766,21 @@ pub enum ParseRepair<StorageT> {
 
 /// Records a single parse error.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ParseError<StorageT> {
+pub struct ParseError<StorageT: Hash> {
     stidx: StIdx,
     lexeme: Lexeme<StorageT>,
     repairs: Vec<Vec<ParseRepair<StorageT>>>
 }
 
-impl<StorageT: Debug> Display for ParseError<StorageT> {
+impl<StorageT: Debug + Hash> Display for ParseError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Parse error at lexeme {:?}", self.lexeme)
     }
 }
 
-impl<StorageT: Debug> Error for ParseError<StorageT> {}
+impl<StorageT: Debug + Hash> Error for ParseError<StorageT> {}
 
-impl<StorageT: PrimInt + Unsigned> ParseError<StorageT> {
+impl<StorageT: Hash + PrimInt + Unsigned> ParseError<StorageT> {
     /// Return the state table index where this error was detected.
     pub fn stidx(&self) -> StIdx {
         self.stidx
