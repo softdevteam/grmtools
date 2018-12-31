@@ -35,6 +35,7 @@ pub enum YaccParserErrorKind {
     UnknownDeclaration,
     DuplicatePrecedence,
     PrecNotFollowedByToken,
+    DuplicateAvoidInsertDeclaration,
     DuplicateImplicitTokensDeclaration,
     DuplicateStartDeclaration,
     DuplicateTypeDeclaration,
@@ -67,6 +68,9 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::UnknownDeclaration => "Unknown declaration",
             YaccParserErrorKind::DuplicatePrecedence => "Token already has a precedence",
             YaccParserErrorKind::PrecNotFollowedByToken => "%prec not followed by token name",
+            YaccParserErrorKind::DuplicateAvoidInsertDeclaration => {
+                "Duplicate %avoid_insert declaration"
+            }
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration => {
                 "Duplicate %implicit_tokens declaration"
             }
@@ -168,6 +172,24 @@ impl YaccParser {
                 let (j, v) = self.parse_string(i)?;
                 self.ast.epp.insert(n, v);
                 i = self.parse_ws(j, true)?;
+                continue;
+            }
+            if let Some(j) = self.lookahead_is("%avoid_insert", i) {
+                if self.ast.avoid_insert.is_some() {
+                    return Err(
+                        self.mk_error(YaccParserErrorKind::DuplicateAvoidInsertDeclaration, i)
+                    );
+                }
+                let mut avoid_insert = HashSet::new();
+                i = self.parse_ws(j, false)?;
+                let num_newlines = self.newlines.len();
+                while j < self.src.len() && self.newlines.len() == num_newlines {
+                    let (j, n) = self.parse_token(i)?;
+                    self.ast.tokens.insert(n.clone());
+                    avoid_insert.insert(n);
+                    i = self.parse_ws(j, true)?;
+                }
+                self.ast.avoid_insert = Some(avoid_insert);
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
@@ -1053,6 +1075,51 @@ x"
             Ok(_) => panic!("Incorrect %prec parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::PrecNotFollowedByToken,
+                line: 3,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_parse_avoid_insert() {
+        let ast = parse(
+            YaccKind::Eco,
+            &"
+          %avoid_insert ws1 ws2
+          %start R
+          %%
+          R: 'a';
+          "
+        )
+        .unwrap();
+        assert_eq!(
+            ast.avoid_insert,
+            Some(
+                ["ws1".to_string(), "ws2".to_string()]
+                    .iter()
+                    .cloned()
+                    .collect()
+            )
+        );
+        assert!(ast.tokens.get("ws1").is_some());
+        assert!(ast.tokens.get("ws2").is_some());
+    }
+
+    #[test]
+    fn test_duplicate_avoid_insert() {
+        match parse(
+            YaccKind::Eco,
+            &"
+          %avoid_insert X
+          %avoid_insert Y
+          %%
+          "
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration,
                 line: 3,
                 ..
             }) => (),

@@ -10,6 +10,7 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, fmt};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
+use vob::Vob;
 
 use super::YaccKind;
 use yacc::{firsts::YaccFirsts, follows::YaccFollows, parser::YaccParser};
@@ -89,7 +90,9 @@ pub struct YaccGrammar<StorageT = u32> {
     /// The programs section of a grammar, if specified; otherwise `None`.
     programs: Option<String>,
     /// The %actiontype declaration value, if specified; otherwise `None`.
-    actiontype: Option<String>
+    actiontype: Option<String>,
+    /// Tokens marked as %avoid_insert (if any).
+    avoid_insert: Option<Vob>
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -312,6 +315,16 @@ where
             }
         }
 
+        let avoid_insert = if let Some(ai) = ast.avoid_insert {
+            let mut aiv = Vob::from_elem(token_names.len(), false);
+            for n in ai.iter() {
+                aiv.set(usize::from(token_map[n]), true);
+            }
+            Some(aiv)
+        } else {
+            None
+        };
+
         assert!(!token_names.is_empty());
         assert!(!rule_names.is_empty());
         Ok(YaccGrammar {
@@ -331,7 +344,8 @@ where
             implicit_rule: implicit_rule.and_then(|x| Some(rule_map[&x])),
             actions,
             programs: ast.programs,
-            actiontype: ast.actiontype
+            actiontype: ast.actiontype,
+            avoid_insert
         })
     }
 
@@ -496,6 +510,15 @@ where
                        // The call to as_() is safe because token_names is guaranteed to be small
                        // enough to fit into StorageT
                        .map(|x| TIdx(x.as_()))
+    }
+
+    /// Is the token `tidx` marked as `%avoid_insert`?
+    pub fn avoid_insert(&self, tidx: TIdx<StorageT>) -> bool {
+        if let Some(ai) = &self.avoid_insert {
+            ai.get(usize::from(tidx)).unwrap()
+        } else {
+            false
+        }
     }
 
     /// Is there a path from the `from` rule to the `to` rule? Note that recursive rules

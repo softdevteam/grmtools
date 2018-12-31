@@ -236,7 +236,7 @@ where
         if rnk_rprs.is_empty() {
             return (in_laidx, vec![]);
         }
-        simplify_repairs(&mut rnk_rprs);
+        simplify_repairs(parser, &mut rnk_rprs);
         let laidx = apply_repairs(
             parser,
             in_laidx,

@@ -204,6 +204,7 @@ fn main() -> Result<(), Box<std::error::Error>> {{
         p,
         "%start Expr
 %type Result<u64, ()>
+%avoid_insert 'INT'
 %%
 Expr: Term 'PLUS' Expr { Ok($1? + $3?) }
     | Term { $1 }
@@ -361,7 +362,7 @@ fn test_error_recovery_and_actions() {
     let mut lexer = lexerdef.lexer(\"2++3\");
     let (r, errs) = calc_y::parse(&mut lexer);
     match r {
-        Some(Ok(5)) | Some(Err(())) => (),
+        Some(Ok(5)) => (),
         _ => unreachable!()
     }
     match errs[0] {
