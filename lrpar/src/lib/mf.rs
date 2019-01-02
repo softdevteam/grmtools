@@ -8,6 +8,7 @@
 // terms.
 
 use std::{
+    cmp::Ordering,
     collections::HashSet,
     fmt::Debug,
     hash::{Hash, Hasher},
@@ -232,7 +233,7 @@ where
         if rnk_rprs.is_empty() {
             return (in_laidx, vec![]);
         }
-        simplify_repairs(&mut rnk_rprs);
+        simplify_repairs(parser, &mut rnk_rprs);
         let laidx = apply_repairs(
             parser,
             in_laidx,
@@ -612,9 +613,12 @@ where
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.
-pub(crate) fn simplify_repairs<StorageT: Hash + PrimInt + Unsigned>(
+pub(crate) fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
+    parser: &Parser<StorageT, ActionT>,
     all_rprs: &mut Vec<Vec<ParseRepair<StorageT>>>
-) {
+) where
+    usize: AsPrimitive<StorageT>
+{
     for rprs in &mut all_rprs.iter_mut() {
         // Remove shifts from the end of repairs
         while !rprs.is_empty() {
@@ -632,8 +636,30 @@ pub(crate) fn simplify_repairs<StorageT: Hash + PrimInt + Unsigned>(
     let mut hs: HashSet<Vec<ParseRepair<StorageT>>> = HashSet::from_iter(all_rprs.drain(..));
     all_rprs.extend(hs.drain());
 
-    // Sort repair sequences by the number of repairs they contain
-    all_rprs.sort_unstable_by(|x, y| x.len().cmp(&y.len()));
+    // Sort repair sequences:
+    //   1) by whether they contain Inserts that are %insert_avoid
+    //   2) by the number of repairs they contain
+    let contains_avoid_insert = |rprs: &Vec<ParseRepair<StorageT>>| -> bool {
+        for r in rprs.iter() {
+            if let ParseRepair::Insert(tidx) = r {
+                if parser.grm.avoid_insert(*tidx) {
+                    return true;
+                }
+            }
+        }
+        false
+    };
+    all_rprs.sort_unstable_by(|x, y| {
+        let x_cai = contains_avoid_insert(x);
+        let y_cai = contains_avoid_insert(y);
+        if x_cai && !y_cai {
+            Ordering::Greater
+        } else if !x_cai && y_cai {
+            Ordering::Less
+        } else {
+            x.len().cmp(&y.len())
+        }
+    });
 }
 
 pub(crate) struct Dist<StorageT> {
@@ -1322,8 +1348,7 @@ E: '(' E ')'
         );
     }
 
-    #[test]
-    fn expr_grammar() {
+    fn calc_grammar() -> (&'static str, &'static str) {
         let lexs = "\\( '('
                     \\) ')'
                     \\+ '+'
@@ -1331,6 +1356,7 @@ E: '(' E ')'
                     [0-9] 'INT'";
 
         let grms = "%start Expr
+%avoid_insert 'INT'
 %%
 Expr: Term '+' Expr
     | Term ;
@@ -1342,6 +1368,12 @@ Factor: '(' Expr ')'
       | 'INT' ;
 ";
 
+        (lexs, grms)
+    }
+
+    #[test]
+    fn test_exprs() {
+        let (lexs, grms) = calc_grammar();
         let us = "(23";
         let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
         let (_, errs) = pr.unwrap_err();
@@ -1365,6 +1397,24 @@ Factor: '(' Expr ')'
             &errs[0],
             &vec!["Insert \"INT\", Delete, Delete, Delete, Delete, Delete"]
         );
+    }
+
+    #[test]
+    fn test_bias() {
+        // If ranking biasing fails, this test will fail 50% of the time, so test it enough times
+        // that we're likely to capture failure.
+        for _ in 0..10 {
+            let (lexs, grms) = calc_grammar();
+            let us = "2++3";
+            let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, &us);
+            let (_, errs) = pr.unwrap_err();
+            check_all_repairs(&grm, &errs[0], &vec!["Delete", "Insert \"INT\""]);
+            if let LexParseError::ParseError(e) = &errs[0] {
+                if let ParseRepair::Insert(_) = &e.repairs()[0][0] {
+                    panic!("Ranking biasing failed");
+                }
+            }
+        }
     }
 
     #[test]

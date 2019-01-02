@@ -27,6 +27,7 @@ pub struct GrammarAST {
     pub prods: Vec<Production>,
     pub tokens: IndexSet<String>,
     pub precs: HashMap<String, Precedence>,
+    pub avoid_insert: Option<HashSet<String>>,
     pub implicit_tokens: Option<HashSet<String>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
@@ -122,6 +123,7 @@ impl GrammarAST {
             prods: Vec::new(),
             tokens: IndexSet::new(),
             precs: HashMap::new(),
+            avoid_insert: None,
             implicit_tokens: None,
             epp: HashMap::new(),
             programs: None,
