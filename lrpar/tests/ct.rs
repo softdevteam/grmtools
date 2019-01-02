@@ -206,15 +206,15 @@ fn main() -> Result<(), Box<std::error::Error>> {{
 %type Result<u64, ()>
 %avoid_insert 'INT'
 %%
-Expr: Term 'PLUS' Expr { Ok($1? + $3?) }
+Expr: Term '+' Expr { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
-Term: Factor 'MUL' Term { Ok($1? * $3?) }
+Term: Factor '*' Term { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
-Factor: 'LBRACK' Expr 'RBRACK' { $2 }
+Factor: '(' Expr ')' { $2 }
       | 'INT' {
             let l = $1.map_err(|_| ())?;
             match $lexer.lexeme_str(&l).parse::<u64>() {
@@ -240,10 +240,10 @@ Factor: 'LBRACK' Expr 'RBRACK' { $2 }
         p,
         " %%
 [0-9]+ \"INT\"
-\\+ \"PLUS\"
-\\* \"MUL\"
-\\( \"LBRACK\"
-\\) \"RBRACK\"
+\\+ \"+\"
+\\* \"*\"
+\\( \"(\"
+\\) \")\"
 [\\t ]+ ;"
     )
     .unwrap();

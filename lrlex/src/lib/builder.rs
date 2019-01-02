@@ -20,6 +20,7 @@ use std::{
 };
 
 use num_traits::{PrimInt, Unsigned};
+use regex::Regex;
 use try_from::TryFrom;
 use typename::TypeName;
 
@@ -29,6 +30,10 @@ use parser::parse_lex;
 const LEX_SUFFIX: &str = "_l";
 const LEX_FILE_EXT: &str = "l";
 const RUST_FILE_EXT: &str = "rs";
+
+lazy_static! {
+    static ref RE_TOKEN_ID: Regex = Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap();
+}
 
 /// A `LexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
@@ -169,12 +174,14 @@ where
         // Token IDs
         if let Some(ref rim) = self.rule_ids_map {
             for (n, id) in rim {
-                outs.push_str(&format!(
-                    "#[allow(dead_code)]\npub const T_{}: {} = {:?};\n",
-                    n.to_ascii_uppercase(),
-                    StorageT::type_name(),
-                    *id
-                ));
+                if RE_TOKEN_ID.is_match(n) {
+                    outs.push_str(&format!(
+                        "#[allow(dead_code)]\npub const T_{}: {} = {:?};\n",
+                        n.to_ascii_uppercase(),
+                        StorageT::type_name(),
+                        *id
+                    ));
+                }
             }
         }
 
