@@ -175,39 +175,43 @@ impl YaccParser {
                 continue;
             }
             if let Some(j) = self.lookahead_is("%avoid_insert", i) {
-                if self.ast.avoid_insert.is_some() {
-                    return Err(
-                        self.mk_error(YaccParserErrorKind::DuplicateAvoidInsertDeclaration, i)
-                    );
-                }
-                let mut avoid_insert = HashSet::new();
                 i = self.parse_ws(j, false)?;
                 let num_newlines = self.newlines.len();
+                if self.ast.avoid_insert.is_none() {
+                    self.ast.avoid_insert = Some(HashSet::new());
+                }
                 while j < self.src.len() && self.newlines.len() == num_newlines {
                     let (j, n) = self.parse_token(i)?;
                     self.ast.tokens.insert(n.clone());
-                    avoid_insert.insert(n);
+                    if self.ast.avoid_insert.as_ref().unwrap().contains(&n) {
+                        return Err(
+                            self.mk_error(YaccParserErrorKind::DuplicateAvoidInsertDeclaration, i)
+                        );
+                    }
+                    self.ast.avoid_insert.as_mut().unwrap().insert(n);
                     i = self.parse_ws(j, true)?;
                 }
-                self.ast.avoid_insert = Some(avoid_insert);
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
-                    if self.ast.implicit_tokens.is_some() {
-                        return Err(self
-                            .mk_error(YaccParserErrorKind::DuplicateImplicitTokensDeclaration, i));
-                    }
-                    let mut implicit_tokens = HashSet::new();
                     i = self.parse_ws(j, false)?;
                     let num_newlines = self.newlines.len();
+                    if self.ast.implicit_tokens.is_none() {
+                        self.ast.implicit_tokens = Some(HashSet::new());
+                    }
                     while j < self.src.len() && self.newlines.len() == num_newlines {
                         let (j, n) = self.parse_token(i)?;
                         self.ast.tokens.insert(n.clone());
-                        implicit_tokens.insert(n);
+                        if self.ast.implicit_tokens.as_ref().unwrap().contains(&n) {
+                            return Err(self.mk_error(
+                                YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
+                                i
+                            ));
+                        }
+                        self.ast.implicit_tokens.as_mut().unwrap().insert(n);
                         i = self.parse_ws(j, true)?;
                     }
-                    self.ast.implicit_tokens = Some(implicit_tokens);
                     continue;
                 }
             }
@@ -1108,12 +1112,49 @@ x"
     }
 
     #[test]
-    fn test_duplicate_avoid_insert() {
-        match parse(
+    fn test_multiple_avoid_insert() {
+        let ast = parse(
             YaccKind::Eco,
             &"
           %avoid_insert X
           %avoid_insert Y
+          %%
+          "
+        )
+        .unwrap();
+        assert_eq!(
+            ast.avoid_insert,
+            Some(["X".to_string(), "Y".to_string()].iter().cloned().collect())
+        );
+    }
+
+    #[test]
+    fn test_duplicate_avoid_insert() {
+        match parse(
+            YaccKind::Eco,
+            &"
+          %avoid_insert X Y
+          %avoid_insert Y
+          %%
+          "
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration,
+                line: 3,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_duplicate_avoid_insert2() {
+        match parse(
+            YaccKind::Eco,
+            &"
+          %avoid_insert X
+          %avoid_insert Y Y
           %%
           "
         ) {
@@ -1172,12 +1213,29 @@ x"
     }
 
     #[test]
+    fn test_multiple_implicit_tokens() {
+        let ast = parse(
+            YaccKind::Eco,
+            &"
+          %implicit_tokens X
+          %implicit_tokens Y
+          %%
+          "
+        )
+        .unwrap();
+        assert_eq!(
+            ast.implicit_tokens,
+            Some(["X".to_string(), "Y".to_string()].iter().cloned().collect())
+        );
+    }
+
+    #[test]
     fn test_duplicate_implicit_tokens() {
         match parse(
             YaccKind::Eco,
             &"
           %implicit_tokens X
-          %implicit_tokens Y
+          %implicit_tokens X Y
           %%
           "
         ) {
@@ -1185,6 +1243,26 @@ x"
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
                 line: 3,
+                ..
+            }) => (),
+            Err(e) => panic!("Incorrect error returned {}", e)
+        }
+    }
+
+    #[test]
+    fn test_duplicate_implicit_tokens2() {
+        match parse(
+            YaccKind::Eco,
+            &"
+          %implicit_tokens X X
+          %implicit_tokens Y
+          %%
+          "
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
+                line: 2,
                 ..
             }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)
