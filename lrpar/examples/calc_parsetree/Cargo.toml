@@ -8,6 +8,7 @@ doc = false
 name = "calcparse"
 
 [build-dependencies]
+cfgrammar = { path="../../../cfgrammar" }
 lrlex = { path="../../../lrlex" }
 lrpar = { path="../.." }
 

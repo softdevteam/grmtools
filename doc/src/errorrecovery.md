@@ -426,7 +426,7 @@ the first parsing error, with the `recoverer` method in `CTParserBuilder` or
 
 ```rust,ignore
     let lex_rule_ids_map = CTParserBuilder::new()
-        .action_kind(ActionKind::CustomAction)
+        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
         .recoverer(lrpar::RecoveryKind::None)
         .process_file_in_src("calc.y")?;
 ```

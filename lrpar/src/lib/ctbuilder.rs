@@ -22,7 +22,7 @@ use std::{
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
-    yacc::{YaccGrammar, YaccKind},
+    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
     Symbol
 };
 use filetime::FileTime;
@@ -46,15 +46,6 @@ const STABLE_FILE_EXT: &str = "stable";
 lazy_static! {
     static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
     static ref RE_DOL_LEXER: Regex = Regex::new(r"\$lexer").unwrap();
-}
-
-pub enum ActionKind {
-    /// Execute user-specified actions attached to each production
-    CustomAction,
-    /// Automatically create a parse tree instead of user-specified actions.
-    GenericParseTree,
-    /// Do not do execute actions of any sort.
-    NoAction
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
@@ -116,7 +107,7 @@ where
     // grammar is rebuilt.
     recoverer: RecoveryKind,
     phantom: PhantomData<StorageT>,
-    actionkind: ActionKind,
+    yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     conflicts: Option<(
         YaccGrammar<StorageT>,
@@ -168,7 +159,7 @@ where
         CTParserBuilder {
             recoverer: RecoveryKind::MF,
             phantom: PhantomData,
-            actionkind: ActionKind::GenericParseTree,
+            yacckind: None,
             error_on_conflicts: true,
             conflicts: None
         }
@@ -205,9 +196,9 @@ where
         self.process_file(inp, outd)
     }
 
-    /// Set the action kind for this parser to `ak`.
-    pub fn action_kind(mut self, ak: ActionKind) -> Self {
-        self.actionkind = ak;
+    /// Set the `YaccKind` for this parser to `ak`.
+    pub fn yacckind(mut self, yk: YaccKind) -> Self {
+        self.yacckind = Some(yk);
         self
     }
 
@@ -248,8 +239,8 @@ where
     /// Where `ActionT` is either:
     ///
     ///   * the `%type` value given to the grammar
-    ///   * or, if the `action_kind` was set to `ActionKind::GenericParseTree`, it is
-    ///     [`Node<StorageT>`](../parser/enum.Node.html)
+    ///   * or, if the `yacckind` was set YaccKind::Original(YaccOriginalActionKind::UserAction),
+    ///     it is [`Node<StorageT>`](../parser/enum.Node.html)
     ///
     /// # Panics
     ///
@@ -264,8 +255,13 @@ where
         P: AsRef<Path>,
         Q: AsRef<Path>
     {
+        let yk = match self.yacckind {
+            None => panic!("yacckind must be specified before processing."),
+            Some(YaccKind::Original(x)) => YaccKind::Original(x),
+            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported.")
+        };
         let inc = read_to_string(&inp).unwrap();
-        let grm = YaccGrammar::<StorageT>::new_with_storaget(YaccKind::Eco, &inc)?;
+        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc)?;
         let rule_ids = grm
             .tokens_map()
             .iter()
@@ -341,11 +337,15 @@ where
         let actiontype = match grm.actiontype() {
             Some(t) => t.clone(), // Probably unneeded once NLL is in stable
             None => {
-                match self.actionkind {
-                    ActionKind::CustomAction => panic!("Action return type not defined!"),
-                    ActionKind::GenericParseTree | ActionKind::NoAction => {
+                match yk {
+                    YaccKind::Original(YaccOriginalActionKind::UserAction) => {
+                        panic!("Action return type not defined!")
+                    }
+                    YaccKind::Original(YaccOriginalActionKind::NoAction)
+                    | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                         String::new() // Dummy string that will never be used
                     }
+                    YaccKind::Eco => unreachable!()
                 }
             }
         };
@@ -357,8 +357,8 @@ where
 "
         );
 
-        match self.actionkind {
-            ActionKind::CustomAction => {
+        match yk {
+            YaccKind::Original(YaccOriginalActionKind::UserAction) => {
                 outs.push_str(&format!(
                     "    use lrpar::{{Lexeme, parser::AStackType}};
     use cfgrammar::RIdx;
@@ -371,7 +371,7 @@ where
                     actiont = actiontype
                 ));
             }
-            ActionKind::GenericParseTree => {
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 outs.push_str(&format!(
                     "use lrpar::Node;
 
@@ -381,7 +381,7 @@ where
                     storaget = StorageT::type_name()
                 ));
             }
-            ActionKind::NoAction => {
+            YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
                     "    pub fn parse(lexer: &mut Lexer<{storaget}>)
           -> Vec<LexParseError<{storaget}>>
@@ -389,6 +389,7 @@ where
                     storaget = StorageT::type_name()
                 ));
             }
+            YaccKind::Eco => unreachable!()
         };
 
         // grm, sgraph, stable
@@ -409,8 +410,8 @@ where
             out_stable.to_str().unwrap()
         ));
 
-        match self.actionkind {
-            ActionKind::CustomAction => {
+        match yk {
+            YaccKind::Original(YaccOriginalActionKind::UserAction) => {
                 // action function references
                 outs.push_str(&format!(
                     "\n        let mut actions: Vec<&Fn(RIdx<{storaget}>,
@@ -435,7 +436,7 @@ where
                     recoverer,
                 ));
             }
-            ActionKind::GenericParseTree => {
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 outs.push_str(&format!(
                     "
         RTParserBuilder::new(&grm, &sgraph, &stable)
@@ -444,7 +445,7 @@ where
                     recoverer
                 ));
             }
-            ActionKind::NoAction => {
+            YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
                     "
         RTParserBuilder::new(&grm, &sgraph, &stable)
@@ -453,6 +454,7 @@ where
                     recoverer
                 ));
             }
+            YaccKind::Eco => unreachable!()
         };
 
         outs.push_str("    }\n\n");
@@ -471,7 +473,7 @@ where
 
         outs.push_str(&self.gen_token_epp(&grm));
 
-        if let ActionKind::CustomAction = self.actionkind {
+        if let YaccKind::Original(YaccOriginalActionKind::UserAction) = yk {
             if let Some(s) = grm.programs() {
                 outs.push_str("\n/* User code */\n\n");
                 outs.push_str(s);
@@ -666,7 +668,8 @@ mod test {
     use std::{fs::File, io::Write, path::PathBuf};
 
     use self::tempfile::TempDir;
-    use super::{ActionKind, CTConflictsError, CTParserBuilder};
+    use super::{CTConflictsError, CTParserBuilder};
+    use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 
     #[test]
     fn test_conflicts() {
@@ -685,7 +688,7 @@ C : 'a';"
 
         let mut ct = CTParserBuilder::new()
             .error_on_conflicts(false)
-            .action_kind(ActionKind::GenericParseTree);
+            .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree));
         ct.process_file_in_src(file_path.to_str().unwrap()).unwrap();
 
         match ct.conflicts() {
@@ -713,7 +716,7 @@ C : 'a';"
         );
 
         match CTParserBuilder::new()
-            .action_kind(ActionKind::GenericParseTree)
+            .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .process_file_in_src(file_path.to_str().unwrap())
         {
             Ok(_) => panic!("Expected error"),

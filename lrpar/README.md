@@ -16,6 +16,7 @@ lexer). We need to add a `build.rs` file to our project which tells `lrpar` to
 statically compile the lexer and parser files:
 
 ```rust
+extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrpar;
 
@@ -24,7 +25,7 @@ use lrpar::{CTParserBuilder, ActionKind};
 
 fn main() -> Result<(), Box<std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
-        .action_kind(ActionKind::CustomAction)
+        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
         .process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)

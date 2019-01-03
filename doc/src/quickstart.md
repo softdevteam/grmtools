@@ -29,6 +29,7 @@ doc = false
 name = "calc"
 
 [build-dependencies]
+cfgrammar = "0.1"
 lrlex = "0.1"
 lrpar = "0.1"
 
@@ -44,15 +45,17 @@ into Rust code. We thus need to create a
 file which can process the lexer and grammar.  Our `build.rs` file thus looks as follows:
 
 ```rust
+extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrpar;
 
+use cfgrammar::yacc::{{YaccKind, YaccOriginalActionKind}};
 use lrlex::LexerBuilder;
 use lrpar::{CTParserBuilder, ActionKind};
 
 fn main() -> Result<(), Box<std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
-        .action_kind(ActionKind::CustomAction)
+        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
         .process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
@@ -63,7 +66,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
 In our case, we want to specify Rust code which is run as the input is parsed
 (rather than creating a generic parse tree which we traverse later), so we
-specified that the `action_kind` is `ActionKind::CustomAction`. The grammar file
+specified that the `yacckind` (i.e. what variant of Yacc file we're using)
+is `YaccKind::Original(YaccOriginalActionKind::UserAction)`. The grammar file
 is stored in `src/calc.y`, but we only specify `calc.y` as the filename to
 `lrpar`, since it searches relative to `src/` automatically.
 
