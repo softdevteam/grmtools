@@ -48,9 +48,6 @@ lazy_static! {
     static ref RE_DOL_LEXER: Regex = Regex::new(r"\$lexer").unwrap();
 }
 
-/// By default `CTParserBuilder` generates a parse tree which is returned after a successful parse.
-/// If the user wants to supply custom actions to be executed during reductions and return their
-/// results, they may change `ActionKind` to `CustomAction` instead.
 pub enum ActionKind {
     /// Execute user-specified actions attached to each production
     CustomAction,

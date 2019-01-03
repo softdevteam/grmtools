@@ -244,7 +244,7 @@ pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
 #[cfg(test)]
 mod test {
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind},
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Symbol
     };
     use pager::pager_stategraph;
@@ -255,7 +255,7 @@ mod test {
     fn test_statetable_core() {
         // Taken from p13 of https://link.springer.com/article/10.1007/s00236-010-0115-6
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
             %start A
             %%

@@ -20,7 +20,7 @@ use TIdx;
 /// `Follows` stores all the Follow sets for a given grammar. For example, given this code and
 /// grammar:
 /// ```text
-///   let grm = YaccGrammar::new(YaccKind::Original, "
+///   let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
 ///       S: A 'b';
 ///       A: 'a' | ;
 ///     ").unwrap();
@@ -127,7 +127,7 @@ where
 mod test {
     use super::YaccFollows;
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
-    use yacc::{YaccGrammar, YaccKind};
+    use yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
 
     fn has<StorageT: 'static + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
@@ -160,7 +160,7 @@ mod test {
     fn test_follow() {
         // Adapted from p2 of https://www.cs.uaf.edu/~cs331/notes/FirstFollow.pdf
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
                 %start E
                 %%
@@ -184,7 +184,7 @@ mod test {
     fn test_follow2() {
         // Adapted from https://www.l2f.inesc-id.pt/~david/w/pt/Top-Down_Parsing/Exercise_5:_Test_2010/07/01
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
                 %start A
                 %%
@@ -207,7 +207,7 @@ mod test {
     #[test]
     fn test_follow3() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
                 %start S
                 %%
@@ -224,7 +224,7 @@ mod test {
     #[test]
     fn test_follow_corchuelo() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
                 %start E
                 %%

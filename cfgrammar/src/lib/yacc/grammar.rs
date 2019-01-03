@@ -117,7 +117,7 @@ where
     /// user defined start rule.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
         let ast = match yacc_kind {
-            YaccKind::Original | YaccKind::Eco => {
+            YaccKind::Original(_) | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
                 yp.parse()?;
                 let mut ast = yp.ast();
@@ -158,7 +158,7 @@ where
         let implicit_rule;
         let implicit_start_rule;
         match yacc_kind {
-            YaccKind::Original => {
+            YaccKind::Original(_) => {
                 implicit_rule = None;
                 implicit_start_rule = None;
             }
@@ -1015,7 +1015,7 @@ impl fmt::Display for YaccGrammarError {
 mod test {
     use super::{rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE};
     use std::collections::HashMap;
-    use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind};
+    use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind};
     use PIdx;
     use RIdx;
     use Symbol;
@@ -1023,7 +1023,11 @@ mod test {
 
     #[test]
     fn test_minimal() {
-        let grm = YaccGrammar::new(YaccKind::Original, "%start R %token T %% R: 'T';").unwrap();
+        let grm = YaccGrammar::new(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            "%start R %token T %% R: 'T';"
+        )
+        .unwrap();
 
         assert_eq!(grm.start_prod, PIdx(1));
         assert_eq!(grm.implicit_rule(), None);
@@ -1050,8 +1054,11 @@ mod test {
 
     #[test]
     fn test_rule_ref() {
-        let grm =
-            YaccGrammar::new(YaccKind::Original, "%start R %token T %% R : S; S: 'T';").unwrap();
+        let grm = YaccGrammar::new(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            "%start R %token T %% R : S; S: 'T';"
+        )
+        .unwrap();
 
         grm.rule_idx("^").unwrap();
         grm.rule_idx("R").unwrap();
@@ -1077,7 +1084,7 @@ mod test {
     #[rustfmt::skip]
     fn test_long_prod() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';"
         ).unwrap();
 
@@ -1108,7 +1115,7 @@ mod test {
     #[test]
     fn test_prods_rules() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1131,7 +1138,7 @@ mod test {
     #[rustfmt::skip]
     fn test_left_right_nonassoc_precs() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start Expr
             %right '='
@@ -1164,7 +1171,7 @@ mod test {
     #[rustfmt::skip]
     fn test_prec_override() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start expr
             %left '+' '-'
@@ -1268,7 +1275,7 @@ mod test {
     #[rustfmt::skip]
     fn test_has_path() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1295,7 +1302,7 @@ mod test {
     #[rustfmt::skip]
     fn test_rule_min_costs() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1318,7 +1325,7 @@ mod test {
     #[test]
     fn test_min_sentences() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1366,7 +1373,7 @@ mod test {
     #[rustfmt::skip]
     fn test_rule_max_costs1() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1390,7 +1397,7 @@ mod test {
     #[rustfmt::skip]
     fn test_rule_max_costs2() {
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1412,7 +1419,7 @@ mod test {
     fn test_out_of_order_productions() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
         let grm = YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start S
             %%

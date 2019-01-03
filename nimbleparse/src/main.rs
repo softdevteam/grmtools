@@ -22,7 +22,7 @@ use std::{
     process
 };
 
-use cfgrammar::yacc::{YaccGrammar, YaccKind};
+use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
 use getopts::Options;
 use lrlex::build_lex;
 use lrpar::parser::{RTParserBuilder, RecoveryKind};
@@ -102,9 +102,9 @@ fn main() {
     };
 
     let yacckind = match matches.opt_str("y") {
-        None => YaccKind::Original,
+        None => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
         Some(s) => match &*s.to_lowercase() {
-            "original" => YaccKind::Original,
+            "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "eco" => YaccKind::Eco,
             _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s))
         }

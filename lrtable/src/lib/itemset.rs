@@ -166,7 +166,7 @@ where
 mod test {
     use super::Itemset;
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind},
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         SIdx, Symbol
     };
     use stategraph::state_exists;
@@ -177,7 +177,7 @@ mod test {
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
         let grm = &YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
           %start S
           %%
@@ -205,7 +205,7 @@ mod test {
 
     fn eco_grammar() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
           %start S
           %token a b c d f
@@ -256,7 +256,7 @@ mod test {
     //     aSb
     fn grammar3() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
           %start S
           %token a b c d
