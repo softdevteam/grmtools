@@ -238,7 +238,7 @@ where
     ///
     /// Where `ActionT` is either:
     ///
-    ///   * the `%type` value given to the grammar
+    ///   * the `%actiontype` value given to the grammar
     ///   * or, if the `yacckind` was set YaccKind::Original(YaccOriginalActionKind::UserAction),
     ///     it is [`Node<StorageT>`](../parser/enum.Node.html)
     ///

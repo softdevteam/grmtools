@@ -52,7 +52,7 @@ Consider the `calc` grammar from the [quickstart guide](quickstart.html):
 %start Expr
 // Define the Rust type that is to be returned by each
 // productions' action.
-%type u64
+%actiontype u64
 %%
 Expr: Term 'PLUS' Expr { $1 + $3 }
     | Term { $1 }
@@ -78,9 +78,9 @@ fn parse_int(s: &str) -> u64 {
 ```
 
 In this grammar, every production has an action: each action *must* evaluate to
-an instance of the `%type` type (in this case `u64`). The `$x` variables refer
+an instance of the `%actiontype` type (in this case `u64`). The `$x` variables refer
 to the respective symbol in the production (i.e. `$1` refers to the first symbol
-in the production). If the symbol is a rule then an instance of `%type` is
+in the production). If the symbol is a rule then an instance of `%actiontype` is
 stored in the `$x` variable; if the symbol is a lexeme then an `Option<Lexeme>`
 instance is returned. A special `$lexer` variable allows access to the lexer.
 This allows us to turn `Lexeme`s into strings with the `lexeme_str` function,
@@ -159,9 +159,9 @@ simpler than it sounds with only a slight rethink in the way that we tend to
 write a grammar's actions.
 
 
-## A rule of thumb: make `%type` return a `Result` type
+## A rule of thumb: make `%actiontype` return a `Result` type
 
-Although you can use whatever type you use for `%type`, using a `Result` type
+Although you can use whatever type you use for `%actiontype`, using a `Result` type
 allows a (deliberately) simple interaction with the effects of error recovery.
 The basic idea is simple: in actions, we ignore lexemes whose value we don't
 care about (e.g. brackets); for lexemes whose value we care about, we either
@@ -175,7 +175,7 @@ occurring:
 
 ```yacc
 %start Expr
-%type Result<u64, ()>
+%actiontype Result<u64, ()>
 %%
 Expr: Term 'PLUS' Expr { Ok($1? + $3?) }
     | Term { $1 }
@@ -251,11 +251,11 @@ Unable to evaluate expression.
 
 Using a `Result` type allows the user arbitrary control over the classes of
 syntax errors they are prepared to deal with or not. For example, we could
-remove the `panic` from `parse_int` by having `%type` be `Result<u64, String>`
+remove the `panic` from `parse_int` by having `%actiontype` be `Result<u64, String>`
 where the `Err` case would report a string such as “18446744073709551616 cannot
 be represented as a u64” for the first unrepresentable `u64` in the user's
 input. If we wanted to report *all* unrepresentable `u64`s, we could have
-`%type` by `Result<u64, Vec<String>>`, though merging together the errors found
+`%actiontype` by `Result<u64, Vec<String>>`, though merging together the errors found
 on the left and right hand sides of the `+` and `*` operators requires adding a
 few lines of code.
 

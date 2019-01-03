@@ -51,7 +51,7 @@ and `src/calc.y` is as follows:
 ```
 %start Expr
 // Define the Rust type that is to be returned by the actions.
-%type u64
+%actiontype u64
 %%
 Expr: Term 'PLUS' Expr { $1 + $3 }
     | Term { $1 }

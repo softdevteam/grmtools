@@ -75,7 +75,7 @@ impl fmt::Display for YaccParserError {
                 "Duplicate %implicit_tokens declaration"
             }
             YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
-            YaccParserErrorKind::DuplicateTypeDeclaration => "Duplicate %type declaration",
+            YaccParserErrorKind::DuplicateTypeDeclaration => "Duplicate %actiontype declaration",
             YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
             YaccParserErrorKind::ReachedEOL => {
                 "Reached end of line without finding expected content"
@@ -142,7 +142,7 @@ impl YaccParser {
                 }
                 continue;
             }
-            if let Some(j) = self.lookahead_is("%type", i) {
+            if let Some(j) = self.lookahead_is("%actiontype", i) {
                 if self.ast.actiontype.is_some() {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateTypeDeclaration, i));
                 }
@@ -1608,7 +1608,7 @@ x"
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
-         %type T
+         %actiontype T
          %%
          A: 'a';
          %%
@@ -1623,8 +1623,8 @@ x"
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
-         %type T1
-         %type T2
+         %actiontype T1
+         %actiontype T2
          %%
          A: 'a';"
         ) {

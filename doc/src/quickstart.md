@@ -107,7 +107,7 @@ Our initial version of calc.y looks as follows:
 ```yacc
 %start Expr
 // Define the Rust type that is to be returned by the actions.
-%type u64
+%actiontype u64
 %%
 Expr: Term 'PLUS' Expr { $1 + $3 }
     | Term { $1 }
@@ -135,7 +135,7 @@ The grammar is in 3 parts, separated by the `%%` lines.
 
 The first part specifies general settings for the grammar: its start rule
 (`%start Expr`) and the Rust type that actions in the grammar must produce
-(`%type u64`).
+(`%actiontype u64`).
 
 The second part is the [Yacc
 grammar](http://dinosaur.compilertools.net/yacc/index.html). It consists of 3
@@ -147,7 +147,7 @@ the end of the production) is executed.
 
 `lrpar`'s actions are somewhat different to Yacc. The `$x` variables refer to
 the respective symbol in the production (i.e. `$1` refers to the first symbol in
-the production). If the symbol is a rule then an instance of `%type` is stored
+the production). If the symbol is a rule then an instance of `%actiontype` is stored
 in the `$x` variable; if the symbol is a lexeme then an `Option<Lexeme>`
 instance is returned. A special `$lexer` variable allows access to the lexer.
 This allows us to turn `Lexeme`s into strings with the `lexeme_str` function,

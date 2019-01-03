@@ -209,7 +209,7 @@ fn main() -> Result<(), Box<std::error::Error>> {{
     fs::write(
         p,
         "%start Expr
-%type Result<u64, ()>
+%actiontype Result<u64, ()>
 %avoid_insert 'INT'
 %%
 Expr: Term '+' Expr { Ok($1? + $3?) }
