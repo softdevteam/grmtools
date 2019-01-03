@@ -314,7 +314,6 @@ where
         fs::remove_file(&outp_rs).ok();
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
-
         if stable.conflicts().is_some() && self.error_on_conflicts {
             return Err(Box::new(CTConflictsError {
                 grm,
@@ -323,32 +322,26 @@ where
             }));
         }
 
-        // Because we're lazy, we don't write our own serializer. We use serde and bincode to
-        // create files $out_base.grm, $out_base.sgraph, and $out_base.out_stable which contain
-        // binary versions of the relevant structs, and then include those binary files into the
-        // Rust binary using "include_bytes" (see below).
-        let out_grm = self.bin_output(&outp_base, GRM_FILE_EXT, &grm)?;
-        let out_sgraph = self.bin_output(&outp_base, SGRAPH_FILE_EXT, &sgraph)?;
-        let out_stable = self.bin_output(&outp_base, STABLE_FILE_EXT, &stable)?;
+        let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
+        self.output_file(&grm, &sgraph, &stable, mod_name, outp_base, outp_rs, &cache)?;
+        if stable.conflicts().is_some() {
+            self.conflicts = Some((grm, sgraph, stable));
+        }
+        Ok(rule_ids)
+    }
 
+    fn output_file(
+        &self,
+        grm: &YaccGrammar<StorageT>,
+        sgraph: &StateGraph<StorageT>,
+        stable: &StateTable<StorageT>,
+        mod_name: &str,
+        outp_base: PathBuf,
+        outp_rs: PathBuf,
+        cache: &str
+    ) -> Result<(), Box<Error>> {
         let mut outs = String::new();
         // Header
-        let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
-        let actiontype = match grm.actiontype() {
-            Some(t) => t.clone(), // Probably unneeded once NLL is in stable
-            None => {
-                match yk {
-                    YaccKind::Original(YaccOriginalActionKind::UserAction) => {
-                        panic!("Action return type not defined!")
-                    }
-                    YaccKind::Original(YaccOriginalActionKind::NoAction)
-                    | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
-                        String::new() // Dummy string that will never be used
-                    }
-                    YaccKind::Eco => unreachable!()
-                }
-            }
-        };
         outs.push_str(&format!("mod {}_y {{\n", mod_name));
         outs.push_str(
             "    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
@@ -357,7 +350,78 @@ where
 "
         );
 
-        match yk {
+        outs.push_str(&self.gen_parse_function(grm, sgraph, stable, outp_base)?);
+        outs.push_str(&self.gen_rule_consts(grm));
+        outs.push_str(&self.gen_token_epp(&grm));
+        outs.push_str(&self.gen_user_actions(&grm));
+
+        outs.push_str("}\n\n");
+
+        // Output the cache so that we can check whether the IDs map is stable.
+        outs.push_str(&cache);
+
+        let mut f = File::create(outp_rs)?;
+        f.write_all(outs.as_bytes())?;
+
+        Ok(())
+    }
+
+    fn actiontype_str<'a, 'b>(&self, grm: &'a YaccGrammar<StorageT>) -> &'a str {
+        match grm.actiontype().as_ref() {
+            Some(t) => t,
+            None => match self.yacckind.unwrap() {
+                YaccKind::Original(YaccOriginalActionKind::UserAction) => {
+                    panic!("Action return type not defined!")
+                }
+                YaccKind::Original(YaccOriginalActionKind::NoAction)
+                | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => &"",
+                YaccKind::Eco => unreachable!()
+            }
+        }
+    }
+
+    /// Generate the cache, which determines if anything's changed enough that we need to
+    /// regenerate outputs and force rustc to recompile.
+    fn rebuild_cache(&self, grm: &YaccGrammar<StorageT>) -> String {
+        // We don't need to be particularly clever here: we just need to record the various things
+        // that could change between builds.
+        let mut cache = String::new();
+        cache.push_str("\n/* CACHE INFORMATION\n");
+
+        // Record the time that this version of lrpar was built. If the source code changes and
+        // rustc forces a recompile, this will change this value, causing anything which depends on
+        // this build of lrpar to be recompiled too.
+        cache.push_str(&format!(
+            "   Build time: {:?}",
+            env!("VERGEN_BUILD_TIMESTAMP")
+        ));
+
+        // Record the recoverer
+        cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));
+
+        // Record the rule IDs map
+        for tidx in grm.iter_tidxs() {
+            let n = match grm.token_name(tidx) {
+                Some(n) => format!("'{}'", n),
+                None => "<unknown>".to_string()
+            };
+            cache.push_str(&format!("   {} {}\n", usize::from(tidx), n));
+        }
+
+        cache.push_str("*/\n");
+        cache
+    }
+
+    /// Generate the main parse() function for the output file.
+    fn gen_parse_function(
+        &self,
+        grm: &YaccGrammar<StorageT>,
+        sgraph: &StateGraph<StorageT>,
+        stable: &StateTable<StorageT>,
+        outp_base: PathBuf
+    ) -> Result<String, Box<Error>> {
+        let mut outs = String::new();
+        match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) => {
                 outs.push_str(&format!(
                     "    use lrpar::{{Lexeme, parser::AStackType}};
@@ -368,7 +432,7 @@ where
           -> (Option<{actiont}>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
-                    actiont = actiontype
+                    actiont = self.actiontype_str(&grm)
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
@@ -392,14 +456,13 @@ where
             YaccKind::Eco => unreachable!()
         };
 
-        // grm, sgraph, stable
-        let recoverer = match self.recoverer {
-            RecoveryKind::CPCTPlus => "CPCTPlus",
-            RecoveryKind::MF => "MF",
-            RecoveryKind::Panic => "Panic",
-            RecoveryKind::None => "None"
-        };
-
+        // Because we're lazy, we don't write our own serializer. We use serde and bincode to
+        // create files $out_base.grm, $out_base.sgraph, and $out_base.out_stable which contain
+        // binary versions of the relevant structs, and then include those binary files into the
+        // Rust binary using "include_bytes" (see below).
+        let out_grm = self.bin_output(&outp_base, GRM_FILE_EXT, &grm)?;
+        let out_sgraph = self.bin_output(&outp_base, SGRAPH_FILE_EXT, &sgraph)?;
+        let out_stable = self.bin_output(&outp_base, STABLE_FILE_EXT, &stable)?;
         outs.push_str(&format!(
             "
         let (grm, sgraph, stable) = _reconstitute(include_bytes!(\"{}\"),
@@ -410,7 +473,14 @@ where
             out_stable.to_str().unwrap()
         ));
 
-        match yk {
+        // grm, sgraph, stable
+        let recoverer = match self.recoverer {
+            RecoveryKind::CPCTPlus => "CPCTPlus",
+            RecoveryKind::MF => "MF",
+            RecoveryKind::Panic => "Panic",
+            RecoveryKind::None => "None"
+        };
+        match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) => {
                 // action function references
                 outs.push_str(&format!(
@@ -419,7 +489,7 @@ where
                        vec::Drain<AStackType<{actiont}, {storaget}>>)
                     -> {actiont}> = Vec::new();\n",
                     storaget = StorageT::type_name(),
-                    actiont = actiontype
+                    actiont = self.actiontype_str(grm)
                 ));
                 for pidx in grm.iter_pidxs() {
                     outs.push_str(&format!(
@@ -458,8 +528,11 @@ where
         };
 
         outs.push_str("    }\n\n");
+        Ok(outs)
+    }
 
-        // The rule constants
+    fn gen_rule_consts(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut outs = String::new();
         for ridx in grm.iter_rules() {
             if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
                 outs.push_str(&format!(
@@ -470,135 +543,7 @@ where
                 ));
             }
         }
-
-        outs.push_str(&self.gen_token_epp(&grm));
-
-        if let YaccKind::Original(YaccOriginalActionKind::UserAction) = yk {
-            if let Some(s) = grm.programs() {
-                outs.push_str("\n/* User code */\n\n");
-                outs.push_str(s);
-            }
-
-            // Convert actions to functions
-            outs.push_str("\n/* Converted actions */\n\n");
-            for pidx in grm.iter_pidxs() {
-                // Iterate over all $-arguments and replace them with their respective
-                // element from the argument vector (e.g. $1 is replaced by args[0]). At
-                // the same time extract &str from tokens and actiontype from nonterminals.
-                outs.push_str(&format!(
-                    "fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
-                            {prefix}lexer: &Lexer<{storaget}>,
-                            mut {prefix}args: vec::Drain<AStackType<{actiont}, {storaget}>>)
-                        -> {actiont} {{\n",
-                    usize::from(pidx),
-                    storaget = StorageT::type_name(),
-                    prefix = ACTION_PREFIX,
-                    actiont = actiontype
-                ));
-                for i in 0..grm.prod(pidx).len() {
-                    match grm.prod(pidx)[i] {
-                        Symbol::Rule(_) => outs.push_str(&format!(
-                            "
-    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
-        AStackType::ActionType(v) => v,
-        AStackType::Lexeme(_) => unreachable!()
-    }};
-",
-                            i + 1,
-                            prefix = ACTION_PREFIX
-                        )),
-                        Symbol::Token(_) => outs.push_str(&format!(
-                            "
-    let {prefix}arg_{}: Result<Lexeme<_>, Lexeme<_>> = match {prefix}args.next().unwrap() {{
-        AStackType::ActionType(_) => unreachable!(),
-        AStackType::Lexeme(l) => {{
-            if l.len().is_some() {{
-                Ok(l)
-            }} else {{
-                Err(l)
-            }}
-        }}
-    }};
-",
-                            i + 1,
-                            prefix = ACTION_PREFIX
-                        ))
-                    }
-                }
-                if let Some(s) = grm.action(pidx) {
-                    // Replace $1 ... $n with the correct local variable
-                    let s = RE_DOL_NUM
-                        .replace_all(
-                            s,
-                            format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
-                        )
-                        .into_owned();
-                    // Replace $lexer with a reference to the lexer variable
-                    let s = RE_DOL_LEXER.replace_all(
-                        &s,
-                        format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
-                    );
-                    outs.push_str(&format!("    {}", &s));
-                } else if pidx == grm.start_prod() {
-                    // The action for the start production (i.e. the extra rule/production
-                    // added by lrpar) will never be executed, so a dummy function is all
-                    // that's required. We add "unreachable" as a check in case some other
-                    // detail of lrpar changes in the future.
-                    outs.push_str("    unreachable!()");
-                } else {
-                    panic!(
-                        "Production in rule '{}' must have an action body.",
-                        grm.rule_name(grm.prod_to_rule(pidx))
-                    );
-                }
-                outs.push_str("\n}\n\n");
-            }
-        }
-
-        outs.push_str("}\n\n");
-
-        // Output the cache so that we can check whether the IDs map is stable.
-        outs.push_str(&cache);
-
-        let mut f = File::create(outp_rs)?;
-        f.write_all(outs.as_bytes())?;
-
-        if stable.conflicts().is_some() {
-            self.conflicts = Some((grm, sgraph, stable));
-        }
-        Ok(rule_ids)
-    }
-
-    /// Generate the cache, which determines if anything's changed enough that we need to
-    /// regenerate outputs and force rustc to recompile.
-    fn rebuild_cache(&self, grm: &YaccGrammar<StorageT>) -> String {
-        // We don't need to be particularly clever here: we just need to record the various things
-        // that could change between builds.
-        let mut cache = String::new();
-        cache.push_str("\n/* CACHE INFORMATION\n");
-
-        // Record the time that this version of lrpar was built. If the source code changes and
-        // rustc forces a recompile, this will change this value, causing anything which depends on
-        // this build of lrpar to be recompiled too.
-        cache.push_str(&format!(
-            "   Build time: {:?}",
-            env!("VERGEN_BUILD_TIMESTAMP")
-        ));
-
-        // Record the recoverer
-        cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));
-
-        // Record the rule IDs map
-        for tidx in grm.iter_tidxs() {
-            let n = match grm.token_name(tidx) {
-                Some(n) => format!("'{}'", n),
-                None => "<unknown>".to_string()
-            };
-            cache.push_str(&format!("   {} {}\n", usize::from(tidx), n));
-        }
-
-        cache.push_str("*/\n");
-        cache
+        outs
     }
 
     fn gen_token_epp(&self, grm: &YaccGrammar<StorageT>) -> String {
@@ -622,6 +567,96 @@ where
             storaget = StorageT::type_name(),
             prefix = GLOBAL_PREFIX
         )
+    }
+
+    /// Generate the user action functions (if any).
+    fn gen_user_actions(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut outs = String::new();
+        match self.yacckind.unwrap() {
+            YaccKind::Original(YaccOriginalActionKind::UserAction) => (),
+            _ => return outs
+        }
+
+        if let Some(s) = grm.programs() {
+            outs.push_str("\n/* User code */\n\n");
+            outs.push_str(s);
+        }
+
+        // Convert actions to functions
+        outs.push_str("\n/* Converted actions */\n\n");
+        for pidx in grm.iter_pidxs() {
+            // Iterate over all $-arguments and replace them with their respective
+            // element from the argument vector (e.g. $1 is replaced by args[0]). At
+            // the same time extract &str from tokens and actiontype from nonterminals.
+            outs.push_str(&format!(
+                "fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
+                            {prefix}lexer: &Lexer<{storaget}>,
+                            mut {prefix}args: vec::Drain<AStackType<{actiont}, {storaget}>>)
+                        -> {actiont} {{\n",
+                usize::from(pidx),
+                storaget = StorageT::type_name(),
+                prefix = ACTION_PREFIX,
+                actiont = self.actiontype_str(&grm)
+            ));
+            for i in 0..grm.prod(pidx).len() {
+                match grm.prod(pidx)[i] {
+                    Symbol::Rule(_) => outs.push_str(&format!(
+                        "
+    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
+        AStackType::ActionType(v) => v,
+        AStackType::Lexeme(_) => unreachable!()
+    }};
+",
+                        i + 1,
+                        prefix = ACTION_PREFIX
+                    )),
+                    Symbol::Token(_) => outs.push_str(&format!(
+                        "
+    let {prefix}arg_{}: Result<Lexeme<_>, Lexeme<_>> = match {prefix}args.next().unwrap() {{
+        AStackType::ActionType(_) => unreachable!(),
+        AStackType::Lexeme(l) => {{
+            if l.len().is_some() {{
+                Ok(l)
+            }} else {{
+                Err(l)
+            }}
+        }}
+    }};
+",
+                        i + 1,
+                        prefix = ACTION_PREFIX
+                    ))
+                }
+            }
+            if let Some(s) = grm.action(pidx) {
+                // Replace $1 ... $n with the correct local variable
+                let s = RE_DOL_NUM
+                    .replace_all(
+                        s,
+                        format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
+                    )
+                    .into_owned();
+                // Replace $lexer with a reference to the lexer variable
+                let s = RE_DOL_LEXER.replace_all(
+                    &s,
+                    format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
+                );
+                outs.push_str(&format!("    {}", &s));
+            } else if pidx == grm.start_prod() {
+                // The action for the start production (i.e. the extra rule/production
+                // added by lrpar) will never be executed, so a dummy function is all
+                // that's required. We add "unreachable" as a check in case some other
+                // detail of lrpar changes in the future.
+                outs.push_str("    unreachable!()");
+            } else {
+                panic!(
+                    "Production in rule '{}' must have an action body.",
+                    grm.rule_name(grm.prod_to_rule(pidx))
+                );
+            }
+            outs.push_str("\n}\n\n");
+        }
+        outs
     }
 
     /// Output the structure `d` to the file `outp_base.ext`.
