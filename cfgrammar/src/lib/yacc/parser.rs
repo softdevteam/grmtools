@@ -267,6 +267,9 @@ impl YaccParser {
 
     fn parse_rule(&mut self, mut i: usize) -> YaccResult<usize> {
         let (j, rn) = self.parse_name(i)?;
+        if self.ast.get_rule(&rn).is_none() {
+            self.ast.add_rule(rn.clone());
+        }
         if self.ast.start.is_none() {
             self.ast.start = Some(rn.clone());
         }
@@ -608,9 +611,9 @@ mod test {
         "
         .to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
-        assert_eq!(*grm.get_rule("A").unwrap(), vec![0]);
+        assert_eq!(grm.get_rule("A").unwrap().pidxs, vec![0]);
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("a")],
                 precedence: None,
@@ -629,7 +632,7 @@ mod test {
         .to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("a")],
                 precedence: None,
@@ -637,7 +640,7 @@ mod test {
             }
         );
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[1]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[1]],
             Production {
                 symbols: vec![token("b")],
                 precedence: None,
@@ -658,7 +661,7 @@ mod test {
         let grm = parse(YaccKind::Original, &src).unwrap();
 
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![],
                 precedence: None,
@@ -667,7 +670,7 @@ mod test {
         );
 
         assert_eq!(
-            grm.prods[grm.get_rule("B").unwrap()[0]],
+            grm.prods[grm.get_rule("B").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("b")],
                 precedence: None,
@@ -675,7 +678,7 @@ mod test {
             }
         );
         assert_eq!(
-            grm.prods[grm.get_rule("B").unwrap()[1]],
+            grm.prods[grm.get_rule("B").unwrap().pidxs[1]],
             Production {
                 symbols: vec![],
                 precedence: None,
@@ -684,7 +687,7 @@ mod test {
         );
 
         assert_eq!(
-            grm.prods[grm.get_rule("C").unwrap()[0]],
+            grm.prods[grm.get_rule("C").unwrap().pidxs[0]],
             Production {
                 symbols: vec![],
                 precedence: None,
@@ -692,7 +695,7 @@ mod test {
             }
         );
         assert_eq!(
-            grm.prods[grm.get_rule("C").unwrap()[1]],
+            grm.prods[grm.get_rule("C").unwrap().pidxs[1]],
             Production {
                 symbols: vec![token("c")],
                 precedence: None,
@@ -712,7 +715,7 @@ mod test {
         let src = "%%\nA : 'a' B;".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("a"), rule("B")],
                 precedence: None,
@@ -726,7 +729,7 @@ mod test {
         let src = "%%\nA : 'a' \"b\";".to_string();
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("a"), token("b")],
                 precedence: None,
@@ -778,7 +781,7 @@ mod test {
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert!(grm.has_token("T"));
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("T")],
                 precedence: None,
@@ -1044,10 +1047,10 @@ x"
         ";
         let grm = parse(YaccKind::Original, &src).unwrap();
         assert_eq!(grm.precs.len(), 4);
-        assert_eq!(grm.prods[grm.rules["expr"][0]].precedence, None);
-        assert_eq!(grm.prods[grm.rules["expr"][3]].symbols.len(), 3);
-        assert_eq!(grm.prods[grm.rules["expr"][4]].symbols.len(), 2);
-        assert_eq!(grm.prods[grm.rules["expr"][4]].precedence, Some("*".to_string()));
+        assert_eq!(grm.prods[grm.rules["expr"].pidxs[0]].precedence, None);
+        assert_eq!(grm.prods[grm.rules["expr"].pidxs[3]].symbols.len(), 3);
+        assert_eq!(grm.prods[grm.rules["expr"].pidxs[4]].symbols.len(), 2);
+        assert_eq!(grm.prods[grm.rules["expr"].pidxs[4]].precedence, Some("*".to_string()));
     }
 
     #[test]
@@ -1399,14 +1402,14 @@ x"
         )
         .unwrap();
         assert_eq!(
-            grm.prods[grm.rules["A"][0]].action,
+            grm.prods[grm.rules["A"].pidxs[0]].action,
             Some("println!(\"test\");".to_string())
         );
         assert_eq!(
-            grm.prods[grm.rules["B"][0]].action,
+            grm.prods[grm.rules["B"].pidxs[0]].action,
             Some("add($1, $2);".to_string())
         );
-        assert_eq!(grm.prods[grm.rules["B"][1]].action, None);
+        assert_eq!(grm.prods[grm.rules["B"].pidxs[1]].action, None);
     }
 
     #[test]

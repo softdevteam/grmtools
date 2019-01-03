@@ -276,8 +276,8 @@ where
             }
 
             let rule = &mut rules_prods[usize::from(ridx)];
-            for &prod_idx in &ast.rules[astrulename] {
-                let astprod = &ast.prods[prod_idx];
+            for &pidx in &ast.rules[astrulename].pidxs {
+                let astprod = &ast.prods[pidx];
                 let mut prod = Vec::with_capacity(astprod.symbols.len());
                 for astsym in &astprod.symbols {
                     match *astsym {
@@ -305,12 +305,12 @@ where
                         }
                     }
                 }
-                (*rule).push(PIdx(prod_idx.as_()));
-                prods[prod_idx] = Some(prod);
-                prod_precs[prod_idx] = Some(prec);
-                prods_rules[prod_idx] = Some(ridx);
+                (*rule).push(PIdx(pidx.as_()));
+                prods[pidx] = Some(prod);
+                prod_precs[pidx] = Some(prec);
+                prods_rules[pidx] = Some(ridx);
                 if let Some(ref s) = astprod.action {
-                    actions[prod_idx] = Some(s.clone());
+                    actions[pidx] = Some(s.clone());
                 }
             }
         }
