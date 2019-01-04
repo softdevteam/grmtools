@@ -7,11 +7,13 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrpar;
 
+use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 use lrlex::LexerBuilder;
-use lrpar::{ActionKind, CTParserBuilder};
+use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<std::error::Error>> {
     // First we create the parser, which returns a HashMap of all the tokens used, then we pass
@@ -21,7 +23,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
     let lex_rule_ids_map = CTParserBuilder::new()
-        .action_kind(ActionKind::CustomAction)
+        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
         .process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)

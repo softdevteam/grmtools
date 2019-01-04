@@ -398,7 +398,7 @@ mod test {
     use vob::Vob;
 
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind},
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         SIdx, Symbol
     };
     use pager::pager_stategraph;
@@ -441,7 +441,7 @@ mod test {
     //     aSb
     fn grammar3() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
           %start S
           %token a b c d
@@ -520,7 +520,7 @@ mod test {
     // Pager grammar
     fn grammar_pager() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
             %start X
             %%

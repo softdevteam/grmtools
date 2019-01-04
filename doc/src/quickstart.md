@@ -29,6 +29,7 @@ doc = false
 name = "calc"
 
 [build-dependencies]
+cfgrammar = "0.1"
 lrlex = "0.1"
 lrpar = "0.1"
 
@@ -44,15 +45,17 @@ into Rust code. We thus need to create a
 file which can process the lexer and grammar.  Our `build.rs` file thus looks as follows:
 
 ```rust
+extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrpar;
 
+use cfgrammar::yacc::{{YaccKind, YaccOriginalActionKind}};
 use lrlex::LexerBuilder;
 use lrpar::{CTParserBuilder, ActionKind};
 
 fn main() -> Result<(), Box<std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
-        .action_kind(ActionKind::CustomAction)
+        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
         .process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
@@ -63,7 +66,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
 In our case, we want to specify Rust code which is run as the input is parsed
 (rather than creating a generic parse tree which we traverse later), so we
-specified that the `action_kind` is `ActionKind::CustomAction`. The grammar file
+specified that the `yacckind` (i.e. what variant of Yacc file we're using)
+is `YaccKind::Original(YaccOriginalActionKind::UserAction)`. The grammar file
 is stored in `src/calc.y`, but we only specify `calc.y` as the filename to
 `lrpar`, since it searches relative to `src/` automatically.
 
@@ -103,7 +107,7 @@ Our initial version of calc.y looks as follows:
 ```yacc
 %start Expr
 // Define the Rust type that is to be returned by the actions.
-%type u64
+%actiontype u64
 %%
 Expr: Term 'PLUS' Expr { $1 + $3 }
     | Term { $1 }
@@ -131,7 +135,7 @@ The grammar is in 3 parts, separated by the `%%` lines.
 
 The first part specifies general settings for the grammar: its start rule
 (`%start Expr`) and the Rust type that actions in the grammar must produce
-(`%type u64`).
+(`%actiontype u64`).
 
 The second part is the [Yacc
 grammar](http://dinosaur.compilertools.net/yacc/index.html). It consists of 3
@@ -143,7 +147,7 @@ the end of the production) is executed.
 
 `lrpar`'s actions are somewhat different to Yacc. The `$x` variables refer to
 the respective symbol in the production (i.e. `$1` refers to the first symbol in
-the production). If the symbol is a rule then an instance of `%type` is stored
+the production). If the symbol is a rule then an instance of `%actiontype` is stored
 in the `$x` variable; if the symbol is a lexeme then an `Option<Lexeme>`
 instance is returned. A special `$lexer` variable allows access to the lexer.
 This allows us to turn `Lexeme`s into strings with the `lexeme_str` function,

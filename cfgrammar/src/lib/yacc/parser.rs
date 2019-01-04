@@ -7,7 +7,7 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-// Note: this is the parser for both YaccKind::Original and YaccKind::Eco yacc kinds.
+// Note: this is the parser for both YaccKind::Original(YaccOriginalActionKind::GenericParseTree) and YaccKind::Eco yacc kinds.
 
 use std::{collections::HashSet, error::Error, fmt};
 
@@ -75,7 +75,7 @@ impl fmt::Display for YaccParserError {
                 "Duplicate %implicit_tokens declaration"
             }
             YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
-            YaccParserErrorKind::DuplicateTypeDeclaration => "Duplicate %type declaration",
+            YaccParserErrorKind::DuplicateTypeDeclaration => "Duplicate %actiontype declaration",
             YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
             YaccParserErrorKind::ReachedEOL => {
                 "Reached end of line without finding expected content"
@@ -142,7 +142,7 @@ impl YaccParser {
                 }
                 continue;
             }
-            if let Some(j) = self.lookahead_is("%type", i) {
+            if let Some(j) = self.lookahead_is("%actiontype", i) {
                 if self.ast.actiontype.is_some() {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateTypeDeclaration, i));
                 }
@@ -267,6 +267,9 @@ impl YaccParser {
 
     fn parse_rule(&mut self, mut i: usize) -> YaccResult<usize> {
         let (j, rn) = self.parse_name(i)?;
+        if self.ast.get_rule(&rn).is_none() {
+            self.ast.add_rule(rn.clone());
+        }
         if self.ast.start.is_none() {
             self.ast.start = Some(rn.clone());
         }
@@ -571,7 +574,7 @@ mod test {
     use super::{YaccParser, YaccParserError, YaccParserErrorKind};
     use yacc::{
         ast::{GrammarAST, Production, Symbol},
-        AssocKind, Precedence, YaccKind
+        AssocKind, Precedence, YaccKind, YaccOriginalActionKind
     };
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, YaccParserError> {
@@ -607,10 +610,14 @@ mod test {
             A : 'a';
         "
         .to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
-        assert_eq!(*grm.get_rule("A").unwrap(), vec![0]);
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
+        assert_eq!(grm.get_rule("A").unwrap().pidxs, vec![0]);
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("a")],
                 precedence: None,
@@ -627,9 +634,13 @@ mod test {
             A : 'b';
         "
         .to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("a")],
                 precedence: None,
@@ -637,7 +648,7 @@ mod test {
             }
         );
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[1]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[1]],
             Production {
                 symbols: vec![token("b")],
                 precedence: None,
@@ -655,10 +666,14 @@ mod test {
             C : | 'c';
         "
         .to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
 
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![],
                 precedence: None,
@@ -667,7 +682,7 @@ mod test {
         );
 
         assert_eq!(
-            grm.prods[grm.get_rule("B").unwrap()[0]],
+            grm.prods[grm.get_rule("B").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("b")],
                 precedence: None,
@@ -675,7 +690,7 @@ mod test {
             }
         );
         assert_eq!(
-            grm.prods[grm.get_rule("B").unwrap()[1]],
+            grm.prods[grm.get_rule("B").unwrap().pidxs[1]],
             Production {
                 symbols: vec![],
                 precedence: None,
@@ -684,7 +699,7 @@ mod test {
         );
 
         assert_eq!(
-            grm.prods[grm.get_rule("C").unwrap()[0]],
+            grm.prods[grm.get_rule("C").unwrap().pidxs[0]],
             Production {
                 symbols: vec![],
                 precedence: None,
@@ -692,7 +707,7 @@ mod test {
             }
         );
         assert_eq!(
-            grm.prods[grm.get_rule("C").unwrap()[1]],
+            grm.prods[grm.get_rule("C").unwrap().pidxs[1]],
             Production {
                 symbols: vec![token("c")],
                 precedence: None,
@@ -704,15 +719,23 @@ mod test {
     #[test]
     fn test_empty_program() {
         let src = "%%\nA : 'a';\n%%".to_string();
-        parse(YaccKind::Original, &src).unwrap();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_multiple_symbols() {
         let src = "%%\nA : 'a' B;".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("a"), rule("B")],
                 precedence: None,
@@ -724,9 +747,13 @@ mod test {
     #[test]
     fn test_token_types() {
         let src = "%%\nA : 'a' \"b\";".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("a"), token("b")],
                 precedence: None,
@@ -738,28 +765,44 @@ mod test {
     #[test]
     fn test_declaration_start() {
         let src = "%start   A\n%%\nA : a;".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert_eq!(grm.start.unwrap(), "A");
     }
 
     #[test]
     fn test_declaration_token() {
         let src = "%token   a\n%%\nA : a;".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert!(grm.has_token("a"));
     }
 
     #[test]
     fn test_declaration_token_literal() {
         let src = "%token   'a'\n%%\nA : 'a';".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert!(grm.has_token("a"));
     }
 
     #[test]
     fn test_declaration_tokens() {
         let src = "%token   a b c 'd'\n%%\nA : a;".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert!(grm.has_token("a"));
         assert!(grm.has_token("b"));
         assert!(grm.has_token("c"));
@@ -768,17 +811,25 @@ mod test {
     #[test]
     fn test_auto_add_tokens() {
         let src = "%%\nA : 'a';".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert!(grm.has_token("a"));
     }
 
     #[test]
     fn test_token_non_literal() {
         let src = "%token T %%\nA : T;".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert!(grm.has_token("T"));
         assert_eq!(
-            grm.prods[grm.get_rule("A").unwrap()[0]],
+            grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
                 symbols: vec![token("T")],
                 precedence: None,
@@ -790,14 +841,21 @@ mod test {
     #[test]
     fn test_token_unicode() {
         let src = "%token '❤' %%\nA : '❤';".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
         assert!(grm.has_token("❤"));
     }
 
     #[test]
     fn test_unicode_err1() {
         let src = "%token '❤' ❤;".to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Incorrect token parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IllegalString,
@@ -811,7 +869,10 @@ mod test {
     #[test]
     fn test_unicode_err2() {
         let src = "%token '❤'\n%%\nA : '❤' | ❤;".to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Incorrect token parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IllegalString,
@@ -826,20 +887,31 @@ mod test {
     #[should_panic]
     fn test_simple_decl_fail() {
         let src = "%fail x\n%%\nA : a".to_string();
-        parse(YaccKind::Original, &src).unwrap();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
     }
 
     #[test]
     #[should_panic]
     fn test_empty() {
         let src = "".to_string();
-        parse(YaccKind::Original, &src).unwrap();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_incomplete_rule1() {
         let src = "%%A:".to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
@@ -855,7 +927,10 @@ mod test {
         let src = "%%
 A:"
         .to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
@@ -872,7 +947,10 @@ A:"
 A:
 "
         .to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
@@ -889,7 +967,10 @@ A:
 
         %woo"
             .to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::UnknownDeclaration,
@@ -903,7 +984,10 @@ A:
     #[test]
     fn test_missing_colon() {
         let src = "%%A x;".to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Missing colon parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::MissingColon,
@@ -917,7 +1001,10 @@ A:
     #[test]
     fn test_premature_end() {
         let src = "%token x".to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::PrematureEnd,
@@ -933,7 +1020,10 @@ A:
         let src = "%token
 x"
         .to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src
+        ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::ReachedEOL,
@@ -948,7 +1038,7 @@ x"
     #[rustfmt::skip]
     fn test_unknown_declaration() {
         let src = "%woo".to_string();
-        match parse(YaccKind::Original, &src) {
+        match parse(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &src) {
             Ok(_) => panic!("Unknown declaration parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::UnknownDeclaration,
@@ -970,7 +1060,7 @@ x"
           %nonassoc '~'
           %%
           ".to_string();
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &src).unwrap();
         assert_eq!(grm.precs.len(), 6);
         assert_eq!(grm.precs["+"], Precedence{level: 0, kind: AssocKind::Left});
         assert_eq!(grm.precs["-"], Precedence{level: 0, kind: AssocKind::Left});
@@ -1015,7 +1105,10 @@ x"
           ",
         ];
         for src in srcs.iter() {
-            match parse(YaccKind::Original, &src.to_string()) {
+            match parse(
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+                &src.to_string()
+            ) {
                 Ok(_) => panic!("Duplicate precedence parsed"),
                 Err(YaccParserError {
                     kind: YaccParserErrorKind::DuplicatePrecedence,
@@ -1042,18 +1135,18 @@ x"
                  | '-'  expr %prec '*'
                  | NAME ;
         ";
-        let grm = parse(YaccKind::Original, &src).unwrap();
+        let grm = parse(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &src).unwrap();
         assert_eq!(grm.precs.len(), 4);
-        assert_eq!(grm.prods[grm.rules["expr"][0]].precedence, None);
-        assert_eq!(grm.prods[grm.rules["expr"][3]].symbols.len(), 3);
-        assert_eq!(grm.prods[grm.rules["expr"][4]].symbols.len(), 2);
-        assert_eq!(grm.prods[grm.rules["expr"][4]].precedence, Some("*".to_string()));
+        assert_eq!(grm.prods[grm.rules["expr"].pidxs[0]].precedence, None);
+        assert_eq!(grm.prods[grm.rules["expr"].pidxs[3]].symbols.len(), 3);
+        assert_eq!(grm.prods[grm.rules["expr"].pidxs[4]].symbols.len(), 2);
+        assert_eq!(grm.prods[grm.rules["expr"].pidxs[4]].precedence, Some("*".to_string()));
     }
 
     #[test]
     fn test_bad_prec_overrides() {
         match parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
           %%
           S: 'A' %prec ;
@@ -1069,7 +1162,7 @@ x"
         }
 
         match parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
           %%
           S: 'A' %prec B;
@@ -1171,7 +1264,7 @@ x"
     #[test]
     fn test_no_implicit_tokens_in_original_yacc() {
         match parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
           %implicit_tokens X
           %%
@@ -1387,7 +1480,7 @@ x"
     #[test]
     fn test_action() {
         let grm = parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
           %%
           A: 'a' B { println!(\"test\"); }
@@ -1399,20 +1492,20 @@ x"
         )
         .unwrap();
         assert_eq!(
-            grm.prods[grm.rules["A"][0]].action,
+            grm.prods[grm.rules["A"].pidxs[0]].action,
             Some("println!(\"test\");".to_string())
         );
         assert_eq!(
-            grm.prods[grm.rules["B"][0]].action,
+            grm.prods[grm.rules["B"].pidxs[0]].action,
             Some("add($1, $2);".to_string())
         );
-        assert_eq!(grm.prods[grm.rules["B"][1]].action, None);
+        assert_eq!(grm.prods[grm.rules["B"].pidxs[1]].action, None);
     }
 
     #[test]
     fn test_programs() {
         let grm = parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
          %%
          A: 'a';
@@ -1426,7 +1519,7 @@ x"
     #[test]
     fn test_actions_with_newlines() {
         match parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
          %%
          A: 'a' { foo();
@@ -1448,11 +1541,15 @@ x"
             /* Another valid comment */
             %%\n
             A : a;";
-        let grm = parse(YaccKind::Original, src).unwrap();
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src
+        )
+        .unwrap();
         assert!(grm.has_token("a"));
 
         match parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
             /* An invalid comment * /
             %token   a
@@ -1469,7 +1566,7 @@ x"
         }
 
         match parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
             %token   a
             %%
@@ -1489,7 +1586,7 @@ x"
         }
 
         match parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
             %token   a
             %%
@@ -1509,9 +1606,9 @@ x"
     #[test]
     fn test_type() {
         let grm = parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
-         %type T
+         %actiontype T
          %%
          A: 'a';
          %%
@@ -1524,10 +1621,10 @@ x"
     #[test]
     fn test_only_one_type() {
         match parse(
-            YaccKind::Original,
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &"
-         %type T1
-         %type T2
+         %actiontype T1
+         %actiontype T2
          %%
          A: 'a';"
         ) {

@@ -23,8 +23,19 @@ pub use self::{
 #[derive(Clone, Copy)]
 pub enum YaccKind {
     /// The original Yacc style as documented by
-    /// [Johnson](http://dinosaur.compilertools.net/yacc/index.html)
-    Original,
+    /// [Johnson](http://dinosaur.compilertools.net/yacc/index.html),
+    Original(YaccOriginalActionKind),
     /// The variant used in the [Eco language composition editor](http://soft-dev.org/src/eco/)
     Eco
+}
+
+#[derive(Clone, Copy)]
+pub enum YaccOriginalActionKind {
+    /// Execute user-specified actions attached to each production; also requires a %actiontype
+    /// declaration.
+    UserAction,
+    /// Automatically create a parse tree instead of user-specified actions.
+    GenericParseTree,
+    /// Do not do execute actions of any sort.
+    NoAction
 }

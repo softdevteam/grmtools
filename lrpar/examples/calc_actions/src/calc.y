@@ -1,5 +1,5 @@
 %start Expr
-%type Result<u64, ()>
+%actiontype Result<u64, ()>
 %%
 Expr: Term 'PLUS' Expr { Ok($1? + $3?) }
     | Term { $1 }

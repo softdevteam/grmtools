@@ -868,7 +868,7 @@ mod test {
 
     use cactus::Cactus;
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind},
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Symbol
     };
     use lrtable::{from_yacc, Minimiser, StIdx, StIdxStorageT};
@@ -912,7 +912,7 @@ A: '(' A ')'
  ;
 ";
 
-        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
         let s0 = StIdx::from(StIdxStorageT::zero());
@@ -975,7 +975,7 @@ T: 'A';
 U: 'B';
 ";
 
-        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
@@ -1033,7 +1033,7 @@ Factor: '(' Expr ')'
       | 'INT' ;
 ";
 
-        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
@@ -1098,7 +1098,7 @@ W: 'b' ;
         // 6: [U -> V W ., {'a', '$'}]
         // 7: [W -> 'b' ., {'a', '$'}]
 
-        let grm = YaccGrammar::new(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 

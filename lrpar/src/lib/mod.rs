@@ -34,7 +34,7 @@ pub mod parser;
 pub use parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind};
 mod mf;
 
-pub use ctbuilder::{ActionKind, CTParserBuilder};
+pub use ctbuilder::CTParserBuilder;
 
 /// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
 /// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.

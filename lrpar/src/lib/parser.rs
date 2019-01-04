@@ -802,7 +802,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> ParseError<StorageT> {
 pub(crate) mod test {
     use std::collections::HashMap;
 
-    use cfgrammar::yacc::{YaccGrammar, YaccKind};
+    use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
     use lrtable::{from_yacc, Minimiser};
     use num_traits::ToPrimitive;
     use regex::Regex;
@@ -832,7 +832,11 @@ pub(crate) mod test {
         YaccGrammar<u16>,
         Result<Node<u16>, (Option<Node<u16>>, Vec<LexParseError<u16>>)>
     ) {
-        let grm = YaccGrammar::<u16>::new_with_storaget(YaccKind::Original, grms).unwrap();
+        let grm = YaccGrammar::<u16>::new_with_storaget(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            grms
+        )
+        .unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let rule_ids = grm
             .tokens_map()

@@ -115,6 +115,7 @@ version = \"0.1.0\"
 authors = [\"test\"]
 
 [build-dependencies]
+cfgrammar = {{ path = \"{repop}/cfgrammar\" }}
 lrlex = {{ path = \"{repop}/lrlex\" }}
 lrpar = {{ path = \"{repop}/lrpar\" }}
 
@@ -136,13 +137,16 @@ fn init_simple(tdir: &TempDir) {
     fs::write(
         p,
         "
+extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrpar;
 
+use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<std::error::Error>> {
     CTParserBuilder::new()
+        .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
         .process_file_in_src(\"grm.y\")?;
     Ok(())
 }"
@@ -168,7 +172,7 @@ fn main() {{
     .unwrap();
 }
 
-fn init_calc(tdir: &TempDir, actionkind: &str, main: &str) {
+fn init_calc(tdir: &TempDir, yacckind: &str, main: &str) {
     // Write build.rs
     let mut p = PathBuf::from(tdir.as_ref());
     p.push("build.rs");
@@ -176,22 +180,24 @@ fn init_calc(tdir: &TempDir, actionkind: &str, main: &str) {
         p,
         &format!(
             "
+extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrpar;
 
+use cfgrammar::yacc::{{YaccKind, YaccOriginalActionKind}};
 use lrlex::LexerBuilder;
-use lrpar::{{CTParserBuilder, ActionKind}};
+use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<std::error::Error>> {{
     let lex_rule_ids_map = CTParserBuilder::new()
-        .action_kind({})
+        .yacckind({})
         .process_file_in_src(\"calc.y\")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
         .process_file_in_src(\"calc.l\")?;
     Ok(())
 }}",
-            actionkind
+            yacckind
         )
     )
     .unwrap();
@@ -203,7 +209,7 @@ fn main() -> Result<(), Box<std::error::Error>> {{
     fs::write(
         p,
         "%start Expr
-%type Result<u64, ()>
+%actiontype Result<u64, ()>
 %avoid_insert 'INT'
 %%
 Expr: Term '+' Expr { Ok($1? + $3?) }
@@ -311,7 +317,7 @@ fn test_no_actions() {
     run_in_dummy(|tdir| {
         init_calc(
             &tdir,
-            "ActionKind::NoAction",
+            "YaccKind::Original(YaccOriginalActionKind::NoAction)",
             "
     let lexerdef = calc_l::lexerdef();
     let mut lexer = lexerdef.lexer(\"2+3\");
@@ -334,7 +340,7 @@ fn test_basic_actions() {
     run_in_dummy(|tdir| {
         init_calc(
             &tdir,
-            "ActionKind::CustomAction",
+            "YaccKind::Original(YaccOriginalActionKind::UserAction)",
             "
     let lexerdef = calc_l::lexerdef();
     let mut lexer = lexerdef.lexer(\"2+3\");
@@ -353,7 +359,7 @@ fn test_error_recovery_and_actions() {
     run_in_dummy(|tdir| {
         init_calc(
             &tdir,
-            "ActionKind::CustomAction",
+            "YaccKind::Original(YaccOriginalActionKind::UserAction)",
             "
     use lrpar::LexParseError;
 
