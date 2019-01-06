@@ -25,6 +25,9 @@ pub enum YaccKind {
     /// The original Yacc style as documented by
     /// [Johnson](http://dinosaur.compilertools.net/yacc/index.html),
     Original(YaccOriginalActionKind),
+    /// Similar to the original Yacc style, but allowing individual rules' actions to have their
+    /// own return type.
+    Grmtools,
     /// The variant used in the [Eco language composition editor](http://soft-dev.org/src/eco/)
     Eco
 }

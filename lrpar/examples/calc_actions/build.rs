@@ -11,7 +11,7 @@ extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrpar;
 
-use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
+use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
 use lrpar::CTParserBuilder;
 
@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
     let lex_rule_ids_map = CTParserBuilder::new()
-        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
+        .yacckind(YaccKind::Grmtools)
         .process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
