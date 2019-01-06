@@ -15,16 +15,19 @@ Factor -> Result<u64, ()>:
       'LBRACK' Expr 'RBRACK' { $2 }
     | 'INT'
       {
-          let l = $1.map_err(|_| ())?;
-          match $lexer.lexeme_str(&l).parse::<u64>() {
-              Ok(v) => Ok(v),
-              Err(_) => {
-                  let (_, col) = $lexer.offset_line_col(l.start());
-                  eprintln!("Error at column {}: '{}' cannot be represented as a u64",
-                            col,
-                            $lexer.lexeme_str(&l));
-                  Err(())
-              }
-          }
+          let v = $1.map_err(|_| ())?;
+          parse_int($lexer.lexeme_str(&v))
       }
     ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &str) -> Result<u64, ()> {
+    match s.parse::<u64>() {
+        Ok(val) => Ok(val as u64),
+        Err(_) => {
+            eprintln!("{} cannot be represented as a u64", s);
+            Err(())
+        }
+    }
+}
