@@ -1,4 +1,5 @@
 %start Expr
+%avoid_insert "INT"
 %%
 Expr: Term 'PLUS' Expr
     | Term ;

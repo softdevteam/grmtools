@@ -16,7 +16,7 @@ extern crate lrlex;
 extern crate lrpar;
 
 use cfgrammar::RIdx;
-use lrpar::{LexParseError, Lexer, Node};
+use lrpar::Node;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
@@ -39,21 +39,12 @@ fn main() {
                 let mut lexer = lexerdef.lexer(l);
                 // Pass the lexer to the parser and lex and parse the input.
                 let (pt, errs) = calc_y::parse(&mut lexer);
+                for e in errs {
+                    println!("{}", e.pp(&lexer, &calc_y::token_epp));
+                }
                 if let Some(pt) = pt {
                     // Success! We parsed the input and created a parse tree.
-                    println!("{}", Eval::new(l).eval(&pt));
-                }
-                for e in errs {
-                    match e {
-                        LexParseError::LexError(e) => {
-                            eprintln!("Lexing error at column {:?}", e.idx);
-                        }
-                        LexParseError::ParseError(e) => {
-                            let (line, col) = lexer.offset_line_col(e.lexeme().start());
-                            assert_eq!(line, 1);
-                            println!("Parsing error at column {}.", col);
-                        }
-                    }
+                    println!("Result: {}", Eval::new(l).eval(&pt));
                 }
             }
             _ => break

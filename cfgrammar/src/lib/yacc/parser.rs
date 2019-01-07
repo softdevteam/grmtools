@@ -27,9 +27,11 @@ pub enum YaccParserErrorKind {
     IllegalName,
     IllegalString,
     IncompleteRule,
+    DuplicateRule,
     IncompleteComment,
     IncompleteAction,
     MissingColon,
+    MissingRightArrow,
     PrematureEnd,
     ProgramsNotSupported,
     UnknownDeclaration,
@@ -38,7 +40,7 @@ pub enum YaccParserErrorKind {
     DuplicateAvoidInsertDeclaration,
     DuplicateImplicitTokensDeclaration,
     DuplicateStartDeclaration,
-    DuplicateTypeDeclaration,
+    DuplicateActiontypeDeclaration,
     DuplicateEPP,
     ReachedEOL,
     InvalidString
@@ -60,9 +62,11 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::IllegalName => "Illegal name",
             YaccParserErrorKind::IllegalString => "Illegal string",
             YaccParserErrorKind::IncompleteRule => "Incomplete rule",
+            YaccParserErrorKind::DuplicateRule => "Duplicate rule",
             YaccParserErrorKind::IncompleteComment => "Incomplete comment",
             YaccParserErrorKind::IncompleteAction => "Incomplete action",
-            YaccParserErrorKind::MissingColon => "Missing colon",
+            YaccParserErrorKind::MissingColon => "Missing ':'",
+            YaccParserErrorKind::MissingRightArrow => "Missing '->'",
             YaccParserErrorKind::PrematureEnd => "File ends prematurely",
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccParserErrorKind::UnknownDeclaration => "Unknown declaration",
@@ -75,7 +79,9 @@ impl fmt::Display for YaccParserError {
                 "Duplicate %implicit_tokens declaration"
             }
             YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
-            YaccParserErrorKind::DuplicateTypeDeclaration => "Duplicate %actiontype declaration",
+            YaccParserErrorKind::DuplicateActiontypeDeclaration => {
+                "Duplicate %actiontype declaration"
+            }
             YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
             YaccParserErrorKind::ReachedEOL => {
                 "Reached end of line without finding expected content"
@@ -90,7 +96,8 @@ pub(crate) struct YaccParser {
     yacc_kind: YaccKind,
     src: String,
     newlines: Vec<usize>,
-    ast: GrammarAST
+    ast: GrammarAST,
+    global_actiontype: Option<String>
 }
 
 lazy_static! {
@@ -106,7 +113,8 @@ impl YaccParser {
             yacc_kind,
             src,
             newlines: vec![0],
-            ast: GrammarAST::new()
+            ast: GrammarAST::new(),
+            global_actiontype: None
         }
     }
 
@@ -142,15 +150,19 @@ impl YaccParser {
                 }
                 continue;
             }
-            if let Some(j) = self.lookahead_is("%actiontype", i) {
-                if self.ast.actiontype.is_some() {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateTypeDeclaration, i));
+            if let YaccKind::Original(_) = self.yacc_kind {
+                if let Some(j) = self.lookahead_is("%actiontype", i) {
+                    if self.global_actiontype.is_some() {
+                        return Err(
+                            self.mk_error(YaccParserErrorKind::DuplicateActiontypeDeclaration, i)
+                        );
+                    }
+                    i = self.parse_ws(j, false)?;
+                    let (j, n) = self.parse_to_eol(i)?;
+                    self.global_actiontype = Some(n);
+                    i = self.parse_ws(j, true)?;
+                    continue;
                 }
-                i = self.parse_ws(j, false)?;
-                let (j, n) = self.parse_to_eol(i)?;
-                self.ast.actiontype = Some(n);
-                i = self.parse_ws(j, true)?;
-                continue;
             }
             if let Some(j) = self.lookahead_is("%start", i) {
                 if self.ast.start.is_some() {
@@ -267,13 +279,34 @@ impl YaccParser {
 
     fn parse_rule(&mut self, mut i: usize) -> YaccResult<usize> {
         let (j, rn) = self.parse_name(i)?;
-        if self.ast.get_rule(&rn).is_none() {
-            self.ast.add_rule(rn.clone());
-        }
         if self.ast.start.is_none() {
             self.ast.start = Some(rn.clone());
         }
-        i = self.parse_ws(j, true)?;
+        match self.yacc_kind {
+            YaccKind::Original(_) | YaccKind::Eco => {
+                if self.ast.get_rule(&rn).is_none() {
+                    self.ast
+                        .add_rule(rn.clone(), self.global_actiontype.clone());
+                }
+                i = j;
+            }
+            YaccKind::Grmtools => {
+                if self.ast.get_rule(&rn).is_some() {
+                    return Err(self.mk_error(YaccParserErrorKind::DuplicateRule, i));
+                }
+                i = self.parse_ws(j, true)?;
+                if let Some(j) = self.lookahead_is("->", i) {
+                    i = j;
+                } else {
+                    return Err(self.mk_error(YaccParserErrorKind::MissingRightArrow, i));
+                }
+                i = self.parse_ws(i, true)?;
+                let (j, actiont) = self.parse_to_colon(i)?;
+                self.ast.add_rule(rn.clone(), Some(actiont));
+                i = j;
+            }
+        }
+        i = self.parse_ws(i, true)?;
         match self.lookahead_is(":", i) {
             Some(j) => i = j,
             None => {
@@ -409,6 +442,21 @@ impl YaccParser {
             }
         }
         Ok((j, self.src[i..j].to_string()))
+    }
+
+    /// Parse up to (but do not include) a colon. Errors if EOL encountered.
+    fn parse_to_colon(&mut self, i: usize) -> YaccResult<(usize, String)> {
+        let mut j = i;
+        while j < self.src.len() {
+            let c = self.src[j..].chars().nth(0).unwrap();
+            match c {
+                ':' => return Ok((j, self.src[i..j].to_string())),
+                '\n' | '\r' => self.newlines.push(i + 1),
+                _ => ()
+            }
+            j += c.len_utf8()
+        }
+        Err(self.mk_error(YaccParserErrorKind::ReachedEOL, j))
     }
 
     /// Parse a quoted string, allowing escape characters.
@@ -1050,6 +1098,20 @@ x"
     }
 
     #[test]
+    fn test_grmtools_format() {
+        let src = "
+          %start A
+          %%
+          A -> T: 'b';
+          B -> Result<(), T>: 'c';
+          "
+        .to_string();
+        let grm = parse(YaccKind::Grmtools, &src).unwrap();
+        assert_eq!(grm.rules["A"].actiont, Some("T".to_string()));
+        assert_eq!(grm.rules["B"].actiont, Some("Result<(), T>".to_string()));
+    }
+
+    #[test]
     #[rustfmt::skip]
     fn test_precs() {
         let src = "
@@ -1604,9 +1666,9 @@ x"
     }
 
     #[test]
-    fn test_type() {
+    fn test_action_type() {
         let grm = parse(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKind::Original(YaccOriginalActionKind::UserAction),
             &"
          %actiontype T
          %%
@@ -1615,7 +1677,7 @@ x"
          fn foo() {}"
         )
         .unwrap();
-        assert_eq!(grm.actiontype, Some("T".to_string()));
+        assert_eq!(grm.rules["A"].actiont, Some("T".to_string()));
     }
 
     #[test]
@@ -1631,7 +1693,7 @@ x"
             Ok(_) => panic!(),
             Err(YaccParserError {
                 line: 3,
-                kind: YaccParserErrorKind::DuplicateTypeDeclaration,
+                kind: YaccParserErrorKind::DuplicateActiontypeDeclaration,
                 ..
             }) => (),
             Err(e) => panic!("Incorrect error returned {}", e)

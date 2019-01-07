@@ -46,28 +46,27 @@ make use of error recovery.
 
 ## Error recovery basics
 
-Consider the `calc` grammar from the [quickstart guide](quickstart.html):
+A simple calculator grammar looks as follows:
 
 ```yacc
 %start Expr
-// Define the Rust type that is to be returned by each
-// productions' action.
-%actiontype u64
 %%
-Expr: Term 'PLUS' Expr { $1 + $3 }
+Expr -> u64:
+      Term 'PLUS' Expr { $1 + $3 }
     | Term { $1 }
     ;
 
-Term: Factor 'MUL' Term { $1 * $3 }
+Term -> u64:
+      Factor 'MUL' Term { $1 * $3 }
     | Factor { $1 }
     ;
 
-Factor: 'LBRACK' Expr 'RBRACK' { $2 }
-      | 'INT' { parse_int($lexer.lexeme_str(&$1.unwrap())) }
-      ;
+Factor -> u64:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT' { parse_int($lexer.lexeme_str(&$1.unwrap())) }
+    ;
 %%
-// Functions / imports in this section are in scope for
-// each productions' actions.
+// Any functions here are in scope for all the grammar actions above.
 
 fn parse_int(s: &str) -> u64 {
     match s.parse::<u64>() {
@@ -76,16 +75,6 @@ fn parse_int(s: &str) -> u64 {
     }
 }
 ```
-
-In this grammar, every production has an action: each action *must* evaluate to
-an instance of the `%actiontype` type (in this case `u64`). The `$x` variables refer
-to the respective symbol in the production (i.e. `$1` refers to the first symbol
-in the production). If the symbol is a rule then an instance of `%actiontype` is
-stored in the `$x` variable; if the symbol is a lexeme then an `Option<Lexeme>`
-instance is returned. A special `$lexer` variable allows access to the lexer.
-This allows us to turn `Lexeme`s into strings with the `lexeme_str` function,
-which, given a `Lexeme`, returns a `&str` of the relevant part of the user’s
-input.
 
 For many examples, this simple grammar and its actions work well leading
 to output such as the following:
@@ -159,9 +148,9 @@ simpler than it sounds with only a slight rethink in the way that we tend to
 write a grammar's actions.
 
 
-## A rule of thumb: make `%actiontype` return a `Result` type
+## A rule of thumb: have rules return a `Result` type
 
-Although you can use whatever type you use for `%actiontype`, using a `Result` type
+Although rules can have any Rust type you can imagine, using a `Result` type
 allows a (deliberately) simple interaction with the effects of error recovery.
 The basic idea is simple: in actions, we ignore lexemes whose value we don't
 care about (e.g. brackets); for lexemes whose value we care about, we either
@@ -175,23 +164,24 @@ occurring:
 
 ```yacc
 %start Expr
-%actiontype Result<u64, ()>
 %%
-Expr: Term 'PLUS' Expr { Ok($1? + $3?) }
+Expr -> Result<u64, ()>:
+      Term 'PLUS' Expr { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
-Term: Factor 'MUL' Term { Ok($1? * $3?) }
+Term -> Result<u64, ()>:
+      Factor 'MUL' Term { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
-Factor: 'LBRACK' Expr 'RBRACK' { $2 }
-      | 'INT' {
-            let l = $1.map_err(|_| ())?;
-            Ok(parse_int($lexer.lexeme_str(&l)))
-         }
-      ;
+Factor -> Result<u64, ()>:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT' { parse_int($lexer.lexeme_str($1.map_err(|_| ())?)) }
+    ;
 %%
+// Any functions here are in scope for all the grammar actions above.
+
 fn parse_int(s: &str) -> u64 {
     match s.parse::<u64>() {
         Ok(val) => val as u64,
@@ -251,11 +241,11 @@ Unable to evaluate expression.
 
 Using a `Result` type allows the user arbitrary control over the classes of
 syntax errors they are prepared to deal with or not. For example, we could
-remove the `panic` from `parse_int` by having `%actiontype` be `Result<u64, String>`
+remove the `panic` from `parse_int` by making the rules have a type `Result<u64, String>`
 where the `Err` case would report a string such as “18446744073709551616 cannot
 be represented as a u64” for the first unrepresentable `u64` in the user's
 input. If we wanted to report *all* unrepresentable `u64`s, we could have
-`%actiontype` by `Result<u64, Vec<String>>`, though merging together the errors found
+the rules have a type `Result<u64, Vec<String>>`, though merging together the errors found
 on the left and right hand sides of the `+` and `*` operators requires adding a
 few lines of code.
 
@@ -297,6 +287,46 @@ Parsing error at line 1 column 3. Repair sequences found:
    3: Insert *
 Result: 2
 ```
+
+
+## Biasing repair sequences
+
+Depending on your language, some repair sequences are better than others. For
+example, sometimes `Insert` repairs are less welcome than `Delete` repairs:
+
+```ignore
+>>> 2 + + 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Insert INT
+   2: Delete +
+Unable to evaluate expression.
+>>> 2 + + 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 5
+```
+
+Why does the same input sometimes produce a result and sometimes fail to produce
+a result? The problem is that `2 + + 3` has two repair sequences `Delete +` and
+`Insert Int`. As things stand, both are equally good, and so one is chosen
+non-deterministically. If `Insert Int` is chosen, we hit the `Err` case from
+earlier, and fail to produce a result; if the `Delete` case is chosen, we can
+produce a result.
+
+To lessen this problem, the `%avoid_insert L` directive causes grmtools to
+prefer repair sequences that don't include `Insert L` over those that do.
+Intuitively, we want to annotate lexemes whose value we care about in this
+way (e.g. `INT`), but we don't need to worry about lexemes whose value we never
+expect (e.g. `(`, `+` etc.). In the case of the calculator grammar a good
+use of this directive is as follows:
+
+```ignore
+%avoid_insert "INT"
+```
+
+With this, the `Delete +` repair sequence is consistently favoured over `Insert
+INT`.
 
 
 ## Under the bonnet
@@ -426,7 +456,7 @@ the first parsing error, with the `recoverer` method in `CTParserBuilder` or
 
 ```rust,ignore
     let lex_rule_ids_map = CTParserBuilder::new()
-        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
+        .yacckind(YaccKind::Grmtools)
         .recoverer(lrpar::RecoveryKind::None)
         .process_file_in_src("calc.y")?;
 ```

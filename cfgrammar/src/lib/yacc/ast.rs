@@ -31,14 +31,14 @@ pub struct GrammarAST {
     pub implicit_tokens: Option<HashSet<String>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
-    pub programs: Option<String>,
-    pub actiontype: Option<String>
+    pub programs: Option<String>
 }
 
 #[derive(Debug)]
 pub struct Rule {
     pub name: String,
-    pub pidxs: Vec<usize> // index into GrammarAST.prod
+    pub pidxs: Vec<usize>, // index into GrammarAST.prod
+    pub actiont: Option<String>
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -126,17 +126,17 @@ impl GrammarAST {
             avoid_insert: None,
             implicit_tokens: None,
             epp: HashMap::new(),
-            programs: None,
-            actiontype: None
+            programs: None
         }
     }
 
-    pub fn add_rule(&mut self, name: String) {
+    pub fn add_rule(&mut self, name: String, actiont: Option<String>) {
         self.rules.insert(
             name.clone(),
             Rule {
                 name,
-                pidxs: Vec::new()
+                pidxs: Vec::new(),
+                actiont
             }
         );
     }
@@ -279,7 +279,7 @@ mod test {
     fn test_invalid_start_rule() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("B".to_string());
+        grm.add_rule("B".to_string(), None);
         grm.add_prod("B".to_string(), vec![], None, None);
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
@@ -294,7 +294,7 @@ mod test {
     fn test_valid_start_rule() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod("A".to_string(), vec![], None, None);
         assert!(grm.complete_and_validate().is_ok());
     }
@@ -303,8 +303,8 @@ mod test {
     fn test_valid_rule_ref() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
-        grm.add_rule("B".to_string());
+        grm.add_rule("A".to_string(), None);
+        grm.add_rule("B".to_string(), None);
         grm.add_prod("A".to_string(), vec![rule("B")], None, None);
         grm.add_prod("B".to_string(), vec![], None, None);
         assert!(grm.complete_and_validate().is_ok());
@@ -314,7 +314,7 @@ mod test {
     fn test_invalid_rule_ref() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod("A".to_string(), vec![rule("B")], None, None);
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
@@ -330,7 +330,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod("A".to_string(), vec![token("b")], None, None);
         assert!(grm.complete_and_validate().is_ok());
     }
@@ -342,7 +342,7 @@ mod test {
         let mut grm = GrammarAST::new();
         grm.tokens.insert("b".to_string());
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod("A".to_string(), vec![rule("b")], None, None);
         assert!(grm.complete_and_validate().is_err());
     }
@@ -351,7 +351,7 @@ mod test {
     fn test_invalid_token_ref() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod("A".to_string(), vec![token("b")], None, None);
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
@@ -366,7 +366,7 @@ mod test {
     fn test_invalid_rule_forgotten_token() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod("A".to_string(), vec![rule("b"), token("b")], None, None);
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
@@ -381,7 +381,7 @@ mod test {
     fn test_invalid_epp() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod("A".to_string(), vec![], None, None);
         grm.epp.insert("k".to_owned(), "v".to_owned());
         match grm.complete_and_validate() {
@@ -405,7 +405,7 @@ mod test {
         );
         grm.start = Some("A".to_string());
         grm.tokens.insert("b".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod(
             "A".to_string(),
             vec![token("b")],
@@ -419,7 +419,7 @@ mod test {
     fn test_invalid_precedence_override() {
         let mut grm = GrammarAST::new();
         grm.start = Some("A".to_string());
-        grm.add_rule("A".to_string());
+        grm.add_rule("A".to_string(), None);
         grm.add_prod(
             "A".to_string(),
             vec![token("b")],

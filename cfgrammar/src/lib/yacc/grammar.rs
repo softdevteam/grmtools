@@ -89,8 +89,8 @@ pub struct YaccGrammar<StorageT = u32> {
     actions: Vec<Option<String>>,
     /// The programs section of a grammar, if specified; otherwise `None`.
     programs: Option<String>,
-    /// The %actiontype declaration value, if specified; otherwise `None`.
-    actiontype: Option<String>,
+    /// The actiontypes of rules (one per rule).
+    actiontypes: Vec<Option<String>>,
     /// Tokens marked as %avoid_insert (if any).
     avoid_insert: Option<Vob>
 }
@@ -117,7 +117,7 @@ where
     /// user defined start rule.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
         let ast = match yacc_kind {
-            YaccKind::Original(_) | YaccKind::Eco => {
+            YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
                 yp.parse()?;
                 let mut ast = yp.ast();
@@ -158,7 +158,7 @@ where
         let implicit_rule;
         let implicit_start_rule;
         match yacc_kind {
-            YaccKind::Original(_) => {
+            YaccKind::Original(_) | YaccKind::Grmtools => {
                 implicit_rule = None;
                 implicit_start_rule = None;
             }
@@ -219,12 +219,13 @@ where
         let mut prod_precs: Vec<Option<Option<Precedence>>> = vec![None; ast.prods.len()];
         let mut prods_rules = vec![None; ast.prods.len()];
         let mut actions = vec![None; ast.prods.len()];
+        let mut actiontypes = vec![None; rule_names.len()];
         for astrulename in &rule_names {
             let ridx = rule_map[astrulename];
             if astrulename == &start_rule {
                 // Add the special start rule which has a single production which references a
                 // single rule.
-                rules_prods[usize::from(rule_map[astrulename])].push(PIdx(prods.len().as_()));
+                rules_prods[usize::from(ridx)].push(PIdx(prods.len().as_()));
                 let start_prod = match implicit_start_rule {
                     None => {
                         // Add ^: S;
@@ -273,6 +274,8 @@ where
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(ridx));
                 continue;
+            } else {
+                actiontypes[usize::from(ridx)] = ast.rules[astrulename].actiont.clone();
             }
 
             let rule = &mut rules_prods[usize::from(ridx)];
@@ -344,8 +347,8 @@ where
             implicit_rule: implicit_rule.and_then(|x| Some(rule_map[&x])),
             actions,
             programs: ast.programs,
-            actiontype: ast.actiontype,
-            avoid_insert
+            avoid_insert,
+            actiontypes
         })
     }
 
@@ -430,7 +433,8 @@ where
                           .map(|x| RIdx(x.as_()))
     }
 
-    /// What is the index of the start rule?
+    /// What is the index of the start rule? Note that cfgrammar will have inserted at least one
+    /// rule "above" the user's start rule.
     pub fn start_rule_idx(&self) -> RIdx<StorageT> {
         self.prod_to_rule(self.start_prod)
     }
@@ -481,9 +485,8 @@ where
         &self.actions[usize::from(pidx)]
     }
 
-    /// Get the action return type as defined by the user
-    pub fn actiontype(&self) -> Option<&String> {
-        self.actiontype.as_ref()
+    pub fn actiontype(&self, ridx: RIdx<StorageT>) -> &Option<String> {
+        &self.actiontypes[usize::from(ridx)]
     }
 
     /// Get the programs part of the grammar

@@ -23,7 +23,7 @@ use std::{
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-    Symbol
+    RIdx, Symbol
 };
 use filetime::FileTime;
 use lrtable::{from_yacc, statetable::Conflicts, Minimiser, StateGraph, StateTable};
@@ -37,6 +37,8 @@ use RecoveryKind;
 const YACC_SUFFIX: &str = "_y";
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
+const ACTIONS_KIND: &str = "__GTActionsKind";
+const ACTIONS_KIND_PREFIX: &str = "AK";
 
 const GRM_FILE_EXT: &str = "grm";
 const RUST_FILE_EXT: &str = "rs";
@@ -230,8 +232,8 @@ where
     /// the directory `outd`. The latter defines a module with the following functions:
     ///
     /// ```text
-    ///    fn parser(lexemes: &Vec<Lexeme<StorageT>>)
-    ///          -> (Option<ActionT>, Vec<LexParseError<StorageT>>)>
+    ///    fn parse(lexemes: &Vec<Lexeme<StorageT>>)
+    ///         -> (Option<ActionT>, Vec<LexParseError<StorageT>>)>
     ///
     ///    fn token_epp<'a>(tidx: TIdx<StorageT>) -> Option<&'a str>
     /// ```
@@ -258,6 +260,7 @@ where
         let yk = match self.yacckind {
             None => panic!("yacckind must be specified before processing."),
             Some(YaccKind::Original(x)) => YaccKind::Original(x),
+            Some(YaccKind::Grmtools) => YaccKind::Grmtools,
             Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported.")
         };
         let inc = read_to_string(&inp).unwrap();
@@ -353,8 +356,15 @@ where
         outs.push_str(&self.gen_parse_function(grm, sgraph, stable, outp_base)?);
         outs.push_str(&self.gen_rule_consts(grm));
         outs.push_str(&self.gen_token_epp(&grm));
-        outs.push_str(&self.gen_user_actions(&grm));
-
+        match self.yacckind.unwrap() {
+            YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
+                outs.push_str(&self.gen_wrappers(&grm));
+                outs.push_str(&self.gen_user_actions(&grm));
+            }
+            YaccKind::Original(YaccOriginalActionKind::NoAction)
+            | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => (),
+            _ => unreachable!()
+        }
         outs.push_str("}\n\n");
 
         // Output the cache so that we can check whether the IDs map is stable.
@@ -364,20 +374,6 @@ where
         f.write_all(outs.as_bytes())?;
 
         Ok(())
-    }
-
-    fn actiontype_str<'a, 'b>(&self, grm: &'a YaccGrammar<StorageT>) -> &'a str {
-        match grm.actiontype().as_ref() {
-            Some(t) => t,
-            None => match self.yacckind.unwrap() {
-                YaccKind::Original(YaccOriginalActionKind::UserAction) => {
-                    panic!("Action return type not defined!")
-                }
-                YaccKind::Original(YaccOriginalActionKind::NoAction)
-                | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => &"",
-                YaccKind::Eco => unreachable!()
-            }
-        }
     }
 
     /// Generate the cache, which determines if anything's changed enough that we need to
@@ -422,7 +418,7 @@ where
     ) -> Result<String, Box<Error>> {
         let mut outs = String::new();
         match self.yacckind.unwrap() {
-            YaccKind::Original(YaccOriginalActionKind::UserAction) => {
+            YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 outs.push_str(&format!(
                     "    use lrpar::{{Lexeme, parser::AStackType}};
     use cfgrammar::RIdx;
@@ -432,7 +428,7 @@ where
           -> (Option<{actiont}>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
-                    actiont = self.actiontype_str(&grm)
+                    actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap()
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
@@ -481,29 +477,36 @@ where
             RecoveryKind::None => "None"
         };
         match self.yacckind.unwrap() {
-            YaccKind::Original(YaccOriginalActionKind::UserAction) => {
+            YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 // action function references
                 outs.push_str(&format!(
                     "\n        let mut actions: Vec<&Fn(RIdx<{storaget}>,
                        &Lexer<{storaget}>,
-                       vec::Drain<AStackType<{actiont}, {storaget}>>)
-                    -> {actiont}> = Vec::new();\n",
-                    storaget = StorageT::type_name(),
-                    actiont = self.actiontype_str(grm)
+                       vec::Drain<AStackType<{actionskind}, {storaget}>>)
+                    -> {actionskind}> = Vec::new();\n",
+                    actionskind = ACTIONS_KIND,
+                    storaget = StorageT::type_name()
                 ));
                 for pidx in grm.iter_pidxs() {
                     outs.push_str(&format!(
-                        "        actions.push(&{prefix}action_{});\n",
+                        "        actions.push(&{prefix}wrapper_{});\n",
                         usize::from(pidx),
                         prefix = ACTION_PREFIX
                     ))
                 }
                 outs.push_str(&format!(
                     "
-        RTParserBuilder::new(&grm, &sgraph, &stable)
-            .recoverer(RecoveryKind::{})
-            .parse_actions(lexer, &actions)\n",
-                    recoverer,
+        match RTParserBuilder::new(&grm, &sgraph, &stable)
+            .recoverer(RecoveryKind::{recoverer})
+            .parse_actions(lexer, &actions) {{
+                (Some({actionskind}::{actionskindprefix}{ridx}(x)), y) => (Some(x), y),
+                (None, y) => (None, y),
+                _ => unreachable!()
+        }}",
+                    actionskind = ACTIONS_KIND,
+                    actionskindprefix = ACTIONS_KIND_PREFIX,
+                    ridx = usize::from(self.user_start_ridx(grm)),
+                    recoverer = recoverer,
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
@@ -527,7 +530,7 @@ where
             YaccKind::Eco => unreachable!()
         };
 
-        outs.push_str("    }\n\n");
+        outs.push_str("\n    }\n\n");
         Ok(outs)
     }
 
@@ -569,79 +572,74 @@ where
         )
     }
 
-    /// Generate the user action functions (if any).
-    fn gen_user_actions(&self, grm: &YaccGrammar<StorageT>) -> String {
+    /// Generate the wrappers that call user actions
+    fn gen_wrappers(&self, grm: &YaccGrammar<StorageT>) -> String {
         let mut outs = String::new();
-        match self.yacckind.unwrap() {
-            YaccKind::Original(YaccOriginalActionKind::UserAction) => (),
-            _ => return outs
-        }
 
-        if let Some(s) = grm.programs() {
-            outs.push_str("\n/* User code */\n\n");
-            outs.push_str(s);
-        }
+        outs.push_str("\n\n    // Wrappers\n\n");
 
-        // Convert actions to functions
-        outs.push_str("\n/* Converted actions */\n\n");
         for pidx in grm.iter_pidxs() {
+            let ridx = grm.prod_to_rule(pidx);
+
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]). At
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
-                "fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
-                            {prefix}lexer: &Lexer<{storaget}>,
-                            mut {prefix}args: vec::Drain<AStackType<{actiont}, {storaget}>>)
-                        -> {actiont} {{\n",
+                "    fn {prefix}wrapper_{}({prefix}ridx: RIdx<{storaget}>,
+                      {prefix}lexer: &Lexer<{storaget}>,
+                      mut {prefix}args: vec::Drain<AStackType<{actionskind}, {storaget}>>)
+                   -> {actionskind} {{",
                 usize::from(pidx),
                 storaget = StorageT::type_name(),
                 prefix = ACTION_PREFIX,
-                actiont = self.actiontype_str(&grm)
+                actionskind = ACTIONS_KIND,
             ));
-            for i in 0..grm.prod(pidx).len() {
-                match grm.prod(pidx)[i] {
-                    Symbol::Rule(_) => outs.push_str(&format!(
-                        "
-    let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
-        AStackType::ActionType(v) => v,
-        AStackType::Lexeme(_) => unreachable!()
-    }};
-",
-                        i + 1,
-                        prefix = ACTION_PREFIX
-                    )),
-                    Symbol::Token(_) => outs.push_str(&format!(
-                        "
-    let {prefix}arg_{}: Result<Lexeme<_>, Lexeme<_>> = match {prefix}args.next().unwrap() {{
-        AStackType::ActionType(_) => unreachable!(),
-        AStackType::Lexeme(l) => {{
-            if l.len().is_some() {{
-                Ok(l)
-            }} else {{
-                Err(l)
-            }}
-        }}
-    }};
-",
-                        i + 1,
-                        prefix = ACTION_PREFIX
-                    ))
+
+            if grm.action(pidx).is_some() {
+                // Unpack the arguments passed to us by the drain
+                for i in 0..grm.prod(pidx).len() {
+                    match grm.prod(pidx)[i] {
+                        Symbol::Rule(ref_ridx) => outs.push_str(&format!(
+                            "
+        let {prefix}arg_{i} = match {prefix}args.next().unwrap() {{
+            AStackType::ActionType({actionskind}::{actionskindprefix}{ref_ridx}(x)) => x,
+            _ => unreachable!()
+        }};",
+                            i = i + 1,
+                            ref_ridx = usize::from(ref_ridx),
+                            prefix = ACTION_PREFIX,
+                            actionskind = ACTIONS_KIND,
+                            actionskindprefix = ACTIONS_KIND_PREFIX
+                        )),
+                        Symbol::Token(_) => outs.push_str(&format!(
+                            "
+        let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
+            AStackType::Lexeme(l) => {{
+                if l.len().is_some() {{
+                    Ok(l)
+                }} else {{
+                    Err(l)
+                }}
+            }},
+            AStackType::ActionType(_) => unreachable!()
+        }};",
+                            i + 1,
+                            prefix = ACTION_PREFIX
+                        ))
+                    }
                 }
-            }
-            if let Some(s) = grm.action(pidx) {
-                // Replace $1 ... $n with the correct local variable
-                let s = RE_DOL_NUM
-                    .replace_all(
-                        s,
-                        format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
-                    )
-                    .into_owned();
-                // Replace $lexer with a reference to the lexer variable
-                let s = RE_DOL_LEXER.replace_all(
-                    &s,
-                    format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
-                );
-                outs.push_str(&format!("    {}", &s));
+
+                // Call the user code
+                let args = (0..grm.prod(pidx).len())
+                    .map(|i| format!("{prefix}arg_{i}", prefix = ACTION_PREFIX, i = i + 1))
+                    .collect::<Vec<_>>();
+                outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {args}))",
+                    actionskind = ACTIONS_KIND,
+                    actionskindprefix = ACTIONS_KIND_PREFIX,
+                    prefix = ACTION_PREFIX,
+                    ridx = usize::from(ridx),
+                    pidx = usize::from(pidx),
+                    args = args.join(", ")));
             } else if pidx == grm.start_prod() {
                 // The action for the start production (i.e. the extra rule/production
                 // added by lrpar) will never be executed, so a dummy function is all
@@ -654,7 +652,92 @@ where
                     grm.rule_name(grm.prod_to_rule(pidx))
                 );
             }
-            outs.push_str("\n}\n\n");
+            outs.push_str("\n    }\n\n");
+        }
+
+        // Wrappers enum
+
+        outs.push_str(&format!(
+            "    #[allow(dead_code)]
+    enum {} {{\n",
+            ACTIONS_KIND
+        ));
+        for ridx in grm.iter_rules() {
+            if grm.actiontype(ridx).is_none() {
+                continue;
+            }
+
+            outs.push_str(&format!(
+                "        {actionskindprefix}{ridx}({actiont}),\n",
+                actionskindprefix = ACTIONS_KIND_PREFIX,
+                ridx = usize::from(ridx),
+                actiont = grm.actiontype(ridx).as_ref().unwrap()
+            ));
+        }
+        outs.push_str("    }\n\n");
+
+        outs
+    }
+
+    /// Generate the user action functions (if any).
+    fn gen_user_actions(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut outs = String::new();
+
+        if let Some(s) = grm.programs() {
+            outs.push_str("\n// User code from the program section\n\n");
+            outs.push_str(s);
+        }
+
+        // Convert actions to functions
+        outs.push_str("\n    // User actions\n\n");
+        for pidx in grm.iter_pidxs() {
+            if pidx == grm.start_prod() {
+                continue;
+            }
+
+            // Work out the right type for each argument
+            let mut args = Vec::with_capacity(grm.prod(pidx).len());
+            for i in 0..grm.prod(pidx).len() {
+                let argt = match grm.prod(pidx)[i] {
+                    Symbol::Rule(ref_ridx) => grm.actiontype(ref_ridx).as_ref().unwrap().clone(),
+                    Symbol::Token(_) => format!(
+                        "Result<Lexeme<{storaget}>, Lexeme<{storaget}>>",
+                        storaget = StorageT::type_name()
+                    )
+                };
+                args.push(format!("mut {}arg_{}: {}", ACTION_PREFIX, i + 1, argt));
+            }
+
+            // Iterate over all $-arguments and replace them with their respective
+            // element from the argument vector (e.g. $1 is replaced by args[0]). At
+            // the same time extract &str from tokens and actiontype from nonterminals.
+            outs.push_str(&format!(
+                "    fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
+                     {prefix}lexer: &Lexer<{storaget}>,
+                     {args})
+                  -> {actiont} {{\n",
+                usize::from(pidx),
+                storaget = StorageT::type_name(),
+                prefix = ACTION_PREFIX,
+                actiont = grm.actiontype(grm.prod_to_rule(pidx)).as_ref().unwrap(),
+                args = args.join(",\n                     ")
+            ));
+
+            // Replace $1 ... $n with the correct local variable
+            let action = grm.action(pidx).as_ref().unwrap();
+            let action = RE_DOL_NUM
+                .replace_all(
+                    &action,
+                    format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
+                )
+                .into_owned();
+            // Replace $lexer with a reference to the lexer variable
+            let action = RE_DOL_LEXER.replace_all(
+                &action,
+                format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
+            );
+            outs.push_str(&action);
+            outs.push_str("\n    }\n\n");
         }
         outs
     }
@@ -671,6 +754,17 @@ where
         let f = File::create(&outp)?;
         serialize_into(f, d)?;
         Ok(outp)
+    }
+
+    /// Return the `RIdx` of the %start rule in the grammar (which will not be the same as
+    /// grm.start_rule_idx because the latter has an additional rule insert by cfgrammar
+    /// which then calls the user's %start rule).
+    fn user_start_ridx(&self, grm: &YaccGrammar<StorageT>) -> RIdx<StorageT> {
+        debug_assert_eq!(grm.prod(grm.start_prod()).len(), 1);
+        match grm.prod(grm.start_prod())[0] {
+            Symbol::Rule(ridx) => ridx,
+            _ => unreachable!()
+        }
     }
 }
 

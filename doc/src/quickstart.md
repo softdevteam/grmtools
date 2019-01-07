@@ -49,13 +49,13 @@ extern crate cfgrammar;
 extern crate lrlex;
 extern crate lrpar;
 
-use cfgrammar::yacc::{{YaccKind, YaccOriginalActionKind}};
+use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
 use lrpar::{CTParserBuilder, ActionKind};
 
 fn main() -> Result<(), Box<std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
-        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
+        .yacckind(YaccKind::Grmtools)
         .process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
@@ -64,10 +64,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
 }
 ```
 
-In our case, we want to specify Rust code which is run as the input is parsed
-(rather than creating a generic parse tree which we traverse later), so we
-specified that the `yacckind` (i.e. what variant of Yacc file we're using)
-is `YaccKind::Original(YaccOriginalActionKind::UserAction)`. The grammar file
+grmtools accepts several different Yacc variants as input. In our case, we want
+to execute Rust code as the input is parsed (rather than creating a generic
+parse tree which we traverse later), so we specified that the `yacckind` (i.e.
+what variant of Yacc file we're using) is `YaccKind::Grmtools`. The grammar file
 is stored in `src/calc.y`, but we only specify `calc.y` as the filename to
 `lrpar`, since it searches relative to `src/` automatically.
 
@@ -106,49 +106,58 @@ is lexed, but no lexemes are created from it.
 Our initial version of calc.y looks as follows:
 ```yacc
 %start Expr
-// Define the Rust type that is to be returned by the actions.
-%actiontype u64
 %%
-Expr: Term 'PLUS' Expr { $1 + $3 }
+Expr -> Result<u64, ()>:
+      Term 'PLUS' Expr { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
-Term: Factor 'MUL' Term { $1 * $3 }
+Term -> Result<u64, ()>:
+      Factor 'MUL' Term { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
-Factor: 'LBRACK' Expr 'RBRACK' { $2 }
-      | 'INT' { parse_int($lexer.lexeme_str(&$1.unwrap())) }
-      ;
+Factor -> Result<u64, ()>:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT'
+      {
+          let v = $1.map_err(|_| ())?;
+          parse_int($lexer.lexeme_str(&v))
+      }
+    ;
 %%
 // Any functions here are in scope for all the grammar actions above.
 
-fn parse_int(s: &str) -> u64 {
+fn parse_int(s: &str) -> Result<u64, ()> {
     match s.parse::<u64>() {
-        Ok(val) => val as u64,
-        Err(_) => panic!("{} cannot be represented as a u64", s)
+        Ok(val) => Ok(val as u64),
+        Err(_) => {
+            eprintln!("{} cannot be represented as a u64", s);
+            Err(())
+        }
     }
 }
 ```
 
 The grammar is in 3 parts, separated by the `%%` lines.
 
-The first part specifies general settings for the grammar: its start rule
-(`%start Expr`) and the Rust type that actions in the grammar must produce
-(`%actiontype u64`).
+The first part specifies general settings for the grammar, at a minimum the
+start rule (`%start Expr`).
 
 The second part is the [Yacc
 grammar](http://dinosaur.compilertools.net/yacc/index.html). It consists of 3
 rules (`Expr`, `Term`, and `Factor`) and 6 productions (2 for each rule,
-separated by `|` characters). A production (sometimes called an “alternative”)
+separated by `|` characters). Because we are using the `Grmtools` Yacc variant,
+each rule has a Rust type associated with it (after `->`) which specifies the
+type that each production’s action must return. A production (sometimes called an “alternative”)
 consists of zero or more symbols. Symbols either reference rules or lexemes. If a
 production matches text, its ”action” (the Rust code between curly brackets at
 the end of the production) is executed.
 
-`lrpar`'s actions are somewhat different to Yacc. The `$x` variables refer to
-the respective symbol in the production (i.e. `$1` refers to the first symbol in
-the production). If the symbol is a rule then an instance of `%actiontype` is stored
-in the `$x` variable; if the symbol is a lexeme then an `Option<Lexeme>`
+`lrpar`'s actions are subtly different to Yacc. The `$x` variables refer to
+the respective symbol in the production, numbered from 1 (i.e. `$1` refers to the first symbol in
+the production). If the symbol references a rule `R` then an instance of
+`R`'s type will be stored in the `$x` variable; if the symbol references a lexeme then an `Option<Lexeme>`
 instance is returned. A special `$lexer` variable allows access to the lexer.
 This allows us to turn `Lexeme`s into strings with the `lexeme_str` function,
 which given a `Lexeme` returns a `&str` representing the corresponding piece of
@@ -158,6 +167,16 @@ The third part is arbitrary Rust code which can be called by productions’
 actions. In our case we have a simple function which converts integers as
 strings into integers as `u64`s: if the user provides an invalid number (e.g.
 one that is too big) the system `panic`s.
+
+This example uses a common grmtools idiom: making use of `Result` types. This
+allows us to deal with two different issues that prevent evaluation.
+First is the “obvious” issue of integers which are too big to represent as
+`u64`s: these cause `Err` to be percolated upwards, preventing evaluation.
+Second is the issue of error recovery telling us that the user should have
+inserted an integer: since it would be confusing for us to insert a default
+value in such cases, we `map_err` such cases to `Err`, preventing evaluation.
+See the section below [on error recovery](#error-recovery) for more details
+about error recovery.
 
 
 ## Putting everything together
@@ -221,6 +240,9 @@ Result: 14
 >>> (2 + 3) * 4
 Result: 20
 ```
+
+
+# Error recovery
 
 Because powerful error recovery is built into `lrpar`, we can even make minor
 errors and have the system recover automatically:

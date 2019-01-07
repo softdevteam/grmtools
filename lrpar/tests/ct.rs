@@ -172,7 +172,7 @@ fn main() {{
     .unwrap();
 }
 
-fn init_calc(tdir: &TempDir, yacckind: &str, main: &str) {
+fn init_generic(tdir: &TempDir, yacckind: &str, grm: &str, lex: &str, main: &str) {
     // Write build.rs
     let mut p = PathBuf::from(tdir.as_ref());
     p.push("build.rs");
@@ -191,10 +191,10 @@ use lrpar::CTParserBuilder;
 fn main() -> Result<(), Box<std::error::Error>> {{
     let lex_rule_ids_map = CTParserBuilder::new()
         .yacckind({})
-        .process_file_in_src(\"calc.y\")?;
+        .process_file_in_src(\"grm.y\")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
-        .process_file_in_src(\"calc.l\")?;
+        .process_file_in_src(\"lex.l\")?;
     Ok(())
 }}",
             yacckind
@@ -202,13 +202,44 @@ fn main() -> Result<(), Box<std::error::Error>> {{
     )
     .unwrap();
 
-    // Write src/calc.y
+    // Write src/grm.y
     let mut p = PathBuf::from(tdir.as_ref());
     p.push("src");
-    p.push("calc.y");
+    p.push("grm.y");
+    fs::write(p, grm).unwrap();
+
+    // Write src/calc.l
+    let mut p = PathBuf::from(tdir.as_ref());
+    p.push("src");
+    p.push("lex.l");
+    fs::write(p, lex).unwrap();
+
+    // Write src/main.rs
+    let mut p = PathBuf::from(tdir.as_ref());
+    p.push("src");
+    p.push("main.rs");
     fs::write(
         p,
-        "%start Expr
+        &format!(
+            "extern crate cfgrammar;
+#[macro_use] extern crate lrpar;
+#[macro_use] extern crate lrlex;
+
+lrlex_mod!(lex_l);
+lrpar_mod!(grm_y);
+
+fn main() {{
+{}
+}}
+",
+            main
+        )
+    )
+    .unwrap();
+}
+
+fn init_calc(tdir: &TempDir, yacckind: &str, main: &str) {
+    let grm = "%start Expr
 %actiontype Result<u64, ()>
 %avoid_insert 'INT'
 %%
@@ -234,48 +265,17 @@ Factor: '(' Expr ')' { $2 }
                 }
             }
         }
-      ;"
-    )
-    .unwrap();
+      ;";
 
-    // Write src/calc.l
-    let mut p = PathBuf::from(tdir.as_ref());
-    p.push("src");
-    p.push("calc.l");
-    fs::write(
-        p,
-        " %%
+    let lex = " %%
 [0-9]+ \"INT\"
 \\+ \"+\"
 \\* \"*\"
 \\( \"(\"
 \\) \")\"
-[\\t ]+ ;"
-    )
-    .unwrap();
+[\\t ]+ ;";
 
-    // Write src/main.rs
-    let mut p = PathBuf::from(tdir.as_ref());
-    p.push("src");
-    p.push("main.rs");
-    fs::write(
-        p,
-        &format!(
-            "extern crate cfgrammar;
-#[macro_use] extern crate lrpar;
-#[macro_use] extern crate lrlex;
-
-lrlex_mod!(calc_l);
-lrpar_mod!(calc_y);
-
-fn main() {{
-{}
-}}
-",
-            main
-        )
-    )
-    .unwrap();
+    init_generic(tdir, yacckind, grm, lex, main);
 }
 
 fn run_dummy(tdir: &TempDir) {
@@ -319,13 +319,13 @@ fn test_no_actions() {
             &tdir,
             "YaccKind::Original(YaccOriginalActionKind::NoAction)",
             "
-    let lexerdef = calc_l::lexerdef();
+    let lexerdef = lex_l::lexerdef();
     let mut lexer = lexerdef.lexer(\"2+3\");
-    if !calc_y::parse(&mut lexer).is_empty() {
+    if !grm_y::parse(&mut lexer).is_empty() {
         panic!();
     }
     let mut lexer = lexerdef.lexer(\"2++3\");
-    if calc_y::parse(&mut lexer).len() != 1 {
+    if grm_y::parse(&mut lexer).len() != 1 {
         panic!();
     }
     "
@@ -342,9 +342,9 @@ fn test_basic_actions() {
             &tdir,
             "YaccKind::Original(YaccOriginalActionKind::UserAction)",
             "
-    let lexerdef = calc_l::lexerdef();
+    let lexerdef = lex_l::lexerdef();
     let mut lexer = lexerdef.lexer(\"2+3\");
-    match calc_y::parse(&mut lexer) {
+    match grm_y::parse(&mut lexer) {
         (Some(Ok(5)), ref errs) if errs.len() == 0 => (),
         _ => unreachable!()
     }"
@@ -363,10 +363,10 @@ fn test_error_recovery_and_actions() {
             "
     use lrpar::LexParseError;
 
-    let lexerdef = calc_l::lexerdef();
+    let lexerdef = lex_l::lexerdef();
 
     let mut lexer = lexerdef.lexer(\"2++3\");
-    let (r, errs) = calc_y::parse(&mut lexer);
+    let (r, errs) = grm_y::parse(&mut lexer);
     match r {
         Some(Ok(5)) => (),
         _ => unreachable!()
@@ -377,7 +377,7 @@ fn test_error_recovery_and_actions() {
     }
 
     let mut lexer = lexerdef.lexer(\"2+3)\");
-    let (r, errs) = calc_y::parse(&mut lexer);
+    let (r, errs) = grm_y::parse(&mut lexer);
     assert_eq!(r, Some(Ok(5)));
     assert_eq!(errs.len(), 1);
     match errs[0] {
@@ -386,10 +386,44 @@ fn test_error_recovery_and_actions() {
     }
 
     let mut lexer = lexerdef.lexer(\"2+3+18446744073709551616\");
-    let (r, errs) = calc_y::parse(&mut lexer);
+    let (r, errs) = grm_y::parse(&mut lexer);
     assert_eq!(r, Some(Err(())));
     assert!(errs.is_empty());"
         );
+        run_dummy(&tdir);
+    });
+}
+
+#[test]
+#[ignore]
+fn test_multitypes() {
+    let grm = "%start S
+%%
+S -> Vec<A>:
+    A { vec![$1] }
+    | S A {
+        $1.push($2);
+        $1
+    }
+    ;
+A -> A: 'a' { A } ;
+%%
+pub struct A;
+";
+
+    let lex = "%%
+a 'a'";
+
+    let main = "
+    let lexerdef = lex_l::lexerdef();
+    let mut lexer = lexerdef.lexer(\"aa\");
+    let (r, errs) = grm_y::parse(&mut lexer);
+    assert_eq!(r.unwrap().len(), 2);
+    assert_eq!(errs.len(), 0);
+";
+
+    run_in_dummy(move |tdir| {
+        init_generic(&tdir, "YaccKind::Grmtools", grm, lex, main);
         run_dummy(&tdir);
     });
 }
