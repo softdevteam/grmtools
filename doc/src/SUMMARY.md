@@ -4,6 +4,7 @@
 - [Quickstart Guide](quickstart.md)
 - [Lexing](lexing.md)
 - [Parsing](parsing.md)
+  - [grmtools parsing idioms](parsing_idioms.md)
 - [The individual libraries and tools](libsandtools.md)
   - [lrpar](lrpar.md)
   - [lrlex](lrlex.md)
