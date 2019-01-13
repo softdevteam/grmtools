@@ -616,7 +616,7 @@ where
 /// C: [x]
 /// D: [y, x] or [y, z]
 /// ```
-pub struct SentenceGenerator<'a, StorageT: 'a> {
+pub struct SentenceGenerator<'a, StorageT> {
     grm: &'a YaccGrammar<StorageT>,
     rule_min_costs: RefCell<Option<Vec<u16>>>,
     rule_max_costs: RefCell<Option<Vec<u16>>>,

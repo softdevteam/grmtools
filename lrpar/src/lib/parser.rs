@@ -83,16 +83,16 @@ pub enum AStackType<ActionT, StorageT> {
 pub struct Parser<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
-    pub(crate) token_cost: &'a Fn(TIdx<StorageT>) -> u8,
+    pub(crate) token_cost: &'a dyn Fn(TIdx<StorageT>) -> u8,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: &'a Lexer<StorageT>,
+    pub(crate) lexer: &'a dyn Lexer<StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: &'a [Lexeme<StorageT>],
-    actions: &'a [&'a Fn(
+    actions: &'a [&'a dyn Fn(
         RIdx<StorageT>,
-        &Lexer<StorageT>,
+        &dyn Lexer<StorageT>,
         vec::Drain<AStackType<ActionT, StorageT>>
     ) -> ActionT]
 }
@@ -108,7 +108,7 @@ where
         token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &mut Lexer<StorageT>,
+        lexer: &mut dyn Lexer<StorageT>,
         lexemes: &[Lexeme<StorageT>]
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
     where
@@ -118,9 +118,9 @@ where
             assert!(token_cost(tidx) > 0);
         }
         let mut actions: Vec<
-            &'a Fn(
+            &'a dyn Fn(
                 RIdx<StorageT>,
-                &Lexer<StorageT>,
+                &dyn Lexer<StorageT>,
                 vec::Drain<AStackType<Node<StorageT>, StorageT>>
             ) -> Node<StorageT>
         > = Vec::new();
@@ -144,7 +144,7 @@ where
 
     fn generic_ptree(
         ridx: RIdx<StorageT>,
-        _lexer: &Lexer<StorageT>,
+        _lexer: &dyn Lexer<StorageT>,
         astack: vec::Drain<AStackType<Node<StorageT>, StorageT>>
     ) -> Node<StorageT> {
         let mut nodes = Vec::with_capacity(astack.len());
@@ -169,7 +169,7 @@ where
         token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &mut Lexer<StorageT>,
+        lexer: &mut dyn Lexer<StorageT>,
         lexemes: &[Lexeme<StorageT>]
     ) -> Vec<LexParseError<StorageT>>
     where
@@ -179,7 +179,11 @@ where
             assert!(token_cost(tidx) > 0);
         }
         let mut actions: Vec<
-            &'a Fn(RIdx<StorageT>, &Lexer<StorageT>, vec::Drain<AStackType<(), StorageT>>) -> ()
+            &'a dyn Fn(
+                RIdx<StorageT>,
+                &dyn Lexer<StorageT>,
+                vec::Drain<AStackType<(), StorageT>>
+            ) -> ()
         > = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
         let psr = Parser {
@@ -201,7 +205,7 @@ where
 
     fn noaction(
         _ridx: RIdx<StorageT>,
-        _lexer: &Lexer<StorageT>,
+        _lexer: &dyn Lexer<StorageT>,
         _astack: vec::Drain<AStackType<(), StorageT>>
     ) -> () {
     }
@@ -219,11 +223,11 @@ where
         token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &mut Lexer<StorageT>,
+        lexer: &mut dyn Lexer<StorageT>,
         lexemes: &[Lexeme<StorageT>],
-        actions: &[&Fn(
+        actions: &[&dyn Fn(
             RIdx<StorageT>,
-            &Lexer<StorageT>,
+            &dyn Lexer<StorageT>,
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
@@ -571,8 +575,8 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     /// though you will have to wrap it in a closure e.g. `&|t| grm.token_epp(t)`.
     pub fn pp<'a>(
         &self,
-        lexer: &Lexer<StorageT>,
-        epp: &Fn(TIdx<StorageT>) -> Option<&'a str>
+        lexer: &dyn Lexer<StorageT>,
+        epp: &dyn Fn(TIdx<StorageT>) -> Option<&'a str>
     ) -> String {
         match self {
             LexParseError::LexError(e) => {
@@ -641,12 +645,12 @@ impl<StorageT: Hash> From<ParseError<StorageT>> for LexParseError<StorageT> {
 }
 
 /// A run-time parser builder.
-pub struct RTParserBuilder<'a, StorageT: Eq + Hash + 'a> {
+pub struct RTParserBuilder<'a, StorageT: Eq + Hash> {
     grm: &'a YaccGrammar<StorageT>,
     sgraph: &'a StateGraph<StorageT>,
     stable: &'a StateTable<StorageT>,
     recoverer: RecoveryKind,
-    term_costs: &'a Fn(TIdx<StorageT>) -> u8,
+    term_costs: &'a dyn Fn(TIdx<StorageT>) -> u8,
     phantom: PhantomData<StorageT>
 }
 
@@ -677,7 +681,7 @@ where
         self
     }
 
-    pub fn term_costs(mut self, f: &'a Fn(TIdx<StorageT>) -> u8) -> Self {
+    pub fn term_costs(mut self, f: &'a dyn Fn(TIdx<StorageT>) -> u8) -> Self {
         self.term_costs = f;
         self
     }
@@ -686,7 +690,7 @@ where
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_generictree(
         &self,
-        lexer: &mut Lexer<StorageT>
+        lexer: &mut dyn Lexer<StorageT>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         let lexemes = match lexer.all_lexemes() {
             Ok(ls) => ls,
@@ -705,7 +709,7 @@ where
 
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_noaction(&self, lexer: &mut Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
+    pub fn parse_noaction(&self, lexer: &mut dyn Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
         let lexemes = match lexer.all_lexemes() {
             Ok(ls) => ls,
             Err(e) => return vec![e.into()]
@@ -729,10 +733,10 @@ where
     /// be a mix of lexing and parsing errors.
     pub fn parse_actions<ActionT: 'static>(
         &self,
-        lexer: &mut Lexer<StorageT>,
-        actions: &[&Fn(
+        lexer: &mut dyn Lexer<StorageT>,
+        actions: &[&dyn Fn(
             RIdx<StorageT>,
-            &Lexer<StorageT>,
+            &dyn Lexer<StorageT>,
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {

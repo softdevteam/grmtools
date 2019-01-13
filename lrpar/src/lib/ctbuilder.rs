@@ -190,7 +190,7 @@ where
     pub fn process_file_in_src(
         &mut self,
         srcp: &str
-    ) -> Result<HashMap<String, StorageT>, Box<Error>> {
+    ) -> Result<HashMap<String, StorageT>, Box<dyn Error>> {
         let mut inp = current_dir()?;
         inp.push("src");
         inp.push(srcp);
@@ -253,7 +253,7 @@ where
         &mut self,
         inp: P,
         outd: Q
-    ) -> Result<HashMap<String, StorageT>, Box<Error>>
+    ) -> Result<HashMap<String, StorageT>, Box<dyn Error>>
     where
         P: AsRef<Path>,
         Q: AsRef<Path>
@@ -343,7 +343,7 @@ where
         outp_base: PathBuf,
         outp_rs: PathBuf,
         cache: &str
-    ) -> Result<(), Box<Error>> {
+    ) -> Result<(), Box<dyn Error>> {
         let mut outs = String::new();
         // Header
         outs.push_str(&format!("mod {}_y {{\n", mod_name));
@@ -416,7 +416,7 @@ where
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         outp_base: PathBuf
-    ) -> Result<String, Box<Error>> {
+    ) -> Result<String, Box<dyn Error>> {
         let mut outs = String::new();
         match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
@@ -749,7 +749,7 @@ where
         outp_base: P,
         ext: &str,
         d: &T
-    ) -> Result<PathBuf, Box<Error>> {
+    ) -> Result<PathBuf, Box<dyn Error>> {
         let mut outp = outp_base.as_ref().to_path_buf();
         outp.set_extension(ext);
         let f = File::create(&outp)?;

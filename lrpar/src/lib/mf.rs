@@ -125,7 +125,7 @@ pub(crate) fn recoverer<
     ActionT: 'static
 >(
     parser: &'a Parser<StorageT, ActionT>
-) -> Box<Recoverer<StorageT, ActionT> + 'a>
+) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -413,7 +413,7 @@ where
                         }
                     }
                     for c in vc.vals() {
-                        for mut pc in traverse(c) {
+                        for pc in traverse(c) {
                             out.push(pc);
                         }
                     }

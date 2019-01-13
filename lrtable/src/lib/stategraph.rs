@@ -54,7 +54,9 @@ where
     }
 
     /// Return an iterator over all closed states in this `StateGraph`.
-    pub fn iter_closed_states<'a>(&'a self) -> Box<Iterator<Item = &'a Itemset<StorageT>> + 'a> {
+    pub fn iter_closed_states<'a>(
+        &'a self
+    ) -> Box<dyn Iterator<Item = &'a Itemset<StorageT>> + 'a> {
         Box::new(self.states.iter().map(|x| &x.1))
     }
 
@@ -64,7 +66,7 @@ where
     }
 
     /// Return an iterator over all core states in this `StateGraph`.
-    pub fn iter_core_states<'a>(&'a self) -> Box<Iterator<Item = &'a Itemset<StorageT>> + 'a> {
+    pub fn iter_core_states<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Itemset<StorageT>> + 'a> {
         Box::new(self.states.iter().map(|x| &x.0))
     }
 

@@ -11,7 +11,7 @@ use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 use lrlex::LexerBuilder;
 use lrpar::CTParserBuilder;
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // First we create the parser, which returns a HashMap of all the tokens used, then we pass
     // that HashMap to the lexer.
     //
