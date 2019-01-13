@@ -2,17 +2,17 @@
 %avoid_insert "INT"
 %%
 Expr -> Result<u64, ()>:
-      Term 'PLUS' Expr { Ok($1? + $3?) }
+      Term '+' Expr { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
 Term -> Result<u64, ()>:
-      Factor 'MUL' Term { Ok($1? * $3?) }
+      Factor '*' Term { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
 Factor -> Result<u64, ()>:
-      'LBRACK' Expr 'RBRACK' { $2 }
+      '(' Expr ')' { $2 }
     | 'INT'
       {
           let v = $1.map_err(|_| ())?;
