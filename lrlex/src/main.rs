@@ -7,10 +7,6 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-extern crate getopts;
-extern crate lrlex;
-extern crate lrpar;
-
 use getopts::Options;
 use std::{
     env,

@@ -15,6 +15,8 @@ use std::{
 use cfgrammar::{yacc::YaccGrammar, PIdx, SIdx, Symbol};
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use vob::Vob;
 
 use cfgrammar::yacc::firsts::YaccFirsts;

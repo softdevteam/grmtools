@@ -26,6 +26,7 @@ use cfgrammar::{
     RIdx, Symbol
 };
 use filetime::FileTime;
+use lazy_static::lazy_static;
 use lrtable::{from_yacc, statetable::Conflicts, Minimiser, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
@@ -793,12 +794,11 @@ pub fn _reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    extern crate tempfile;
     use std::{fs::File, io::Write, path::PathBuf};
 
-    use self::tempfile::TempDir;
     use super::{CTConflictsError, CTParserBuilder};
     use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
+    use tempfile::TempDir;
 
     #[test]
     fn test_conflicts() {

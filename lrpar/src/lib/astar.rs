@@ -9,7 +9,10 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use indexmap::map::{Entry, IndexMap};
+use indexmap::{
+    indexmap,
+    map::{Entry, IndexMap}
+};
 
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
 ///

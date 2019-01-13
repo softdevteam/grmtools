@@ -11,6 +11,8 @@ use std::{collections::hash_map::HashMap, hash::Hash};
 
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use try_from::TryFrom;
 
 use crate::{itemset::Itemset, StIdx, StIdxStorageT};

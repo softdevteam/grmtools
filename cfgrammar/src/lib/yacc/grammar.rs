@@ -10,6 +10,8 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, fmt};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use vob::Vob;
 
 use super::{

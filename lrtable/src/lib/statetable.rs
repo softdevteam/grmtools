@@ -20,6 +20,8 @@ use cfgrammar::{
     PIdx, RIdx, Symbol, TIdx
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use sparsevec::SparseVec;
 use vob::{IterSetBits, Vob};
 

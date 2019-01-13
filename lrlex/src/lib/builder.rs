@@ -19,6 +19,7 @@ use std::{
     path::{Path, PathBuf}
 };
 
+use lazy_static::lazy_static;
 use num_traits::{PrimInt, Unsigned};
 use regex::Regex;
 use try_from::TryFrom;

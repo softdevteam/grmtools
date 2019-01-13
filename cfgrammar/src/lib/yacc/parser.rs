@@ -11,6 +11,7 @@
 
 use std::{collections::HashSet, error::Error, fmt};
 
+use lazy_static::lazy_static;
 use regex::Regex;
 
 type YaccResult<T> = Result<T, YaccParserError>;

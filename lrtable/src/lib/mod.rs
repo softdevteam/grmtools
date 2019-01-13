@@ -7,19 +7,11 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-extern crate cfgrammar;
-extern crate fnv;
-extern crate num_traits;
-#[cfg(feature = "serde")]
-#[macro_use]
-extern crate serde;
-extern crate sparsevec;
-extern crate try_from;
-extern crate vob;
-
 use std::{hash::Hash, mem::size_of};
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 mod itemset;
 mod pager;

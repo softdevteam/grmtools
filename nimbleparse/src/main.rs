@@ -7,13 +7,6 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-extern crate cfgrammar;
-extern crate getopts;
-extern crate lrlex;
-extern crate lrpar;
-extern crate lrtable;
-extern crate num_traits;
-
 use std::{
     env,
     fs::File,

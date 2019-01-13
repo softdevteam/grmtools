@@ -7,14 +7,6 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-#[macro_use]
-extern crate lazy_static;
-extern crate lrpar;
-extern crate num_traits;
-extern crate regex;
-extern crate try_from;
-extern crate typename;
-
 use std::{error::Error, fmt, hash::Hash};
 
 use num_traits::{PrimInt, Unsigned};

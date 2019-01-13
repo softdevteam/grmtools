@@ -7,10 +7,6 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-extern crate cfgrammar;
-extern crate lrlex;
-extern crate lrpar;
-
 use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
 use lrpar::CTParserBuilder;
