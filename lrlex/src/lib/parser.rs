@@ -110,7 +110,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let line_len = self.src[i..]
             .find(|c| c == '\n')
             .unwrap_or(self.src.len() - i);
-        let line = self.src[i..i + line_len].trim_right();
+        let line = self.src[i..i + line_len].trim_end();
         let rspace = match line.rfind(' ') {
             Some(j) => j,
             None => return Err(self.mk_error(LexErrorKind::MissingSpace, i))
@@ -137,7 +137,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             }
         }
 
-        let re_str = line[..rspace].trim_right().to_string();
+        let re_str = line[..rspace].trim_end().to_string();
         let rules_len = self.rules.len();
         let tok_id = StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));

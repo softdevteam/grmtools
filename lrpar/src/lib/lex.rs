@@ -113,4 +113,9 @@ impl<StorageT: Copy> Lexeme<StorageT> {
             Some(self.len as usize)
         }
     }
+
+    /// Returns `true` if this lexeme is the result of error recovery, or `false` otherwise.
+    pub fn is_empty(&self) -> bool {
+        self.len == u32::max_value()
+    }
 }
