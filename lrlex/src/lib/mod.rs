@@ -24,9 +24,11 @@ mod builder;
 mod lexer;
 mod parser;
 
-pub use builder::LexerBuilder;
-pub use lexer::{LexerDef, Rule};
-use parser::parse_lex;
+use crate::parser::parse_lex;
+pub use crate::{
+    builder::LexerBuilder,
+    lexer::{LexerDef, Rule}
+};
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
 

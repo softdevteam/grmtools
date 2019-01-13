@@ -23,9 +23,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use sparsevec::SparseVec;
 use vob::{IterSetBits, Vob};
 
-use stategraph::StateGraph;
-use StIdx;
-use StIdxStorageT;
+use crate::{stategraph::StateGraph, StIdx, StIdxStorageT};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
@@ -580,14 +578,14 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    use super::{Action, StateTable, StateTableError, StateTableErrorKind};
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         PIdx, Symbol, TIdx
     };
-    use pager::pager_stategraph;
     use std::collections::HashSet;
-    use StIdx;
+
+    use super::{Action, StateTable, StateTableError, StateTableErrorKind};
+    use crate::{pager::pager_stategraph, StIdx};
 
     #[test]
     #[rustfmt::skip]

@@ -24,8 +24,7 @@ use regex::Regex;
 use try_from::TryFrom;
 use typename::TypeName;
 
-use lexer::LexerDef;
-use parser::parse_lex;
+use crate::{lexer::LexerDef, parser::parse_lex};
 
 const LEX_SUFFIX: &str = "_l";
 const LEX_FILE_EXT: &str = "l";

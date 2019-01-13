@@ -11,12 +11,11 @@
 
 use std::{collections::HashSet, error::Error, fmt};
 
-extern crate regex;
-use self::regex::Regex;
+use regex::Regex;
 
 type YaccResult<T> = Result<T, YaccParserError>;
 
-use yacc::{
+use super::{
     ast::{GrammarAST, Symbol},
     AssocKind, Precedence, YaccKind
 };
@@ -619,10 +618,12 @@ impl YaccParser {
 
 #[cfg(test)]
 mod test {
-    use super::{YaccParser, YaccParserError, YaccParserErrorKind};
-    use yacc::{
-        ast::{GrammarAST, Production, Symbol},
-        AssocKind, Precedence, YaccKind, YaccOriginalActionKind
+    use super::{
+        super::{
+            ast::{GrammarAST, Production, Symbol},
+            AssocKind, Precedence, YaccKind, YaccOriginalActionKind
+        },
+        YaccParser, YaccParserError, YaccParserErrorKind
     };
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, YaccParserError> {

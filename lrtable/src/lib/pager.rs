@@ -16,10 +16,7 @@ use cfgrammar::{yacc::YaccGrammar, SIdx, Symbol};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use itemset::Itemset;
-use stategraph::StateGraph;
-use StIdx;
-use StIdxStorageT;
+use crate::{itemset::Itemset, stategraph::StateGraph, StIdx, StIdxStorageT};
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -397,15 +394,13 @@ fn gc<StorageT: Eq + Hash + PrimInt>(
 mod test {
     use vob::Vob;
 
+    use crate::{pager::pager_stategraph, stategraph::state_exists, StIdx};
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         SIdx, Symbol
     };
-    use pager::pager_stategraph;
-    use stategraph::state_exists;
 
     use super::vob_intersect;
-    use StIdx;
 
     #[test]
     fn test_vob_intersect() {

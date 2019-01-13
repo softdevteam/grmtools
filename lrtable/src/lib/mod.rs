@@ -26,9 +26,11 @@ mod pager;
 mod stategraph;
 pub mod statetable;
 
+pub use crate::{
+    stategraph::StateGraph,
+    statetable::{Action, StateTable, StateTableError, StateTableErrorKind}
+};
 use cfgrammar::yacc::YaccGrammar;
-pub use stategraph::StateGraph;
-pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
 /// The type of the inner value of an StIdx.
 pub type StIdxStorageT = u16;

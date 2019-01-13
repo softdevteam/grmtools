@@ -164,13 +164,14 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::Itemset;
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         SIdx, Symbol
     };
-    use stategraph::state_exists;
     use vob::Vob;
+
+    use super::Itemset;
+    use crate::stategraph::state_exists;
 
     #[test]
     #[rustfmt::skip]

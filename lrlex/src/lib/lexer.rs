@@ -268,7 +268,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
 #[cfg(test)]
 mod test {
     use super::*;
-    use parser::parse_lex;
+    use crate::parser::parse_lex;
     use std::collections::HashMap;
 
     #[test]

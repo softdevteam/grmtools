@@ -12,7 +12,7 @@ use std::{fmt::Debug, hash::Hash, time::Instant};
 use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use parser::{AStackType, ParseRepair, Parser, Recoverer};
+use crate::parser::{AStackType, ParseRepair, Parser, Recoverer};
 
 struct Panic;
 

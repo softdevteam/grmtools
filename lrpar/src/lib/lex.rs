@@ -34,11 +34,11 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
 
     /// Return the user input associated with a lexeme. Panics if the lexeme is invalid (i.e. was
     /// not produced by next()).
-    fn lexeme_str(&self, &Lexeme<StorageT>) -> &str;
+    fn lexeme_str(&self, lexeme: &Lexeme<StorageT>) -> &str;
 
     /// Return the line and column number of a given offset. Panics if the offset exceeds the known
     /// input.
-    fn offset_line_col(&self, usize) -> (usize, usize);
+    fn offset_line_col(&self, off: usize) -> (usize, usize);
 
     /// Return all this lexer's remaining lexemes or a `LexError` if there was a problem when lexing.
     fn all_lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError> {

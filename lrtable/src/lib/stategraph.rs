@@ -13,9 +13,7 @@ use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use try_from::TryFrom;
 
-use itemset::Itemset;
-use StIdx;
-use StIdxStorageT;
+use crate::{itemset::Itemset, StIdx, StIdxStorageT};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -243,12 +241,11 @@ pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
+    use crate::{pager::pager_stategraph, StIdx};
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Symbol
     };
-    use pager::pager_stategraph;
-    use StIdx;
 
     #[test]
     #[rustfmt::skip]

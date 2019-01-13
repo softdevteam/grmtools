@@ -2,6 +2,7 @@
 name = "nimbleparse"
 version = "0.1.0"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+edition = "2018"
 
 [[bin]]
 doc = false

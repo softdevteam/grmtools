@@ -21,10 +21,11 @@ use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
 use lrtable::{Action, StIdx, StIdxStorageT, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned, Zero};
 
-use cpctplus;
-use lex::{LexError, Lexeme, Lexer};
-use mf;
-use panic;
+use crate::{
+    cpctplus,
+    lex::{LexError, Lexeme, Lexer},
+    mf, panic
+};
 
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
@@ -526,11 +527,11 @@ where
 pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned, ActionT> {
     fn recover(
         &self,
-        Instant,
-        &Parser<StorageT, ActionT>,
-        usize,
-        &mut PStack,
-        &mut Vec<AStackType<ActionT, StorageT>>
+        finish_by: Instant,
+        parser: &Parser<StorageT, ActionT>,
+        in_laidx: usize,
+        in_pstack: &mut PStack,
+        astack: &mut Vec<AStackType<ActionT, StorageT>>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>);
 }
 
@@ -808,7 +809,7 @@ pub(crate) mod test {
     use regex::Regex;
 
     use super::*;
-    use lex::Lexeme;
+    use crate::lex::Lexeme;
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,

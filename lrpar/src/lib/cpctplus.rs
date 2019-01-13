@@ -18,10 +18,12 @@ use cfgrammar::TIdx;
 use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use astar::dijkstra;
-use lex::Lexeme;
-use mf::{apply_repairs, rank_cnds, simplify_repairs};
-use parser::{AStackType, ParseRepair, Parser, Recoverer};
+use super::{
+    astar::dijkstra,
+    lex::Lexeme,
+    mf::{apply_repairs, rank_cnds, simplify_repairs},
+    parser::{AStackType, ParseRepair, Parser, Recoverer}
+};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 
@@ -452,8 +454,10 @@ mod test {
     use cfgrammar::yacc::YaccGrammar;
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
-    use lex::Lexeme;
-    use parser::{test::do_parse, LexParseError, ParseRepair, RecoveryKind};
+    use crate::{
+        lex::Lexeme,
+        parser::{test::do_parse, LexParseError, ParseRepair, RecoveryKind}
+    };
 
     fn pp_repairs<StorageT: 'static + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,

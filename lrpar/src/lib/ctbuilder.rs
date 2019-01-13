@@ -32,7 +32,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use typename::TypeName;
 
-use RecoveryKind;
+use crate::RecoveryKind;
 
 const YACC_SUFFIX: &str = "_y";
 const ACTION_PREFIX: &str = "__gt_";

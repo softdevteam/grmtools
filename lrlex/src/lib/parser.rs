@@ -12,10 +12,10 @@ use std::hash::Hash;
 use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
-use lexer::{LexerDef, Rule};
-use LexBuildError;
-use LexBuildResult;
-use LexErrorKind;
+use crate::{
+    lexer::{LexerDef, Rule},
+    LexBuildError, LexBuildResult, LexErrorKind
+};
 
 pub struct LexParser<StorageT> {
     src: String,
@@ -179,8 +179,6 @@ pub fn parse_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigne
 #[cfg(test)]
 mod test {
     use super::*;
-    use LexBuildError;
-    use LexErrorKind;
 
     #[test]
     fn test_nooptions() {
