@@ -172,7 +172,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
 
 /// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
 /// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
-pub struct LRLexer<'a, StorageT: 'a> {
+pub struct LRLexer<'a, StorageT> {
     lexerdef: &'a LexerDef<StorageT>,
     s: &'a str,
     i: usize,
@@ -268,7 +268,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
 #[cfg(test)]
 mod test {
     use super::*;
-    use parser::parse_lex;
+    use crate::parser::parse_lex;
     use std::collections::HashMap;
 
     #[test]

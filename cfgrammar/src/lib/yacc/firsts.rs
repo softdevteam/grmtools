@@ -12,10 +12,8 @@ use std::marker::PhantomData;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use yacc::YaccGrammar;
-use RIdx;
-use Symbol;
-use TIdx;
+use super::YaccGrammar;
+use crate::{RIdx, Symbol, TIdx};
 
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
 /// grammar:
@@ -154,9 +152,11 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::YaccFirsts;
+    use super::{
+        super::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+        YaccFirsts
+    };
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
-    use yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
 
     fn has<StorageT: 'static + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,

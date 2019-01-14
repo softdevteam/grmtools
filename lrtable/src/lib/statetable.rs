@@ -20,12 +20,12 @@ use cfgrammar::{
     PIdx, RIdx, Symbol, TIdx
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use sparsevec::SparseVec;
 use vob::{IterSetBits, Vob};
 
-use stategraph::StateGraph;
-use StIdx;
-use StIdxStorageT;
+use crate::{stategraph::StateGraph, StIdx, StIdxStorageT};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
@@ -176,14 +176,12 @@ where
         // We only have usize-2 bits to store state IDs and rule indexes
         assert!(usize::from(sg.all_states_len()) < (usize::max_value() - 4));
         assert!(usize::from(grm.rules_len()) < (usize::max_value() - 4));
-        let mut actions: Vec<usize> = Vec::with_capacity(maxa);
-        actions.resize(maxa, 0);
-        let mut gotos: Vec<usize> = Vec::with_capacity(maxg);
+        let mut actions: Vec<usize> = vec![0; maxa];
 
         // Since 0 is reserved for the error type, and states are encoded by adding 1, we can only
         // store max_value - 1 states within the goto table
         assert!(usize::from(sg.all_states_len()) < (usize::from(StIdx::max_value()) - 1));
-        gotos.resize(maxg, 0);
+        let mut gotos: Vec<usize> = vec![0; maxg];
 
         // Store automatically resolved conflicts, so we can print them out later
         let mut reduce_reduce = Vec::new();
@@ -580,14 +578,14 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    use super::{Action, StateTable, StateTableError, StateTableErrorKind};
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         PIdx, Symbol, TIdx
     };
-    use pager::pager_stategraph;
     use std::collections::HashSet;
-    use StIdx;
+
+    use super::{Action, StateTable, StateTableError, StateTableErrorKind};
+    use crate::{pager::pager_stategraph, StIdx};
 
     #[test]
     #[rustfmt::skip]

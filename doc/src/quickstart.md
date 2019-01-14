@@ -45,10 +45,6 @@ into Rust code. We thus need to create a
 file which can process the lexer and grammar.  Our `build.rs` file thus looks as follows:
 
 ```rust
-extern crate cfgrammar;
-extern crate lrlex;
-extern crate lrpar;
-
 use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
 use lrpar::{CTParserBuilder, ActionKind};
@@ -186,19 +182,15 @@ that we can then call. The `src/main.rs` file below provides a simple
 Python-esque REPL to the user into which they can write calculator expressions:
 
 ```rust
-// The cfgrammar import will not be needed once the 2018 edition is stable.
-extern crate cfgrammar;
-// We import lrpar and lrlex with macros so that lrlex_mod! and lrpar_mod! are in scope.
-#[macro_use] extern crate lrpar;
-#[macro_use] extern crate lrlex;
-
 use std::io::{self, BufRead, Write};
+
+use lrlex::lrlex_mod;
+use lrpar::lrpar_mod;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
 // Using `lrpar_mod!` brings the lexer for `calc.l` into scope.
 lrpar_mod!(calc_y);
-
 
 fn main() {
     // We need to get a `LexerDef` for the `calc` language in order that we can lex input.

@@ -7,34 +7,19 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-extern crate bincode;
-extern crate cactus;
-extern crate cfgrammar;
-extern crate filetime;
-#[macro_use]
-extern crate indexmap;
-#[macro_use]
-extern crate lazy_static;
-extern crate lrtable;
-extern crate num_traits;
-extern crate packedvec;
-extern crate regex;
-extern crate rmp_serde as rmps;
-extern crate serde;
-extern crate typename;
-extern crate vob;
-
 mod astar;
 mod cpctplus;
 pub mod ctbuilder;
 pub mod lex;
-pub use lex::{LexError, Lexeme, Lexer};
+pub use crate::lex::{LexError, Lexeme, Lexer};
 mod panic;
 pub mod parser;
-pub use parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind};
+pub use crate::parser::{
+    LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind
+};
 mod mf;
 
-pub use ctbuilder::CTParserBuilder;
+pub use crate::ctbuilder::CTParserBuilder;
 
 /// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
 /// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.

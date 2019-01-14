@@ -12,7 +12,7 @@ use std::{fmt::Debug, hash::Hash, time::Instant};
 use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use parser::{AStackType, ParseRepair, Parser, Recoverer};
+use crate::parser::{AStackType, ParseRepair, Parser, Recoverer};
 
 struct Panic;
 
@@ -22,7 +22,7 @@ pub(crate) fn recoverer<
     ActionT: 'static
 >(
     _: &'a Parser<StorageT, ActionT>
-) -> Box<Recoverer<StorageT, ActionT> + 'a>
+) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>

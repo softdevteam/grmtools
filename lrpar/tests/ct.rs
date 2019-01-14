@@ -7,9 +7,6 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-extern crate lrpar;
-extern crate tempfile;
-
 use std::{
     fs::{self, create_dir, read_dir, remove_dir_all, remove_file},
     panic::{catch_unwind, resume_unwind, UnwindSafe},
@@ -20,7 +17,7 @@ use std::{
     time::Duration
 };
 
-use self::tempfile::TempDir;
+use tempfile::TempDir;
 
 // How long to wait, in ms, when spinning for DUMMY_SPINLOCK to become false?
 const SPIN_WAIT: u64 = 250;
@@ -113,6 +110,7 @@ fn reset_dummy(tdir: &TempDir) {
 name = \"dummytest\"
 version = \"0.1.0\"
 authors = [\"test\"]
+edition = \"2018\"
 
 [build-dependencies]
 cfgrammar = {{ path = \"{repop}/cfgrammar\" }}
@@ -137,10 +135,6 @@ fn init_simple(tdir: &TempDir) {
     fs::write(
         p,
         "
-extern crate cfgrammar;
-extern crate lrlex;
-extern crate lrpar;
-
 use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 use lrpar::CTParserBuilder;
 
@@ -160,8 +154,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     fs::write(
         p,
         "
-extern crate cfgrammar;
-#[macro_use] extern crate lrpar;
+use lrpar::lrpar_mod;
 
 lrpar_mod!(grm_y);
 
@@ -180,10 +173,6 @@ fn init_generic(tdir: &TempDir, yacckind: &str, grm: &str, lex: &str, main: &str
         p,
         &format!(
             "
-extern crate cfgrammar;
-extern crate lrlex;
-extern crate lrpar;
-
 use cfgrammar::yacc::{{YaccKind, YaccOriginalActionKind}};
 use lrlex::LexerBuilder;
 use lrpar::CTParserBuilder;
@@ -221,9 +210,9 @@ fn main() -> Result<(), Box<std::error::Error>> {{
     fs::write(
         p,
         &format!(
-            "extern crate cfgrammar;
-#[macro_use] extern crate lrpar;
-#[macro_use] extern crate lrlex;
+            "
+use lrlex::lrlex_mod;
+use lrpar::lrpar_mod;
 
 lrlex_mod!(lex_l);
 lrpar_mod!(grm_y);

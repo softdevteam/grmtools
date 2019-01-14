@@ -16,10 +16,6 @@ lexer). We need to add a `build.rs` file to our project which tells `lrpar` to
 statically compile the lexer and parser files:
 
 ```rust
-extern crate cfgrammar;
-extern crate lrlex;
-extern crate lrpar;
-
 use lrlex::LexerBuilder;
 use lrpar::{CTParserBuilder, ActionKind};
 
@@ -78,11 +74,9 @@ fn parse_int(s: &str) -> u64 {
 A simple `src/main.rs` is as follows:
 
 ```rust
-// The cfgrammar import will not be needed once the 2018 edition is stable.
-extern crate cfgrammar;
 // We import lrpar and lrlex with macros so that lrlex_mod! and lrpar_mod! are in scope.
-#[macro_use] extern crate lrpar;
-#[macro_use] extern crate lrlex;
+use lrlex::lrlex_mod;
+use lrpar::lrpar_mod;
 
 use std::io::{self, BufRead, Write};
 

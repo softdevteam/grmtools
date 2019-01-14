@@ -15,6 +15,8 @@ use std::{
 use cfgrammar::{yacc::YaccGrammar, PIdx, SIdx, Symbol};
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use vob::Vob;
 
 use cfgrammar::yacc::firsts::YaccFirsts;
@@ -164,13 +166,14 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::Itemset;
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         SIdx, Symbol
     };
-    use stategraph::state_exists;
     use vob::Vob;
+
+    use super::Itemset;
+    use crate::stategraph::state_exists;
 
     #[test]
     #[rustfmt::skip]

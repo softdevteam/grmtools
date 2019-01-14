@@ -19,13 +19,13 @@ use std::{
     path::{Path, PathBuf}
 };
 
+use lazy_static::lazy_static;
 use num_traits::{PrimInt, Unsigned};
 use regex::Regex;
 use try_from::TryFrom;
 use typename::TypeName;
 
-use lexer::LexerDef;
-use parser::parse_lex;
+use crate::{lexer::LexerDef, parser::parse_lex};
 
 const LEX_SUFFIX: &str = "_l";
 const LEX_FILE_EXT: &str = "l";
@@ -94,7 +94,7 @@ where
     pub fn process_file_in_src(
         self,
         srcp: &str
-    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<Error>> {
+    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>> {
         let mut inp = current_dir()?;
         inp.push("src");
         inp.push(srcp);
@@ -120,7 +120,7 @@ where
         self,
         inp: P,
         outp: Q
-    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<Error>>
+    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>>
     where
         P: AsRef<Path>,
         Q: AsRef<Path>

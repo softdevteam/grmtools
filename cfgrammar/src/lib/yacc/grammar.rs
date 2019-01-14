@@ -10,24 +10,22 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, fmt};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use vob::Vob;
 
-use super::YaccKind;
-use yacc::{firsts::YaccFirsts, follows::YaccFollows, parser::YaccParser};
-use PIdx;
-use RIdx;
-use SIdx;
-use Symbol;
-use TIdx;
+use super::{
+    ast::{self, GrammarValidationError},
+    firsts::YaccFirsts,
+    follows::YaccFollows,
+    parser::{YaccParser, YaccParserError},
+    YaccKind
+};
+use crate::{PIdx, RIdx, SIdx, Symbol, TIdx};
 
 const START_RULE: &str = "^";
 const IMPLICIT_RULE: &str = "~";
 const IMPLICIT_START_RULE: &str = "^~";
-
-use yacc::{
-    ast::{self, GrammarValidationError},
-    parser::YaccParserError
-};
 
 pub type PrecedenceLevel = u64;
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -618,7 +616,7 @@ where
 /// C: [x]
 /// D: [y, x] or [y, z]
 /// ```
-pub struct SentenceGenerator<'a, StorageT: 'a> {
+pub struct SentenceGenerator<'a, StorageT> {
     grm: &'a YaccGrammar<StorageT>,
     rule_min_costs: RefCell<Option<Vec<u16>>>,
     rule_max_costs: RefCell<Option<Vec<u16>>>,
@@ -1016,13 +1014,12 @@ impl fmt::Display for YaccGrammarError {
 
 #[cfg(test)]
 mod test {
-    use super::{rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE};
+    use super::{
+        super::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind},
+        rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE
+    };
+    use crate::{PIdx, RIdx, Symbol, TIdx};
     use std::collections::HashMap;
-    use yacc::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind};
-    use PIdx;
-    use RIdx;
-    use Symbol;
-    use TIdx;
 
     #[test]
     fn test_minimal() {

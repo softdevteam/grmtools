@@ -13,6 +13,8 @@
 use std::mem::size_of;
 
 use num_traits::{self, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 macro_rules! IdxNewtype {
     ($(#[$attr:meta])* $n: ident) => {

@@ -7,28 +7,22 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-extern crate cfgrammar;
-extern crate fnv;
-extern crate num_traits;
-#[cfg(feature = "serde")]
-#[macro_use]
-extern crate serde;
-extern crate sparsevec;
-extern crate try_from;
-extern crate vob;
-
 use std::{hash::Hash, mem::size_of};
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 mod itemset;
 mod pager;
 mod stategraph;
 pub mod statetable;
 
+pub use crate::{
+    stategraph::StateGraph,
+    statetable::{Action, StateTable, StateTableError, StateTableErrorKind}
+};
 use cfgrammar::yacc::YaccGrammar;
-pub use stategraph::StateGraph;
-pub use statetable::{Action, StateTable, StateTableError, StateTableErrorKind};
 
 /// The type of the inner value of an StIdx.
 pub type StIdxStorageT = u16;

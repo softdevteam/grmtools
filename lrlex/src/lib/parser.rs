@@ -12,10 +12,10 @@ use std::hash::Hash;
 use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
-use lexer::{LexerDef, Rule};
-use LexBuildError;
-use LexBuildResult;
-use LexErrorKind;
+use crate::{
+    lexer::{LexerDef, Rule},
+    LexBuildError, LexBuildResult, LexErrorKind
+};
 
 pub struct LexParser<StorageT> {
     src: String,
@@ -110,7 +110,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let line_len = self.src[i..]
             .find(|c| c == '\n')
             .unwrap_or(self.src.len() - i);
-        let line = self.src[i..i + line_len].trim_right();
+        let line = self.src[i..i + line_len].trim_end();
         let rspace = match line.rfind(' ') {
             Some(j) => j,
             None => return Err(self.mk_error(LexErrorKind::MissingSpace, i))
@@ -137,7 +137,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             }
         }
 
-        let re_str = line[..rspace].trim_right().to_string();
+        let re_str = line[..rspace].trim_end().to_string();
         let rules_len = self.rules.len();
         let tok_id = StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
@@ -179,8 +179,6 @@ pub fn parse_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigne
 #[cfg(test)]
 mod test {
     use super::*;
-    use LexBuildError;
-    use LexErrorKind;
 
     #[test]
     fn test_nooptions() {

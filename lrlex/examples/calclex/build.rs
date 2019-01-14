@@ -7,8 +7,6 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
-extern crate lrlex;
-
 use lrlex::LexerBuilder;
 
 fn main() {

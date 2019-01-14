@@ -25,9 +25,11 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use packedvec::PackedVec;
 use vob::Vob;
 
-use astar::astar_all;
-use lex::Lexeme;
-use parser::{AStackType, ParseRepair, Parser, Recoverer};
+use crate::{
+    astar::astar_all,
+    lex::Lexeme,
+    parser::{AStackType, ParseRepair, Parser, Recoverer}
+};
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
 const TRY_PARSE_AT_MOST: usize = 250;
@@ -123,7 +125,7 @@ pub(crate) fn recoverer<
     ActionT: 'static
 >(
     parser: &'a Parser<StorageT, ActionT>
-) -> Box<Recoverer<StorageT, ActionT> + 'a>
+) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -411,7 +413,7 @@ where
                         }
                     }
                     for c in vc.vals() {
-                        for mut pc in traverse(c) {
+                        for pc in traverse(c) {
                             out.push(pc);
                         }
                     }
@@ -864,19 +866,20 @@ where
 mod test {
     use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-    use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned, Zero};
-
     use cactus::Cactus;
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Symbol
     };
     use lrtable::{from_yacc, Minimiser, StIdx, StIdxStorageT};
+    use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned, Zero};
 
-    use lex::Lexeme;
-    use parser::{
-        test::{do_parse, do_parse_with_costs},
-        LexParseError, ParseRepair, RecoveryKind
+    use crate::{
+        lex::Lexeme,
+        parser::{
+            test::{do_parse, do_parse_with_costs},
+            LexParseError, ParseRepair, RecoveryKind
+        }
     };
 
     use super::{ends_with_parse_at_least_shifts, Dist, Repair, RepairMerge, PARSE_AT_LEAST};

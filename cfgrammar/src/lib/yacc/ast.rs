@@ -15,7 +15,7 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 
-use yacc::Precedence;
+use super::Precedence;
 
 /// An AST representing a grammar. This is built up gradually: when it is finished, the
 /// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
@@ -252,8 +252,10 @@ impl GrammarAST {
 
 #[cfg(test)]
 mod test {
-    use super::{GrammarAST, GrammarValidationError, GrammarValidationErrorKind, Symbol};
-    use yacc::{AssocKind, Precedence};
+    use super::{
+        super::{AssocKind, Precedence},
+        GrammarAST, GrammarValidationError, GrammarValidationErrorKind, Symbol
+    };
 
     fn rule(n: &str) -> Symbol {
         Symbol::Rule(n.to_string())
