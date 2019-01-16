@@ -54,3 +54,8 @@ First stable release.
 * `lrlex` no longer tries to create Rust-level identifiers for tokens whose
   names can't be valid Rust identifiers (which led to compile-time syntax
   errors in the generated Rust code).
+
+
+# grmtools 0.2.1 (2019-01-16)
+
+* Documentation fixes.
