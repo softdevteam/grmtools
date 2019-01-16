@@ -425,6 +425,7 @@ where
     use cfgrammar::RIdx;
     use std::vec;
 
+    #[allow(dead_code)]
     pub fn parse(lexer: &mut Lexer<{storaget}>)
           -> (Option<{actiont}>, Vec<LexParseError<{storaget}>>)
     {{",
@@ -444,7 +445,7 @@ where
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
-                    "    pub fn parse(lexer: &mut Lexer<{storaget}>)
+                    "    #[allow(dead_code)]\n    pub fn parse(lexer: &mut Lexer<{storaget}>)
           -> Vec<LexParseError<{storaget}>>
     {{",
                     storaget = StorageT::type_name()
