@@ -3,8 +3,9 @@
 `lrpar` provides a Yacc-compatible parser (where grammars can be generated at
 compile-time or run-time). It can take in traditional `.y` files and convert
 them into an idiomatic Rust parser. More details can be found in the [grmtools
-book](https://softdevteam.github.io/grmtools/master/book) which includes a
-quickstart guide.
+book](https://softdevteam.github.io/grmtools/master/book); the
+[quickstart guide](https://softdevteam.github.io/grmtools/master/book/quickstart.html)
+is a good place to start.
 
 
 ## Example
@@ -16,12 +17,13 @@ lexer). We need to add a `build.rs` file to our project which tells `lrpar` to
 statically compile the lexer and parser files:
 
 ```rust
+use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
-use lrpar::{CTParserBuilder, ActionKind};
+use lrpar::CTParserBuilder;
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
-        .yacckind(YaccKind::Original(YaccOriginalActionKind::UserAction))
+        .yacckind(YaccKind::Grmtools)
         .process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
@@ -35,10 +37,10 @@ where `src/calc.l` is as follows:
 ```
 %%
 [0-9]+ "INT"
-\+ "PLUS"
-\* "MUL"
-\( "LBRACK"
-\) "RBRACK"
+\+ "+"
+\* "*"
+\( "("
+\) ")"
 [\t ]+ ;
 ```
 
@@ -46,45 +48,57 @@ and `src/calc.y` is as follows:
 
 ```
 %start Expr
-// Define the Rust type that is to be returned by the actions.
-%actiontype u64
+%avoid_insert "INT"
 %%
-Expr: Term 'PLUS' Expr { $1 + $3 }
+Expr -> Result<u64, ()>:
+      Term '+' Expr { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
-Term: Factor 'MUL' Term { $1 * $3 }
+Term -> Result<u64, ()>:
+      Factor '*' Term { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
-Factor: 'LBRACK' Expr 'RBRACK' { $2 }
-      | 'INT' { parse_int($lexer.lexeme_str(&$1.unwrap())) }
-      ;
+Factor -> Result<u64, ()>:
+      '(' Expr ')' { $2 }
+    | 'INT'
+      {
+          let v = $1.map_err(|_| ())?;
+          parse_int($lexer.lexeme_str(&v))
+      }
+    ;
 %%
 // Any functions here are in scope for all the grammar actions above.
 
-fn parse_int(s: &str) -> u64 {
+fn parse_int(s: &str) -> Result<u64, ()> {
     match s.parse::<u64>() {
-        Ok(val) => val as u64,
-        Err(_) => panic!("{} cannot be represented as a u64", s)
+        Ok(val) => Ok(val as u64),
+        Err(_) => {
+            eprintln!("{} cannot be represented as a u64", s);
+            Err(())
+        }
     }
 }
 ```
 
+Because we specified that our Yacc file is in `Grmtools` format, each Rule has a
+separate Rust type to which all its functions conform (in this case, all the
+rules have the same type, but that's not a requirement).
+
 A simple `src/main.rs` is as follows:
 
 ```rust
-// We import lrpar and lrlex with macros so that lrlex_mod! and lrpar_mod! are in scope.
-use lrlex::lrlex_mod;
-use lrpar::lrpar_mod;
 
 use std::io::{self, BufRead, Write};
+
+use lrlex::lrlex_mod;
+use lrpar::lrpar_mod;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
 // Using `lrpar_mod!` brings the lexer for `calc.l` into scope.
 lrpar_mod!(calc_y);
-
 
 fn main() {
     // We need to get a `LexerDef` for the `calc` language in order that we can lex input.
@@ -106,7 +120,7 @@ fn main() {
                     println!("{}", e.pp(&lexer, &calc_y::token_epp));
                 }
                 match res {
-                    Some(r) => println!("Result: {}", r),
+                    Some(Ok(r)) => println!("Result: {}", r),
                     _ => eprintln!("Unable to evaluate expression.")
                 }
             }
@@ -138,20 +152,20 @@ Parsing error at line 1 column 5. Repair sequences found:
 Result: 5
 >>> 2 + 3 3
 Parsing error at line 1 column 7. Repair sequences found:
-   1: Delete 3
-   2: Insert PLUS
-   3: Insert MUL
-Result: 5
+   1: Insert *
+   2: Insert +
+   3: Delete 3
+Result: 11
 >>> 2 + 3 4 5
 Parsing error at line 1 column 7. Repair sequences found:
-   1: Insert MUL, Delete 4
-   2: Insert PLUS, Delete 4
+   1: Insert *, Delete 4
+   2: Insert +, Delete 4
    3: Delete 4, Delete 5
-   4: Insert MUL, Shift 4, Delete 5
-   5: Insert MUL, Shift 4, Insert PLUS
-   6: Insert MUL, Shift 4, Insert MUL
-   7: Insert PLUS, Shift 4, Delete 5
-   8: Insert PLUS, Shift 4, Insert PLUS
-   9: Insert PLUS, Shift 4, Insert MUL
+   4: Insert +, Shift 4, Delete 5
+   5: Insert +, Shift 4, Insert +
+   6: Insert *, Shift 4, Delete 5
+   7: Insert *, Shift 4, Insert *
+   8: Insert *, Shift 4, Insert +
+   9: Insert +, Shift 4, Insert *
 Result: 17
 ```
