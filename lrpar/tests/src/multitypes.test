@@ -1,0 +1,18 @@
+name: Test multiple types
+yacckind: Grmtools
+grammar: |
+    %start S
+    %%
+    S -> Vec<A>:
+        A { vec![$1] }
+        | S A {
+            $1.push($2);
+            $1
+        }
+        ;
+    A -> A: 'a' { A } ;
+    %%
+    pub struct A;
+lexer: |
+    %%
+    a 'a'

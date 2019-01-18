@@ -223,6 +223,7 @@ impl<StorageT: Copy + Debug + Eq + TypeName> LexerDef<StorageT> {
         outs.push_str(&format!(
             "use lrlex::{{LexerDef, Rule}};
 
+#[allow(dead_code)]
 pub fn lexerdef() -> LexerDef<{}> {{
     let rules = vec![",
             StorageT::type_name()

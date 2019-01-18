@@ -1,0 +1,10 @@
+name: Test %epp string
+yacckind: Original(YaccOriginalActionKind::GenericParseTree)
+grammar: |
+    %start A
+    %epp a '"\"a"'
+    %%
+    A : 'a';
+lexer: |
+    %%
+    a 'a'

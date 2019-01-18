@@ -4,10 +4,11 @@ members=[
     "lrlex",
     "lrlex/examples/calclex",
     "lrpar",
+    "lrpar/tests",
     "lrpar/examples/calc_parsetree",
     "lrpar/examples/calc_actions",
     "lrtable",
-    "nimbleparse"
+    "nimbleparse",
 ]
 
 [profile.release]
