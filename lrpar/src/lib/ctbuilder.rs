@@ -194,9 +194,13 @@ where
         let mut inp = current_dir()?;
         inp.push("src");
         inp.push(srcp);
-        let mut outd = PathBuf::new();
-        outd.push(var("OUT_DIR").unwrap());
-        self.process_file(inp, outd)
+        let mut leaf = inp.file_stem().unwrap().to_str().unwrap().to_owned();
+        leaf.push_str(&YACC_SUFFIX);
+        let mut outp = PathBuf::new();
+        outp.push(var("OUT_DIR").unwrap());
+        outp.push(leaf);
+        outp.set_extension(RUST_FILE_EXT);
+        self.process_file(inp, outp)
     }
 
     /// Set the `YaccKind` for this parser to `ak`.
@@ -229,8 +233,10 @@ where
         None
     }
 
-    /// Statically compile the Yacc file `inp` into Rust, placing the output file(s) into
-    /// the directory `outd`. The latter defines a module with the following functions:
+    /// Statically compile the Yacc file `inp` into Rust, placing the output into the file `outp`.
+    /// Note that three additional files will be created with the same name as `outp` but with the
+    /// extensions `grm`, `sgraph`, and `stable`, overwriting any existing files with those names.
+    /// `outp` defines a module with the following functions:
     ///
     /// ```text
     ///    fn parse(lexemes: &Vec<Lexeme<StorageT>>)
@@ -252,7 +258,7 @@ where
     pub fn process_file<P, Q>(
         &mut self,
         inp: P,
-        outd: Q
+        outp: Q
     ) -> Result<HashMap<String, StorageT>, Box<dyn Error>>
     where
         P: AsRef<Path>,
@@ -275,19 +281,9 @@ where
 
         // out_base is the base filename for the output (e.g. /path/to/target/out/grm_y) to which
         // we will write filenames with various extensions below.
-        let mut outp_base = outd.as_ref().to_path_buf();
-        let mut leaf = inp
-            .as_ref()
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
-        leaf.push_str(YACC_SUFFIX);
-        outp_base.push(leaf);
+        let mut outp_base = outp.as_ref().to_path_buf().clone();
+        outp_base.set_extension("");
 
-        let mut outp_rs = outp_base.clone();
-        outp_rs.set_extension(RUST_FILE_EXT);
         // We don't need to go through the full rigmarole of generating an output file if all of
         // the following are true: the output file exists; it is newer than the input file; and the
         // cache hasn't changed. The last of these might be surprising, but it's vital: we don't
@@ -296,11 +292,11 @@ where
         // and lrpar would get out of sync, so we have to play it safe and regenerate in such
         // cases.
         if let Ok(ref inmd) = fs::metadata(&inp) {
-            if let Ok(ref out_rs_md) = fs::metadata(&outp_rs) {
+            if let Ok(ref out_rs_md) = fs::metadata(&outp) {
                 if FileTime::from_last_modification_time(out_rs_md)
                     > FileTime::from_last_modification_time(inmd)
                 {
-                    if let Ok(outc) = read_to_string(&outp_rs) {
+                    if let Ok(outc) = read_to_string(&outp) {
                         if outc.contains(&cache) {
                             return Ok(rule_ids);
                         }
@@ -315,7 +311,7 @@ where
         // compilation, leading to weird errors. We therefore delete /out/blah.rs at this point,
         // which means, at worse, the user gets a "file not found" error from rustc (which is less
         // confusing than the alternatives).
-        fs::remove_file(&outp_rs).ok();
+        fs::remove_file(&outp).ok();
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
         if stable.conflicts().is_some() && self.error_on_conflicts {
@@ -327,7 +323,15 @@ where
         }
 
         let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
-        self.output_file(&grm, &sgraph, &stable, mod_name, outp_base, outp_rs, &cache)?;
+        self.output_file(
+            &grm,
+            &sgraph,
+            &stable,
+            mod_name,
+            outp_base,
+            outp.as_ref().to_path_buf(),
+            &cache
+        )?;
         if stable.conflicts().is_some() {
             self.conflicts = Some((grm, sgraph, stable));
         }

@@ -44,16 +44,19 @@ fn main() -> Result<(), Box<std::error::Error>> {
             fs::write(&pl, &lex).unwrap();
 
             // Build parser and lexer
+            let mut outp = PathBuf::from(&out_dir);
+            outp.push(format!("{}_y", base));
+            outp.set_extension("rs");
             let lex_rule_ids_map = CTParserBuilder::new()
                 .yacckind(yacckind)
-                .process_file(pg.to_str().unwrap(), &out_dir)?;
+                .process_file(pg.to_str().unwrap(), &outp)?;
 
-            let mut outpl = PathBuf::from(&out_dir);
-            outpl.push(format!("{}_l", base));
-            outpl.set_extension("rs");
+            let mut outl = PathBuf::from(&out_dir);
+            outl.push(format!("{}_l", base));
+            outl.set_extension("rs");
             LexerBuilder::new()
                 .rule_ids_map(lex_rule_ids_map)
-                .process_file(pl.to_str().unwrap(), &outpl)?;
+                .process_file(pl.to_str().unwrap(), &outl)?;
         }
     }
     Ok(())
