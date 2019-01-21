@@ -113,8 +113,8 @@ where
         self.process_file(inp, outp)
     }
 
-    /// Statically compile the `.l` file `inp` into Rust, placing the output into `outp`. The
-    /// latter defines a module with a function `lexerdef()`, which returns a
+    /// Statically compile the `.l` file `inp` into Rust, placing the output into the file `outp`.
+    /// The latter defines a module with a function `lexerdef()`, which returns a
     /// [`LexerDef`](struct.LexerDef.html) that can then be used as normal.
     pub fn process_file<P, Q>(
         self,
