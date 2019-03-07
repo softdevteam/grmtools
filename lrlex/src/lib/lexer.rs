@@ -369,6 +369,34 @@ if 'IF'
     }
 
     #[test]
+    fn test_multibyte() {
+        let src = "%%
+[a❤]+ 'ID'
+[ ] ;"
+            .to_string();
+        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut map = HashMap::new();
+        map.insert("ID", 0u8);
+        assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
+
+        let mut lexer = lexerdef.lexer("a ❤ a");
+        let lexemes = lexer.all_lexemes().unwrap();
+        assert_eq!(lexemes.len(), 3);
+        let lex1 = lexemes[0];
+        assert_eq!(lex1.start(), 0);
+        assert_eq!(lex1.len(), Some(1));
+        assert_eq!(lexer.lexeme_str(&lex1), "a");
+        let lex2 = lexemes[1];
+        assert_eq!(lex2.start(), 2);
+        assert_eq!(lex2.len(), Some(3));
+        assert_eq!(lexer.lexeme_str(&lex2), "❤");
+        let lex3 = lexemes[2];
+        assert_eq!(lex3.start(), 6);
+        assert_eq!(lex3.len(), Some(1));
+        assert_eq!(lexer.lexeme_str(&lex3), "a");
+    }
+
+    #[test]
     fn test_line_col() {
         let src = "%%
 [a-z]+ 'ID'
