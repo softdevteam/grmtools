@@ -259,6 +259,30 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         )
     }
 
+    fn surrounding_line_str(&self, i: usize) -> &str {
+        fn surrounding_line_off<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
+            if i > lexer.s.len() {
+                panic!("Offset {} exceeds known input length {}", i, lexer.s.len());
+            }
+
+            if lexer.newlines.is_empty() {
+                return (0, lexer.s.len());
+            } else if i < lexer.newlines[0] {
+                return (0, lexer.newlines[0] - 1);
+            }
+
+            for j in 0..lexer.newlines.len() - 1 {
+                if lexer.newlines[j + 1] > i {
+                    return (lexer.newlines[j], lexer.newlines[j + 1] - 1);
+                }
+            }
+            (lexer.newlines[lexer.newlines.len() - 1], lexer.s.len())
+        }
+
+        let (st, en) = surrounding_line_off(self, i);
+        &self.s[st..en]
+    }
+
     fn lexeme_str(&self, l: &Lexeme<StorageT>) -> &str {
         let st = l.start();
         &self.s[st..l.end().unwrap_or(st)]
@@ -353,11 +377,13 @@ if 'IF'
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.offset_line_col(lexemes[1].start()), (1, 3));
+        assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "a b c");
 
         let mut lexer = lexerdef.lexer("a b c\n");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.offset_line_col(lexemes[1].start()), (1, 3));
+        assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "a b c");
 
         let mut lexer = lexerdef.lexer(" a\nb\n  c d");
         let lexemes = lexer.all_lexemes().unwrap();
@@ -366,6 +392,10 @@ if 'IF'
         assert_eq!(lexer.offset_line_col(lexemes[1].start()), (2, 1));
         assert_eq!(lexer.offset_line_col(lexemes[2].start()), (3, 3));
         assert_eq!(lexer.offset_line_col(lexemes[3].start()), (3, 5));
+        assert_eq!(lexer.surrounding_line_str(lexemes[0].start()), " a");
+        assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "b");
+        assert_eq!(lexer.surrounding_line_str(lexemes[2].start()), "  c d");
+        assert_eq!(lexer.surrounding_line_str(lexemes[3].start()), "  c d");
     }
 
     #[test]

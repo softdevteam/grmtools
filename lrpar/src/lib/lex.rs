@@ -40,6 +40,10 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// input.
     fn offset_line_col(&self, off: usize) -> (usize, usize);
 
+    /// Return the line containing the byte at position `off`. Panics if the offset exceeds the
+    /// known input.
+    fn surrounding_line_str(&self, off: usize) -> &str;
+
     /// Return all this lexer's remaining lexemes or a `LexError` if there was a problem when lexing.
     fn all_lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
         let mut lxs = Vec::new();
