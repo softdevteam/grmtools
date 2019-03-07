@@ -580,11 +580,11 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     ) -> String {
         match self {
             LexParseError::LexError(e) => {
-                let (line, col) = lexer.offset_line_col(e.idx);
+                let (line, col) = lexer.line_col(e.idx);
                 format!("Lexing error at line {} column {}.", line, col)
             }
             LexParseError::ParseError(e) => {
-                let (line, col) = lexer.offset_line_col(e.lexeme().start());
+                let (line, col) = lexer.line_col(e.lexeme().start());
                 let mut out = format!("Parsing error at line {} column {}.", line, col);
                 let repairs_len = e.repairs().len();
                 if repairs_len == 0 {
@@ -892,7 +892,7 @@ pub(crate) mod test {
             None
         }
 
-        fn offset_line_col(&self, _: usize) -> (usize, usize) {
+        fn line_col(&self, _: usize) -> (usize, usize) {
             unreachable!();
         }
 
