@@ -896,6 +896,10 @@ pub(crate) mod test {
             unreachable!();
         }
 
+        fn surrounding_line_str(&self, _: usize) -> &str {
+            unreachable!();
+        }
+
         fn lexeme_str(&self, _: &Lexeme<StorageT>) -> &str {
             unreachable!();
         }
@@ -975,7 +979,7 @@ L: 'ID'
         check_parse_output(
             &lexs, &grms, "", "S
  L
-",
+"
         );
 
         check_parse_output(
