@@ -2,31 +2,18 @@ name: Test NoAction using the calculator grammar
 yacckind: Original(YaccOriginalActionKind::NoAction)
 grammar: |
     %start Expr
-    %actiontype Result<u64, ()>
     %avoid_insert 'INT'
     %%
-    Expr: Term '+' Expr { Ok($1? + $3?) }
-        | Term { $1 }
+    Expr: Term '+' Expr
+        | Term
         ;
 
-    Term: Factor '*' Term { Ok($1? * $3?) }
-        | Factor { $1 }
+    Term: Factor '*' Term
+        | Factor
         ;
 
-    Factor: '(' Expr ')' { $2 }
-          | 'INT' {
-                let l = $1.map_err(|_| ())?;
-                match $lexer.lexeme_str(&l).parse::<u64>() {
-                    Ok(v) => Ok(v),
-                    Err(_) => {
-                        let (_, col) = $lexer.offset_line_col(l.start());
-                        eprintln!(\"Error at column {}: '{}' cannot be represented as a u64\",
-                                  col,
-                                  $lexer.lexeme_str(&l));
-                        Err(())
-                    }
-                }
-            }
+    Factor: '(' Expr ')'
+          | 'INT'
           ;
 
 lexer: |
