@@ -36,9 +36,10 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// not produced by next()).
     fn lexeme_str(&self, lexeme: &Lexeme<StorageT>) -> &str;
 
-    /// Return the line and column number of a given offset. Panics if the offset exceeds the known
-    /// input.
-    fn offset_line_col(&self, off: usize) -> (usize, usize);
+    /// Return the line and column number of the byte at position `off`. Note that the column
+    /// number is a character -- not a byte! -- offset, relative to the beginning of the line.
+    /// Panics if the offset exceeds the known input.
+    fn line_col(&self, off: usize) -> (usize, usize);
 
     /// Return the line containing the byte at position `off`. Panics if the offset exceeds the
     /// known input.
