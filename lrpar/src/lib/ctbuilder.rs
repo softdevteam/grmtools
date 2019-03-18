@@ -718,11 +718,13 @@ where
             // element from the argument vector (e.g. $1 is replaced by args[0]). At
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
-                "    fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
+                "    // {rulename}
+    fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
                      {prefix}lexer: &Lexer<{storaget}>,
                      {args})
                   -> {actiont} {{\n",
                 usize::from(pidx),
+                rulename = grm.rule_name(grm.prod_to_rule(pidx)),
                 storaget = StorageT::type_name(),
                 prefix = ACTION_PREFIX,
                 actiont = grm.actiontype(grm.prod_to_rule(pidx)).as_ref().unwrap(),
