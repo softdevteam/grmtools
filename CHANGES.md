@@ -59,3 +59,26 @@ First stable release.
 # grmtools 0.2.1 (2019-01-16)
 
 * Documentation fixes.
+
+
+# grmtools 0.3.0 (2019-03-25)
+
+## Breaking changes
+
+* Have the `process_file` functions in both `LexerBuilder` and
+  `CTParserBuilder` place output into a named file (whereas previously
+  `CTParserBuilder` expected a directory name).
+
+* Rename `offset_line_col` to `line_col` *and* have the latter return character
+  offsets (whereas before it returned byte offsets). This makes the resulting
+  numbers reported to humans much less confusing when multi-byte UTF-8
+  characters are used.
+
+## Minor changes
+
+* Add `surrounding_line_str` helper function to lexers. This is helpful when
+  printing out error messages to users.
+
+* Add a comment with rule names when generating grammars at compile-time. Thus
+  if user action code contains an error, it's much easier to relate this to the
+  appropriate point in the `.y` file.
