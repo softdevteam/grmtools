@@ -4,7 +4,7 @@ members=[
     "lrlex",
     "lrlex/examples/calclex",
     "lrpar",
-    "lrpar/tests",
+    "lrpar/cttests",
     "lrpar/examples/calc_parsetree",
     "lrpar/examples/calc_actions",
     "lrtable",
