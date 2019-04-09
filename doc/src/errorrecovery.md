@@ -70,7 +70,7 @@ Factor -> u64:
 
 fn parse_int(s: &str) -> u64 {
     match s.parse::<u64>() {
-        Ok(val) => val as u64,
+        Ok(val) => val,
         Err(_) => panic!("{} cannot be represented as a u64", s)
     }
 }
@@ -184,7 +184,7 @@ Factor -> Result<u64, ()>:
 
 fn parse_int(s: &str) -> u64 {
     match s.parse::<u64>() {
-        Ok(val) => val as u64,
+        Ok(val) => val,
         Err(_) => panic!("{} cannot be represented as a u64", s)
     }
 }

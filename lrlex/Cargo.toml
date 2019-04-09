@@ -25,5 +25,5 @@ lazy_static = "1.2"
 lrpar = { path = "../lrpar", version = "0.3" }
 regex = "1.0"
 num-traits = "0.2"
-try_from = "0.2"
+try_from = "0.3"
 typename = "0.1"
