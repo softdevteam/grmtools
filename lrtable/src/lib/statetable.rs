@@ -208,8 +208,8 @@ where
                         // to as_ is safe.
                         TIdx(tidx.as_())
                     );
-                    state_actions.set(off as usize, true);
-                    match StateTable::decode(actions[off as usize]) {
+                    state_actions.set(off, true);
+                    match StateTable::decode(actions[off]) {
                         Action::Reduce(r_pidx) => {
                             if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
                             {
@@ -222,7 +222,7 @@ where
                             // of the earlier production in the grammar.
                             if pidx < r_pidx {
                                 reduce_reduce.push((pidx, r_pidx, stidx));
-                                actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
+                                actions[off] = StateTable::encode(Action::Reduce(pidx));
                             } else if pidx > r_pidx {
                                 reduce_reduce.push((r_pidx, pidx, stidx));
                             }
@@ -238,9 +238,9 @@ where
                             {
                                 assert!(final_state.is_none());
                                 final_state = Some(stidx);
-                                actions[off as usize] = StateTable::encode(Action::Accept);
+                                actions[off] = StateTable::encode(Action::Accept);
                             } else {
-                                actions[off as usize] = StateTable::encode(Action::Reduce(pidx));
+                                actions[off] = StateTable::encode(Action::Reduce(pidx));
                             }
                         }
                         _ => panic!("Internal error")
@@ -261,14 +261,14 @@ where
                     Symbol::Token(s_tidx) => {
                         // Populate shifts
                         let off = actions_offset(grm.tokens_len(), stidx, s_tidx);
-                        state_actions.set(off as usize, true);
-                        match StateTable::decode(actions[off as usize]) {
+                        state_actions.set(off, true);
+                        match StateTable::decode(actions[off]) {
                             Action::Shift(x) => assert_eq!(*ref_stidx, x),
                             Action::Reduce(r_pidx) => {
                                 resolve_shift_reduce(
                                     grm,
                                     &mut actions,
-                                    off as usize,
+                                    off,
                                     s_tidx,
                                     r_pidx,
                                     *ref_stidx,
@@ -278,8 +278,7 @@ where
                             }
                             Action::Accept => panic!("Internal error"),
                             Action::Error => {
-                                actions[off as usize] =
-                                    StateTable::encode(Action::Shift(*ref_stidx));
+                                actions[off] = StateTable::encode(Action::Shift(*ref_stidx));
                             }
                         }
                     }
@@ -307,7 +306,7 @@ where
             let mut only_reduces = true;
             for tidx in grm.iter_tidxs() {
                 let off = actions_offset(grm.tokens_len(), stidx, tidx);
-                match StateTable::decode(actions[off as usize]) {
+                match StateTable::decode(actions[off]) {
                     Action::Reduce(pidx) => {
                         let prod_len = grm.prod(pidx).len();
                         let ridx = grm.prod_to_rule(pidx);
@@ -315,7 +314,7 @@ where
                     }
                     Action::Shift(_) => {
                         only_reduces = false;
-                        state_shifts.set(off as usize, true);
+                        state_shifts.set(off, true);
                     }
                     Action::Accept => {
                         only_reduces = false;
