@@ -11,6 +11,7 @@ use std::{error::Error, fmt, hash::Hash, mem::size_of};
 
 use num_traits::{PrimInt, Unsigned};
 
+/// A Lexing error.
 #[derive(Copy, Clone, Debug)]
 pub struct LexError {
     pub idx: usize
