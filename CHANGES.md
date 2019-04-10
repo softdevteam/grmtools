@@ -1,3 +1,12 @@
+# grmtools 0.3.1 (2019-04-10)
+
+## Minor changes
+
+* Document lrpar more thoroughly, in particular hiding the inner modules, whose
+  location might change one day in the future: all useful structs (etc.) are
+  explicitly exposed at the module level.
+
+
 # grmtools 0.3.0 (2019-03-25)
 
 ## Breaking changes
