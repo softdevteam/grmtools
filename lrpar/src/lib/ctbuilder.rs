@@ -7,6 +7,8 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+//! Build grammars at compile-time so that they can be statically included into a binary.
+
 use std::{
     collections::HashMap,
     convert::AsRef,

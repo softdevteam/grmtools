@@ -82,7 +82,7 @@ fn parse_int(s: &str) -> Result<u64, ()> {
 }
 ```
 
-Because we specified that our Yacc file is in `Grmtools` format, each Rule has a
+Because we specified that our Yacc file is in `Grmtools` format, each rule has a
 separate Rust type to which all its functions conform (in this case, all the
 rules have the same type, but that's not a requirement).
 
@@ -130,7 +130,7 @@ fn main() {
 }
 ```
 
-We can now cargo run our project and evaluate simple expressions:
+We can now `cargo run` our project and evaluate simple expressions:
 
 ```
 >>> 2 + 3

@@ -539,11 +539,18 @@ pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned, ActionT> {
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>);
 }
 
+/// What recovery algorithm should be used when a syntax error is encountered?
 #[derive(Clone, Copy, Debug)]
 pub enum RecoveryKind {
+    /// The CPCT+ algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
+    /// Parsers".
     CPCTPlus,
+    /// The MF algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
+    /// Parsers".
     MF,
+    #[doc(hidden)]
     Panic,
+    /// Don't use error recovery: return as soon as the first syntax error is encountered.
     None
 }
 

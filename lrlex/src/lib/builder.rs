@@ -7,6 +7,8 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+//! Build grammars at run-time.
+
 use std::{
     collections::{HashMap, HashSet},
     convert::AsRef,
