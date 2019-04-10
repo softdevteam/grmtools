@@ -2,7 +2,7 @@
 name = "cfgrammar"
 description = "Grammar manipulation"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
 readme = "README.md"
