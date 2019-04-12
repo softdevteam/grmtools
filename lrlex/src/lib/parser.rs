@@ -128,11 +128,12 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                 return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1));
             }
             name = Some(orig_name[1..orig_name.len() - 1].to_string());
-            if self.rules.iter().any(|r| {
+            let dup_name = self.rules.iter().any(|r| {
                 r.name
                     .as_ref()
                     .map_or(false, |n| n == name.as_ref().unwrap())
-            }) {
+            });
+            if dup_name {
                 return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1));
             }
         }
