@@ -7,6 +7,13 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::new_without_default)]
+#![allow(clippy::range_plus_one)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::type_complexity)]
+
 //! `lrpar` provides a Yacc-compatible parser (where grammars can be generated at
 //! compile-time or run-time). It can take in traditional `.y` files and convert
 //! them into an idiomatic Rust parser. More details can be found in the [grmtools
