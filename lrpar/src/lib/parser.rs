@@ -207,7 +207,7 @@ where
         _ridx: RIdx<StorageT>,
         _lexer: &dyn Lexer<StorageT>,
         _astack: vec::Drain<AStackType<(), StorageT>>
-    ) -> () {
+    ) {
     }
 }
 

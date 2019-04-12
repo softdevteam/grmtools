@@ -83,7 +83,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
         self.rules
             .iter()
-            .find(|r| r.name.as_ref().map(|x| x.as_str()) == Some(n))
+            .find(|r| r.name.as_ref().map(String::as_str) == Some(n))
     }
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used

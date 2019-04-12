@@ -488,7 +488,8 @@ where
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 // action function references
                 outs.push_str(&format!(
-                    "\n        let mut actions: Vec<&Fn(RIdx<{storaget}>,
+                    "\n        #[allow(clippy::type_complexity)]
+        let mut actions: Vec<&Fn(RIdx<{storaget}>,
                        &Lexer<{storaget}>,
                        vec::Drain<AStackType<{actionskind}, {storaget}>>)
                     -> {actionskind}> = Vec::new();\n",
@@ -721,6 +722,7 @@ where
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
                 "    // {rulename}
+    #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
                      {prefix}lexer: &Lexer<{storaget}>,
                      {args})

@@ -7,6 +7,9 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+#![allow(clippy::new_without_default)]
+#![allow(clippy::type_complexity)]
+
 use std::{error::Error, fmt, hash::Hash};
 
 use num_traits::{PrimInt, Unsigned};

@@ -7,6 +7,10 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::new_without_default)]
+
 //! A library for manipulating Context Free Grammars (CFG). It is impractical to fully homogenise
 //! all the types of grammars out there, so the aim is for different grammar types
 //! to have completely separate implementations. Code that wants to be generic over more than one

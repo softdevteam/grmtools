@@ -7,6 +7,10 @@
 // at your option. This file may not be copied, modified, or distributed except according to those
 // terms.
 
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::type_complexity)]
+
 use std::{hash::Hash, mem::size_of};
 
 use num_traits::{AsPrimitive, PrimInt, Unsigned};

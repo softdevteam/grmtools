@@ -176,10 +176,10 @@ where
         let state_i = match closed_states
             .iter()
             .skip(todo_off)
-            .position(|x| x.is_none())
+            .position(Option::is_none)
         {
             Some(i) => todo_off + i,
-            None => closed_states.iter().position(|x| x.is_none()).unwrap()
+            None => closed_states.iter().position(Option::is_none).unwrap()
         };
         todo_off = state_i + 1;
         todo -= 1;
@@ -293,7 +293,7 @@ where
     let (gc_states, gc_edges) = gc(
         core_states
             .drain(..)
-            .zip(closed_states.drain(..).map(|x| x.unwrap()))
+            .zip(closed_states.drain(..).map(Option::unwrap))
             .collect(),
         edges
     );
