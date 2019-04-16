@@ -33,7 +33,7 @@ fn usage(prog: &str, msg: &str) -> ! {
     }
     writeln!(
         &mut stderr(),
-        "Usage: {} [-r <cpctplus|mf|none>] [-y <eco|original>] [-q] <lexer.l> <parser.y> <input file>",
+        "Usage: {} [-r <cpctplus|mf|none>] [-y <eco|grmtools|original>] [-q] <lexer.l> <parser.y> <input file>",
         leaf
     )
     .ok();
@@ -69,7 +69,7 @@ fn main() {
             "y",
             "yaccvariant",
             "Yacc variant to be parsed (default: Original)",
-            "Original|Eco"
+            "Eco|Original|Grmtools"
         )
         .parse(&args[1..])
     {
@@ -97,8 +97,9 @@ fn main() {
     let yacckind = match matches.opt_str("y") {
         None => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
         Some(s) => match &*s.to_lowercase() {
-            "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "eco" => YaccKind::Eco,
+            "grmtools" => YaccKind::Grmtools,
+            "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s))
         }
     };
