@@ -1,0 +1,50 @@
+name: Test the span variable
+yacckind: Grmtools
+grammar: |
+    %start Expr
+    %avoid_insert "INT"
+    %%
+    Expr -> Vec<(usize, usize)>:
+          Term '+' Expr {
+              let mut spans = $1;
+              spans.extend($3);
+              spans.push($span);
+              spans
+          }
+        | Term {
+              let mut spans = $1;
+              spans.push($span);
+              spans
+          }
+        ;
+
+    Term -> Vec<(usize, usize)>:
+          Factor '*' Term {
+              let mut spans = $1;
+              spans.extend($3);
+              spans.push($span);
+              spans
+          }
+        | Factor {
+              let mut spans = $1;
+              spans.push($span);
+              spans
+          }
+        ;
+
+    Factor -> Vec<(usize, usize)>:
+          '(' Expr ')' {
+              let mut spans = $2;
+              spans.push($span);
+              spans
+          }
+        | 'INT' { vec![$span] }
+        ;
+lexer: |
+    %%
+    [0-9]+ "INT"
+    \+ "+"
+    \* "*"
+    \( "("
+    \) ")"
+    [\t ]+ ;

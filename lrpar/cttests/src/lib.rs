@@ -13,6 +13,9 @@ lrpar_mod!(calc_noactions_y);
 lrlex_mod!(multitypes_l);
 lrpar_mod!(multitypes_y);
 
+lrlex_mod!(span_l);
+lrpar_mod!(span_y);
+
 #[test]
 fn multitypes() {
     let lexerdef = multitypes_l::lexerdef();
@@ -87,4 +90,52 @@ fn test_calc_multitypes() {
     lexer = lexerdef.lexer("1++2");
     let (res, _errs) = calc_multitypes_y::parse(&mut lexer);
     assert_eq!(res, Some(Ok(3)));
+}
+
+#[test]
+fn test_span() {
+    let lexerdef = span_l::lexerdef();
+    let mut lexer = lexerdef.lexer("2+3");
+    match span_y::parse(&mut lexer) {
+        (Some(ref spans), _) if spans == &vec![(0, 1), (0, 1), (2, 3), (2, 3), (2, 3), (0, 3)] => {
+            ()
+        }
+        _ => unreachable!()
+    }
+
+    let mut lexer = lexerdef.lexer("2+3*4");
+    match span_y::parse(&mut lexer) {
+        (Some(ref spans), _)
+            if spans
+                == &vec![
+                    (0, 1),
+                    (0, 1),
+                    (2, 3),
+                    (4, 5),
+                    (4, 5),
+                    (2, 5),
+                    (2, 5),
+                    (0, 5),
+                ] =>
+        {
+            ()
+        }
+        _ => unreachable!()
+    }
+
+    let mut lexer = lexerdef.lexer("2++3");
+    match span_y::parse(&mut lexer) {
+        (Some(ref spans), _) if spans == &vec![(0, 1), (0, 1), (3, 4), (3, 4), (3, 4), (0, 4)] => {
+            ()
+        }
+        _ => unreachable!()
+    }
+
+    let mut lexer = lexerdef.lexer("(2)))");
+    match span_y::parse(&mut lexer) {
+        (Some(ref spans), _) if spans == &vec![(1, 2), (1, 2), (1, 2), (0, 3), (0, 3), (0, 3)] => {
+            ()
+        }
+        _ => unreachable!()
+    }
 }

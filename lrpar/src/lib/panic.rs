@@ -42,7 +42,8 @@ where
         parser: &Parser<StorageT, ActionT>,
         in_laidx: usize,
         in_pstack: &mut Vec<StIdx>,
-        _: &mut Vec<AStackType<ActionT, StorageT>>
+        _: &mut Vec<AStackType<ActionT, StorageT>>,
+        _: &mut Vec<usize>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This recoverer is based on that in Compiler Design in C by Allen I. Holub p.348.
         //

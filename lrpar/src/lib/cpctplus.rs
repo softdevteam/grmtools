@@ -136,7 +136,8 @@ where
         parser: &Parser<StorageT, ActionT>,
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
-        mut astack: &mut Vec<AStackType<ActionT, StorageT>>
+        mut astack: &mut Vec<AStackType<ActionT, StorageT>>,
+        mut span: &mut Vec<usize>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
@@ -244,6 +245,7 @@ where
             in_laidx,
             &mut in_pstack,
             &mut Some(&mut astack),
+            &mut Some(&mut span),
             &rnk_rprs[0]
         );
 

@@ -51,6 +51,7 @@ const STABLE_FILE_EXT: &str = "stable";
 lazy_static! {
     static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
     static ref RE_DOL_LEXER: Regex = Regex::new(r"\$lexer").unwrap();
+    static ref RE_DOL_SPAN: Regex = Regex::new(r"\$span").unwrap();
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
@@ -491,6 +492,7 @@ where
                     "\n        #[allow(clippy::type_complexity)]
         let mut actions: Vec<&Fn(RIdx<{storaget}>,
                        &Lexer<{storaget}>,
+                       (usize, usize),
                        vec::Drain<AStackType<{actionskind}, {storaget}>>)
                     -> {actionskind}> = Vec::new();\n",
                     actionskind = ACTIONS_KIND,
@@ -596,6 +598,7 @@ where
             outs.push_str(&format!(
                 "    fn {prefix}wrapper_{}({prefix}ridx: RIdx<{storaget}>,
                       {prefix}lexer: &Lexer<{storaget}>,
+                      {prefix}span: (usize, usize),
                       mut {prefix}args: vec::Drain<AStackType<{actionskind}, {storaget}>>)
                    -> {actionskind} {{",
                 usize::from(pidx),
@@ -642,7 +645,7 @@ where
                 let args = (0..grm.prod(pidx).len())
                     .map(|i| format!("{prefix}arg_{i}", prefix = ACTION_PREFIX, i = i + 1))
                     .collect::<Vec<_>>();
-                outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {args}))",
+                outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args}))",
                     actionskind = ACTIONS_KIND,
                     actionskindprefix = ACTIONS_KIND_PREFIX,
                     prefix = ACTION_PREFIX,
@@ -725,6 +728,7 @@ where
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
                      {prefix}lexer: &Lexer<{storaget}>,
+                     {prefix}span: (usize, usize),
                      {args})
                   -> {actiont} {{\n",
                 usize::from(pidx),
@@ -747,6 +751,11 @@ where
             let action = RE_DOL_LEXER.replace_all(
                 &action,
                 format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
+            );
+            // Replace $span with a reference to the span variable
+            let action = RE_DOL_SPAN.replace_all(
+                &action,
+                format!("{prefix}span", prefix = ACTION_PREFIX).as_str()
             );
             outs.push_str(&action);
             outs.push_str("\n    }\n\n");
