@@ -136,8 +136,8 @@ where
             actions: actions.as_slice()
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
-        let mut astack: Vec<AStackType<Node<StorageT>, StorageT>> = Vec::new();
-        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
+        let mut astack = Vec::new();
+        let mut errors = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors);
         (accpt, errors)
     }
@@ -197,8 +197,8 @@ where
             actions: actions.as_slice()
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
-        let mut astack: Vec<AStackType<(), StorageT>> = Vec::new();
-        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
+        let mut astack = Vec::new();
+        let mut errors = Vec::new();
         psr.lr(0, &mut pstack, &mut astack, &mut errors);
         errors
     }
@@ -248,8 +248,8 @@ where
             actions
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
-        let mut astack: Vec<AStackType<ActionT, StorageT>> = Vec::new();
-        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
+        let mut astack = Vec::new();
+        let mut errors = Vec::new();
         let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors);
         (accpt, errors)
     }
