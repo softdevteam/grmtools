@@ -4,19 +4,28 @@ grmtools can deal with several different variants of Yacc input.
 
 ## Grmtools
 
-`YaccKind::Grmtools` is grmtools own variant of Yacc syntax. The sole difference
-is that rules have a Rust type to which all their production's actions must adhere
-to. Consider the following snippet:
+`YaccKind::Grmtools` is grmtools own variant of Yacc syntax, and the one that
+most users will want to use. The most significant difference to "normal" Yacc
+is that rules are annotated with a Rust type to which all their production's
+actions must adhere to. Note that whilst a rule's productions must all adhere
+to a single type, different rules can have different types.  Consider the
+following snippet:
 
 ```
-R -> Result<i32, ()>:
+R1 -> Result<i32, ()>:
      'a' { Ok(5) }
    | 'b' { Err(()) }
+   ;
+
+R2 -> u64:
+   | { 0 }
+   ;
 ```
 
-Here the rule `R` has a Rust return type of `Result<X, ()>` (between `->` and
+Here the rule `R1` has a Rust return type of `Result<X, ()>` (between `->` and
 `:`). Both of its productions adhere to this type, the first by instantiating
-`Ok(5)` and the second `Err(())`.
+`Ok(5)` and the second `Err(())`. The rule `R2` has a return type of `u64`.
+
 
 ## “Original” Yacc
 
@@ -36,7 +45,7 @@ externally created Yacc files. Several sub-variants are allowed:
 * `YaccKind::Original(YaccOriginalActionKind::UserAction)` models original Yacc
   most closely but, in a Rust setting, is probably of little use beyond simple
   calculator like languages. Instead of Yacc's `%union` directive, users can
-  specify `%actiontype` which is a Rust type which all production actions must
-  return an instance of. Unless all actions happen to naturally return the same
-  type, this quickly becomes cumbersome to use. For most use cases,
+  specify `%actiontype` which is a Rust type to which every production's actions
+  in the grammar must adhere to. Unless all actions happen to naturally return
+  the same type, this quickly becomes cumbersome to use. For most use cases,
   `YaccKind::Grmtools` is a superior alternative.
