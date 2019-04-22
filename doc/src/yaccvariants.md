@@ -4,7 +4,7 @@ grmtools can deal with several different variants of Yacc input.
 
 ## Grmtools
 
-`YaccKind::Grmtools` is grmtools own variant of Yacc syntax, and the one that
+`YaccKind::Grmtools` is grmtools' own variant of Yacc syntax, and the one that
 most users will want to use. The most significant difference to "normal" Yacc
 is that rules are annotated with a Rust type to which all their production's
 actions must adhere to. Note that whilst a rule's productions must all adhere
