@@ -4,6 +4,7 @@
 - [Quickstart Guide](quickstart.md)
 - [Lexing](lexing.md)
 - [Parsing](parsing.md)
+  - [Yacc variants](yaccvariants.md)
   - [grmtools parsing idioms](parsing_idioms.md)
 - [The individual libraries and tools](libsandtools.md)
   - [lrpar](lrpar.md)
