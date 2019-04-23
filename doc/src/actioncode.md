@@ -16,4 +16,5 @@ Action code is normal Rust code with the addition of the following special varia
 
  * `$span` is a `(start, end)` tuple (with both elements of type `usize`) which
    captures how much of the user's input the current production matched. This
-   can be useful when storing debugging information.
+   can be useful when storing debugging information. Note that this variable is
+   not enabled by default: use `CTParserBuilder::span_var(true)` to enable it.
