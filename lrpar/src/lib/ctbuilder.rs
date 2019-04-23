@@ -51,6 +51,7 @@ const STABLE_FILE_EXT: &str = "stable";
 lazy_static! {
     static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
     static ref RE_DOL_LEXER: Regex = Regex::new(r"\$lexer").unwrap();
+    static ref RE_DOL_SPAN: Regex = Regex::new(r"\$span").unwrap();
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
@@ -114,6 +115,7 @@ where
     phantom: PhantomData<StorageT>,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
+    span_var: bool,
     conflicts: Option<(
         YaccGrammar<StorageT>,
         StateGraph<StorageT>,
@@ -166,6 +168,7 @@ where
             phantom: PhantomData,
             yacckind: None,
             error_on_conflicts: true,
+            span_var: false,
             conflicts: None
         }
     }
@@ -215,6 +218,13 @@ where
     /// any Shift/Reduce or Reduce/Reduce conflicts. Defaults to `true`.
     pub fn error_on_conflicts(mut self, b: bool) -> Self {
         self.error_on_conflicts = b;
+        self
+    }
+
+    /// If set to true, action code will be able to reference the `$span` variable. Note that
+    /// enabling this feature might slow the parser down. Defaults to `false`.
+    pub fn span_var(mut self, b: bool) -> Self {
+        self.span_var = b;
         self
     }
 
@@ -491,6 +501,7 @@ where
                     "\n        #[allow(clippy::type_complexity)]
         let mut actions: Vec<&Fn(RIdx<{storaget}>,
                        &Lexer<{storaget}>,
+                       (usize, usize),
                        vec::Drain<AStackType<{actionskind}, {storaget}>>)
                     -> {actionskind}> = Vec::new();\n",
                     actionskind = ACTIONS_KIND,
@@ -596,6 +607,7 @@ where
             outs.push_str(&format!(
                 "    fn {prefix}wrapper_{}({prefix}ridx: RIdx<{storaget}>,
                       {prefix}lexer: &Lexer<{storaget}>,
+                      {prefix}span: (usize, usize),
                       mut {prefix}args: vec::Drain<AStackType<{actionskind}, {storaget}>>)
                    -> {actionskind} {{",
                 usize::from(pidx),
@@ -642,7 +654,7 @@ where
                 let args = (0..grm.prod(pidx).len())
                     .map(|i| format!("{prefix}arg_{i}", prefix = ACTION_PREFIX, i = i + 1))
                     .collect::<Vec<_>>();
-                outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {args}))",
+                outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args}))",
                     actionskind = ACTIONS_KIND,
                     actionskindprefix = ACTIONS_KIND_PREFIX,
                     prefix = ACTION_PREFIX,
@@ -725,6 +737,7 @@ where
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
                      {prefix}lexer: &Lexer<{storaget}>,
+                     {prefix}span: (usize, usize),
                      {args})
                   -> {actiont} {{\n",
                 usize::from(pidx),
@@ -736,18 +749,29 @@ where
             ));
 
             // Replace $1 ... $n with the correct local variable
-            let action = grm.action(pidx).as_ref().unwrap();
-            let action = RE_DOL_NUM
+            let mut action = grm.action(pidx).as_ref().unwrap().to_owned();
+            action = RE_DOL_NUM
                 .replace_all(
                     &action,
                     format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
                 )
                 .into_owned();
             // Replace $lexer with a reference to the lexer variable
-            let action = RE_DOL_LEXER.replace_all(
-                &action,
-                format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
-            );
+            action = RE_DOL_LEXER
+                .replace_all(
+                    &action,
+                    format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
+                )
+                .into_owned();
+            if self.span_var {
+                // Replace $span with a reference to the span variable
+                action = RE_DOL_SPAN
+                    .replace_all(
+                        &action,
+                        format!("{prefix}span", prefix = ACTION_PREFIX).as_str()
+                    )
+                    .into_owned();
+            }
             outs.push_str(&action);
             outs.push_str("\n    }\n\n");
         }

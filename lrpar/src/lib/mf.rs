@@ -146,7 +146,8 @@ where
         parser: &Parser<StorageT, ActionT>,
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
-        mut astack: &mut Vec<AStackType<ActionT, StorageT>>
+        mut astack: &mut Vec<AStackType<ActionT, StorageT>>,
+        mut span: &mut Vec<usize>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         let mut start_cactus_pstack = Cactus::new();
         for st in in_pstack.iter() {
@@ -241,6 +242,7 @@ where
             in_laidx,
             &mut in_pstack,
             &mut Some(&mut astack),
+            &mut Some(&mut span),
             &rnk_rprs[0]
         );
 
@@ -553,12 +555,20 @@ where
             return vec![];
         }
         let mut pstack = in_pstack.to_owned();
-        let mut laidx = apply_repairs(parser, in_laidx, &mut pstack, &mut None, &rpr_seqs[0]);
+        let mut laidx = apply_repairs(
+            parser,
+            in_laidx,
+            &mut pstack,
+            &mut None,
+            &mut None,
+            &rpr_seqs[0]
+        );
         laidx = parser.lr_upto(
             None,
             laidx,
             in_laidx + TRY_PARSE_AT_MOST,
             &mut pstack,
+            &mut None,
             &mut None
         );
         if laidx >= furthest {
@@ -586,6 +596,7 @@ pub(crate) fn apply_repairs<
     mut laidx: usize,
     mut pstack: &mut Vec<StIdx>,
     mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
+    mut span: &mut Option<&mut Vec<usize>>,
     repairs: &[ParseRepair<StorageT>]
 ) -> usize
 where
@@ -601,13 +612,31 @@ where
                     next_lexeme.start(),
                     None
                 );
-                parser.lr_upto(Some(new_lexeme), laidx, laidx + 1, &mut pstack, &mut astack);
+                parser.lr_upto(
+                    Some(new_lexeme),
+                    laidx,
+                    laidx + 1,
+                    &mut pstack,
+                    &mut astack,
+                    &mut span
+                );
             }
             ParseRepair::Delete(_) => {
+                let next_lexeme = parser.next_lexeme(laidx);
+                // When we delete something, we need to adjust the span if it would otherwise
+                // reference the current deleted lexeme.
+                if let Some(ref mut span_uw) = span {
+                    if span_uw[span_uw.len() - 1] == next_lexeme.start()
+                        && laidx <= parser.lexemes.len()
+                    {
+                        let idx = span_uw.len() - 1;
+                        span_uw[idx] = parser.next_lexeme(laidx + 1).start();
+                    }
+                }
                 laidx += 1;
             }
             ParseRepair::Shift(_) => {
-                laidx = parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack);
+                laidx = parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack, &mut span);
             }
         }
     }

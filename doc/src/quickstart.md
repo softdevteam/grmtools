@@ -156,8 +156,8 @@ the production). If the symbol references a rule `R` then an instance of
 `R`'s type will be stored in the `$x` variable; if the symbol references a lexeme then an `Option<Lexeme>`
 instance is returned. A special `$lexer` variable allows access to the lexer.
 This allows us to turn `Lexeme`s into strings with the `lexeme_str` function,
-which given a `Lexeme` returns a `&str` representing the corresponding piece of
-information.
+which given a `Lexeme` returns a `&str` representing the corresponding portion of
+the user's input.
 
 The third part is arbitrary Rust code which can be called by productions’
 actions. In our case we have a simple function which converts integers as

@@ -75,6 +75,7 @@ where
 
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 
+#[derive(Debug)]
 pub enum AStackType<ActionT, StorageT> {
     ActionType(ActionT),
     Lexeme(Lexeme<StorageT>)
@@ -93,6 +94,7 @@ pub struct Parser<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
     actions: &'a [&'a dyn Fn(
         RIdx<StorageT>,
         &dyn Lexer<StorageT>,
+        (usize, usize),
         vec::Drain<AStackType<ActionT, StorageT>>
     ) -> ActionT]
 }
@@ -121,6 +123,7 @@ where
             &'a dyn Fn(
                 RIdx<StorageT>,
                 &dyn Lexer<StorageT>,
+                (usize, usize),
                 vec::Drain<AStackType<Node<StorageT>, StorageT>>
             ) -> Node<StorageT>
         > = Vec::new();
@@ -136,15 +139,17 @@ where
             actions: actions.as_slice()
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
-        let mut astack: Vec<AStackType<Node<StorageT>, StorageT>> = Vec::new();
-        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
-        let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors);
+        let mut astack = Vec::new();
+        let mut errors = Vec::new();
+        let mut span = vec![0];
+        let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut span);
         (accpt, errors)
     }
 
     fn generic_ptree(
         ridx: RIdx<StorageT>,
         _lexer: &dyn Lexer<StorageT>,
+        _span: (usize, usize),
         astack: vec::Drain<AStackType<Node<StorageT>, StorageT>>
     ) -> Node<StorageT> {
         let mut nodes = Vec::with_capacity(astack.len());
@@ -182,6 +187,7 @@ where
             &'a dyn Fn(
                 RIdx<StorageT>,
                 &dyn Lexer<StorageT>,
+                (usize, usize),
                 vec::Drain<AStackType<(), StorageT>>
             ) -> ()
         > = Vec::new();
@@ -197,15 +203,17 @@ where
             actions: actions.as_slice()
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
-        let mut astack: Vec<AStackType<(), StorageT>> = Vec::new();
-        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
-        psr.lr(0, &mut pstack, &mut astack, &mut errors);
+        let mut astack = Vec::new();
+        let mut errors = Vec::new();
+        let mut span = vec![0];
+        psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut span);
         errors
     }
 
     fn noaction(
         _ridx: RIdx<StorageT>,
         _lexer: &dyn Lexer<StorageT>,
+        _span: (usize, usize),
         _astack: vec::Drain<AStackType<(), StorageT>>
     ) {
     }
@@ -228,6 +236,7 @@ where
         actions: &[&dyn Fn(
             RIdx<StorageT>,
             &dyn Lexer<StorageT>,
+            (usize, usize),
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
@@ -248,9 +257,10 @@ where
             actions
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
-        let mut astack: Vec<AStackType<ActionT, StorageT>> = Vec::new();
-        let mut errors: Vec<LexParseError<StorageT>> = Vec::new();
-        let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors);
+        let mut astack = Vec::new();
+        let mut errors = Vec::new();
+        let mut span = vec![0];
+        let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut span);
         (accpt, errors)
     }
 
@@ -272,7 +282,8 @@ where
         mut laidx: usize,
         pstack: &mut PStack,
         astack: &mut Vec<AStackType<ActionT, StorageT>>,
-        errors: &mut Vec<LexParseError<StorageT>>
+        errors: &mut Vec<LexParseError<StorageT>>,
+        span: &mut Vec<usize>
     ) -> Option<ActionT> {
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
@@ -289,9 +300,17 @@ where
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
 
+                    // We want to delete pop_idx..span_uw.len() - 1, but have to do a little dance
+                    // to achieve that effect.
+                    let tail = span[span.len() - 1];
+                    let sp = (span[pop_idx - 1], tail);
+                    span.truncate(pop_idx);
+                    span.push(tail);
+
                     let v = AStackType::ActionType(self.actions[usize::from(pidx)](
                         ridx,
                         self.lexer,
+                        sp,
                         astack.drain(pop_idx - 1..)
                     ));
                     astack.push(v);
@@ -300,6 +319,7 @@ where
                     let la_lexeme = self.next_lexeme(laidx);
                     pstack.push(state_id);
                     astack.push(AStackType::Lexeme(la_lexeme));
+                    span.push(la_lexeme.end().unwrap_or_else(|| la_lexeme.start()));
                     laidx += 1;
                 }
                 Action::Accept => {
@@ -337,7 +357,7 @@ where
                         .as_ref()
                         .unwrap()
                         .as_ref()
-                        .recover(finish_by, self, laidx, pstack, astack);
+                        .recover(finish_by, self, laidx, pstack, astack, span);
                     let after = Instant::now();
                     recovery_budget = recovery_budget
                         .checked_sub(after - before)
@@ -371,7 +391,8 @@ where
         mut laidx: usize,
         end_laidx: usize,
         pstack: &mut PStack,
-        astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>
+        astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
+        span: &mut Option<&mut Vec<usize>>
     ) -> usize {
         assert!(lexeme_prefix.is_none() || end_laidx == laidx + 1);
         while laidx != end_laidx && laidx <= self.lexemes.len() {
@@ -387,12 +408,24 @@ where
                     let ridx = self.grm.prod_to_rule(pidx);
                     let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     if let Some(ref mut astack_uw) = *astack {
-                        let v = AStackType::ActionType(self.actions[usize::from(pidx)](
-                            ridx,
-                            self.lexer,
-                            astack_uw.drain(pop_idx - 1..)
-                        ));
-                        astack_uw.push(v);
+                        if let Some(ref mut span_uw) = *span {
+                            // We want to delete pop_idx..span_uw.len() - 1, but have to do a
+                            // little dance to achieve that effect.
+                            let tail = span_uw[span_uw.len() - 1];
+                            let sp = (span_uw[pop_idx - 1], tail);
+                            span_uw.truncate(pop_idx);
+                            span_uw.push(tail);
+
+                            let v = AStackType::ActionType(self.actions[usize::from(pidx)](
+                                ridx,
+                                self.lexer,
+                                sp,
+                                astack_uw.drain(pop_idx - 1..)
+                            ));
+                            astack_uw.push(v);
+                        } else {
+                            unreachable!();
+                        }
                     }
 
                     pstack.drain(pop_idx..);
@@ -401,12 +434,15 @@ where
                 }
                 Action::Shift(state_id) => {
                     if let Some(ref mut astack_uw) = *astack {
-                        let la_lexeme = if let Some(l) = lexeme_prefix {
-                            l
-                        } else {
-                            self.next_lexeme(laidx)
-                        };
-                        astack_uw.push(AStackType::Lexeme(la_lexeme));
+                        if let Some(ref mut span_uw) = span {
+                            let la_lexeme = if let Some(l) = lexeme_prefix {
+                                l
+                            } else {
+                                self.next_lexeme(laidx)
+                            };
+                            astack_uw.push(AStackType::Lexeme(la_lexeme));
+                            span_uw.push(la_lexeme.end().unwrap_or_else(|| la_lexeme.start()));
+                        }
                     }
                     pstack.push(state_id);
                     laidx += 1;
@@ -535,7 +571,8 @@ pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned, ActionT> {
         parser: &Parser<StorageT, ActionT>,
         in_laidx: usize,
         in_pstack: &mut PStack,
-        astack: &mut Vec<AStackType<ActionT, StorageT>>
+        astack: &mut Vec<AStackType<ActionT, StorageT>>,
+        span: &mut Vec<usize>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>);
 }
 
@@ -744,6 +781,7 @@ where
         actions: &[&dyn Fn(
             RIdx<StorageT>,
             &dyn Lexer<StorageT>,
+            (usize, usize),
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
