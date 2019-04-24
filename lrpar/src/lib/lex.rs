@@ -120,8 +120,9 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         }
     }
 
-    /// Returns `true` if this lexeme is the result of error recovery, or `false` otherwise.
-    pub fn is_empty(&self) -> bool {
+    /// Returns `true` if this lexeme was inserted as the result of error recovery, or `false`
+    /// otherwise.
+    pub fn inserted(&self) -> bool {
         self.len == u32::max_value()
     }
 }
