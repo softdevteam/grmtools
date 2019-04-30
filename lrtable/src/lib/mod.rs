@@ -16,6 +16,7 @@ use std::{hash::Hash, mem::size_of};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use static_assertions::const_assert;
 
 mod itemset;
 mod pager;
@@ -52,7 +53,7 @@ impl From<StIdxStorageT> for StIdx {
 
 impl From<StIdx> for usize {
     fn from(st: StIdx) -> Self {
-        debug_assert!(size_of::<usize>() >= size_of::<StIdxStorageT>());
+        const_assert!(size_of::<usize>() >= size_of::<StIdxStorageT>());
         st.0 as usize
     }
 }

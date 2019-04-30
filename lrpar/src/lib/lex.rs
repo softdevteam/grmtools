@@ -10,6 +10,7 @@
 use std::{error::Error, fmt, hash::Hash, mem::size_of};
 
 use num_traits::{PrimInt, Unsigned};
+use static_assertions::const_assert;
 
 /// A Lexing error.
 #[derive(Copy, Clone, Debug)]
@@ -78,7 +79,7 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     /// token is the result of user input, then `Some(n)` should be passed to `len`; if the token
     /// is the result of error recovery, then `None` should be passed to `len`.
     pub fn new(tok_id: StorageT, start: usize, len: Option<usize>) -> Self {
-        debug_assert!(size_of::<usize>() >= size_of::<u32>());
+        const_assert!(size_of::<usize>() >= size_of::<u32>());
         let len = if let Some(l) = len {
             if l >= u32::max_value() as usize {
                 panic!("Can't currently represent lexeme of length {}.", l);
@@ -115,7 +116,7 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         if self.len == u32::max_value() {
             None
         } else {
-            debug_assert!(size_of::<usize>() >= size_of::<u32>());
+            const_assert!(size_of::<usize>() >= size_of::<u32>());
             Some(self.len as usize)
         }
     }
