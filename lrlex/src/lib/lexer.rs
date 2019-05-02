@@ -290,8 +290,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
     }
 
     fn lexeme_str(&self, l: &Lexeme<StorageT>) -> &str {
-        let st = l.start();
-        &self.s[st..l.end().unwrap_or(st)]
+        &self.s[l.start()..l.end()]
     }
 }
 
@@ -321,11 +320,11 @@ mod test {
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.start(), 0);
-        assert_eq!(lex1.len(), Some(3));
+        assert_eq!(lex1.len(), 3);
         let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.start(), 4);
-        assert_eq!(lex2.len(), Some(3));
+        assert_eq!(lex2.len(), 3);
     }
 
     #[test]
@@ -361,11 +360,11 @@ if 'IF'
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.start(), 0);
-        assert_eq!(lex1.len(), Some(3));
+        assert_eq!(lex1.len(), 3);
         let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.start(), 4);
-        assert_eq!(lex2.len(), Some(2));
+        assert_eq!(lex2.len(), 2);
     }
 
     #[test]
@@ -384,15 +383,15 @@ if 'IF'
         assert_eq!(lexemes.len(), 3);
         let lex1 = lexemes[0];
         assert_eq!(lex1.start(), 0);
-        assert_eq!(lex1.len(), Some(1));
+        assert_eq!(lex1.len(), 1);
         assert_eq!(lexer.lexeme_str(&lex1), "a");
         let lex2 = lexemes[1];
         assert_eq!(lex2.start(), 2);
-        assert_eq!(lex2.len(), Some(3));
+        assert_eq!(lex2.len(), 3);
         assert_eq!(lexer.lexeme_str(&lex2), "❤");
         let lex3 = lexemes[2];
         assert_eq!(lex3.start(), 6);
-        assert_eq!(lex3.len(), Some(1));
+        assert_eq!(lex3.len(), 1);
         assert_eq!(lexer.lexeme_str(&lex3), "a");
     }
 

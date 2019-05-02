@@ -636,10 +636,10 @@ where
                             "
         let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
             AStackType::Lexeme(l) => {{
-                if l.len().is_some() {{
-                    Ok(l)
-                }} else {{
+                if l.inserted() {{
                     Err(l)
+                }} else {{
+                    Ok(l)
                 }}
             }},
             AStackType::ActionType(_) => unreachable!()

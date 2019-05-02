@@ -101,23 +101,26 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         self.start
     }
 
-    /// Byte offset of the end of the lexeme, or `None` if this lexeme is the result of error
-    /// recovery.
-    pub fn end(&self) -> Option<usize> {
-        if let Some(l) = self.len() {
-            Some(self.start() + l)
+    /// Byte offset of the end of the lexeme.
+    ///
+    /// Note that if this lexeme was inserted by error recovery, it will end at the same place it
+    /// started (i.e. `self.start() == self.end()).
+    pub fn end(&self) -> usize {
+        if self.len == u32::max_value() {
+            self.start
         } else {
-            None
+            self.start + (self.len as usize)
         }
     }
 
-    /// Length in bytes of the lexeme, or `None` if this lexeme is the result of error recovery.
-    pub fn len(&self) -> Option<usize> {
+    /// Length in bytes of the lexeme. Note that if this lexeme was inserted by error recovery, it
+    /// will have a length of 0.
+    pub fn len(&self) -> usize {
         if self.len == u32::max_value() {
-            None
+            0
         } else {
             const_assert!(size_of::<usize>() >= size_of::<u32>());
-            Some(self.len as usize)
+            self.len as usize
         }
     }
 

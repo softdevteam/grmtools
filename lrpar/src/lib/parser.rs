@@ -58,7 +58,7 @@ where
                 Node::Term { lexeme } => {
                     let tidx = TIdx(lexeme.tok_id());
                     let tn = grm.token_name(tidx).unwrap();
-                    let lt = &input[lexeme.start()..lexeme.end().unwrap_or_else(|| lexeme.start())];
+                    let lt = &input[lexeme.start()..lexeme.end()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
                 Node::Nonterm { ridx, ref nodes } => {
@@ -319,7 +319,7 @@ where
                     let la_lexeme = self.next_lexeme(laidx);
                     pstack.push(state_id);
                     astack.push(AStackType::Lexeme(la_lexeme));
-                    span.push(la_lexeme.end().unwrap_or_else(|| la_lexeme.start()));
+                    span.push(la_lexeme.end());
                     laidx += 1;
                 }
                 Action::Accept => {
@@ -441,7 +441,7 @@ where
                                 self.next_lexeme(laidx)
                             };
                             astack_uw.push(AStackType::Lexeme(la_lexeme));
-                            span_uw.push(la_lexeme.end().unwrap_or_else(|| la_lexeme.start()));
+                            span_uw.push(la_lexeme.end());
                         }
                     }
                     pstack.push(state_id);
@@ -472,7 +472,7 @@ where
             } else {
                 debug_assert!(laidx > 0);
                 let last_la = self.lexemes[laidx - 1];
-                last_la.start() + last_la.len().unwrap_or(0)
+                last_la.end()
             };
 
             Lexeme::new(
