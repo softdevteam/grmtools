@@ -2,7 +2,7 @@
 name = "lrtable"
 description = "LR grammar table generation"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Lukas Diekmann <http://lukasdiekmann.com/>", "Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
 readme = "README.md"
@@ -21,7 +21,7 @@ fnv = "1.0"
 macro-attr = "0.2.0"
 newtype_derive = "0.1.6"
 num-traits = "0.2"
-cfgrammar = { path="../cfgrammar", version = "0.3", features=["serde"] }
+cfgrammar = { path="../cfgrammar", version = "0.4", features=["serde"] }
 serde = { version="1.0", features=["derive"], optional=true }
 vob = { version="2.0", features=["serde"] }
 sparsevec = { version="0.1", features=["serde"] }
