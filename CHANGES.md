@@ -1,3 +1,43 @@
+# grmtools 0.4.0 (2019-05-09)
+
+## Breaking changes
+
+* `Lexeme::empty()` has been renamed to `Lexeme::inserted()`. Although rare,
+  there are grammars with empty lexemes that aren't the result of error
+  recovery (e.g. DEDENT tokens in Python). The previous name was misleading in
+  such cases.
+
+* Lexeme insertion is no longer explicitly encoded in the API for lexemes
+  end/length. Previously these functions returned `None` if a lexeme had been
+  inserted by error recovery. This has proven to be more effort than it's worth
+  with variants on the idiom `lexeme.end().unwrap_or_else(|| lexeme.start())`
+  used extensively. These definitions have thus been simplified, changing from:
+    ```rust
+    pub fn end(&self) -> Option<usize>
+    pub fn len(&self) -> Option<usize>
+    ```
+  to:
+    ```rust
+    pub fn end(&self) -> usize
+    pub fn len(&self) -> usiz>
+    ```
+
+# Major changes
+
+* A new pseudo-variable `$span` can be enabled within parser actions if
+  `CTBuilder::span_var(true)` is called. This pseudo-variable has the type
+  (usize, usize) where these represent (start, end) offsets in the input
+  and allows users to determine how much input a rule has matched.
+
+# Minor changes
+
+* Some dynamic assertions about the correct use of types have been converted to
+  static assertions. In the unlikely event that you try to run grmtools on a
+  platform with unexpected type sizes (which, in practise, probably only means
+  16 bit machines), this will lead to the problems being determined at
+  compile-time rather than run-time.
+
+
 # grmtools 0.3.1 (2019-04-10)
 
 ## Minor changes
