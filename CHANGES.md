@@ -1,3 +1,12 @@
+# grmtools 0.4.1 (2019-06-10)
+
+* Newer versions of rustc produce "deprecated" warnings when trait objects are
+  used without the `dyn` keyword. This previously caused a large number of
+  warnings in generated grammar code from `lrpar`. This release ensures that
+  generated grammar code uses the `dyn` keyword when needed, removing such
+  warnings.
+
+
 # grmtools 0.4.0 (2019-05-09)
 
 ## Breaking changes
