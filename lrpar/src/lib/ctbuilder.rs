@@ -442,7 +442,7 @@ where
     use std::vec;
 
     #[allow(dead_code)]
-    pub fn parse(lexer: &mut Lexer<{storaget}>)
+    pub fn parse(lexer: &mut dyn Lexer<{storaget}>)
           -> (Option<{actiont}>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
@@ -453,7 +453,7 @@ where
                 outs.push_str(&format!(
                     "use lrpar::Node;
 
-    pub fn parse(lexer: &mut Lexer<{storaget}>)
+    pub fn parse(lexer: &mut dyn Lexer<{storaget}>)
           -> (Option<Node<{storaget}>>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name()
@@ -461,7 +461,7 @@ where
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
-                    "    #[allow(dead_code)]\n    pub fn parse(lexer: &mut Lexer<{storaget}>)
+                    "    #[allow(dead_code)]\n    pub fn parse(lexer: &mut dyn Lexer<{storaget}>)
           -> Vec<LexParseError<{storaget}>>
     {{",
                     storaget = StorageT::type_name()
@@ -499,8 +499,8 @@ where
                 // action function references
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
-        let mut actions: Vec<&Fn(RIdx<{storaget}>,
-                       &Lexer<{storaget}>,
+        let mut actions: Vec<&dyn Fn(RIdx<{storaget}>,
+                       &dyn Lexer<{storaget}>,
                        (usize, usize),
                        vec::Drain<AStackType<{actionskind}, {storaget}>>)
                     -> {actionskind}> = Vec::new();\n",
@@ -606,7 +606,7 @@ where
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
                 "    fn {prefix}wrapper_{}({prefix}ridx: RIdx<{storaget}>,
-                      {prefix}lexer: &Lexer<{storaget}>,
+                      {prefix}lexer: &dyn Lexer<{storaget}>,
                       {prefix}span: (usize, usize),
                       mut {prefix}args: vec::Drain<AStackType<{actionskind}, {storaget}>>)
                    -> {actionskind} {{",
@@ -736,7 +736,7 @@ where
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
-                     {prefix}lexer: &Lexer<{storaget}>,
+                     {prefix}lexer: &dyn Lexer<{storaget}>,
                      {prefix}span: (usize, usize),
                      {args})
                   -> {actiont} {{\n",
