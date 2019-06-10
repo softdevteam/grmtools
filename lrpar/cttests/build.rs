@@ -10,7 +10,7 @@ use yaml_rust::YamlLoader;
 // used), grammar (the grammar rules), and lexer (the lexing rules). The tests are compiled into
 // two modules `<filename>_y` and `<filename>_l`, which we can then import into src/lib.rs and
 // write tests for.
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = env::var("OUT_DIR").unwrap();
     for entry in glob("src/*.test")? {
         let path = entry.unwrap();
