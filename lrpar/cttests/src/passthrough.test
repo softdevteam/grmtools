@@ -1,0 +1,16 @@
+name: Test that $$ is passed through correctly.
+yacckind: Grmtools
+grammar: |
+    %start Expr
+    %avoid_insert "INT"
+    %%
+    Expr -> Result<String, ()>:
+        Num { $1 }
+        ;
+    Num -> Result<String, ()>:
+        "INT" { Ok(format!("$${}", $lexer.lexeme_str(&$1.unwrap()))) }
+        ;
+lexer: |
+    %%
+    [0-9]+ "INT"
+

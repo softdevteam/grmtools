@@ -18,3 +18,7 @@ Action code is normal Rust code with the addition of the following special varia
    captures how much of the user's input the current production matched. This
    can be useful when storing debugging information. Note that this variable is
    not enabled by default: use `CTParserBuilder::span_var(true)` to enable it.
+
+ * `$$` is equivalent to `$` in normal Rust code.
+
+Any other variables beginning with `$` are treated as errors.
