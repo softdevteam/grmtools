@@ -13,6 +13,9 @@ lrpar_mod!(calc_noactions_y);
 lrlex_mod!(multitypes_l);
 lrpar_mod!(multitypes_y);
 
+lrlex_mod!(passthrough_l);
+lrpar_mod!(passthrough_y);
+
 lrlex_mod!(span_l);
 lrpar_mod!(span_y);
 
@@ -136,6 +139,16 @@ fn test_span() {
         (Some(ref spans), _) if spans == &vec![(1, 2), (1, 2), (1, 2), (0, 3), (0, 3), (0, 3)] => {
             ()
         }
+        _ => unreachable!()
+    }
+}
+
+#[test]
+fn test_passthrough() {
+    let lexerdef = passthrough_l::lexerdef();
+    let mut lexer = lexerdef.lexer("101");
+    match passthrough_y::parse(&mut lexer) {
+        (Some(Ok(ref s)), _) if s == "$101" => (),
         _ => unreachable!()
     }
 }

@@ -749,30 +749,44 @@ where
             ));
 
             // Replace $1 ... $n with the correct local variable
-            let mut action = grm.action(pidx).as_ref().unwrap().to_owned();
-            action = RE_DOL_NUM
-                .replace_all(
-                    &action,
-                    format!("{prefix}arg_$1", prefix = ACTION_PREFIX).as_str()
-                )
-                .into_owned();
-            // Replace $lexer with a reference to the lexer variable
-            action = RE_DOL_LEXER
-                .replace_all(
-                    &action,
-                    format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
-                )
-                .into_owned();
-            if self.span_var {
-                // Replace $span with a reference to the span variable
-                action = RE_DOL_SPAN
-                    .replace_all(
-                        &action,
-                        format!("{prefix}span", prefix = ACTION_PREFIX).as_str()
-                    )
-                    .into_owned();
+            let pre_action = grm.action(pidx).as_ref().unwrap();
+            let mut last = 0;
+            loop {
+                match pre_action[last..].find("$") {
+                    Some(off) => {
+                        if pre_action[last + off..].starts_with("$$") {
+                            outs.push_str(&pre_action[last..last + off + "$".len()]);
+                            last = last + off + "$$".len();
+                        } else if pre_action[last + off..].starts_with("$lexer") {
+                            outs.push_str(&pre_action[last..last + off]);
+                            outs.push_str(
+                                format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
+                            );
+                            last = last + off + "$lexer".len();
+                        } else if self.span_var && pre_action[last + off..].starts_with("$span") {
+                            outs.push_str(&pre_action[last..last + off]);
+                            outs.push_str(format!("{prefix}span", prefix = ACTION_PREFIX).as_str());
+                            last = last + off + "$span".len();
+                        } else if last + off + 1 < pre_action.len()
+                            && pre_action[last + off + 1..].starts_with(|c: char| c.is_numeric())
+                        {
+                            outs.push_str(&pre_action[last..last + off]);
+                            outs.push_str(format!("{prefix}arg_", prefix = ACTION_PREFIX).as_str());
+                            last = last + off + "$".len();
+                        } else {
+                            panic!(
+                                "Unknown text following '$' operator: {}",
+                                &pre_action[last + off..]
+                            );
+                        }
+                    }
+                    None => {
+                        outs.push_str(&pre_action[last..]);
+                        break;
+                    }
+                }
             }
-            outs.push_str(&action);
+
             outs.push_str("\n    }\n\n");
         }
         outs
