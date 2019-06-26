@@ -1,3 +1,13 @@
+# grmtools 0.4.2 (2019-06-26)
+
+* Action code uses `$` as a way of denoting special variables. For example, the
+  pseudo-variable `$2` is replaced with a "real" Rust variable by grmtools.
+  However, this means that `$2` cannot appear in, say, a string without being
+  replaced. This release uses `$$` as an escaping mechanism, so that one can
+  write code such as `"$$1"` in action code; this is rewritten to `"$1"` by
+  grmtools.
+
+
 # grmtools 0.4.1 (2019-06-10)
 
 * Newer versions of rustc produce "deprecated" warnings when trait objects are

@@ -1,6 +1,6 @@
 [package]
 name = "nimbleparse"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
 
