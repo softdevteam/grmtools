@@ -28,14 +28,14 @@ of recovering from syntax errors, causing a cascade of spurious further syntax
 errors to be reported. Programmers quickly learn that only the first reported
 syntax error can be trusted on to be correct.
 
-`lrpar` implements the `MF` error recovery algorithm from [Reducing
+`lrpar` implements the `CPCT+` error recovery algorithm from [Reducing
 Cascading Parsing Errors Through Fast Error
 Recovery](https://arxiv.org/abs/1804.07133), which, in our biased opinion, does
 a better job than previous approaches. It is fast, grammar neutral, and reports
 multiple *repair sequences* to users, allowing them to consider which best
 matches their intentions.
 
-No matter how clever we think `MF` is, it is important to understand that it has
+No matter how clever we think `CPCT+` is, it is important to understand that it has
 a fundamental limitation: it only knows about a language's syntax; it has no
 concept of the language's semantics beyond that implied by the structure of the
 grammar; and it cannot control what the user does with the result of error
@@ -333,7 +333,7 @@ INT`.
 
 For any given syntax error there are, potentially, a finite but vast number of
 possible valid repair sequences: far too many to exhaustively search. Error
-recovery algorithms such as `MF` use various heuristics to cut the search space
+recovery algorithms such as `CPCT+` use various heuristics to cut the search space
 down to something that is (generally) manageable. Although surprisingly few in
 practise, this inevitably leads to occasional situations where the repair
 sequences found (or, more accurately, those not found) surprise humans.
@@ -360,7 +360,7 @@ Unable to evaluate expression.
 ```
 
 At a certain number of open brackets (which will partly depend on the speed of
-your machine), `MF` simply cannot find suitable repair sequences within its
+your machine), `CPCT+` simply cannot find suitable repair sequences within its
 internal timeout, hence the “No repair sequences found” message. In practise
 this happens in less than 2% of real-world inputs, so it is not a significant
 worry.
@@ -369,13 +369,13 @@ worry.
 ### Some “obvious” repair sequences aren't reported at the end of a file
 
 The second surprising condition is more subtle. Before we can show the issue, we
-need to introduce the concept of repair sequence ranking: `MF` only presents the
+need to introduce the concept of repair sequence ranking: `CPCT+` only presents the
 lowest cost repair sequences to users (where `Insert`s and `Delete`s cost 1, and
 `Shift`s cost 0). Higher cost repair sequences are discarded.
 
-In an ideal world, `MF` would find repair sequences that allow a file to parse
+In an ideal world, `CPCT+` would find repair sequences that allow a file to parse
 completely successfully. In practice, this is only feasible if a syntax error
-occurs near the very end of the input. In most cases, `MF` is happy with a
+occurs near the very end of the input. In most cases, `CPCT+` is happy with a
 weaker condition, which is that a repair sequence ends with 3 `Shift` repairs,
 showing that parsing has got back on track, at least for a little bit. This
 condition explains the following:
@@ -413,7 +413,7 @@ to the user.
 
 In practise, this situation is rarer than the timeout problem, to the point that
 it’s arguably not worth worrying about or explaining to end users. Even when it
-happens, the repair sequences that `MF` reports are always correct and at least
+happens, the repair sequences that `CPCT+` reports are always correct and at least
 one repair sequence will be reported (assuming that error recovery doesn't time
 out!).
 
@@ -449,7 +449,7 @@ Error at line 5 col 21. Repair sequences found:
 
 ## Turning off error recovery
 
-By default, `lrpar` uses the `MF` error recovery algorithm. You can use the
+By default, `lrpar` uses the `CPCT+` error recovery algorithm. You can use the
 `None` error recovery algorithm, which causes parsing to stop as soon as it hits
 the first parsing error, with the `recoverer` method in `CTParserBuilder` or
 `RTParserBuilder`. For example, we can change `calc`'s `build.rs` file to:

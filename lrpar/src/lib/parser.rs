@@ -584,6 +584,7 @@ pub enum RecoveryKind {
     CPCTPlus,
     /// The MF algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
     /// Parsers".
+    #[doc(hidden)]
     MF,
     #[doc(hidden)]
     Panic,
@@ -713,7 +714,7 @@ where
             grm,
             sgraph,
             stable,
-            recoverer: RecoveryKind::MF,
+            recoverer: RecoveryKind::CPCTPlus,
             term_costs: &|_| 1,
             phantom: PhantomData
         }
@@ -914,7 +915,7 @@ pub(crate) mod test {
     }
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
-        let (grm, pt) = do_parse(RecoveryKind::MF, lexs, grms, input);
+        let (grm, pt) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, input);
         assert_eq!(expected, pt.unwrap().pp(&grm, &input));
     }
 

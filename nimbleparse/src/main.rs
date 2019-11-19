@@ -33,7 +33,7 @@ fn usage(prog: &str, msg: &str) -> ! {
     }
     writeln!(
         &mut stderr(),
-        "Usage: {} [-r <cpctplus|mf|none>] [-y <eco|grmtools|original>] [-q] <lexer.l> <parser.y> <input file>",
+        "Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-q] <lexer.l> <parser.y> <input file>",
         leaf
     )
     .ok();
@@ -62,8 +62,8 @@ fn main() {
         .optopt(
             "r",
             "recoverer",
-            "Recoverer to be used (default: mf)",
-            "cpctplus|mf|none"
+            "Recoverer to be used (default: cpctplus)",
+            "cpctplus|none"
         )
         .optopt(
             "y",
