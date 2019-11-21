@@ -1,8 +1,9 @@
 [package]
 name = "nimbleparse"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
+license = "Apache-2.0/MIT"
 
 [[bin]]
 doc = false

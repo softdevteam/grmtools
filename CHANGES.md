@@ -1,3 +1,14 @@
+# grmtools 0.4.3 (2019-11-21)
+
+* Deprecate the MF recoverer: CPCT+ is now the default and MF is now
+  undocumented. For most people, CPCT+ is good enough, and it's quite a bit
+  easier to understand. In the longer term, MF will probably disappear
+  entirely.
+
+* License as dual Apache-2.0/MIT (instead of a more complex, and little
+  understood, triple license of Apache-2.0/MIT/UPL-1.0).
+
+
 # grmtools 0.4.2 (2019-06-26)
 
 * Action code uses `$` as a way of denoting special variables. For example, the
