@@ -6,9 +6,7 @@ version = "0.4.2"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
 readme = "README.md"
-# This should be "Apache-2.0 OR MIT OR UPL-1.0" but crates.io doesn't know about
-# UPL-1.0.
-license = "Apache-2.0 OR MIT"
+license = "Apache-2.0/MIT"
 categories = ["parsing"]
 keywords = ["yacc", "grammar"]
 
