@@ -101,11 +101,7 @@ struct CPCTPlus<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
     parser: &'a Parser<'a, StorageT, ActionT>
 }
 
-pub(crate) fn recoverer<
-    'a,
-    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-    ActionT: 'static
->(
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
     parser: &'a Parser<StorageT, ActionT>
 ) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
@@ -115,7 +111,7 @@ where
     Box::new(CPCTPlus { parser })
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     Recoverer<StorageT, ActionT> for CPCTPlus<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
@@ -244,7 +240,7 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     CPCTPlus<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,

@@ -110,11 +110,7 @@ struct MF<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
     parser: &'a Parser<'a, StorageT, ActionT>
 }
 
-pub(crate) fn recoverer<
-    'a,
-    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-    ActionT: 'static
->(
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
     parser: &'a Parser<StorageT, ActionT>
 ) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
@@ -130,7 +126,7 @@ where
     Box::new(MF { dist, parser })
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     Recoverer<StorageT, ActionT> for MF<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
@@ -246,7 +242,7 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     MF<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
@@ -533,7 +529,7 @@ fn ends_with_parse_at_least_shifts<StorageT>(repairs: &Cactus<RepairMerge<Storag
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-pub(crate) fn rank_cnds<StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>(
+pub(crate) fn rank_cnds<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
     parser: &Parser<StorageT, ActionT>,
     finish_by: Instant,
     in_laidx: usize,
@@ -585,8 +581,9 @@ where
 /// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
 /// distance and a new pstack.
 pub(crate) fn apply_repairs<
+    'a,
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-    ActionT: 'static
+    ActionT: 'a
 >(
     parser: &Parser<StorageT, ActionT>,
     mut laidx: usize,

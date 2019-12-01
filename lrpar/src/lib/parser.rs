@@ -210,7 +210,7 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     Parser<'a, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
@@ -767,7 +767,7 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<ActionT: 'static>(
+    pub fn parse_actions<ActionT: 'a>(
         &self,
         lexer: &mut dyn Lexer<StorageT>,
         actions: &[&dyn Fn(
