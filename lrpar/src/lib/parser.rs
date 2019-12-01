@@ -219,15 +219,15 @@ where
 {
     fn parse_actions<F>(
         rcvry_kind: RecoveryKind,
-        grm: &YaccGrammar<StorageT>,
+        grm: &'a YaccGrammar<StorageT>,
         token_cost: F,
-        sgraph: &StateGraph<StorageT>,
-        stable: &StateTable<StorageT>,
-        lexer: &mut dyn Lexer<StorageT>,
+        sgraph: &'a StateGraph<StorageT>,
+        stable: &'a StateTable<StorageT>,
+        lexer: &'b mut (dyn Lexer<StorageT> + 'b),
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: &[&dyn Fn(
+        actions: &'a [&'a dyn Fn(
             RIdx<StorageT>,
-            &dyn Lexer<StorageT>,
+            &'b (dyn Lexer<StorageT> + 'b),
             (usize, usize),
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
@@ -768,12 +768,12 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<ActionT: 'a>(
+    pub fn parse_actions<'b, ActionT: 'a>(
         &self,
-        lexer: &mut dyn Lexer<StorageT>,
+        lexer: &'b mut (dyn Lexer<StorageT> + 'b),
         actions: &[&dyn Fn(
             RIdx<StorageT>,
-            &dyn Lexer<StorageT>,
+            &'b (dyn Lexer<StorageT> + 'b),
             (usize, usize),
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
