@@ -75,7 +75,7 @@ pub enum AStackType<ActionT, StorageT> {
 pub struct Parser<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
-    pub(crate) token_cost: &'a dyn Fn(TIdx<StorageT>) -> u8,
+    pub(crate) token_cost: Box<dyn Fn(TIdx<StorageT>) -> u8 + 'a>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
     pub(crate) lexer: &'a dyn Lexer<StorageT>,
@@ -105,7 +105,7 @@ where
         lexemes: &[Lexeme<StorageT>]
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
     where
-        F: Fn(TIdx<StorageT>) -> u8
+        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -122,7 +122,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: &token_cost,
+            token_cost: Box::new(token_cost),
             sgraph,
             stable,
             lexer,
@@ -169,7 +169,7 @@ where
         lexemes: &[Lexeme<StorageT>]
     ) -> Vec<LexParseError<StorageT>>
     where
-        F: Fn(TIdx<StorageT>) -> u8
+        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -186,7 +186,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: &token_cost,
+            token_cost: Box::new(token_cost),
             sgraph,
             stable,
             lexer,
@@ -232,7 +232,7 @@ where
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
     where
-        F: Fn(TIdx<StorageT>) -> u8
+        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -240,7 +240,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: &token_cost,
+            token_cost: Box::new(token_cost),
             sgraph,
             stable,
             lexer,

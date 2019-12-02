@@ -121,7 +121,12 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    let dist = Dist::new(parser.grm, parser.sgraph, parser.stable, parser.token_cost);
+    let dist = Dist::new(
+        parser.grm,
+        parser.sgraph,
+        parser.stable,
+        parser.token_cost.as_ref()
+    );
     Box::new(MF { dist, parser })
 }
 
