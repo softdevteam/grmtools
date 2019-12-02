@@ -81,7 +81,7 @@ pub struct Parser<'a, 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     pub(crate) lexer: &'b dyn Lexer<StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
-    pub(crate) lexemes: &'b [Lexeme<StorageT>],
+    pub(crate) lexemes: Vec<Lexeme<StorageT>>,
     actions: &'a [&'a dyn Fn(
         RIdx<StorageT>,
         &'b dyn Lexer<StorageT>,
@@ -103,7 +103,7 @@ where
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &mut dyn Lexer<StorageT>,
-        lexemes: &[Lexeme<StorageT>]
+        lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
     where
         F: Fn(TIdx<StorageT>) -> u8 + 'a
@@ -167,7 +167,7 @@ where
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &mut dyn Lexer<StorageT>,
-        lexemes: &[Lexeme<StorageT>]
+        lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>>
     where
         F: Fn(TIdx<StorageT>) -> u8 + 'a
@@ -224,7 +224,7 @@ where
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &mut dyn Lexer<StorageT>,
-        lexemes: &[Lexeme<StorageT>],
+        lexemes: Vec<Lexeme<StorageT>>,
         actions: &[&dyn Fn(
             RIdx<StorageT>,
             &dyn Lexer<StorageT>,
@@ -740,7 +740,7 @@ where
             self.sgraph,
             self.stable,
             lexer,
-            &lexemes
+            lexemes
         )
     }
 
@@ -758,7 +758,7 @@ where
             self.sgraph,
             self.stable,
             lexer,
-            &lexemes
+            lexemes
         )
     }
 
@@ -789,7 +789,7 @@ where
             self.sgraph,
             self.stable,
             lexer,
-            &lexemes,
+            lexemes,
             actions
         )
     }
