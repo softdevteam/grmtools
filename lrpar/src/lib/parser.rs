@@ -102,7 +102,7 @@ where
         token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &mut dyn Lexer<StorageT>,
+        lexer: &dyn Lexer<StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
     where
@@ -166,7 +166,7 @@ where
         token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &mut dyn Lexer<StorageT>,
+        lexer: &dyn Lexer<StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>>
     where
@@ -223,7 +223,7 @@ where
         token_cost: F,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
-        lexer: &'b mut (dyn Lexer<StorageT> + 'b),
+        lexer: &'b (dyn Lexer<StorageT> + 'b),
         lexemes: Vec<Lexeme<StorageT>>,
         actions: &'a [&'a dyn Fn(
             RIdx<StorageT>,
@@ -727,7 +727,7 @@ where
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_generictree(
         &self,
-        lexer: &mut dyn Lexer<StorageT>
+        lexer: &dyn Lexer<StorageT>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         let lexemes = match lexer.all_lexemes() {
             Ok(ls) => ls,
@@ -746,7 +746,7 @@ where
 
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_noaction(&self, lexer: &mut dyn Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
+    pub fn parse_noaction(&self, lexer: &dyn Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
         let lexemes = match lexer.all_lexemes() {
             Ok(ls) => ls,
             Err(e) => return vec![e.into()]
@@ -770,7 +770,7 @@ where
     /// be a mix of lexing and parsing errors.
     pub fn parse_actions<'b, ActionT: 'a>(
         &self,
-        lexer: &'b mut (dyn Lexer<StorageT> + 'b),
+        lexer: &'b (dyn Lexer<StorageT> + 'b),
         actions: &[&dyn Fn(
             RIdx<StorageT>,
             &'b (dyn Lexer<StorageT> + 'b),
@@ -843,7 +843,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> ParseError<StorageT> {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::collections::HashMap;
+    use std::{cell::Cell, collections::HashMap};
 
     use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
     use lrtable::{from_yacc, Minimiser};
@@ -888,7 +888,10 @@ pub(crate) mod test {
             .collect();
         let lexer_rules = small_lexer(lexs, rule_ids);
         let lexemes = small_lex(lexer_rules, input);
-        let mut lexer = SmallLexer { lexemes, i: 0 };
+        let lexer = SmallLexer {
+            lexemes,
+            i: Cell::new(0)
+        };
         let costs_tidx = costs
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
@@ -896,7 +899,7 @@ pub(crate) mod test {
         let (r, errs) = RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
-            .parse_generictree(&mut lexer);
+            .parse_generictree(&lexer);
         if r.is_some() && errs.is_empty() {
             (grm, Ok(r.unwrap()))
         } else if r.is_some() && !errs.is_empty() {
@@ -917,14 +920,14 @@ pub(crate) mod test {
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
     struct SmallLexer<StorageT> {
         lexemes: Vec<Lexeme<StorageT>>,
-        i: usize
+        i: Cell<usize>
     }
 
     impl<StorageT: Hash + PrimInt + Unsigned> Lexer<StorageT> for SmallLexer<StorageT> {
-        fn next(&mut self) -> Option<Result<Lexeme<StorageT>, LexError>> {
-            let old_i = self.i;
+        fn next(&self) -> Option<Result<Lexeme<StorageT>, LexError>> {
+            let old_i = self.i.get();
             if old_i < self.lexemes.len() {
-                self.i = old_i + 1;
+                self.i.set(old_i + 1);
                 return Some(Ok(self.lexemes[old_i]));
             }
             None

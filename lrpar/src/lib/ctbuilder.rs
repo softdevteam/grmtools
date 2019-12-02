@@ -434,7 +434,7 @@ where
     use std::vec;
 
     #[allow(dead_code)]
-    pub fn parse<'input>(lexer: &'input mut (dyn Lexer<{storaget}> + 'input))
+    pub fn parse<'input>(lexer: &'input (dyn Lexer<{storaget}> + 'input))
           -> (Option<{actiont}>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
@@ -445,7 +445,7 @@ where
                 outs.push_str(&format!(
                     "use lrpar::Node;
 
-    pub fn parse(lexer: &mut dyn Lexer<{storaget}>)
+    pub fn parse(lexer: &dyn Lexer<{storaget}>)
           -> (Option<Node<{storaget}>>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name()
@@ -453,7 +453,7 @@ where
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
-                    "    #[allow(dead_code)]\n    pub fn parse(lexer: &mut dyn Lexer<{storaget}>)
+                    "    #[allow(dead_code)]\n    pub fn parse(lexer: &dyn Lexer<{storaget}>)
           -> Vec<LexParseError<{storaget}>>
     {{",
                     storaget = StorageT::type_name()

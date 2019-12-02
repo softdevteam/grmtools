@@ -17,7 +17,7 @@ fn main() {
             Some(Ok(ref l)) => {
                 // Now we create a lexer with the `lexer` method with which we can lex an input.
                 // Note that each lexer can only lex one input in its lifetime.
-                let mut lexer = lexerdef.lexer(l);
+                let lexer = lexerdef.lexer(l);
                 match lexer.all_lexemes() {
                     Ok(lexemes) => println!("{:?}", lexemes),
                     Err(e) => println!("{:?}", e)
