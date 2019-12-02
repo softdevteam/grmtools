@@ -72,25 +72,26 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>)
 }
 
-pub struct Parser<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
+pub struct Parser<'a, 'b, StorageT: 'a + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
     pub(crate) token_cost: Box<dyn Fn(TIdx<StorageT>) -> u8 + 'a>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: &'a dyn Lexer<StorageT>,
+    pub(crate) lexer: &'b dyn Lexer<StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
-    pub(crate) lexemes: &'a [Lexeme<StorageT>],
+    pub(crate) lexemes: &'b [Lexeme<StorageT>],
     actions: &'a [&'a dyn Fn(
         RIdx<StorageT>,
-        &dyn Lexer<StorageT>,
+        &'b dyn Lexer<StorageT>,
         (usize, usize),
         vec::Drain<AStackType<ActionT, StorageT>>
     ) -> ActionT]
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, StorageT, Node<StorageT>>
+impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'b, StorageT, Node<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -154,7 +155,7 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, StorageT, ()>
+impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, 'b, StorageT, ()>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -210,8 +211,8 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    Parser<'a, StorageT, ActionT>
+impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+    Parser<'a, 'b, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
