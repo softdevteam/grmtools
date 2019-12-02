@@ -72,7 +72,7 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>)
 }
 
-pub struct Parser<'a, 'b, StorageT: 'a + Eq + Hash, ActionT: 'a> {
+pub struct Parser<'a, 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
     pub(crate) token_cost: Box<dyn Fn(TIdx<StorageT>) -> u8 + 'a>,

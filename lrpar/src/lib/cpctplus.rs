@@ -97,7 +97,7 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct CPCTPlus<'a, 'b, StorageT: 'a + Eq + Hash, ActionT: 'a> {
+struct CPCTPlus<'a, 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     parser: &'a Parser<'a, 'b, StorageT, ActionT>
 }
 

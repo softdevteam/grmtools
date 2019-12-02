@@ -105,7 +105,7 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct MF<'a, 'b, StorageT: 'a + Eq + Hash, ActionT: 'a> {
+struct MF<'a, 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     dist: Dist<StorageT>,
     parser: &'a Parser<'a, 'b, StorageT, ActionT>
 }
