@@ -105,18 +105,18 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct MF<'a, 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+struct MF<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     dist: Dist<StorageT>,
-    parser: &'a Parser<'a, 'b, StorageT, ActionT>
+    parser: &'a Parser<'a, 'input, StorageT, ActionT>
 }
 
 pub(crate) fn recoverer<
     'a,
-    'b,
+    'input,
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     ActionT: 'a
 >(
-    parser: &'a Parser<'a, 'b, StorageT, ActionT>
+    parser: &'a Parser<'a, 'input, StorageT, ActionT>
 ) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
@@ -131,8 +131,8 @@ where
     Box::new(MF { dist, parser })
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    Recoverer<StorageT, ActionT> for MF<'a, 'b, StorageT, ActionT>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+    Recoverer<StorageT, ActionT> for MF<'a, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -247,8 +247,8 @@ where
     }
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    MF<'a, 'b, StorageT, ActionT>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+    MF<'a, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>

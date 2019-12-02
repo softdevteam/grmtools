@@ -72,26 +72,26 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>)
 }
 
-pub struct Parser<'a, 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
     pub(crate) token_cost: Box<dyn Fn(TIdx<StorageT>) -> u8 + 'a>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: &'b dyn Lexer<StorageT>,
+    pub(crate) lexer: &'input dyn Lexer<StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
     actions: &'a [&'a dyn Fn(
         RIdx<StorageT>,
-        &'b dyn Lexer<StorageT>,
+        &'input dyn Lexer<StorageT>,
         (usize, usize),
         vec::Drain<AStackType<ActionT, StorageT>>
     ) -> ActionT]
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-    Parser<'a, 'b, StorageT, Node<StorageT>>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'input, StorageT, Node<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -155,7 +155,8 @@ where
     }
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, 'b, StorageT, ()>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'input, StorageT, ()>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -211,8 +212,8 @@ where
     }
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    Parser<'a, 'b, StorageT, ActionT>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+    Parser<'a, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -223,11 +224,11 @@ where
         token_cost: F,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
-        lexer: &'b (dyn Lexer<StorageT> + 'b),
+        lexer: &'input (dyn Lexer<StorageT> + 'input),
         lexemes: Vec<Lexeme<StorageT>>,
         actions: &'a [&'a dyn Fn(
             RIdx<StorageT>,
-            &'b (dyn Lexer<StorageT> + 'b),
+            &'input (dyn Lexer<StorageT> + 'input),
             (usize, usize),
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
@@ -768,12 +769,12 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<'b, ActionT: 'a>(
+    pub fn parse_actions<'input, ActionT: 'a>(
         &self,
-        lexer: &'b (dyn Lexer<StorageT> + 'b),
+        lexer: &'input (dyn Lexer<StorageT> + 'input),
         actions: &[&dyn Fn(
             RIdx<StorageT>,
-            &'b (dyn Lexer<StorageT> + 'b),
+            &'input (dyn Lexer<StorageT> + 'input),
             (usize, usize),
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
