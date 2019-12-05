@@ -1,4 +1,5 @@
 use std::{
+    cell::{Cell, UnsafeCell},
     collections::{HashMap, HashSet},
     hash::Hash,
     slice::Iter
@@ -166,8 +167,8 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
 pub struct LRLexer<'a, StorageT> {
     lexerdef: &'a LexerDef<StorageT>,
     s: &'a str,
-    i: usize,
-    newlines: Vec<usize>
+    i: Cell<usize>,
+    newlines: UnsafeCell<Vec<usize>>
 }
 
 impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
@@ -175,8 +176,8 @@ impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
         LRLexer {
             lexerdef,
             s,
-            i: 0,
-            newlines: Vec::new()
+            i: Cell::new(0),
+            newlines: UnsafeCell::new(Vec::new())
         }
     }
 }
@@ -184,9 +185,9 @@ impl<'a, StorageT: Copy + Eq> LRLexer<'a, StorageT> {
 impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
     for LRLexer<'a, StorageT>
 {
-    fn next(&mut self) -> Option<Result<Lexeme<StorageT>, LexError>> {
-        while self.i < self.s.len() {
-            let old_i = self.i;
+    fn next(&self) -> Option<Result<Lexeme<StorageT>, LexError>> {
+        while self.i.get() < self.s.len() {
+            let old_i = self.i.get();
             let mut longest = 0; // Length of the longest match
             let mut longest_ridx = 0; // This is only valid iff longest != 0
             for (ridx, r) in self.lexerdef.iter_rules().enumerate() {
@@ -201,7 +202,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
                 }
             }
             if longest > 0 {
-                self.newlines.extend(
+                unsafe { &mut *self.newlines.get() }.extend(
                     self.s[old_i..old_i + longest]
                         .chars()
                         .enumerate()
@@ -212,18 +213,18 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
                 if r.name.is_some() {
                     match r.tok_id {
                         Some(tok_id) => {
-                            self.i += longest;
+                            self.i.set(self.i.get() + longest);
                             return Some(Ok(Lexeme::new(tok_id, old_i, Some(longest))));
                         }
                         None => {
-                            self.i = self.s.len();
+                            self.i.set(self.s.len());
                             return Some(Err(LexError { idx: old_i }));
                         }
                     }
                 }
-                self.i += longest;
+                self.i.set(self.i.get() + longest);
             } else {
-                self.i = self.s.len();
+                self.i.set(self.s.len());
                 return Some(Err(LexError { idx: old_i }));
             }
         }
@@ -236,19 +237,17 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         }
 
         fn line_col_off<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
-            if lexer.newlines.is_empty() || i < lexer.newlines[0] {
+            let newlines = unsafe { &mut *lexer.newlines.get() };
+            if newlines.is_empty() || i < newlines[0] {
                 return (1, i);
             }
 
-            for j in 0..lexer.newlines.len() - 1 {
-                if lexer.newlines[j + 1] > i {
-                    return (j + 2, i - lexer.newlines[j]);
+            for j in 0..newlines.len() - 1 {
+                if newlines[j + 1] > i {
+                    return (j + 2, i - newlines[j]);
                 }
             }
-            (
-                lexer.newlines.len() + 1,
-                i - lexer.newlines[lexer.newlines.len() - 1]
-            )
+            (newlines.len() + 1, i - newlines[newlines.len() - 1])
         }
 
         let (line_idx, col_byte) = line_col_off(self, i);
@@ -262,18 +261,19 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
                 panic!("Offset {} exceeds known input length {}", i, lexer.s.len());
             }
 
-            if lexer.newlines.is_empty() {
+            let newlines = unsafe { &mut *lexer.newlines.get() };
+            if newlines.is_empty() {
                 return (0, lexer.s.len());
-            } else if i < lexer.newlines[0] {
-                return (0, lexer.newlines[0] - 1);
+            } else if i < newlines[0] {
+                return (0, newlines[0] - 1);
             }
 
-            for j in 0..lexer.newlines.len() - 1 {
-                if lexer.newlines[j + 1] > i {
-                    return (lexer.newlines[j], lexer.newlines[j + 1] - 1);
+            for j in 0..newlines.len() - 1 {
+                if newlines[j + 1] > i {
+                    return (newlines[j], newlines[j + 1] - 1);
                 }
             }
-            (lexer.newlines[lexer.newlines.len() - 1], lexer.s.len())
+            (newlines[newlines.len() - 1], lexer.s.len())
         }
 
         let (st, en) = surrounding_line_off(self, i);
@@ -369,7 +369,7 @@ if 'IF'
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
-        let mut lexer = lexerdef.lexer("a ❤ a");
+        let lexer = lexerdef.lexer("a ❤ a");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         let lex1 = lexemes[0];
@@ -397,19 +397,19 @@ if 'IF'
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
-        let mut lexer = lexerdef.lexer("a b c");
+        let lexer = lexerdef.lexer("a b c");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_col(lexemes[1].start()), (1, 3));
         assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "a b c");
 
-        let mut lexer = lexerdef.lexer("a b c\n");
+        let lexer = lexerdef.lexer("a b c\n");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_col(lexemes[1].start()), (1, 3));
         assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "a b c");
 
-        let mut lexer = lexerdef.lexer(" a\nb\n  c d");
+        let lexer = lexerdef.lexer(" a\nb\n  c d");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 4);
         assert_eq!(lexer.line_col(lexemes[0].start()), (1, 2));
@@ -433,7 +433,7 @@ if 'IF'
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
-        let mut lexer = lexerdef.lexer(" a\n❤ b");
+        let lexer = lexerdef.lexer(" a\n❤ b");
         let lexemes = lexer.all_lexemes().unwrap();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_col(lexemes[0].start()), (1, 2));

@@ -1,0 +1,19 @@
+[package]
+name = "calc_ast"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+edition = "2018"
+
+[[bin]]
+doc = false
+name = "calc_ast"
+
+[build-dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }
+
+[dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }

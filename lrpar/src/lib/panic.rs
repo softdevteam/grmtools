@@ -7,11 +7,7 @@ use crate::parser::{AStackType, ParseRepair, Parser, Recoverer};
 
 struct Panic;
 
-pub(crate) fn recoverer<
-    'a,
-    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-    ActionT: 'static
->(
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
     _: &'a Parser<StorageT, ActionT>
 ) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
@@ -21,7 +17,7 @@ where
     Box::new(Panic)
 }
 
-impl<StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     Recoverer<StorageT, ActionT> for Panic
 where
     usize: AsPrimitive<StorageT>,

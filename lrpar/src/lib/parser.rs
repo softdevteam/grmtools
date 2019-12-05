@@ -72,25 +72,26 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>)
 }
 
-pub struct Parser<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
+pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
-    pub(crate) token_cost: &'a dyn Fn(TIdx<StorageT>) -> u8,
+    pub(crate) token_cost: Box<dyn Fn(TIdx<StorageT>) -> u8 + 'a>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: &'a dyn Lexer<StorageT>,
+    pub(crate) lexer: &'input dyn Lexer<StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
-    pub(crate) lexemes: &'a [Lexeme<StorageT>],
+    pub(crate) lexemes: Vec<Lexeme<StorageT>>,
     actions: &'a [&'a dyn Fn(
         RIdx<StorageT>,
-        &dyn Lexer<StorageT>,
+        &'input dyn Lexer<StorageT>,
         (usize, usize),
         vec::Drain<AStackType<ActionT, StorageT>>
     ) -> ActionT]
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, StorageT, Node<StorageT>>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'input, StorageT, Node<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -101,11 +102,11 @@ where
         token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &mut dyn Lexer<StorageT>,
-        lexemes: &[Lexeme<StorageT>]
+        lexer: &dyn Lexer<StorageT>,
+        lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
     where
-        F: Fn(TIdx<StorageT>) -> u8
+        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -122,7 +123,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: &token_cost,
+            token_cost: Box::new(token_cost),
             sgraph,
             stable,
             lexer,
@@ -154,7 +155,8 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, StorageT, ()>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'input, StorageT, ()>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -165,11 +167,11 @@ where
         token_cost: F,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &mut dyn Lexer<StorageT>,
-        lexemes: &[Lexeme<StorageT>]
+        lexer: &dyn Lexer<StorageT>,
+        lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>>
     where
-        F: Fn(TIdx<StorageT>) -> u8
+        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -186,7 +188,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: &token_cost,
+            token_cost: Box::new(token_cost),
             sgraph,
             stable,
             lexer,
@@ -210,29 +212,29 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
-    Parser<'a, StorageT, ActionT>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+    Parser<'a, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
     fn parse_actions<F>(
         rcvry_kind: RecoveryKind,
-        grm: &YaccGrammar<StorageT>,
+        grm: &'a YaccGrammar<StorageT>,
         token_cost: F,
-        sgraph: &StateGraph<StorageT>,
-        stable: &StateTable<StorageT>,
-        lexer: &mut dyn Lexer<StorageT>,
-        lexemes: &[Lexeme<StorageT>],
-        actions: &[&dyn Fn(
+        sgraph: &'a StateGraph<StorageT>,
+        stable: &'a StateTable<StorageT>,
+        lexer: &'input (dyn Lexer<StorageT> + 'input),
+        lexemes: Vec<Lexeme<StorageT>>,
+        actions: &'a [&'a dyn Fn(
             RIdx<StorageT>,
-            &dyn Lexer<StorageT>,
+            &'input (dyn Lexer<StorageT> + 'input),
             (usize, usize),
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
     where
-        F: Fn(TIdx<StorageT>) -> u8
+        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -240,7 +242,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: &token_cost,
+            token_cost: Box::new(token_cost),
             sgraph,
             stable,
             lexer,
@@ -726,7 +728,7 @@ where
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_generictree(
         &self,
-        lexer: &mut dyn Lexer<StorageT>
+        lexer: &dyn Lexer<StorageT>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         let lexemes = match lexer.all_lexemes() {
             Ok(ls) => ls,
@@ -739,13 +741,13 @@ where
             self.sgraph,
             self.stable,
             lexer,
-            &lexemes
+            lexemes
         )
     }
 
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_noaction(&self, lexer: &mut dyn Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
+    pub fn parse_noaction(&self, lexer: &dyn Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
         let lexemes = match lexer.all_lexemes() {
             Ok(ls) => ls,
             Err(e) => return vec![e.into()]
@@ -757,7 +759,7 @@ where
             self.sgraph,
             self.stable,
             lexer,
-            &lexemes
+            lexemes
         )
     }
 
@@ -767,12 +769,12 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<ActionT: 'static>(
+    pub fn parse_actions<'input, ActionT: 'a>(
         &self,
-        lexer: &mut dyn Lexer<StorageT>,
+        lexer: &'input (dyn Lexer<StorageT> + 'input),
         actions: &[&dyn Fn(
             RIdx<StorageT>,
-            &dyn Lexer<StorageT>,
+            &'input (dyn Lexer<StorageT> + 'input),
             (usize, usize),
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
@@ -788,7 +790,7 @@ where
             self.sgraph,
             self.stable,
             lexer,
-            &lexemes,
+            lexemes,
             actions
         )
     }
@@ -842,7 +844,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> ParseError<StorageT> {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::collections::HashMap;
+    use std::{cell::Cell, collections::HashMap};
 
     use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
     use lrtable::{from_yacc, Minimiser};
@@ -887,7 +889,10 @@ pub(crate) mod test {
             .collect();
         let lexer_rules = small_lexer(lexs, rule_ids);
         let lexemes = small_lex(lexer_rules, input);
-        let mut lexer = SmallLexer { lexemes, i: 0 };
+        let lexer = SmallLexer {
+            lexemes,
+            i: Cell::new(0)
+        };
         let costs_tidx = costs
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
@@ -895,7 +900,7 @@ pub(crate) mod test {
         let (r, errs) = RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
-            .parse_generictree(&mut lexer);
+            .parse_generictree(&lexer);
         if r.is_some() && errs.is_empty() {
             (grm, Ok(r.unwrap()))
         } else if r.is_some() && !errs.is_empty() {
@@ -916,14 +921,14 @@ pub(crate) mod test {
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
     struct SmallLexer<StorageT> {
         lexemes: Vec<Lexeme<StorageT>>,
-        i: usize
+        i: Cell<usize>
     }
 
     impl<StorageT: Hash + PrimInt + Unsigned> Lexer<StorageT> for SmallLexer<StorageT> {
-        fn next(&mut self) -> Option<Result<Lexeme<StorageT>, LexError>> {
-            let old_i = self.i;
+        fn next(&self) -> Option<Result<Lexeme<StorageT>, LexError>> {
+            let old_i = self.i.get();
             if old_i < self.lexemes.len() {
-                self.i = old_i + 1;
+                self.i.set(old_i + 1);
                 return Some(Ok(self.lexemes[old_i]));
             }
             None

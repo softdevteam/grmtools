@@ -97,15 +97,11 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct CPCTPlus<'a, StorageT: 'a + Eq + Hash, ActionT: 'a> {
-    parser: &'a Parser<'a, StorageT, ActionT>
+struct CPCTPlus<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+    parser: &'a Parser<'a, 'input, StorageT, ActionT>
 }
 
-pub(crate) fn recoverer<
-    'a,
-    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-    ActionT: 'static
->(
+pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
     parser: &'a Parser<StorageT, ActionT>
 ) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
@@ -115,8 +111,8 @@ where
     Box::new(CPCTPlus { parser })
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
-    Recoverer<StorageT, ActionT> for CPCTPlus<'a, StorageT, ActionT>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+    Recoverer<StorageT, ActionT> for CPCTPlus<'a, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -244,8 +240,8 @@ where
     }
 }
 
-impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'static>
-    CPCTPlus<'a, StorageT, ActionT>
+impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+    CPCTPlus<'a, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>

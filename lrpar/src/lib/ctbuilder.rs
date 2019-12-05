@@ -33,6 +33,7 @@ const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
 const ACTIONS_KIND: &str = "__GTActionsKind";
 const ACTIONS_KIND_PREFIX: &str = "AK";
+const ACTIONS_KIND_HIDDEN: &str = "__GTActionsKindHidden";
 
 const GRM_FILE_EXT: &str = "grm";
 const RUST_FILE_EXT: &str = "rs";
@@ -433,7 +434,7 @@ where
     use std::vec;
 
     #[allow(dead_code)]
-    pub fn parse(lexer: &mut dyn Lexer<{storaget}>)
+    pub fn parse<'input>(lexer: &'input (dyn Lexer<{storaget}> + 'input))
           -> (Option<{actiont}>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
@@ -444,7 +445,7 @@ where
                 outs.push_str(&format!(
                     "use lrpar::Node;
 
-    pub fn parse(lexer: &mut dyn Lexer<{storaget}>)
+    pub fn parse(lexer: &dyn Lexer<{storaget}>)
           -> (Option<Node<{storaget}>>, Vec<LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name()
@@ -452,7 +453,7 @@ where
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
-                    "    #[allow(dead_code)]\n    pub fn parse(lexer: &mut dyn Lexer<{storaget}>)
+                    "    #[allow(dead_code)]\n    pub fn parse(lexer: &dyn Lexer<{storaget}>)
           -> Vec<LexParseError<{storaget}>>
     {{",
                     storaget = StorageT::type_name()
@@ -491,10 +492,10 @@ where
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
         let mut actions: Vec<&dyn Fn(RIdx<{storaget}>,
-                       &dyn Lexer<{storaget}>,
+                       &'input (dyn Lexer<{storaget}> + 'input),
                        (usize, usize),
-                       vec::Drain<AStackType<{actionskind}, {storaget}>>)
-                    -> {actionskind}> = Vec::new();\n",
+                       vec::Drain<AStackType<{actionskind}<'input>, {storaget}>>)
+                    -> {actionskind}<'input>> = Vec::new();\n",
                     actionskind = ACTIONS_KIND,
                     storaget = StorageT::type_name()
                 ));
@@ -596,11 +597,11 @@ where
             // element from the argument vector (e.g. $1 is replaced by args[0]). At
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
-                "    fn {prefix}wrapper_{}({prefix}ridx: RIdx<{storaget}>,
-                      {prefix}lexer: &dyn Lexer<{storaget}>,
+                "    fn {prefix}wrapper_{}<'input>({prefix}ridx: RIdx<{storaget}>,
+                      {prefix}lexer: &'input (dyn Lexer<{storaget}> + 'input),
                       {prefix}span: (usize, usize),
-                      mut {prefix}args: vec::Drain<AStackType<{actionskind}, {storaget}>>)
-                   -> {actionskind} {{",
+                      mut {prefix}args: vec::Drain<AStackType<{actionskind}<'input>, {storaget}>>)
+                   -> {actionskind}<'input> {{",
                 usize::from(pidx),
                 storaget = StorageT::type_name(),
                 prefix = ACTION_PREFIX,
@@ -671,7 +672,7 @@ where
 
         outs.push_str(&format!(
             "    #[allow(dead_code)]
-    enum {} {{\n",
+    enum {}<'input> {{\n",
             ACTIONS_KIND
         ));
         for ridx in grm.iter_rules() {
@@ -686,7 +687,11 @@ where
                 actiont = grm.actiontype(ridx).as_ref().unwrap()
             ));
         }
-        outs.push_str("    }\n\n");
+        outs.push_str(&format!(
+            "    _{actionskindhidden}(::std::marker::PhantomData<&'input ()>)
+    }}\n\n",
+            actionskindhidden = ACTIONS_KIND_HIDDEN
+        ));
 
         outs
     }
@@ -726,8 +731,8 @@ where
             outs.push_str(&format!(
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
-    fn {prefix}action_{}({prefix}ridx: RIdx<{storaget}>,
-                     {prefix}lexer: &dyn Lexer<{storaget}>,
+    fn {prefix}action_{}<'input>({prefix}ridx: RIdx<{storaget}>,
+                     {prefix}lexer: &'input (dyn Lexer<{storaget}> + 'input),
                      {prefix}span: (usize, usize),
                      {args})
                   -> {actiont} {{\n",
