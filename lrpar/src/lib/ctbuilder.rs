@@ -285,7 +285,7 @@ where
 
         // out_base is the base filename for the output (e.g. /path/to/target/out/grm_y) to which
         // we will write filenames with various extensions below.
-        let mut outp_base = outp.as_ref().to_path_buf().clone();
+        let mut outp_base = outp.as_ref().to_path_buf();
         outp_base.set_extension("");
 
         // We don't need to go through the full rigmarole of generating an output file if all of
@@ -356,7 +356,8 @@ where
         // Header
         outs.push_str(&format!("mod {}_y {{\n", mod_name));
         outs.push_str(
-            "    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
+            "    #![allow(clippy::type_complexity)]
+    use lrpar::{{Lexer, LexParseError, RecoveryKind, RTParserBuilder}};
     use lrpar::ctbuilder::_reconstitute;
     use cfgrammar::TIdx;
 "
@@ -748,7 +749,7 @@ where
             let pre_action = grm.action(pidx).as_ref().unwrap();
             let mut last = 0;
             loop {
-                match pre_action[last..].find("$") {
+                match pre_action[last..].find('$') {
                     Some(off) => {
                         if pre_action[last + off..].starts_with("$$") {
                             outs.push_str(&pre_action[last..last + off + "$".len()]);

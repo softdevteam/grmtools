@@ -1,3 +1,5 @@
+#![allow(clippy::len_without_is_empty)]
+
 use std::{error::Error, fmt, hash::Hash, mem::size_of};
 
 use num_traits::{PrimInt, Unsigned};

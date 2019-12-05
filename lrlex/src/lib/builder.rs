@@ -129,8 +129,8 @@ where
                     .collect::<HashMap<_, _>>();
                 match lexerdef.set_rule_ids(&owned_map) {
                     (x, y) => (
-                        x.map(|a| a.iter().map(|b| b.to_string()).collect::<HashSet<_>>()),
-                        y.map(|a| a.iter().map(|b| b.to_string()).collect::<HashSet<_>>())
+                        x.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
+                        y.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>())
                     )
                 }
             }

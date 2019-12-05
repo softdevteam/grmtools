@@ -152,7 +152,7 @@ where
         }
 
         let start_node = PathFNode {
-            pstack: start_cactus_pstack.clone(),
+            pstack: start_cactus_pstack,
             laidx: in_laidx,
             repairs: Cactus::new().child(RepairMerge::Terminator),
             cf: 0,

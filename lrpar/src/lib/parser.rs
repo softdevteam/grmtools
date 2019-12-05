@@ -543,8 +543,8 @@ where
                 }
                 Action::Accept => {
                     debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
-                    if let Some(ref mut tstack_uw) = *tstack {
-                        debug_assert_eq!(tstack_uw.len(), 1);
+                    if let Some(ref tstack_uw) = *tstack {
+                        debug_assert_eq!((&tstack_uw).len(), 1);
                     }
                     break;
                 }

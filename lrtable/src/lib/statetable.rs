@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::hash_map::HashMap,
     error::Error,
     fmt::{self, Debug},
@@ -211,11 +212,13 @@ where
                             }
                             // By default, Yacc resolves reduce/reduce conflicts in favour
                             // of the earlier production in the grammar.
-                            if pidx < r_pidx {
-                                reduce_reduce.push((pidx, r_pidx, stidx));
-                                actions[off] = StateTable::encode(Action::Reduce(pidx));
-                            } else if pidx > r_pidx {
-                                reduce_reduce.push((r_pidx, pidx, stidx));
+                            match pidx.cmp(&r_pidx) {
+                                Ordering::Less => {
+                                    reduce_reduce.push((pidx, r_pidx, stidx));
+                                    actions[off] = StateTable::encode(Action::Reduce(pidx));
+                                }
+                                Ordering::Greater => reduce_reduce.push((r_pidx, pidx, stidx)),
+                                Ordering::Equal => ()
                             }
                         }
                         Action::Accept => {
@@ -535,33 +538,38 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
             shift_reduce.push((tidx, pidx, conflict_stidx));
         }
         (Some(token_prec), Some(prod_prec)) => {
-            if token_prec.level == prod_prec.level {
-                // Both token and production have the same level precedence, so we need to look
-                // at the precedence kind.
-                match (token_prec.kind, prod_prec.kind) {
-                    (AssocKind::Left, AssocKind::Left) => {
-                        // Left associativity is resolved in favour of the reduce (i.e. leave
-                        // as-is).
-                    }
-                    (AssocKind::Right, AssocKind::Right) => {
-                        // Right associativity is resolved in favour of the shift.
-                        actions[off] = StateTable::encode(Action::Shift(stidx));
-                    }
-                    (AssocKind::Nonassoc, AssocKind::Nonassoc) => {
-                        // Nonassociativity leads to a run-time parsing error, so we need to remove
-                        // the action entirely.
-                        actions[off] = StateTable::encode(Action::Error);
-                    }
-                    (_, _) => {
-                        panic!("Not supported.");
+            match token_prec.level.cmp(&prod_prec.level) {
+                Ordering::Equal => {
+                    // Both token and production have the same level precedence, so we need to look
+                    // at the precedence kind.
+                    match (token_prec.kind, prod_prec.kind) {
+                        (AssocKind::Left, AssocKind::Left) => {
+                            // Left associativity is resolved in favour of the reduce (i.e. leave
+                            // as-is).
+                        }
+                        (AssocKind::Right, AssocKind::Right) => {
+                            // Right associativity is resolved in favour of the shift.
+                            actions[off] = StateTable::encode(Action::Shift(stidx));
+                        }
+                        (AssocKind::Nonassoc, AssocKind::Nonassoc) => {
+                            // Nonassociativity leads to a run-time parsing error, so we need to
+                            // remove the action entirely.
+                            actions[off] = StateTable::encode(Action::Error);
+                        }
+                        (_, _) => {
+                            panic!("Not supported.");
+                        }
                     }
                 }
-            } else if token_prec.level > prod_prec.level {
-                // The token has higher level precedence, so resolve in favour of shift.
-                actions[off] = StateTable::encode(Action::Shift(stidx));
+                Ordering::Greater => {
+                    // The token has higher level precedence, so resolve in favour of shift.
+                    actions[off] = StateTable::encode(Action::Shift(stidx));
+                }
+                Ordering::Less => {
+                    // If token_lev < prod_lev, then the production has higher level precedence and
+                    // we keep the reduce as-is.
+                }
             }
-            // If token_lev < prod_lev, then the production has higher level precedence and we keep
-            // the reduce as-is.
         }
     }
 }
