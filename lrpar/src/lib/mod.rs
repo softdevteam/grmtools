@@ -1,5 +1,6 @@
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::many_single_char_names)]
+#![allow(clippy::needless_doctest_main)]
 #![allow(clippy::new_without_default)]
 #![allow(clippy::range_plus_one)]
 #![allow(clippy::too_many_arguments)]

@@ -317,7 +317,7 @@ impl YaccParser {
                 i = self.parse_ws(j, true)?;
                 continue;
             } else if let Some(j) = self.lookahead_is(";", i) {
-                self.ast.add_prod(rn.clone(), syms, prec, action);
+                self.ast.add_prod(rn, syms, prec, action);
                 return Ok(j);
             }
 

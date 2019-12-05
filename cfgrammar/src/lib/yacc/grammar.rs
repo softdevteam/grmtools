@@ -333,7 +333,7 @@ where
             prods_rules: prods_rules.into_iter().map(Option::unwrap).collect(),
             prods: prods.into_iter().map(Option::unwrap).collect(),
             prod_precs: prod_precs.into_iter().map(Option::unwrap).collect(),
-            implicit_rule: implicit_rule.and_then(|x| Some(rule_map[&x])),
+            implicit_rule: implicit_rule.map(|x| rule_map[&x]),
             actions,
             programs: ast.programs,
             avoid_insert,
@@ -452,7 +452,7 @@ where
     pub fn token_name(&self, tidx: TIdx<StorageT>) -> Option<&str> {
         self.token_names[usize::from(tidx)]
             .as_ref()
-            .and_then(|x| Some(x.as_str()))
+            .map(|x| x.as_str())
     }
 
     /// Return the precedence of token `tidx` (where `None` indicates "no precedence specified").
@@ -466,7 +466,7 @@ where
     pub fn token_epp(&self, tidx: TIdx<StorageT>) -> Option<&str> {
         self.token_epp[usize::from(tidx)]
             .as_ref()
-            .and_then(|x| Some(x.as_str()))
+            .map(|x| x.as_str())
     }
 
     /// Get the action for production `pidx`. Panics if `pidx` doesn't exist.
