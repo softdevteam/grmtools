@@ -62,6 +62,9 @@ where
         }
 
         if !neighbours(true, &n, &mut next) {
+            #[cfg(test)]
+            panic!("Timeout occurred.");
+            #[cfg(not(test))]
             return Vec::new();
         }
         for (nbr_cost, nbr_hrstc, nbr) in next.drain(..) {

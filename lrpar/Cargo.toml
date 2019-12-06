@@ -19,8 +19,8 @@ path = "src/lib/mod.rs"
 vergen = "2"
 
 [dependencies]
-cactus = "1.0"
 bincode = "1.2"
+cactus = "1.0"
 cfgrammar = { path="../cfgrammar", version = "0.4", features=["serde"] }
 filetime = "0.2"
 getopts = "0.2"
