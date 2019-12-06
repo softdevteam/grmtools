@@ -19,22 +19,22 @@ path = "src/lib/mod.rs"
 vergen = "2"
 
 [dependencies]
-bincode = "1.0"
 cactus = "1.0"
+bincode = "1.2"
 cfgrammar = { path="../cfgrammar", version = "0.4", features=["serde"] }
 filetime = "0.2"
 getopts = "0.2"
-indexmap = "1.0"
-lazy_static = "1.2"
+indexmap = "1.3"
+lazy_static = "1.4"
 lrtable = { path="../lrtable", version = "0.4", features=["serde"] }
 num-traits = "0.2"
-packedvec = "1.0"
-rmp-serde = "0.13"
+packedvec = "1.2"
+rmp-serde = "0.14"
 serde = { version="1.0", features=["derive"] }
-static_assertions = "0.3"
+static_assertions = "1.1"
 typename = "0.1"
 vob = "2.0"
-regex = "1.0"
+regex = "1.3"
 
 [dev-dependencies]
 tempfile = "3.0"
