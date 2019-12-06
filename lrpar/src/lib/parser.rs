@@ -18,6 +18,9 @@ use crate::{
     mf, panic
 };
 
+#[cfg(test)]
+const RECOVERY_TIME_BUDGET: u64 = 60_000; // milliseconds
+#[cfg(not(test))]
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
 /// A generic parse tree.

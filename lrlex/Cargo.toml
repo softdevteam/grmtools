@@ -18,10 +18,10 @@ name = "lrlex"
 path = "src/lib/mod.rs"
 
 [dependencies]
-getopts = "0.2.15" # only needed for src/main.rs
-lazy_static = "1.2"
+getopts = "0.2" # only needed for src/main.rs
+lazy_static = "1.4"
 lrpar = { path = "../lrpar", version = "0.4" }
-regex = "1.0"
+regex = "1.3"
 num-traits = "0.2"
 try_from = "0.3"
 typename = "0.1"
