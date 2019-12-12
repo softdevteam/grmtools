@@ -42,8 +42,6 @@ const STABLE_FILE_EXT: &str = "stable";
 
 lazy_static! {
     static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
-    static ref RE_DOL_LEXER: Regex = Regex::new(r"\$lexer").unwrap();
-    static ref RE_DOL_SPAN: Regex = Regex::new(r"\$span").unwrap();
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
