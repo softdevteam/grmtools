@@ -19,9 +19,7 @@ impl fmt::Display for LexError {
     }
 }
 
-/// Roughly speaking, `Lexer` is an iterator which collectively produces `Lexeme`s, as well as
-/// collecting the newlines encountered so that it can later optionally answer queries of the form
-/// "what's the line and column number of lexeme L".
+/// The trait which all lexers which want to interact with `lrpar` must implement.
 pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// Return the next `Lexeme` in the input or a `LexError`. Returns `None` if the input has been
     /// fully lexed (or if an error occurred which prevents further lexing).
@@ -52,12 +50,12 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     }
 }
 
-/// A `Lexeme` represents a segment of the user's input that conforms to a known type. All lexemes
-/// have a starting position in the user's input: lexemes that result from error recovery, however,
-/// do not have a length (or, therefore, an end). This allows us to differentiate between lexemes
-/// that are always of zero length (which are required in some grammars) from lexemes that result
-/// from error recovery (where an error recovery algorithm can know the type that a lexeme should
-/// have been, but can't know what its contents should have been).
+/// A `Lexeme` represents a segment of the user's input that conforms to a known type. Note that
+/// even if the type of a lexeme seemingly requires it to have `len() > 0` (e.g. integers might
+/// match the regular expressions `[0-9]+`), error recovery might cause a lexeme to have a length
+/// of 0. Users can detect the difference between a lexeme with an intentionally zero length from a
+/// lexeme with zero length due to error recovery through the
+/// [`inserted`](struct.Lexeme.html#method.inserted) method.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Lexeme<StorageT> {
     // The long-term aim is to pack this struct so that len can be longer than u32 while everything
@@ -97,7 +95,7 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     /// Byte offset of the end of the lexeme.
     ///
     /// Note that if this lexeme was inserted by error recovery, it will end at the same place it
-    /// started (i.e. `self.start() == self.end()).
+    /// started (i.e. `self.start() == self.end()`).
     pub fn end(&self) -> usize {
         if self.len == u32::max_value() {
             self.start
@@ -106,8 +104,9 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         }
     }
 
-    /// Length in bytes of the lexeme. Note that if this lexeme was inserted by error recovery, it
-    /// will have a length of 0.
+    /// Length in bytes of the lexeme.
+    ///
+    /// Note that if this lexeme was inserted by error recovery, it will have a length of 0.
     pub fn len(&self) -> usize {
         if self.len == u32::max_value() {
             0
