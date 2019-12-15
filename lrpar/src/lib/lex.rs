@@ -21,9 +21,11 @@ impl fmt::Display for LexError {
 
 /// The trait which all lexers which want to interact with `lrpar` must implement.
 pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
-    /// Return the next `Lexeme` in the input or a `LexError`. Returns `None` if the input has been
-    /// fully lexed (or if an error occurred which prevents further lexing).
-    fn next(&self) -> Option<Result<Lexeme<StorageT>, LexError>>;
+    /// Iterate over all the lexemes in this lexer. Note that:
+    ///   * The lexer may or may not stop after the first `LexError` is encountered.
+    ///   * There are no guarantees about whether the lexer caches anything if this method is
+    ///     called more than once (i.e. it might be slow to call this more than once).
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a>;
 
     /// Return the user input associated with a lexeme. Panics if the lexeme is invalid (i.e. was
     /// not produced by next()).
@@ -37,17 +39,6 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// Return the line containing the byte at position `off`. Panics if the offset exceeds the
     /// known input.
     fn surrounding_line_str(&self, off: usize) -> &str;
-
-    /// Return all this lexer's remaining lexemes or a `LexError` if there was a problem when lexing.
-    fn all_lexemes(&self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
-        let mut lxs = Vec::new();
-        let mut n = self.next();
-        while let Some(r) = n {
-            lxs.push(r?);
-            n = self.next();
-        }
-        Ok(lxs)
-    }
 }
 
 /// A `Lexeme` represents a segment of the user's input that conforms to a known type. Note that

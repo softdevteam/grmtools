@@ -733,10 +733,13 @@ where
         &self,
         lexer: &dyn Lexer<StorageT>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
-        let lexemes = match lexer.all_lexemes() {
-            Ok(ls) => ls,
-            Err(e) => return (None, vec![e.into()])
-        };
+        let mut lexemes = vec![];
+        for e in lexer.iter().collect::<Vec<_>>() {
+            match e {
+                Ok(l) => lexemes.push(l),
+                Err(e) => return (None, vec![e.into()])
+            }
+        }
         Parser::<StorageT, Node<StorageT>>::parse_generictree(
             self.recoverer,
             self.grm,
@@ -751,10 +754,13 @@ where
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_noaction(&self, lexer: &dyn Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
-        let lexemes = match lexer.all_lexemes() {
-            Ok(ls) => ls,
-            Err(e) => return vec![e.into()]
-        };
+        let mut lexemes = vec![];
+        for e in lexer.iter().collect::<Vec<_>>() {
+            match e {
+                Ok(l) => lexemes.push(l),
+                Err(e) => return vec![e.into()]
+            }
+        }
         Parser::<StorageT, ()>::parse_noaction(
             self.recoverer,
             self.grm,
@@ -782,10 +788,13 @@ where
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
-        let lexemes = match lexer.all_lexemes() {
-            Ok(ls) => ls,
-            Err(e) => return (None, vec![e.into()])
-        };
+        let mut lexemes = vec![];
+        for e in lexer.iter().collect::<Vec<_>>() {
+            match e {
+                Ok(l) => lexemes.push(l),
+                Err(e) => return (None, vec![e.into()])
+            }
+        }
         Parser::parse_actions(
             self.recoverer,
             self.grm,
@@ -847,7 +856,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> ParseError<StorageT> {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::{cell::Cell, collections::HashMap};
+    use std::collections::HashMap;
 
     use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
     use lrtable::{from_yacc, Minimiser};
@@ -892,10 +901,7 @@ pub(crate) mod test {
             .collect();
         let lexer_rules = small_lexer(lexs, rule_ids);
         let lexemes = small_lex(lexer_rules, input);
-        let lexer = SmallLexer {
-            lexemes,
-            i: Cell::new(0)
-        };
+        let lexer = SmallLexer { lexemes };
         let costs_tidx = costs
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
@@ -923,18 +929,12 @@ pub(crate) mod test {
     //   * The initial "%%" isn't needed, and only "'" is valid as a rule name delimiter.
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
     struct SmallLexer<StorageT> {
-        lexemes: Vec<Lexeme<StorageT>>,
-        i: Cell<usize>
+        lexemes: Vec<Lexeme<StorageT>>
     }
 
     impl<StorageT: Hash + PrimInt + Unsigned> Lexer<StorageT> for SmallLexer<StorageT> {
-        fn next(&self) -> Option<Result<Lexeme<StorageT>, LexError>> {
-            let old_i = self.i.get();
-            if old_i < self.lexemes.len() {
-                self.i.set(old_i + 1);
-                return Some(Ok(self.lexemes[old_i]));
-            }
-            None
+        fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
+            Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
 
         fn line_col(&self, _: usize) -> (usize, usize) {
