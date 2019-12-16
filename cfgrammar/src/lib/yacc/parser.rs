@@ -292,7 +292,7 @@ impl YaccParser {
                     return Err(self.mk_error(YaccParserErrorKind::MissingRightArrow, i));
                 }
                 i = self.parse_ws(i, true)?;
-                let (j, actiont) = self.parse_to_colon(i)?;
+                let (j, actiont) = self.parse_to_single_colon(i)?;
                 self.ast.add_rule(rn.clone(), Some(actiont));
                 i = j;
             }
@@ -435,17 +435,26 @@ impl YaccParser {
         Ok((j, self.src[i..j].to_string()))
     }
 
-    /// Parse up to (but do not include) a colon. Errors if EOL encountered.
-    fn parse_to_colon(&mut self, i: usize) -> YaccResult<(usize, String)> {
+    /// Parse up to (but do not include) a single colon (double colons are allowed so that strings
+    /// like `a::b::c:` treat `a::b::c` as a single name. Errors if EOL encountered.
+    fn parse_to_single_colon(&mut self, i: usize) -> YaccResult<(usize, String)> {
         let mut j = i;
         while j < self.src.len() {
             let c = self.src[j..].chars().nth(0).unwrap();
             match c {
-                ':' => return Ok((j, self.src[i..j].to_string())),
-                '\n' | '\r' => self.newlines.push(i + 1),
-                _ => ()
+                ':' => {
+                    let k = j + ':'.len_utf8();
+                    if k == self.src.len() || self.src[k..].chars().nth(0).unwrap() != ':' {
+                        return Ok((j, self.src[i..j].to_string()));
+                    }
+                    j += 2 * ':'.len_utf8();
+                }
+                '\n' | '\r' => {
+                    self.newlines.push(i + 1);
+                    j += c.len_utf8();
+                }
+                _ => j += c.len_utf8()
             }
-            j += c.len_utf8()
         }
         Err(self.mk_error(YaccParserErrorKind::ReachedEOL, j))
     }
@@ -1097,11 +1106,16 @@ x"
           %%
           A -> T: 'b';
           B -> Result<(), T>: 'c';
+          C -> ::std::result::Result<(), T>: 'd';
           "
         .to_string();
         let grm = parse(YaccKind::Grmtools, &src).unwrap();
         assert_eq!(grm.rules["A"].actiont, Some("T".to_string()));
         assert_eq!(grm.rules["B"].actiont, Some("Result<(), T>".to_string()));
+        assert_eq!(
+            grm.rules["C"].actiont,
+            Some("::std::result::Result<(), T>".to_string())
+        );
     }
 
     #[test]
