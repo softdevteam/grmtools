@@ -42,12 +42,13 @@ lrpar = "0.4"
 In this situation we want to statically compile the `.y` grammar and `.l` lexer
 into Rust code. We thus need to create a
 [`build.rs`](https://doc.rust-lang.org/cargo/reference/build-scripts.html)
-file which can process the lexer and grammar.  Our `build.rs` file thus looks as follows:
+file inside the root of our project which can process the lexer and grammar.
+Our `build.rs` file thus looks as follows:
 
 ```rust
 use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
-use lrpar::{CTParserBuilder, ActionKind};
+use lrpar::{CTParserBuilder};
 
 fn main() -> Result<(), Box<std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
@@ -191,7 +192,7 @@ use lrpar::lrpar_mod;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!(calc_l);
-// Using `lrpar_mod!` brings the lexer for `calc.l` into scope.
+// Using `lrpar_mod!` brings the parser for `calc.y` into scope.
 lrpar_mod!(calc_y);
 
 fn main() {
