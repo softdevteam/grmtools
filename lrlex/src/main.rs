@@ -57,12 +57,14 @@ fn main() {
         process::exit(1);
     });
     let input = &read_file(&matches.free[1]);
-    let lexemes = lexerdef.lexer(input).all_lexemes().unwrap();
-    for l in &lexemes {
-        println!(
-            "{} {}",
-            lexerdef.get_rule_by_id(l.tok_id()).name.as_ref().unwrap(),
-            &input[l.start()..l.end()]
-        );
+    for r in lexerdef.lexer(input).iter() {
+        match r {
+            Ok(l) => println!(
+                "{} {}",
+                lexerdef.get_rule_by_id(l.tok_id()).name.as_ref().unwrap(),
+                &input[l.start()..l.end()]
+            ),
+            Err(e) => println!("{:?}", e)
+        }
     }
 }
