@@ -242,9 +242,9 @@ where
     ///
     /// ```text
     ///    fn parse(lexemes: &std::vec::Vec<::lrpar::Lexeme<StorageT>>)
-    ///         -> (Option<ActionT>, Vec<::lrpar::LexParseError<StorageT>>)>
+    ///         -> (::std::option::Option<ActionT>, Vec<::lrpar::LexParseError<StorageT>>)>
     ///
-    ///    fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> Option<&'a str>
+    ///    fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str>
     /// ```
     ///
     /// Where `ActionT` is either:
@@ -428,7 +428,7 @@ where
                     "
     #[allow(dead_code)]
     pub fn parse<'input>(lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input))
-          -> (Option<{actiont}>, Vec<::lrpar::LexParseError<{storaget}>>)
+          -> (::std::option::Option<{actiont}>, Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap()
@@ -438,7 +438,7 @@ where
                 outs.push_str(&format!(
                     "
     pub fn parse(lexer: &dyn ::lrpar::Lexer<{storaget}>)
-          -> (Option<::lrpar::Node<{storaget}>>, Vec<::lrpar::LexParseError<{storaget}>>)
+          -> (::std::option::Option<::lrpar::Node<{storaget}>>, Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name()
                 ));
@@ -562,12 +562,12 @@ where
             }
         }
         format!(
-            "    const {prefix}EPP: &[Option<&str>] = &[{}];
+            "    const {prefix}EPP: &[::std::option::Option<&str>] = &[{}];
 
     /// Return the %epp entry for token `tidx` (where `None` indicates \"the token has no
     /// pretty-printed value\"). Panics if `tidx` doesn't exist.
     #[allow(dead_code)]
-    pub fn token_epp<'a>(tidx: ::cfgrammar::TIdx<{storaget}>) -> Option<&'a str> {{
+    pub fn token_epp<'a>(tidx: ::cfgrammar::TIdx<{storaget}>) -> ::std::option::Option<&'a str> {{
         {prefix}EPP[usize::from(tidx)]
     }}",
             tidxs.join(", "),
@@ -710,7 +710,7 @@ where
                 let argt = match grm.prod(pidx)[i] {
                     Symbol::Rule(ref_ridx) => grm.actiontype(ref_ridx).as_ref().unwrap().clone(),
                     Symbol::Token(_) => format!(
-                        "Result<::lrpar::Lexeme<{storaget}>, ::lrpar::Lexeme<{storaget}>>",
+                        "::std::result::Result<::lrpar::Lexeme<{storaget}>, ::lrpar::Lexeme<{storaget}>>",
                         storaget = StorageT::type_name()
                     )
                 };
