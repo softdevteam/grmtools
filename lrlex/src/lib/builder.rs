@@ -6,7 +6,7 @@ use std::{
     env::{current_dir, var},
     error::Error,
     fmt::Debug,
-    fs::{self, read_to_string, File},
+    fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
     io::Write,
     path::{Path, PathBuf}
@@ -20,8 +20,6 @@ use typename::TypeName;
 
 use crate::{lexer::LexerDef, parser::parse_lex};
 
-const LEX_SUFFIX: &str = "_l";
-const LEX_FILE_EXT: &str = "l";
 const RUST_FILE_EXT: &str = "rs";
 
 lazy_static! {
@@ -73,17 +71,10 @@ where
         self
     }
 
-    /// Given the filename `x.l` as input, statically compile the file `src/x.l` into a Rust module
-    /// which can then be imported using `lrlex_mod!(x_l)`. This is a convenience function around
-    /// [`process_file`](struct.LexerBuilder.html#method.process_file) which makes it easier to
-    /// compile `.l` files stored in a project's `src/` directory. Note that leaf names must be
-    /// unique within a single project, even if they are in different directories: in other words,
-    /// `a.l` and `x/a.l` will both be mapped to the same module `a_l` (and it is undefined which
-    /// of the input files will "win" the compilation race).
-    ///
-    /// # Panics
-    ///
-    /// If the input filename does not end in `.l`.
+    /// Given the filename `a/b.l` as input, statically compile the file `src/a/b.l` into a Rust
+    /// module which can then be imported using `lrlex_mod!("a/b.l")`. This is a convenience
+    /// function around [`process_file`](struct.LexerBuilder.html#method.process_file) which makes
+    /// it easier to compile `.l` files stored in a project's `src/` directory.
     pub fn process_file_in_src(
         self,
         srcp: &str
@@ -91,18 +82,18 @@ where
         let mut inp = current_dir()?;
         inp.push("src");
         inp.push(srcp);
-        if Path::new(srcp).extension().unwrap().to_str().unwrap() != LEX_FILE_EXT {
-            panic!(
-                "File name passed to process_file_in_src must have extension '{}'.",
-                LEX_FILE_EXT
-            );
-        }
-        let mut leaf = inp.file_stem().unwrap().to_str().unwrap().to_owned();
-        leaf.push_str(&LEX_SUFFIX);
         let mut outp = PathBuf::new();
         outp.push(var("OUT_DIR").unwrap());
+        outp.push(Path::new(srcp).parent().unwrap().to_str().unwrap());
+        create_dir_all(&outp)?;
+        let mut leaf = Path::new(srcp)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
         outp.push(leaf);
-        outp.set_extension(RUST_FILE_EXT);
         self.process_file(inp, outp)
     }
 
@@ -159,7 +150,15 @@ where
         }
 
         let mut outs = String::new();
-        let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
+        // At this point we potentially have a filename a.l.rs, so strip off all the extensions.
+        let mut mod_name = inp.as_ref().to_str().unwrap();
+        loop {
+            let mod_stem = Path::new(mod_name).file_stem().unwrap().to_str().unwrap();
+            if mod_name == mod_stem {
+                break;
+            }
+            mod_name = mod_stem;
+        }
         // Header
         outs.push_str(&format!("mod {}_l {{", mod_name));
         lexerdef.rust_pp(&mut outs);

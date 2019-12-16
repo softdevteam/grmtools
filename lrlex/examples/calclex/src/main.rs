@@ -4,7 +4,7 @@ use lrlex::lrlex_mod;
 use lrpar::Lexer;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
-lrlex_mod!(calc_l);
+lrlex_mod!("calc.l");
 
 fn main() {
     // We need to get a `LexerDef` for the `calc` language in order that we can lex input.

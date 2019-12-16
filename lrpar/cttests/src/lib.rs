@@ -1,23 +1,23 @@
 use lrlex::lrlex_mod;
 use lrpar::lrpar_mod;
 
-lrlex_mod!(calc_multitypes_l);
-lrpar_mod!(calc_multitypes_y);
+lrlex_mod!("calc_multitypes.l");
+lrpar_mod!("calc_multitypes.y");
 
-lrlex_mod!(calc_actiontype_l);
-lrpar_mod!(calc_actiontype_y);
+lrlex_mod!("calc_actiontype.l");
+lrpar_mod!("calc_actiontype.y");
 
-lrlex_mod!(calc_noactions_l);
-lrpar_mod!(calc_noactions_y);
+lrlex_mod!("calc_noactions.l");
+lrpar_mod!("calc_noactions.y");
 
-lrlex_mod!(multitypes_l);
-lrpar_mod!(multitypes_y);
+lrlex_mod!("multitypes.l");
+lrpar_mod!("multitypes.y");
 
-lrlex_mod!(passthrough_l);
-lrpar_mod!(passthrough_y);
+lrlex_mod!("passthrough.l");
+lrpar_mod!("passthrough.y");
 
-lrlex_mod!(span_l);
-lrpar_mod!(span_y);
+lrlex_mod!("span.l");
+lrpar_mod!("span.y");
 
 #[test]
 fn multitypes() {

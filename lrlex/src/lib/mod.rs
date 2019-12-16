@@ -62,11 +62,11 @@ pub fn build_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigne
     parse_lex(s)
 }
 
-/// A convenience macro for including statically compiled `.l` files. A file `src/x.l` which is
-/// statically compiled by lrlex can then be used in a crate with `lrlex_mod!(x)`.
+/// A convenience macro for including statically compiled `.l` files. A file `src/a/b/c.l` which is
+/// statically compiled by lrlex can then be used in a crate with `lrlex_mod!("a/b/c.l")`.
 #[macro_export]
 macro_rules! lrlex_mod {
-    ($n:ident) => {
-        include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs"));
+    ($path:expr) => {
+        include!(concat!(env!("OUT_DIR"), "/", $path, ".rs"));
     };
 }

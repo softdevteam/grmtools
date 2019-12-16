@@ -191,12 +191,12 @@ pub use crate::{
 };
 mod mf;
 
-/// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
-/// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.
+/// A convenience macro for including statically compiled `.y` files. A file `src/a/b/c.y` which is
+/// statically compiled by lrpar can then be used in a crate with `lrpar_mod!("a/b/c.y")`.
 #[macro_export]
 macro_rules! lrpar_mod {
-    ($n:ident) => {
-        include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs"));
+    ($path:expr) => {
+        include!(concat!(env!("OUT_DIR"), "/", $path, ".rs"));
     };
 }
 
