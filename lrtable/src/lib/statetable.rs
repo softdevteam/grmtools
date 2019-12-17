@@ -618,7 +618,7 @@ mod test {
         assert_eq!(st.actions.len(), 9*4);
         let assert_reduce = |stidx: StIdx, tidx: TIdx<_>, rule: &str, prod_off: usize| {
             let pidx = grm.rule_to_prods(grm.rule_idx(rule).unwrap())[prod_off];
-            assert_eq!(st.action(stidx, tidx), Action::Reduce(pidx.into()));
+            assert_eq!(st.action(stidx, tidx), Action::Reduce(pidx));
         };
 
         assert_eq!(st.action(s0, grm.token_idx("id").unwrap()), Action::Shift(s4));

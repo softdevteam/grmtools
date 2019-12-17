@@ -139,10 +139,8 @@ mod test {
                 if follows.is_set(ridx, tidx) {
                     panic!("{} is incorrectly set in {}", n, rn);
                 }
-            } else {
-                if !follows.is_set(ridx, tidx) {
-                    panic!("{} is not set in {}", n, rn);
-                }
+            } else if !follows.is_set(ridx, tidx) {
+                panic!("{} is not set in {}", n, rn);
             }
         }
     }

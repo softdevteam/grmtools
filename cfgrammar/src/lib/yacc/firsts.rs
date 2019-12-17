@@ -176,7 +176,7 @@ mod test {
                 }
             }
         }
-        if should_be.iter().position(|x| x == &"").is_some() {
+        if should_be.iter().any(|x| x == &"") {
             assert!(firsts.is_epsilon_set(ridx));
         }
     }

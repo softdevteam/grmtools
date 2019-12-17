@@ -450,7 +450,7 @@ mod test {
 
     fn pp_repairs<StorageT: 'static + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
-        repairs: &Vec<ParseRepair<StorageT>>
+        repairs: &[ParseRepair<StorageT>]
     ) -> String
     where
         usize: AsPrimitive<StorageT>
@@ -461,8 +461,8 @@ mod test {
                 ParseRepair::Insert(token_idx) => {
                     out.push(format!("Insert \"{}\"", grm.token_epp(token_idx).unwrap()))
                 }
-                ParseRepair::Delete(_) => out.push(format!("Delete")),
-                ParseRepair::Shift(_) => out.push(format!("Shift"))
+                ParseRepair::Delete(_) => out.push("Delete".to_owned()),
+                ParseRepair::Shift(_) => out.push("Shift".to_owned())
             }
         }
         out.join(", ")
@@ -565,24 +565,24 @@ E : 'N'
         check_all_repairs(
             &grm,
             &errs[0],
-            &vec![
+            &[
                 "Insert \")\", Insert \"+\"",
                 "Insert \")\", Delete",
-                "Insert \"+\", Shift, Insert \")\"",
+                "Insert \"+\", Shift, Insert \")\""
             ]
         );
 
         let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm, &errs[0], &vec!["Delete"]);
-        check_all_repairs(&grm, &errs[1], &vec!["Delete"]);
+        check_all_repairs(&grm, &errs[0], &["Delete"]);
+        check_all_repairs(&grm, &errs[1], &["Delete"]);
 
         let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm, &errs[0], &vec!["Insert \"N\"", "Delete"]);
-        check_all_repairs(&grm, &errs[1], &vec!["Insert \")\""]);
+        check_all_repairs(&grm, &errs[0], &["Insert \"N\"", "Delete"]);
+        check_all_repairs(&grm, &errs[1], &["Insert \")\""]);
     }
 
     #[test]
@@ -607,10 +607,10 @@ U: 'd';
         check_all_repairs(
             &grm,
             &errs[0],
-            &vec![
+            &[
                 "Insert \"a\", Insert \"d\"",
                 "Insert \"b\", Insert \"d\"",
-                "Insert \"c\", Insert \"d\"",
+                "Insert \"c\", Insert \"d\""
             ]
         );
     }
