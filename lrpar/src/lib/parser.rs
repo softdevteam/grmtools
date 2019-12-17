@@ -953,8 +953,8 @@ pub(crate) mod test {
     fn small_lexer(lexs: &str, ids_map: HashMap<String, u16>) -> Vec<(u16, Regex)> {
         let mut rules = Vec::new();
         for l in lexs.split("\n").map(|x| x.trim()).filter(|x| !x.is_empty()) {
-            assert!(l.rfind("'") == Some(l.len() - 1));
-            let i = l[..l.len() - 1].rfind("'").unwrap();
+            assert!(l.rfind('\'') == Some(l.len() - 1));
+            let i = l[..l.len() - 1].rfind('\'').unwrap();
             let name = &l[i + 1..l.len() - 1];
             let re = &l[..i - 1].trim();
             rules.push((

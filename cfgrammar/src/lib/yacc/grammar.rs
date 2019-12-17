@@ -1305,7 +1305,7 @@ mod test {
           "
         ).unwrap();
 
-        let scores = rule_min_costs(&grm, &vec![1, 1, 1]);
+        let scores = rule_min_costs(&grm, &[1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx(&"A").unwrap())], 0);
         assert_eq!(scores[usize::from(grm.rule_idx(&"B").unwrap())], 1);
         assert_eq!(scores[usize::from(grm.rule_idx(&"C").unwrap())], 1);
@@ -1376,7 +1376,7 @@ mod test {
           "
         ).unwrap();
 
-        let scores = rule_max_costs(&grm, &vec![1, 1, 1]);
+        let scores = rule_max_costs(&grm, &[1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
         assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], u16::max_value());
         assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], u16::max_value());
@@ -1399,7 +1399,7 @@ mod test {
           "
         ).unwrap();
 
-        let scores = rule_max_costs(&grm, &vec![1, 1, 1]);
+        let scores = rule_max_costs(&grm, &[1, 1, 1]);
         assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
         assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], 3);
         assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], 2);
