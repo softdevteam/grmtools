@@ -5,7 +5,7 @@ use lrpar::lrpar_mod;
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
 lrlex_mod!("calc.l");
-// Using `lrpar_mod!` brings the lexer for `calc.l` into scope.
+// Using `lrpar_mod!` brings the parser for `calc.y` into scope.
 lrpar_mod!("calc.y");
 
 fn main() {
