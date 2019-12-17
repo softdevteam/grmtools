@@ -101,9 +101,9 @@
 //! use lrpar::lrpar_mod;
 //!
 //! // Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
-//! lrlex_mod!(calc_l);
-//! // Using `lrpar_mod!` brings the lexer for `calc.l` into scope.
-//! lrpar_mod!(calc_y);
+//! lrlex_mod!("calc.l");
+//! // Using `lrpar_mod!` brings the parser for `calc.y` into scope.
+//! lrpar_mod!("calc.y");
 //!
 //! fn main() {
 //!     // We need to get a `LexerDef` for the `calc` language in order that we can lex input.
@@ -191,12 +191,12 @@ pub use crate::{
 };
 mod mf;
 
-/// A convenience macro for including statically compiled `.y` files. A file `src/x.y` which is
-/// statically compiled by lrpar can then be used in a crate with `lrpar_mod!(x)`.
+/// A convenience macro for including statically compiled `.y` files. A file `src/a/b/c.y` which is
+/// statically compiled by lrpar can then be used in a crate with `lrpar_mod!("a/b/c.y")`.
 #[macro_export]
 macro_rules! lrpar_mod {
-    ($n:ident) => {
-        include!(concat!(env!("OUT_DIR"), "/", stringify!($n), ".rs"));
+    ($path:expr) => {
+        include!(concat!(env!("OUT_DIR"), "/", $path, ".rs"));
     };
 }
 

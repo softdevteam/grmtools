@@ -34,18 +34,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 s => panic!("YaccKind '{}' not supported", s)
             };
 
+            // The code below, in essence, replicates lrlex and lrpar's internal / undocumented
+            // filename conventions. If those change, this code will also have to change.
+
             // Create grammar files
             let base = path.file_stem().unwrap().to_str().unwrap();
             let mut pg = PathBuf::from(&out_dir);
-            pg.push(format!("{}.y", base));
+            pg.push(format!("{}.y.rs", base));
             fs::write(&pg, &grm).unwrap();
             let mut pl = PathBuf::from(&out_dir);
-            pl.push(format!("{}.l", base));
+            pl.push(format!("{}.l.rs", base));
             fs::write(&pl, &lex).unwrap();
 
             // Build parser and lexer
             let mut outp = PathBuf::from(&out_dir);
-            outp.push(format!("{}_y", base));
+            outp.push(format!("{}.y.rs", base));
             outp.set_extension("rs");
             let lex_rule_ids_map = CTParserBuilder::new()
                 .yacckind(yacckind)
@@ -53,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .process_file(pg.to_str().unwrap(), &outp)?;
 
             let mut outl = PathBuf::from(&out_dir);
-            outl.push(format!("{}_l", base));
+            outl.push(format!("{}.l.rs", base));
             outl.set_extension("rs");
             LexerBuilder::new()
                 .rule_ids_map(lex_rule_ids_map)

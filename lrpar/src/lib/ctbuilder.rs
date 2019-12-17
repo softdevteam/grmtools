@@ -6,7 +6,7 @@ use std::{
     env::{current_dir, var},
     error::Error,
     fmt::{self, Debug},
-    fs::{self, read_to_string, File},
+    fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
     io::Write,
     marker::PhantomData,
@@ -28,7 +28,6 @@ use typename::TypeName;
 
 use crate::RecoveryKind;
 
-const YACC_SUFFIX: &str = "_y";
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
 const ACTIONS_KIND: &str = "__GTActionsKind";
@@ -169,19 +168,14 @@ where
         self
     }
 
-    /// Given the filename `x/y.z` as input, statically compile the grammar `src/x/y.z` into a Rust
-    /// module which can then be imported using `lrpar_mod!(x_y)`. This is a convenience function
-    /// around [`process_file`](#method.process_file) which makes it easier to compile `.y` files
-    /// stored in a project's `src/` directory.
-    ///
-    /// Note that leaf names must be unique within a single project, even if they are in different
-    /// directories: in other words, `y.z` and `x/y.z` will both be mapped to the same module `y_z`
-    /// (and it is undefined which of the input files will "win" the compilation race).
+    /// Given the filename `a/b.y` as input, statically compile the grammar `src/a/b.y` into a Rust
+    /// module which can then be imported using `lrpar_mod!("a/b.y")`. This is a convenience
+    /// function around [`process_file`](#method.process_file) which makes it easier to compile
+    /// grammar files stored in a project's `src/` directory.
     ///
     /// # Panics
     ///
-    /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
-    /// productions.
+    /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
     pub fn process_file_in_src(
         &mut self,
         srcp: &str
@@ -189,13 +183,19 @@ where
         let mut inp = current_dir()?;
         inp.push("src");
         inp.push(srcp);
-        let mut leaf = inp.file_stem().unwrap().to_str().unwrap().to_owned();
-        leaf.push_str(&YACC_SUFFIX);
         let mut outp = PathBuf::new();
         outp.push(var("OUT_DIR").unwrap());
+        outp.push(Path::new(srcp).parent().unwrap().to_str().unwrap());
+        create_dir_all(&outp)?;
+        let mut leaf = Path::new(srcp)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
         outp.push(leaf);
-        outp.set_extension(RUST_FILE_EXT);
-        self.process_file(inp, outp)
+        self.process_file(inp, dbg!(outp))
     }
 
     /// Set the `YaccKind` for this parser to `ak`.
@@ -324,7 +324,15 @@ where
             }));
         }
 
-        let mod_name = inp.as_ref().file_stem().unwrap().to_str().unwrap();
+        // At this point we potentially have a filename a.y.rs, so strip off all the extensions.
+        let mut mod_name = inp.as_ref().to_str().unwrap();
+        loop {
+            let mod_stem = Path::new(mod_name).file_stem().unwrap().to_str().unwrap();
+            if mod_name == mod_stem {
+                break;
+            }
+            mod_name = mod_stem;
+        }
         self.output_file(
             &grm,
             &sgraph,
