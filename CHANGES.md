@@ -1,3 +1,98 @@
+# grmtools 0.5.0 (2019-12-17)
+
+## Breaking changes
+
+* `lrlex_mod` and `lrpar_mod` now take strings that match the paths of
+  `process_file_in_src`. In other words what was:
+
+    ```rust
+    ...
+      .process_file_in_src("a/b/grm.y");
+
+    ...
+
+    lrpar_mod!(grm_y);
+    ```
+
+  is now:
+
+    ```rust
+    ...
+      .process_file_in_src("a/b/grm.y");
+
+    ...
+
+    lrpar_mod!("a/b/grm.y");
+    ```
+
+  and similarly for `lrlex_mod`. This is hopefully easier to remember and also
+  allows projects to have multiple grammar files with the same name.
+
+* The [`Lexer`](https://docs.rs/lrpar/0.4.3/lrpar/trait.Lexer.html) API
+  no longer requires mutability. What was:
+
+    ```rust
+    trait Lexer {
+      fn next(&mut self) -> Option<Result<Lexeme<StorageT>, LexError>>;
+      fn all_lexemes(&mut self) -> Result<Vec<Lexeme<StorageT>>, LexError> {
+        ...
+      }
+      ...
+    }
+    ```
+
+  has now been replaced by an iterator over lexemes:
+
+    ```rust
+    trait Lexer {
+      fn iter<'a>(&'a self) ->
+        Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a>;
+      ...
+    }
+    ```
+
+  This enables more ergonomic use of the new zero-copy feature, but does
+  require changing structs which implement this trait. `lrlex` has been
+  adjusted appropriately. 
+
+  In practise, the only impact that most users will notice is that the following idiom:
+
+    ```rust
+    let (res, errs) = grm_y::parse(&mut lexer);
+    ```
+
+  will produce a warning that the `mut` part of `&mut` is no longer needed.
+
+
+## Major changes
+
+* Add support for zero-copying user input when parsing. A special lifetime
+  `'input` is now available in action code and allows users to extract parts
+  of the input without calling `to_owned()` (or equivalent). For example:
+
+  ```
+    Name -> &'input str: 'ID' { $lexer.lexeme_str(&$1.map_err(|_| ())?) } ;
+  ```
+
+  See `lrpar/examples/calc_ast/src/calc.y` for a more detailed example.
+
+
+## Minor changes
+
+* Generated code now uses fully qualified names so that name clashes between
+  user action code and that created by grmtools is less likely.
+
+* Action types can now be fully qualified. In other words this:
+
+    ```rust
+    R -> A::B:
+      ...
+      ;
+    ```
+
+  means that the rule `R` now has an action type `A::B`.
+
+
 # grmtools 0.4.3 (2019-11-21)
 
 * Deprecate the MF recoverer: CPCT+ is now the default and MF is now
@@ -49,7 +144,7 @@
   to:
     ```rust
     pub fn end(&self) -> usize
-    pub fn len(&self) -> usiz>
+    pub fn len(&self) -> usize
     ```
 
 # Major changes
