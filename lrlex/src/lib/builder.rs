@@ -28,13 +28,14 @@ lazy_static! {
 
 /// A `LexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
-pub struct LexerBuilder<StorageT = u32> {
+pub struct LexerBuilder<'a, StorageT = u32> {
+    mod_name: Option<&'a str>,
     rule_ids_map: Option<HashMap<String, StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool
 }
 
-impl<StorageT> LexerBuilder<StorageT>
+impl<'a, StorageT> LexerBuilder<'a, StorageT>
 where
     StorageT: Copy + Debug + Eq + Hash + PrimInt + TryFrom<usize> + TypeName + Unsigned
 {
@@ -56,10 +57,19 @@ where
     /// ```
     pub fn new() -> Self {
         LexerBuilder {
+            mod_name: None,
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true
         }
+    }
+
+    /// Set the generated module name to `mod_name`. If no module name is specified,
+    /// [`process_file`](#method.process_file) will attempt to create a sensible default based on
+    /// the input filename.
+    pub fn mod_name(mut self, mod_name: &'a str) -> Self {
+        self.mod_name = Some(mod_name);
+        self
     }
 
     /// Set this lexer builder's map of rule IDs to `rule_ids_map`. By default, lexing rules have
@@ -74,7 +84,9 @@ where
     /// Given the filename `a/b.l` as input, statically compile the file `src/a/b.l` into a Rust
     /// module which can then be imported using `lrlex_mod!("a/b.l")`. This is a convenience
     /// function around [`process_file`](struct.LexerBuilder.html#method.process_file) which makes
-    /// it easier to compile `.l` files stored in a project's `src/` directory.
+    /// it easier to compile `.l` files stored in a project's `src/` directory: please see
+    /// [`process_file`](#method.process_file) for additional constraints and information about the
+    /// generated files.
     pub fn process_file_in_src(
         self,
         srcp: &str
@@ -98,8 +110,22 @@ where
     }
 
     /// Statically compile the `.l` file `inp` into Rust, placing the output into the file `outp`.
-    /// The latter defines a module with a function `lexerdef()`, which returns a
-    /// [`LexerDef`](struct.LexerDef.html) that can then be used as normal.
+    /// The latter defines a module as follows:
+    ///
+    /// ```text
+    ///    mod modname {
+    ///      fn lexerdef() -> LexerDef<StorageT> { ... }
+    ///
+    ///      ...
+    ///    }
+    /// ```
+    ///
+    /// where:
+    ///  * `modname` is either:
+    ///    * the module name specified [`mod_name`](#method.mod_name)
+    ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
+    ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
+    ///      `_l`).
     pub fn process_file<P, Q>(
         self,
         inp: P,
@@ -149,18 +175,29 @@ where
             }
         }
 
-        let mut outs = String::new();
-        // At this point we potentially have a filename a.l.rs, so strip off all the extensions.
-        let mut mod_name = inp.as_ref().to_str().unwrap();
-        loop {
-            let mod_stem = Path::new(mod_name).file_stem().unwrap().to_str().unwrap();
-            if mod_name == mod_stem {
-                break;
+        let mod_name = match self.mod_name {
+            Some(s) => s.to_owned(),
+            None => {
+                // The user hasn't specified a module name, so we create one automatically: what we
+                // do is strip off all the filename extensions (note that it's likely that inp ends
+                // with `l.rs`, so we potentially have to strip off more than one extension) and
+                // then add `_l` to the end.
+                let mut stem = inp.as_ref().to_str().unwrap();
+                loop {
+                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
+                    if stem == new_stem {
+                        break;
+                    }
+                    stem = new_stem;
+                }
+                format!("{}_l", stem)
             }
-            mod_name = mod_stem;
-        }
+        };
+
+        let mut outs = String::new();
+        //
         // Header
-        outs.push_str(&format!("mod {}_l {{", mod_name));
+        outs.push_str(&format!("mod {} {{\n", mod_name));
         lexerdef.rust_pp(&mut outs);
 
         // Token IDs
