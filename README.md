@@ -51,9 +51,9 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     // Now we create a lexer with the `lexer` method with which we can lex an
     // input.
-    let mut lexer = lexerdef.lexer(&args[1]);
+    let lexer = lexerdef.lexer(&args[1]);
     // Pass the lexer to the parser and lex and parse the input.
-    let (res, errs) = calc_y::parse(&mut lexer);
+    let (res, errs) = calc_y::parse(&lexer);
     for e in errs {
         println!("{}", e.pp(&lexer, &calc_y::token_epp));
     }
