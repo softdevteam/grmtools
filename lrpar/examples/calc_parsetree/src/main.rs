@@ -12,7 +12,7 @@ lrlex_mod!("calc.l");
 lrpar_mod!("calc.y");
 
 fn main() {
-    // We need to get a `LexerDef` for the `calc` language in order that we can lex input.
+    // Get the `LexerDef` for the `calc` language.
     let lexerdef = calc_l::lexerdef();
     let stdin = io::stdin();
     loop {

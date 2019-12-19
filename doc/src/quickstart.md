@@ -200,8 +200,7 @@ lrlex_mod!("calc.l");
 lrpar_mod!("calc.y");
 
 fn main() {
-    // We need to get a `LexerDef` for the `calc` language in order that we can
-    // lex input.
+    // Get the `LexerDef` for the `calc` language.
     let lexerdef = calc_l::lexerdef();
     let stdin = io::stdin();
     loop {
@@ -212,7 +211,8 @@ fn main() {
                 if l.trim().is_empty() {
                     continue;
                 }
-                // Now we create a lexer with the `lexer` method with which we can lex an input.
+                // Now we create a lexer with the `lexer` method with which
+                // we can lex an input.
                 let lexer = lexerdef.lexer(l);
                 // Pass the lexer to the parser and lex and parse the input.
                 let (res, errs) = calc_y::parse(&lexer);
