@@ -93,15 +93,15 @@ where
 
 /// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
-pub struct CTParserBuilder<StorageT = u32>
+pub struct CTParserBuilder<'a, StorageT = u32>
 where
     StorageT: Eq + Hash
 {
     // Anything stored in here (except `conflicts` and `error_on_conflict`) almost certainly needs
     // to be included as part of the rebuild_cache function below so that, if it's changed, the
     // grammar is rebuilt.
+    mod_name: Option<&'a str>,
     recoverer: RecoveryKind,
-    phantom: PhantomData<StorageT>,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     span_var: bool,
@@ -109,10 +109,11 @@ where
         YaccGrammar<StorageT>,
         StateGraph<StorageT>,
         StateTable<StorageT>
-    )>
+    )>,
+    phantom: PhantomData<StorageT>
 }
 
-impl CTParserBuilder<u32> {
+impl<'a> CTParserBuilder<'a, u32> {
     /// Create a new `CTParserBuilder`.
     ///
     /// # Examples
@@ -127,7 +128,7 @@ impl CTParserBuilder<u32> {
     }
 }
 
-impl<StorageT> CTParserBuilder<StorageT>
+impl<'a, StorageT> CTParserBuilder<'a, StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
     usize: AsPrimitive<StorageT>,
@@ -153,49 +154,28 @@ where
     /// ```
     pub fn new_with_storaget() -> Self {
         CTParserBuilder {
+            mod_name: None,
             recoverer: RecoveryKind::MF,
-            phantom: PhantomData,
             yacckind: None,
             error_on_conflicts: true,
             span_var: false,
-            conflicts: None
+            conflicts: None,
+            phantom: PhantomData
         }
+    }
+
+    /// Set the generated module name to `mod_name`. If no module name is specified,
+    /// [`process_file`](#method.process_file) will attempt to create a sensible default based on
+    /// the input filename.
+    pub fn mod_name(mut self, mod_name: &'a str) -> Self {
+        self.mod_name = Some(mod_name);
+        self
     }
 
     /// Set the recoverer for this parser to `rk`.
     pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
         self.recoverer = rk;
         self
-    }
-
-    /// Given the filename `a/b.y` as input, statically compile the grammar `src/a/b.y` into a Rust
-    /// module which can then be imported using `lrpar_mod!("a/b.y")`. This is a convenience
-    /// function around [`process_file`](#method.process_file) which makes it easier to compile
-    /// grammar files stored in a project's `src/` directory.
-    ///
-    /// # Panics
-    ///
-    /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
-    pub fn process_file_in_src(
-        &mut self,
-        srcp: &str
-    ) -> Result<HashMap<String, StorageT>, Box<dyn Error>> {
-        let mut inp = current_dir()?;
-        inp.push("src");
-        inp.push(srcp);
-        let mut outp = PathBuf::new();
-        outp.push(var("OUT_DIR").unwrap());
-        outp.push(Path::new(srcp).parent().unwrap().to_str().unwrap());
-        create_dir_all(&outp)?;
-        let mut leaf = Path::new(srcp)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
-        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
-        outp.push(leaf);
-        self.process_file(inp, dbg!(outp))
     }
 
     /// Set the `YaccKind` for this parser to `ak`.
@@ -235,23 +215,63 @@ where
         None
     }
 
+    /// Given the filename `a/b.y` as input, statically compile the grammar `src/a/b.y` into a Rust
+    /// module which can then be imported using `lrpar_mod!("a/b.y")`. This is a convenience
+    /// function around [`process_file`](#method.process_file) which makes it easier to compile
+    /// grammar files stored in a project's `src/` directory: please see
+    /// [`process_file`](#method.process_file) for additional constraints and information about the
+    /// generated files.
+    pub fn process_file_in_src(
+        &mut self,
+        srcp: &str
+    ) -> Result<HashMap<String, StorageT>, Box<dyn Error>> {
+        let mut inp = current_dir()?;
+        inp.push("src");
+        inp.push(srcp);
+        let mut outp = PathBuf::new();
+        outp.push(var("OUT_DIR").unwrap());
+        outp.push(Path::new(srcp).parent().unwrap().to_str().unwrap());
+        create_dir_all(&outp)?;
+        let mut leaf = Path::new(srcp)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
+        outp.push(leaf);
+        self.process_file(inp, dbg!(outp))
+    }
+
     /// Statically compile the Yacc file `inp` into Rust, placing the output into the file `outp`.
     /// Note that three additional files will be created with the same name as `outp` but with the
     /// extensions `grm`, `sgraph`, and `stable`, overwriting any existing files with those names.
-    /// `outp` defines a module with the following functions:
+    ///
+    /// `outp` defines a module as follows:
     ///
     /// ```text
-    ///    fn parse(lexemes: &std::vec::Vec<::lrpar::Lexeme<StorageT>>)
-    ///         -> (::std::option::Option<ActionT>, Vec<::lrpar::LexParseError<StorageT>>)>
+    ///   mod modname {
+    ///     fn parse(lexemes: &std::vec::Vec<::lrpar::Lexeme<StorageT>>) { ... }
+    ///         -> (::std::option::Option<ActionT>, Vec<::lrpar::LexParseError<StorageT>>)> { ...}
     ///
-    ///    fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str>
+    ///     fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str> {
+    ///       ...
+    ///     }
+    ///
+    ///     ...
+    ///   }
     /// ```
     ///
-    /// Where `ActionT` is either:
-    ///
-    ///   * the `%actiontype` value given to the grammar
-    ///   * or, if the `yacckind` was set YaccKind::Original(YaccOriginalActionKind::UserAction),
-    ///     it is [`Node<StorageT>`](../parser/enum.Node.html)
+    /// where:
+    ///  * `modname` is either:
+    ///    * the module name specified [`mod_name`](#method.mod_name)
+    ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.y` the
+    ///      module name is `c_y` (i.e. the file's leaf name, minus its extension, with a prefix of
+    ///      `_y`).
+    ///  * `ActionT` is either:
+    ///    * the `%actiontype` value given to the grammar
+    ///    * or, if the `yacckind` was set YaccKind::Original(YaccOriginalActionKind::UserAction),
+    ///      it is [`Node<StorageT>`](../parser/enum.Node.html)
     ///
     /// # Panics
     ///
@@ -324,20 +344,29 @@ where
             }));
         }
 
-        // At this point we potentially have a filename a.y.rs, so strip off all the extensions.
-        let mut mod_name = inp.as_ref().to_str().unwrap();
-        loop {
-            let mod_stem = Path::new(mod_name).file_stem().unwrap().to_str().unwrap();
-            if mod_name == mod_stem {
-                break;
+        let mod_name = match self.mod_name {
+            Some(s) => s.to_owned(),
+            None => {
+                // The user hasn't specified a module name, so we create one automatically: what we
+                // do is strip off all the filename extensions (note that it's likely that inp ends
+                // with `y.rs`, so we potentially have to strip off more than one extension) and
+                // then add `_y` to the end.
+                let mut stem = inp.as_ref().to_str().unwrap();
+                loop {
+                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
+                    if stem == new_stem {
+                        break;
+                    }
+                    stem = new_stem;
+                }
+                format!("{}_y", stem)
             }
-            mod_name = mod_stem;
-        }
+        };
         self.output_file(
             &grm,
             &sgraph,
             &stable,
-            mod_name,
+            &mod_name,
             outp_base,
             outp.as_ref().to_path_buf(),
             &cache
@@ -360,7 +389,7 @@ where
     ) -> Result<(), Box<dyn Error>> {
         let mut outs = String::new();
         // Header
-        outs.push_str(&format!("mod {}_y {{\n", mod_name));
+        outs.push_str(&format!("mod {} {{\n", mod_name));
         outs.push_str(
             "    #![allow(clippy::type_complexity)]
 "
@@ -401,12 +430,18 @@ where
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
         cache.push_str(&format!(
-            "   Build time: {:?}",
+            "   Build time: {:?}\n",
             env!("VERGEN_BUILD_TIMESTAMP")
         ));
 
-        // Record the recoverer
+        cache.push_str(&format!("   Mod name: {:?}\n", self.mod_name));
         cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));
+        cache.push_str(&format!("   YaccKind: {:?}\n", self.yacckind));
+        cache.push_str(&format!(
+            "   Error on conflicts: {:?}\n",
+            self.error_on_conflicts
+        ));
+        cache.push_str(&format!("   Span var: {:?}\n", self.span_var));
 
         // Record the rule IDs map
         for tidx in grm.iter_tidxs() {

@@ -3,11 +3,12 @@ use std::io::{self, BufRead, Write};
 use lrlex::lrlex_mod;
 use lrpar::Lexer;
 
-// Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
+// Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
+// `calc_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).
 lrlex_mod!("calc.l");
 
 fn main() {
-    // We need to get a `LexerDef` for the `calc` language in order that we can lex input.
+    // Get the `LexerDef` for the `calc` language.
     let lexerdef = calc_l::lexerdef();
     let stdin = io::stdin();
     loop {
