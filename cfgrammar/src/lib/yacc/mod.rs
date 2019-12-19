@@ -11,7 +11,7 @@ pub use self::{
 };
 
 /// The particular Yacc variant this grammar makes use of.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum YaccKind {
     /// The original Yacc style as documented by
     /// [Johnson](http://dinosaur.compilertools.net/yacc/index.html),
@@ -23,7 +23,7 @@ pub enum YaccKind {
     Eco
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum YaccOriginalActionKind {
     /// Execute user-specified actions attached to each production; also requires a %actiontype
     /// declaration.
