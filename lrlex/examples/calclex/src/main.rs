@@ -3,7 +3,8 @@ use std::io::{self, BufRead, Write};
 use lrlex::lrlex_mod;
 use lrpar::Lexer;
 
-// Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
+// Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
+// `calc_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).
 lrlex_mod!("calc.l");
 
 fn main() {
