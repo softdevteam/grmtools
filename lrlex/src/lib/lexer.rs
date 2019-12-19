@@ -301,13 +301,13 @@ mod test {
 [ \t] ;
         "
         .to_string();
-        let mut lexer = parse_lex(&src).unwrap();
+        let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("int", 0);
         map.insert("id", 1);
-        assert_eq!(lexer.set_rule_ids(&map), (None, None));
+        assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
-        let lexemes = lexer
+        let lexemes = lexerdef
             .lexer(&"abc 123")
             .iter()
             .map(|x| x.unwrap())
@@ -330,8 +330,8 @@ mod test {
 [0-9]+ 'int'
         "
         .to_string();
-        let lexer = parse_lex::<u8>(&src).unwrap();
-        match lexer.lexer(&"abc").iter().nth(0).unwrap() {
+        let lexerdef = parse_lex::<u8>(&src).unwrap();
+        match lexerdef.lexer(&"abc").iter().nth(0).unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(LexError { idx: 0 }) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e)
@@ -345,13 +345,13 @@ if 'IF'
 [a-z]+ 'ID'
 [ ] ;"
             .to_string();
-        let mut lexer = parse_lex(&src).unwrap();
+        let mut lexerdef = parse_lex(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("IF", 0);
         map.insert("ID", 1);
-        assert_eq!(lexer.set_rule_ids(&map), (None, None));
+        assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
-        let lexemes = lexer
+        let lexemes = lexerdef
             .lexer(&"iff if")
             .iter()
             .map(|x| x.unwrap())
