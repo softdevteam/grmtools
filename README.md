@@ -1,6 +1,6 @@
 # Grammar and parsing libraries for Rust
 
-[![Build Status](https://api.travis-ci.org/softdevteam/sparsevec.svg?branch=master)](https://travis-ci.org/softdevteam/sparsevec)
+[![Bors enabled](https://bors.tech/images/badge_small.svg)](https://app.bors.tech/repositories/22484) [![lrpar on crates.io](https://img.shields.io/crates/v/lrpar.svg?label=lrpar)](https://crates.io/crates/lrpar) [![lrlex on crates.io](https://img.shields.io/crates/v/lrlex.svg?label=lrlex)](https://crates.io/crates/lrlex) [![lrtable on crates.io](https://img.shields.io/crates/v/lrtable.svg?label=lrtable)](https://crates.io/crates/lrtable) [![cfgrammar on crates.io](https://img.shields.io/crates/v/cfgrammar.svg?label=cfgrammar)](https://crates.io/crates/cfgrammar)
 
 grmtools is a suite of Rust libraries and binaries for parsing text, both at
 compile-time, and run-time. Most users will probably be interested in the
