@@ -251,8 +251,9 @@ where
     ///
     /// ```text
     ///   mod modname {
-    ///     fn parse(lexemes: &std::vec::Vec<::lrpar::Lexeme<StorageT>>) { ... }
-    ///         -> (::std::option::Option<ActionT>, Vec<::lrpar::LexParseError<StorageT>>)> { ...}
+    ///     fn parse(lexemes: &::std::vec::Vec<::lrpar::Lexeme<StorageT>>) { ... }
+    ///         -> (::std::option::Option<ActionT>,
+    ///             ::std::vec::Vec<::lrpar::LexParseError<StorageT>>)> { ...}
     ///
     ///     fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str> {
     ///       ...
@@ -471,7 +472,7 @@ where
                     "
     #[allow(dead_code)]
     pub fn parse<'input>(lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input))
-          -> (::std::option::Option<{actiont}>, Vec<::lrpar::LexParseError<{storaget}>>)
+          -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap()
@@ -480,16 +481,20 @@ where
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 outs.push_str(&format!(
                     "
+    #[allow(dead_code)]
     pub fn parse(lexer: &dyn ::lrpar::Lexer<{storaget}>)
-          -> (::std::option::Option<::lrpar::Node<{storaget}>>, Vec<::lrpar::LexParseError<{storaget}>>)
+          -> (::std::option::Option<::lrpar::Node<{storaget}>>,
+              ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name()
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
-                    "    #[allow(dead_code)]\n    pub fn parse(lexer: &dyn ::lrpar::Lexer<{storaget}>)
-          -> Vec<::lrpar::LexParseError<{storaget}>>
+                    "
+    #[allow(dead_code)]
+    pub fn parse(lexer: &dyn ::lrpar::Lexer<{storaget}>)
+          -> ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>
     {{",
                     storaget = StorageT::type_name()
                 ));
@@ -526,7 +531,7 @@ where
                 // action function references
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
-        let mut actions: Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
+        let mut actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
                        (usize, usize),
                        ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
