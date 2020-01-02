@@ -1,3 +1,14 @@
+# grmtools 0.5.1 (2020-01-02)
+
+* If called as a binary, lrlex now exits with a return code of 1 if it could
+  not lex input. This matches the behaviour of lrpar.
+
+* Module names in generated code can now be optionally configured with
+  `mod_name`. The names default to the same naming scheme as before.
+
+* Fully qualify more names in generated code.
+
+
 # grmtools 0.5.0 (2019-12-17)
 
 ## Breaking changes
