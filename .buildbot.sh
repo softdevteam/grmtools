@@ -17,3 +17,6 @@ rustup toolchain install stable
 rustup default stable
 cargo test
 cargo test --release
+
+which cargo-deny | cargo install cargo-deny
+cargo-deny check license
