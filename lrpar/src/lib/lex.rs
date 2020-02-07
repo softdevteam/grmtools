@@ -5,6 +5,8 @@ use std::{error::Error, fmt, hash::Hash, mem::size_of};
 use num_traits::{PrimInt, Unsigned};
 use static_assertions::const_assert;
 
+use crate::Span;
+
 /// A Lexing error.
 #[derive(Copy, Clone, Debug)]
 pub struct LexError {
@@ -105,6 +107,10 @@ impl<StorageT: Copy> Lexeme<StorageT> {
             const_assert!(size_of::<usize>() >= size_of::<u32>());
             self.len as usize
         }
+    }
+
+    pub fn span(&self) -> Span {
+        Span::new(self.start(), self.len())
     }
 
     /// Returns `true` if this lexeme was inserted as the result of error recovery, or `false`
