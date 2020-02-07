@@ -10,14 +10,28 @@ use crate::Span;
 /// A Lexing error.
 #[derive(Copy, Clone, Debug)]
 pub struct LexError {
-    pub idx: usize
+    span: Span
+}
+
+impl LexError {
+    pub fn new(span: Span) -> Self {
+        LexError { span }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl Error for LexError {}
 
 impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Couldn't lex input at position {}", self.idx)
+        write!(
+            f,
+            "Couldn't lex input starting at byte {}",
+            self.span.start()
+        )
     }
 }
 
@@ -33,10 +47,13 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// not produced by next()).
     fn lexeme_str(&self, lexeme: &Lexeme<StorageT>) -> &str;
 
-    /// Return the line and column number of the byte at position `off`. Note that the column
-    /// number is a character -- not a byte! -- offset, relative to the beginning of the line.
-    /// Panics if the offset exceeds the known input.
-    fn line_col(&self, off: usize) -> (usize, usize);
+    /// Return `((start line, start column char), (end line, end column char))` for `span`. Note
+    /// that column *characters* (not bytes) are returned.
+    ///
+    /// # Panics
+    ///
+    /// If the span exceeds the known input.
+    fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
 
     /// Return the line containing the byte at position `off`. Panics if the offset exceeds the
     /// known input.
@@ -110,7 +127,7 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     }
 
     pub fn span(&self) -> Span {
-        Span::new(self.start(), self.len())
+        Span::new(self.start(), self.end())
     }
 
     /// Returns `true` if this lexeme was inserted as the result of error recovery, or `false`

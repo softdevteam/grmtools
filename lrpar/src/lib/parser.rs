@@ -621,11 +621,11 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     ) -> String {
         match self {
             LexParseError::LexError(e) => {
-                let (line, col) = lexer.line_col(e.idx);
+                let ((line, col), _) = lexer.line_col(e.span());
                 format!("Lexing error at line {} column {}.", line, col)
             }
             LexParseError::ParseError(e) => {
-                let (line, col) = lexer.line_col(e.lexeme().start());
+                let ((line, col), _) = lexer.line_col(e.lexeme().span());
                 let mut out = format!("Parsing error at line {} column {}.", line, col);
                 let repairs_len = e.repairs().len();
                 if repairs_len == 0 {
@@ -864,7 +864,7 @@ pub(crate) mod test {
     use regex::Regex;
 
     use super::*;
-    use crate::lex::Lexeme;
+    use crate::{lex::Lexeme, Span};
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,
@@ -937,7 +937,7 @@ pub(crate) mod test {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
 
-        fn line_col(&self, _: usize) -> (usize, usize) {
+        fn line_col(&self, _: Span) -> ((usize, usize), (usize, usize)) {
             unreachable!();
         }
 

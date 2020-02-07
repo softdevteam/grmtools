@@ -7,7 +7,7 @@ use std::{
 use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 
-use lrpar::{LexError, Lexeme, Lexer};
+use lrpar::{LexError, Lexeme, Lexer, Span};
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -204,14 +204,14 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'a, StorageT> 
                             lexemes.push(Ok(Lexeme::new(tok_id, old_i, Some(longest))));
                         }
                         None => {
-                            lexemes.push(Err(LexError { idx: old_i }));
+                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
                             break;
                         }
                     }
                 }
                 i += longest;
             } else {
-                lexemes.push(Err(LexError { idx: old_i }));
+                lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
                 break;
             }
         }
@@ -231,12 +231,16 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         Box::new(self.lexemes.iter().cloned())
     }
 
-    fn line_col(&self, i: usize) -> (usize, usize) {
-        if i > self.s.len() {
-            panic!("Offset {} exceeds known input length {}", i, self.s.len());
+    fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize)) {
+        if span.end() > self.s.len() {
+            panic!(
+                "Span {:?} exceeds known input length {}",
+                span,
+                self.s.len()
+            );
         }
 
-        fn line_col_off<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
+        fn lc_byte<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
             if lexer.newlines.is_empty() || i < lexer.newlines[0] {
                 return (1, i);
             }
@@ -252,9 +256,16 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
             )
         }
 
-        let (line_idx, col_byte) = line_col_off(self, i);
-        let line = self.surrounding_line_str(i);
-        (line_idx, line[..col_byte].chars().count() + 1)
+        fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
+            lexer: &LRLexer<StorageT>,
+            i: usize
+        ) -> (usize, usize) {
+            let (line_idx, col_byte) = lc_byte(lexer, i);
+            let line = lexer.surrounding_line_str(i);
+            (line_idx, line[..col_byte].chars().count() + 1)
+        }
+
+        (lc_char(self, span.start()), lc_char(self, span.end()))
     }
 
     fn surrounding_line_str(&self, i: usize) -> &str {
@@ -333,8 +344,11 @@ mod test {
         let lexerdef = parse_lex::<u8>(&src).unwrap();
         match lexerdef.lexer(&"abc").iter().nth(0).unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
-            Err(LexError { idx: 0 }) => (),
-            Err(e) => panic!("Incorrect error returned {:?}", e)
+            Err(e) => {
+                if e.span().start() != 0 || e.span().end() != 0 {
+                    panic!("Incorrect span returned {:?}", e.span());
+                }
+            }
         };
     }
 
@@ -409,22 +423,22 @@ if 'IF'
         let lexer = lexerdef.lexer("a b c");
         let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
         assert_eq!(lexemes.len(), 3);
-        assert_eq!(lexer.line_col(lexemes[1].start()), (1, 3));
+        assert_eq!(lexer.line_col(lexemes[1].span()), ((1, 3), (1, 4)));
         assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "a b c");
 
         let lexer = lexerdef.lexer("a b c\n");
         let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
         assert_eq!(lexemes.len(), 3);
-        assert_eq!(lexer.line_col(lexemes[1].start()), (1, 3));
+        assert_eq!(lexer.line_col(lexemes[1].span()), ((1, 3), (1, 4)));
         assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "a b c");
 
         let lexer = lexerdef.lexer(" a\nb\n  c d");
         let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
         assert_eq!(lexemes.len(), 4);
-        assert_eq!(lexer.line_col(lexemes[0].start()), (1, 2));
-        assert_eq!(lexer.line_col(lexemes[1].start()), (2, 1));
-        assert_eq!(lexer.line_col(lexemes[2].start()), (3, 3));
-        assert_eq!(lexer.line_col(lexemes[3].start()), (3, 5));
+        assert_eq!(lexer.line_col(lexemes[0].span()), ((1, 2), (1, 3)));
+        assert_eq!(lexer.line_col(lexemes[1].span()), ((2, 1), (2, 2)));
+        assert_eq!(lexer.line_col(lexemes[2].span()), ((3, 3), (3, 4)));
+        assert_eq!(lexer.line_col(lexemes[3].span()), ((3, 5), (3, 6)));
         assert_eq!(lexer.surrounding_line_str(lexemes[0].start()), " a");
         assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "b");
         assert_eq!(lexer.surrounding_line_str(lexemes[2].start()), "  c d");
@@ -445,9 +459,9 @@ if 'IF'
         let lexer = lexerdef.lexer(" a\n❤ b");
         let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
         assert_eq!(lexemes.len(), 3);
-        assert_eq!(lexer.line_col(lexemes[0].start()), (1, 2));
-        assert_eq!(lexer.line_col(lexemes[1].start()), (2, 1));
-        assert_eq!(lexer.line_col(lexemes[2].start()), (2, 3));
+        assert_eq!(lexer.line_col(lexemes[0].span()), ((1, 2), (1, 3)));
+        assert_eq!(lexer.line_col(lexemes[1].span()), ((2, 1), (2, 2)));
+        assert_eq!(lexer.line_col(lexemes[2].span()), ((2, 3), (2, 4)));
         assert_eq!(lexer.surrounding_line_str(lexemes[0].start()), " a");
         assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "❤ b");
         assert_eq!(lexer.surrounding_line_str(lexemes[2].start()), "❤ b");
@@ -467,7 +481,7 @@ if 'IF'
 
         let lexer = lexerdef.lexer("a b c");
 
-        lexer.line_col(100);
+        lexer.line_col(Span::new(100, 100));
     }
 
     #[test]
@@ -490,8 +504,11 @@ if 'IF'
 
         match lexerdef.lexer(&" a ").iter().nth(0).unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
-            Err(LexError { idx: 1 }) => (),
-            Err(e) => panic!("Incorrect error returned {:?}", e)
+            Err(e) => {
+                if e.span().start() != 1 || e.span().end() != 1 {
+                    panic!("Incorrect span returned {:?}", e.span());
+                }
+            }
         };
     }
 }

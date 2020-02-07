@@ -207,6 +207,7 @@ pub use cfgrammar::RIdx;
 
 /// A `Span` records the start/end/length of a portion of the input (i.e. it doesn't hold a
 /// reference / copy of the actual input).
+#[derive(Clone, Copy, Debug)]
 pub struct Span {
     start: usize,
     end: usize
