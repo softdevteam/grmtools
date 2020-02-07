@@ -941,7 +941,7 @@ pub(crate) mod test {
             unreachable!();
         }
 
-        fn surrounding_line_str(&self, _: usize) -> &str {
+        fn span_lines_str(&self, _: Span) -> &str {
             unreachable!();
         }
 

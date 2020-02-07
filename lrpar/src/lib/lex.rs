@@ -55,9 +55,13 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// If the span exceeds the known input.
     fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
 
-    /// Return the line containing the byte at position `off`. Panics if the offset exceeds the
-    /// known input.
-    fn surrounding_line_str(&self, off: usize) -> &str;
+    /// Return the lines containing the input at `span` (including the text before and after the
+    /// `Span` on the lines that the `Span` starts and ends).
+    ///
+    /// # Panics
+    ///
+    /// If the span exceeds the known input.
+    fn span_lines_str(&self, span: Span) -> &str;
 }
 
 /// A `Lexeme` represents a segment of the user's input that conforms to a known type. Note that

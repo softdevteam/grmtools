@@ -232,6 +232,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
     }
 
     fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize)) {
+        debug_assert!(span.end() >= span.start());
         if span.end() > self.s.len() {
             panic!(
                 "Span {:?} exceeds known input length {}",
@@ -261,14 +262,23 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
             i: usize
         ) -> (usize, usize) {
             let (line_idx, col_byte) = lc_byte(lexer, i);
-            let line = lexer.surrounding_line_str(i);
+            let line = lexer.span_lines_str(Span::new(i, i));
             (line_idx, line[..col_byte].chars().count() + 1)
         }
 
         (lc_char(self, span.start()), lc_char(self, span.end()))
     }
 
-    fn surrounding_line_str(&self, i: usize) -> &str {
+    fn span_lines_str(&self, span: Span) -> &str {
+        debug_assert!(span.end() >= span.start());
+        if span.end() > self.s.len() {
+            panic!(
+                "Span {:?} exceeds known input length {}",
+                span,
+                self.s.len()
+            );
+        }
+
         fn surrounding_line_off<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
             if i > lexer.s.len() {
                 panic!("Offset {} exceeds known input length {}", i, lexer.s.len());
@@ -288,7 +298,8 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
             (lexer.newlines[lexer.newlines.len() - 1], lexer.s.len())
         }
 
-        let (st, en) = surrounding_line_off(self, i);
+        let (st, _) = surrounding_line_off(self, span.start());
+        let (_, en) = surrounding_line_off(self, span.end());
         &self.s[st..en]
     }
 
@@ -424,13 +435,13 @@ if 'IF'
         let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_col(lexemes[1].span()), ((1, 3), (1, 4)));
-        assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "a b c");
+        assert_eq!(lexer.span_lines_str(lexemes[1].span()), "a b c");
 
         let lexer = lexerdef.lexer("a b c\n");
         let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_col(lexemes[1].span()), ((1, 3), (1, 4)));
-        assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "a b c");
+        assert_eq!(lexer.span_lines_str(lexemes[1].span()), "a b c");
 
         let lexer = lexerdef.lexer(" a\nb\n  c d");
         let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
@@ -439,10 +450,10 @@ if 'IF'
         assert_eq!(lexer.line_col(lexemes[1].span()), ((2, 1), (2, 2)));
         assert_eq!(lexer.line_col(lexemes[2].span()), ((3, 3), (3, 4)));
         assert_eq!(lexer.line_col(lexemes[3].span()), ((3, 5), (3, 6)));
-        assert_eq!(lexer.surrounding_line_str(lexemes[0].start()), " a");
-        assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "b");
-        assert_eq!(lexer.surrounding_line_str(lexemes[2].start()), "  c d");
-        assert_eq!(lexer.surrounding_line_str(lexemes[3].start()), "  c d");
+        assert_eq!(lexer.span_lines_str(lexemes[0].span()), " a");
+        assert_eq!(lexer.span_lines_str(lexemes[1].span()), "b");
+        assert_eq!(lexer.span_lines_str(lexemes[2].span()), "  c d");
+        assert_eq!(lexer.span_lines_str(lexemes[3].span()), "  c d");
     }
 
     #[test]
@@ -462,9 +473,9 @@ if 'IF'
         assert_eq!(lexer.line_col(lexemes[0].span()), ((1, 2), (1, 3)));
         assert_eq!(lexer.line_col(lexemes[1].span()), ((2, 1), (2, 2)));
         assert_eq!(lexer.line_col(lexemes[2].span()), ((2, 3), (2, 4)));
-        assert_eq!(lexer.surrounding_line_str(lexemes[0].start()), " a");
-        assert_eq!(lexer.surrounding_line_str(lexemes[1].start()), "❤ b");
-        assert_eq!(lexer.surrounding_line_str(lexemes[2].start()), "❤ b");
+        assert_eq!(lexer.span_lines_str(lexemes[0].span()), " a");
+        assert_eq!(lexer.span_lines_str(lexemes[1].span()), "❤ b");
+        assert_eq!(lexer.span_lines_str(lexemes[2].span()), "❤ b");
     }
 
     #[test]
@@ -510,5 +521,23 @@ if 'IF'
                 }
             }
         };
+    }
+
+    #[test]
+    fn test_multiline_lexeme() {
+        let src = "%%
+'.*' 'STR'
+[ \\n] ;"
+            .to_string();
+        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut map = HashMap::new();
+        map.insert("STR", 0u8);
+        assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
+
+        let lexer = lexerdef.lexer("'a\nb'\n");
+        let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
+        assert_eq!(lexemes.len(), 1);
+        assert_eq!(lexer.line_col(lexemes[0].span()), ((1, 1), (2, 3)));
+        assert_eq!(lexer.span_lines_str(lexemes[0].span()), "'a\nb'");
     }
 }
