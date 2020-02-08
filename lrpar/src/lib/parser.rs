@@ -15,7 +15,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned, Zero};
 use crate::{
     cpctplus,
     lex::{LexError, Lexeme, Lexer},
-    mf, panic
+    mf, panic, Span
 };
 
 #[cfg(test)]
@@ -88,7 +88,7 @@ pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     actions: &'a [&'a dyn Fn(
         RIdx<StorageT>,
         &'input dyn Lexer<StorageT>,
-        (usize, usize),
+        Span,
         vec::Drain<AStackType<ActionT, StorageT>>
     ) -> ActionT]
 }
@@ -118,7 +118,7 @@ where
             &'a dyn Fn(
                 RIdx<StorageT>,
                 &dyn Lexer<StorageT>,
-                (usize, usize),
+                Span,
                 vec::Drain<AStackType<Node<StorageT>, StorageT>>
             ) -> Node<StorageT>
         > = Vec::new();
@@ -144,7 +144,7 @@ where
     fn generic_ptree(
         ridx: RIdx<StorageT>,
         _lexer: &dyn Lexer<StorageT>,
-        _span: (usize, usize),
+        _span: Span,
         astack: vec::Drain<AStackType<Node<StorageT>, StorageT>>
     ) -> Node<StorageT> {
         let mut nodes = Vec::with_capacity(astack.len());
@@ -183,7 +183,7 @@ where
             &'a dyn Fn(
                 RIdx<StorageT>,
                 &dyn Lexer<StorageT>,
-                (usize, usize),
+                Span,
                 vec::Drain<AStackType<(), StorageT>>
             ) -> ()
         > = Vec::new();
@@ -209,7 +209,7 @@ where
     fn noaction(
         _ridx: RIdx<StorageT>,
         _lexer: &dyn Lexer<StorageT>,
-        _span: (usize, usize),
+        _span: Span,
         _astack: vec::Drain<AStackType<(), StorageT>>
     ) {
     }
@@ -232,7 +232,7 @@ where
         actions: &'a [&'a dyn Fn(
             RIdx<StorageT>,
             &'input (dyn Lexer<StorageT> + 'input),
-            (usize, usize),
+            Span,
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
@@ -299,7 +299,7 @@ where
                     // We want to delete pop_idx..span_uw.len() - 1, but have to do a little dance
                     // to achieve that effect.
                     let tail = span[span.len() - 1];
-                    let sp = (span[pop_idx - 1], tail);
+                    let sp = Span::new(span[pop_idx - 1], tail);
                     span.truncate(pop_idx);
                     span.push(tail);
 
@@ -408,7 +408,7 @@ where
                             // We want to delete pop_idx..span_uw.len() - 1, but have to do a
                             // little dance to achieve that effect.
                             let tail = span_uw[span_uw.len() - 1];
-                            let sp = (span_uw[pop_idx - 1], tail);
+                            let sp = Span::new(span_uw[pop_idx - 1], tail);
                             span_uw.truncate(pop_idx);
                             span_uw.push(tail);
 
@@ -784,7 +784,7 @@ where
         actions: &[&dyn Fn(
             RIdx<StorageT>,
             &'input (dyn Lexer<StorageT> + 'input),
-            (usize, usize),
+            Span,
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
