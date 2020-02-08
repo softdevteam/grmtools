@@ -948,6 +948,10 @@ pub(crate) mod test {
         fn lexeme_str(&self, _: &Lexeme<StorageT>) -> &str {
             unreachable!();
         }
+
+        fn span_str(&self, _: Span) -> &str {
+            unreachable!();
+        }
     }
 
     fn small_lexer(lexs: &str, ids_map: HashMap<String, u16>) -> Vec<(u16, Regex)> {

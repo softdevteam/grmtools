@@ -306,6 +306,17 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
     fn lexeme_str(&self, l: &Lexeme<StorageT>) -> &str {
         &self.s[l.start()..l.end()]
     }
+
+    fn span_str(&self, span: Span) -> &str {
+        if span.end() > self.s.len() {
+            panic!(
+                "Span {:?} exceeds known input length {}",
+                span,
+                self.s.len()
+            );
+        }
+        &self.s[span.start()..span.end()]
+    }
 }
 
 #[cfg(test)]
