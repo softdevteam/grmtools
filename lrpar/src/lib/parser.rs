@@ -937,19 +937,19 @@ pub(crate) mod test {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
 
-        fn line_col(&self, _: Span) -> ((usize, usize), (usize, usize)) {
-            unreachable!();
-        }
-
-        fn span_lines_str(&self, _: Span) -> &str {
-            unreachable!();
-        }
-
         fn lexeme_str(&self, _: &Lexeme<StorageT>) -> &str {
             unreachable!();
         }
 
         fn span_str(&self, _: Span) -> &str {
+            unreachable!();
+        }
+
+        fn line_col(&self, _: Span) -> ((usize, usize), (usize, usize)) {
+            unreachable!();
+        }
+
+        fn span_lines_str(&self, _: Span) -> &str {
             unreachable!();
         }
     }
