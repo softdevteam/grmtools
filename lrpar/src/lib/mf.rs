@@ -19,7 +19,8 @@ use vob::Vob;
 use crate::{
     astar::astar_all,
     lex::Lexeme,
-    parser::{AStackType, ParseRepair, Parser, Recoverer}
+    parser::{AStackType, ParseRepair, Parser, Recoverer},
+    Span
 };
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
@@ -144,7 +145,7 @@ where
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
         mut astack: &mut Vec<AStackType<ActionT, StorageT>>,
-        mut span: &mut Vec<usize>
+        mut span: &mut Vec<Span>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         let mut start_cactus_pstack = Cactus::new();
         for st in in_pstack.iter() {
@@ -594,7 +595,7 @@ pub(crate) fn apply_repairs<
     mut laidx: usize,
     mut pstack: &mut Vec<StIdx>,
     mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
-    mut span: &mut Option<&mut Vec<usize>>,
+    mut spans: &mut Option<&mut Vec<Span>>,
     repairs: &[ParseRepair<StorageT>]
 ) -> usize
 where
@@ -616,25 +617,15 @@ where
                     laidx + 1,
                     &mut pstack,
                     &mut astack,
-                    &mut span
+                    &mut spans
                 );
             }
             ParseRepair::Delete(_) => {
-                let next_lexeme = parser.next_lexeme(laidx);
-                // When we delete something, we need to adjust the span if it would otherwise
-                // reference the current deleted lexeme.
-                if let Some(ref mut span_uw) = span {
-                    if span_uw[span_uw.len() - 1] == next_lexeme.start()
-                        && laidx <= parser.lexemes.len()
-                    {
-                        let idx = span_uw.len() - 1;
-                        span_uw[idx] = parser.next_lexeme(laidx + 1).start();
-                    }
-                }
                 laidx += 1;
             }
             ParseRepair::Shift(_) => {
-                laidx = parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack, &mut span);
+                laidx =
+                    parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack, &mut spans);
             }
         }
     }

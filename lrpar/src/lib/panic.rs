@@ -3,7 +3,10 @@ use std::{fmt::Debug, hash::Hash, time::Instant};
 use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use crate::parser::{AStackType, ParseRepair, Parser, Recoverer};
+use crate::{
+    parser::{AStackType, ParseRepair, Parser, Recoverer},
+    Span
+};
 
 struct Panic;
 
@@ -30,7 +33,7 @@ where
         in_laidx: usize,
         in_pstack: &mut Vec<StIdx>,
         _: &mut Vec<AStackType<ActionT, StorageT>>,
-        _: &mut Vec<usize>
+        _: &mut Vec<Span>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This recoverer is based on that in Compiler Design in C by Allen I. Holub p.348.
         //

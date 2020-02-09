@@ -118,6 +118,24 @@ fn test_span() {
         _ => unreachable!()
     }
 
+    let lexer = lexerdef.lexer("2 + 3");
+    match span_y::parse(&lexer) {
+        (Some(ref spans), _)
+            if spans
+                == &vec![
+                    Span::new(0, 1),
+                    Span::new(0, 1),
+                    Span::new(4, 5),
+                    Span::new(4, 5),
+                    Span::new(4, 5),
+                    Span::new(0, 5),
+                ] =>
+        {
+            ()
+        }
+        _ => unreachable!()
+    }
+
     let lexer = lexerdef.lexer("2+3*4");
     match span_y::parse(&lexer) {
         (Some(ref spans), _)

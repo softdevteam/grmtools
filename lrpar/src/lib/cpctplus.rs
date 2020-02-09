@@ -13,7 +13,8 @@ use super::{
     astar::dijkstra,
     lex::Lexeme,
     mf::{apply_repairs, rank_cnds, simplify_repairs},
-    parser::{AStackType, ParseRepair, Parser, Recoverer}
+    parser::{AStackType, ParseRepair, Parser, Recoverer},
+    Span
 };
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
@@ -124,7 +125,7 @@ where
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
         mut astack: &mut Vec<AStackType<ActionT, StorageT>>,
-        mut span: &mut Vec<usize>
+        mut spans: &mut Vec<Span>
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
@@ -232,7 +233,7 @@ where
             in_laidx,
             &mut in_pstack,
             &mut Some(&mut astack),
-            &mut Some(&mut span),
+            &mut Some(&mut spans),
             &rnk_rprs[0]
         );
 
