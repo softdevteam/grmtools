@@ -10,11 +10,12 @@ Action code is normal Rust code with the addition of the following special varia
 
  * `$lexer` allows access to the lexer and its [various
    functions](https://softdevteam.github.io/grmtools/master/api/lrpar/trait.Lexer.html).
-   The most commonly used of these is the `lexeme_str` function, which allows
-   us to turn `Lexeme`s into `&'input str`s representing the corresponding
-   portion of the user's input. As this may suggest, actions may also reference the
-   special lifetime `'input` (without any `$` prefix), which allows strings to
-   be returned / stored by the grammar without copying memory.
+   The most commonly used of these is the `span_str` function, which allows us
+   to extract `&'input str`s from a `Span` (e.g. to extract the string
+   represented by a `Lexeme`, we would use `$lexer.span_str(lexeme.span())`).
+   As this may suggest, actions may also reference the special lifetime
+   `'input` (without any `$` prefix), which allows strings to be returned /
+   stored by the grammar without copying memory.
 
  * `$span` is a
    [`lrpar::Span`](https://softdevteam.github.io/grmtools/master/api/lrpar/struct.CTParserBuilder.html)

@@ -43,10 +43,6 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     ///     called more than once (i.e. it might be slow to call this more than once).
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a>;
 
-    /// Return the user input associated with a lexeme. Panics if the lexeme is invalid (i.e. was
-    /// not produced by next()).
-    fn lexeme_str(&self, lexeme: &Lexeme<StorageT>) -> &str;
-
     /// Return the user input associated with a [`Span`](::Span).
     ///
     /// # Panics

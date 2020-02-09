@@ -644,7 +644,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
                                     rs_out.push(format!("Insert {}", epp(*tidx).unwrap()));
                                 }
                                 ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
-                                    let t = &lexer.lexeme_str(l).replace("\n", "\\n");
+                                    let t = &lexer.span_str(l.span()).replace("\n", "\\n");
                                     if let ParseRepair::Delete(_) = *r {
                                         rs_out.push(format!("Delete {}", t));
                                     } else {
@@ -935,10 +935,6 @@ pub(crate) mod test {
     impl<StorageT: Hash + PrimInt + Unsigned> Lexer<StorageT> for SmallLexer<StorageT> {
         fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
-        }
-
-        fn lexeme_str(&self, _: &Lexeme<StorageT>) -> &str {
-            unreachable!();
         }
 
         fn span_str(&self, _: Span) -> &str {

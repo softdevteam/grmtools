@@ -65,7 +65,7 @@ Factor -> Result<u64, ()>:
     | 'INT'
       {
           let v = $1.map_err(|_| ())?;
-          parse_int($lexer.lexeme_str(&v))
+          parse_int($lexer.span_str(v.span()))
       }
     ;
 %%

@@ -231,10 +231,6 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         Box::new(self.lexemes.iter().cloned())
     }
 
-    fn lexeme_str(&self, l: &Lexeme<StorageT>) -> &str {
-        &self.s[l.start()..l.end()]
-    }
-
     fn span_str(&self, span: Span) -> &str {
         if span.end() > self.s.len() {
             panic!(
@@ -420,15 +416,15 @@ if 'IF'
         let lex1 = lexemes[0];
         assert_eq!(lex1.start(), 0);
         assert_eq!(lex1.len(), 1);
-        assert_eq!(lexer.lexeme_str(&lex1), "a");
+        assert_eq!(lexer.span_str(lex1.span()), "a");
         let lex2 = lexemes[1];
         assert_eq!(lex2.start(), 2);
         assert_eq!(lex2.len(), 3);
-        assert_eq!(lexer.lexeme_str(&lex2), "❤");
+        assert_eq!(lexer.span_str(lex2.span()), "❤");
         let lex3 = lexemes[2];
         assert_eq!(lex3.start(), 6);
         assert_eq!(lex3.len(), 1);
-        assert_eq!(lexer.lexeme_str(&lex3), "a");
+        assert_eq!(lexer.span_str(lex3.span()), "a");
     }
 
     #[test]

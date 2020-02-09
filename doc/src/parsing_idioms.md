@@ -19,7 +19,7 @@ representing the identifier as follows:
 ```
 Assign -> ASTAssign: "ID" "+" Expr
     {
-        let id = $lexer.lexeme_str($1.as_ref().unwrap()).to_string();
+        let id = $lexer.span_str($1.as_ref().unwrap().span()).to_string();
         ASTAssign::new(id, $3)
     }
 
@@ -44,13 +44,12 @@ An alternative approach is not to convert the lexeme into a `String` during
 parsing, but simply to return the
 [`Lexeme`](https://docs.rs/lrpar/~0/lrpar/lex/struct.Lexeme.html) itself. The
 relevant `&str` slice can be extracted from the user's input later and memory
-allocation avoided entirely. An example of this is as follows:
+allocation avoided entirely. An outline of this is as follows:
 
 ```
 Assign -> ASTAssign: "ID" "+" Expr
     {
-        let id = $lexer.lexeme_str($1);
-        ASTAssign::new(id, $3)
+        ASTAssign { id: $1, expr: Box::new($3) }
     }
 
 %%
@@ -59,13 +58,10 @@ type StorageT = u32;
 
 struct ASTAssign {
     id: Lexeme<StorageT>
+    expr: Box<Expr>
 }
 
-impl ASTAssign {
-    fn new(name: Lexeme<StorageT>) -> Self {
-        ASTAssign { name }
-    }
-}
+enum Expr { ... }
 ```
 
 Dealing with the [`Lexeme`](https://docs.rs/lrpar/~0/lrpar/lex/struct.Lexeme.html)

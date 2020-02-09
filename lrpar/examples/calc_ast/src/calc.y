@@ -13,7 +13,7 @@ Term -> Result<Expr<'input>, ()>:
 
 Factor -> Result<Expr<'input>, ()>:
       '(' Expr ')' { $2 }
-    | 'INT' { Ok(Expr::Number{span: $span, int: $lexer.lexeme_str(&$1.map_err(|_| ())?) }) }
+    | 'INT' { Ok(Expr::Number{span: $span, int: $lexer.span_str($1.map_err(|_| ())?.span()) }) }
     ;
 %%
 

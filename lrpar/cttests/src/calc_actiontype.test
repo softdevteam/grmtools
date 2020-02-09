@@ -16,13 +16,13 @@ grammar: |
     Factor: '(' Expr ')' { $2 }
           | 'INT' {
                 let l = $1.map_err(|_| ())?;
-                match $lexer.lexeme_str(&l).parse::<u64>() {
+                match $lexer.span_str(l.span()).parse::<u64>() {
                     Ok(v) => Ok(v),
                     Err(_) => {
                         let ((_, col), _) = $lexer.line_col(l.span());
                         eprintln!("Error at column {}: '{}' cannot be represented as a u64",
                                   col,
-                                  $lexer.lexeme_str(&l));
+                                  $lexer.span_str(l.span()));
                         Err(())
                     }
                 }
