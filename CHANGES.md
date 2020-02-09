@@ -1,3 +1,32 @@
+# grmtools 0.6.0 (xxxx-xx-xx)
+
+## Breaking changes
+
+* Introduce the concept of a `Span` which records what portion of the user's
+  input something (e.g. a lexeme or production) references. Users can turn a
+  `Span` into a string through the `Lexer::span_str` function. This has several
+  API changes:
+   * `lrpar` now exports a `Span` type.
+   * `Lexeme`s now have a `fn span(&self) -> Span` function which returns the
+     `Lexeme`'s `Span.
+   * `Lexer::span_str` replaces `Lexer::lexeme_str` function. Roughly speaking this:
+       ```rust
+       let s = lexer.lexeme_str(&lexeme);
+       ```
+     becomes:
+       ```rust
+       let s = lexer.span_str(lexeme.span());
+       ```
+   * `Lexer::line_col` now takes a `Span` rather than a `usize` and, since a
+     `Span` can be over multiple lines, returns `((start line, start column),
+     (end line, end column))`.
+   * `Lexer::surrounding_line_str` is removed in favour of `span_lines_str`
+     which takes a `Span` and returns a (possibly multi-line) `&str` of the
+     lines containing that `Span`.
+   * The `$span` special variable now returns a `Span` rather than `(usize,
+     usize`).
+
+
 # grmtools 0.5.1 (2020-01-02)
 
 * If called as a binary, lrlex now exits with a return code of 1 if it could
