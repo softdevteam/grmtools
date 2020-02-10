@@ -5,7 +5,7 @@
 - [Lexing](lexing.md)
 - [Parsing](parsing.md)
   - [Yacc variants](yaccvariants.md)
-  - [Action code](actioncode.md)
+  - [Return types and action code](actioncode.md)
   - [grmtools parsing idioms](parsing_idioms.md)
   - [Error recovery](errorrecovery.md)
   - [An AST evaluator](ast_example.md)

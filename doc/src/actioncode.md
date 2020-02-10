@@ -1,4 +1,6 @@
-# Action code
+# Action code and return types
+
+## Action code
 
 Action code is normal Rust code with the addition of the following special variables:
 
@@ -25,3 +27,19 @@ Action code is normal Rust code with the addition of the following special varia
  * `$$` is equivalent to `$` in normal Rust code.
 
 Any other variables beginning with `$` are treated as errors.
+
+
+## Return types
+
+Productions' return types can be any arbitrary Rust type. You may in addition
+make use of the following:
+
+ * The generic parameter `StorageT` references the type of lexemes and is
+   typically used with the
+   [`Lexeme`](https://softdevteam.github.io/grmtools/master/api/lrpar/struct.Lexeme.html)
+   type i.e. `Lexeme<StorageT>`. This allows you to return lexemes from rules.
+
+ * The lifetime `'input` allows you to extract strings whose lifetime is tied
+   to the lexer and return them from rules / store them in structs without
+   copying. `Lexer::span_str` returns such strings and the typical idiom of use
+   is `&'input str`.
