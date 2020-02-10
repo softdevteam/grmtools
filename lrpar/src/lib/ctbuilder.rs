@@ -533,7 +533,7 @@ where
                     "\n        #[allow(clippy::type_complexity)]
         let mut actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
-                       (usize, usize),
+                       ::lrpar::Span,
                        ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
                     -> {actionskind}<'input>> = ::std::vec::Vec::new();\n",
                     actionskind = ACTIONS_KIND,
@@ -639,7 +639,7 @@ where
             outs.push_str(&format!(
                 "    fn {prefix}wrapper_{}<'input>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
-                      {prefix}span: (usize, usize),
+                      {prefix}span: ::lrpar::Span,
                       mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
                    -> {actionskind}<'input> {{",
                 usize::from(pidx),
@@ -773,7 +773,7 @@ where
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}<'input>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
-                     {prefix}span: (usize, usize),
+                     {prefix}span: ::lrpar::Span,
                      {args})
                   -> {actiont} {{\n",
                 usize::from(pidx),
