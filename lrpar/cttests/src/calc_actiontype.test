@@ -19,7 +19,7 @@ grammar: |
                 match $lexer.lexeme_str(&l).parse::<u64>() {
                     Ok(v) => Ok(v),
                     Err(_) => {
-                        let (_, col) = $lexer.line_col(l.start());
+                        let ((_, col), _) = $lexer.line_col(l.span());
                         eprintln!("Error at column {}: '{}' cannot be represented as a u64",
                                   col,
                                   $lexer.lexeme_str(&l));

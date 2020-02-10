@@ -204,3 +204,40 @@ macro_rules! lrpar_mod {
 
 #[doc(hidden)]
 pub use cfgrammar::RIdx;
+
+/// A `Span` records the start/end/length of a portion of the input (i.e. it doesn't hold a
+/// reference / copy of the actual input).
+#[derive(Clone, Copy, Debug)]
+pub struct Span {
+    start: usize,
+    end: usize
+}
+
+impl Span {
+    /// Create a new span starting at byte `start` and ending at byte `end`.
+    ///
+    /// # Panics
+    ///
+    /// If `end` is less than `start`.
+    pub fn new(start: usize, end: usize) -> Self {
+        if end < start {
+            panic!("Span starts ({}) after it ends ({})!", start, end);
+        }
+        Span { start, end }
+    }
+
+    /// Byte offset of the start of the span.
+    pub fn start(&self) -> usize {
+        self.start
+    }
+
+    /// Byte offset of the end of the span.
+    pub fn end(&self) -> usize {
+        self.end
+    }
+
+    /// Length in bytes of the span.
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+}

@@ -5,17 +5,33 @@ use std::{error::Error, fmt, hash::Hash, mem::size_of};
 use num_traits::{PrimInt, Unsigned};
 use static_assertions::const_assert;
 
+use crate::Span;
+
 /// A Lexing error.
 #[derive(Copy, Clone, Debug)]
 pub struct LexError {
-    pub idx: usize
+    span: Span
+}
+
+impl LexError {
+    pub fn new(span: Span) -> Self {
+        LexError { span }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl Error for LexError {}
 
 impl fmt::Display for LexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Couldn't lex input at position {}", self.idx)
+        write!(
+            f,
+            "Couldn't lex input starting at byte {}",
+            self.span.start()
+        )
     }
 }
 
@@ -31,14 +47,21 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// not produced by next()).
     fn lexeme_str(&self, lexeme: &Lexeme<StorageT>) -> &str;
 
-    /// Return the line and column number of the byte at position `off`. Note that the column
-    /// number is a character -- not a byte! -- offset, relative to the beginning of the line.
-    /// Panics if the offset exceeds the known input.
-    fn line_col(&self, off: usize) -> (usize, usize);
+    /// Return `((start line, start column char), (end line, end column char))` for `span`. Note
+    /// that column *characters* (not bytes) are returned.
+    ///
+    /// # Panics
+    ///
+    /// If the span exceeds the known input.
+    fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
 
-    /// Return the line containing the byte at position `off`. Panics if the offset exceeds the
-    /// known input.
-    fn surrounding_line_str(&self, off: usize) -> &str;
+    /// Return the lines containing the input at `span` (including the text before and after the
+    /// `Span` on the lines that the `Span` starts and ends).
+    ///
+    /// # Panics
+    ///
+    /// If the span exceeds the known input.
+    fn span_lines_str(&self, span: Span) -> &str;
 }
 
 /// A `Lexeme` represents a segment of the user's input that conforms to a known type. Note that
@@ -105,6 +128,10 @@ impl<StorageT: Copy> Lexeme<StorageT> {
             const_assert!(size_of::<usize>() >= size_of::<u32>());
             self.len as usize
         }
+    }
+
+    pub fn span(&self) -> Span {
+        Span::new(self.start(), self.end())
     }
 
     /// Returns `true` if this lexeme was inserted as the result of error recovery, or `false`
