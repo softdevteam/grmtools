@@ -14,57 +14,53 @@ guide](quickstart.md). However the `calc.y` file is change as follows:
 %start Expr
 %avoid_insert "INT"
 %%
-Expr -> Result<Expr<'input>, ()>:
-      Term '+' Expr { Ok(Expr::Add{span: $span, lhs: Box::new($1?), rhs: Box::new($3?)}) }
+Expr -> Result<Expr, ()>:
+      Term '+' Expr { Ok(Expr::Add{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
     | Term { $1 }
     ;
 
-Term -> Result<Expr<'input>, ()>:
-      Factor '*' Term { Ok(Expr::Mul{span: $span, lhs: Box::new($1?), rhs: Box::new($3?)}) }
+Term -> Result<Expr, ()>:
+      Factor '*' Term { Ok(Expr::Mul{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
     | Factor { $1 }
     ;
 
-Factor -> Result<Expr<'input>, ()>:
+Factor -> Result<Expr, ()>:
       '(' Expr ')' { $2 }
-    | 'INT' { Ok(Expr::Number{span: $span, int: $lexer.span_str($1.map_err(|_| ())?.span()) }) }
+    | 'INT' { Ok(Expr::Number{ span: $span }) }
     ;
 %%
 
 use lrpar::Span;
 
 #[derive(Debug)]
-pub enum Expr<'input> {
+pub enum Expr {
     Add {
         span: Span,
-        lhs: Box<Expr<'input>>,
-        rhs: Box<Expr<'input>>,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
     },
     Mul {
         span: Span,
-        lhs: Box<Expr<'input>>,
-        rhs: Box<Expr<'input>>,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
     },
     Number {
-        span: Span,
-        int: &'input str
+        span: Span
     }
 }
 ```
 
 The most obvious difference here is that we have defined a simple `enum` `Expr`,
-with three variants, for our AST. `Expr` makes use of the `'input`
-lifetime so that although the AST contains strings, they do not require copying
-any memory from the user's input. Each AST element also records a `Span` which
+with three variants, for our AST. Each AST variant also records a `Span` which
 records how much input the AST element covers. By using the
 [`$span`](actioncode.md) variable we can ensure that AST elements record their
 relationship to portions of the user's input that span multiple tokens (e.g.
 for the expressions `1 + 2` the resulting `Expr::Add` will have a `Span`
 starting at byte index 0 and ending at byte index 5 -- in other words covering
-the complete input string in this case). This is useful for error reporting as
-we shall soon see.
+the complete input string in this case).
 
-After parsing, we thus end up with a `Result<Expr<'input>, ()>`. In the case of
-a successful parse, this will give us an arbitrarily deeply nested `Expr`.
+After parsing, we thus end up with a `Result<Expr, ()>`. In the case of a
+successful parse, this will give us an arbitrarily deeply nested `Expr`.
 
 Our `main.rs` file then looks as follows:
 
@@ -125,7 +121,8 @@ fn eval(lexer: &dyn Lexer<u32>, e: Expr) -> Result<u64, (Span, &'static str)> {
         Expr::Mul { span, lhs, rhs } => eval(lexer, *lhs)?
             .checked_mul(eval(lexer, *rhs)?)
             .ok_or((span, "overflowed")),
-        Expr::Number { span, int } => int
+        Expr::Number { span } => lexer
+            .span_str(span)
             .parse::<u64>()
             .map_err(|_| (span, "cannot be represented as a u64"))
     }

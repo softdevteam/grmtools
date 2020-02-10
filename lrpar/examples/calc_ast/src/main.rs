@@ -60,7 +60,8 @@ fn eval(lexer: &dyn Lexer<u32>, e: Expr) -> Result<u64, (Span, &'static str)> {
         Expr::Mul { span, lhs, rhs } => eval(lexer, *lhs)?
             .checked_mul(eval(lexer, *rhs)?)
             .ok_or((span, "overflowed")),
-        Expr::Number { span, int } => int
+        Expr::Number { span } => lexer
+            .span_str(span)
             .parse::<u64>()
             .map_err(|_| (span, "cannot be represented as a u64"))
     }
