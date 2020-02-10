@@ -26,6 +26,10 @@
    * The `$span` special variable now returns a `Span` rather than `(usize,
      usize`).
 
+* The `$span` special variable is now enabled at all times and no longer needs
+  to be turned on with `CTBuilder::span_var`. This function has thus been
+  removed.
+
 
 # grmtools 0.5.1 (2020-01-02)
 

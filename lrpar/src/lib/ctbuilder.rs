@@ -104,7 +104,6 @@ where
     recoverer: RecoveryKind,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
-    span_var: bool,
     conflicts: Option<(
         YaccGrammar<StorageT>,
         StateGraph<StorageT>,
@@ -158,7 +157,6 @@ where
             recoverer: RecoveryKind::MF,
             yacckind: None,
             error_on_conflicts: true,
-            span_var: false,
             conflicts: None,
             phantom: PhantomData
         }
@@ -188,13 +186,6 @@ where
     /// any Shift/Reduce or Reduce/Reduce conflicts. Defaults to `true`.
     pub fn error_on_conflicts(mut self, b: bool) -> Self {
         self.error_on_conflicts = b;
-        self
-    }
-
-    /// If set to true, action code will be able to reference the `$span` variable. Note that
-    /// enabling this feature might slow the parser down. Defaults to `false`.
-    pub fn span_var(mut self, b: bool) -> Self {
-        self.span_var = b;
         self
     }
 
@@ -442,7 +433,6 @@ where
             "   Error on conflicts: {:?}\n",
             self.error_on_conflicts
         ));
-        cache.push_str(&format!("   Span var: {:?}\n", self.span_var));
 
         // Record the rule IDs map
         for tidx in grm.iter_tidxs() {
@@ -799,7 +789,7 @@ where
                                 format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
                             );
                             last = last + off + "$lexer".len();
-                        } else if self.span_var && pre_action[last + off..].starts_with("$span") {
+                        } else if pre_action[last + off..].starts_with("$span") {
                             outs.push_str(&pre_action[last..last + off]);
                             outs.push_str(format!("{prefix}span", prefix = ACTION_PREFIX).as_str());
                             last = last + off + "$span".len();

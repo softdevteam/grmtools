@@ -18,12 +18,9 @@ Action code is normal Rust code with the addition of the following special varia
    stored by the grammar without copying memory.
 
  * `$span` is a
-   [`lrpar::Span`](https://softdevteam.github.io/grmtools/master/api/lrpar/struct.CTParserBuilder.html)
+   [`lrpar::Span`](https://softdevteam.github.io/grmtools/master/api/lrpar/struct.Span.html)
    tuple (with both elements of type `usize`) which captures how much of the
-   user's input the current production matched. This can be useful when storing
-   debugging information. Note that this variable is not enabled by default as
-   it may slow parsing down: use `CTParserBuilder::span_var(true)` to enable
-   it.
+   user's input the current production matched.
 
  * `$$` is equivalent to `$` in normal Rust code.
 
