@@ -231,8 +231,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         Box::new(self.lexemes.iter().cloned())
     }
 
-    fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize)) {
-        debug_assert!(span.end() >= span.start());
+    fn span_str(&self, span: Span) -> &str {
         if span.end() > self.s.len() {
             panic!(
                 "Span {:?} exceeds known input length {}",
@@ -240,33 +239,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
                 self.s.len()
             );
         }
-
-        fn lc_byte<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
-            if lexer.newlines.is_empty() || i < lexer.newlines[0] {
-                return (1, i);
-            }
-
-            for j in 0..lexer.newlines.len() - 1 {
-                if lexer.newlines[j + 1] > i {
-                    return (j + 2, i - lexer.newlines[j]);
-                }
-            }
-            (
-                lexer.newlines.len() + 1,
-                i - lexer.newlines[lexer.newlines.len() - 1]
-            )
-        }
-
-        fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
-            lexer: &LRLexer<StorageT>,
-            i: usize
-        ) -> (usize, usize) {
-            let (line_idx, col_byte) = lc_byte(lexer, i);
-            let line = lexer.span_lines_str(Span::new(i, i));
-            (line_idx, line[..col_byte].chars().count() + 1)
-        }
-
-        (lc_char(self, span.start()), lc_char(self, span.end()))
+        &self.s[span.start()..span.end()]
     }
 
     fn span_lines_str(&self, span: Span) -> &str {
@@ -303,8 +276,42 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         &self.s[st..en]
     }
 
-    fn lexeme_str(&self, l: &Lexeme<StorageT>) -> &str {
-        &self.s[l.start()..l.end()]
+    fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize)) {
+        debug_assert!(span.end() >= span.start());
+        if span.end() > self.s.len() {
+            panic!(
+                "Span {:?} exceeds known input length {}",
+                span,
+                self.s.len()
+            );
+        }
+
+        fn lc_byte<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
+            if lexer.newlines.is_empty() || i < lexer.newlines[0] {
+                return (1, i);
+            }
+
+            for j in 0..lexer.newlines.len() - 1 {
+                if lexer.newlines[j + 1] > i {
+                    return (j + 2, i - lexer.newlines[j]);
+                }
+            }
+            (
+                lexer.newlines.len() + 1,
+                i - lexer.newlines[lexer.newlines.len() - 1]
+            )
+        }
+
+        fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
+            lexer: &LRLexer<StorageT>,
+            i: usize
+        ) -> (usize, usize) {
+            let (line_idx, col_byte) = lc_byte(lexer, i);
+            let line = lexer.span_lines_str(Span::new(i, i));
+            (line_idx, line[..col_byte].chars().count() + 1)
+        }
+
+        (lc_char(self, span.start()), lc_char(self, span.end()))
     }
 }
 
@@ -409,15 +416,15 @@ if 'IF'
         let lex1 = lexemes[0];
         assert_eq!(lex1.start(), 0);
         assert_eq!(lex1.len(), 1);
-        assert_eq!(lexer.lexeme_str(&lex1), "a");
+        assert_eq!(lexer.span_str(lex1.span()), "a");
         let lex2 = lexemes[1];
         assert_eq!(lex2.start(), 2);
         assert_eq!(lex2.len(), 3);
-        assert_eq!(lexer.lexeme_str(&lex2), "❤");
+        assert_eq!(lexer.span_str(lex2.span()), "❤");
         let lex3 = lexemes[2];
         assert_eq!(lex3.start(), 6);
         assert_eq!(lex3.len(), 1);
-        assert_eq!(lexer.lexeme_str(&lex3), "a");
+        assert_eq!(lexer.span_str(lex3.span()), "a");
     }
 
     #[test]

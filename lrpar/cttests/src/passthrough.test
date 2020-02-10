@@ -8,7 +8,7 @@ grammar: |
         Num { $1 }
         ;
     Num -> Result<String, ()>:
-        "INT" { Ok(format!("$${}", $lexer.lexeme_str(&$1.unwrap()))) }
+        "INT" { Ok(format!("$${}", $lexer.span_str($1.unwrap().span()))) }
         ;
 lexer: |
     %%

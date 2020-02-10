@@ -63,7 +63,7 @@ Term -> u64:
 
 Factor -> u64:
       'LBRACK' Expr 'RBRACK' { $2 }
-    | 'INT' { parse_int($lexer.lexeme_str(&$1.unwrap())) }
+    | 'INT' { parse_int($lexer.span_str($1.unwrap().unwrap())) }
     ;
 %%
 // Any functions here are in scope for all the grammar actions above.
@@ -140,7 +140,7 @@ In this case, the first repair sequence was `Insert INT`. The fundamental
 problem is that while error recovery can adjust the user’s input to insert a
 lexeme of type `INT`, neither it nor the parser have any idea what value might
 have made sense for that lexeme. Thus the expression above caused the expression
-`$lexer.lexeme_str(&$1.unwrap())` to panic, since `$1` was `Err(<lexeme>)`.
+`$lexer.span_str($1.unwrap().span())` to panic, since `$1` was `Err(<lexeme>)`.
 
 It is thus up to the user to decide what to do in the face of the inevitable
 semantic issues that error recovery highlights. Fortunately, this is generally
@@ -177,7 +177,7 @@ Term -> Result<u64, ()>:
 
 Factor -> Result<u64, ()>:
       'LBRACK' Expr 'RBRACK' { $2 }
-    | 'INT' { parse_int($lexer.lexeme_str($1.map_err(|_| ())?)) }
+    | 'INT' { parse_int($lexer.span_str($1.map_err(|_| ())?.span())) }
     ;
 %%
 // Any functions here are in scope for all the grammar actions above.

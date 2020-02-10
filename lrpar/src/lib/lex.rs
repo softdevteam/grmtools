@@ -43,17 +43,12 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     ///     called more than once (i.e. it might be slow to call this more than once).
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a>;
 
-    /// Return the user input associated with a lexeme. Panics if the lexeme is invalid (i.e. was
-    /// not produced by next()).
-    fn lexeme_str(&self, lexeme: &Lexeme<StorageT>) -> &str;
-
-    /// Return `((start line, start column char), (end line, end column char))` for `span`. Note
-    /// that column *characters* (not bytes) are returned.
+    /// Return the user input associated with a [`Span`](::Span).
     ///
     /// # Panics
     ///
     /// If the span exceeds the known input.
-    fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
+    fn span_str(&self, span: Span) -> &str;
 
     /// Return the lines containing the input at `span` (including the text before and after the
     /// `Span` on the lines that the `Span` starts and ends).
@@ -62,6 +57,14 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     ///
     /// If the span exceeds the known input.
     fn span_lines_str(&self, span: Span) -> &str;
+
+    /// Return `((start line, start column), (end line, end column))` for `span`. Note that column
+    /// *characters* (not bytes) are returned.
+    ///
+    /// # Panics
+    ///
+    /// If the span exceeds the known input.
+    fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
 }
 
 /// A `Lexeme` represents a segment of the user's input that conforms to a known type. Note that
