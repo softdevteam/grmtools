@@ -1,4 +1,4 @@
-# grmtools 0.6.0 (xxxx-xx-xx)
+# grmtools 0.6.0 (2020-02-10)
 
 ## Breaking changes
 
@@ -9,7 +9,8 @@
    * `lrpar` now exports a `Span` type.
    * `Lexeme`s now have a `fn span(&self) -> Span` function which returns the
      `Lexeme`'s `Span.
-   * `Lexer::span_str` replaces `Lexer::lexeme_str` function. Roughly speaking this:
+   * `Lexer::span_str` replaces `Lexer::lexeme_str` function. Roughly speaking
+     this:
        ```rust
        let s = lexer.lexeme_str(&lexeme);
        ```
@@ -25,6 +26,14 @@
      lines containing that `Span`.
    * The `$span` special variable now returns a `Span` rather than `(usize,
      usize`).
+
+  In practise, this means that in many cases where you previously had to use
+  `Lexeme<StorageT>`, you can now use `Span` instead. This has two advantages.
+  First, it simplifies your code. Second, it enables better error reporting, as
+  you can now point the user to a span of text, rather than a single point. See
+  the (new) [AST
+  evaluator](https://softdevteam.github.io/grmtools/master/book/ast_example.html)
+  section of the grmtools book for an example of how code using `Span` looks.
 
 * The `$span` special variable is now enabled at all times and no longer needs
   to be turned on with `CTBuilder::span_var`. This function has thus been
