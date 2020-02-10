@@ -11,7 +11,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ".l" for lrlex).
     let lex_rule_ids_map = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
-        .span_var(true)
         .process_file_in_src("calc.y")?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)

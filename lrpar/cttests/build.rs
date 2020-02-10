@@ -52,7 +52,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             outp.set_extension("rs");
             let lex_rule_ids_map = CTParserBuilder::new()
                 .yacckind(yacckind)
-                .span_var(true)
                 .process_file(pg.to_str().unwrap(), &outp)?;
 
             let mut outl = PathBuf::from(&out_dir);
