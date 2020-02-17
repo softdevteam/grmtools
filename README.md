@@ -29,9 +29,59 @@ fn main() -> Result<(), Box<std::error::Error>> {
 }
 ```
 
-This will generate and compile a parser and lexer using the definitions found
-in `src/lexer.l` and `src/grammar.y`. We can then use the generated lexer and
-parser within our `src/main.rs` file as follows:
+This will generate and compile a parser and lexer, where the definitions for the
+lexer can be found in `src/calc.l`:
+
+```rust
+%%
+[0-9]+ "INT"
+\+ "+"
+\* "*"
+\( "("
+\) ")"
+[\t ]+ ;
+```
+
+And where the definitions for the parser can be found in `src/calc.y`:
+
+```rust
+%start Expr
+%avoid_insert "INT"
+%%
+Expr -> Result<u64, ()>:
+      Term '+' Expr { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+
+Term -> Result<u64, ()>:
+      Factor '*' Term { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor -> Result<u64, ()>:
+      '(' Expr ')' { $2 }
+    | 'INT'
+      {
+          let v = $1.map_err(|_| ())?;
+          parse_int($lexer.lexeme_str(&v))
+      }
+    ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &str) -> Result<u64, ()> {
+    match s.parse::<u64>() {
+        Ok(val) => Ok(val),
+        Err(_) => {
+            eprintln!("{} cannot be represented as a u64", s);
+            Err(())
+        }
+    }
+}
+```
+
+We can then use the generated lexer and parser within our `src/main.rs` file as
+follows:
 
 ```rust
 use std::env;
