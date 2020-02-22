@@ -1,6 +1,32 @@
-# Yacc variants
+# Yacc compatibility
 
-grmtools can deal with several different variants of Yacc input.
+grmtools supports most major Yacc features, to the extent that many Yacc
+grammars can be used unchanged with grmtools. In this book we assume
+familiarity with Yacc syntax and its major features: the
+[Yacc manual](http://dinosaur.compilertools.net/yacc/index.html) is recommended
+reading.
+
+
+## Major differences
+
+There are several differences between Yacc and grmtools including:
+
+ * grmtools has no equivalent of any of the `yy*` functions (e.g. `yyerror`,
+   `yylex`, `yylval`, `yyparse` and so on). This means, for example, that
+   grammar actions cannot currently influence the lexer in any way.
+
+ * grmtools has an entirely different approach to [error
+   recovery](errorrecovery.md). The token `error` and the special action
+   expressions `yyerrok` and `yyclearin` are not supported. In general, users
+   can simply remove alternatives that consist solely of `error`.
+
+ * `%union` can be mapped to `%actiontype` in grmtools, though this is rarely
+   the best way of using a Yacc grammar in Rust. See the [Grmtools Yacc
+   variant](#grmtools) below for the most common way of making grammars do
+   something useful; in a limited number of cases (e.g. if you just want to
+   build a parse tree), you may find the ["Original" Yacc
+   variants](#original-yacc) useful.
+
 
 ## Grmtools
 
