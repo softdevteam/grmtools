@@ -17,7 +17,7 @@ Perhaps the "obvious" way to build this into an AST is to extract the string
 representing the identifier as follows:
 
 ```
-Assign -> ASTAssign: "ID" "+" Expr
+Assign -> ASTAssign: "ID" "=" Expr
     {
         let id = $lexer.span_str($1.as_ref().unwrap().span()).to_string();
         ASTAssign::new(id, $3)
@@ -47,7 +47,7 @@ relevant `&str` slice can be extracted from the user's input later and memory
 allocation avoided entirely. An outline of this is as follows:
 
 ```
-Assign -> ASTAssign: "ID" "+" Expr
+Assign -> ASTAssign: "ID" "=" Expr
     {
         ASTAssign { id: $1, expr: Box::new($3) }
     }
@@ -105,7 +105,7 @@ R -> Result<Lexeme<StorageT>, ()>:
 %%
 
 fn map_err(r: Result<Lexeme<StorageT>, Lexeme<StorageT>>)
-        -> Result<Lexeme<StorageT>, ()
+        -> Result<Lexeme<StorageT>, ()>
 {
     r.map_err(|_| ())
 }
@@ -171,7 +171,7 @@ ListOfIds -> Result<Vec<Lexeme<StorageT>>, ()>:
 type StorageT = u32;
 
 fn map_err(r: Result<Lexeme<StorageT>, Lexeme<StorageT>>)
-        -> Result<Lexeme<StorageT>, ()
+        -> Result<Lexeme<StorageT>, ()>
 {
     r.map_err(|_| ())
 }
