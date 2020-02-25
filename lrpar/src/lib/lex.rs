@@ -114,12 +114,9 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     ///
     /// Note that if this lexeme was inserted by error recovery, it will end at the same place it
     /// started (i.e. `self.start() == self.end()`).
+    #[deprecated(since = "0.6.1", note = "Please use span().end() instead")]
     pub fn end(&self) -> usize {
-        if self.len == u32::max_value() {
-            self.start
-        } else {
-            self.start + (self.len as usize)
-        }
+        self.span().end()
     }
 
     /// Length in bytes of the lexeme.
@@ -135,7 +132,12 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     }
 
     pub fn span(&self) -> Span {
-        Span::new(self.start, self.end())
+        let end = if self.len == u32::max_value() {
+            self.start
+        } else {
+            self.start + (self.len as usize)
+        };
+        Span::new(self.start, end)
     }
 
     /// Returns `true` if this lexeme was inserted as the result of error recovery, or `false`

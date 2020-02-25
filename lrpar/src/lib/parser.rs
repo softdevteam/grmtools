@@ -482,7 +482,7 @@ where
             } else {
                 debug_assert!(laidx > 0);
                 let last_la = self.lexemes[laidx - 1];
-                last_la.end()
+                last_la.span().end()
             };
 
             Lexeme::new(
