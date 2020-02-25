@@ -329,6 +329,64 @@ With this, the `Delete +` repair sequence is consistently favoured over `Insert
 INT`.
 
 
+## Turning lexing errors into parsing errors
+
+Most lexers do not have lexical rules for all possible inputs. For example, our
+running calculator example has no lexical rule for the character `@`. Typically
+this causes the lexer to generate an error and stop lexing further. For example
+with `lrlex` we would encounter the following:
+
+```
+>>> 2@3
+Lexing error at line 1 column 2.
+```
+
+This error message is correct, but not as helpful as we might like (*what* is
+the error specifically?). Furthermore, any further errors in the input will not
+be found until the lexing error is fixed.
+
+Fortunately we can fix this easily for nearly all grammars by adding a line
+similar to this to the end of your `.l` file:
+
+```
+. "UNKNOWN"
+```
+
+Any single character which is not matched by any other lex rule will now lead
+to a token of type `UNKNOWN`. Note that it is vital that this is the last rule
+in your `.l` file, and that only a single character is matched, otherwise you
+will incorrectly lex correct input as `UNKNOWN`!
+
+We then need to add a dummy rule to your `.y` file, simply so that `lrpar`
+knows about `UNKNOWN` tokens. This dummy rule won't be referenced by other
+rules, so its return type and action are irrelevant. The simplest example is
+thus:
+
+```
+Unused -> ():
+  "UNKNOWN" { } 
+  ;
+```
+
+With this done, all possible input will be lexed, and what were previously
+lexing errors are now parsing errors. This means that [error recovery
+section](errorrecovery.html) kicks in, giving us more detailed and informative
+errors, and ensuring that multiple "lexing" errors are reported at once:
+
+```
+>>> 2@3+4+5+6@7
+Parsing error at line 1 column 2. Repair sequences found:
+   1: Delete @, Delete 3
+   2: Insert +, Delete @
+   3: Insert *, Delete @
+Parsing error at line 1 column 10. Repair sequences found:
+   1: Insert +, Delete @
+   2: Delete @, Delete 7
+   3: Insert *, Delete @
+Result: 24
+```
+
+
 ## Under the bonnet
 
 For any given syntax error there are, potentially, a finite but vast number of
