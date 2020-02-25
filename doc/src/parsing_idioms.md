@@ -4,7 +4,7 @@ grmtools is a flexible tool and can be used in many ways. However, for those
 using the `Grmtools` format, the simple idioms below can often make life easier.
 
 
-# Return `Lexeme`s rather than `&str`s or `String`s when performance is critical
+# Return `Span`s when possible
 
 When executing grammar actions one is often building up an Abstract Syntax Tree
 (AST) or equivalent. For example consider a simple language with assignments:
@@ -38,18 +38,18 @@ impl ASTAssign {
 
 This approach is easy to work with, but isn't as performant as may be desired:
 the `to_string` call allocates memory and copies part of the user's input into
-that.
+that. It also loses information about the part of the user's input that the
+string relates to.
 
 An alternative approach is not to convert the lexeme into a `String` during
-parsing, but simply to return the
-[`Lexeme`](https://docs.rs/lrpar/~0/lrpar/lex/struct.Lexeme.html) itself. The
-relevant `&str` slice can be extracted from the user's input later and memory
-allocation avoided entirely. An outline of this is as follows:
+parsing, but simply to return a
+[`Span`](https://docs.rs/lrpar/~0/lrpar/struct.Span.html). An outline of this
+is as follows:
 
 ```
 Assign -> ASTAssign: "ID" "=" Expr
     {
-        ASTAssign { id: $1, expr: Box::new($3) }
+        ASTAssign { id: $1, expr: Box::new($3.span()) }
     }
 
 %%
@@ -57,27 +57,23 @@ Assign -> ASTAssign: "ID" "=" Expr
 type StorageT = u32;
 
 struct ASTAssign {
-    id: Lexeme<StorageT>
+    id: Span
     expr: Box<Expr>
 }
 
 enum Expr { ... }
 ```
 
-Dealing with the [`Lexeme`](https://docs.rs/lrpar/~0/lrpar/lex/struct.Lexeme.html)
-type can be somewhat fiddly because it has a type paramater `<StorageT>`
-with somewhat complex bounds. In essence, `StorageT` must be an unsigned integer
-that is big enough to index (individually) a grammar's rules, productions, and
-lexemes. Users can manually specify `StorageT` by using
-[`CTParserBuilder::new_with_storaget`](https://docs.rs/lrpar/0.1.1/lrpar/ctbuilder/struct.CTParserBuilder.html#method.new_with_storaget);
-if not specified explicitly it defaults to `u32`.
+If this is not quite what you want to do, you can use largely the same trick with
+the [`Lexeme`](https://docs.rs/lrpar/~0/lrpar/lex/struct.Lexeme.html) `struct`.
+Working with `Lexeme`s has the advantage that you can tell what the type of the
+lexeme in question is, though generally this is entirely clear from AST
+context, and `Lexeme`'s type parameter makes it marginally more fiddly to work
+with than `Span`.
 
-A simple way of avoiding the complexity of the parameter's bounds is to encode
-it directly into the `Lexeme` type. A pleasant, and easily adapted way of doing
-this, is to semi-hard-code the value of `StorageT` into the AST, which we
-do by adding `type StorageT = u32;` to the programs part of the grammar
-(note that if a different type than `u32` was passed to [`CTParserBuilder::new_with_storaget`](https://docs.rs/lrpar/0.1.1/lrpar/ctbuilder/struct.CTParserBuilder.html#method.new_with_storaget) then
-that will need to be used instead).
+Alternatively, if you really want to extract strings during parsing, consider
+using the `'input` to extract `&str`'s during parsing, since this does not
+cause any additional memory to be allocated.
 
 
 # Have rules return a `Result` type and add a function to avoid `map_err` directly
