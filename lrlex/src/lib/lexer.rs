@@ -345,11 +345,11 @@ mod test {
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.span().start(), 0);
-        assert_eq!(lex1.len(), 3);
+        assert_eq!(lex1.span().len(), 3);
         let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.span().start(), 4);
-        assert_eq!(lex2.len(), 3);
+        assert_eq!(lex2.span().len(), 3);
     }
 
     #[test]
@@ -392,11 +392,11 @@ if 'IF'
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
         assert_eq!(lex1.span().start(), 0);
-        assert_eq!(lex1.len(), 3);
+        assert_eq!(lex1.span().len(), 3);
         let lex2 = lexemes[1];
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.span().start(), 4);
-        assert_eq!(lex2.len(), 2);
+        assert_eq!(lex2.span().len(), 2);
     }
 
     #[test]
@@ -415,15 +415,15 @@ if 'IF'
         assert_eq!(lexemes.len(), 3);
         let lex1 = lexemes[0];
         assert_eq!(lex1.span().start(), 0);
-        assert_eq!(lex1.len(), 1);
+        assert_eq!(lex1.span().len(), 1);
         assert_eq!(lexer.span_str(lex1.span()), "a");
         let lex2 = lexemes[1];
         assert_eq!(lex2.span().start(), 2);
-        assert_eq!(lex2.len(), 3);
+        assert_eq!(lex2.span().len(), 3);
         assert_eq!(lexer.span_str(lex2.span()), "❤");
         let lex3 = lexemes[2];
         assert_eq!(lex3.span().start(), 6);
-        assert_eq!(lex3.len(), 1);
+        assert_eq!(lex3.span().len(), 1);
         assert_eq!(lexer.span_str(lex3.span()), "a");
     }
 

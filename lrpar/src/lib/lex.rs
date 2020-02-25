@@ -122,13 +122,9 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     /// Length in bytes of the lexeme.
     ///
     /// Note that if this lexeme was inserted by error recovery, it will have a length of 0.
+    #[deprecated(since = "0.6.1", note = "Please use span().len() instead")]
     pub fn len(&self) -> usize {
-        if self.len == u32::max_value() {
-            0
-        } else {
-            const_assert!(size_of::<usize>() >= size_of::<u32>());
-            self.len as usize
-        }
+        self.span().len()
     }
 
     pub fn span(&self) -> Span {
