@@ -105,6 +105,7 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     }
 
     /// Byte offset of the start of the lexeme
+    #[deprecated(since = "0.6.1", note = "Please use span().start() instead")]
     pub fn start(&self) -> usize {
         self.start
     }
@@ -134,7 +135,7 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     }
 
     pub fn span(&self) -> Span {
-        Span::new(self.start(), self.end())
+        Span::new(self.start, self.end())
     }
 
     /// Returns `true` if this lexeme was inserted as the result of error recovery, or `false`

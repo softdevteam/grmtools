@@ -79,7 +79,9 @@ impl<'a> Eval<'a> {
             } if ridx == calc_y::R_FACTOR => {
                 if nodes.len() == 1 {
                     if let Node::Term { lexeme } = nodes[0] {
-                        self.s[lexeme.start()..lexeme.end()].parse().unwrap()
+                        self.s[lexeme.span().start()..lexeme.span().end()]
+                            .parse()
+                            .unwrap()
                     } else {
                         unreachable!();
                     }
