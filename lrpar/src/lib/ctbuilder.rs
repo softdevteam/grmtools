@@ -676,13 +676,30 @@ where
                 let args = (0..grm.prod(pidx).len())
                     .map(|i| format!("{prefix}arg_{i}", prefix = ACTION_PREFIX, i = i + 1))
                     .collect::<Vec<_>>();
-                outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args}))",
-                    actionskind = ACTIONS_KIND,
-                    actionskindprefix = ACTIONS_KIND_PREFIX,
-                    prefix = ACTION_PREFIX,
-                    ridx = usize::from(ridx),
-                    pidx = usize::from(pidx),
-                    args = args.join(", ")));
+                // If the rule `r` that we're calling has the unit type then Clippy will warn that
+                // `enum::A(wrapper_r())` is pointless. We thus have to split it into two:
+                // `wrapper_r(); enum::A(())`.
+                match grm.actiontype(ridx) {
+                    Some(s) if s == "()" => {
+                        outs.push_str(&format!("\n        {prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args});
+        {actionskind}::{actionskindprefix}{ridx}(())",
+                            actionskind = ACTIONS_KIND,
+                            actionskindprefix = ACTIONS_KIND_PREFIX,
+                            prefix = ACTION_PREFIX,
+                            ridx = usize::from(ridx),
+                            pidx = usize::from(pidx),
+                            args = args.join(", ")));
+                    }
+                    _ => {
+                        outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args}))",
+                            actionskind = ACTIONS_KIND,
+                            actionskindprefix = ACTIONS_KIND_PREFIX,
+                            prefix = ACTION_PREFIX,
+                            ridx = usize::from(ridx),
+                            pidx = usize::from(pidx),
+                            args = args.join(", ")));
+                    }
+                }
             } else if pidx == grm.start_prod() {
                 // The action for the start production (i.e. the extra rule/production
                 // added by lrpar) will never be executed, so a dummy function is all
@@ -755,26 +772,34 @@ where
                 args.push(format!("mut {}arg_{}: {}", ACTION_PREFIX, i + 1, argt));
             }
 
-            // Iterate over all $-arguments and replace them with their respective
-            // element from the argument vector (e.g. $1 is replaced by args[0]). At
-            // the same time extract &str from tokens and actiontype from nonterminals.
+            // If this rule's `actiont` is `()` then Clippy will warn that the return type `-> ()`
+            // is pointless (which is true). We therefore avoid outputting a return type if actiont
+            // is the unit type.
+            let returnt = {
+                let actiont = grm.actiontype(grm.prod_to_rule(pidx)).as_ref().unwrap();
+                if actiont == "()" {
+                    "".to_owned()
+                } else {
+                    format!("\n->                  {}", actiont)
+                }
+            };
             outs.push_str(&format!(
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}<'input>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
                      {prefix}span: ::lrpar::Span,
-                     {args})
-                  -> {actiont} {{\n",
+                     {args}) {returnt} {{\n",
                 usize::from(pidx),
                 rulename = grm.rule_name(grm.prod_to_rule(pidx)),
                 storaget = StorageT::type_name(),
                 prefix = ACTION_PREFIX,
-                actiont = grm.actiontype(grm.prod_to_rule(pidx)).as_ref().unwrap(),
+                returnt = returnt,
                 args = args.join(",\n                     ")
             ));
 
-            // Replace $1 ... $n with the correct local variable
+            // Iterate over all $-arguments and replace them with their respective
+            // element from the argument vector (e.g. $1 is replaced by args[0]).
             let pre_action = grm.action(pidx).as_ref().unwrap();
             let mut last = 0;
             loop {
