@@ -18,7 +18,7 @@ use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
 use lrpar::{CTParserBuilder};
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
         .process_file_in_src("grammar.y")?;
