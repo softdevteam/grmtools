@@ -608,7 +608,7 @@ where
                 let next_lexeme = parser.next_lexeme(laidx);
                 let new_lexeme = Lexeme::new(
                     StorageT::from(u32::from(tidx)).unwrap(),
-                    next_lexeme.start(),
+                    next_lexeme.span().start(),
                     None
                 );
                 parser.lr_upto(

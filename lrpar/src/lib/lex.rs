@@ -38,20 +38,20 @@ impl fmt::Display for LexError {
 /// The trait which all lexers which want to interact with `lrpar` must implement.
 pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// Iterate over all the lexemes in this lexer. Note that:
-    ///   * The lexer may or may not stop after the first `LexError` is encountered.
+    ///   * The lexer may or may not stop after the first [LexError] is encountered.
     ///   * There are no guarantees about whether the lexer caches anything if this method is
     ///     called more than once (i.e. it might be slow to call this more than once).
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a>;
 
-    /// Return the user input associated with a [`Span`](::Span).
+    /// Return the user input associated with a [Span].
     ///
     /// # Panics
     ///
     /// If the span exceeds the known input.
     fn span_str(&self, span: Span) -> &str;
 
-    /// Return the lines containing the input at `span` (including the text before and after the
-    /// `Span` on the lines that the `Span` starts and ends).
+    /// Return the lines containing the input at `span` (including *all* the text on the lines
+    /// that `span` starts and ends on).
     ///
     /// # Panics
     ///
@@ -72,7 +72,7 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
 /// match the regular expressions `[0-9]+`), error recovery might cause a lexeme to have a length
 /// of 0. Users can detect the difference between a lexeme with an intentionally zero length from a
 /// lexeme with zero length due to error recovery through the
-/// [`inserted`](struct.Lexeme.html#method.inserted) method.
+/// [`inserted`](Lexeme::inserted) method.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Lexeme<StorageT> {
     // The long-term aim is to pack this struct so that len can be longer than u32 while everything
@@ -105,6 +105,7 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     }
 
     /// Byte offset of the start of the lexeme
+    #[deprecated(since = "0.6.1", note = "Please use span().start() instead")]
     pub fn start(&self) -> usize {
         self.start
     }
@@ -113,28 +114,27 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     ///
     /// Note that if this lexeme was inserted by error recovery, it will end at the same place it
     /// started (i.e. `self.start() == self.end()`).
+    #[deprecated(since = "0.6.1", note = "Please use span().end() instead")]
     pub fn end(&self) -> usize {
-        if self.len == u32::max_value() {
-            self.start
-        } else {
-            self.start + (self.len as usize)
-        }
+        self.span().end()
     }
 
     /// Length in bytes of the lexeme.
     ///
     /// Note that if this lexeme was inserted by error recovery, it will have a length of 0.
+    #[deprecated(since = "0.6.1", note = "Please use span().len() instead")]
     pub fn len(&self) -> usize {
-        if self.len == u32::max_value() {
-            0
-        } else {
-            const_assert!(size_of::<usize>() >= size_of::<u32>());
-            self.len as usize
-        }
+        self.span().len()
     }
 
+    /// Obtain this `Lexeme`'s [Span].
     pub fn span(&self) -> Span {
-        Span::new(self.start(), self.end())
+        let end = if self.len == u32::max_value() {
+            self.start
+        } else {
+            self.start + (self.len as usize)
+        };
+        Span::new(self.start, end)
     }
 
     /// Returns `true` if this lexeme was inserted as the result of error recovery, or `false`

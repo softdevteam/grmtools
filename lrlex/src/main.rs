@@ -62,7 +62,7 @@ fn main() {
             Ok(l) => println!(
                 "{} {}",
                 lexerdef.get_rule_by_id(l.tok_id()).name.as_ref().unwrap(),
-                &input[l.start()..l.end()]
+                &input[l.span().start()..l.span().end()]
             ),
             Err(e) => {
                 println!("{:?}", e);

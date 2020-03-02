@@ -257,7 +257,7 @@ where
             let next_lexeme = self.parser.next_lexeme(n.laidx);
             let new_lexeme = Lexeme::new(
                 StorageT::from(u32::from(tidx)).unwrap(),
-                next_lexeme.start(),
+                next_lexeme.span().start(),
                 None
             );
             let (new_laidx, n_pstack) = self.parser.lr_cactus(

@@ -240,4 +240,9 @@ impl Span {
     pub fn len(&self) -> usize {
         self.end - self.start
     }
+
+    /// Returns `true` if this `Span` covers 0 bytes, or `false` otherwise.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }

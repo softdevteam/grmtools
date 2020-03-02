@@ -52,7 +52,7 @@ where
                 Node::Term { lexeme } => {
                     let tidx = TIdx(lexeme.tok_id());
                     let tn = grm.token_name(tidx).unwrap();
-                    let lt = &input[lexeme.start()..lexeme.end()];
+                    let lt = &input[lexeme.span().start()..lexeme.span().end()];
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
                 Node::Nonterm { ridx, ref nodes } => {
@@ -482,7 +482,7 @@ where
             } else {
                 debug_assert!(laidx > 0);
                 let last_la = self.lexemes[laidx - 1];
-                last_la.end()
+                last_la.span().end()
             };
 
             Lexeme::new(
