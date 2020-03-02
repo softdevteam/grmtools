@@ -15,6 +15,10 @@ Factor -> Result<Expr, ()>:
       '(' Expr ')' { $2 }
     | 'INT' { Ok(Expr::Number{ span: $span }) }
     ;
+
+Unused -> ():
+      "UNKNOWN" { }
+    ;
 %%
 
 use lrpar::Span;
