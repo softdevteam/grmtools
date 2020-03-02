@@ -231,7 +231,7 @@ where
             .to_owned();
         leaf.push_str(&format!(".{}", RUST_FILE_EXT));
         outp.push(leaf);
-        self.process_file(inp, dbg!(outp))
+        self.process_file(inp, outp)
     }
 
     /// Statically compile the Yacc file `inp` into Rust, placing the output into the file `outp`.
