@@ -1,3 +1,15 @@
+# grmtools 0.6.1 (2020-03-02)
+
+* Deprecate `Lexeme::len`, `Lexeme::start`, and `Lexeme::end`. Each is now
+  replaced by `Lexeme::span().len()` etc. An appropriate warning is generated
+  if the deprecated methods are used.
+
+* Avoid use of the unit return type in action code causing Clippy warnings.
+
+* Document the "turn lexing errors into parsing errors" technique and extend
+  `lrpar/examples/calc_ast` to use it.
+
+
 # grmtools 0.6.0 (2020-02-10)
 
 ## Breaking changes
