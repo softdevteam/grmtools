@@ -143,3 +143,11 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         self.len == u32::max_value()
     }
 }
+
+impl<StorageT: Copy> fmt::Display for Lexeme<StorageT> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Lexeme[{}..{}]", self.span().start(), self.span().end())
+    }
+}
+
+impl<StorageT: Copy + fmt::Debug> Error for Lexeme<StorageT> {}
