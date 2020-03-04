@@ -804,6 +804,7 @@ where
 
 /// Return the cost of a minimal string for each rule in this grammar. The cost of a
 /// token is specified by the user-defined `token_cost` function.
+#[allow(clippy::unnecessary_unwrap)]
 fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
     token_costs: &[u8]
@@ -892,6 +893,7 @@ where
 /// Return the cost of the maximal string for each rule in this grammar (u32::max_val()
 /// representing "this rule can generate strings of infinite length"). The cost of a
 /// token is specified by the user-defined `token_cost` function.
+#[allow(clippy::unnecessary_unwrap)]
 fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
     token_costs: &[u8]

@@ -297,7 +297,7 @@ where
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
 
-                    let span = if spans.len() == 0 {
+                    let span = if spans.is_empty() {
                         Span::new(0, 0)
                     } else if pop_idx - 1 < spans.len() {
                         Span::new(spans[pop_idx - 1].start(), spans[spans.len() - 1].end())
@@ -410,7 +410,7 @@ where
                     let pop_idx = pstack.len() - self.grm.prod(pidx).len();
                     if let Some(ref mut astack_uw) = *astack {
                         if let Some(ref mut spans_uw) = *spans {
-                            let span = if spans_uw.len() == 0 {
+                            let span = if spans_uw.is_empty() {
                                 Span::new(0, 0)
                             } else if pop_idx - 1 < spans_uw.len() {
                                 Span::new(
