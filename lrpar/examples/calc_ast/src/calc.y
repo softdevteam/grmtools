@@ -16,8 +16,8 @@ Factor -> Result<Expr, ()>:
     | 'INT' { Ok(Expr::Number{ span: $span }) }
     ;
 
-Unused -> ():
-      "UNKNOWN" { }
+Unmatched -> ():
+      "UNMATCHED" { }
     ;
 %%
 
