@@ -1,7 +1,9 @@
 # `cfgrammar`
 
-`cfgrammar` reads in grammar files, processes them, and provides a convenient
-API for operating with them. Most users only need to think about `cfgrammar` to the
+`cfgrammar` ([crate](https://crates.io/crates/cfgrammar);
+[source](https://github.com/softdevteam/grmtools/tree/master/cfgrammar)) reads
+in grammar files, processes them, and provides a convenient API for operating
+with them. Most users only need to think about `cfgrammar` to the
 extent that they are required to use it to specify what Yacc variant they wish
 to use.
 

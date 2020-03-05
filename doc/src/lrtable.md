@@ -1,8 +1,10 @@
 # `lrtable`
 
-`lrtable` takes in grammars from [`cfgrammar`](cfgrammar.html) and creates LR
-state tables from them. Few users will be interested in its functionality
-directly, except those doing advanced forms of grammar analysis.
+`lrtable` ([crate](https://crates.io/crates/lrtable);
+[source](https://github.com/softdevteam/grmtools/tree/master/lrtable)) takes in
+grammars from [`cfgrammar`](cfgrammar.html) and creates LR state tables from
+them. Few users will be interested in its functionality directly, except those
+doing advanced forms of grammar analysis.
 
 One, admittedly fairly advanced, aspect worth noting is that
 `lrtable` uses [Pager's
