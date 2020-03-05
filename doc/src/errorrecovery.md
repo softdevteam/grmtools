@@ -349,22 +349,22 @@ Fortunately we can fix this easily for nearly all grammars by adding a line
 similar to this to the end of your `.l` file:
 
 ```
-. "UNKNOWN"
+. "UNMATCHED"
 ```
 
 Any single character which is not matched by any other lex rule will now lead
-to a token of type `UNKNOWN`. Note that it is vital that this is the last rule
+to a token of type `UNMATCHED`. Note that it is vital that this is the last rule
 in your `.l` file, and that only a single character is matched, otherwise you
-will incorrectly lex correct input as `UNKNOWN`!
+will incorrectly lex correct input as `UNMATCHED`!
 
 We then need to add a dummy rule to your `.y` file, simply so that `lrpar`
-knows about `UNKNOWN` tokens. This dummy rule won't be referenced by other
+knows about `UNMATCHED` tokens. This dummy rule won't be referenced by other
 rules, so its return type and action are irrelevant. The simplest example is
 thus:
 
 ```
-Unused -> ():
-  "UNKNOWN" { } 
+Unmatched -> ():
+  "UNMATCHED" { } 
   ;
 ```
 
