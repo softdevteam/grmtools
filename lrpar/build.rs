@@ -1,9 +1,7 @@
-use vergen::{ConstantsFlags, Vergen};
+use vergen::{generate_cargo_keys, ConstantsFlags};
 
 fn main() {
-    let mut vgfl = ConstantsFlags::empty();
-    vgfl.insert(ConstantsFlags::BUILD_TIMESTAMP);
-    for (k, v) in Vergen::new(vgfl).unwrap().build_info() {
-        println!("cargo:rustc-env={}={}", k.name(), v);
-    }
+    let mut flags = ConstantsFlags::empty();
+    flags.insert(ConstantsFlags::BUILD_TIMESTAMP);
+    generate_cargo_keys(flags).unwrap();
 }
