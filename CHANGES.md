@@ -1,3 +1,11 @@
+# grmtools 0.6.2 (2020-03-22)
+
+* Fix two Clippy warnings and suppress two others.
+
+* Prefer "unmatched" rather than "unknown" when using the "turn lexing errors
+  into parsing errors" trick.
+
+
 # grmtools 0.6.1 (2020-03-02)
 
 * Deprecate `Lexeme::len`, `Lexeme::start`, and `Lexeme::end`. Each is now
