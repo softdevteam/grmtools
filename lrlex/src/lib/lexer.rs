@@ -92,10 +92,10 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     /// benign: some lexers deliberately define tokens which are not used (e.g. reserving future
     /// keywords). A non-empty set #2 is more likely to be an error since there are parts of the
     /// grammar where nothing the user can input will be parseable.
-    pub fn set_rule_ids<'a>(
-        &'a mut self,
+    pub fn set_rule_ids<'b, 'a: 'b>(
+        &'b mut self,
         rule_ids_map: &HashMap<&'a str, StorageT>
-    ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
+    ) -> (Option<HashSet<&'b str>>, Option<HashSet<&'b str>>) {
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
         // recover the names later.
@@ -156,7 +156,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     }
 
     /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
-    pub fn lexer<'a>(&'a self, s: &'a str) -> impl Lexer<StorageT> + 'a {
+    pub fn lexer<'b, 'a: 'b>(&'b self, s: &'a str) -> impl Lexer<StorageT> + 'b {
         LRLexer::new(self, s)
     }
 }
@@ -169,8 +169,8 @@ pub struct LRLexer<'a, StorageT> {
     newlines: Vec<usize>
 }
 
-impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'a, StorageT> {
-    fn new(lexerdef: &'a LexerDef<StorageT>, s: &'a str) -> LRLexer<'a, StorageT> {
+impl<'b, 'a: 'b, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'b, StorageT> {
+    fn new(lexerdef: &'b LexerDef<StorageT>, s: &'a str) -> LRLexer<'b, StorageT> {
         let mut lexemes = vec![];
         let mut newlines = vec![];
         let mut i = 0;
