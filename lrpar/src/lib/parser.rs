@@ -76,7 +76,15 @@ pub(crate) type LexerVTable<'a,T> = &'a (dyn Lexer<T> + 'a);
 // 
 // This defination is a bit abstracted as it means different
 // things in different locations.
-pub(crate) type ActionFn<'a,'b,T,D,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'b,T>,Span,vec::Drain<D>) -> R;
+//
+// - T (normally StorageT)
+// - R (return)
+// - 'b (often 'input)
+pub(crate) type ActionFn<'a,'b,T,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'b,T>,Span,vec::Drain<AStackType<R,T>>) -> R;
+// Identical to `ActionFn` but the `Vec<>` is added.
+pub(crate) type ActionFnVec<'a,'b,T,R> = Vec<ActionFn<'a,'b,T,R>>;
+// Identical to `ActionFnVec` but as a borrowed array, not `Vec<>`
+pub(crate) type ActionFnArr<'a,'b,T,R> = &'a [ActionFn<'a,'b,T,R>];
 
 #[derive(Debug)]
 pub enum AStackType<ActionT, StorageT> {
@@ -94,12 +102,7 @@ pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
-    actions: &'a [&'a dyn Fn(
-        RIdx<StorageT>,
-        LexerVTable<'input,StorageT>,
-        Span,
-        vec::Drain<AStackType<ActionT, StorageT>>
-    ) -> ActionT]
+    actions: ActionFnArr<'a,'input,StorageT,ActionT>,
 }
 
 impl<'a, 'input: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
@@ -123,14 +126,7 @@ where
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: Vec<
-            &'a dyn Fn(
-                RIdx<StorageT>,
-                LexerVTable<'input,StorageT>,
-                Span,
-                vec::Drain<AStackType<Node<StorageT>, StorageT>>
-            ) -> Node<StorageT>
-        > = Vec::new();
+        let mut actions: ActionFnVec<'a,'input,StorageT,Node<StorageT>> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::generic_ptree);
         let psr = Parser {
             rcvry_kind,
@@ -188,14 +184,15 @@ where
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: Vec<
-            &'a dyn Fn(
-                RIdx<StorageT>,
-                LexerVTable<'input,StorageT>,
-                Span,
-                vec::Drain<AStackType<(), StorageT>>
-            ) -> ()
-        > = Vec::new();
+        //let mut actions: Vec<
+        //    &'a dyn Fn(
+        //        RIdx<StorageT>,
+        //        LexerVTable<'input,StorageT>,
+        //        Span,
+        //        vec::Drain<AStackType<(), StorageT>>
+        //    ) -> ()
+        //> = Vec::new();
+        let mut actions: ActionFnVec<'a,'input,StorageT,()> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
         let psr = Parser {
             rcvry_kind,
@@ -238,12 +235,13 @@ where
         stable: &'a StateTable<StorageT>,
         lexer: LexerVTable<'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: &'a [&'a dyn Fn(
-            RIdx<StorageT>,
-            LexerVTable<'input,StorageT>,
-            Span,
-            vec::Drain<AStackType<ActionT, StorageT>>
-        ) -> ActionT]
+        actions: ActionFnArr<'a,'input,StorageT,ActionT>,
+        //actions: &'a [&'a dyn Fn(
+        //    RIdx<StorageT>,
+        //    LexerVTable<'input,StorageT>,
+        //    Span,
+        //    vec::Drain<AStackType<ActionT, StorageT>>
+        //) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
     where
         F: Fn(TIdx<StorageT>) -> u8 + 'a
@@ -808,12 +806,13 @@ where
     pub fn parse_actions<ActionT: 'a>(
         &self,
         lexer: LexerVTable<'input,StorageT>,
-        actions: &[&dyn Fn(
-            RIdx<StorageT>,
-            LexerVTable<'input,StorageT>,
-            Span,
-            vec::Drain<AStackType<ActionT, StorageT>>
-        ) -> ActionT]
+        actions: ActionFnArr<'a,'input,StorageT,ActionT>,
+        //jactions: &[&dyn Fn(
+        //    RIdx<StorageT>,
+        //    LexerVTable<'input,StorageT>,
+        //    Span,
+        //    vec::Drain<AStackType<ActionT, StorageT>>
+        //) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
