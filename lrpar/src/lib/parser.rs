@@ -71,7 +71,6 @@ pub(crate) type PStack = Vec<StIdx>; // Parse stack
 
 // Lexer v-table pointer
 pub(crate) type LexerVTable<'a,T> = &'a (dyn Lexer<T> + 'a);
-
 // Action Function
 // 
 // This defination is a bit abstracted as it means different
@@ -109,6 +108,7 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
+
     fn parse_generictree<F>(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
@@ -797,12 +797,6 @@ where
         &self,
         lexer: LexerVTable<'input,StorageT>,
         actions: ActionFnVec<'a,'input,StorageT,ActionT>,
-        //jactions: &[&dyn Fn(
-        //    RIdx<StorageT>,
-        //    LexerVTable<'input,StorageT>,
-        //    Span,
-        //    vec::Drain<AStackType<ActionT, StorageT>>
-        //) -> ActionT]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
