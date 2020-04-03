@@ -82,6 +82,8 @@ pub(crate) type LexerVTable<'a,T> = &'a (dyn Lexer<T> + 'a);
 pub(crate) type ActionFn<'a,'b,T,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'b,T>,Span,usize, &mut Vec<AStackType<R,T>>) -> R;
 // Identical to `ActionFn` but the `Vec<>` is added.
 pub(crate) type ActionFnVec<'a,'b,T,R> = Vec<ActionFn<'a,'b,T,R>>;
+// Used for token cost function
+pub(crate) type TokenCostFn<'a,T> = &'a (dyn Fn(TIdx<T>) -> u8 + 'a);
 
 #[derive(Debug)]
 pub enum AStackType<ActionT, StorageT> {
@@ -92,7 +94,7 @@ pub enum AStackType<ActionT, StorageT> {
 pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
-    pub(crate) token_cost: Box<dyn Fn(TIdx<StorageT>) -> u8 + 'a>,
+    pub(crate) token_cost: TokenCostFn<'a,StorageT>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
     pub(crate) lexer: LexerVTable<'input,StorageT>,
@@ -109,17 +111,15 @@ where
     u32: AsPrimitive<StorageT>
 {
 
-    fn parse_generictree<F>(
+    fn parse_generictree(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
-        token_cost: F,
+        token_cost: TokenCostFn<'a,StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: LexerVTable<'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
-    where
-        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -129,7 +129,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: Box::new(token_cost),
+            token_cost,
             sgraph,
             stable,
             lexer,
@@ -168,17 +168,15 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    fn parse_noaction<F>(
+    fn parse_noaction(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
-        token_cost: F,
+        token_cost: TokenCostFn<'a,StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: LexerVTable<'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>>
-    where
-        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -188,7 +186,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: Box::new(token_cost),
+            token_cost,
             sgraph,
             stable,
             lexer,
@@ -220,18 +218,16 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    fn parse_actions<F>(
+    fn parse_actions(
         rcvry_kind: RecoveryKind,
         grm: &'a YaccGrammar<StorageT>,
-        token_cost: F,
+        token_cost: TokenCostFn<'a,StorageT>,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
         lexer: LexerVTable<'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
         actions: ActionFnVec<'a,'input,StorageT,ActionT>,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
-    where
-        F: Fn(TIdx<StorageT>) -> u8 + 'a
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -239,7 +235,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: Box::new(token_cost),
+            token_cost,
             sgraph,
             stable,
             lexer,

@@ -127,7 +127,7 @@ where
         parser.grm,
         parser.sgraph,
         parser.stable,
-        parser.token_cost.as_ref()
+        parser.token_cost,
     );
     Box::new(MF { dist, parser })
 }
