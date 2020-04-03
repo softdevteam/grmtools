@@ -207,9 +207,10 @@ where
         _ridx: RIdx<StorageT>,
         _lexer: LexerVTable<'input,StorageT>,
         _span: Span,
-        _drain_count: usize,
-        _astack: &mut Vec<AStackType<(), StorageT>>
+        drain_count: usize,
+        astack: &mut Vec<AStackType<(), StorageT>>
     ) {
+      astack.drain(drain_count..);
     }
 }
 
@@ -274,6 +275,7 @@ where
         errors: &mut Vec<LexParseError<StorageT>>,
         spans: &mut Vec<Span>
     ) -> Option<ActionT> {
+        __debug_assert_eq!(astack.len(), spans.len());
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
         loop {
@@ -297,9 +299,11 @@ where
                     } else {
                         Span::new(spans[spans.len() - 1].start(), spans[spans.len() - 1].end())
                     };
+                    __debug_assert_eq!(astack.len(), spans.len());
                     spans.truncate(pop_idx - 1);
+                    __debug_assert_eq!(spans.len(), pop_idx -1);
                     spans.push(span);
-
+                    __debug_assert_eq!(spans.len(), pop_idx);
                     let v = AStackType::ActionType(self.actions[usize::from(pidx)](
                         ridx,
                         self.lexer,
@@ -308,6 +312,7 @@ where
                         astack,
                     ));
                     astack.push(v);
+                    __debug_assert_eq!(astack.len(), spans.len());
                 }
                 Action::Shift(state_id) => {
                     let la_lexeme = self.next_lexeme(laidx);
@@ -316,6 +321,7 @@ where
 
                     spans.push(la_lexeme.span());
                     laidx += 1;
+                    __debug_assert_eq!(astack.len(), spans.len());
                 }
                 Action::Accept => {
                     __debug_assert_eq!(la_tidx, self.grm.eof_token_idx());

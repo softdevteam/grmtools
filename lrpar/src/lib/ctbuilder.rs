@@ -639,21 +639,9 @@ where
                 prefix = ACTION_PREFIX,
                 actionskind = ACTIONS_KIND,
             ));
-
-            if grm.action(pidx).is_some() {
-                // construct the drain provided we'll use it
-                outs.push_str(&format!("
+            outs.push_str(&format!("
         let mut {prefix}args = {prefix}vec.drain({prefix}drain_count..);
         ", prefix = ACTION_PREFIX));
-            } else {
-                // we don't have any actions to perform,
-                // but we still need to get rid of the
-                // correct number of elements
-                // so we call truncate.
-                outs.push_str(&format!("
-        {prefix}vec.truncate({prefix}drain_count);
-        ", prefix = ACTION_PREFIX));
-            }
 
             if grm.action(pidx).is_some() {
                 // Unpack the arguments passed to us by the drain
