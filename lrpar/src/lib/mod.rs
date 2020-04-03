@@ -177,6 +177,23 @@
 //! Result: 17
 //! ```
 
+/*
+ * Fancy temporary debug macros because reading RUST_BACKTRACE is hard.
+ *
+ * They include the path:line:column as well as the expression which errored.
+ *
+ */
+macro_rules! __debug_assert_eq {
+    ($a: expr, $b: expr) => {
+        debug_assert_eq!($a, $b, "'{} == {}' not true at {}:{}:{}", stringify!($a), stringify!($b), file!(), line!(), column!());
+    }
+}
+macro_rules! __debug_assert {
+    ($a: expr) => {
+        debug_assert!($a, "'{}' is not true at {}:{}:{}", stringify!($a),file!(),line!(),column!());
+    }
+}
+
 mod astar;
 mod cpctplus;
 #[doc(hidden)]

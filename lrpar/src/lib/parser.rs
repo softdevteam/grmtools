@@ -277,7 +277,7 @@ where
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
         loop {
-            debug_assert_eq!(astack.len(), spans.len());
+            __debug_assert_eq!(astack.len(), spans.len());
             let stidx = *pstack.last().unwrap();
             let la_tidx = self.next_tidx(laidx);
 
@@ -318,8 +318,8 @@ where
                     laidx += 1;
                 }
                 Action::Accept => {
-                    debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
-                    debug_assert_eq!(astack.len(), 1);
+                    __debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
+                    __debug_assert_eq!(astack.len(), 1);
                     match astack.drain(..).nth(0).unwrap() {
                         AStackType::ActionType(v) => return Some(v),
                         _ => unreachable!()
@@ -467,7 +467,7 @@ where
     /// a lexeme constructed to look as if contains the EOF token).
     pub(crate) fn next_lexeme(&self, laidx: usize) -> Lexeme<StorageT> {
         let llen = self.lexemes.len();
-        debug_assert!(laidx <= llen);
+        __debug_assert!(laidx <= llen);
         if laidx < llen {
             self.lexemes[laidx]
         } else {
@@ -475,7 +475,7 @@ where
             let last_la_end = if llen == 0 {
                 0
             } else {
-                debug_assert!(laidx > 0);
+                __debug_assert!(laidx > 0);
                 let last_la = self.lexemes[laidx - 1];
                 last_la.span().end()
             };
@@ -492,7 +492,7 @@ where
     /// EOF `TIdx`).
     pub(crate) fn next_tidx(&self, laidx: usize) -> TIdx<StorageT> {
         let ll = self.lexemes.len();
-        debug_assert!(laidx <= ll);
+        __debug_assert!(laidx <= ll);
         if laidx < ll {
             TIdx(self.lexemes[laidx].tok_id())
         } else {
@@ -554,9 +554,9 @@ where
                     laidx += 1;
                 }
                 Action::Accept => {
-                    debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
+                    __debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     if let Some(ref tstack_uw) = *tstack {
-                        debug_assert_eq!((&tstack_uw).len(), 1);
+                        __debug_assert_eq!((&tstack_uw).len(), 1);
                     }
                     break;
                 }
