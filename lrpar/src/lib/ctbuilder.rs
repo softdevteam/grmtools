@@ -524,7 +524,8 @@ where
         let mut actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
                        ::lrpar::Span,
-                       ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
+                       usize,
+                       &mut Vec<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
                     -> {actionskind}<'input>> = ::std::vec::Vec::new();\n",
                     actionskind = ACTIONS_KIND,
                     storaget = StorageT::type_name()
@@ -540,7 +541,7 @@ where
                     "
         match ::lrpar::RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(::lrpar::RecoveryKind::{recoverer})
-            .parse_actions(lexer, &actions) {{
+            .parse_actions(lexer, actions) {{
                 (Some({actionskind}::{actionskindprefix}{ridx}(x)), y) => (Some(x), y),
                 (None, y) => (None, y),
                 _ => unreachable!()
@@ -630,7 +631,8 @@ where
                 "    fn {prefix}wrapper_{}<'input>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
                       {prefix}span: ::lrpar::Span,
-                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
+                      {prefix}drain_count: usize,
+                      {prefix}vec: &mut Vec<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
                    -> {actionskind}<'input> {{",
                 usize::from(pidx),
                 storaget = StorageT::type_name(),
@@ -639,6 +641,10 @@ where
             ));
 
             if grm.action(pidx).is_some() {
+                // construct the drain provided we'll use it
+                outs.push_str(&format!("
+        let mut {prefix}args = {prefix}vec.drain({prefix}drain_count..);
+        ", prefix = ACTION_PREFIX));
                 // Unpack the arguments passed to us by the drain
                 for i in 0..grm.prod(pidx).len() {
                     match grm.prod(pidx)[i] {

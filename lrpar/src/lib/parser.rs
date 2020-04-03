@@ -80,11 +80,9 @@ pub(crate) type LexerVTable<'a,T> = &'a (dyn Lexer<T> + 'a);
 // - T (normally StorageT)
 // - R (return)
 // - 'b (often 'input)
-pub(crate) type ActionFn<'a,'b,T,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'b,T>,Span,vec::Drain<AStackType<R,T>>) -> R;
+pub(crate) type ActionFn<'a,'b,T,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'b,T>,Span,usize, &mut Vec<AStackType<R,T>>) -> R;
 // Identical to `ActionFn` but the `Vec<>` is added.
 pub(crate) type ActionFnVec<'a,'b,T,R> = Vec<ActionFn<'a,'b,T,R>>;
-// Identical to `ActionFnVec` but as a borrowed array, not `Vec<>`
-pub(crate) type ActionFnArr<'a,'b,T,R> = &'a [ActionFn<'a,'b,T,R>];
 
 #[derive(Debug)]
 pub enum AStackType<ActionT, StorageT> {
@@ -102,7 +100,7 @@ pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
-    actions: ActionFnArr<'a,'input,StorageT,ActionT>,
+    actions: ActionFnVec<'a,'input,StorageT,ActionT>,
 }
 
 impl<'a, 'input: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
@@ -136,7 +134,7 @@ where
             stable,
             lexer,
             lexemes,
-            actions: actions.as_slice()
+            actions,
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
         let mut astack = Vec::new();
@@ -150,10 +148,11 @@ where
         ridx: RIdx<StorageT>,
         _lexer: LexerVTable<'input,StorageT>,
         _span: Span,
-        astack: vec::Drain<AStackType<Node<StorageT>, StorageT>>
+        drain_count: usize,
+        astack: &mut Vec<AStackType<Node<StorageT>, StorageT>>
     ) -> Node<StorageT> {
         let mut nodes = Vec::with_capacity(astack.len());
-        for a in astack {
+        for a in astack.drain(drain_count..) {
             nodes.push(match a {
                 AStackType::ActionType(n) => n,
                 AStackType::Lexeme(lexeme) => Node::Term { lexeme }
@@ -184,14 +183,6 @@ where
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        //let mut actions: Vec<
-        //    &'a dyn Fn(
-        //        RIdx<StorageT>,
-        //        LexerVTable<'input,StorageT>,
-        //        Span,
-        //        vec::Drain<AStackType<(), StorageT>>
-        //    ) -> ()
-        //> = Vec::new();
         let mut actions: ActionFnVec<'a,'input,StorageT,()> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
         let psr = Parser {
@@ -202,7 +193,7 @@ where
             stable,
             lexer,
             lexemes,
-            actions: actions.as_slice()
+            actions,
         };
         let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
         let mut astack = Vec::new();
@@ -216,7 +207,8 @@ where
         _ridx: RIdx<StorageT>,
         _lexer: LexerVTable<'input,StorageT>,
         _span: Span,
-        _astack: vec::Drain<AStackType<(), StorageT>>
+        _drain_count: usize,
+        _astack: &mut Vec<AStackType<(), StorageT>>
     ) {
     }
 }
@@ -235,13 +227,7 @@ where
         stable: &'a StateTable<StorageT>,
         lexer: LexerVTable<'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: ActionFnArr<'a,'input,StorageT,ActionT>,
-        //actions: &'a [&'a dyn Fn(
-        //    RIdx<StorageT>,
-        //    LexerVTable<'input,StorageT>,
-        //    Span,
-        //    vec::Drain<AStackType<ActionT, StorageT>>
-        //) -> ActionT]
+        actions: ActionFnVec<'a,'input,StorageT,ActionT>,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
     where
         F: Fn(TIdx<StorageT>) -> u8 + 'a
@@ -318,7 +304,8 @@ where
                         ridx,
                         self.lexer,
                         span,
-                        astack.drain(pop_idx - 1..)
+                        pop_idx - 1,
+                        astack,
                     ));
                     astack.push(v);
                 }
@@ -437,7 +424,8 @@ where
                                 ridx,
                                 self.lexer,
                                 span,
-                                astack_uw.drain(pop_idx - 1..)
+                                pop_idx - 1,
+                                astack_uw,
                             ));
                             astack_uw.push(v);
                         } else {
@@ -802,7 +790,7 @@ where
     pub fn parse_actions<ActionT: 'a>(
         &self,
         lexer: LexerVTable<'input,StorageT>,
-        actions: ActionFnArr<'a,'input,StorageT,ActionT>,
+        actions: ActionFnVec<'a,'input,StorageT,ActionT>,
         //jactions: &[&dyn Fn(
         //    RIdx<StorageT>,
         //    LexerVTable<'input,StorageT>,
