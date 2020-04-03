@@ -293,7 +293,9 @@ where
                     let ridx = self.grm.prod_to_rule(pidx);
                     let pop_idx = pstack.len() - self.grm.prod(pidx).len();
 
-                    pstack.drain(pop_idx..);
+                    for _ in pstack.drain(pop_idx..) {
+                        // a drain dropped without consumption is UB
+                    }
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
 
@@ -438,7 +440,9 @@ where
                         }
                     }
 
-                    pstack.drain(pop_idx..);
+                    for _ in pstack.drain(pop_idx..) {
+                        // a drain dropped without consumption is UB
+                    }
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
                 }
