@@ -271,11 +271,10 @@ where
         errors: &mut Vec<LexParseError<StorageT>>,
         spans: &mut Vec<Span>
     ) -> Option<ActionT> {
-        __debug_assert_eq!(astack.len(), spans.len());
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
         loop {
-            __debug_assert_eq!(astack.len(), spans.len());
+            debug_assert_eq!(astack.len(), spans.len());
             let stidx = *pstack.last().unwrap();
             let la_tidx = self.next_tidx(laidx);
 
@@ -284,7 +283,7 @@ where
                     let ridx = self.grm.prod_to_rule(pidx);
                     let pop_idx = pstack.len() - self.grm.prod(pidx).len();
 
-                    pstack.truncate(pop_idx);
+                    pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
 
@@ -295,11 +294,8 @@ where
                     } else {
                         Span::new(spans[spans.len() - 1].start(), spans[spans.len() - 1].end())
                     };
-                    __debug_assert_eq!(astack.len(), spans.len());
                     spans.truncate(pop_idx - 1);
-                    __debug_assert_eq!(spans.len(), pop_idx -1);
                     spans.push(span);
-                    __debug_assert_eq!(spans.len(), pop_idx);
                     let v = AStackType::ActionType(self.actions[usize::from(pidx)](
                         ridx,
                         self.lexer,
@@ -308,7 +304,6 @@ where
                         astack,
                     ));
                     astack.push(v);
-                    __debug_assert_eq!(astack.len(), spans.len());
                 }
                 Action::Shift(state_id) => {
                     let la_lexeme = self.next_lexeme(laidx);
@@ -317,11 +312,11 @@ where
 
                     spans.push(la_lexeme.span());
                     laidx += 1;
-                    __debug_assert_eq!(astack.len(), spans.len());
+                    debug_assert_eq!(astack.len(), spans.len());
                 }
                 Action::Accept => {
-                    __debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
-                    __debug_assert_eq!(astack.len(), 1);
+                    debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
+                    debug_assert_eq!(astack.len(), 1);
                     match astack.drain(..).nth(0).unwrap() {
                         AStackType::ActionType(v) => return Some(v),
                         _ => unreachable!()
@@ -435,7 +430,7 @@ where
                         }
                     }
 
-                    pstack.truncate(pop_idx);
+                    pstack.drain(pop_idx..);
                     let prior = *pstack.last().unwrap();
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
                 }
@@ -556,9 +551,9 @@ where
                     laidx += 1;
                 }
                 Action::Accept => {
-                    __debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
+                    debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     if let Some(ref tstack_uw) = *tstack {
-                        __debug_assert_eq!((&tstack_uw).len(), 1);
+                        debug_assert_eq!((&tstack_uw).len(), 1);
                     }
                     break;
                 }
