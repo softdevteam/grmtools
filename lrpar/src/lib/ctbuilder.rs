@@ -461,7 +461,7 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse<'input>(lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input))
+    pub fn parse<'a,'lexer:'a,'input:'lexer>(lexer: &'a (dyn ::lrpar::Lexer<'lexer,'input,{storaget}> + 'a))
           -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
@@ -472,7 +472,7 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::Lexer<{storaget}>)
+    pub fn parse<'a,'lexer:'a,'input:'lexer>(lexer: &'a (dyn ::lrpar::Lexer<'lexer,'input,{storaget}> + 'a))
           -> (::std::option::Option<::lrpar::Node<{storaget}>>,
               ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
@@ -483,7 +483,7 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::Lexer<{storaget}>)
+    pub fn parse<'a,'lexer:'a,'input:'lexer>(lexer: &'a (dyn ::lrpar::Lexer<'lexer,'input,{storaget}> +'a))
           -> ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>
     {{",
                     storaget = StorageT::type_name()
@@ -522,10 +522,11 @@ where
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
         let mut actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
-                       &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
+                       &'a (dyn ::lrpar::Lexer<'lexer,'input,{storaget}> + 'a),
                        ::lrpar::Span,
-                       ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
-                    -> {actionskind}<'input>> = ::std::vec::Vec::new();\n",
+                       usize,
+                       &mut Vec<::lrpar::parser::AStackType<{actionskind}<'a,'lexer,'input>, {storaget}>>)
+                    -> {actionskind}<'a, 'lexer,'input>> = ::std::vec::Vec::new();\n",
                     actionskind = ACTIONS_KIND,
                     storaget = StorageT::type_name()
                 ));
@@ -540,7 +541,7 @@ where
                     "
         match ::lrpar::RTParserBuilder::new(&grm, &sgraph, &stable)
             .recoverer(::lrpar::RecoveryKind::{recoverer})
-            .parse_actions(lexer, &actions) {{
+            .parse_actions(lexer, actions) {{
                 (Some({actionskind}::{actionskindprefix}{ridx}(x)), y) => (Some(x), y),
                 (None, y) => (None, y),
                 _ => unreachable!()
@@ -627,16 +628,20 @@ where
             // element from the argument vector (e.g. $1 is replaced by args[0]). At
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
-                "    fn {prefix}wrapper_{}<'input>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                      {prefix}lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
+                "    fn {prefix}wrapper_{}<'a,'lexer:'a,'input:'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
+                      {prefix}lexer: &'a (dyn ::lrpar::Lexer<'lexer,'input,{storaget}> + 'a),
                       {prefix}span: ::lrpar::Span,
-                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
-                   -> {actionskind}<'input> {{",
+                      {prefix}drain_count: usize,
+                      {prefix}vec: &mut Vec<::lrpar::parser::AStackType<{actionskind}<'a,'lexer,'input>, {storaget}>>)
+                   -> {actionskind}<'a,'lexer,'input> {{",
                 usize::from(pidx),
                 storaget = StorageT::type_name(),
                 prefix = ACTION_PREFIX,
                 actionskind = ACTIONS_KIND,
             ));
+            outs.push_str(&format!("
+        let mut {prefix}args = {prefix}vec.drain({prefix}drain_count..);
+        ", prefix = ACTION_PREFIX));
 
             if grm.action(pidx).is_some() {
                 // Unpack the arguments passed to us by the drain
@@ -719,7 +724,7 @@ where
 
         outs.push_str(&format!(
             "    #[allow(dead_code)]
-    enum {}<'input> {{\n",
+    enum {}<'a, 'lexer: 'a, 'input: 'lexer> {{\n",
             ACTIONS_KIND
         ));
         for ridx in grm.iter_rules() {
@@ -735,7 +740,10 @@ where
             ));
         }
         outs.push_str(&format!(
-            "    _{actionskindhidden}(::std::marker::PhantomData<&'input ()>)
+            "    
+                _{actionskindhidden}1(::std::marker::PhantomData<&'a ()>),
+                _{actionskindhidden}2(::std::marker::PhantomData<&'lexer ()>),
+                _{actionskindhidden}3(::std::marker::PhantomData<&'input ()>),
     }}\n\n",
             actionskindhidden = ACTIONS_KIND_HIDDEN
         ));
@@ -786,8 +794,8 @@ where
             outs.push_str(&format!(
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
-    fn {prefix}action_{}<'input>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                     {prefix}lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
+    fn {prefix}action_{}<'a,'lexer: 'a, 'input: 'lexer, >({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
+                     {prefix}lexer: &'a (dyn ::lrpar::Lexer<'lexer,'input,{storaget}> + 'a),
                      {prefix}span: ::lrpar::Span,
                      {args}) {returnt} {{\n",
                 usize::from(pidx),
