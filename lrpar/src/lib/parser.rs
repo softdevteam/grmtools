@@ -224,9 +224,9 @@ where
         token_cost: TokenCostFn<'a,StorageT>,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
-        lexer: LexerVTable<'a,'lexer,'input,StorageT>,
+        lexer: LexerVTable<'b,'lexer,'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: ActionFnVec<'a,'lexer,'input,StorageT,ActionT>,
+        actions: ActionFnVec<'b,'lexer,'input,StorageT,ActionT>,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
     {
         for tidx in grm.iter_tidxs() {
@@ -791,10 +791,10 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<'lexer: 'a, 'input: 'lexer, ActionT: 'a>(
+    pub fn parse_actions<'b: 'a,'lexer: 'b, 'input: 'lexer, ActionT: 'a>(
         &self,
-        lexer: LexerVTable<'a,'lexer,'input,StorageT>,
-        actions: ActionFnVec<'a,'lexer,'input,StorageT,ActionT>,
+        lexer: LexerVTable<'b,'lexer,'input,StorageT>,
+        actions: ActionFnVec<'b,'lexer,'input,StorageT,ActionT>,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {

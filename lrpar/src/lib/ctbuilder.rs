@@ -472,7 +472,7 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::Lexer<{storaget}>)
+    pub fn parse<'a,'lexer:'a,'input:'lexer>(lexer: &'a (dyn ::lrpar::Lexer<'lexer,'input,{storaget}> + 'a))
           -> (::std::option::Option<::lrpar::Node<{storaget}>>,
               ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
@@ -483,7 +483,7 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::Lexer<{storaget}>)
+    pub fn parse<'a,'lexer:'a,'input:'lexer>(lexer: &'a (dyn ::lrpar::Lexer<'lexer,'input,{storaget}> +'a))
           -> ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>
     {{",
                     storaget = StorageT::type_name()
