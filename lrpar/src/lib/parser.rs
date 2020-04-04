@@ -464,7 +464,7 @@ where
     /// a lexeme constructed to look as if contains the EOF token).
     pub(crate) fn next_lexeme(&self, laidx: usize) -> Lexeme<StorageT> {
         let llen = self.lexemes.len();
-        __debug_assert!(laidx <= llen);
+        debug_assert!(laidx <= llen);
         if laidx < llen {
             self.lexemes[laidx]
         } else {
@@ -472,7 +472,7 @@ where
             let last_la_end = if llen == 0 {
                 0
             } else {
-                __debug_assert!(laidx > 0);
+                debug_assert!(laidx > 0);
                 let last_la = self.lexemes[laidx - 1];
                 last_la.span().end()
             };
@@ -489,7 +489,7 @@ where
     /// EOF `TIdx`).
     pub(crate) fn next_tidx(&self, laidx: usize) -> TIdx<StorageT> {
         let ll = self.lexemes.len();
-        __debug_assert!(laidx <= ll);
+        debug_assert!(laidx <= ll);
         if laidx < ll {
             TIdx(self.lexemes[laidx].tok_id())
         } else {
