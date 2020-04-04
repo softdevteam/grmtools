@@ -70,7 +70,7 @@ where
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 
 // Lexer v-table pointer
-pub(crate) type LexerVTable<'a,T> = &'a (dyn Lexer<T> + 'a);
+pub(crate) type LexerVTable<'a,'b,'c, T> = &'a (dyn Lexer<'b, 'c, T> + 'a);
 // Action Function
 // 
 // This defination is a bit abstracted as it means different
@@ -79,9 +79,9 @@ pub(crate) type LexerVTable<'a,T> = &'a (dyn Lexer<T> + 'a);
 // - T (normally StorageT)
 // - R (return)
 // - 'b (often 'input)
-pub(crate) type ActionFn<'a,'b,T,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'b,T>,Span,usize, &mut Vec<AStackType<R,T>>) -> R;
+pub(crate) type ActionFn<'a,'b,'c,T,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'a,'b,'c,T>,Span,usize, &mut Vec<AStackType<R,T>>) -> R;
 // Identical to `ActionFn` but the `Vec<>` is added.
-pub(crate) type ActionFnVec<'a,'b,T,R> = Vec<ActionFn<'a,'b,T,R>>;
+pub(crate) type ActionFnVec<'a,'b,'c,T,R> = Vec<ActionFn<'a,'b,'c,T,R>>;
 // Used for token cost function
 pub(crate) type TokenCostFn<'a,T> = &'a (dyn Fn(TIdx<T>) -> u8 + 'a);
 
@@ -91,21 +91,21 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>)
 }
 
-pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+pub struct Parser<'a, 'b: 'a, 'lexer: 'a, 'input:'lexer, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
     pub(crate) token_cost: TokenCostFn<'a,StorageT>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: LexerVTable<'input,StorageT>,
+    pub(crate) lexer: LexerVTable<'b, 'lexer,'input,StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
-    actions: ActionFnVec<'a,'input,StorageT,ActionT>,
+    actions: ActionFnVec<'b,'lexer,'input,StorageT,ActionT>,
 }
 
-impl<'a, 'input: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-    Parser<'a, 'input, StorageT, Node<StorageT>>
+impl<'a, 'b:'a, 'lexer:'b, 'input: 'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'b, 'lexer, 'input, StorageT, Node<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -113,18 +113,18 @@ where
 
     fn parse_generictree(
         rcvry_kind: RecoveryKind,
-        grm: &YaccGrammar<StorageT>,
+        grm: &'a YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a,StorageT>,
-        sgraph: &StateGraph<StorageT>,
-        stable: &StateTable<StorageT>,
-        lexer: LexerVTable<'input,StorageT>,
+        sgraph: &'a StateGraph<StorageT>,
+        stable: &'a StateTable<StorageT>,
+        lexer: LexerVTable<'b,'lexer,'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: ActionFnVec<'a,'input,StorageT,Node<StorageT>> = Vec::new();
+        let mut actions: ActionFnVec<'b,'lexer,'input,StorageT,Node<StorageT>> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::generic_ptree);
         let psr = Parser {
             rcvry_kind,
@@ -146,7 +146,7 @@ where
 
     fn generic_ptree(
         ridx: RIdx<StorageT>,
-        _lexer: LexerVTable<'input,StorageT>,
+        _lexer: LexerVTable<'b, 'lexer,'input,StorageT>,
         _span: Span,
         drain_count: usize,
         astack: &mut Vec<AStackType<Node<StorageT>, StorageT>>
@@ -162,26 +162,26 @@ where
     }
 }
 
-impl<'a, 'input: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-    Parser<'a, 'input, StorageT, ()>
+impl<'a, 'b: 'a, 'lexer: 'b, 'input: 'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'b, 'lexer, 'input, StorageT, ()>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
     fn parse_noaction(
         rcvry_kind: RecoveryKind,
-        grm: &YaccGrammar<StorageT>,
+        grm: &'a YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a,StorageT>,
-        sgraph: &StateGraph<StorageT>,
-        stable: &StateTable<StorageT>,
-        lexer: LexerVTable<'input,StorageT>,
+        sgraph: &'a StateGraph<StorageT>,
+        stable: &'a StateTable<StorageT>,
+        lexer: LexerVTable<'b, 'lexer,'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>>
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: ActionFnVec<'a,'input,StorageT,()> = Vec::new();
+        let mut actions: ActionFnVec<'b,'lexer,'input,StorageT,()> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
         let psr = Parser {
             rcvry_kind,
@@ -203,7 +203,7 @@ where
 
     fn noaction(
         _ridx: RIdx<StorageT>,
-        _lexer: LexerVTable<'input,StorageT>,
+        _lexer: LexerVTable<'b,'lexer,'input,StorageT>,
         _span: Span,
         drain_count: usize,
         astack: &mut Vec<AStackType<(), StorageT>>
@@ -212,8 +212,8 @@ where
     }
 }
 
-impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    Parser<'a, 'input, StorageT, ActionT>
+impl<'a, 'b: 'a, 'lexer: 'b, 'input:'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+    Parser<'a, 'b, 'lexer,'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -224,9 +224,9 @@ where
         token_cost: TokenCostFn<'a,StorageT>,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
-        lexer: LexerVTable<'input,StorageT>,
+        lexer: LexerVTable<'a,'lexer,'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: ActionFnVec<'a,'input,StorageT,ActionT>,
+        actions: ActionFnVec<'a,'lexer,'input,StorageT,ActionT>,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
     {
         for tidx in grm.iter_tidxs() {
@@ -625,14 +625,16 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     /// [`YaccGrammar`](../../cfgrammar/yacc/grammar/struct.YaccGrammar.html) exposes a suitable
     /// [`epp`](../../cfgrammar/yacc/grammar/struct.YaccGrammar.html#method.token_epp) function,
     /// though you will have to wrap it in a closure e.g. `&|t| grm.token_epp(t)`.
-    pub fn pp<'a,'input>(
+    pub fn pp<'a, 'lexer: 'a, 'input: 'lexer>(
         &self,
-        lexer: LexerVTable<'input,StorageT>,
-        epp: &dyn Fn(TIdx<StorageT>) -> Option<&'a str>
+        lexer: LexerVTable<'a,'lexer,'input, StorageT>,
+        epp: &dyn Fn(TIdx<StorageT>) -> Option<&'static str>
     ) -> String {
         match self {
             LexParseError::LexError(e) => {
-                let ((line, col), _) = lexer.line_col(e.span());
+                let ((line, col), _): ((usize,usize),(usize,usize)) = {
+                    lexer.line_col(e.span()).clone()
+                };
                 format!("Lexing error at line {} column {}.", line, col)
             }
             LexParseError::ParseError(e) => {
@@ -706,7 +708,7 @@ pub struct RTParserBuilder<'a, StorageT: Eq + Hash> {
     phantom: PhantomData<StorageT>
 }
 
-impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> RTParserBuilder<'a, StorageT>
+impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> RTParserBuilder<'a, StorageT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -740,9 +742,9 @@ where
 
     /// Parse input, and (if possible) return a generic parse tree. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_generictree(
+    pub fn parse_generictree<'b: 'a, 'lexer: 'b, 'input: 'lexer>(
         &self,
-        lexer: LexerVTable<'input,StorageT>,
+        lexer: LexerVTable<'b,'lexer,'input,StorageT>,
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
@@ -764,7 +766,7 @@ where
 
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_noaction(&self, lexer: LexerVTable<'input,StorageT>) -> Vec<LexParseError<StorageT>> {
+    pub fn parse_noaction<'b: 'a,'lexer: 'b, 'input: 'lexer>(&self, lexer: LexerVTable<'b,'lexer,'input,StorageT>) -> Vec<LexParseError<StorageT>> {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
             match e {
@@ -789,10 +791,10 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<ActionT: 'a>(
+    pub fn parse_actions<'lexer: 'a, 'input: 'lexer, ActionT: 'a>(
         &self,
-        lexer: LexerVTable<'input,StorageT>,
-        actions: ActionFnVec<'a,'input,StorageT,ActionT>,
+        lexer: LexerVTable<'a,'lexer,'input,StorageT>,
+        actions: ActionFnVec<'a,'lexer,'input,StorageT,ActionT>,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
@@ -938,12 +940,12 @@ pub(crate) mod test {
         lexemes: Vec<Lexeme<StorageT>>
     }
 
-    impl<StorageT: Hash + PrimInt + Unsigned> Lexer<StorageT> for SmallLexer<StorageT> {
+    impl<'lexer, 'input: 'lexer, StorageT: Hash + PrimInt + Unsigned> Lexer<'lexer, 'input, StorageT> for SmallLexer<StorageT> {
         fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
 
-        fn span_str(&self, _: Span) -> &str {
+        fn span_str(&self, _: Span) -> &'input str {
             unreachable!();
         }
 
@@ -951,7 +953,7 @@ pub(crate) mod test {
             unreachable!();
         }
 
-        fn span_lines_str(&self, _: Span) -> &str {
+        fn span_lines_str(&self, _: Span) -> &'input str {
             unreachable!();
         }
     }

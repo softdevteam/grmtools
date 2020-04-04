@@ -1,7 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
-    slice::Iter
+    slice::Iter,
+    marker::PhantomData,
 };
 
 use num_traits::{PrimInt, Unsigned};
@@ -56,13 +57,13 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     }
 
     /// Get the `Rule` at index `idx`.
-    pub fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
+    pub fn get_rule<'a>(&'a self, idx: usize) -> Option<&'a Rule<StorageT>> {
         self.rules.get(idx)
     }
 
     /// Get the `Rule` instance associated with a particular lexeme ID. Panics if no such rule
     /// exists.
-    pub fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
+    pub fn get_rule_by_id<'a>(&'a self, tok_id: StorageT) -> &'a Rule<StorageT> {
         &self
             .rules
             .iter()
@@ -71,7 +72,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     }
 
     /// Get the `Rule` instance associated with a particular name.
-    pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
+    pub fn get_rule_by_name<'a>(&'a self, n: &str) -> Option<&'a Rule<StorageT>> {
         self.rules
             .iter()
             .find(|r| r.name.as_ref().map(String::as_str) == Some(n))
@@ -151,26 +152,27 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     }
 
     /// Returns an iterator over all rules in this AST.
-    pub fn iter_rules(&self) -> Iter<Rule<StorageT>> {
+    pub fn iter_rules<'a>(&'a self) -> Iter<'a, Rule<StorageT>> {
         self.rules.iter()
     }
 
     /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
-    pub fn lexer<'b, 'a: 'b>(&'b self, s: &'a str) -> impl Lexer<StorageT> + 'b {
+    pub fn lexer<'lexer,'input: 'lexer>(&'lexer self, s: &'input str) -> impl Lexer<'lexer, 'input, StorageT> + 'lexer {
         LRLexer::new(self, s)
     }
 }
 
 /// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
 /// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
-pub struct LRLexer<'a, StorageT> {
-    s: &'a str,
+pub struct LRLexer<'lexer, 'input: 'lexer, StorageT> {
+    s: &'input str,
     lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
-    newlines: Vec<usize>
+    newlines: Vec<usize>,
+    marker: PhantomData<&'lexer ()>,
 }
 
-impl<'b, 'a: 'b, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'b, StorageT> {
-    fn new(lexerdef: &'b LexerDef<StorageT>, s: &'a str) -> LRLexer<'b, StorageT> {
+impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'lexer, 'input, StorageT> {
+    fn new(lexerdef: &'lexer LexerDef<StorageT>, s: &'input str) -> LRLexer<'lexer, 'input, StorageT> {
         let mut lexemes = vec![];
         let mut newlines = vec![];
         let mut i = 0;
@@ -217,6 +219,7 @@ impl<'b, 'a: 'b, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'b, St
         }
 
         LRLexer {
+            marker: PhantomData,
             s,
             lexemes,
             newlines
@@ -224,14 +227,14 @@ impl<'b, 'a: 'b, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'b, St
     }
 }
 
-impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
-    for LRLexer<'a, StorageT>
+impl<'lexer,'input:'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<'lexer,'input,StorageT>
+    for LRLexer<'lexer, 'input, StorageT>
 {
     fn iter<'b>(&'b self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'b> {
         Box::new(self.lexemes.iter().cloned())
     }
 
-    fn span_str(&self, span: Span) -> &str {
+    fn span_str(&self, span: Span) -> &'input str {
         if span.end() > self.s.len() {
             panic!(
                 "Span {:?} exceeds known input length {}",
@@ -242,7 +245,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         &self.s[span.start()..span.end()]
     }
 
-    fn span_lines_str(&self, span: Span) -> &str {
+    fn span_lines_str(&self, span: Span) -> &'input str {
         debug_assert!(span.end() >= span.start());
         if span.end() > self.s.len() {
             panic!(
