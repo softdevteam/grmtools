@@ -625,10 +625,10 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     /// [`YaccGrammar`](../../cfgrammar/yacc/grammar/struct.YaccGrammar.html) exposes a suitable
     /// [`epp`](../../cfgrammar/yacc/grammar/struct.YaccGrammar.html#method.token_epp) function,
     /// though you will have to wrap it in a closure e.g. `&|t| grm.token_epp(t)`.
-    pub fn pp<'a, 'lexer: 'a, 'input: 'lexer>(
+    pub fn pp<'a, 'b, 'lexer: 'a, 'input: 'lexer>(
         &self,
         lexer: LexerVTable<'a,'lexer,'input, StorageT>,
-        epp: &dyn Fn(TIdx<StorageT>) -> Option<&'static str>
+        epp: &'b dyn Fn(TIdx<StorageT>) -> Option<&'b str>
     ) -> String {
         match self {
             LexParseError::LexError(e) => {
