@@ -70,18 +70,13 @@ where
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 
 // Lexer v-table pointer
-pub(crate) type LexerVTable<'a,'b,'c, T> = &'a (dyn Lexer<'b, 'c, T> + 'a);
-// Action Function
-// 
-// This defination is a bit abstracted as it means different
-// things in different locations.
-//
-// - T (normally StorageT)
-// - R (return)
-// - 'b (often 'input)
-pub(crate) type ActionFn<'a,'b,'c,T,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'a,'b,'c,T>,Span,usize, &mut Vec<AStackType<R,T>>) -> R;
+pub(crate) type LexerVTable<'a,'lexer,'input, T> = &'a (dyn Lexer<'lexer, 'input, T> + 'a);
+// Generated actions share lifetimes
+// with Lexer V-Table as they can both
+// be recieved by a function call into `RTParserBuilder`
+pub(crate) type ActionFn<'a,'lexer,'input,T,R> = &'a dyn Fn(RIdx<T>,LexerVTable<'a,'lexer,'input,T>,Span,usize, &mut Vec<AStackType<R,T>>) -> R;
 // Identical to `ActionFn` but the `Vec<>` is added.
-pub(crate) type ActionFnVec<'a,'b,'c,T,R> = Vec<ActionFn<'a,'b,'c,T,R>>;
+pub(crate) type ActionFnVec<'a,'lexer,'input,T,R> = Vec<ActionFn<'a,'lexer,'input,T,R>>;
 // Used for token cost function
 pub(crate) type TokenCostFn<'a,T> = &'a (dyn Fn(TIdx<T>) -> u8 + 'a);
 
@@ -91,21 +86,26 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>)
 }
 
-pub struct Parser<'a, 'b: 'a, 'lexer: 'a, 'input:'lexer, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+pub struct Parser<'rtpb, 'ext: 'rtpb, 'lexer: 'ext, 'input:'lexer, StorageT: 'static + Eq + Hash, ActionT: 'rtpb> {
     pub(crate) rcvry_kind: RecoveryKind,
-    pub(crate) grm: &'a YaccGrammar<StorageT>,
-    pub(crate) token_cost: TokenCostFn<'a,StorageT>,
-    pub(crate) sgraph: &'a StateGraph<StorageT>,
-    pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: LexerVTable<'b, 'lexer,'input,StorageT>,
+    pub(crate) grm: &'rtpb YaccGrammar<StorageT>,
+    pub(crate) token_cost: TokenCostFn<'rtpb,StorageT>,
+    pub(crate) sgraph: &'rtpb StateGraph<StorageT>,
+    pub(crate) stable: &'rtpb StateTable<StorageT>,
+    // it should be noted that `LexerVTable` and `ActionFnVec` use
+    // a different lifetime from _just about everything else_.
+    //
+    // most of `Parser` flows from `RTParserBiulder`, but these
+    // two fields can come from other locations. 
+    pub(crate) lexer: LexerVTable<'ext, 'lexer,'input,StorageT>,
+    actions: ActionFnVec<'ext,'lexer,'input,StorageT,ActionT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
-    actions: ActionFnVec<'b,'lexer,'input,StorageT,ActionT>,
 }
 
-impl<'a, 'b:'a, 'lexer:'b, 'input: 'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-    Parser<'a, 'b, 'lexer, 'input, StorageT, Node<StorageT>>
+impl<'rtpb, 'ext:'rtpb, 'lexer:'ext, 'input: 'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'rtpb, 'ext, 'lexer, 'input, StorageT, Node<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -113,18 +113,18 @@ where
 
     fn parse_generictree(
         rcvry_kind: RecoveryKind,
-        grm: &'a YaccGrammar<StorageT>,
-        token_cost: TokenCostFn<'a,StorageT>,
-        sgraph: &'a StateGraph<StorageT>,
-        stable: &'a StateTable<StorageT>,
-        lexer: LexerVTable<'b,'lexer,'input,StorageT>,
+        grm: &'rtpb YaccGrammar<StorageT>,
+        token_cost: TokenCostFn<'rtpb,StorageT>,
+        sgraph: &'rtpb StateGraph<StorageT>,
+        stable: &'rtpb StateTable<StorageT>,
+        lexer: LexerVTable<'ext,'lexer,'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: ActionFnVec<'b,'lexer,'input,StorageT,Node<StorageT>> = Vec::new();
+        let mut actions: ActionFnVec<'ext,'lexer,'input,StorageT,Node<StorageT>> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::generic_ptree);
         let psr = Parser {
             rcvry_kind,
@@ -146,7 +146,7 @@ where
 
     fn generic_ptree(
         ridx: RIdx<StorageT>,
-        _lexer: LexerVTable<'b, 'lexer,'input,StorageT>,
+        _lexer: LexerVTable<'ext, 'lexer,'input,StorageT>,
         _span: Span,
         drain_count: usize,
         astack: &mut Vec<AStackType<Node<StorageT>, StorageT>>
@@ -162,26 +162,26 @@ where
     }
 }
 
-impl<'a, 'b: 'a, 'lexer: 'b, 'input: 'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-    Parser<'a, 'b, 'lexer, 'input, StorageT, ()>
+impl<'rtpb, 'ext: 'rtpb, 'lexer: 'ext, 'input: 'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'rtpb, 'ext, 'lexer, 'input, StorageT, ()>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
     fn parse_noaction(
         rcvry_kind: RecoveryKind,
-        grm: &'a YaccGrammar<StorageT>,
-        token_cost: TokenCostFn<'a,StorageT>,
-        sgraph: &'a StateGraph<StorageT>,
-        stable: &'a StateTable<StorageT>,
-        lexer: LexerVTable<'b, 'lexer,'input,StorageT>,
+        grm: &'rtpb YaccGrammar<StorageT>,
+        token_cost: TokenCostFn<'rtpb,StorageT>,
+        sgraph: &'rtpb StateGraph<StorageT>,
+        stable: &'rtpb StateTable<StorageT>,
+        lexer: LexerVTable<'ext, 'lexer,'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>>
     {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: ActionFnVec<'b,'lexer,'input,StorageT,()> = Vec::new();
+        let mut actions: ActionFnVec<'ext,'lexer,'input,StorageT,()> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
         let psr = Parser {
             rcvry_kind,
@@ -203,7 +203,7 @@ where
 
     fn noaction(
         _ridx: RIdx<StorageT>,
-        _lexer: LexerVTable<'b,'lexer,'input,StorageT>,
+        _lexer: LexerVTable<'ext,'lexer,'input,StorageT>,
         _span: Span,
         drain_count: usize,
         astack: &mut Vec<AStackType<(), StorageT>>
@@ -212,21 +212,21 @@ where
     }
 }
 
-impl<'a, 'b: 'a, 'lexer: 'b, 'input:'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    Parser<'a, 'b, 'lexer,'input, StorageT, ActionT>
+impl<'rtpb, 'ext: 'rtpb, 'lexer: 'ext, 'input:'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'ext>
+    Parser<'rtpb, 'ext, 'lexer,'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
     fn parse_actions(
         rcvry_kind: RecoveryKind,
-        grm: &'a YaccGrammar<StorageT>,
-        token_cost: TokenCostFn<'a,StorageT>,
-        sgraph: &'a StateGraph<StorageT>,
-        stable: &'a StateTable<StorageT>,
-        lexer: LexerVTable<'b,'lexer,'input,StorageT>,
+        grm: &'rtpb YaccGrammar<StorageT>,
+        token_cost: TokenCostFn<'rtpb,StorageT>,
+        sgraph: &'rtpb StateGraph<StorageT>,
+        stable: &'rtpb StateTable<StorageT>,
+        lexer: LexerVTable<'ext,'lexer,'input,StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: ActionFnVec<'b,'lexer,'input,StorageT,ActionT>,
+        actions: ActionFnVec<'ext,'lexer,'input,StorageT,ActionT>,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
     {
         for tidx in grm.iter_tidxs() {
@@ -312,7 +312,6 @@ where
 
                     spans.push(la_lexeme.span());
                     laidx += 1;
-                    debug_assert_eq!(astack.len(), spans.len());
                 }
                 Action::Accept => {
                     debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
@@ -620,10 +619,10 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     /// [`YaccGrammar`](../../cfgrammar/yacc/grammar/struct.YaccGrammar.html) exposes a suitable
     /// [`epp`](../../cfgrammar/yacc/grammar/struct.YaccGrammar.html#method.token_epp) function,
     /// though you will have to wrap it in a closure e.g. `&|t| grm.token_epp(t)`.
-    pub fn pp<'a, 'b, 'lexer: 'a, 'input: 'lexer>(
+    pub fn pp<'solo,'ext, 'lexer: 'ext, 'input: 'lexer>(
         &self,
-        lexer: LexerVTable<'a,'lexer,'input, StorageT>,
-        epp: &'b dyn Fn(TIdx<StorageT>) -> Option<&'b str>
+        lexer: LexerVTable<'ext,'lexer,'input, StorageT>,
+        epp: &'solo dyn Fn(TIdx<StorageT>) -> Option<&'solo str>
     ) -> String {
         match self {
             LexParseError::LexError(e) => {
@@ -737,9 +736,9 @@ where
 
     /// Parse input, and (if possible) return a generic parse tree. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_generictree<'b: 'a, 'lexer: 'b, 'input: 'lexer>(
+    pub fn parse_generictree<'ext: 'a, 'lexer: 'ext, 'input: 'lexer>(
         &self,
-        lexer: LexerVTable<'b,'lexer,'input,StorageT>,
+        lexer: LexerVTable<'ext,'lexer,'input,StorageT>,
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
@@ -761,7 +760,7 @@ where
 
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_noaction<'b: 'a,'lexer: 'b, 'input: 'lexer>(&self, lexer: LexerVTable<'b,'lexer,'input,StorageT>) -> Vec<LexParseError<StorageT>> {
+    pub fn parse_noaction<'ext: 'a,'lexer: 'ext, 'input: 'lexer>(&self, lexer: LexerVTable<'ext,'lexer,'input,StorageT>) -> Vec<LexParseError<StorageT>> {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
             match e {
@@ -786,10 +785,10 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<'b: 'a,'lexer: 'b, 'input: 'lexer, ActionT: 'a>(
+    pub fn parse_actions<'ext: 'a,'lexer: 'ext, 'input: 'lexer, ActionT: 'a>(
         &self,
-        lexer: LexerVTable<'b,'lexer,'input,StorageT>,
-        actions: ActionFnVec<'b,'lexer,'input,StorageT,ActionT>,
+        lexer: LexerVTable<'ext,'lexer,'input,StorageT>,
+        actions: ActionFnVec<'ext,'lexer,'input,StorageT,ActionT>,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {

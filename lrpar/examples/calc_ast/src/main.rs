@@ -52,7 +52,7 @@ fn main() {
     }
 }
 
-fn eval<'a,'b:'a>(lexer: &'a dyn Lexer<'b,'b,u32>, e: Expr) -> Result<u64, (Span, &'static str)> {
+fn eval<'temp, 'lexer:'temp, 'input: 'lexer>(lexer: &'temp dyn Lexer<'lexer,'input,u32>, e: Expr) -> Result<u64, (Span, &'static str)> {
     match e {
         Expr::Add { span, lhs, rhs } => eval(lexer, *lhs)?
             .checked_add(eval(lexer, *rhs)?)
@@ -63,7 +63,6 @@ fn eval<'a,'b:'a>(lexer: &'a dyn Lexer<'b,'b,u32>, e: Expr) -> Result<u64, (Span
         Expr::Number { span } => lexer
             .span_str(span)
             .parse::<u64>()
-            .ok()
-            .ok_or((span, "cannot be represented as a u64"))
+            .map_err(|_| (span,"cannot be represented as a u64"))
     }
 }

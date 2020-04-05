@@ -106,22 +106,22 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct MF<'a, 'b:'a,'c: 'b, 'lexer:'c,'input:'lexer, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+struct MF<'mf,'rtpb:'mf,'ext:'rtpb,'lexer:'ext,'input:'lexer, StorageT: 'static + Eq + Hash, ActionT: 'mf> {
     dist: Dist<StorageT>,
-    parser: &'a Parser<'b, 'c, 'lexer,'input, StorageT, ActionT>
+    parser: &'mf Parser<'rtpb,'ext,'lexer,'input,StorageT, ActionT>
 }
 
 pub(crate) fn recoverer<
-    'a,
-    'b: 'a,
-    'c: 'b,
-    'lexer: 'c,
-    'input: 'lexer,
-    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-    ActionT: 'b
+   'mf,
+   'rtpb: 'mf,
+   'ext: 'rtpb,
+   'lexer:'ext,
+   'input: 'lexer,
+   StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+   ActionT: 'mf
 >(
-    parser: &'a Parser<'b,'c, 'lexer,'input, StorageT, ActionT>
-) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
+    parser: &'mf Parser<'rtpb,'ext,'lexer,'input,StorageT, ActionT>
+) -> Box<dyn Recoverer<StorageT, ActionT> + 'mf>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -135,8 +135,8 @@ where
     Box::new(MF { dist, parser })
 }
 
-impl<'a, 'b: 'a, 'c: 'b, 'lexer: 'c, 'input:'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    Recoverer<StorageT, ActionT> for MF<'a, 'b, 'c,'lexer, 'input, StorageT, ActionT>
+impl<'mf,'rtpb:'mf,'ext:'rtpb,'lexer:'ext,'input:'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'mf>
+    Recoverer<StorageT, ActionT> for MF<'mf,'rtpb,'ext,'lexer, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -251,8 +251,8 @@ where
     }
 }
 
-impl<'a, 'b: 'a, 'c: 'b, 'lexer: 'c, 'input: 'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    MF<'a, 'b, 'c, 'lexer, 'input, StorageT, ActionT>
+impl<'mf,'rtpb:'mf,'ext:'rtpb,'lexer:'ext,'input:'lexer, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'mf>
+  MF<'mf,'rtpb,'ext,'lexer, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>

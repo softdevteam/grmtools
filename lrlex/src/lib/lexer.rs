@@ -57,13 +57,13 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     }
 
     /// Get the `Rule` at index `idx`.
-    pub fn get_rule<'a>(&'a self, idx: usize) -> Option<&'a Rule<StorageT>> {
+    pub fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
         self.rules.get(idx)
     }
 
     /// Get the `Rule` instance associated with a particular lexeme ID. Panics if no such rule
     /// exists.
-    pub fn get_rule_by_id<'a>(&'a self, tok_id: StorageT) -> &'a Rule<StorageT> {
+    pub fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
         &self
             .rules
             .iter()
@@ -72,7 +72,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     }
 
     /// Get the `Rule` instance associated with a particular name.
-    pub fn get_rule_by_name<'a>(&'a self, n: &str) -> Option<&'a Rule<StorageT>> {
+    pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
         self.rules
             .iter()
             .find(|r| r.name.as_ref().map(String::as_str) == Some(n))
@@ -93,10 +93,10 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     /// benign: some lexers deliberately define tokens which are not used (e.g. reserving future
     /// keywords). A non-empty set #2 is more likely to be an error since there are parts of the
     /// grammar where nothing the user can input will be parseable.
-    pub fn set_rule_ids<'b, 'a: 'b>(
-        &'b mut self,
-        rule_ids_map: &HashMap<&'a str, StorageT>
-    ) -> (Option<HashSet<&'b str>>, Option<HashSet<&'b str>>) {
+    pub fn set_rule_ids<'lexerdef, 'external: 'lexerdef>(
+        &'lexerdef mut self,
+        rule_ids_map: &HashMap<&'external str, StorageT>
+    ) -> (Option<HashSet<&'lexerdef str>>, Option<HashSet<&'lexerdef str>>) {
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
         // recover the names later.
@@ -152,7 +152,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     }
 
     /// Returns an iterator over all rules in this AST.
-    pub fn iter_rules<'a>(&'a self) -> Iter<'a, Rule<StorageT>> {
+    pub fn iter_rules(&self) -> Iter<Rule<StorageT>> {
         self.rules.iter()
     }
 
