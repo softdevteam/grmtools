@@ -68,6 +68,7 @@ where
 }
 
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
+pub(crate) type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
 
 #[derive(Debug)]
 pub enum AStackType<ActionT, StorageT> {
@@ -78,7 +79,7 @@ pub enum AStackType<ActionT, StorageT> {
 pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
-    pub(crate) token_cost: Box<dyn Fn(TIdx<StorageT>) -> u8 + 'a>,
+    pub(crate) token_cost: Box<TokenCostFn<'a, StorageT>>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
     pub(crate) lexer: &'input dyn Lexer<StorageT>,
@@ -99,18 +100,15 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    fn parse_generictree<F>(
+    fn parse_generictree(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
-        token_cost: F,
+        token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &dyn Lexer<StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
-    ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>)
-    where
-        F: Fn(TIdx<StorageT>) -> u8 + 'a
-    {
+    ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
@@ -164,18 +162,15 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    fn parse_noaction<F>(
+    fn parse_noaction(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
-        token_cost: F,
+        token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &dyn Lexer<StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
-    ) -> Vec<LexParseError<StorageT>>
-    where
-        F: Fn(TIdx<StorageT>) -> u8 + 'a
-    {
+    ) -> Vec<LexParseError<StorageT>> {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
@@ -221,10 +216,10 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
-    fn parse_actions<F>(
+    fn parse_actions(
         rcvry_kind: RecoveryKind,
         grm: &'a YaccGrammar<StorageT>,
-        token_cost: F,
+        token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
         lexer: &'input (dyn Lexer<StorageT> + 'input),
@@ -235,10 +230,7 @@ where
             Span,
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]
-    ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>)
-    where
-        F: Fn(TIdx<StorageT>) -> u8 + 'a
-    {
+    ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
