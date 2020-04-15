@@ -69,6 +69,12 @@ where
 
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
+pub(crate) type ActionFn<'a, 'input, StorageT, ActionT> = &'a dyn Fn(
+    RIdx<StorageT>,
+    &'input (dyn Lexer<StorageT> + 'input),
+    Span,
+    vec::Drain<AStackType<ActionT, StorageT>>
+) -> ActionT;
 
 #[derive(Debug)]
 pub enum AStackType<ActionT, StorageT> {
@@ -86,15 +92,10 @@ pub struct Parser<'a, 'input, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
-    actions: &'a [&'a dyn Fn(
-        RIdx<StorageT>,
-        &'input dyn Lexer<StorageT>,
-        Span,
-        vec::Drain<AStackType<ActionT, StorageT>>
-    ) -> ActionT]
+    actions: &'a [ActionFn<'a, 'input, StorageT, ActionT>]
 }
 
-impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+impl<'a, 'input: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
     Parser<'a, 'input, StorageT, Node<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
@@ -106,20 +107,13 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &dyn Lexer<StorageT>,
+        lexer: &'input (dyn Lexer<StorageT> + 'input),
         lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: Vec<
-            &'a dyn Fn(
-                RIdx<StorageT>,
-                &dyn Lexer<StorageT>,
-                Span,
-                vec::Drain<AStackType<Node<StorageT>, StorageT>>
-            ) -> Node<StorageT>
-        > = Vec::new();
+        let mut actions: Vec<ActionFn<'a, 'input, StorageT, Node<StorageT>>> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::generic_ptree);
         let psr = Parser {
             rcvry_kind,
@@ -156,7 +150,7 @@ where
     }
 }
 
-impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+impl<'a, 'input: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
     Parser<'a, 'input, StorageT, ()>
 where
     usize: AsPrimitive<StorageT>,
@@ -168,20 +162,13 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &dyn Lexer<StorageT>,
+        lexer: &'input (dyn Lexer<StorageT> + 'input),
         lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>> {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: Vec<
-            &'a dyn Fn(
-                RIdx<StorageT>,
-                &dyn Lexer<StorageT>,
-                Span,
-                vec::Drain<AStackType<(), StorageT>>
-            ) -> ()
-        > = Vec::new();
+        let mut actions: Vec<ActionFn<'a, 'input, StorageT, ()>> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
         let psr = Parser {
             rcvry_kind,
@@ -210,7 +197,7 @@ where
     }
 }
 
-impl<'a, 'input, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+impl<'a, 'input: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     Parser<'a, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
@@ -224,12 +211,7 @@ where
         stable: &'a StateTable<StorageT>,
         lexer: &'input (dyn Lexer<StorageT> + 'input),
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: &'a [&'a dyn Fn(
-            RIdx<StorageT>,
-            &'input (dyn Lexer<StorageT> + 'input),
-            Span,
-            vec::Drain<AStackType<ActionT, StorageT>>
-        ) -> ActionT]
+        actions: &'a [ActionFn<'a, 'input, StorageT, ActionT>]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
