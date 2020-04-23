@@ -92,9 +92,9 @@ pub(crate) struct YaccParser {
 }
 
 lazy_static! {
-    static ref RE_NAME: Regex = { Regex::new(r"^[a-zA-Z_.][a-zA-Z0-9_.]*").unwrap() };
+    static ref RE_NAME: Regex = Regex::new(r"^[a-zA-Z_.][a-zA-Z0-9_.]*").unwrap();
     static ref RE_TOKEN: Regex =
-        { Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap() };
+        Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap();
 }
 
 /// The actual parser is intended to be entirely opaque from outside users.
