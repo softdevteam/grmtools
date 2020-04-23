@@ -71,7 +71,7 @@ pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
 pub(crate) type ActionFn<'a, 'input, StorageT, ActionT> = &'a dyn Fn(
     RIdx<StorageT>,
-    &'input (dyn Lexer<StorageT> + 'input),
+    &'input dyn Lexer<StorageT>,
     Span,
     vec::Drain<AStackType<ActionT, StorageT>>
 ) -> ActionT;
@@ -107,7 +107,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &'input (dyn Lexer<StorageT> + 'input),
+        lexer: &'input dyn Lexer<StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
@@ -162,7 +162,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &'input (dyn Lexer<StorageT> + 'input),
+        lexer: &'input dyn Lexer<StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>> {
         for tidx in grm.iter_tidxs() {
@@ -209,7 +209,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
-        lexer: &'input (dyn Lexer<StorageT> + 'input),
+        lexer: &'input dyn Lexer<StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
         actions: &'a [ActionFn<'a, 'input, StorageT, ActionT>]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
@@ -768,10 +768,10 @@ where
     /// be a mix of lexing and parsing errors.
     pub fn parse_actions<'input, ActionT: 'a>(
         &self,
-        lexer: &'input (dyn Lexer<StorageT> + 'input),
+        lexer: &'input dyn Lexer<StorageT>,
         actions: &[&dyn Fn(
             RIdx<StorageT>,
-            &'input (dyn Lexer<StorageT> + 'input),
+            &'input dyn Lexer<StorageT>,
             Span,
             vec::Drain<AStackType<ActionT, StorageT>>
         ) -> ActionT]

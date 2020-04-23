@@ -461,7 +461,7 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse<'input>(lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input))
+    pub fn parse<'input>(lexer: &'input dyn ::lrpar::Lexer<{storaget}>)
           -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
                     storaget = StorageT::type_name(),
@@ -522,7 +522,7 @@ where
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
         let mut actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
-                       &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
+                       &'input dyn ::lrpar::Lexer<{storaget}>,
                        ::lrpar::Span,
                        ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
                     -> {actionskind}<'input>> = ::std::vec::Vec::new();\n",
@@ -628,7 +628,7 @@ where
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
                 "    fn {prefix}wrapper_{}<'input>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                      {prefix}lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
+                      {prefix}lexer: &'input dyn ::lrpar::Lexer<{storaget}>,
                       {prefix}span: ::lrpar::Span,
                       mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
                    -> {actionskind}<'input> {{",
@@ -787,7 +787,7 @@ where
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}<'input>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                     {prefix}lexer: &'input (dyn ::lrpar::Lexer<{storaget}> + 'input),
+                     {prefix}lexer: &'input dyn ::lrpar::Lexer<{storaget}>,
                      {prefix}span: ::lrpar::Span,
                      {args}) {returnt} {{\n",
                 usize::from(pidx),
