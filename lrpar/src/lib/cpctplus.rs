@@ -98,7 +98,7 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct CPCTPlus<'a, 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+struct CPCTPlus<'a, 'b: 'a, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     parser: &'a Parser<'a, 'b, StorageT, ActionT>
 }
 
@@ -112,7 +112,7 @@ where
     Box::new(CPCTPlus { parser })
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+impl<'a, 'b: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     Recoverer<StorageT, ActionT> for CPCTPlus<'a, 'b, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
@@ -241,7 +241,7 @@ where
     }
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+impl<'a, 'b: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     CPCTPlus<'a, 'b, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,

@@ -113,7 +113,7 @@ struct MF<'a, 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
 
 pub(crate) fn recoverer<
     'a,
-    'b,
+    'b: 'a,
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     ActionT: 'a
 >(
@@ -132,7 +132,7 @@ where
     Box::new(MF { dist, parser })
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+impl<'a, 'b: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     Recoverer<StorageT, ActionT> for MF<'a, 'b, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
@@ -248,7 +248,7 @@ where
     }
 }
 
-impl<'a, 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
+impl<'a, 'b: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     MF<'a, 'b, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
