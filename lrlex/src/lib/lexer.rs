@@ -163,14 +163,14 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
 
 /// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
 /// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
-pub struct LRLexer<'a, StorageT> {
-    s: &'a str,
+pub struct LRLexer<'input, StorageT> {
+    s: &'input str,
     lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
     newlines: Vec<usize>
 }
 
-impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'a, StorageT> {
-    fn new(lexerdef: &'a LexerDef<StorageT>, s: &'a str) -> LRLexer<'a, StorageT> {
+impl<'input, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'input, StorageT> {
+    fn new(lexerdef: &LexerDef<StorageT>, s: &'input str) -> LRLexer<'input, StorageT> {
         let mut lexemes = vec![];
         let mut newlines = vec![];
         let mut i = 0;
@@ -224,14 +224,14 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'a, StorageT> 
     }
 }
 
-impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
-    for LRLexer<'a, StorageT>
+impl<'input, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<'input, StorageT>
+    for LRLexer<'input, StorageT>
 {
-    fn iter<'b>(&'b self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'b> {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
         Box::new(self.lexemes.iter().cloned())
     }
 
-    fn span_str(&self, span: Span) -> &str {
+    fn span_str(&self, span: Span) -> &'input str {
         if span.end() > self.s.len() {
             panic!(
                 "Span {:?} exceeds known input length {}",
@@ -242,7 +242,7 @@ impl<'a, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
         &self.s[span.start()..span.end()]
     }
 
-    fn span_lines_str(&self, span: Span) -> &str {
+    fn span_lines_str(&self, span: Span) -> &'input str {
         debug_assert!(span.end() >= span.start());
         if span.end() > self.s.len() {
             panic!(

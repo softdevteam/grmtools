@@ -82,21 +82,21 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>)
 }
 
-pub struct Parser<'a, 'b: 'a, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
     pub(crate) token_cost: Box<TokenCostFn<'a, StorageT>>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: &'b dyn Lexer<StorageT>,
+    pub(crate) lexer: &'b dyn Lexer<'input, StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
     actions: &'a [ActionFn<'a, 'b, StorageT, ActionT>]
 }
 
-impl<'a, 'b: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-    Parser<'a, 'b, StorageT, Node<StorageT>>
+impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'b, 'input, StorageT, Node<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -107,7 +107,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &'b dyn Lexer<StorageT>,
+        lexer: &'b dyn Lexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
@@ -150,7 +150,8 @@ where
     }
 }
 
-impl<'a, 'b: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> Parser<'a, 'b, StorageT, ()>
+impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
+    Parser<'a, 'b, 'input, StorageT, ()>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -161,7 +162,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &'b dyn Lexer<StorageT>,
+        lexer: &'b dyn Lexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>> {
         for tidx in grm.iter_tidxs() {
@@ -196,8 +197,13 @@ where
     }
 }
 
-impl<'a, 'b: 'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
-    Parser<'a, 'b, StorageT, ActionT>
+impl<
+        'a,
+        'b: 'a,
+        'input: 'b,
+        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+        ActionT: 'a
+    > Parser<'a, 'b, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
@@ -208,7 +214,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
-        lexer: &'b dyn Lexer<StorageT>,
+        lexer: &'b dyn Lexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
         actions: &'a [ActionFn<'a, 'b, StorageT, ActionT>]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
@@ -919,20 +925,20 @@ pub(crate) mod test {
         lexemes: Vec<Lexeme<StorageT>>
     }
 
-    impl<StorageT: Hash + PrimInt + Unsigned> Lexer<StorageT> for SmallLexer<StorageT> {
+    impl<'input, StorageT: Hash + PrimInt + Unsigned> Lexer<'input, StorageT> for SmallLexer<StorageT> {
         fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
 
-        fn span_str(&self, _: Span) -> &str {
+        fn span_str(&self, _: Span) -> &'input str {
+            unreachable!();
+        }
+
+        fn span_lines_str(&self, _: Span) -> &'input str {
             unreachable!();
         }
 
         fn line_col(&self, _: Span) -> ((usize, usize), (usize, usize)) {
-            unreachable!();
-        }
-
-        fn span_lines_str(&self, _: Span) -> &str {
             unreachable!();
         }
     }

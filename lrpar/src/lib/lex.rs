@@ -36,7 +36,7 @@ impl fmt::Display for LexError {
 }
 
 /// The trait which all lexers which want to interact with `lrpar` must implement.
-pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
+pub trait Lexer<'input, StorageT: Hash + PrimInt + Unsigned> {
     /// Iterate over all the lexemes in this lexer. Note that:
     ///   * The lexer may or may not stop after the first [LexError] is encountered.
     ///   * There are no guarantees about whether the lexer caches anything if this method is
@@ -48,7 +48,7 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// # Panics
     ///
     /// If the span exceeds the known input.
-    fn span_str(&self, span: Span) -> &str;
+    fn span_str(&self, span: Span) -> &'input str;
 
     /// Return the lines containing the input at `span` (including *all* the text on the lines
     /// that `span` starts and ends on).
@@ -56,7 +56,7 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// # Panics
     ///
     /// If the span exceeds the known input.
-    fn span_lines_str(&self, span: Span) -> &str;
+    fn span_lines_str(&self, span: Span) -> &'input str;
 
     /// Return `((start line, start column), (end line, end column))` for `span`. Note that column
     /// *characters* (not bytes) are returned.
