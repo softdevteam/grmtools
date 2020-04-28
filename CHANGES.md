@@ -1,3 +1,31 @@
+# grmtools 0.7.0 (2020-XX-XX)
+
+## Breaking change
+
+* `Lexer` now takes a lifetime `'input` which allows the input to last longer
+  than the `Lexer` itself. `Lexer::span_str` and `Lexer::span_lines_str` have
+  changed from:
+    ```rustc
+    fn span_str(&self, span: Span) -> &str;
+    fn span_lines_str(&self, span: Span) -> &str;
+    ```
+  to:
+    ```rustc
+    fn span_str(&self, span: Span) -> &'input str;
+    fn span_lines_str(&self, span: Span) -> &'input str;
+    ```
+  This change allows users to throw away the `Lexer` but still keep around
+  structures (e.g. ASTs) which reference the user's input.
+
+  rustc infers the `'input` lifetime in some situations but not others,
+  so if you get an error:
+    ```
+    error[E0106]: missing lifetime specifier
+    ```
+  then it is likely that you need to change a type from `Lexer` to
+  `Lexer<'input>`.
+
+
 # grmtools 0.6.2 (2020-03-22)
 
 * Fix two Clippy warnings and suppress two others.
