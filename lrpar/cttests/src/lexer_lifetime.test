@@ -3,8 +3,8 @@ yacckind: Grmtools
 grammar: |
     %start T
     %%
-    T -> ():
-        "ID" { }
+    T -> &'input str:
+        "ID" { $lexer.span_str($1.unwrap().span()) }
         ;
 lexer: |
     %%

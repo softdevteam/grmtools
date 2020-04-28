@@ -69,9 +69,9 @@ where
 
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
-pub(crate) type ActionFn<'a, 'b, StorageT, ActionT> = &'a dyn Fn(
+pub(crate) type ActionFn<'a, 'b, 'input, StorageT, ActionT> = &'a dyn Fn(
     RIdx<StorageT>,
-    &'b dyn Lexer<StorageT>,
+    &'b dyn Lexer<'input, StorageT>,
     Span,
     vec::Drain<AStackType<ActionT, StorageT>>
 ) -> ActionT;
@@ -92,7 +92,7 @@ pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT
     // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
-    actions: &'a [ActionFn<'a, 'b, StorageT, ActionT>]
+    actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>]
 }
 
 impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
@@ -113,7 +113,7 @@ where
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: Vec<ActionFn<'a, 'b, StorageT, Node<StorageT>>> = Vec::new();
+        let mut actions: Vec<ActionFn<'a, 'b, 'input, StorageT, Node<StorageT>>> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::generic_ptree);
         let psr = Parser {
             rcvry_kind,
@@ -168,7 +168,7 @@ where
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: Vec<ActionFn<'a, 'b, StorageT, ()>> = Vec::new();
+        let mut actions: Vec<ActionFn<'a, 'b, 'input, StorageT, ()>> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
         let psr = Parser {
             rcvry_kind,
@@ -216,7 +216,7 @@ where
         stable: &'a StateTable<StorageT>,
         lexer: &'b dyn Lexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: &'a [ActionFn<'a, 'b, StorageT, ActionT>]
+        actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -771,15 +771,10 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<'b, ActionT: 'a>(
+    pub fn parse_actions<'b: 'a, 'input: 'b, ActionT: 'a>(
         &self,
-        lexer: &'b dyn Lexer<StorageT>,
-        actions: &[&dyn Fn(
-            RIdx<StorageT>,
-            &'b dyn Lexer<StorageT>,
-            Span,
-            vec::Drain<AStackType<ActionT, StorageT>>
-        ) -> ActionT]
+        lexer: &'b dyn Lexer<'input, StorageT>,
+        actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {

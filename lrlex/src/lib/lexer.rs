@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
+    marker::PhantomData,
     slice::Iter
 };
 
@@ -156,21 +157,30 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
     }
 
     /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
-    pub fn lexer<'a>(&'a self, s: &'a str) -> impl Lexer<StorageT> + 'a {
+    pub fn lexer<'lexer, 'input: 'lexer>(
+        &'lexer self,
+        s: &'input str
+    ) -> LRLexer<'lexer, 'input, StorageT> {
         LRLexer::new(self, s)
     }
 }
 
 /// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
 /// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
-pub struct LRLexer<'input, StorageT> {
+pub struct LRLexer<'lexer, 'input: 'lexer, StorageT> {
     s: &'input str,
     lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
-    newlines: Vec<usize>
+    newlines: Vec<usize>,
+    phantom: PhantomData<&'lexer ()>
 }
 
-impl<'input, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'input, StorageT> {
-    fn new(lexerdef: &LexerDef<StorageT>, s: &'input str) -> LRLexer<'input, StorageT> {
+impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
+    LRLexer<'lexer, 'input, StorageT>
+{
+    fn new(
+        lexerdef: &'lexer LexerDef<StorageT>,
+        s: &'input str
+    ) -> LRLexer<'lexer, 'input, StorageT> {
         let mut lexemes = vec![];
         let mut newlines = vec![];
         let mut i = 0;
@@ -219,13 +229,14 @@ impl<'input, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LRLexer<'input, St
         LRLexer {
             s,
             lexemes,
-            newlines
+            newlines,
+            phantom: PhantomData
         }
     }
 }
 
-impl<'input, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<'input, StorageT>
-    for LRLexer<'input, StorageT>
+impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
+    Lexer<'input, StorageT> for LRLexer<'lexer, 'input, StorageT>
 {
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
         Box::new(self.lexemes.iter().cloned())
