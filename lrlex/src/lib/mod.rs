@@ -13,7 +13,7 @@ mod parser;
 use crate::parser::parse_lex;
 pub use crate::{
     builder::LexerBuilder,
-    lexer::{LexerDef, Rule}
+    lexer::{NonStreamingLexerDef, Rule}
 };
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
@@ -58,7 +58,7 @@ impl fmt::Display for LexBuildError {
 
 pub fn build_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>(
     s: &str
-) -> Result<LexerDef<StorageT>, LexBuildError> {
+) -> Result<NonStreamingLexerDef<StorageT>, LexBuildError> {
     parse_lex(s)
 }
 

@@ -8,7 +8,7 @@ use std::{
 use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 
-use lrpar::{LexError, Lexeme, Lexer, Span};
+use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span};
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -45,15 +45,15 @@ impl<StorageT> Rule<StorageT> {
     }
 }
 
-/// This struct represents, in essence, a .l file in memory. From it one can produce a `Lexer`
+/// This struct represents, in essence, a .l file in memory. From it one can produce a `NonStreamingLexer`
 /// which actually lexes inputs.
-pub struct LexerDef<StorageT> {
+pub struct NonStreamingLexerDef<StorageT> {
     pub(crate) rules: Vec<Rule<StorageT>>
 }
 
-impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
-    pub fn new(rules: Vec<Rule<StorageT>>) -> LexerDef<StorageT> {
-        LexerDef { rules }
+impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<StorageT> {
+    pub fn new(rules: Vec<Rule<StorageT>>) -> NonStreamingLexerDef<StorageT> {
+        NonStreamingLexerDef { rules }
     }
 
     /// Get the `Rule` at index `idx`.
@@ -156,18 +156,18 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> LexerDef<StorageT> {
         self.rules.iter()
     }
 
-    /// Return a lexer for the `String` `s` that will lex relative to this `LexerDef`.
+    /// Return a lexer for the `String` `s` that will lex relative to this `NonStreamingLexerDef`.
     pub fn lexer<'lexer, 'input: 'lexer>(
         &'lexer self,
         s: &'input str
-    ) -> LRLexer<'lexer, 'input, StorageT> {
-        LRLexer::new(self, s)
+    ) -> LRNonStreamingLexer<'lexer, 'input, StorageT> {
+        LRNonStreamingLexer::new(self, s)
     }
 }
 
 /// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
 /// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
-pub struct LRLexer<'lexer, 'input: 'lexer, StorageT> {
+pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
     s: &'input str,
     lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
     newlines: Vec<usize>,
@@ -175,12 +175,12 @@ pub struct LRLexer<'lexer, 'input: 'lexer, StorageT> {
 }
 
 impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
-    LRLexer<'lexer, 'input, StorageT>
+    LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
     fn new(
-        lexerdef: &'lexer LexerDef<StorageT>,
+        lexerdef: &'lexer NonStreamingLexerDef<StorageT>,
         s: &'input str
-    ) -> LRLexer<'lexer, 'input, StorageT> {
+    ) -> LRNonStreamingLexer<'lexer, 'input, StorageT> {
         let mut lexemes = vec![];
         let mut newlines = vec![];
         let mut i = 0;
@@ -226,7 +226,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             }
         }
 
-        LRLexer {
+        LRNonStreamingLexer {
             s,
             lexemes,
             newlines,
@@ -235,13 +235,17 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
     }
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
-    Lexer<'input, StorageT> for LRLexer<'lexer, 'input, StorageT>
+impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
+    for LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
         Box::new(self.lexemes.iter().cloned())
     }
+}
 
+impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
+    NonStreamingLexer<'input, StorageT> for LRNonStreamingLexer<'lexer, 'input, StorageT>
+{
     fn span_str(&self, span: Span) -> &'input str {
         if span.end() > self.s.len() {
             panic!(
@@ -263,7 +267,10 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             );
         }
 
-        fn surrounding_line_off<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
+        fn surrounding_line_off<StorageT>(
+            lexer: &LRNonStreamingLexer<StorageT>,
+            i: usize
+        ) -> (usize, usize) {
             if i > lexer.s.len() {
                 panic!("Offset {} exceeds known input length {}", i, lexer.s.len());
             }
@@ -297,7 +304,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             );
         }
 
-        fn lc_byte<StorageT>(lexer: &LRLexer<StorageT>, i: usize) -> (usize, usize) {
+        fn lc_byte<StorageT>(lexer: &LRNonStreamingLexer<StorageT>, i: usize) -> (usize, usize) {
             if lexer.newlines.is_empty() || i < lexer.newlines[0] {
                 return (1, i);
             }
@@ -314,7 +321,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
         }
 
         fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
-            lexer: &LRLexer<StorageT>,
+            lexer: &LRNonStreamingLexer<StorageT>,
             i: usize
         ) -> (usize, usize) {
             let (line_idx, col_byte) = lc_byte(lexer, i);

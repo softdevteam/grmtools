@@ -35,14 +35,18 @@ impl fmt::Display for LexError {
     }
 }
 
-/// The trait which all lexers which want to interact with `lrpar` must implement.
-pub trait Lexer<'input, StorageT: Hash + PrimInt + Unsigned> {
+/// The base trait which all lexers which want to interact with `lrpar` must implement.
+pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// Iterate over all the lexemes in this lexer. Note that:
     ///   * The lexer may or may not stop after the first [LexError] is encountered.
     ///   * There are no guarantees about whether the lexer caches anything if this method is
     ///     called more than once (i.e. it might be slow to call this more than once).
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a>;
+}
 
+/// A `NonStreamingLexer` is one that takes input in one go, and is then able to hand out
+/// substrings to that input and calculate line and column numbers from a [Span].
+pub trait NonStreamingLexer<'input, StorageT: Hash + PrimInt + Unsigned>: Lexer<StorageT> {
     /// Return the user input associated with a [Span].
     ///
     /// # Panics

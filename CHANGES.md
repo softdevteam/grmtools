@@ -2,14 +2,24 @@
 
 ## Breaking change
 
-* `Lexer` now takes a lifetime `'input` which allows the input to last longer
-  than the `Lexer` itself. `Lexer::span_str` and `Lexer::span_lines_str` have
-  changed from:
+* The `Lexer` trait has been broken into two: `Lexer` and `NonStreamingLexer`.
+  The former trait is now only capable of producing `Lexeme`s: the latter is
+  capable of producing substrings of the input and calculating line/column
+  information. This split allows the flexibility to introduce streaming lexers
+  in the future (which will not be able to produce substrings of the input in
+  the same way as a `NonStreamingLexer`).
+
+  Most users will need to replace references to the `Lexer` trait
+  in their code to `NonStreamingLexer`.
+
+* `NonStreamingLexer` takes a lifetime `'input` which allows the input to last
+  longer than the `NonStreamingLexer` itself. `Lexer::span_str` and
+  `Lexer::span_lines_str` had the following definitions:
     ```rustc
     fn span_str(&self, span: Span) -> &str;
     fn span_lines_str(&self, span: Span) -> &str;
     ```
-  to:
+  As part of `NonStreamingLexer` their definitions are now:
     ```rustc
     fn span_str(&self, span: Span) -> &'input str;
     fn span_lines_str(&self, span: Span) -> &'input str;
@@ -22,8 +32,8 @@
     ```
     error[E0106]: missing lifetime specifier
     ```
-  then it is likely that you need to change a type from `Lexer` to
-  `Lexer<'input>`.
+  then it is likely that you need to change a type from `NonStreamingLexer` to
+  `NonStreamingLexer<'input>`.
 
 
 # grmtools 0.6.2 (2020-03-22)

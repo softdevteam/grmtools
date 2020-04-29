@@ -183,7 +183,7 @@ mod cpctplus;
 pub mod ctbuilder;
 #[doc(hidden)]
 pub mod lex;
-pub use crate::lex::{LexError, Lexeme, Lexer};
+pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer};
 mod panic;
 #[doc(hidden)]
 pub mod parser;

@@ -4,7 +4,7 @@ use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
 use crate::{
-    lexer::{LexerDef, Rule},
+    lexer::{NonStreamingLexerDef, Rule},
     LexBuildError, LexBuildResult, LexErrorKind
 };
 
@@ -164,8 +164,8 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
 
 pub fn parse_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>(
     s: &str
-) -> LexBuildResult<LexerDef<StorageT>> {
-    LexParser::new(s.to_string()).map(|p| LexerDef::new(p.rules))
+) -> LexBuildResult<NonStreamingLexerDef<StorageT>> {
+    LexParser::new(s.to_string()).map(|p| NonStreamingLexerDef::new(p.rules))
 }
 
 #[cfg(test)]
