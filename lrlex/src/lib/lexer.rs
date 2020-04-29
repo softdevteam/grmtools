@@ -45,8 +45,8 @@ impl<StorageT> Rule<StorageT> {
     }
 }
 
-/// This struct represents, in essence, a .l file in memory. From it one can produce a `NonStreamingLexer`
-/// which actually lexes inputs.
+/// This struct represents, in essence, a .l file in memory. From it one can produce an
+/// [LRNonStreamingLexer] which actually lexes inputs.
 pub struct NonStreamingLexerDef<StorageT> {
     pub(crate) rules: Vec<Rule<StorageT>>
 }
@@ -156,7 +156,8 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<Stora
         self.rules.iter()
     }
 
-    /// Return a lexer for the `String` `s` that will lex relative to this `NonStreamingLexerDef`.
+    /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
+    /// [NonStreamingLexerDef].
     pub fn lexer<'lexer, 'input: 'lexer>(
         &'lexer self,
         s: &'input str
@@ -165,8 +166,9 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<Stora
     }
 }
 
-/// A lexer holds a reference to a string and can lex it into `Lexeme`s. Although the struct is
-/// tied to a single string, no guarantees are made about whether the lexemes are cached or not.
+/// An `LRNonStreamingLexer` holds a reference to a string and can lex it into [lrpar::Lexeme]s.
+/// Although the struct is tied to a single string, no guarantees are made about whether the
+/// lexemes are cached or not.
 pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
     s: &'input str,
     lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,

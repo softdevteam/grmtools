@@ -1,3 +1,10 @@
+//! `lrlex` is a partial replacement for [`lex`](http://dinosaur.compilertools.net/lex/index.html)
+//! / [`flex`](https://westes.github.io/flex/manual/). It takes in a `.l` file and statically
+//! compiles it to Rust code. The resulting [NonStreamingLexerDef] can then be given an input
+//! string, from which it instantiates an [LRNonStreamingLexer]. This provides an iterator which
+//! can produce the sequence of [lrpar::Lexeme]s for that input, as well as answer basic queries
+//! about [lrpar::Span]s (e.g. extracting substrings, calculating line and column numbers).
+
 #![allow(clippy::new_without_default)]
 #![allow(clippy::type_complexity)]
 
@@ -13,7 +20,7 @@ mod parser;
 use crate::parser::parse_lex;
 pub use crate::{
     builder::LexerBuilder,
-    lexer::{NonStreamingLexerDef, Rule}
+    lexer::{LRNonStreamingLexer, NonStreamingLexerDef, Rule}
 };
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
