@@ -1,6 +1,8 @@
 use lrlex::lrlex_mod;
 use lrpar::lrpar_mod;
 #[cfg(test)]
+use lrpar::Lexer;
+#[cfg(test)]
 use lrpar::Span;
 
 lrlex_mod!("calc_multitypes.l");
@@ -11,6 +13,9 @@ lrpar_mod!("calc_actiontype.y");
 
 lrlex_mod!("calc_noactions.l");
 lrpar_mod!("calc_noactions.y");
+
+lrlex_mod!("lexer_lifetime.l");
+lrpar_mod!("lexer_lifetime.y");
 
 lrlex_mod!("multitypes.l");
 lrpar_mod!("multitypes.y");
@@ -95,6 +100,35 @@ fn test_calc_multitypes() {
     let lexer = lexerdef.lexer("1++2");
     let (res, _errs) = calc_multitypes_y::parse(&lexer);
     assert_eq!(res, Some(Ok(3)));
+}
+
+#[test]
+fn test_input_lifetime() {
+    // This test only exists to make sure that this code compiles: there's no need for us to
+    // actually run anything.
+    let lexerdef = lexer_lifetime_l::lexerdef();
+    let input = "a";
+    let _ = {
+        let lexer = lexerdef.lexer(&input);
+        let lx = lexer.iter().next().unwrap().unwrap();
+        lexer.span_str(lx.span())
+    };
+}
+
+#[test]
+fn test_lexer_lifetime() {
+    // This test only exists to make sure that this code compiles: there's no need for us to
+    // actually run anything.
+
+    pub fn parse_data<'a>(input: &'a str) -> Option<&'a str> {
+        let lexer_def = crate::lexer_lifetime_l::lexerdef();
+        let l = lexer_def.lexer(input);
+        match crate::lexer_lifetime_y::parse(&l) {
+            (Option::Some(x), _) => Some(x),
+            _ => None
+        }
+    }
+    parse_data("abc");
 }
 
 #[test]
