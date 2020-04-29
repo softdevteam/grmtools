@@ -39,8 +39,8 @@ impl fmt::Display for LexError {
 pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
     /// Iterate over all the lexemes in this lexer. Note that:
     ///   * The lexer may or may not stop after the first [LexError] is encountered.
-    ///   * There are no guarantees about whether the lexer caches anything if this method is
-    ///     called more than once (i.e. it might be slow to call this more than once).
+    ///   * There are no guarantees about what happens if this function is called more than once.
+    ///     For example, a streaming lexer may only produce [Lexeme]s on the first call.
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a>;
 }
 
