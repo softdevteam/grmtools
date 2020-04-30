@@ -1,4 +1,4 @@
-# grmtools 0.7.0 (2020-XX-XX)
+# grmtools 0.7.0 (2020-04-30)
 
 ## Breaking change
 
