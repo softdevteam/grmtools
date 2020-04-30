@@ -14,7 +14,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned, Zero};
 
 use crate::{
     cpctplus,
-    lex::{LexError, Lexeme, Lexer},
+    lex::{LexError, Lexeme, NonStreamingLexer},
     mf, panic, Span
 };
 
@@ -71,7 +71,7 @@ pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
 pub(crate) type ActionFn<'a, 'b, 'input, StorageT, ActionT> = &'a dyn Fn(
     RIdx<StorageT>,
-    &'b dyn Lexer<'input, StorageT>,
+    &'b dyn NonStreamingLexer<'input, StorageT>,
     Span,
     vec::Drain<AStackType<ActionT, StorageT>>
 ) -> ActionT;
@@ -88,8 +88,8 @@ pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT
     pub(crate) token_cost: Box<TokenCostFn<'a, StorageT>>,
     pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: &'b dyn Lexer<'input, StorageT>,
-    // In the long term, we should remove the `lexemes` field entirely, as the `Lexer` API is
+    pub(crate) lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
+    // In the long term, we should remove the `lexemes` field entirely, as the `NonStreamingLexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
     actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>]
@@ -107,7 +107,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &'b dyn Lexer<'input, StorageT>,
+        lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
@@ -135,7 +135,7 @@ where
 
     fn generic_ptree(
         ridx: RIdx<StorageT>,
-        _lexer: &dyn Lexer<StorageT>,
+        _lexer: &dyn NonStreamingLexer<StorageT>,
         _span: Span,
         astack: vec::Drain<AStackType<Node<StorageT>, StorageT>>
     ) -> Node<StorageT> {
@@ -162,7 +162,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
-        lexer: &'b dyn Lexer<'input, StorageT>,
+        lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>
     ) -> Vec<LexParseError<StorageT>> {
         for tidx in grm.iter_tidxs() {
@@ -190,7 +190,7 @@ where
 
     fn noaction(
         _ridx: RIdx<StorageT>,
-        _lexer: &dyn Lexer<StorageT>,
+        _lexer: &dyn NonStreamingLexer<StorageT>,
         _span: Span,
         _astack: vec::Drain<AStackType<(), StorageT>>
     ) {
@@ -214,7 +214,7 @@ where
         token_cost: TokenCostFn<'a, StorageT>,
         sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
-        lexer: &'b dyn Lexer<'input, StorageT>,
+        lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
         actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
@@ -609,7 +609,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> LexParseError<StorageT> {
     /// though you will have to wrap it in a closure e.g. `&|t| grm.token_epp(t)`.
     pub fn pp<'a>(
         &self,
-        lexer: &dyn Lexer<StorageT>,
+        lexer: &dyn NonStreamingLexer<StorageT>,
         epp: &dyn Fn(TIdx<StorageT>) -> Option<&'a str>
     ) -> String {
         match self {
@@ -724,7 +724,7 @@ where
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_generictree(
         &self,
-        lexer: &dyn Lexer<StorageT>
+        lexer: &dyn NonStreamingLexer<StorageT>
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
@@ -746,7 +746,10 @@ where
 
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_noaction(&self, lexer: &dyn Lexer<StorageT>) -> Vec<LexParseError<StorageT>> {
+    pub fn parse_noaction(
+        &self,
+        lexer: &dyn NonStreamingLexer<StorageT>
+    ) -> Vec<LexParseError<StorageT>> {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
             match e {
@@ -773,7 +776,7 @@ where
     /// be a mix of lexing and parsing errors.
     pub fn parse_actions<'b: 'a, 'input: 'b, ActionT: 'a>(
         &self,
-        lexer: &'b dyn Lexer<'input, StorageT>,
+        lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>]
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
@@ -852,7 +855,10 @@ pub(crate) mod test {
     use regex::Regex;
 
     use super::*;
-    use crate::{lex::Lexeme, Span};
+    use crate::{
+        lex::{Lexeme, Lexer},
+        Span
+    };
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,
@@ -920,11 +926,15 @@ pub(crate) mod test {
         lexemes: Vec<Lexeme<StorageT>>
     }
 
-    impl<'input, StorageT: Hash + PrimInt + Unsigned> Lexer<'input, StorageT> for SmallLexer<StorageT> {
+    impl<StorageT: Hash + PrimInt + Unsigned> Lexer<StorageT> for SmallLexer<StorageT> {
         fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
+    }
 
+    impl<'input, StorageT: Hash + PrimInt + Unsigned> NonStreamingLexer<'input, StorageT>
+        for SmallLexer<StorageT>
+    {
         fn span_str(&self, _: Span) -> &'input str {
             unreachable!();
         }

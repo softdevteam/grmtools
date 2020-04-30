@@ -7,7 +7,7 @@ use std::{
     process
 };
 
-use lrlex::{build_lex, LexerDef};
+use lrlex::{build_lex, NonStreamingLexerDef};
 use lrpar::Lexer;
 
 fn usage(prog: &str, msg: &str) {
@@ -52,10 +52,11 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let lexerdef: LexerDef<usize> = build_lex(&read_file(lex_l_path)).unwrap_or_else(|s| {
-        writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
-        process::exit(1);
-    });
+    let lexerdef: NonStreamingLexerDef<usize> =
+        build_lex(&read_file(lex_l_path)).unwrap_or_else(|s| {
+            writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
+            process::exit(1);
+        });
     let input = &read_file(&matches.free[1]);
     for r in lexerdef.lexer(input).iter() {
         match r {

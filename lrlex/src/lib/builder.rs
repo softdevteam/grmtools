@@ -18,7 +18,7 @@ use regex::Regex;
 use try_from::TryFrom;
 use typename::TypeName;
 
-use crate::{lexer::LexerDef, parser::parse_lex};
+use crate::{lexer::NonStreamingLexerDef, parser::parse_lex};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -246,14 +246,14 @@ where
     }
 }
 
-impl<StorageT: Copy + Debug + Eq + TypeName> LexerDef<StorageT> {
+impl<StorageT: Copy + Debug + Eq + TypeName> NonStreamingLexerDef<StorageT> {
     pub(crate) fn rust_pp(&self, outs: &mut String) {
         // Header
         outs.push_str(&format!(
-            "use lrlex::{{LexerDef, Rule}};
+            "use lrlex::{{NonStreamingLexerDef, Rule}};
 
 #[allow(dead_code)]
-pub fn lexerdef() -> LexerDef<{}> {{
+pub fn lexerdef() -> NonStreamingLexerDef<{}> {{
     let rules = vec![",
             StorageT::type_name()
         ));
@@ -281,7 +281,7 @@ Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
         outs.push_str(
             "
 ];
-    LexerDef::new(rules)
+    NonStreamingLexerDef::new(rules)
 }
 "
         );

@@ -1,9 +1,9 @@
 use lrlex::lrlex_mod;
 use lrpar::lrpar_mod;
 #[cfg(test)]
-use lrpar::Lexer;
-#[cfg(test)]
 use lrpar::Span;
+#[cfg(test)]
+use lrpar::{Lexer, NonStreamingLexer};
 
 lrlex_mod!("calc_multitypes.l");
 lrpar_mod!("calc_multitypes.y");
