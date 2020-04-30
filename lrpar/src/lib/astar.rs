@@ -93,7 +93,7 @@ where
     // Free up all memory except for the cost todo that contains the first success node.
     let mut scs_todo = todo
         .drain(usize::from(c)..usize::from(c) + 1)
-        .nth(0)
+        .next()
         .unwrap();
     while !scs_todo.is_empty() {
         let n = scs_todo.pop().unwrap().1;
@@ -185,7 +185,7 @@ where
 
     let mut scs_todo = todo
         .drain(usize::from(c)..usize::from(c) + 1)
-        .nth(0)
+        .next()
         .unwrap();
     while !scs_todo.is_empty() {
         let n = scs_todo.pop().unwrap().1;
