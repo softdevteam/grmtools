@@ -1,6 +1,7 @@
 //! Build grammars at compile-time so that they can be statically included into a binary.
 
 use std::{
+    any::type_name,
     collections::HashMap,
     convert::AsRef,
     env::{current_dir, var},
@@ -24,7 +25,6 @@ use lrtable::{from_yacc, statetable::Conflicts, Minimiser, StateGraph, StateTabl
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use typename::TypeName;
 
 use crate::RecoveryKind;
 
@@ -51,7 +51,7 @@ struct CTConflictsError<StorageT: Eq + Hash> {
 
 impl<StorageT> fmt::Display for CTConflictsError<StorageT>
 where
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
@@ -68,7 +68,7 @@ where
 
 impl<StorageT> fmt::Debug for CTConflictsError<StorageT>
 where
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
@@ -85,7 +85,7 @@ where
 
 impl<StorageT> Error for CTConflictsError<StorageT>
 where
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
@@ -129,7 +129,7 @@ impl<'a> CTParserBuilder<'a, u32> {
 
 impl<'a, StorageT> CTParserBuilder<'a, StorageT>
 where
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + TypeName + Unsigned,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>
 {
@@ -464,7 +464,7 @@ where
     pub fn parse<'lexer, 'input: 'lexer>(lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>)
           -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
-                    storaget = StorageT::type_name(),
+                    storaget = type_name::<StorageT>(),
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap()
                 ));
             }
@@ -476,7 +476,7 @@ where
           -> (::std::option::Option<::lrpar::Node<{storaget}>>,
               ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
-                    storaget = StorageT::type_name()
+                    storaget = type_name::<StorageT>()
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
@@ -486,7 +486,7 @@ where
     pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{storaget}>)
           -> ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>
     {{",
-                    storaget = StorageT::type_name()
+                    storaget = type_name::<StorageT>()
                 ));
             }
             YaccKind::Eco => unreachable!()
@@ -527,7 +527,7 @@ where
                        ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
                     -> {actionskind}<'input>> = ::std::vec::Vec::new();\n",
                     actionskind = ACTIONS_KIND,
-                    storaget = StorageT::type_name()
+                    storaget = type_name::<StorageT>()
                 ));
                 for pidx in grm.iter_pidxs() {
                     outs.push_str(&format!(
@@ -583,7 +583,7 @@ where
                 outs.push_str(&format!(
                     "    #[allow(dead_code)]\n    pub const R_{}: {} = {:?};\n",
                     grm.rule_name(ridx).to_ascii_uppercase(),
-                    StorageT::type_name(),
+                    type_name::<StorageT>(),
                     usize::from(ridx)
                 ));
             }
@@ -609,7 +609,7 @@ where
         {prefix}EPP[usize::from(tidx)]
     }}",
             tidxs.join(", "),
-            storaget = StorageT::type_name(),
+            storaget = type_name::<StorageT>(),
             prefix = GLOBAL_PREFIX
         )
     }
@@ -633,7 +633,7 @@ where
                       mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
                    -> {actionskind}<'input> {{",
                 usize::from(pidx),
-                storaget = StorageT::type_name(),
+                storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
                 actionskind = ACTIONS_KIND,
             ));
@@ -766,7 +766,7 @@ where
                     Symbol::Rule(ref_ridx) => grm.actiontype(ref_ridx).as_ref().unwrap().clone(),
                     Symbol::Token(_) => format!(
                         "::std::result::Result<::lrpar::Lexeme<{storaget}>, ::lrpar::Lexeme<{storaget}>>",
-                        storaget = StorageT::type_name()
+                        storaget = type_name::<StorageT>()
                     )
                 };
                 args.push(format!("mut {}arg_{}: {}", ACTION_PREFIX, i + 1, argt));
@@ -792,7 +792,7 @@ where
                      {args}) {returnt} {{\n",
                 usize::from(pidx),
                 rulename = grm.rule_name(grm.prod_to_rule(pidx)),
-                storaget = StorageT::type_name(),
+                storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
                 returnt = returnt,
                 args = args.join(",\n                     ")
