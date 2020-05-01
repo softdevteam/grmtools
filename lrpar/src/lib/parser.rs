@@ -305,7 +305,7 @@ where
                 Action::Accept => {
                     debug_assert_eq!(la_tidx, self.grm.eof_token_idx());
                     debug_assert_eq!(astack.len(), 1);
-                    match astack.drain(..).nth(0).unwrap() {
+                    match astack.drain(..).next().unwrap() {
                         AStackType::ActionType(v) => return Some(v),
                         _ => unreachable!()
                     }

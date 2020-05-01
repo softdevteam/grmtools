@@ -73,9 +73,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<Stora
 
     /// Get the `Rule` instance associated with a particular name.
     pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
-        self.rules
-            .iter()
-            .find(|r| r.name.as_ref().map(String::as_str) == Some(n))
+        self.rules.iter().find(|r| r.name.as_deref() == Some(n))
     }
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
@@ -380,7 +378,7 @@ mod test {
         "
         .to_string();
         let lexerdef = parse_lex::<u8>(&src).unwrap();
-        match lexerdef.lexer(&"abc").iter().nth(0).unwrap() {
+        match lexerdef.lexer(&"abc").iter().next().unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(e) => {
                 if e.span().start() != 0 || e.span().end() != 0 {
@@ -540,7 +538,7 @@ if 'IF'
             (Some(missing_from_lexer), Some(missing_from_parser))
         );
 
-        match lexerdef.lexer(&" a ").iter().nth(0).unwrap() {
+        match lexerdef.lexer(&" a ").iter().next().unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(e) => {
                 if e.span().start() != 1 || e.span().end() != 1 {

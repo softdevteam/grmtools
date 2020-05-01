@@ -426,7 +426,7 @@ impl YaccParser {
     fn parse_to_eol(&mut self, i: usize) -> YaccResult<(usize, String)> {
         let mut j = i;
         while j < self.src.len() {
-            let c = self.src[j..].chars().nth(0).unwrap();
+            let c = self.src[j..].chars().next().unwrap();
             match c {
                 '\n' | '\r' => break,
                 _ => j += c.len_utf8()
@@ -440,11 +440,11 @@ impl YaccParser {
     fn parse_to_single_colon(&mut self, i: usize) -> YaccResult<(usize, String)> {
         let mut j = i;
         while j < self.src.len() {
-            let c = self.src[j..].chars().nth(0).unwrap();
+            let c = self.src[j..].chars().next().unwrap();
             match c {
                 ':' => {
                     let k = j + ':'.len_utf8();
-                    if k == self.src.len() || self.src[k..].chars().nth(0).unwrap() != ':' {
+                    if k == self.src.len() || self.src[k..].chars().next().unwrap() != ':' {
                         return Ok((j, self.src[i..j].to_string()));
                     }
                     j += 2 * ':'.len_utf8();
@@ -478,7 +478,7 @@ impl YaccParser {
         i += 1;
         let mut j = i;
         while j < self.src.len() {
-            let c = self.src[j..].chars().nth(0).unwrap();
+            let c = self.src[j..].chars().next().unwrap();
             match c {
                 '\n' | '\r' => {
                     return Err(self.mk_error(YaccParserErrorKind::InvalidString, j));
@@ -489,7 +489,7 @@ impl YaccParser {
                 }
                 '\\' => {
                     debug_assert!('\\'.len_utf8() == 1);
-                    match self.src[j + 1..].chars().nth(0).unwrap() {
+                    match self.src[j + 1..].chars().next().unwrap() {
                         '\'' | '"' => {
                             s.push_str(&self.src[i..j]);
                             i = j + 1;
@@ -510,7 +510,7 @@ impl YaccParser {
     /// newline is encountered; otherwise newlines are consumed and skipped.
     fn parse_ws(&mut self, mut i: usize, inc_newlines: bool) -> YaccResult<usize> {
         while i < self.src.len() {
-            let c = self.src[i..].chars().nth(0).unwrap();
+            let c = self.src[i..].chars().next().unwrap();
             match c {
                 ' ' | '\t' => i += c.len_utf8(),
                 '\n' | '\r' => {
@@ -525,7 +525,7 @@ impl YaccParser {
                         break;
                     } else {
                         let j = i + c.len_utf8();
-                        let c = self.src[j..].chars().nth(0).unwrap();
+                        let c = self.src[j..].chars().next().unwrap();
                         match c {
                             '/' => {
                                 i = j + c.len_utf8();
@@ -543,7 +543,7 @@ impl YaccParser {
                                 let mut k = j + c.len_utf8();
                                 let mut found = false;
                                 while k < self.src.len() {
-                                    let c = self.src[k..].chars().nth(0).unwrap();
+                                    let c = self.src[k..].chars().next().unwrap();
                                     k += c.len_utf8();
                                     match c {
                                         '\n' | '\r' => {
@@ -557,7 +557,7 @@ impl YaccParser {
                                         _ => continue
                                     }
                                     if k < self.src.len() {
-                                        let c = self.src[k..].chars().nth(0).unwrap();
+                                        let c = self.src[k..].chars().next().unwrap();
                                         if c == '/' {
                                             i = k + c.len_utf8();
                                             found = true;

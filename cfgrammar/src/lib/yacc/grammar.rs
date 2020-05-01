@@ -450,9 +450,7 @@ where
     /// Return the name of token `tidx` (where `None` indicates "the rule has no name"). Panics if
     /// `tidx` doesn't exist.
     pub fn token_name(&self, tidx: TIdx<StorageT>) -> Option<&str> {
-        self.token_names[usize::from(tidx)]
-            .as_ref()
-            .map(|x| x.as_str())
+        self.token_names[usize::from(tidx)].as_deref()
     }
 
     /// Return the precedence of token `tidx` (where `None` indicates "no precedence specified").
@@ -464,9 +462,7 @@ where
     /// Return the %epp entry for token `tidx` (where `None` indicates "the token has no
     /// pretty-printed value"). Panics if `tidx` doesn't exist.
     pub fn token_epp(&self, tidx: TIdx<StorageT>) -> Option<&str> {
-        self.token_epp[usize::from(tidx)]
-            .as_ref()
-            .map(|x| x.as_str())
+        self.token_epp[usize::from(tidx)].as_deref()
     }
 
     /// Get the action for production `pidx`. Panics if `pidx` doesn't exist.
