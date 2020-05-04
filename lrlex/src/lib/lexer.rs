@@ -378,7 +378,6 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::parser::parse_lex;
     use std::collections::HashMap;
 
     #[test]
@@ -390,7 +389,7 @@ mod test {
 [ \t] ;
         "
         .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("int", 0);
         map.insert("id", 1);
@@ -419,7 +418,7 @@ mod test {
 [0-9]+ 'int'
         "
         .to_string();
-        let lexerdef = parse_lex::<u8>(&src).unwrap();
+        let lexerdef = LRNonStreamingLexerDef::<u8>::from_str(&src).unwrap();
         match lexerdef.lexer(&"abc").iter().next().unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(e) => {
@@ -437,7 +436,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ ] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("IF", 0);
         map.insert("ID", 1);
@@ -465,7 +464,7 @@ if 'IF'
 [a❤]+ 'ID'
 [ ] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -493,7 +492,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -529,7 +528,7 @@ if 'IF'
 [a-z❤]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -552,7 +551,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -568,7 +567,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("INT", 0u8);
         let mut missing_from_lexer = HashSet::new();
@@ -596,7 +595,7 @@ if 'IF'
 '.*' 'STR'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("STR", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
