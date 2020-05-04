@@ -1,6 +1,15 @@
+# grmtools 0.7.1 (20xx-xx-xx)
+
+* `lrlex::NonStreamingLexerDef` has been renamed to
+  `lrlex::LRNonStreamingLexerDef`; use of the former is deprecated.
+
+* The `lrlex::build_lex` function has been deprecated in favour of
+  `LRNonStreamingLexerDef::from_str`.
+
+
 # grmtools 0.7.0 (2020-04-30)
 
-## Breaking change
+## Breaking changes
 
 * The `Lexer` trait has been broken into two: `Lexer` and `NonStreamingLexer`.
   The former trait is now only capable of producing `Lexeme`s: the latter is

@@ -7,8 +7,11 @@ use std::{
 
 use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
+use try_from::TryFrom;
 
 use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span};
+
+use crate::{parser::LexParser, LexBuildResult};
 
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -47,13 +50,19 @@ impl<StorageT> Rule<StorageT> {
 
 /// This struct represents, in essence, a .l file in memory. From it one can produce an
 /// [LRNonStreamingLexer] which actually lexes inputs.
-pub struct NonStreamingLexerDef<StorageT> {
+pub struct LRNonStreamingLexerDef<StorageT> {
     pub(crate) rules: Vec<Rule<StorageT>>
 }
 
-impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<StorageT> {
-    pub fn new(rules: Vec<Rule<StorageT>>) -> NonStreamingLexerDef<StorageT> {
-        NonStreamingLexerDef { rules }
+impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
+    LRNonStreamingLexerDef<StorageT>
+{
+    pub fn from_rules(rules: Vec<Rule<StorageT>>) -> LRNonStreamingLexerDef<StorageT> {
+        LRNonStreamingLexerDef { rules }
+    }
+
+    pub fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<StorageT>> {
+        LexParser::new(s.to_string()).map(|p| LRNonStreamingLexerDef { rules: p.rules })
     }
 
     /// Get the `Rule` at index `idx`.
@@ -155,7 +164,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<Stora
     }
 
     /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
-    /// [NonStreamingLexerDef].
+    /// [LRNonStreamingLexerDef].
     pub fn lexer<'lexer, 'input: 'lexer>(
         &'lexer self,
         s: &'input str
@@ -174,11 +183,11 @@ pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
     phantom: PhantomData<&'lexer ()>
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
+impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
     LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
     fn new(
-        lexerdef: &'lexer NonStreamingLexerDef<StorageT>,
+        lexerdef: &'lexer LRNonStreamingLexerDef<StorageT>,
         s: &'input str
     ) -> LRNonStreamingLexer<'lexer, 'input, StorageT> {
         let mut lexemes = vec![];

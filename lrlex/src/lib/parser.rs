@@ -4,18 +4,18 @@ use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
 use crate::{
-    lexer::{NonStreamingLexerDef, Rule},
+    lexer::{LRNonStreamingLexerDef, Rule},
     LexBuildError, LexBuildResult, LexErrorKind
 };
 
 pub struct LexParser<StorageT> {
     src: String,
     newlines: Vec<usize>,
-    rules: Vec<Rule<StorageT>>
+    pub(crate) rules: Vec<Rule<StorageT>>
 }
 
 impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
-    fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
+    pub(crate) fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
         let mut p = LexParser {
             src,
             newlines: vec![0],
@@ -164,8 +164,8 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
 
 pub fn parse_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>(
     s: &str
-) -> LexBuildResult<NonStreamingLexerDef<StorageT>> {
-    LexParser::new(s.to_string()).map(|p| NonStreamingLexerDef::new(p.rules))
+) -> LexBuildResult<LRNonStreamingLexerDef<StorageT>> {
+    LRNonStreamingLexerDef::from_str(s)
 }
 
 #[cfg(test)]
