@@ -1,6 +1,7 @@
 //! Build grammars at run-time.
 
 use std::{
+    any::type_name,
     collections::{HashMap, HashSet},
     convert::AsRef,
     env::{current_dir, var},
@@ -16,7 +17,6 @@ use lazy_static::lazy_static;
 use num_traits::{PrimInt, Unsigned};
 use regex::Regex;
 use try_from::TryFrom;
-use typename::TypeName;
 
 use crate::{lexer::NonStreamingLexerDef, parser::parse_lex};
 
@@ -37,7 +37,7 @@ pub struct LexerBuilder<'a, StorageT = u32> {
 
 impl<'a, StorageT> LexerBuilder<'a, StorageT>
 where
-    StorageT: Copy + Debug + Eq + Hash + PrimInt + TryFrom<usize> + TypeName + Unsigned
+    StorageT: Copy + Debug + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned
 {
     /// Create a new `LexerBuilder`.
     ///
@@ -207,7 +207,7 @@ where
                     outs.push_str(&format!(
                         "#[allow(dead_code)]\npub const T_{}: {} = {:?};\n",
                         n.to_ascii_uppercase(),
-                        StorageT::type_name(),
+                        type_name::<StorageT>(),
                         *id
                     ));
                 }
@@ -246,7 +246,7 @@ where
     }
 }
 
-impl<StorageT: Copy + Debug + Eq + TypeName> NonStreamingLexerDef<StorageT> {
+impl<StorageT: Copy + Debug + Eq> NonStreamingLexerDef<StorageT> {
     pub(crate) fn rust_pp(&self, outs: &mut String) {
         // Header
         outs.push_str(&format!(
@@ -255,7 +255,7 @@ impl<StorageT: Copy + Debug + Eq + TypeName> NonStreamingLexerDef<StorageT> {
 #[allow(dead_code)]
 pub fn lexerdef() -> NonStreamingLexerDef<{}> {{
     let rules = vec![",
-            StorageT::type_name()
+            type_name::<StorageT>()
         ));
 
         // Individual rules
