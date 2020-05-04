@@ -4,7 +4,7 @@ use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
 use crate::{
-    lexer::{LRNonStreamingLexerDef, Rule},
+    lexer::{LRNonStreamingLexerDef, LexerDef, Rule},
     LexBuildError, LexBuildResult, LexErrorKind
 };
 

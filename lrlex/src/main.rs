@@ -7,7 +7,7 @@ use std::{
     process
 };
 
-use lrlex::LRNonStreamingLexerDef;
+use lrlex::{LRNonStreamingLexerDef, LexerDef};
 use lrpar::Lexer;
 
 fn usage(prog: &str, msg: &str) {

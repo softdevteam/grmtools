@@ -8,7 +8,7 @@ use std::{
 
 use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
 use getopts::Options;
-use lrlex::LRNonStreamingLexerDef;
+use lrlex::{LRNonStreamingLexerDef, LexerDef};
 use lrpar::parser::{RTParserBuilder, RecoveryKind};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;

@@ -13,6 +13,7 @@ use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span};
 
 use crate::{parser::LexParser, LexBuildResult};
 
+#[doc(hidden)]
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
     /// rules a guaranteed unique value, though that value can be overridden by clients who need to
@@ -48,42 +49,29 @@ impl<StorageT> Rule<StorageT> {
     }
 }
 
-/// This struct represents, in essence, a .l file in memory. From it one can produce an
-/// [LRNonStreamingLexer] which actually lexes inputs.
-pub struct LRNonStreamingLexerDef<StorageT> {
-    pub(crate) rules: Vec<Rule<StorageT>>
-}
+/// Methods which all lexer definitions must implement.
+pub trait LexerDef<StorageT> {
+    #[doc(hidden)]
+    /// Instantiate a lexer from a set of `Rule`s. This is only intended to be used by compiled
+    /// lexers (see `builder.rs`).
+    fn from_rules(rules: Vec<Rule<StorageT>>) -> Self
+    where
+        Self: Sized;
 
-impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
-    LRNonStreamingLexerDef<StorageT>
-{
-    pub fn from_rules(rules: Vec<Rule<StorageT>>) -> LRNonStreamingLexerDef<StorageT> {
-        LRNonStreamingLexerDef { rules }
-    }
-
-    pub fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<StorageT>> {
-        LexParser::new(s.to_string()).map(|p| LRNonStreamingLexerDef { rules: p.rules })
-    }
+    /// Instantiate a lexer from a string (e.g. representing a `.l` file).
+    fn from_str(s: &str) -> LexBuildResult<Self>
+    where
+        Self: Sized;
 
     /// Get the `Rule` at index `idx`.
-    pub fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
-        self.rules.get(idx)
-    }
+    fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>>;
 
     /// Get the `Rule` instance associated with a particular lexeme ID. Panics if no such rule
     /// exists.
-    pub fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
-        &self
-            .rules
-            .iter()
-            .find(|r| r.tok_id == Some(tok_id))
-            .unwrap()
-    }
+    fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT>;
 
     /// Get the `Rule` instance associated with a particular name.
-    pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
-        self.rules.iter().find(|r| r.name.as_deref() == Some(n))
-    }
+    fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>>;
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
     /// to synchronise a parser's notion of lexeme IDs with the lexers. While doing this, it keeps
@@ -100,7 +88,49 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
     /// benign: some lexers deliberately define tokens which are not used (e.g. reserving future
     /// keywords). A non-empty set #2 is more likely to be an error since there are parts of the
     /// grammar where nothing the user can input will be parseable.
-    pub fn set_rule_ids<'a>(
+    fn set_rule_ids<'a>(
+        &'a mut self,
+        rule_ids_map: &HashMap<&'a str, StorageT>
+    ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>);
+
+    /// Returns an iterator over all rules in this AST.
+    fn iter_rules(&self) -> Iter<Rule<StorageT>>;
+}
+
+/// This struct represents, in essence, a .l file in memory. From it one can produce an
+/// [LRNonStreamingLexer] which actually lexes inputs.
+pub struct LRNonStreamingLexerDef<StorageT> {
+    pub(crate) rules: Vec<Rule<StorageT>>
+}
+
+impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<StorageT>
+    for LRNonStreamingLexerDef<StorageT>
+{
+    fn from_rules(rules: Vec<Rule<StorageT>>) -> LRNonStreamingLexerDef<StorageT> {
+        LRNonStreamingLexerDef { rules }
+    }
+
+    fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<StorageT>> {
+        LexParser::new(s.to_string()).map(|p| LRNonStreamingLexerDef { rules: p.rules })
+    }
+
+    fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
+        self.rules.get(idx)
+    }
+
+    fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
+        &self
+            .rules
+            .iter()
+            .find(|r| r.tok_id == Some(tok_id))
+            .unwrap()
+    }
+
+    fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
+        self.rules.iter().find(|r| r.name.as_deref() == Some(n))
+    }
+
+    fn set_rule_ids<'a>(
         &'a mut self,
         rule_ids_map: &HashMap<&'a str, StorageT>
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
@@ -158,11 +188,14 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
         (missing_from_lexer, missing_from_parser)
     }
 
-    /// Returns an iterator over all rules in this AST.
-    pub fn iter_rules(&self) -> Iter<Rule<StorageT>> {
+    fn iter_rules(&self) -> Iter<Rule<StorageT>> {
         self.rules.iter()
     }
+}
 
+impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
+    LRNonStreamingLexerDef<StorageT>
+{
     /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
     /// [LRNonStreamingLexerDef].
     pub fn lexer<'lexer, 'input: 'lexer>(

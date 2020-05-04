@@ -1,4 +1,12 @@
-# grmtools 0.7.1 (20xx-xx-xx)
+# grmtools 0.8.0 (20xx-xx-xx)
+
+## Breaking changes
+
+* `lrlex` now uses a `LexerDef` which all lexer definitions must `impl`. This
+  means that if you want to call methods on a concrete lexer definition, you
+  will almost certainly need to import `lrlex::LexerDef`.
+
+## Deprecations
 
 * `lrlex::NonStreamingLexerDef` has been renamed to
   `lrlex::LRNonStreamingLexerDef`; use of the former is deprecated.

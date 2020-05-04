@@ -18,7 +18,10 @@ use num_traits::{PrimInt, Unsigned};
 use regex::Regex;
 use try_from::TryFrom;
 
-use crate::{lexer::LRNonStreamingLexerDef, parser::parse_lex};
+use crate::{
+    lexer::{LRNonStreamingLexerDef, LexerDef},
+    parser::parse_lex
+};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -250,7 +253,7 @@ impl<StorageT: Copy + Debug + Eq> LRNonStreamingLexerDef<StorageT> {
     pub(crate) fn rust_pp(&self, outs: &mut String) {
         // Header
         outs.push_str(&format!(
-            "use lrlex::{{LRNonStreamingLexerDef, Rule}};
+            "use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule}};
 
 #[allow(dead_code)]
 pub fn lexerdef() -> LRNonStreamingLexerDef<{}> {{
