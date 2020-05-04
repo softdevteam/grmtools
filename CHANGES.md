@@ -4,7 +4,9 @@
 
 * `lrlex` now uses a `LexerDef` which all lexer definitions must `impl`. This
   means that if you want to call methods on a concrete lexer definition, you
-  will almost certainly need to import `lrlex::LexerDef`.
+  will almost certainly need to import `lrlex::LexerDef`. This opens the
+  possibility that lrlex can seamlessly produce lexers other than
+  `LRNonStreamingLexerDef`s in the future.
 
 ## Deprecations
 

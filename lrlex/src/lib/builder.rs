@@ -18,10 +18,7 @@ use num_traits::{PrimInt, Unsigned};
 use regex::Regex;
 use try_from::TryFrom;
 
-use crate::{
-    lexer::{LRNonStreamingLexerDef, LexerDef},
-    parser::parse_lex
-};
+use crate::lexer::{LRNonStreamingLexerDef, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -29,9 +26,14 @@ lazy_static! {
     static ref RE_TOKEN_ID: Regex = Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap();
 }
 
+pub enum LexerKind {
+    LRNonStreamingLexer
+}
+
 /// A `LexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
 pub struct LexerBuilder<'a, StorageT = u32> {
+    lexerkind: LexerKind,
     mod_name: Option<&'a str>,
     rule_ids_map: Option<HashMap<String, StorageT>>,
     allow_missing_terms_in_lexer: bool,
@@ -60,11 +62,18 @@ where
     /// ```
     pub fn new() -> Self {
         LexerBuilder {
+            lexerkind: LexerKind::LRNonStreamingLexer,
             mod_name: None,
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true
         }
+    }
+
+    /// Set the type of lexer to be generated to `lexerkind`.
+    pub fn lexerkind(mut self, lexerkind: LexerKind) -> Self {
+        self.lexerkind = lexerkind;
+        self
     }
 
     /// Set the generated module name to `mod_name`. If no module name is specified,
@@ -138,8 +147,11 @@ where
         P: AsRef<Path>,
         Q: AsRef<Path>
     {
-        let inc = read_to_string(&inp).unwrap();
-        let mut lexerdef = parse_lex::<StorageT>(&inc)?;
+        let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
+            LexerKind::LRNonStreamingLexer => {
+                Box::new(LRNonStreamingLexerDef::from_str(&read_to_string(&inp)?)?)
+            }
+        };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
                 // Convert from HashMap<String, _> to HashMap<&str, _>
@@ -200,8 +212,53 @@ where
         let mut outs = String::new();
         //
         // Header
-        outs.push_str(&format!("mod {} {{\n", mod_name));
-        lexerdef.rust_pp(&mut outs);
+
+        let (lexerdef_name, lexerdef_type) = match self.lexerkind {
+            LexerKind::LRNonStreamingLexer => (
+                "LRNonStreamingLexerDef",
+                format!("LRNonStreamingLexerDef<{}>", type_name::<StorageT>())
+            )
+        };
+
+        outs.push_str(&format!(
+            "mod {mod_name} {{
+use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule}};
+
+#[allow(dead_code)]
+pub fn lexerdef() -> {lexerdef_type} {{
+    let rules = vec![",
+            mod_name = mod_name,
+            lexerdef_type = lexerdef_type
+        ));
+
+        // Individual rules
+        for r in lexerdef.iter_rules() {
+            let tok_id = match r.tok_id {
+                Some(ref t) => format!("Some({:?})", t),
+                None => "None".to_owned()
+            };
+            let n = match r.name {
+                Some(ref n) => format!("Some({:?}.to_string())", n),
+                None => "None".to_owned()
+            };
+            outs.push_str(&format!(
+                "
+Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
+                tok_id,
+                n,
+                r.re_str.replace("\\", "\\\\").replace("\"", "\\\"")
+            ));
+        }
+
+        // Footer
+        outs.push_str(&format!(
+            "
+];
+    {lexerdef_name}::from_rules(rules)
+}}
+",
+            lexerdef_name = lexerdef_name
+        ));
 
         // Token IDs
         if let Some(ref rim) = self.rule_ids_map {
@@ -246,47 +303,5 @@ where
     pub fn allow_missing_tokens_in_parser(mut self, allow: bool) -> Self {
         self.allow_missing_tokens_in_parser = allow;
         self
-    }
-}
-
-impl<StorageT: Copy + Debug + Eq> LRNonStreamingLexerDef<StorageT> {
-    pub(crate) fn rust_pp(&self, outs: &mut String) {
-        // Header
-        outs.push_str(&format!(
-            "use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule}};
-
-#[allow(dead_code)]
-pub fn lexerdef() -> LRNonStreamingLexerDef<{}> {{
-    let rules = vec![",
-            type_name::<StorageT>()
-        ));
-
-        // Individual rules
-        for r in &self.rules {
-            let tok_id = match r.tok_id {
-                Some(ref t) => format!("Some({:?})", t),
-                None => "None".to_owned()
-            };
-            let n = match r.name {
-                Some(ref n) => format!("Some({:?}.to_string())", n),
-                None => "None".to_owned()
-            };
-            outs.push_str(&format!(
-                "
-Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
-                tok_id,
-                n,
-                r.re_str.replace("\\", "\\\\").replace("\"", "\\\"")
-            ));
-        }
-
-        // Footer
-        outs.push_str(
-            "
-];
-    LRNonStreamingLexerDef::from_rules(rules)
-}
-"
-        );
     }
 }

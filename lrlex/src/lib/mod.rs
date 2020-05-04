@@ -18,7 +18,7 @@ mod lexer;
 mod parser;
 
 pub use crate::{
-    builder::LexerBuilder,
+    builder::{LexerBuilder, LexerKind},
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule}
 };
 
