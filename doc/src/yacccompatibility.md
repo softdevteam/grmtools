@@ -37,7 +37,7 @@ actions must adhere to. Note that whilst a rule's productions must all adhere
 to a single type, different rules can have different types.  Consider the
 following snippet:
 
-```
+```rust,noplaypen
 R1 -> Result<i32, ()>:
      'a' { Ok(5) }
    | 'b' { Err(()) }
