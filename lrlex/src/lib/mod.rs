@@ -1,6 +1,6 @@
 //! `lrlex` is a partial replacement for [`lex`](http://dinosaur.compilertools.net/lex/index.html)
 //! / [`flex`](https://westes.github.io/flex/manual/). It takes in a `.l` file and statically
-//! compiles it to Rust code. The resulting [NonStreamingLexerDef] can then be given an input
+//! compiles it to Rust code. The resulting [LRNonStreamingLexerDef] can then be given an input
 //! string, from which it instantiates an [LRNonStreamingLexer]. This provides an iterator which
 //! can produce the sequence of [lrpar::Lexeme]s for that input, as well as answer basic queries
 //! about [lrpar::Span]s (e.g. extracting substrings, calculating line and column numbers).
@@ -17,10 +17,9 @@ mod builder;
 mod lexer;
 mod parser;
 
-use crate::parser::parse_lex;
 pub use crate::{
-    builder::LexerBuilder,
-    lexer::{LRNonStreamingLexer, NonStreamingLexerDef, Rule}
+    builder::{LexerBuilder, LexerKind},
+    lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule}
 };
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
@@ -63,11 +62,18 @@ impl fmt::Display for LexBuildError {
     }
 }
 
+#[deprecated(since = "0.8.0", note = "Please use LRNonStreamingLexerDef::from_str")]
 pub fn build_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>(
     s: &str
-) -> Result<NonStreamingLexerDef<StorageT>, LexBuildError> {
-    parse_lex(s)
+) -> Result<LRNonStreamingLexerDef<StorageT>, LexBuildError> {
+    LRNonStreamingLexerDef::from_str(s)
 }
+
+#[deprecated(
+    since = "0.8.0",
+    note = "This struct has been renamed to LRNonStreamingLexerDef"
+)]
+pub type NonStreamingLexerDef<StorageT> = LRNonStreamingLexerDef<StorageT>;
 
 /// A convenience macro for including statically compiled `.l` files. A file `src/a/b/c.l` which is
 /// statically compiled by lrlex can then be used in a crate with `lrlex_mod!("a/b/c.l")`.

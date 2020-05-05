@@ -1,21 +1,15 @@
-use std::hash::Hash;
-
-use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
-use crate::{
-    lexer::{NonStreamingLexerDef, Rule},
-    LexBuildError, LexBuildResult, LexErrorKind
-};
+use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 
 pub struct LexParser<StorageT> {
     src: String,
     newlines: Vec<usize>,
-    rules: Vec<Rule<StorageT>>
+    pub(crate) rules: Vec<Rule<StorageT>>
 }
 
 impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
-    fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
+    pub(crate) fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
         let mut p = LexParser {
             src,
             newlines: vec![0],
@@ -162,15 +156,10 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     }
 }
 
-pub fn parse_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>(
-    s: &str
-) -> LexBuildResult<NonStreamingLexerDef<StorageT>> {
-    LexParser::new(s.to_string()).map(|p| NonStreamingLexerDef::new(p.rules))
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::lexer::{LRNonStreamingLexerDef, LexerDef};
 
     #[test]
     fn test_nooptions() {
@@ -178,13 +167,13 @@ mod test {
 %option nounput
         "
         .to_string();
-        assert!(parse_lex::<u8>(&src).is_err());
+        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
     }
 
     #[test]
     fn test_minimum() {
         let src = "%%".to_string();
-        assert!(parse_lex::<u8>(&src).is_ok());
+        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_ok());
     }
 
     #[test]
@@ -195,7 +184,7 @@ mod test {
 \\+ '+'
 "
         .to_string();
-        let ast = parse_lex::<u8>(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<u8>::from_str(&src).unwrap();
         let intrule = ast.get_rule_by_name("int").unwrap();
         assert_eq!("int", intrule.name.as_ref().unwrap());
         assert_eq!("[0-9]+", intrule.re_str);
@@ -213,7 +202,7 @@ mod test {
 [0-9]+ ;
 "
         .to_string();
-        let ast = parse_lex::<u8>(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<u8>::from_str(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
         assert!(intrule.name.is_none());
         assert_eq!("[0-9]+", intrule.re_str);
@@ -225,8 +214,8 @@ mod test {
 [0-9]
 'int'"
             .to_string();
-        assert!(parse_lex::<u8>(&src).is_err());
-        match parse_lex::<u8>(&src) {
+        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
+        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::MissingSpace,
@@ -242,8 +231,8 @@ mod test {
         let src = "%%
 [0-9] "
             .to_string();
-        assert!(parse_lex::<u8>(&src).is_err());
-        match parse_lex::<u8>(&src) {
+        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
+        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::MissingSpace,
@@ -259,8 +248,8 @@ mod test {
         let src = "%%
 [0-9] int"
             .to_string();
-        assert!(parse_lex::<u8>(&src).is_err());
-        match parse_lex::<u8>(&src) {
+        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
+        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::InvalidName,
@@ -276,8 +265,8 @@ mod test {
         let src = "%%
 [0-9] 'int"
             .to_string();
-        assert!(parse_lex::<u8>(&src).is_err());
-        match parse_lex::<u8>(&src) {
+        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
+        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::InvalidName,
@@ -294,7 +283,7 @@ mod test {
 [0-9] 'int'
 [0-9] 'int'"
             .to_string();
-        match parse_lex::<u8>(&src) {
+        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
             Ok(_) => panic!("Duplicate rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::DuplicateName,
@@ -314,6 +303,6 @@ mod test {
         for i in 0..257 {
             src.push_str(&format!("x 'x{}'\n", i));
         }
-        parse_lex::<u8>(&src).ok();
+        LRNonStreamingLexerDef::<u8>::from_str(&src).ok();
     }
 }

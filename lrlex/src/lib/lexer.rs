@@ -7,9 +7,13 @@ use std::{
 
 use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
+use try_from::TryFrom;
 
 use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span};
 
+use crate::{parser::LexParser, LexBuildResult};
+
+#[doc(hidden)]
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
     /// rules a guaranteed unique value, though that value can be overridden by clients who need to
@@ -45,36 +49,29 @@ impl<StorageT> Rule<StorageT> {
     }
 }
 
-/// This struct represents, in essence, a .l file in memory. From it one can produce an
-/// [LRNonStreamingLexer] which actually lexes inputs.
-pub struct NonStreamingLexerDef<StorageT> {
-    pub(crate) rules: Vec<Rule<StorageT>>
-}
+/// Methods which all lexer definitions must implement.
+pub trait LexerDef<StorageT> {
+    #[doc(hidden)]
+    /// Instantiate a lexer from a set of `Rule`s. This is only intended to be used by compiled
+    /// lexers (see `builder.rs`).
+    fn from_rules(rules: Vec<Rule<StorageT>>) -> Self
+    where
+        Self: Sized;
 
-impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<StorageT> {
-    pub fn new(rules: Vec<Rule<StorageT>>) -> NonStreamingLexerDef<StorageT> {
-        NonStreamingLexerDef { rules }
-    }
+    /// Instantiate a lexer from a string (e.g. representing a `.l` file).
+    fn from_str(s: &str) -> LexBuildResult<Self>
+    where
+        Self: Sized;
 
     /// Get the `Rule` at index `idx`.
-    pub fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
-        self.rules.get(idx)
-    }
+    fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>>;
 
     /// Get the `Rule` instance associated with a particular lexeme ID. Panics if no such rule
     /// exists.
-    pub fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
-        &self
-            .rules
-            .iter()
-            .find(|r| r.tok_id == Some(tok_id))
-            .unwrap()
-    }
+    fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT>;
 
     /// Get the `Rule` instance associated with a particular name.
-    pub fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
-        self.rules.iter().find(|r| r.name.as_deref() == Some(n))
-    }
+    fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>>;
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
     /// to synchronise a parser's notion of lexeme IDs with the lexers. While doing this, it keeps
@@ -91,7 +88,49 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<Stora
     /// benign: some lexers deliberately define tokens which are not used (e.g. reserving future
     /// keywords). A non-empty set #2 is more likely to be an error since there are parts of the
     /// grammar where nothing the user can input will be parseable.
-    pub fn set_rule_ids<'a>(
+    fn set_rule_ids<'a>(
+        &'a mut self,
+        rule_ids_map: &HashMap<&'a str, StorageT>
+    ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>);
+
+    /// Returns an iterator over all rules in this AST.
+    fn iter_rules(&self) -> Iter<Rule<StorageT>>;
+}
+
+/// This struct represents, in essence, a .l file in memory. From it one can produce an
+/// [LRNonStreamingLexer] which actually lexes inputs.
+pub struct LRNonStreamingLexerDef<StorageT> {
+    pub(crate) rules: Vec<Rule<StorageT>>
+}
+
+impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<StorageT>
+    for LRNonStreamingLexerDef<StorageT>
+{
+    fn from_rules(rules: Vec<Rule<StorageT>>) -> LRNonStreamingLexerDef<StorageT> {
+        LRNonStreamingLexerDef { rules }
+    }
+
+    fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<StorageT>> {
+        LexParser::new(s.to_string()).map(|p| LRNonStreamingLexerDef { rules: p.rules })
+    }
+
+    fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
+        self.rules.get(idx)
+    }
+
+    fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
+        &self
+            .rules
+            .iter()
+            .find(|r| r.tok_id == Some(tok_id))
+            .unwrap()
+    }
+
+    fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
+        self.rules.iter().find(|r| r.name.as_deref() == Some(n))
+    }
+
+    fn set_rule_ids<'a>(
         &'a mut self,
         rule_ids_map: &HashMap<&'a str, StorageT>
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
@@ -149,13 +188,16 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + Unsigned> NonStreamingLexerDef<Stora
         (missing_from_lexer, missing_from_parser)
     }
 
-    /// Returns an iterator over all rules in this AST.
-    pub fn iter_rules(&self) -> Iter<Rule<StorageT>> {
+    fn iter_rules(&self) -> Iter<Rule<StorageT>> {
         self.rules.iter()
     }
+}
 
+impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
+    LRNonStreamingLexerDef<StorageT>
+{
     /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
-    /// [NonStreamingLexerDef].
+    /// [LRNonStreamingLexerDef].
     pub fn lexer<'lexer, 'input: 'lexer>(
         &'lexer self,
         s: &'input str
@@ -174,11 +216,11 @@ pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
     phantom: PhantomData<&'lexer ()>
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
+impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
     LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
     fn new(
-        lexerdef: &'lexer NonStreamingLexerDef<StorageT>,
+        lexerdef: &'lexer LRNonStreamingLexerDef<StorageT>,
         s: &'input str
     ) -> LRNonStreamingLexer<'lexer, 'input, StorageT> {
         let mut lexemes = vec![];
@@ -336,7 +378,6 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::parser::parse_lex;
     use std::collections::HashMap;
 
     #[test]
@@ -348,7 +389,7 @@ mod test {
 [ \t] ;
         "
         .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("int", 0);
         map.insert("id", 1);
@@ -377,7 +418,7 @@ mod test {
 [0-9]+ 'int'
         "
         .to_string();
-        let lexerdef = parse_lex::<u8>(&src).unwrap();
+        let lexerdef = LRNonStreamingLexerDef::<u8>::from_str(&src).unwrap();
         match lexerdef.lexer(&"abc").iter().next().unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(e) => {
@@ -395,7 +436,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ ] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("IF", 0);
         map.insert("ID", 1);
@@ -423,7 +464,7 @@ if 'IF'
 [a❤]+ 'ID'
 [ ] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -451,7 +492,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -487,7 +528,7 @@ if 'IF'
 [a-z❤]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -510,7 +551,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -526,7 +567,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("INT", 0u8);
         let mut missing_from_lexer = HashSet::new();
@@ -554,7 +595,7 @@ if 'IF'
 '.*' 'STR'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = parse_lex(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("STR", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));

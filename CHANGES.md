@@ -1,6 +1,25 @@
+# grmtools 0.8.0 (20xx-xx-xx)
+
+## Breaking changes
+
+* `lrlex` now uses a `LexerDef` which all lexer definitions must `impl`. This
+  means that if you want to call methods on a concrete lexer definition, you
+  will almost certainly need to import `lrlex::LexerDef`. This opens the
+  possibility that lrlex can seamlessly produce lexers other than
+  `LRNonStreamingLexerDef`s in the future.
+
+## Deprecations
+
+* `lrlex::NonStreamingLexerDef` has been renamed to
+  `lrlex::LRNonStreamingLexerDef`; use of the former is deprecated.
+
+* The `lrlex::build_lex` function has been deprecated in favour of
+  `LRNonStreamingLexerDef::from_str`.
+
+
 # grmtools 0.7.0 (2020-04-30)
 
-## Breaking change
+## Breaking changes
 
 * The `Lexer` trait has been broken into two: `Lexer` and `NonStreamingLexer`.
   The former trait is now only capable of producing `Lexeme`s: the latter is

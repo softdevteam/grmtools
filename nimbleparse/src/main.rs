@@ -8,7 +8,7 @@ use std::{
 
 use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
 use getopts::Options;
-use lrlex::build_lex;
+use lrlex::{LRNonStreamingLexerDef, LexerDef};
 use lrpar::parser::{RTParserBuilder, RecoveryKind};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
@@ -100,7 +100,7 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let mut lexerdef = match build_lex::<u16>(&read_file(lex_l_path)) {
+    let mut lexerdef = match LRNonStreamingLexerDef::<u16>::from_str(&read_file(lex_l_path)) {
         Ok(ast) => ast,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
