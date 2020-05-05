@@ -48,7 +48,7 @@ make use of error recovery.
 
 A simple calculator grammar looks as follows:
 
-```yacc
+```rust,noplaypen
 %start Expr
 %%
 Expr -> u64:
@@ -162,7 +162,7 @@ case of the calculator, default values are likely to lead to confusing results.
 We thus change the grammar so that inserted integers prevent evaluation from
 occurring:
 
-```yacc
+```rust,noplaypen
 %start Expr
 %%
 Expr -> Result<u64, ()>:
@@ -201,7 +201,7 @@ actions to percolate errors upwards, but this is a trivial change.
 
 We then need to make a small tweak to our `main.rs` changing:
 
-```rust,ignore
+```rust,noplaypen
 match res {
     Some(r) => println!("Result: {}", r),
     _ => eprintln!("Unable to evaluate expression.")
@@ -210,7 +210,7 @@ match res {
 
 to:
 
-```rust,ignore
+```rust,noplaypen
 match res {
     Some(Ok(r)) => println!("Result: {}", r),
     _ => eprintln!("Unable to evaluate expression.")
@@ -220,7 +220,7 @@ match res {
 Now the input which previously caused a panic simply tells the user that it
 could not evaluate the expression:
 
-```ignore
+```
 >>> 2+
 Parsing error at line 1 column 3. Repair sequences found:
    1: Insert INT
@@ -230,7 +230,7 @@ Unable to evaluate expression.
 Usefully, our inability (or unwillingness) to evaluate the expression does not
 prevent further syntax errors from being discovered and repaired:
 
-```ignore
+```
 >>> (2+)+3+4+
 Parsing error at line 1 column 4. Repair sequences found:
    1: Insert Int
@@ -255,7 +255,7 @@ few lines of code.
 By default, pretty-printing lexeme types prints out their identifier in the
 grammar. These rarely match what the user would expect:
 
-```ignore
+```
 >>> 2 3
 Parsing error at line 1 column 3. Repair sequences found:
    1: Delete 3
@@ -269,7 +269,7 @@ are far from obvious. `grmtools` allows users to provide human friendly versions
 of these for error recovery using the `%epp` declaration in grammars. For
 example, we can extend the `calc` grammar as follows:
 
-```ignore
+```
 %epp PLUS "+"
 %epp MUL "*"
 %epp LBRACK "("
@@ -279,7 +279,7 @@ example, we can extend the `calc` grammar as follows:
 
 leading to the following output:
 
-```ignore
+```
 >>> 2 3
 Parsing error at line 1 column 3. Repair sequences found:
    1: Delete 3
@@ -294,7 +294,7 @@ Result: 2
 Depending on your language, some repair sequences are better than others. For
 example, sometimes `Insert` repairs are less welcome than `Delete` repairs:
 
-```ignore
+```
 >>> 2 + + 3
 Parsing error at line 1 column 3. Repair sequences found:
    1: Insert INT
@@ -321,7 +321,7 @@ way (e.g. `INT`), but we don't need to worry about lexemes whose value we never
 expect (e.g. `(`, `+` etc.). In the case of the calculator grammar a good
 use of this directive is as follows:
 
-```ignore
+```
 %avoid_insert "INT"
 ```
 
@@ -403,7 +403,7 @@ The first surprising condition is that even with the small `calc` grammar, some
 user inputs lead to such a massive search space that no repair sequences can be
 found. The easiest way to trigger this in most grammars is bracket expressions:
 
-```ignore
+```
 >>> 1+(
 Parsing error at line 1 column 4. Repair sequences found:
    1: Insert Int, Insert )
@@ -438,7 +438,7 @@ weaker condition, which is that a repair sequence ends with 3 `Shift` repairs,
 showing that parsing has got back on track, at least for a little bit. This
 condition explains the following:
 
-```ignore
+```
 >>> 2 + + 3
 Parsing error at line 1 column 5. Repair sequences found:
    1: Delete +
@@ -512,7 +512,7 @@ By default, `lrpar` uses the `CPCT+` error recovery algorithm. You can use the
 the first parsing error, with the `recoverer` method in `CTParserBuilder` or
 `RTParserBuilder`. For example, we can change `calc`'s `build.rs` file to:
 
-```rust,ignore
+```rust,noplaypen
     let lex_rule_ids_map = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
         .recoverer(lrpar::RecoveryKind::None)

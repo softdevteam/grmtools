@@ -10,7 +10,7 @@ The `calc.l` file remains unchanged from that in the [Quickstart
 guide](quickstart.md). However the `calc.y` file is change as follows:
 
 
-```rust
+```rust,noplaypen
 %start Expr
 %avoid_insert "INT"
 %%
@@ -64,7 +64,7 @@ successful parse, this will give us an arbitrarily deeply nested `Expr`.
 
 Our `main.rs` file then looks as follows:
 
-```rust
+```rust,noplaypen
 use std::io::{self, BufRead, Write};
 
 use lrlex::lrlex_mod;

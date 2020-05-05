@@ -45,7 +45,7 @@ into Rust code. We thus need to create a
 file inside the root of our project which can process the lexer and grammar.
 Our `build.rs` file thus looks as follows:
 
-```rust
+```rust,noplaypen
 use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
 use lrpar::{CTParserBuilder};
@@ -101,7 +101,7 @@ is lexed, but no lexemes are created from it.
 ## The grammar
 
 Our initial version of calc.y looks as follows:
-```yacc
+```rust,noplaypen
 %start Expr
 %%
 Expr -> Result<u64, ()>:
@@ -185,7 +185,7 @@ The `build.rs` file will statically compile the lexer and grammar into Rust code
 that we can then call. The `src/main.rs` file below provides a simple
 Python-esque REPL to the user into which they can write calculator expressions:
 
-```rust
+```rust,noplaypen
 use std::io::{self, BufRead, Write};
 
 use lrlex::lrlex_mod;

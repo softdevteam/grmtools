@@ -11,7 +11,7 @@ However, when it is suitable, it is a very convenient way of expressing lexing.
 `lrlex` also has a simple command-line interface, allowing you to check whether
 your lexing rules are working as expected:
 
-```ignore
+```
 $ cat C.java
 class C {
     int x = 0;
