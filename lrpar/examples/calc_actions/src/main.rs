@@ -31,6 +31,7 @@ fn main() {
                 }
                 match res {
                     Some(Ok(r)) => println!("Result: {}", r),
+                    Some(Err(e)) => eprintln!("{}", e),
                     _ => eprintln!("Unable to evaluate expression.")
                 }
             }
