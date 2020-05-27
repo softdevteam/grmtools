@@ -876,6 +876,7 @@ fn serialize_bin_output<T: Serialize + ?Sized>(
 struct ArrayWriter {
     buffer: String,
 }
+
 impl ArrayWriter {
     /// create a new array with the specified name
     fn new(name: &str) -> Self {
@@ -890,6 +891,7 @@ impl ArrayWriter {
         self.buffer
     }
 }
+
 impl Write for ArrayWriter {
     #[allow(dead_code)]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
