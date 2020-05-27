@@ -47,7 +47,7 @@ fn main() {
                     }
                 }
             }
-            _ => break
+            _ => break,
         }
     }
 }
@@ -63,6 +63,6 @@ fn eval(lexer: &dyn NonStreamingLexer<u32>, e: Expr) -> Result<u64, (Span, &'sta
         Expr::Number { span } => lexer
             .span_str(span)
             .parse::<u64>()
-            .map_err(|_| (span, "cannot be represented as a u64"))
+            .map_err(|_| (span, "cannot be represented as a u64")),
     }
 }

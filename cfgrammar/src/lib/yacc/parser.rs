@@ -9,7 +9,7 @@ type YaccResult<T> = Result<T, YaccParserError>;
 
 use super::{
     ast::{GrammarAST, Symbol},
-    AssocKind, Precedence, YaccKind
+    AssocKind, Precedence, YaccKind,
 };
 
 /// The various different possible Yacc parser errors.
@@ -34,7 +34,7 @@ pub enum YaccParserErrorKind {
     DuplicateActiontypeDeclaration,
     DuplicateEPP,
     ReachedEOL,
-    InvalidString
+    InvalidString,
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -42,7 +42,7 @@ pub enum YaccParserErrorKind {
 pub struct YaccParserError {
     pub kind: YaccParserErrorKind,
     line: usize,
-    col: usize
+    col: usize,
 }
 
 impl Error for YaccParserError {}
@@ -77,7 +77,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::ReachedEOL => {
                 "Reached end of line without finding expected content"
             }
-            YaccParserErrorKind::InvalidString => "Invalid string"
+            YaccParserErrorKind::InvalidString => "Invalid string",
         };
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -88,7 +88,7 @@ pub(crate) struct YaccParser {
     src: String,
     newlines: Vec<usize>,
     ast: GrammarAST,
-    global_actiontype: Option<String>
+    global_actiontype: Option<String>,
 }
 
 lazy_static! {
@@ -105,7 +105,7 @@ impl YaccParser {
             src,
             newlines: vec![0],
             ast: GrammarAST::new(),
-            global_actiontype: None
+            global_actiontype: None,
         }
     }
 
@@ -209,7 +209,7 @@ impl YaccParser {
                         if self.ast.implicit_tokens.as_ref().unwrap().contains(&n) {
                             return Err(self.mk_error(
                                 YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
-                                i
+                                i,
                             ));
                         }
                         self.ast.implicit_tokens.as_mut().unwrap().insert(n);
@@ -243,7 +243,7 @@ impl YaccParser {
                     }
                     let prec = Precedence {
                         level: prec_level,
-                        kind
+                        kind,
                     };
                     self.ast.precs.insert(n, prec);
                     i = self.parse_ws(j, true)?;
@@ -359,7 +359,7 @@ impl YaccParser {
                 assert_eq!(m.start(), 0);
                 Ok((i + m.end(), self.src[i..i + m.end()].to_string()))
             }
-            None => Err(self.mk_error(YaccParserErrorKind::IllegalName, i))
+            None => Err(self.mk_error(YaccParserErrorKind::IllegalName, i)),
         }
     }
 
@@ -372,10 +372,10 @@ impl YaccParser {
                         debug_assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
                         Ok((i + m.end(), self.src[i + 1..i + m.end() - 1].to_string()))
                     }
-                    _ => Ok((i + m.end(), self.src[i..i + m.end()].to_string()))
+                    _ => Ok((i + m.end(), self.src[i..i + m.end()].to_string())),
                 }
             }
-            None => Err(self.mk_error(YaccParserErrorKind::IllegalString, i))
+            None => Err(self.mk_error(YaccParserErrorKind::IllegalString, i)),
         }
     }
 
@@ -394,7 +394,7 @@ impl YaccParser {
                 '\n' | '\r' => {
                     self.newlines.push(j + 1);
                 }
-                _ => ()
+                _ => (),
             };
             j += ch.len_utf8();
         }
@@ -429,7 +429,7 @@ impl YaccParser {
             let c = self.src[j..].chars().next().unwrap();
             match c {
                 '\n' | '\r' => break,
-                _ => j += c.len_utf8()
+                _ => j += c.len_utf8(),
             }
         }
         Ok((j, self.src[i..j].to_string()))
@@ -453,7 +453,7 @@ impl YaccParser {
                     self.newlines.push(i + 1);
                     j += c.len_utf8();
                 }
-                _ => j += c.len_utf8()
+                _ => j += c.len_utf8(),
             }
         }
         Err(self.mk_error(YaccParserErrorKind::ReachedEOL, j))
@@ -500,7 +500,7 @@ impl YaccParser {
                         }
                     }
                 }
-                _ => j += c.len_utf8()
+                _ => j += c.len_utf8(),
             }
         }
         Err(self.mk_error(YaccParserErrorKind::InvalidString, j))
@@ -554,7 +554,7 @@ impl YaccParser {
                                             self.newlines.push(i + 1);
                                         }
                                         '*' => (),
-                                        _ => continue
+                                        _ => continue,
                                     }
                                     if k < self.src.len() {
                                         let c = self.src[k..].chars().next().unwrap();
@@ -571,11 +571,11 @@ impl YaccParser {
                                     );
                                 }
                             }
-                            _ => break
+                            _ => break,
                         }
                     }
                 }
-                _ => break
+                _ => break,
             }
         }
         Ok(i)
@@ -599,7 +599,7 @@ impl YaccParser {
             let line_off = *self.newlines.iter().last().unwrap();
             return (
                 self.newlines.len(),
-                self.src[line_off..].chars().count() + 1
+                self.src[line_off..].chars().count() + 1,
             );
         }
         let (line_m1, &line_off) = self
@@ -622,9 +622,9 @@ mod test {
     use super::{
         super::{
             ast::{GrammarAST, Production, Symbol},
-            AssocKind, Precedence, YaccKind, YaccOriginalActionKind
+            AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
-        YaccParser, YaccParserError, YaccParserErrorKind
+        YaccParser, YaccParserError, YaccParserErrorKind,
     };
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, YaccParserError> {
@@ -662,7 +662,7 @@ mod test {
         .to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert_eq!(grm.get_rule("A").unwrap().pidxs, vec![0]);
@@ -686,7 +686,7 @@ mod test {
         .to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert_eq!(
@@ -718,7 +718,7 @@ mod test {
         .to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
 
@@ -771,7 +771,7 @@ mod test {
         let src = "%%\nA : 'a';\n%%".to_string();
         parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
     }
@@ -781,7 +781,7 @@ mod test {
         let src = "%%\nA : 'a' B;".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert_eq!(
@@ -799,7 +799,7 @@ mod test {
         let src = "%%\nA : 'a' \"b\";".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert_eq!(
@@ -817,7 +817,7 @@ mod test {
         let src = "%start   A\n%%\nA : a;".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert_eq!(grm.start.unwrap(), "A");
@@ -828,7 +828,7 @@ mod test {
         let src = "%token   a\n%%\nA : a;".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert!(grm.has_token("a"));
@@ -839,7 +839,7 @@ mod test {
         let src = "%token   'a'\n%%\nA : 'a';".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert!(grm.has_token("a"));
@@ -850,7 +850,7 @@ mod test {
         let src = "%token   a b c 'd'\n%%\nA : a;".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert!(grm.has_token("a"));
@@ -863,7 +863,7 @@ mod test {
         let src = "%%\nA : 'a';".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert!(grm.has_token("a"));
@@ -874,7 +874,7 @@ mod test {
         let src = "%token T %%\nA : T;".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert!(grm.has_token("T"));
@@ -893,7 +893,7 @@ mod test {
         let src = "%token '❤' %%\nA : '❤';".to_string();
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
         assert!(grm.has_token("❤"));
@@ -904,15 +904,15 @@ mod test {
         let src = "%token '❤' ❤;".to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Incorrect token parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IllegalString,
                 line: 1,
-                col: 12
+                col: 12,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -921,15 +921,15 @@ mod test {
         let src = "%token '❤'\n%%\nA : '❤' | ❤;".to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Incorrect token parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IllegalString,
                 line: 3,
-                col: 11
+                col: 11,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -939,7 +939,7 @@ mod test {
         let src = "%fail x\n%%\nA : a".to_string();
         parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
     }
@@ -950,7 +950,7 @@ mod test {
         let src = "".to_string();
         parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         )
         .unwrap();
     }
@@ -960,15 +960,15 @@ mod test {
         let src = "%%A:".to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
                 line: 1,
-                col: 5
+                col: 5,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -979,15 +979,15 @@ A:"
         .to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
                 line: 2,
-                col: 3
+                col: 3,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -999,15 +999,15 @@ A:
         .to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
                 line: 3,
-                col: 1
+                col: 1,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1019,15 +1019,15 @@ A:
             .to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::UnknownDeclaration,
                 line: 3,
-                col: 9
+                col: 9,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1036,15 +1036,15 @@ A:
         let src = "%%A x;".to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Missing colon parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::MissingColon,
                 line: 1,
-                col: 5
+                col: 5,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1053,15 +1053,15 @@ A:
         let src = "%token x".to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::PrematureEnd,
                 line: 1,
-                col: 8
+                col: 8,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1072,15 +1072,15 @@ x"
         .to_string();
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src
+            &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::ReachedEOL,
                 line: 1,
-                col: 7
+                col: 7,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1176,7 +1176,7 @@ x"
         for src in srcs.iter() {
             match parse(
                 YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-                &src.to_string()
+                &src.to_string(),
             ) {
                 Ok(_) => panic!("Duplicate precedence parsed"),
                 Err(YaccParserError {
@@ -1184,7 +1184,7 @@ x"
                     line: 3,
                     ..
                 }) => (),
-                Err(e) => panic!("Incorrect error returned {}", e)
+                Err(e) => panic!("Incorrect error returned {}", e),
             }
         }
     }
@@ -1219,7 +1219,7 @@ x"
             &"
           %%
           S: 'A' %prec ;
-          "
+          ",
         ) {
             Ok(_) => panic!("Incorrect %prec parsed"),
             Err(YaccParserError {
@@ -1227,7 +1227,7 @@ x"
                 line: 3,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
 
         match parse(
@@ -1236,7 +1236,7 @@ x"
           %%
           S: 'A' %prec B;
           B: ;
-          "
+          ",
         ) {
             Ok(_) => panic!("Incorrect %prec parsed"),
             Err(YaccParserError {
@@ -1244,7 +1244,7 @@ x"
                 line: 3,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1257,7 +1257,7 @@ x"
           %start R
           %%
           R: 'a';
-          "
+          ",
         )
         .unwrap();
         assert_eq!(
@@ -1281,7 +1281,7 @@ x"
           %avoid_insert X
           %avoid_insert Y
           %%
-          "
+          ",
         )
         .unwrap();
         assert_eq!(
@@ -1298,7 +1298,7 @@ x"
           %avoid_insert X Y
           %avoid_insert Y
           %%
-          "
+          ",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1306,7 +1306,7 @@ x"
                 line: 3,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1318,7 +1318,7 @@ x"
           %avoid_insert X
           %avoid_insert Y Y
           %%
-          "
+          ",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1326,7 +1326,7 @@ x"
                 line: 3,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1337,7 +1337,7 @@ x"
             &"
           %implicit_tokens X
           %%
-          "
+          ",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1345,7 +1345,7 @@ x"
                 line: 2,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1358,7 +1358,7 @@ x"
           %start R
           %%
           R: 'a';
-          "
+          ",
         )
         .unwrap();
         assert_eq!(
@@ -1382,7 +1382,7 @@ x"
           %implicit_tokens X
           %implicit_tokens Y
           %%
-          "
+          ",
         )
         .unwrap();
         assert_eq!(
@@ -1399,7 +1399,7 @@ x"
           %implicit_tokens X
           %implicit_tokens X Y
           %%
-          "
+          ",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1407,7 +1407,7 @@ x"
                 line: 3,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1419,7 +1419,7 @@ x"
           %implicit_tokens X X
           %implicit_tokens Y
           %%
-          "
+          ",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1427,7 +1427,7 @@ x"
                 line: 2,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1445,7 +1445,7 @@ x"
           %epp G \"a\\\"b\"
           %%
           R: 'A';
-          "
+          ",
         )
         .unwrap();
         assert_eq!(ast.epp.len(), 7);
@@ -1466,7 +1466,7 @@ x"
           %epp A \"a\"
           %epp A \"a\"
           %%
-          "
+          ",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1474,7 +1474,7 @@ x"
                 line: 3,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1485,7 +1485,7 @@ x"
             &"
           %epp A \"a
           %%
-          "
+          ",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1493,13 +1493,13 @@ x"
                 line: 2,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
 
         match parse(
             YaccKind::Eco,
             &"
-          %epp A \"a"
+          %epp A \"a",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1507,7 +1507,7 @@ x"
                 line: 2,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1519,7 +1519,7 @@ x"
           %start X
           %start X
           %%
-          "
+          ",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1527,7 +1527,7 @@ x"
                 line: 3,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1540,7 +1540,7 @@ x"
           R: ;
           R2: ;
           R3: ;
-          "
+          ",
         )
         .unwrap();
         assert_eq!(ast.start, Some("R".to_string()));
@@ -1557,7 +1557,7 @@ x"
           B: 'b' 'c' { add($1, $2); }
            | 'd'
            ;
-          "
+          ",
         )
         .unwrap();
         assert_eq!(
@@ -1579,7 +1579,7 @@ x"
          %%
          A: 'a';
          %%
-         fn foo() {}"
+         fn foo() {}",
         )
         .unwrap();
         assert_eq!(grm.programs, Some("fn foo() {}".to_string()));
@@ -1594,11 +1594,11 @@ x"
          A: 'a' { foo();
                   bar(); }
          ;
-         B: b';"
+         B: b';",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError { line: 6, .. }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1612,7 +1612,7 @@ x"
             A : a;";
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            src
+            src,
         )
         .unwrap();
         assert!(grm.has_token("a"));
@@ -1623,7 +1623,7 @@ x"
             /* An invalid comment * /
             %token   a
             %%\n
-            A : a;"
+            A : a;",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1631,7 +1631,7 @@ x"
                 line: 2,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
 
         match parse(
@@ -1643,7 +1643,7 @@ x"
              * multi-line comment
              */
             /* An invalid comment * /
-            A : a;"
+            A : a;",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1651,7 +1651,7 @@ x"
                 line: 7,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
 
         match parse(
@@ -1660,7 +1660,7 @@ x"
             %token   a
             %%
             // Valid comment
-            A : a"
+            A : a",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1668,7 +1668,7 @@ x"
                 line: 5,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -1681,7 +1681,7 @@ x"
          %%
          A: 'a';
          %%
-         fn foo() {}"
+         fn foo() {}",
         )
         .unwrap();
         assert_eq!(grm.rules["A"].actiont, Some("T".to_string()));
@@ -1695,7 +1695,7 @@ x"
          %actiontype T1
          %actiontype T2
          %%
-         A: 'a';"
+         A: 'a';",
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
@@ -1703,7 +1703,7 @@ x"
                 kind: YaccParserErrorKind::DuplicateActiontypeDeclaration,
                 ..
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 }

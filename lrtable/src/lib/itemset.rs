@@ -1,6 +1,6 @@
 use std::{
     collections::hash_map::{Entry, HashMap},
-    hash::{BuildHasherDefault, Hash}
+    hash::{BuildHasherDefault, Hash},
 };
 
 use cfgrammar::{yacc::YaccGrammar, PIdx, SIdx, Symbol};
@@ -18,17 +18,17 @@ pub type Ctx = Vob;
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Itemset<StorageT: Eq + Hash> {
-    pub items: HashMap<(PIdx<StorageT>, SIdx<StorageT>), Ctx, BuildHasherDefault<FnvHasher>>
+    pub items: HashMap<(PIdx<StorageT>, SIdx<StorageT>), Ctx, BuildHasherDefault<FnvHasher>>,
 }
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> Itemset<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     /// Create a blank Itemset.
     pub fn new(_: &YaccGrammar<StorageT>) -> Self {
         Itemset {
-            items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default())
+            items: HashMap::with_hasher(BuildHasherDefault::<FnvHasher>::default()),
         }
     }
 
@@ -88,7 +88,7 @@ where
                             // Since zero_todos.len() == grm.prods_len, the call to as_ is safe.
                             pidx = PIdx(i.as_())
                         }
-                        None => break
+                        None => break,
                     }
                     dot = SIdx(StorageT::zero());
                     zero_todos.set(pidx.into(), false);
@@ -159,7 +159,7 @@ where
 mod test {
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        SIdx, Symbol
+        SIdx, Symbol,
     };
     use vob::Vob;
 
@@ -210,7 +210,7 @@ mod test {
           C: D A;
           D: 'd' | ;
           F: C D 'f';
-          "
+          ",
         )
         .unwrap()
     }
@@ -257,7 +257,7 @@ mod test {
           %%
           S: S 'b' | 'b' A 'a';
           A: 'a' S 'c' | 'a' | 'a' S 'b';
-          "
+          ",
         )
         .unwrap()
     }

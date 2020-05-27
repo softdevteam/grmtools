@@ -5,17 +5,17 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use crate::{
     parser::{AStackType, ParseRepair, Parser, Recoverer},
-    Span
+    Span,
 };
 
 struct Panic;
 
 pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    _: &'a Parser<StorageT, ActionT>
+    _: &'a Parser<StorageT, ActionT>,
 ) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     Box::new(Panic)
 }
@@ -24,7 +24,7 @@ impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>
     Recoverer<StorageT, ActionT> for Panic
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     fn recover(
         &self,
@@ -33,7 +33,7 @@ where
         in_laidx: usize,
         in_pstack: &mut Vec<StIdx>,
         _: &mut Vec<AStackType<ActionT, StorageT>>,
-        _: &mut Vec<Span>
+        _: &mut Vec<Span>,
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This recoverer is based on that in Compiler Design in C by Allen I. Holub p.348.
         //

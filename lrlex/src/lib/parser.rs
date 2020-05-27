@@ -5,7 +5,7 @@ use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 pub struct LexParser<StorageT> {
     src: String,
     newlines: Vec<usize>,
-    pub(crate) rules: Vec<Rule<StorageT>>
+    pub(crate) rules: Vec<Rule<StorageT>>,
 }
 
 impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
@@ -13,7 +13,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let mut p = LexParser {
             src,
             newlines: vec![0],
-            rules: Vec::new()
+            rules: Vec::new(),
         };
         p.parse()?;
         Ok(p)
@@ -29,7 +29,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             let line_off = *self.newlines.iter().last().unwrap();
             return (
                 self.newlines.len(),
-                self.src[line_off..].chars().count() + 1
+                self.src[line_off..].chars().count() + 1,
             );
         }
         let (line_m1, &line_off) = self
@@ -98,7 +98,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let line = self.src[i..i + line_len].trim_end();
         let rspace = match line.rfind(' ') {
             Some(j) => j,
-            None => return Err(self.mk_error(LexErrorKind::MissingSpace, i))
+            None => return Err(self.mk_error(LexErrorKind::MissingSpace, i)),
         };
 
         let name;
@@ -140,7 +140,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             match c {
                 ' ' | '\t' => (),
                 '\n' | '\r' => self.newlines.push(j + 1),
-                _ => break
+                _ => break,
             }
             j += c.len_utf8();
         }
@@ -220,9 +220,9 @@ mod test {
             Err(LexBuildError {
                 kind: LexErrorKind::MissingSpace,
                 line: 2,
-                col: 1
+                col: 1,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -237,9 +237,9 @@ mod test {
             Err(LexBuildError {
                 kind: LexErrorKind::MissingSpace,
                 line: 2,
-                col: 1
+                col: 1,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -254,9 +254,9 @@ mod test {
             Err(LexBuildError {
                 kind: LexErrorKind::InvalidName,
                 line: 2,
-                col: 7
+                col: 7,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -271,9 +271,9 @@ mod test {
             Err(LexBuildError {
                 kind: LexErrorKind::InvalidName,
                 line: 2,
-                col: 7
+                col: 7,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 
@@ -288,9 +288,9 @@ mod test {
             Err(LexBuildError {
                 kind: LexErrorKind::DuplicateName,
                 line: 3,
-                col: 7
+                col: 7,
             }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+            Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
 

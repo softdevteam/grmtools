@@ -2,7 +2,7 @@ use std::{fmt::Debug, hash::Hash};
 
 use indexmap::{
     indexmap,
-    map::{Entry, IndexMap}
+    map::{Entry, IndexMap},
 };
 
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
@@ -19,13 +19,13 @@ pub(crate) fn astar_all<N, FN, FM, FS>(
     start_node: N,
     neighbours: FN,
     merge: FM,
-    success: FS
+    success: FS,
 ) -> Vec<N>
 where
     N: Debug + Clone + Hash + Eq + PartialEq,
     FN: Fn(bool, &N, &mut Vec<(u16, u16, N)>) -> bool,
     FM: Fn(&mut N, N),
-    FS: Fn(&N) -> bool
+    FS: Fn(&N) -> bool,
 {
     // We tackle the problem in two phases. In the first phase we search for a success node, with
     // the cost monotonically increasing. All neighbouring nodes are stored for future inspection,
@@ -137,13 +137,13 @@ pub(crate) fn dijkstra<N, FM, FN, FS>(
     start_node: N,
     neighbours: FN,
     merge: FM,
-    success: FS
+    success: FS,
 ) -> Vec<N>
 where
     N: Debug + Clone + Hash + Eq + PartialEq,
     FN: Fn(bool, &N, &mut Vec<(u16, N)>) -> bool,
     FM: Fn(&mut N, N),
-    FS: Fn(&N) -> bool
+    FS: Fn(&N) -> bool,
 {
     let mut scs_nodes = Vec::new();
     let mut todo: Vec<IndexMap<N, N>> = vec![indexmap![start_node.clone() => start_node]];

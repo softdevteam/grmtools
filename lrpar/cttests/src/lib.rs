@@ -54,7 +54,7 @@ fn test_basic_actions() {
     let lexer = lexerdef.lexer("2+3");
     match calc_actiontype_y::parse(&lexer) {
         (Some(Ok(5)), ref errs) if errs.is_empty() => (),
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
 
@@ -68,11 +68,11 @@ fn test_error_recovery_and_actions() {
     let (r, errs) = calc_actiontype_y::parse(&lexer);
     match r {
         Some(Ok(5)) => (),
-        _ => unreachable!()
+        _ => unreachable!(),
     }
     match errs[0] {
         LexParseError::ParseError(..) => (),
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     let lexer = lexerdef.lexer("2+3)");
@@ -81,7 +81,7 @@ fn test_error_recovery_and_actions() {
     assert_eq!(errs.len(), 1);
     match errs[0] {
         LexParseError::ParseError(..) => (),
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     let lexer = lexerdef.lexer("2+3+18446744073709551616");
@@ -125,7 +125,7 @@ fn test_lexer_lifetime() {
         let l = lexer_def.lexer(input);
         match crate::lexer_lifetime_y::parse(&l) {
             (Option::Some(x), _) => Some(x),
-            _ => None
+            _ => None,
         }
     }
     parse_data("abc");
@@ -149,7 +149,7 @@ fn test_span() {
         {
             ()
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     let lexer = lexerdef.lexer("2 + 3");
@@ -167,7 +167,7 @@ fn test_span() {
         {
             ()
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     let lexer = lexerdef.lexer("2+3*4");
@@ -187,7 +187,7 @@ fn test_span() {
         {
             ()
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     let lexer = lexerdef.lexer("2++3");
@@ -205,7 +205,7 @@ fn test_span() {
         {
             ()
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     let lexer = lexerdef.lexer("(2)))");
@@ -223,7 +223,7 @@ fn test_span() {
         {
             ()
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
 
@@ -233,6 +233,6 @@ fn test_passthrough() {
     let lexer = lexerdef.lexer("101");
     match passthrough_y::parse(&lexer) {
         (Some(Ok(ref s)), _) if s == "$101" => (),
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }

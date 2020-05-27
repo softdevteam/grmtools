@@ -60,5 +60,5 @@ pub use crate::idxnewtype::{PIdx, RIdx, SIdx, TIdx};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Symbol<StorageT> {
     Rule(RIdx<StorageT>),
-    Token(TIdx<StorageT>)
+    Token(TIdx<StorageT>),
 }

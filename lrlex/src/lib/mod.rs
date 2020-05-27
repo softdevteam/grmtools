@@ -19,7 +19,7 @@ mod parser;
 
 pub use crate::{
     builder::{LexerBuilder, LexerKind},
-    lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule}
+    lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
 
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
@@ -29,7 +29,7 @@ pub type LexBuildResult<T> = Result<T, LexBuildError>;
 pub struct LexBuildError {
     pub kind: LexErrorKind,
     line: usize,
-    col: usize
+    col: usize,
 }
 
 impl Error for LexBuildError {}
@@ -43,7 +43,7 @@ pub enum LexErrorKind {
     MissingSpace,
     InvalidName,
     DuplicateName,
-    RegexError
+    RegexError,
 }
 
 impl fmt::Display for LexBuildError {
@@ -56,7 +56,7 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::MissingSpace => s = "Rule is missing a space",
             LexErrorKind::InvalidName => s = "Invalid rule name",
             LexErrorKind::DuplicateName => s = "Rule name already exists",
-            LexErrorKind::RegexError => s = "Invalid regular expression"
+            LexErrorKind::RegexError => s = "Invalid regular expression",
         }
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
@@ -64,7 +64,7 @@ impl fmt::Display for LexBuildError {
 
 #[deprecated(since = "0.8.0", note = "Please use LRNonStreamingLexerDef::from_str")]
 pub fn build_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>(
-    s: &str
+    s: &str,
 ) -> Result<LRNonStreamingLexerDef<StorageT>, LexBuildError> {
     LRNonStreamingLexerDef::from_str(s)
 }

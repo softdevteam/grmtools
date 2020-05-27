@@ -35,13 +35,13 @@ fn main() {
                     println!("Result: {}", Eval::new(l).eval(&pt));
                 }
             }
-            _ => break
+            _ => break,
         }
     }
 }
 
 struct Eval<'a> {
-    s: &'a str
+    s: &'a str,
 }
 
 impl<'a> Eval<'a> {
@@ -53,7 +53,7 @@ impl<'a> Eval<'a> {
         match *n {
             Node::Nonterm {
                 ridx: RIdx(ridx),
-                ref nodes
+                ref nodes,
             } if ridx == calc_y::R_EXPR => {
                 if nodes.len() == 1 {
                     self.eval(&nodes[0])
@@ -64,7 +64,7 @@ impl<'a> Eval<'a> {
             }
             Node::Nonterm {
                 ridx: RIdx(ridx),
-                ref nodes
+                ref nodes,
             } if ridx == calc_y::R_TERM => {
                 if nodes.len() == 1 {
                     self.eval(&nodes[0])
@@ -75,7 +75,7 @@ impl<'a> Eval<'a> {
             }
             Node::Nonterm {
                 ridx: RIdx(ridx),
-                ref nodes
+                ref nodes,
             } if ridx == calc_y::R_FACTOR => {
                 if nodes.len() == 1 {
                     if let Node::Term { lexeme } = nodes[0] {
@@ -90,7 +90,7 @@ impl<'a> Eval<'a> {
                     self.eval(&nodes[1])
                 }
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }

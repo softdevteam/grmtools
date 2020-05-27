@@ -4,7 +4,7 @@ use std::{
     fs::File,
     io::{stderr, Read, Write},
     path::Path,
-    process
+    process,
 };
 
 use lrlex::{LRNonStreamingLexerDef, LexerDef};
@@ -14,7 +14,7 @@ fn usage(prog: &str, msg: &str) {
     let path = Path::new(prog);
     let leaf = match path.file_name() {
         Some(m) => m.to_str().unwrap(),
-        None => "lrpar"
+        None => "lrpar",
     };
     if !msg.is_empty() {
         writeln!(&mut stderr(), "{}", msg).ok();

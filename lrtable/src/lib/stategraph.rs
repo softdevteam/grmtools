@@ -14,16 +14,16 @@ pub struct StateGraph<StorageT: Eq + Hash> {
     /// A vector of `(core_states, closed_states)` tuples.
     states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
     /// For each state in `states`, edges is a hashmap from symbols to state offsets.
-    edges: Vec<HashMap<Symbol<StorageT>, StIdx>>
+    edges: Vec<HashMap<Symbol<StorageT>, StIdx>>,
 }
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateGraph<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     pub(crate) fn new(
         states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-        edges: Vec<HashMap<Symbol<StorageT>, StIdx>>
+        edges: Vec<HashMap<Symbol<StorageT>, StIdx>>,
     ) -> Self {
         // states.len() needs to fit into StIdxStorageT; however we don't need to worry about
         // edges.len() (which merely needs to fit in a usize)
@@ -46,7 +46,7 @@ where
 
     /// Return an iterator over all closed states in this `StateGraph`.
     pub fn iter_closed_states<'a>(
-        &'a self
+        &'a self,
     ) -> Box<dyn Iterator<Item = &'a Itemset<StorageT>> + 'a> {
         Box::new(self.states.iter().map(|x| &x.1))
     }
@@ -100,14 +100,14 @@ where
 
         fn fmt_sym<StorageT: 'static + PrimInt + Unsigned>(
             grm: &YaccGrammar<StorageT>,
-            sym: Symbol<StorageT>
+            sym: Symbol<StorageT>,
         ) -> String
         where
-            usize: AsPrimitive<StorageT>
+            usize: AsPrimitive<StorageT>,
         {
             match sym {
                 Symbol::Rule(ridx) => grm.rule_name(ridx).to_string(),
-                Symbol::Token(tidx) => format!("'{}'", grm.token_name(tidx).unwrap_or(""))
+                Symbol::Token(tidx) => format!("'{}'", grm.token_name(tidx).unwrap_or("")),
             }
         }
 
@@ -198,9 +198,9 @@ pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
     nt: &str,
     prod_off: usize,
     dot: SIdx<StorageT>,
-    la: Vec<&str>
+    la: Vec<&str>,
 ) where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     let ab_prod_off = grm.rule_to_prods(grm.rule_idx(nt).unwrap())[prod_off];
     let ctx = &is.items[&(ab_prod_off, dot)];
@@ -239,7 +239,7 @@ mod test {
     use crate::{pager::pager_stategraph, StIdx};
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        Symbol
+        Symbol,
     };
 
     #[test]

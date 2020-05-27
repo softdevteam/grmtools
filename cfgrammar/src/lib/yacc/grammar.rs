@@ -10,7 +10,7 @@ use super::{
     firsts::YaccFirsts,
     follows::YaccFollows,
     parser::{YaccParser, YaccParserError},
-    YaccKind
+    YaccKind,
 };
 use crate::{PIdx, RIdx, SIdx, Symbol, TIdx};
 
@@ -23,7 +23,7 @@ pub type PrecedenceLevel = u64;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Precedence {
     pub level: PrecedenceLevel,
-    pub kind: AssocKind
+    pub kind: AssocKind,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,7 +31,7 @@ pub struct Precedence {
 pub enum AssocKind {
     Left,
     Right,
-    Nonassoc
+    Nonassoc,
 }
 
 /// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
@@ -81,7 +81,7 @@ pub struct YaccGrammar<StorageT = u32> {
     /// The actiontypes of rules (one per rule).
     actiontypes: Vec<Option<String>>,
     /// Tokens marked as %avoid_insert (if any).
-    avoid_insert: Option<Vob>
+    avoid_insert: Option<Vob>,
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -95,7 +95,7 @@ impl YaccGrammar<u32> {
 
 impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
     /// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
@@ -337,7 +337,7 @@ where
             actions,
             programs: ast.programs,
             avoid_insert,
-            actiontypes
+            actiontypes,
         })
     }
 
@@ -415,11 +415,12 @@ where
 
     /// Return the index of the rule named `n` or `None` if it doesn't exist.
     pub fn rule_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
-        self.rule_names.iter()
-                          .position(|x| x == n)
-                          // The call to as_() is safe because rule_names is guaranteed to be
-                          // small enough to fit into StorageT
-                          .map(|x| RIdx(x.as_()))
+        self.rule_names
+            .iter()
+            .position(|x| x == n)
+            // The call to as_() is safe because rule_names is guaranteed to be
+            // small enough to fit into StorageT
+            .map(|x| RIdx(x.as_()))
     }
 
     /// What is the index of the start rule? Note that cfgrammar will have inserted at least one
@@ -493,11 +494,12 @@ where
 
     /// Return the index of the token named `n` or `None` if it doesn't exist.
     pub fn token_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
-        self.token_names.iter()
-                       .position(|x| x.as_ref().map_or(false, |x| x == n))
-                       // The call to as_() is safe because token_names is guaranteed to be small
-                       // enough to fit into StorageT
-                       .map(|x| TIdx(x.as_()))
+        self.token_names
+            .iter()
+            .position(|x| x.as_ref().map_or(false, |x| x == n))
+            // The call to as_() is safe because token_names is guaranteed to be small
+            // enough to fit into StorageT
+            .map(|x| TIdx(x.as_()))
     }
 
     /// Is the token `tidx` marked as `%avoid_insert`?
@@ -554,7 +556,7 @@ where
         for sym in self.prod(pidx) {
             let s = match sym {
                 Symbol::Token(tidx) => self.token_name(*tidx).unwrap(),
-                Symbol::Rule(ridx) => self.rule_name(*ridx)
+                Symbol::Rule(ridx) => self.rule_name(*ridx),
             };
             sprod.push_str(&format!(" \"{}\"", s));
         }
@@ -567,7 +569,7 @@ where
     /// tokens can have the same score. The simplest cost function is thus `|_| 1`.
     pub fn sentence_generator<F>(&self, token_cost: F) -> SentenceGenerator<StorageT>
     where
-        F: Fn(TIdx<StorageT>) -> u8
+        F: Fn(TIdx<StorageT>) -> u8,
     {
         SentenceGenerator::new(self, token_cost)
     }
@@ -607,16 +609,16 @@ pub struct SentenceGenerator<'a, StorageT> {
     grm: &'a YaccGrammar<StorageT>,
     rule_min_costs: RefCell<Option<Vec<u16>>>,
     rule_max_costs: RefCell<Option<Vec<u16>>>,
-    token_costs: Vec<u8>
+    token_costs: Vec<u8>,
 }
 
 impl<'a, StorageT: 'static + PrimInt + Unsigned> SentenceGenerator<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     fn new<F>(grm: &'a YaccGrammar<StorageT>, token_cost: F) -> Self
     where
-        F: Fn(TIdx<StorageT>) -> u8
+        F: Fn(TIdx<StorageT>) -> u8,
     {
         let mut token_costs = Vec::with_capacity(usize::from(grm.tokens_len()));
         for tidx in grm.iter_tidxs() {
@@ -626,7 +628,7 @@ where
             grm,
             token_costs,
             rule_min_costs: RefCell::new(None),
-            rule_max_costs: RefCell::new(None)
+            rule_max_costs: RefCell::new(None),
         }
     }
 
@@ -665,7 +667,7 @@ where
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Rule(i) => self.min_sentence_cost(i),
-                        Symbol::Token(i) => u16::from(self.token_costs[usize::from(i)])
+                        Symbol::Token(i) => u16::from(self.token_costs[usize::from(i)]),
                     };
                 }
                 if low_sc.is_none() || sc < low_sc.unwrap() {
@@ -706,7 +708,7 @@ where
                 for sym in self.grm.prod(pidx).iter() {
                     sc += match *sym {
                         Symbol::Rule(s_ridx) => self.min_sentence_cost(s_ridx),
-                        Symbol::Token(s_tidx) => u16::from(self.token_costs[usize::from(s_tidx)])
+                        Symbol::Token(s_tidx) => u16::from(self.token_costs[usize::from(s_tidx)]),
                     };
                 }
                 if low_sc.is_none() || sc <= low_sc.unwrap() {
@@ -742,7 +744,7 @@ where
             for sym in prod {
                 match *sym {
                     Symbol::Rule(s_ridx) => ms.push(self.min_sentences(s_ridx)),
-                    Symbol::Token(s_tidx) => ms.push(vec![vec![s_tidx]])
+                    Symbol::Token(s_tidx) => ms.push(vec![vec![s_tidx]]),
                 }
             }
 
@@ -803,10 +805,10 @@ where
 #[allow(clippy::unnecessary_unwrap)]
 fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
-    token_costs: &[u8]
+    token_costs: &[u8],
 ) -> Vec<u16>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     // We use a simple(ish) fixed-point algorithm to determine costs. We maintain two lists
     // "costs" and "done". An integer costs[i] starts at 0 and monotonically increments
@@ -892,10 +894,10 @@ where
 #[allow(clippy::unnecessary_unwrap)]
 fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
-    token_costs: &[u8]
+    token_costs: &[u8],
 ) -> Vec<u16>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     let mut done = vec![];
     done.resize(usize::from(grm.rules_len()), false);
@@ -975,7 +977,7 @@ where
 #[derive(Debug)]
 pub enum YaccGrammarError {
     YaccParserError(YaccParserError),
-    GrammarValidationError(GrammarValidationError)
+    GrammarValidationError(GrammarValidationError),
 }
 
 impl Error for YaccGrammarError {}
@@ -996,7 +998,7 @@ impl fmt::Display for YaccGrammarError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             YaccGrammarError::YaccParserError(ref e) => e.fmt(f),
-            YaccGrammarError::GrammarValidationError(ref e) => e.fmt(f)
+            YaccGrammarError::GrammarValidationError(ref e) => e.fmt(f),
         }
     }
 }
@@ -1005,7 +1007,7 @@ impl fmt::Display for YaccGrammarError {
 mod test {
     use super::{
         super::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind},
-        rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE
+        rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE,
     };
     use crate::{PIdx, RIdx, Symbol, TIdx};
     use std::collections::HashMap;
@@ -1014,7 +1016,7 @@ mod test {
     fn test_minimal() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "%start R %token T %% R: 'T';"
+            "%start R %token T %% R: 'T';",
         )
         .unwrap();
 
@@ -1045,7 +1047,7 @@ mod test {
     fn test_rule_ref() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "%start R %token T %% R : S; S: 'T';"
+            "%start R %token T %% R : S; S: 'T';",
         )
         .unwrap();
 
@@ -1113,7 +1115,7 @@ mod test {
             B: 'x';
             C: 'y'
              | 'z';
-          "
+          ",
         )
         .unwrap();
 
@@ -1322,7 +1324,7 @@ mod test {
             B: C | D;
             C: 'x' B | 'x';
             D: 'y' B | 'y' 'z';
-          "
+          ",
         )
         .unwrap();
 
@@ -1418,7 +1420,7 @@ mod test {
             B: 'a'
              | 'b';
             A: 'b';
-            "
+            ",
         )
         .unwrap();
 

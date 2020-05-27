@@ -24,12 +24,12 @@ use crate::{RIdx, Symbol, TIdx};
 #[derive(Debug)]
 pub struct YaccFollows<StorageT> {
     follows: Vec<Vob>,
-    phantom: PhantomData<StorageT>
+    phantom: PhantomData<StorageT>,
 }
 
 impl<StorageT: 'static + PrimInt + Unsigned> YaccFollows<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     /// Generates and returns the Follows set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
@@ -95,7 +95,7 @@ where
             if !changed {
                 return YaccFollows {
                     follows,
-                    phantom: PhantomData
+                    phantom: PhantomData,
                 };
             }
         }
@@ -116,7 +116,7 @@ where
 mod test {
     use super::{
         super::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        YaccFollows
+        YaccFollows,
     };
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
@@ -124,9 +124,9 @@ mod test {
         grm: &YaccGrammar<StorageT>,
         follows: &YaccFollows<StorageT>,
         rn: &str,
-        should_be: Vec<&str>
+        should_be: Vec<&str>,
     ) where
-        usize: AsPrimitive<StorageT>
+        usize: AsPrimitive<StorageT>,
     {
         let ridx = grm.rule_idx(rn).unwrap();
         for tidx in grm.iter_tidxs() {
@@ -158,7 +158,7 @@ mod test {
                 T: F T2 ;
                 T2: '*' F T2 | ;
                 F: '(' E ')' | 'ID' ;
-          "
+          ",
         )
         .unwrap();
         let follows = grm.follows();
@@ -182,7 +182,7 @@ mod test {
                 B2: 'w' B | 'u' 'w' B ;
                 D : 'v' D2 ;
                 D2: 'x' B D2 | ;
-          "
+          ",
         )
         .unwrap();
         let follows = grm.follows();
@@ -202,7 +202,7 @@ mod test {
                 %%
                 S: A 'b';
                 A: 'b' | ;
-          "
+          ",
         )
         .unwrap();
         let follows = grm.follows();
@@ -221,7 +221,7 @@ mod test {
                   | E '+' 'N'
                   | '(' E ')'
                   ;
-          "
+          ",
         )
         .unwrap();
         let follows = grm.follows();
