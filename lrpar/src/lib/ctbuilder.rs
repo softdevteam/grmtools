@@ -6,10 +6,10 @@ use std::{
     convert::AsRef,
     env::{current_dir, var},
     error::Error,
-    fmt::{self, Debug},
+    fmt::{self, Debug, Write as fmtWrite},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
-    io::Write,
+    io::{self, Write},
     marker::PhantomData,
     path::{Path, PathBuf}
 };
@@ -24,7 +24,7 @@ use lazy_static::lazy_static;
 use lrtable::{from_yacc, statetable::Conflicts, Minimiser, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::RecoveryKind;
 
@@ -34,10 +34,11 @@ const ACTIONS_KIND: &str = "__GTActionsKind";
 const ACTIONS_KIND_PREFIX: &str = "AK";
 const ACTIONS_KIND_HIDDEN: &str = "__GTActionsKindHidden";
 
-const GRM_FILE_EXT: &str = "grm";
 const RUST_FILE_EXT: &str = "rs";
-const SGRAPH_FILE_EXT: &str = "sgraph";
-const STABLE_FILE_EXT: &str = "stable";
+
+const GRM_CONST_NAME: &str = "__GRM_DATA";
+const SGRAPH_CONST_NAME: &str = "__SGRAPH_DATA";
+const STABLE_CONST_NAME: &str = "__STABLE_DATA";
 
 lazy_static! {
     static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
@@ -293,11 +294,6 @@ where
             .collect::<HashMap<_, _>>();
         let cache = self.rebuild_cache(&grm);
 
-        // out_base is the base filename for the output (e.g. /path/to/target/out/grm_y) to which
-        // we will write filenames with various extensions below.
-        let mut outp_base = outp.as_ref().to_path_buf();
-        outp_base.set_extension("");
-
         // We don't need to go through the full rigmarole of generating an output file if all of
         // the following are true: the output file exists; it is newer than the input file; and the
         // cache hasn't changed. The last of these might be surprising, but it's vital: we don't
@@ -354,29 +350,20 @@ where
                 format!("{}_y", stem)
             }
         };
-        self.output_file(
-            &grm,
-            &sgraph,
-            &stable,
-            &mod_name,
-            outp_base,
-            outp.as_ref().to_path_buf(),
-            &cache
-        )?;
+        self.output_file(&grm, &sgraph, &stable, &mod_name, &outp, &cache)?;
         if stable.conflicts().is_some() {
             self.conflicts = Some((grm, sgraph, stable));
         }
         Ok(rule_ids)
     }
 
-    fn output_file(
+    fn output_file<P: AsRef<Path>>(
         &self,
         grm: &YaccGrammar<StorageT>,
         sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         mod_name: &str,
-        outp_base: PathBuf,
-        outp_rs: PathBuf,
+        outp_rs: P,
         cache: &str
     ) -> Result<(), Box<dyn Error>> {
         let mut outs = String::new();
@@ -387,7 +374,7 @@ where
 "
         );
 
-        outs.push_str(&self.gen_parse_function(grm, sgraph, stable, outp_base)?);
+        outs.push_str(&self.gen_parse_function(grm, sgraph, stable)?);
         outs.push_str(&self.gen_rule_consts(grm));
         outs.push_str(&self.gen_token_epp(&grm));
         match self.yacckind.unwrap() {
@@ -452,10 +439,16 @@ where
         &self,
         grm: &YaccGrammar<StorageT>,
         sgraph: &StateGraph<StorageT>,
-        stable: &StateTable<StorageT>,
-        outp_base: PathBuf
+        stable: &StateTable<StorageT>
     ) -> Result<String, Box<dyn Error>> {
         let mut outs = String::new();
+
+        // bincode format is serialized into constants which the generated
+        // source code.
+        serialize_bin_output(grm, GRM_CONST_NAME, &mut outs)?;
+        serialize_bin_output(sgraph, SGRAPH_CONST_NAME, &mut outs)?;
+        serialize_bin_output(stable, STABLE_CONST_NAME, &mut outs)?;
+
         match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 outs.push_str(&format!(
@@ -492,21 +485,10 @@ where
             YaccKind::Eco => unreachable!()
         };
 
-        // Because we're lazy, we don't write our own serializer. We use serde and bincode to
-        // create files $out_base.grm, $out_base.sgraph, and $out_base.out_stable which contain
-        // binary versions of the relevant structs, and then include those binary files into the
-        // Rust binary using "include_bytes" (see below).
-        let out_grm = self.bin_output(&outp_base, GRM_FILE_EXT, &grm)?;
-        let out_sgraph = self.bin_output(&outp_base, SGRAPH_FILE_EXT, &sgraph)?;
-        let out_stable = self.bin_output(&outp_base, STABLE_FILE_EXT, &stable)?;
         outs.push_str(&format!(
             "
-        let (grm, sgraph, stable) = ::lrpar::ctbuilder::_reconstitute(include_bytes!(\"{}\"),
-            include_bytes!(\"{}\"),
-            include_bytes!(\"{}\"));",
-            out_grm.to_str().unwrap(),
-            out_sgraph.to_str().unwrap(),
-            out_stable.to_str().unwrap()
+        let (grm, sgraph, stable) = ::lrpar::ctbuilder::_reconstitute({},{},{});",
+            GRM_CONST_NAME, SGRAPH_CONST_NAME, STABLE_CONST_NAME
         ));
 
         // grm, sgraph, stable
@@ -843,20 +825,6 @@ where
         outs
     }
 
-    /// Output the structure `d` to the file `outp_base.ext`.
-    fn bin_output<P: AsRef<Path>, T: Serialize>(
-        &self,
-        outp_base: P,
-        ext: &str,
-        d: &T
-    ) -> Result<PathBuf, Box<dyn Error>> {
-        let mut outp = outp_base.as_ref().to_path_buf();
-        outp.set_extension(ext);
-        let f = File::create(&outp)?;
-        serialize_into(f, d)?;
-        Ok(outp)
-    }
-
     /// Return the `RIdx` of the %start rule in the grammar (which will not be the same as
     /// grm.start_rule_idx because the latter has an additional rule insert by cfgrammar
     /// which then calls the user's %start rule).
@@ -877,10 +845,10 @@ fn str_escape(s: &str) -> String {
 /// This function is called by generated files; it exists so that generated files don't require a
 /// dependency on serde and rmps.
 #[doc(hidden)]
-pub fn _reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
-    grm_buf: &'a [u8],
-    sgraph_buf: &'a [u8],
-    stable_buf: &'a [u8]
+pub fn _reconstitute<StorageT: DeserializeOwned + Hash + PrimInt + Unsigned>(
+    grm_buf: &[u8],
+    sgraph_buf: &[u8],
+    stable_buf: &[u8]
 ) -> (
     YaccGrammar<StorageT>,
     StateGraph<StorageT>,
@@ -890,6 +858,51 @@ pub fn _reconstitute<'a, StorageT: Deserialize<'a> + Hash + PrimInt + Unsigned>(
     let sgraph = deserialize(sgraph_buf).unwrap();
     let stable = deserialize(stable_buf).unwrap();
     (grm, sgraph, stable)
+}
+
+fn serialize_bin_output<T: Serialize + ?Sized>(
+    ser: &T,
+    name: &str,
+    buffer: &mut String
+) -> Result<(), Box<dyn Error>> {
+    let mut w = ArrayWriter::new(name);
+    serialize_into(&mut w, ser)?;
+    let data = w.finish();
+    buffer.push_str(&data);
+    Ok(())
+}
+
+/// Makes formatting bytes into a rust array relatively painless.
+struct ArrayWriter {
+    buffer: String
+}
+impl ArrayWriter {
+    /// create a new array with the specified name
+    fn new(name: &str) -> Self {
+        Self {
+            buffer: format!(r#"#[allow(dead_code)] const {}: &[u8] = &["#, name)
+        }
+    }
+
+    /// complete the array, and return the finished string
+    fn finish(mut self) -> String {
+        self.buffer.push_str("];\n");
+        self.buffer
+    }
+}
+impl Write for ArrayWriter {
+    #[allow(dead_code)]
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        for b in buf {
+            self.buffer.write_fmt(format_args!("{},", b)).unwrap();
+        }
+        Ok(buf.len())
+    }
+
+    #[allow(dead_code)]
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
