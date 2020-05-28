@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
-    fmt
+    fmt,
 };
 
 use indexmap::{IndexMap, IndexSet};
@@ -22,27 +22,27 @@ pub struct GrammarAST {
     pub implicit_tokens: Option<HashSet<String>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
-    pub programs: Option<String>
+    pub programs: Option<String>,
 }
 
 #[derive(Debug)]
 pub struct Rule {
     pub name: String,
     pub pidxs: Vec<usize>, // index into GrammarAST.prod
-    pub actiont: Option<String>
+    pub actiont: Option<String>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Production {
     pub symbols: Vec<Symbol>,
     pub precedence: Option<String>,
-    pub action: Option<String>
+    pub action: Option<String>,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
     Rule(String),
-    Token(String)
+    Token(String),
 }
 
 /// The various different possible grammar validation errors.
@@ -53,14 +53,14 @@ pub enum GrammarValidationErrorKind {
     UnknownRuleRef,
     UnknownToken,
     NoPrecForToken,
-    UnknownEPP
+    UnknownEPP,
 }
 
 /// `GrammarAST` validation errors return an instance of this struct.
 #[derive(Debug)]
 pub struct GrammarValidationError {
     pub kind: GrammarValidationErrorKind,
-    pub sym: Option<Symbol>
+    pub sym: Option<Symbol>,
 }
 
 impl Error for GrammarValidationError {}
@@ -91,7 +91,7 @@ impl fmt::Display for GrammarValidationError {
                 f,
                 "Unknown token '{}' in %epp declaration",
                 self.sym.as_ref().unwrap()
-            )
+            ),
         }
     }
 }
@@ -100,7 +100,7 @@ impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Symbol::Rule(ref s) => write!(f, "{}", s),
-            Symbol::Token(ref s) => write!(f, "{}", s)
+            Symbol::Token(ref s) => write!(f, "{}", s),
         }
     }
 }
@@ -117,7 +117,7 @@ impl GrammarAST {
             avoid_insert: None,
             implicit_tokens: None,
             epp: HashMap::new(),
-            programs: None
+            programs: None,
         }
     }
 
@@ -127,8 +127,8 @@ impl GrammarAST {
             Rule {
                 name,
                 pidxs: Vec::new(),
-                actiont
-            }
+                actiont,
+            },
         );
     }
 
@@ -137,13 +137,13 @@ impl GrammarAST {
         rule_name: String,
         symbols: Vec<Symbol>,
         precedence: Option<String>,
-        action: Option<String>
+        action: Option<String>,
     ) {
         self.rules[&rule_name].pidxs.push(self.prods.len());
         self.prods.push(Production {
             symbols,
             precedence,
-            action
+            action,
         });
     }
 
@@ -172,14 +172,14 @@ impl GrammarAST {
             None => {
                 return Err(GrammarValidationError {
                     kind: GrammarValidationErrorKind::NoStartRule,
-                    sym: None
+                    sym: None,
                 });
             }
             Some(ref s) => {
                 if !self.rules.contains_key(s) {
                     return Err(GrammarValidationError {
                         kind: GrammarValidationErrorKind::InvalidStartRule,
-                        sym: Some(Symbol::Rule(s.clone()))
+                        sym: Some(Symbol::Rule(s.clone())),
                     });
                 }
             }
@@ -191,13 +191,13 @@ impl GrammarAST {
                     if !self.tokens.contains(n) {
                         return Err(GrammarValidationError {
                             kind: GrammarValidationErrorKind::UnknownToken,
-                            sym: Some(Symbol::Token(n.clone()))
+                            sym: Some(Symbol::Token(n.clone())),
                         });
                     }
                     if !self.precs.contains_key(n) {
                         return Err(GrammarValidationError {
                             kind: GrammarValidationErrorKind::NoPrecForToken,
-                            sym: Some(Symbol::Token(n.clone()))
+                            sym: Some(Symbol::Token(n.clone())),
                         });
                     }
                 }
@@ -207,7 +207,7 @@ impl GrammarAST {
                             if !self.rules.contains_key(name) {
                                 return Err(GrammarValidationError {
                                     kind: GrammarValidationErrorKind::UnknownRuleRef,
-                                    sym: Some(sym.clone())
+                                    sym: Some(sym.clone()),
                                 });
                             }
                         }
@@ -215,7 +215,7 @@ impl GrammarAST {
                             if !self.tokens.contains(name) {
                                 return Err(GrammarValidationError {
                                     kind: GrammarValidationErrorKind::UnknownToken,
-                                    sym: Some(sym.clone())
+                                    sym: Some(sym.clone()),
                                 });
                             }
                         }
@@ -234,7 +234,7 @@ impl GrammarAST {
             }
             return Err(GrammarValidationError {
                 kind: GrammarValidationErrorKind::UnknownEPP,
-                sym: Some(Symbol::Token(k.clone()))
+                sym: Some(Symbol::Token(k.clone())),
             });
         }
         Ok(())
@@ -245,7 +245,7 @@ impl GrammarAST {
 mod test {
     use super::{
         super::{AssocKind, Precedence},
-        GrammarAST, GrammarValidationError, GrammarValidationErrorKind, Symbol
+        GrammarAST, GrammarValidationError, GrammarValidationErrorKind, Symbol,
     };
 
     fn rule(n: &str) -> Symbol {
@@ -264,7 +264,7 @@ mod test {
                 kind: GrammarValidationErrorKind::NoStartRule,
                 ..
             }) => (),
-            _ => panic!("Validation error")
+            _ => panic!("Validation error"),
         }
     }
 
@@ -279,7 +279,7 @@ mod test {
                 kind: GrammarValidationErrorKind::InvalidStartRule,
                 ..
             }) => (),
-            _ => panic!("Validation error")
+            _ => panic!("Validation error"),
         }
     }
 
@@ -314,7 +314,7 @@ mod test {
                 kind: GrammarValidationErrorKind::UnknownRuleRef,
                 ..
             }) => (),
-            _ => panic!("Validation error")
+            _ => panic!("Validation error"),
         }
     }
 
@@ -351,7 +351,7 @@ mod test {
                 kind: GrammarValidationErrorKind::UnknownToken,
                 ..
             }) => (),
-            _ => panic!("Validation error")
+            _ => panic!("Validation error"),
         }
     }
 
@@ -366,7 +366,7 @@ mod test {
                 kind: GrammarValidationErrorKind::UnknownRuleRef,
                 ..
             }) => (),
-            _ => panic!("Validation error")
+            _ => panic!("Validation error"),
         }
     }
 
@@ -382,7 +382,7 @@ mod test {
                 kind: GrammarValidationErrorKind::UnknownEPP,
                 ..
             }) => (),
-            _ => panic!("Validation error")
+            _ => panic!("Validation error"),
         }
     }
 
@@ -393,8 +393,8 @@ mod test {
             "b".to_string(),
             Precedence {
                 level: 1,
-                kind: AssocKind::Left
-            }
+                kind: AssocKind::Left,
+            },
         );
         grm.start = Some("A".to_string());
         grm.tokens.insert("b".to_string());
@@ -403,7 +403,7 @@ mod test {
             "A".to_string(),
             vec![token("b")],
             Some("b".to_string()),
-            None
+            None,
         );
         assert!(grm.complete_and_validate().is_ok());
     }
@@ -417,14 +417,14 @@ mod test {
             "A".to_string(),
             vec![token("b")],
             Some("b".to_string()),
-            None
+            None,
         );
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
                 kind: GrammarValidationErrorKind::UnknownToken,
                 ..
             }) => (),
-            _ => panic!("Validation error")
+            _ => panic!("Validation error"),
         }
         grm.tokens.insert("b".to_string());
         match grm.complete_and_validate() {
@@ -432,7 +432,7 @@ mod test {
                 kind: GrammarValidationErrorKind::NoPrecForToken,
                 ..
             }) => (),
-            _ => panic!("Validation error")
+            _ => panic!("Validation error"),
         }
     }
 }

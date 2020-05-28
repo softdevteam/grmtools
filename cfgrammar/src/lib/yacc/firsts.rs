@@ -27,12 +27,12 @@ use crate::{RIdx, Symbol, TIdx};
 pub struct YaccFirsts<StorageT> {
     firsts: Vec<Vob>,
     epsilons: Vob,
-    phantom: PhantomData<StorageT>
+    phantom: PhantomData<StorageT>,
 }
 
 impl<StorageT: 'static + PrimInt + Unsigned> YaccFirsts<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
@@ -43,7 +43,7 @@ where
         let mut firsts = YaccFirsts {
             firsts,
             epsilons: Vob::from_elem(usize::from(grm.rules_len()), false),
-            phantom: PhantomData
+            phantom: PhantomData,
         };
 
         // Loop looking for changes to the firsts set, until we reach a fixed point. In essence, we
@@ -145,7 +145,7 @@ where
 mod test {
     use super::{
         super::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        YaccFirsts
+        YaccFirsts,
     };
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
@@ -153,15 +153,15 @@ mod test {
         grm: &YaccGrammar<StorageT>,
         firsts: &YaccFirsts<StorageT>,
         rn: &str,
-        should_be: Vec<&str>
+        should_be: Vec<&str>,
     ) where
-        usize: AsPrimitive<StorageT>
+        usize: AsPrimitive<StorageT>,
     {
         let ridx = grm.rule_idx(rn).unwrap();
         for tidx in grm.iter_tidxs() {
             let n = match grm.token_name(tidx) {
                 Some(n) => n,
-                None => &"<no name>"
+                None => &"<no name>",
             };
             match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
@@ -193,7 +193,7 @@ mod test {
           D: 'd';
           E: D | C;
           F: E;
-          "
+          ",
         )
         .unwrap();
         let firsts = grm.firsts();
@@ -214,7 +214,7 @@ mod test {
           C: 'c';
           D: 'd';
           E: D C;
-          "
+          ",
         )
         .unwrap();
         let firsts = grm.firsts();
@@ -233,7 +233,7 @@ mod test {
           B: 'b' | ;
           C: 'c' | ;
           D: C;
-          "
+          ",
         )
         .unwrap();
         let firsts = grm.firsts();
@@ -253,7 +253,7 @@ mod test {
           A: B C;
           B: 'b' | ;
           C: B 'c' B;
-          "
+          ",
         )
         .unwrap();
         let firsts = grm.firsts();
@@ -272,7 +272,7 @@ mod test {
           %%
           A: B 'b';
           B: 'b' | ;
-          "
+          ",
         )
         .unwrap();
         let firsts = grm.firsts();
@@ -292,7 +292,7 @@ mod test {
           C: D A;
           D: 'd' | ;
           F: C D 'f';
-          "
+          ",
         )
         .unwrap()
     }
@@ -324,7 +324,7 @@ mod test {
           D: D 'd' | F;
           F: 'f' | ;
           G: C D;
-          "
+          ",
         )
         .unwrap();
         let firsts = grm.firsts();

@@ -4,12 +4,12 @@ use std::{
     error::Error,
     fmt::{self, Debug},
     hash::Hash,
-    marker::PhantomData
+    marker::PhantomData,
 };
 
 use cfgrammar::{
     yacc::{AssocKind, YaccGrammar},
-    PIdx, RIdx, Symbol, TIdx
+    PIdx, RIdx, Symbol, TIdx,
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
@@ -23,13 +23,13 @@ use crate::{stategraph::StateGraph, StIdx, StIdxStorageT};
 #[derive(Debug)]
 pub struct Conflicts<StorageT> {
     reduce_reduce: Vec<(PIdx<StorageT>, PIdx<StorageT>, StIdx)>,
-    shift_reduce: Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx)>
+    shift_reduce: Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx)>,
 }
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> Conflicts<StorageT>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     /// Return an iterator over all shift/reduce conflicts.
     pub fn sr_conflicts(&self) -> impl Iterator<Item = &(TIdx<StorageT>, PIdx<StorageT>, StIdx)> {
@@ -84,14 +84,14 @@ where
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
 pub enum StateTableErrorKind {
-    AcceptReduceConflict
+    AcceptReduceConflict,
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
 #[derive(Debug)]
 pub struct StateTableError<StorageT> {
     pub kind: StateTableErrorKind,
-    pub pidx: PIdx<StorageT>
+    pub pidx: PIdx<StorageT>,
 }
 
 impl<StorageT: Debug> Error for StateTableError<StorageT> {}
@@ -100,7 +100,7 @@ impl<StorageT> fmt::Display for StateTableError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s;
         match self.kind {
-            StateTableErrorKind::AcceptReduceConflict => s = "Accept/reduce conflict"
+            StateTableErrorKind::AcceptReduceConflict => s = "Accept/reduce conflict",
         }
         write!(f, "{}", s)
     }
@@ -127,7 +127,7 @@ pub struct StateTable<StorageT> {
     prods_len: PIdx<StorageT>,
     tokens_len: TIdx<StorageT>,
     conflicts: Option<Conflicts<StorageT>>,
-    pub final_state: StIdx
+    pub final_state: StIdx,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -140,7 +140,7 @@ pub enum Action<StorageT> {
     /// Accept this input.
     Accept,
     /// No valid action.
-    Error
+    Error,
 }
 
 const SHIFT: usize = 1;
@@ -151,17 +151,17 @@ const ERROR: usize = 0;
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateTable<StorageT>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     pub fn new(
         grm: &YaccGrammar<StorageT>,
-        sg: &StateGraph<StorageT>
+        sg: &StateGraph<StorageT>,
     ) -> Result<Self, StateTableError<StorageT>> {
         let mut state_actions = Vob::from_elem(
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.tokens_len()))
                 .unwrap(),
-            false
+            false,
         );
         let maxa = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         let maxg = usize::from(grm.rules_len()) * usize::from(sg.all_states_len());
@@ -198,7 +198,7 @@ where
                         stidx,
                         // Since ctx is exactly tokens_len bits long, the call
                         // to as_ is safe.
-                        TIdx(tidx.as_())
+                        TIdx(tidx.as_()),
                     );
                     state_actions.set(off, true);
                     match StateTable::decode(actions[off]) {
@@ -207,7 +207,7 @@ where
                             {
                                 return Err(StateTableError {
                                     kind: StateTableErrorKind::AcceptReduceConflict,
-                                    pidx
+                                    pidx,
                                 });
                             }
                             // By default, Yacc resolves reduce/reduce conflicts in favour
@@ -218,13 +218,13 @@ where
                                     actions[off] = StateTable::encode(Action::Reduce(pidx));
                                 }
                                 Ordering::Greater => reduce_reduce.push((r_pidx, pidx, stidx)),
-                                Ordering::Equal => ()
+                                Ordering::Equal => (),
                             }
                         }
                         Action::Accept => {
                             return Err(StateTableError {
                                 kind: StateTableErrorKind::AcceptReduceConflict,
-                                pidx
+                                pidx,
                             });
                         }
                         Action::Error => {
@@ -237,7 +237,7 @@ where
                                 actions[off] = StateTable::encode(Action::Reduce(pidx));
                             }
                         }
-                        _ => panic!("Internal error")
+                        _ => panic!("Internal error"),
                     }
                 }
             }
@@ -267,7 +267,7 @@ where
                                     r_pidx,
                                     *ref_stidx,
                                     &mut shift_reduce,
-                                    stidx
+                                    stidx,
                                 );
                             }
                             Action::Accept => panic!("Internal error"),
@@ -286,13 +286,13 @@ where
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.prods_len()))
                 .unwrap(),
-            false
+            false,
         );
         let mut state_shifts = Vob::from_elem(
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.tokens_len()))
                 .unwrap(),
-            false
+            false,
         );
         let mut reduce_states = Vob::from_elem(usize::from(sg.all_states_len()), false);
         for stidx in sg.iter_stidxs() {
@@ -313,7 +313,7 @@ where
                     Action::Accept => {
                         only_reduces = false;
                     }
-                    Action::Error => ()
+                    Action::Error => (),
                 }
             }
 
@@ -340,7 +340,7 @@ where
         let conflicts = if !(reduce_reduce.is_empty() && shift_reduce.is_empty()) {
             Some(Conflicts {
                 reduce_reduce,
-                shift_reduce
+                shift_reduce,
             })
         } else {
             None
@@ -357,7 +357,7 @@ where
             prods_len: grm.prods_len(),
             tokens_len: grm.tokens_len(),
             conflicts,
-            final_state: final_state.unwrap()
+            final_state: final_state.unwrap(),
         })
     }
 
@@ -374,7 +374,7 @@ where
             REDUCE => Action::Reduce(PIdx(val.as_())),
             ACCEPT => Action::Accept,
             ERROR => Action::Error,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -383,7 +383,7 @@ where
             Action::Shift(stidx) => SHIFT | (usize::from(stidx) << 2),
             Action::Reduce(ridx) => REDUCE | (usize::from(ridx) << 2),
             Action::Accept => ACCEPT,
-            Action::Error => ERROR
+            Action::Error => ERROR,
         }
     }
 
@@ -392,7 +392,7 @@ where
         StateTable::decode(
             self.actions
                 .get(usize::from(stidx), usize::from(tidx))
-                .unwrap()
+                .unwrap(),
         )
     }
 
@@ -403,7 +403,7 @@ where
         StateActionsIterator {
             iter: self.state_actions.iter_set_bits(start..end),
             start,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -415,7 +415,7 @@ where
         StateActionsIterator {
             iter: self.state_shifts.iter_set_bits(start..end),
             start,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -446,7 +446,7 @@ where
         CoreReducesIterator {
             iter: self.core_reduces.iter_set_bits(start..end),
             start,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -459,7 +459,7 @@ where
             // gotos can only contain state id's which we know can fit into StIdxStorageT so this
             // cast is safe
             Some(i) => Some(StIdx((i - 1) as StIdxStorageT)),
-            None => unreachable!()
+            None => unreachable!(),
         }
     }
 
@@ -472,7 +472,7 @@ where
 fn actions_offset<StorageT: PrimInt + Unsigned>(
     tokens_len: TIdx<StorageT>,
     stidx: StIdx,
-    tidx: TIdx<StorageT>
+    tidx: TIdx<StorageT>,
 ) -> usize {
     usize::from(stidx) * usize::from(tokens_len) + usize::from(tidx)
 }
@@ -480,12 +480,12 @@ fn actions_offset<StorageT: PrimInt + Unsigned>(
 pub struct StateActionsIterator<'a, StorageT> {
     iter: IterSetBits<'a, usize>,
     start: usize,
-    phantom: PhantomData<StorageT>
+    phantom: PhantomData<StorageT>,
 }
 
 impl<'a, StorageT: 'static + PrimInt + Unsigned> Iterator for StateActionsIterator<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     type Item = TIdx<StorageT>;
 
@@ -499,12 +499,12 @@ where
 pub struct CoreReducesIterator<'a, StorageT> {
     iter: IterSetBits<'a, usize>,
     start: usize,
-    phantom: PhantomData<StorageT>
+    phantom: PhantomData<StorageT>,
 }
 
 impl<'a, StorageT: 'static + PrimInt + Unsigned> Iterator for CoreReducesIterator<'a, StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     type Item = PIdx<StorageT>;
 
@@ -523,10 +523,10 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     pidx: PIdx<StorageT>,
     stidx: StIdx, // State we want to shift to
     shift_reduce: &mut Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx)>,
-    conflict_stidx: StIdx // State in which the conflict occured
+    conflict_stidx: StIdx, // State in which the conflict occured
 ) where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     let tidx_prec = grm.token_precedence(tidx);
     let pidx_prec = grm.prod_precedence(pidx);
@@ -578,7 +578,7 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
 mod test {
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        PIdx, Symbol, TIdx
+        PIdx, Symbol, TIdx,
     };
     use std::collections::HashSet;
 
@@ -927,7 +927,7 @@ mod test {
 A : 'a' 'b' | B 'b';
 B : 'a' | C;
 C : 'a';
-          "
+          ",
         )
         .unwrap();
         let sg = pager_stategraph(&grm);
@@ -961,7 +961,7 @@ C : 'a';
 %start D
 %%
 D : D;
-          "
+          ",
         )
         .unwrap();
         let sg = pager_stategraph(&grm);
@@ -969,9 +969,9 @@ D : D;
             Ok(_) => panic!("Infinitely recursive rule let through"),
             Err(StateTableError {
                 kind: StateTableErrorKind::AcceptReduceConflict,
-                pidx
+                pidx,
             }) if pidx == PIdx(1) => (),
-            Err(e) => panic!("Incorrect error returned {:?}", e)
+            Err(e) => panic!("Incorrect error returned {:?}", e),
         }
     }
 }

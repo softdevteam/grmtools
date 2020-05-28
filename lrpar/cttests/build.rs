@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "Original(YaccOriginalActionKind::GenericParseTree)" => {
                     YaccKind::Original(YaccOriginalActionKind::GenericParseTree)
                 }
-                s => panic!("YaccKind '{}' not supported", s)
+                s => panic!("YaccKind '{}' not supported", s),
             };
 
             // The code below, in essence, replicates lrlex and lrpar's internal / undocumented

@@ -7,7 +7,7 @@ pub mod parser;
 pub use self::{
     ast::{GrammarValidationError, GrammarValidationErrorKind},
     grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar, YaccGrammarError},
-    parser::{YaccParserError, YaccParserErrorKind}
+    parser::{YaccParserError, YaccParserErrorKind},
 };
 
 /// The particular Yacc variant this grammar makes use of.
@@ -20,7 +20,7 @@ pub enum YaccKind {
     /// own return type.
     Grmtools,
     /// The variant used in the [Eco language composition editor](http://soft-dev.org/src/eco/)
-    Eco
+    Eco,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -31,5 +31,5 @@ pub enum YaccOriginalActionKind {
     /// Automatically create a parse tree instead of user-specified actions.
     GenericParseTree,
     /// Do not do execute actions of any sort.
-    NoAction
+    NoAction,
 }

@@ -10,7 +10,7 @@ use std::{
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
     io::Write,
-    path::{Path, PathBuf}
+    path::{Path, PathBuf},
 };
 
 use lazy_static::lazy_static;
@@ -27,7 +27,7 @@ lazy_static! {
 }
 
 pub enum LexerKind {
-    LRNonStreamingLexer
+    LRNonStreamingLexer,
 }
 
 /// A `LexerBuilder` allows one to specify the criteria for building a statically generated
@@ -37,12 +37,12 @@ pub struct LexerBuilder<'a, StorageT = u32> {
     mod_name: Option<&'a str>,
     rule_ids_map: Option<HashMap<String, StorageT>>,
     allow_missing_terms_in_lexer: bool,
-    allow_missing_tokens_in_parser: bool
+    allow_missing_tokens_in_parser: bool,
 }
 
 impl<'a, StorageT> LexerBuilder<'a, StorageT>
 where
-    StorageT: Copy + Debug + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned
+    StorageT: Copy + Debug + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned,
 {
     /// Create a new `LexerBuilder`.
     ///
@@ -66,7 +66,7 @@ where
             mod_name: None,
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
-            allow_missing_tokens_in_parser: true
+            allow_missing_tokens_in_parser: true,
         }
     }
 
@@ -101,7 +101,7 @@ where
     /// generated files.
     pub fn process_file_in_src(
         self,
-        srcp: &str
+        srcp: &str,
     ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>> {
         let mut inp = current_dir()?;
         inp.push("src");
@@ -141,11 +141,11 @@ where
     pub fn process_file<P, Q>(
         self,
         inp: P,
-        outp: Q
+        outp: Q,
     ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>>
     where
         P: AsRef<Path>,
-        Q: AsRef<Path>
+        Q: AsRef<Path>,
     {
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => {
@@ -162,11 +162,11 @@ where
                 match lexerdef.set_rule_ids(&owned_map) {
                     (x, y) => (
                         x.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
-                        y.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>())
-                    )
+                        y.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
+                    ),
                 }
             }
-            None => (None, None)
+            None => (None, None),
         };
 
         if !self.allow_missing_terms_in_lexer {
@@ -216,8 +216,8 @@ where
         let (lexerdef_name, lexerdef_type) = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => (
                 "LRNonStreamingLexerDef",
-                format!("LRNonStreamingLexerDef<{}>", type_name::<StorageT>())
-            )
+                format!("LRNonStreamingLexerDef<{}>", type_name::<StorageT>()),
+            ),
         };
 
         outs.push_str(&format!(
@@ -235,11 +235,11 @@ pub fn lexerdef() -> {lexerdef_type} {{
         for r in lexerdef.iter_rules() {
             let tok_id = match r.tok_id {
                 Some(ref t) => format!("Some({:?})", t),
-                None => "None".to_owned()
+                None => "None".to_owned(),
             };
             let n = match r.name {
                 Some(ref n) => format!("Some({:?}.to_string())", n),
-                None => "None".to_owned()
+                None => "None".to_owned(),
             };
             outs.push_str(&format!(
                 "

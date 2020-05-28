@@ -16,7 +16,7 @@ pub mod statetable;
 
 pub use crate::{
     stategraph::StateGraph,
-    statetable::{Action, StateTable, StateTableError, StateTableErrorKind}
+    statetable::{Action, StateTable, StateTableError, StateTableErrorKind},
 };
 use cfgrammar::yacc::YaccGrammar;
 
@@ -57,16 +57,16 @@ impl From<StIdx> for StIdxStorageT {
 
 #[derive(Clone, Copy)]
 pub enum Minimiser {
-    Pager
+    Pager,
 }
 
 pub fn from_yacc<StorageT: 'static + Hash + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
-    m: Minimiser
+    m: Minimiser,
 ) -> Result<(StateGraph<StorageT>, StateTable<StorageT>), StateTableError<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     match m {
         Minimiser::Pager => {

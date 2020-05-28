@@ -10,7 +10,7 @@ use crate::Span;
 /// A Lexing error.
 #[derive(Copy, Clone, Debug)]
 pub struct LexError {
-    span: Span
+    span: Span,
 }
 
 impl LexError {
@@ -83,7 +83,7 @@ pub struct Lexeme<StorageT> {
     // still fitting into 2 64-bit words.
     start: usize,
     len: u32,
-    tok_id: StorageT
+    tok_id: StorageT,
 }
 
 impl<StorageT: Copy> Lexeme<StorageT> {

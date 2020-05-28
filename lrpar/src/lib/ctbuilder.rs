@@ -11,13 +11,13 @@ use std::{
     hash::Hash,
     io::{self, Write},
     marker::PhantomData,
-    path::{Path, PathBuf}
+    path::{Path, PathBuf},
 };
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-    RIdx, Symbol
+    RIdx, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -47,14 +47,14 @@ lazy_static! {
 struct CTConflictsError<StorageT: Eq + Hash> {
     pub grm: YaccGrammar<StorageT>,
     pub sgraph: StateGraph<StorageT>,
-    pub stable: StateTable<StorageT>
+    pub stable: StateTable<StorageT>,
 }
 
 impl<StorageT> fmt::Display for CTConflictsError<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let conflicts = self.stable.conflicts().unwrap();
@@ -71,7 +71,7 @@ impl<StorageT> fmt::Debug for CTConflictsError<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let conflicts = self.stable.conflicts().unwrap();
@@ -88,7 +88,7 @@ impl<StorageT> Error for CTConflictsError<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
 }
 
@@ -96,7 +96,7 @@ where
 /// parser.
 pub struct CTParserBuilder<'a, StorageT = u32>
 where
-    StorageT: Eq + Hash
+    StorageT: Eq + Hash,
 {
     // Anything stored in here (except `conflicts` and `error_on_conflict`) almost certainly needs
     // to be included as part of the rebuild_cache function below so that, if it's changed, the
@@ -108,9 +108,9 @@ where
     conflicts: Option<(
         YaccGrammar<StorageT>,
         StateGraph<StorageT>,
-        StateTable<StorageT>
+        StateTable<StorageT>,
     )>,
-    phantom: PhantomData<StorageT>
+    phantom: PhantomData<StorageT>,
 }
 
 impl<'a> CTParserBuilder<'a, u32> {
@@ -132,7 +132,7 @@ impl<'a, StorageT> CTParserBuilder<'a, StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>
+    u32: AsPrimitive<StorageT>,
 {
     /// Create a new `CTParserBuilder`.
     ///
@@ -159,7 +159,7 @@ where
             yacckind: None,
             error_on_conflicts: true,
             conflicts: None,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -194,12 +194,12 @@ where
     /// and pretty print them; otherwise returns `None`. Note: The conflicts feature is currently
     /// unstable and may change in the future.
     pub fn conflicts(
-        &self
+        &self,
     ) -> Option<(
         &YaccGrammar<StorageT>,
         &StateGraph<StorageT>,
         &StateTable<StorageT>,
-        &Conflicts<StorageT>
+        &Conflicts<StorageT>,
     )> {
         if let Some((grm, sgraph, stable)) = &self.conflicts {
             return Some((grm, sgraph, stable, &stable.conflicts().unwrap()));
@@ -215,7 +215,7 @@ where
     /// generated files.
     pub fn process_file_in_src(
         &mut self,
-        srcp: &str
+        srcp: &str,
     ) -> Result<HashMap<String, StorageT>, Box<dyn Error>> {
         let mut inp = current_dir()?;
         inp.push("src");
@@ -273,17 +273,17 @@ where
     pub fn process_file<P, Q>(
         &mut self,
         inp: P,
-        outp: Q
+        outp: Q,
     ) -> Result<HashMap<String, StorageT>, Box<dyn Error>>
     where
         P: AsRef<Path>,
-        Q: AsRef<Path>
+        Q: AsRef<Path>,
     {
         let yk = match self.yacckind {
             None => panic!("yacckind must be specified before processing."),
             Some(YaccKind::Original(x)) => YaccKind::Original(x),
             Some(YaccKind::Grmtools) => YaccKind::Grmtools,
-            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported.")
+            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
         };
         let inc = read_to_string(&inp).unwrap();
         let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc)?;
@@ -328,7 +328,7 @@ where
             return Err(Box::new(CTConflictsError {
                 grm,
                 sgraph,
-                stable
+                stable,
             }));
         }
 
@@ -364,14 +364,14 @@ where
         stable: &StateTable<StorageT>,
         mod_name: &str,
         outp_rs: P,
-        cache: &str
+        cache: &str,
     ) -> Result<(), Box<dyn Error>> {
         let mut outs = String::new();
         // Header
         outs.push_str(&format!("mod {} {{\n", mod_name));
         outs.push_str(
             "    #![allow(clippy::type_complexity)]
-"
+",
         );
 
         outs.push_str(&self.gen_parse_function(grm, sgraph, stable)?);
@@ -384,7 +384,7 @@ where
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction)
             | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => (),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
         outs.push_str("}\n\n");
 
@@ -425,7 +425,7 @@ where
         for tidx in grm.iter_tidxs() {
             let n = match grm.token_name(tidx) {
                 Some(n) => format!("'{}'", n),
-                None => "<unknown>".to_string()
+                None => "<unknown>".to_string(),
             };
             cache.push_str(&format!("   {} {}\n", usize::from(tidx), n));
         }
@@ -439,7 +439,7 @@ where
         &self,
         grm: &YaccGrammar<StorageT>,
         sgraph: &StateGraph<StorageT>,
-        stable: &StateTable<StorageT>
+        stable: &StateTable<StorageT>,
     ) -> Result<String, Box<dyn Error>> {
         let mut outs = String::new();
 
@@ -482,7 +482,7 @@ where
                     storaget = type_name::<StorageT>()
                 ));
             }
-            YaccKind::Eco => unreachable!()
+            YaccKind::Eco => unreachable!(),
         };
 
         outs.push_str(&format!(
@@ -496,7 +496,7 @@ where
             RecoveryKind::CPCTPlus => "CPCTPlus",
             RecoveryKind::MF => "MF",
             RecoveryKind::Panic => "Panic",
-            RecoveryKind::None => "None"
+            RecoveryKind::None => "None",
         };
         match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
@@ -551,7 +551,7 @@ where
                     recoverer
                 ));
             }
-            YaccKind::Eco => unreachable!()
+            YaccKind::Eco => unreachable!(),
         };
 
         outs.push_str("\n    }\n\n");
@@ -578,7 +578,7 @@ where
         for tidx in grm.iter_tidxs() {
             match grm.token_epp(tidx) {
                 Some(n) => tidxs.push(format!("Some(\"{}\")", str_escape(n))),
-                None => tidxs.push("None".to_string())
+                None => tidxs.push("None".to_string()),
             }
         }
         format!(
@@ -793,7 +793,7 @@ where
                         } else if pre_action[last + off..].starts_with("$lexer") {
                             outs.push_str(&pre_action[last..last + off]);
                             outs.push_str(
-                                format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str()
+                                format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str(),
                             );
                             last = last + off + "$lexer".len();
                         } else if pre_action[last + off..].starts_with("$span") {
@@ -832,7 +832,7 @@ where
         debug_assert_eq!(grm.prod(grm.start_prod()).len(), 1);
         match grm.prod(grm.start_prod())[0] {
             Symbol::Rule(ridx) => ridx,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -848,11 +848,11 @@ fn str_escape(s: &str) -> String {
 pub fn _reconstitute<StorageT: DeserializeOwned + Hash + PrimInt + Unsigned>(
     grm_buf: &[u8],
     sgraph_buf: &[u8],
-    stable_buf: &[u8]
+    stable_buf: &[u8],
 ) -> (
     YaccGrammar<StorageT>,
     StateGraph<StorageT>,
-    StateTable<StorageT>
+    StateTable<StorageT>,
 ) {
     let grm = deserialize(grm_buf).unwrap();
     let sgraph = deserialize(sgraph_buf).unwrap();
@@ -863,7 +863,7 @@ pub fn _reconstitute<StorageT: DeserializeOwned + Hash + PrimInt + Unsigned>(
 fn serialize_bin_output<T: Serialize + ?Sized>(
     ser: &T,
     name: &str,
-    buffer: &mut String
+    buffer: &mut String,
 ) -> Result<(), Box<dyn Error>> {
     let mut w = ArrayWriter::new(name);
     serialize_into(&mut w, ser)?;
@@ -874,13 +874,14 @@ fn serialize_bin_output<T: Serialize + ?Sized>(
 
 /// Makes formatting bytes into a rust array relatively painless.
 struct ArrayWriter {
-    buffer: String
+    buffer: String,
 }
+
 impl ArrayWriter {
     /// create a new array with the specified name
     fn new(name: &str) -> Self {
         Self {
-            buffer: format!(r#"#[allow(dead_code)] const {}: &[u8] = &["#, name)
+            buffer: format!(r#"#[allow(dead_code)] const {}: &[u8] = &["#, name),
         }
     }
 
@@ -890,6 +891,7 @@ impl ArrayWriter {
         self.buffer
     }
 }
+
 impl Write for ArrayWriter {
     #[allow(dead_code)]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -925,7 +927,7 @@ mod test {
 A : 'a' 'b' | B 'b';
 B : 'a' | C;
 C : 'a';"
-                .as_bytes()
+                .as_bytes(),
         );
 
         let mut ct = CTParserBuilder::new()
@@ -938,7 +940,7 @@ C : 'a';"
                 assert_eq!(conflicts.sr_len(), 1);
                 assert_eq!(conflicts.rr_len(), 1);
             }
-            None => panic!("Expected error data")
+            None => panic!("Expected error data"),
         }
     }
 
@@ -954,7 +956,7 @@ C : 'a';"
 A : 'a' 'b' | B 'b';
 B : 'a' | C;
 C : 'a';"
-                .as_bytes()
+                .as_bytes(),
         );
 
         match CTParserBuilder::new()

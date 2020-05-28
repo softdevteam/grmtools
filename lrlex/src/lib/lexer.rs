@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     marker::PhantomData,
-    slice::Iter
+    slice::Iter,
 };
 
 use num_traits::{PrimInt, Unsigned};
@@ -24,7 +24,7 @@ pub struct Rule<StorageT> {
     /// create a lexeme).
     pub name: Option<String>,
     pub re_str: String,
-    pub re: Regex
+    pub re: Regex,
 }
 
 impl<StorageT> Rule<StorageT> {
@@ -34,7 +34,7 @@ impl<StorageT> Rule<StorageT> {
     pub fn new(
         tok_id: Option<StorageT>,
         name: Option<String>,
-        re_str: String
+        re_str: String,
     ) -> Result<Rule<StorageT>, regex::Error> {
         let re = RegexBuilder::new(&format!("\\A(?:{})", &re_str))
             .multi_line(true)
@@ -44,7 +44,7 @@ impl<StorageT> Rule<StorageT> {
             tok_id,
             name,
             re_str,
-            re
+            re,
         })
     }
 }
@@ -90,7 +90,7 @@ pub trait LexerDef<StorageT> {
     /// grammar where nothing the user can input will be parseable.
     fn set_rule_ids<'a>(
         &'a mut self,
-        rule_ids_map: &HashMap<&'a str, StorageT>
+        rule_ids_map: &HashMap<&'a str, StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>);
 
     /// Returns an iterator over all rules in this AST.
@@ -100,7 +100,7 @@ pub trait LexerDef<StorageT> {
 /// This struct represents, in essence, a .l file in memory. From it one can produce an
 /// [LRNonStreamingLexer] which actually lexes inputs.
 pub struct LRNonStreamingLexerDef<StorageT> {
-    pub(crate) rules: Vec<Rule<StorageT>>
+    pub(crate) rules: Vec<Rule<StorageT>>,
 }
 
 impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<StorageT>
@@ -132,7 +132,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<
 
     fn set_rule_ids<'a>(
         &'a mut self,
-        rule_ids_map: &HashMap<&'a str, StorageT>
+        rule_ids_map: &HashMap<&'a str, StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
@@ -178,10 +178,10 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<
                             .iter()
                             .filter(|x| x.name.is_some())
                             .map(|x| &**x.name.as_ref().unwrap())
-                            .collect::<HashSet<&str>>()
+                            .collect::<HashSet<&str>>(),
                     )
                     .cloned()
-                    .collect::<HashSet<&str>>()
+                    .collect::<HashSet<&str>>(),
             );
         }
 
@@ -200,7 +200,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
     /// [LRNonStreamingLexerDef].
     pub fn lexer<'lexer, 'input: 'lexer>(
         &'lexer self,
-        s: &'input str
+        s: &'input str,
     ) -> LRNonStreamingLexer<'lexer, 'input, StorageT> {
         LRNonStreamingLexer::new(self, s)
     }
@@ -213,7 +213,7 @@ pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
     s: &'input str,
     lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
     newlines: Vec<usize>,
-    phantom: PhantomData<&'lexer ()>
+    phantom: PhantomData<&'lexer ()>,
 }
 
 impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
@@ -221,7 +221,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usiz
 {
     fn new(
         lexerdef: &'lexer LRNonStreamingLexerDef<StorageT>,
-        s: &'input str
+        s: &'input str,
     ) -> LRNonStreamingLexer<'lexer, 'input, StorageT> {
         let mut lexemes = vec![];
         let mut newlines = vec![];
@@ -247,7 +247,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usiz
                         .chars()
                         .enumerate()
                         .filter(|&(_, c)| c == '\n')
-                        .map(|(j, _)| old_i + j + 1)
+                        .map(|(j, _)| old_i + j + 1),
                 );
                 let r = lexerdef.get_rule(longest_ridx).unwrap();
                 if r.name.is_some() {
@@ -272,7 +272,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usiz
             s,
             lexemes,
             newlines,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }
@@ -311,7 +311,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
 
         fn surrounding_line_off<StorageT>(
             lexer: &LRNonStreamingLexer<StorageT>,
-            i: usize
+            i: usize,
         ) -> (usize, usize) {
             if i > lexer.s.len() {
                 panic!("Offset {} exceeds known input length {}", i, lexer.s.len());
@@ -358,13 +358,13 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             }
             (
                 lexer.newlines.len() + 1,
-                i - lexer.newlines[lexer.newlines.len() - 1]
+                i - lexer.newlines[lexer.newlines.len() - 1],
             )
         }
 
         fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
             lexer: &LRNonStreamingLexer<StorageT>,
-            i: usize
+            i: usize,
         ) -> (usize, usize) {
             let (line_idx, col_byte) = lc_byte(lexer, i);
             let line = lexer.span_lines_str(Span::new(i, i));

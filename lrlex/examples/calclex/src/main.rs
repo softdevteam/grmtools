@@ -21,7 +21,7 @@ fn main() {
                 let lexer = lexerdef.lexer(l);
                 println!("{:?}", lexer.iter().collect::<Vec<_>>());
             }
-            _ => break
+            _ => break,
         }
     }
 }

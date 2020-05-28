@@ -3,7 +3,7 @@ use std::{
     fs::File,
     io::{stderr, Read, Write},
     path::Path,
-    process
+    process,
 };
 
 use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
@@ -17,7 +17,7 @@ fn usage(prog: &str, msg: &str) -> ! {
     let path = Path::new(prog);
     let leaf = match path.file_name() {
         Some(m) => m.to_str().unwrap(),
-        None => "lrpar"
+        None => "lrpar",
     };
     if !msg.is_empty() {
         writeln!(&mut stderr(), "{}", msg).ok();
@@ -54,18 +54,18 @@ fn main() {
             "r",
             "recoverer",
             "Recoverer to be used (default: cpctplus)",
-            "cpctplus|none"
+            "cpctplus|none",
         )
         .optopt(
             "y",
             "yaccvariant",
             "Yacc variant to be parsed (default: Original)",
-            "Eco|Original|Grmtools"
+            "Eco|Original|Grmtools",
         )
         .parse(&args[1..])
     {
         Ok(m) => m,
-        Err(f) => usage(prog, f.to_string().as_str())
+        Err(f) => usage(prog, f.to_string().as_str()),
     };
 
     if matches.opt_present("h") {
@@ -81,8 +81,8 @@ fn main() {
             "mf" => RecoveryKind::MF,
             "panic" => RecoveryKind::Panic,
             "none" => RecoveryKind::None,
-            _ => usage(prog, &format!("Unknown recoverer '{}'.", s))
-        }
+            _ => usage(prog, &format!("Unknown recoverer '{}'.", s)),
+        },
     };
 
     let yacckind = match matches.opt_str("y") {
@@ -91,8 +91,8 @@ fn main() {
             "eco" => YaccKind::Eco,
             "grmtools" => YaccKind::Grmtools,
             "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s))
-        }
+            _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s)),
+        },
     };
 
     if matches.free.len() != 3 {
@@ -169,7 +169,7 @@ fn main() {
     let (pt, errs) = pb.parse_generictree(&lexer);
     match pt {
         Some(pt) => println!("{}", pt.pp(&grm, &input)),
-        None => println!("Unable to repair input sufficiently to produce parse tree.\n")
+        None => println!("Unable to repair input sufficiently to produce parse tree.\n"),
     }
     for e in &errs {
         println!("{}", e.pp(&lexer, &|t| grm.token_epp(t)));

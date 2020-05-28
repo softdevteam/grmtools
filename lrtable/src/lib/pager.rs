@@ -1,6 +1,6 @@
 use std::{
     collections::{hash_map::HashMap, HashSet},
-    hash::Hash
+    hash::Hash,
 };
 
 use cfgrammar::{yacc::YaccGrammar, SIdx, Symbol};
@@ -114,10 +114,10 @@ fn vob_intersect(v1: &Vob, v2: &Vob) -> bool {
 
 /// Create a `StateGraph` from 'grm'.
 pub fn pager_stategraph<StorageT: 'static + Hash + PrimInt + Unsigned>(
-    grm: &YaccGrammar<StorageT>
+    grm: &YaccGrammar<StorageT>,
 ) -> StateGraph<StorageT>
 where
-    usize: AsPrimitive<StorageT>
+    usize: AsPrimitive<StorageT>,
 {
     // This function can be seen as a modified version of items() from Chen's dissertation.
 
@@ -170,7 +170,7 @@ where
             .position(Option::is_none)
         {
             Some(i) => todo_off + i,
-            None => closed_states.iter().position(Option::is_none).unwrap()
+            None => closed_states.iter().position(Option::is_none).unwrap(),
         };
         todo_off = state_i + 1;
         todo -= 1;
@@ -211,7 +211,7 @@ where
                 // Try and compatible match for this state.
                 let cnd_states = match sym {
                     Symbol::Rule(s_ridx) => &cnd_rule_weaklies[usize::from(s_ridx)],
-                    Symbol::Token(s_tidx) => &cnd_token_weaklies[usize::from(s_tidx)]
+                    Symbol::Token(s_tidx) => &cnd_token_weaklies[usize::from(s_tidx)],
                 };
                 // First of all see if any of the candidate states are exactly the same as the
                 // new state, in which case we only need to add an edge to the candidate
@@ -286,7 +286,7 @@ where
             .drain(..)
             .zip(closed_states.drain(..).map(Option::unwrap))
             .collect(),
-        edges
+        edges,
     );
     StateGraph::new(gc_states, gc_edges)
 }
@@ -295,10 +295,10 @@ where
 /// with unused states and their corresponding edges removed.
 fn gc<StorageT: Eq + Hash + PrimInt>(
     mut states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-    mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>>
+    mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>>,
 ) -> (
     Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-    Vec<HashMap<Symbol<StorageT>, StIdx>>
+    Vec<HashMap<Symbol<StorageT>, StIdx>>,
 ) {
     // First of all, do a simple pass over all states. All state indexes reachable from the
     // start state will be inserted into the 'seen' set.
@@ -315,7 +315,7 @@ fn gc<StorageT: Eq + Hash + PrimInt>(
         todo.extend(
             edges[usize::from(state_i)]
                 .values()
-                .filter(|x| !seen.contains(x))
+                .filter(|x| !seen.contains(x)),
         );
     }
 
@@ -374,7 +374,7 @@ fn gc<StorageT: Eq + Hash + PrimInt>(
             st_edges
                 .iter()
                 .map(|(&k, &v)| (k, offsets[usize::from(v)]))
-                .collect()
+                .collect(),
         );
     }
 
@@ -388,7 +388,7 @@ mod test {
     use crate::{pager::pager_stategraph, stategraph::state_exists, StIdx};
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        SIdx, Symbol
+        SIdx, Symbol,
     };
 
     use super::vob_intersect;
@@ -434,7 +434,7 @@ mod test {
           %%
           S: S 'b' | 'b' A 'a';
           A: 'a' S 'c' | 'a' | 'a' S 'b';
-          "
+          ",
         )
         .unwrap()
     }
@@ -516,7 +516,7 @@ mod test {
              T : 'u' X 'a';
              W : 'u' V;
              V : ;
-          "
+          ",
         )
         .unwrap()
     }

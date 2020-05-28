@@ -189,7 +189,7 @@ mod panic;
 pub mod parser;
 pub use crate::{
     ctbuilder::CTParserBuilder,
-    parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind}
+    parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
 mod mf;
 
@@ -210,7 +210,7 @@ pub use cfgrammar::RIdx;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Span {
     start: usize,
-    end: usize
+    end: usize,
 }
 
 impl Span {
