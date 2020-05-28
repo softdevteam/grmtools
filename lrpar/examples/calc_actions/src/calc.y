@@ -19,7 +19,7 @@ Factor -> Result<u64, Box<dyn Error>>:
       '(' Expr ')' { $2 }
     | 'INT'
       {
-          parse_int($lexer.span_str($1?.span()))
+          parse_int($lexer.span_str($1.map_err(|_| "<evaluation aborted>")?.span()))
       }
     ;
 %%
