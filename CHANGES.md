@@ -1,4 +1,4 @@
-# grmtools 0.8.0 (20xx-xx-xx)
+# grmtools 0.8.0 (2020-05-28)
 
 ## Breaking changes
 
@@ -15,6 +15,13 @@
 
 * The `lrlex::build_lex` function has been deprecated in favour of
   `LRNonStreamingLexerDef::from_str`.
+
+## Bug fixes
+
+* The statetable and other elements were previously included in the user binary
+  with `include_bytes!`, but this could cause problems with relative path
+  names. We now include the statetable and other elements in generated source
+  code to avoid this issue.
 
 
 # grmtools 0.7.0 (2020-04-30)

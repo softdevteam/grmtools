@@ -29,14 +29,14 @@ doc = false
 name = "calc"
 
 [build-dependencies]
-cfgrammar = "0.7"
-lrlex = "0.7"
-lrpar = "0.7"
+cfgrammar = "0.8"
+lrlex = "0.8"
+lrpar = "0.8"
 
 [dependencies]
-cfgrammar = "0.7"
-lrlex = "0.7"
-lrpar = "0.7"
+cfgrammar = "0.8"
+lrlex = "0.8"
+lrpar = "0.8"
 ```
 
 In this situation we want to statically compile the `.y` grammar and `.l` lexer
