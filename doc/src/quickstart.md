@@ -23,6 +23,7 @@ a `Cargo.toml` file with the following dependencies:
 name = "calc"
 version = "0.0.1"
 authors = ["<authors>"]
+edition = "2018"
 
 [[bin]]
 doc = false
@@ -221,7 +222,7 @@ fn main() {
                     println!("{}", e.pp(&lexer, &calc_y::token_epp));
                 }
                 match res {
-                    Some(r) => println!("Result: {}", r),
+                    Some(r) => println!("Result: {:?}", r),
                     _ => eprintln!("Unable to evaluate expression.")
                 }
             }
