@@ -14,6 +14,7 @@ use std::{
 };
 
 use lazy_static::lazy_static;
+use lrpar::Visibility;
 use num_traits::{PrimInt, Unsigned};
 use regex::Regex;
 use try_from::TryFrom;
@@ -35,6 +36,7 @@ pub enum LexerKind {
 pub struct LexerBuilder<'a, StorageT = u32> {
     lexerkind: LexerKind,
     mod_name: Option<&'a str>,
+    module_visibility: Visibility,
     rule_ids_map: Option<HashMap<String, StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
@@ -64,6 +66,7 @@ where
         LexerBuilder {
             lexerkind: LexerKind::LRNonStreamingLexer,
             mod_name: None,
+            module_visibility: Visibility::Private,
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
@@ -81,6 +84,13 @@ where
     /// the input filename.
     pub fn mod_name(mut self, mod_name: &'a str) -> Self {
         self.mod_name = Some(mod_name);
+        self
+    }
+
+    /// Set the visibility of the generated module to `vis`.
+    /// Defaults to `Visibility::Private` if not used.
+    pub fn visibility(mut self, vis: Visibility) -> Self {
+        self.module_visibility = vis;
         self
     }
 
@@ -126,7 +136,7 @@ where
     ///
     /// ```text
     ///    mod modname {
-    ///      fn lexerdef() -> LexerDef<StorageT> { ... }
+    ///      pub fn lexerdef() -> LexerDef<StorageT> { ... }
     ///
     ///      ...
     ///    }
@@ -221,12 +231,13 @@ where
         };
 
         outs.push_str(&format!(
-            "mod {mod_name} {{
+            "{mod_vis} mod {mod_name} {{
 use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule}};
 
 #[allow(dead_code)]
 pub fn lexerdef() -> {lexerdef_type} {{
     let rules = vec![",
+            mod_vis = self.module_visibility.get_str(),
             mod_name = mod_name,
             lexerdef_type = lexerdef_type
         ));
