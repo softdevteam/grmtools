@@ -120,6 +120,7 @@ pub struct StateTable<StorageT> {
     actions: SparseVec<usize>,
     state_actions: Vob,
     gotos: SparseVec<usize>,
+    start_state: StIdx,
     core_reduces: Vob,
     state_shifts: Vob,
     reduce_states: Vob,
@@ -350,6 +351,7 @@ where
             actions: actions_sv,
             state_actions,
             gotos: gotos_sv,
+            start_state: sg.start_state(),
             state_shifts,
             core_reduces,
             reduce_states,
@@ -461,6 +463,11 @@ where
             Some(i) => Some(StIdx((i - 1) as StIdxStorageT)),
             None => unreachable!(),
         }
+    }
+
+    /// Return this state table's start state.
+    pub fn start_state(&self) -> StIdx {
+        self.start_state
     }
 
     /// Return a struct containing all conflicts or `None` if there aren't any.
@@ -602,7 +609,7 @@ mod test {
         let sg = pager_stategraph(&grm);
         assert_eq!(sg.all_states_len(), StIdx(9));
 
-        let s0 = StIdx(0);
+        let s0 = sg.start_state();
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s2 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Term").unwrap())).unwrap();
         let s3 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Factor").unwrap())).unwrap();
@@ -685,7 +692,7 @@ mod test {
         assert_eq!(st.actions.len(), len);
 
         // We only extract the states necessary to test those rules affected by the reduce/reduce.
-        let s0 = StIdx(0);
+        let s0 = sg.start_state();
         let s4 = sg.edge(s0, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
 
         assert_eq!(st.action(s4, grm.token_idx("x").unwrap()),
@@ -707,7 +714,7 @@ mod test {
         let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         assert_eq!(st.actions.len(), len);
 
-        let s0 = StIdx(0);
+        let s0 = sg.start_state();
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Token(grm.token_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Token(grm.token_idx("*").unwrap())).unwrap();
@@ -737,7 +744,7 @@ mod test {
             ").unwrap();
         let sg = pager_stategraph(&grm);
         let st = StateTable::new(&grm, &sg).unwrap();
-        let s0 = StIdx(0);
+        let s0 = sg.start_state();
         let s1 = sg.edge(s0, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
         let s2 = sg.edge(s0, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
 
@@ -764,7 +771,7 @@ mod test {
         let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         assert_eq!(st.actions.len(), len);
 
-        let s0 = StIdx(0);
+        let s0 = sg.start_state();
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Token(grm.token_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Token(grm.token_idx("*").unwrap())).unwrap();
@@ -805,7 +812,7 @@ mod test {
         let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         assert_eq!(st.actions.len(), len);
 
-        let s0 = StIdx(0);
+        let s0 = sg.start_state();
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Token(grm.token_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Token(grm.token_idx("*").unwrap())).unwrap();
@@ -863,7 +870,7 @@ mod test {
         let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         assert_eq!(st.actions.len(), len);
 
-        let s0 = StIdx(0);
+        let s0 = sg.start_state();
         let s1 = sg.edge(s0, Symbol::Rule(grm.rule_idx("Expr").unwrap())).unwrap();
         let s3 = sg.edge(s1, Symbol::Token(grm.token_idx("+").unwrap())).unwrap();
         let s4 = sg.edge(s1, Symbol::Token(grm.token_idx("*").unwrap())).unwrap();

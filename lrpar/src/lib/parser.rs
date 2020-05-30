@@ -9,8 +9,8 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
-use lrtable::{Action, StIdx, StIdxStorageT, StateGraph, StateTable};
-use num_traits::{AsPrimitive, PrimInt, Unsigned, Zero};
+use lrtable::{Action, StIdx, StateGraph, StateTable};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use crate::{
     cpctplus,
@@ -125,7 +125,7 @@ where
             lexemes,
             actions: actions.as_slice(),
         };
-        let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
+        let mut pstack = vec![sgraph.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
@@ -180,7 +180,7 @@ where
             lexemes,
             actions: actions.as_slice(),
         };
-        let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
+        let mut pstack = vec![sgraph.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
@@ -231,7 +231,7 @@ where
             lexemes,
             actions,
         };
-        let mut pstack = vec![StIdx::from(StIdxStorageT::zero())];
+        let mut pstack = vec![sgraph.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();

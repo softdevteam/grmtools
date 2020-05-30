@@ -900,8 +900,8 @@ mod test {
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Symbol,
     };
-    use lrtable::{from_yacc, Minimiser, StIdx, StIdxStorageT};
-    use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned, Zero};
+    use lrtable::{from_yacc, Minimiser};
+    use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
     use crate::{
         lex::Lexeme,
@@ -947,7 +947,7 @@ A: '(' A ')'
         let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), grms).unwrap();
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
-        let s0 = StIdx::from(StIdxStorageT::zero());
+        let s0 = sgraph.start_state();
         assert_eq!(d.dist(s0, grm.token_idx("(").unwrap()), 0);
         assert_eq!(d.dist(s0, grm.token_idx(")").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.token_idx("a").unwrap()), 0);
@@ -1014,7 +1014,7 @@ U: 'B';
         // This only tests a subset of all the states and distances but, I believe, it tests all
         // more interesting edge cases that the example from the Kim/Yi paper.
 
-        let s0 = StIdx::from(StIdxStorageT::zero());
+        let s0 = sgraph.start_state();
         assert_eq!(d.dist(s0, grm.token_idx("A").unwrap()), 0);
         assert_eq!(d.dist(s0, grm.token_idx("B").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.token_idx("C").unwrap()), 2);
@@ -1072,7 +1072,7 @@ Factor: '(' Expr ')'
         // This only tests a subset of all the states and distances but, I believe, it tests all
         // more interesting edge cases that the example from the Kim/Yi paper.
 
-        let s0 = StIdx::from(StIdxStorageT::zero());
+        let s0 = sgraph.start_state();
         assert_eq!(d.dist(s0, grm.token_idx("+").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.token_idx("*").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.token_idx("(").unwrap()), 0);
@@ -1134,7 +1134,7 @@ W: 'b' ;
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let d = Dist::new(&grm, &sgraph, &stable, |_| 1);
 
-        let s0 = StIdx::from(StIdxStorageT::zero());
+        let s0 = sgraph.start_state();
         assert_eq!(d.dist(s0, grm.token_idx("a").unwrap()), 0);
         assert_eq!(d.dist(s0, grm.token_idx("b").unwrap()), 1);
         assert_eq!(d.dist(s0, grm.eof_token_idx()), 0);
