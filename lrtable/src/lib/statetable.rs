@@ -110,13 +110,6 @@ impl<StorageT> fmt::Display for StateTableError<StorageT> {
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StateTable<StorageT> {
-    // For actions, we use a HashMap as a quick representation of a sparse table. We use the normal
-    // statetable representation where rows represent states and columns represent tokens. Thus
-    // the statetable:
-    //        A         B
-    //   0  shift 1
-    //   1  shift 0  reduce B
-    // is represented as a hashtable {0: shift 1, 2: shift 0, 3: reduce 4}.
     actions: SparseVec<usize>,
     state_actions: Vob,
     gotos: SparseVec<usize>,
