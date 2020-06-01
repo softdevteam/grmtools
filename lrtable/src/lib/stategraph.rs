@@ -13,6 +13,7 @@ use crate::{itemset::Itemset, StIdx, StIdxStorageT};
 pub struct StateGraph<StorageT: Eq + Hash> {
     /// A vector of `(core_states, closed_states)` tuples.
     states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
+    start_state: StIdx,
     /// For each state in `states`, edges is a hashmap from symbols to state offsets.
     edges: Vec<HashMap<Symbol<StorageT>, StIdx>>,
 }
@@ -23,12 +24,22 @@ where
 {
     pub(crate) fn new(
         states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
+        start_state: StIdx,
         edges: Vec<HashMap<Symbol<StorageT>, StIdx>>,
     ) -> Self {
         // states.len() needs to fit into StIdxStorageT; however we don't need to worry about
         // edges.len() (which merely needs to fit in a usize)
         assert!(StIdxStorageT::try_from(states.len()).is_ok());
-        StateGraph { states, edges }
+        StateGraph {
+            states,
+            start_state,
+            edges,
+        }
+    }
+
+    /// Return this state graph's start state.
+    pub fn start_state(&self) -> StIdx {
+        self.start_state
     }
 
     /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
@@ -113,7 +124,7 @@ where
 
         let mut o = String::new();
         for (stidx, &(ref core_st, ref closed_st)) in self.iter_stidxs().zip(self.states.iter()) {
-            if StIdxStorageT::from(stidx) > 0 {
+            if stidx != self.start_state {
                 o.push_str(&"\n");
             }
             {
