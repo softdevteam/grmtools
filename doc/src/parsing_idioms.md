@@ -4,7 +4,7 @@ grmtools is a flexible tool and can be used in many ways. However, for those
 using the `Grmtools` format, the simple idioms below can often make life easier.
 
 
-# Return `Span`s when possible
+## Return `Span`s when possible
 
 When executing grammar actions one is often building up an Abstract Syntax Tree
 (AST) or equivalent. For example consider a simple language with assignments:
@@ -76,7 +76,7 @@ using the `'input` to extract `&str`'s during parsing, since this does not
 cause any additional memory to be allocated.
 
 
-# Have rules return a `Result` type and add a function to avoid `map_err` directly
+## Have rules return a `Result` type and add a function to avoid `map_err` directly
 
 As described in the [error recovery
 section](errorrecovery.html#a-rule-of-thumb-have-rules-return-a-result-type), it
@@ -108,7 +108,7 @@ fn map_err(r: Result<Lexeme<StorageT>, Lexeme<StorageT>>)
 ```
 
 
-# Define a `flatten` function
+## Define a `flatten` function
 
 Yacc grammars make specifying sequences of things something of a bore. A common
 idiom is thus:
@@ -152,7 +152,7 @@ Note that `flatten` is generic with respect to `T` so that it can be used in
 multiple places in the grammar.
 
 
-# Composing the idioms
+## Composing the idioms
 
 Happily, `flatten`, `map_err`, and `Lexeme` combine well:
 
