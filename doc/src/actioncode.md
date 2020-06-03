@@ -7,8 +7,11 @@ Action code is normal Rust code with the addition of the following special varia
  * `$1` ... `$n` refer to the respective symbol in the production, numbered
    from 1 (i.e. `$1` refers to the first symbol in the production). If the
    symbol references a rule `R` then an instance of `R`'s type will be stored
-   in the `$i` variable; if the symbol references a lexeme then an
-   `Option<Lexeme>` instance is returned.
+   in the `$i` variable. If the symbol references a lexeme then a
+   `Result<Lexeme<StorageT>, Lexeme<StorageT>>` instance is returned where the
+   `Ok` variant is used for lexemes that are directly derived from the user's
+   input and the `Err` variant is used for lexemes that have been inserted by
+   [error recovery](errorrecovery.md).
 
  * `$lexer` allows access to the lexer and its [various
    functions](https://softdevteam.github.io/grmtools/master/api/lrpar/trait.Lexer.html).
