@@ -8,13 +8,8 @@ starting at index 7 to index 10"). There is also a simple mechanism to
 differentiate lexemes of zero length (e.g. `DEDENT` tokens in Python) from
 lexemes inserted by [error recovery](errorrecovery.md).
 
-Users can write custom lexers that conform to the `lrpar::lex::Lexer` trait.
-This API allows users to deal with streaming data since the parser asks the
-`Lexer` for one token at a time. However, note that users can later ask the
-`Lexer` to return the string from the input matching a lexeme: users need to
-buffer input to provide this information.
-
-Hand-written lexers are not particularly difficult to write and, for better or
-worse, are necessary for many real-world languages. However, a subset of
-languages can use a simpler `lex`/`flex` style approach to lexing, for which
-[`lrlex`](lrlex.html) can be used.
+A subset of languages can use a simple `lex`/`flex` style approach to lexing,
+for which [`lrlex`](lrlex.html) can be used. For situations which require more
+flexibility, users can write their own custom lexer provided it implements the
+[`lrpar::lex::NonStreamingLexer`](https://softdevteam.github.io/grmtools/master/api/lrpar/trait.NonStreamingLexer.html)
+trait.
