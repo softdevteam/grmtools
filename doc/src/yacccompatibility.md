@@ -25,7 +25,7 @@ There are several differences between Yacc and grmtools including:
    variant](#grmtools) below for the most common way of making grammars do
    something useful; in a limited number of cases (e.g. if you just want to
    build a parse tree), you may find the ["Original" Yacc
-   variants](#original-yacc) useful.
+   variant](#original-yacc) useful.
 
 
 ## Grmtools
