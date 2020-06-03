@@ -25,7 +25,7 @@ There are several differences between Yacc and grmtools including:
    variant](#grmtools) below for the most common way of making grammars do
    something useful; in a limited number of cases (e.g. if you just want to
    build a parse tree), you may find the ["Original" Yacc
-   variants](#original-yacc) useful.
+   variant](#original-yacc) useful.
 
 
 ## Grmtools
@@ -66,7 +66,8 @@ externally created Yacc files. Several sub-variants are allowed:
 
 * `YaccKind::Original(YaccOriginalActionKind::NoActions)` parses input and
   reports errors but does not execute any user actions. This is useful if you
-  are trying to test a large corpus of input for correctness.
+  are trying to find out whether a corpus of input parses successfully against
+  your grammar or not.
 
 * `YaccKind::Original(YaccOriginalActionKind::UserAction)` models original Yacc
   most closely but, in a Rust setting, is probably of little use beyond simple
