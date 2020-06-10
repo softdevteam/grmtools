@@ -2,6 +2,7 @@
 
 use std::{
     any::type_name,
+    borrow::Cow,
     collections::HashMap,
     convert::AsRef,
     env::{current_dir, var},
@@ -92,6 +93,47 @@ where
 {
 }
 
+/// Visibility controls how public generated code is.
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub enum Visibility {
+    /// No visibiility, just private.
+    Private,
+
+    /// `pub`
+    Public,
+
+    /// `pub(super)`
+    PublicSuper,
+
+    /// `pub(self)`
+    PublicSelf,
+
+    /// `pub(crate)`
+    PublicCrate,
+
+    /// `pub(in {arg})`
+    PublicIn(String),
+}
+impl Default for Visibility {
+    fn default() -> Self {
+        Self::Private
+    }
+}
+
+impl Visibility {
+    /// returns a string to serialize the result
+    pub fn get_str(&self) -> Cow<'static, str> {
+        match self {
+            Visibility::Private => Cow::from(""),
+            Visibility::Public => Cow::from("pub"),
+            Visibility::PublicSuper => Cow::from("pub(super)"),
+            Visibility::PublicSelf => Cow::from("pub(self)"),
+            Visibility::PublicCrate => Cow::from("pub(crate)"),
+            Visibility::PublicIn(data) => Cow::from(format!("pub(in {})", data)),
+        }
+    }
+}
+
 /// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
 pub struct CTParserBuilder<'a, StorageT = u32>
@@ -105,6 +147,7 @@ where
     recoverer: RecoveryKind,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
+    module_visibility: Visibility,
     conflicts: Option<(
         YaccGrammar<StorageT>,
         StateGraph<StorageT>,
@@ -158,6 +201,7 @@ where
             recoverer: RecoveryKind::MF,
             yacckind: None,
             error_on_conflicts: true,
+            module_visibility: Visibility::Private,
             conflicts: None,
             phantom: PhantomData,
         }
@@ -168,6 +212,13 @@ where
     /// the input filename.
     pub fn mod_name(mut self, mod_name: &'a str) -> Self {
         self.mod_name = Some(mod_name);
+        self
+    }
+
+    /// Set the visibility of the generated module to `vis`.
+    /// Defaults to `Visibility::Private` if not used.
+    pub fn visibility(mut self, vis: Visibility) -> Self {
+        self.module_visibility = vis;
         self
     }
 
@@ -243,11 +294,11 @@ where
     ///
     /// ```text
     ///   mod modname {
-    ///     fn parse(lexemes: &::std::vec::Vec<::lrpar::Lexeme<StorageT>>) { ... }
+    ///     pub fn parse(lexemes: &::std::vec::Vec<::lrpar::Lexeme<StorageT>>) { ... }
     ///         -> (::std::option::Option<ActionT>,
     ///             ::std::vec::Vec<::lrpar::LexParseError<StorageT>>)> { ...}
     ///
-    ///     fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str> {
+    ///     pub fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str> {
     ///       ...
     ///     }
     ///
@@ -367,8 +418,11 @@ where
         cache: &str,
     ) -> Result<(), Box<dyn Error>> {
         let mut outs = String::new();
-        // Header
-        outs.push_str(&format!("mod {} {{\n", mod_name));
+        outs.push_str(&format!(
+            "{} mod {} {{\n",
+            self.module_visibility.get_str(),
+            mod_name
+        ));
         outs.push_str(
             "    #![allow(clippy::type_complexity)]
 ",

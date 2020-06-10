@@ -188,7 +188,7 @@ mod panic;
 #[doc(hidden)]
 pub mod parser;
 pub use crate::{
-    ctbuilder::CTParserBuilder,
+    ctbuilder::{CTParserBuilder, Visibility},
     parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
 mod mf;
