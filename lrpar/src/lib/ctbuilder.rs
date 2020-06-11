@@ -198,7 +198,7 @@ where
     pub fn new_with_storaget() -> Self {
         CTParserBuilder {
             mod_name: None,
-            recoverer: RecoveryKind::MF,
+            recoverer: RecoveryKind::CPCTPlus,
             yacckind: None,
             error_on_conflicts: true,
             module_visibility: Visibility::Private,
@@ -222,7 +222,7 @@ where
         self
     }
 
-    /// Set the recoverer for this parser to `rk`.
+    /// Set the recoverer for this parser to `rk`. Defaults to `RecoveryKind::CPCTPlus`.
     pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
         self.recoverer = rk;
         self
