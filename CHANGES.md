@@ -1,3 +1,14 @@
+# grmtools 0.8.1 (2020-06-11)
+
+* The modules generated for compile-time parsing by lrlex and lrpar have
+  private visibility by default. Changing this previously required a manual
+  alias. The `visibility` function in lrlex and lrpar's compile-time builders
+  allows a different visibility to be set (e.g.
+  `visibility(Visibility::Public)`. Rust has a [number of visibility
+  settings](https://doc.rust-lang.org/reference/visibility-and-privacy.html#pubin-path-pubcrate-pubsuper-and-pubself)
+  and the `Visibility` `enum`s in lrlex and lrpar reflect this.
+
+
 # grmtools 0.8.0 (2020-05-28)
 
 ## Breaking changes
