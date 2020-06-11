@@ -1,4 +1,4 @@
-# nimbleparse
+# `nimbleparse`
 
 `nimbleparse` is a simple grammar debugging aid. It takes as input a Lex
 specification, a Yacc specification, and an input file and prints any warnings

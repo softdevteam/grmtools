@@ -59,8 +59,8 @@ fn main() {
         .optopt(
             "y",
             "yaccvariant",
-            "Yacc variant to be parsed (default: Original)",
-            "Eco|Original|Grmtools",
+            "Yacc variant to be parsed (default: original)",
+            "eco|original|grmtools",
         )
         .parse(&args[1..])
     {
