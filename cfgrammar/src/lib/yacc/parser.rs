@@ -444,7 +444,7 @@ impl YaccParser {
             match c {
                 ':' => {
                     let k = j + ':'.len_utf8();
-                    if k == self.src.len() || self.src[k..].chars().next().unwrap() != ':' {
+                    if k == self.src.len() || !self.src[k..].starts_with(':') {
                         return Ok((j, self.src[i..j].to_string()));
                     }
                     j += 2 * ':'.len_utf8();
