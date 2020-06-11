@@ -14,9 +14,9 @@ doc = false
 name = "nimbleparse"
 
 [dependencies]
-cfgrammar = { path="../cfgrammar" }
+cfgrammar = { path="../cfgrammar", version="0.8" }
 getopts = "0.2"
-lrlex = { path="../lrlex" }
-lrpar = { path="../lrpar" }
-lrtable = { path="../lrtable" }
+lrlex = { path="../lrlex", version="0.8" }
+lrpar = { path="../lrpar", version="0.8" }
+lrtable = { path="../lrtable", version="0.8" }
 num-traits = "0.2"
