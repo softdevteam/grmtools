@@ -163,7 +163,7 @@ fn main() {
 
     let input = read_file(&matches.free[2]);
     let lexer = lexerdef.lexer(&input);
-    let pb = RTParserBuilder::new(&grm, &sgraph, &stable).recoverer(recoverykind);
+    let pb = RTParserBuilder::new(&grm, &stable).recoverer(recoverykind);
     let (pt, errs) = pb.parse_generictree(&lexer);
     match pt {
         Some(pt) => println!("{}", pt.pp(&grm, &input)),

@@ -9,7 +9,7 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
-use lrtable::{Action, StIdx, StateGraph, StateTable};
+use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use crate::{
@@ -104,7 +104,6 @@ where
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a, StorageT>,
-        sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
@@ -123,7 +122,7 @@ where
             lexemes,
             actions: actions.as_slice(),
         };
-        let mut pstack = vec![sgraph.start_state()];
+        let mut pstack = vec![stable.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
@@ -158,7 +157,6 @@ where
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a, StorageT>,
-        sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
@@ -177,7 +175,7 @@ where
             lexemes,
             actions: actions.as_slice(),
         };
-        let mut pstack = vec![sgraph.start_state()];
+        let mut pstack = vec![stable.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
@@ -209,7 +207,6 @@ where
         rcvry_kind: RecoveryKind,
         grm: &'a YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a, StorageT>,
-        sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
@@ -227,7 +224,7 @@ where
             lexemes,
             actions,
         };
-        let mut pstack = vec![sgraph.start_state()];
+        let mut pstack = vec![stable.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
@@ -669,7 +666,6 @@ impl<StorageT: Hash> From<ParseError<StorageT>> for LexParseError<StorageT> {
 /// A run-time parser builder.
 pub struct RTParserBuilder<'a, StorageT: Eq + Hash> {
     grm: &'a YaccGrammar<StorageT>,
-    sgraph: &'a StateGraph<StorageT>,
     stable: &'a StateTable<StorageT>,
     recoverer: RecoveryKind,
     term_costs: &'a dyn Fn(TIdx<StorageT>) -> u8,
@@ -682,14 +678,9 @@ where
     u32: AsPrimitive<StorageT>,
 {
     /// Create a new run-time parser from a `YaccGrammar`, a `StateGraph`, and a `StateTable`.
-    pub fn new(
-        grm: &'a YaccGrammar<StorageT>,
-        sgraph: &'a StateGraph<StorageT>,
-        stable: &'a StateTable<StorageT>,
-    ) -> Self {
+    pub fn new(grm: &'a YaccGrammar<StorageT>, stable: &'a StateTable<StorageT>) -> Self {
         RTParserBuilder {
             grm,
-            sgraph,
             stable,
             recoverer: RecoveryKind::CPCTPlus,
             term_costs: &|_| 1,
@@ -725,7 +716,6 @@ where
             self.recoverer,
             self.grm,
             self.term_costs,
-            self.sgraph,
             self.stable,
             lexer,
             lexemes,
@@ -749,7 +739,6 @@ where
             self.recoverer,
             self.grm,
             self.term_costs,
-            self.sgraph,
             self.stable,
             lexer,
             lexemes,
@@ -778,7 +767,6 @@ where
             self.recoverer,
             self.grm,
             self.term_costs,
-            self.sgraph,
             self.stable,
             lexer,
             lexemes,
@@ -875,7 +863,7 @@ pub(crate) mod test {
             grms,
         )
         .unwrap();
-        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let rule_ids = grm
             .tokens_map()
             .iter()
@@ -888,7 +876,7 @@ pub(crate) mod test {
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
             .collect::<HashMap<_, _>>();
-        let (r, errs) = RTParserBuilder::new(&grm, &sgraph, &stable)
+        let (r, errs) = RTParserBuilder::new(&grm, &stable)
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
             .parse_generictree(&lexer);
