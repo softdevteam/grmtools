@@ -536,8 +536,6 @@ where
         // grm, sgraph, stable
         let recoverer = match self.recoverer {
             RecoveryKind::CPCTPlus => "CPCTPlus",
-            RecoveryKind::MF => "MF",
-            RecoveryKind::Panic => "Panic",
             RecoveryKind::None => "None",
         };
         match self.yacckind.unwrap() {

@@ -15,7 +15,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use crate::{
     cpctplus,
     lex::{LexError, Lexeme, NonStreamingLexer},
-    mf, panic, Span,
+    Span,
 };
 
 #[cfg(test)]
@@ -86,7 +86,6 @@ pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
     pub(crate) token_cost: Box<TokenCostFn<'a, StorageT>>,
-    pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
     pub(crate) lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `NonStreamingLexer` API is
@@ -119,7 +118,6 @@ where
             rcvry_kind,
             grm,
             token_cost: Box::new(token_cost),
-            sgraph,
             stable,
             lexer,
             lexemes,
@@ -174,7 +172,6 @@ where
             rcvry_kind,
             grm,
             token_cost: Box::new(token_cost),
-            sgraph,
             stable,
             lexer,
             lexemes,
@@ -225,7 +222,6 @@ where
             rcvry_kind,
             grm,
             token_cost: Box::new(token_cost),
-            sgraph,
             stable,
             lexer,
             lexemes,
@@ -314,8 +310,6 @@ where
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
                             RecoveryKind::CPCTPlus => cpctplus::recoverer(self),
-                            RecoveryKind::MF => mf::recoverer(self),
-                            RecoveryKind::Panic => panic::recoverer(self),
                             RecoveryKind::None => {
                                 let la_lexeme = self.next_lexeme(laidx);
                                 errors.push(
@@ -571,12 +565,6 @@ pub enum RecoveryKind {
     /// The CPCT+ algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
     /// Parsers".
     CPCTPlus,
-    /// The MF algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
-    /// Parsers".
-    #[doc(hidden)]
-    MF,
-    #[doc(hidden)]
-    Panic,
     /// Don't use error recovery: return as soon as the first syntax error is encountered.
     None,
 }
@@ -1107,7 +1095,7 @@ Call: 'ID' '(' ')';";
 ",
         );
 
-        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
@@ -1119,7 +1107,7 @@ Call: 'ID' '(' ')';";
             _ => unreachable!(),
         }
 
-        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();
