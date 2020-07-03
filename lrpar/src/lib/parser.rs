@@ -9,13 +9,13 @@ use std::{
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
-use lrtable::{Action, StIdx, StateGraph, StateTable};
+use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use crate::{
     cpctplus,
     lex::{LexError, Lexeme, NonStreamingLexer},
-    mf, panic, Span,
+    Span,
 };
 
 #[cfg(test)]
@@ -86,7 +86,6 @@ pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
     pub(crate) token_cost: Box<TokenCostFn<'a, StorageT>>,
-    pub(crate) sgraph: &'a StateGraph<StorageT>,
     pub(crate) stable: &'a StateTable<StorageT>,
     pub(crate) lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `NonStreamingLexer` API is
@@ -105,7 +104,6 @@ where
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a, StorageT>,
-        sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
@@ -119,13 +117,12 @@ where
             rcvry_kind,
             grm,
             token_cost: Box::new(token_cost),
-            sgraph,
             stable,
             lexer,
             lexemes,
             actions: actions.as_slice(),
         };
-        let mut pstack = vec![sgraph.start_state()];
+        let mut pstack = vec![stable.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
@@ -160,7 +157,6 @@ where
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a, StorageT>,
-        sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
@@ -174,13 +170,12 @@ where
             rcvry_kind,
             grm,
             token_cost: Box::new(token_cost),
-            sgraph,
             stable,
             lexer,
             lexemes,
             actions: actions.as_slice(),
         };
-        let mut pstack = vec![sgraph.start_state()];
+        let mut pstack = vec![stable.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
@@ -212,7 +207,6 @@ where
         rcvry_kind: RecoveryKind,
         grm: &'a YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a, StorageT>,
-        sgraph: &'a StateGraph<StorageT>,
         stable: &'a StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
@@ -225,13 +219,12 @@ where
             rcvry_kind,
             grm,
             token_cost: Box::new(token_cost),
-            sgraph,
             stable,
             lexer,
             lexemes,
             actions,
         };
-        let mut pstack = vec![sgraph.start_state()];
+        let mut pstack = vec![stable.start_state()];
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
@@ -314,8 +307,6 @@ where
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
                             RecoveryKind::CPCTPlus => cpctplus::recoverer(self),
-                            RecoveryKind::MF => mf::recoverer(self),
-                            RecoveryKind::Panic => panic::recoverer(self),
                             RecoveryKind::None => {
                                 let la_lexeme = self.next_lexeme(laidx);
                                 errors.push(
@@ -571,12 +562,6 @@ pub enum RecoveryKind {
     /// The CPCT+ algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
     /// Parsers".
     CPCTPlus,
-    /// The MF algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
-    /// Parsers".
-    #[doc(hidden)]
-    MF,
-    #[doc(hidden)]
-    Panic,
     /// Don't use error recovery: return as soon as the first syntax error is encountered.
     None,
 }
@@ -681,7 +666,6 @@ impl<StorageT: Hash> From<ParseError<StorageT>> for LexParseError<StorageT> {
 /// A run-time parser builder.
 pub struct RTParserBuilder<'a, StorageT: Eq + Hash> {
     grm: &'a YaccGrammar<StorageT>,
-    sgraph: &'a StateGraph<StorageT>,
     stable: &'a StateTable<StorageT>,
     recoverer: RecoveryKind,
     term_costs: &'a dyn Fn(TIdx<StorageT>) -> u8,
@@ -694,14 +678,9 @@ where
     u32: AsPrimitive<StorageT>,
 {
     /// Create a new run-time parser from a `YaccGrammar`, a `StateGraph`, and a `StateTable`.
-    pub fn new(
-        grm: &'a YaccGrammar<StorageT>,
-        sgraph: &'a StateGraph<StorageT>,
-        stable: &'a StateTable<StorageT>,
-    ) -> Self {
+    pub fn new(grm: &'a YaccGrammar<StorageT>, stable: &'a StateTable<StorageT>) -> Self {
         RTParserBuilder {
             grm,
-            sgraph,
             stable,
             recoverer: RecoveryKind::CPCTPlus,
             term_costs: &|_| 1,
@@ -737,7 +716,6 @@ where
             self.recoverer,
             self.grm,
             self.term_costs,
-            self.sgraph,
             self.stable,
             lexer,
             lexemes,
@@ -761,7 +739,6 @@ where
             self.recoverer,
             self.grm,
             self.term_costs,
-            self.sgraph,
             self.stable,
             lexer,
             lexemes,
@@ -790,7 +767,6 @@ where
             self.recoverer,
             self.grm,
             self.term_costs,
-            self.sgraph,
             self.stable,
             lexer,
             lexemes,
@@ -887,7 +863,7 @@ pub(crate) mod test {
             grms,
         )
         .unwrap();
-        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
+        let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let rule_ids = grm
             .tokens_map()
             .iter()
@@ -900,7 +876,7 @@ pub(crate) mod test {
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
             .collect::<HashMap<_, _>>();
-        let (r, errs) = RTParserBuilder::new(&grm, &sgraph, &stable)
+        let (r, errs) = RTParserBuilder::new(&grm, &stable)
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
             .parse_generictree(&lexer);
@@ -1107,7 +1083,7 @@ Call: 'ID' '(' ')';";
 ",
         );
 
-        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
@@ -1119,7 +1095,7 @@ Call: 'ID' '(' ')';";
             _ => unreachable!(),
         }
 
-        let (grm, pr) = do_parse(RecoveryKind::MF, &lexs, &grms, "f(f(");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();

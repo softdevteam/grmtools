@@ -38,7 +38,6 @@ const ACTIONS_KIND_HIDDEN: &str = "__GTActionsKindHidden";
 const RUST_FILE_EXT: &str = "rs";
 
 const GRM_CONST_NAME: &str = "__GRM_DATA";
-const SGRAPH_CONST_NAME: &str = "__SGRAPH_DATA";
 const STABLE_CONST_NAME: &str = "__STABLE_DATA";
 
 lazy_static! {
@@ -276,7 +275,7 @@ where
 
     /// Statically compile the Yacc file `inp` into Rust, placing the output into the file `outp`.
     /// Note that three additional files will be created with the same name as `outp` but with the
-    /// extensions `grm`, `sgraph`, and `stable`, overwriting any existing files with those names.
+    /// extensions `grm`, and `stable`, overwriting any existing files with those names.
     ///
     /// `outp` defines a module as follows:
     ///
@@ -389,7 +388,7 @@ where
                 format!("{}_y", stem)
             }
         };
-        self.output_file(&grm, &sgraph, &stable, &mod_name, &outp, &cache)?;
+        self.output_file(&grm, &stable, &mod_name, &outp, &cache)?;
         if stable.conflicts().is_some() {
             self.conflicts = Some((grm, sgraph, stable));
         }
@@ -399,7 +398,6 @@ where
     fn output_file<P: AsRef<Path>>(
         &self,
         grm: &YaccGrammar<StorageT>,
-        sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
         mod_name: &str,
         outp_rs: P,
@@ -416,7 +414,7 @@ where
 ",
         );
 
-        outs.push_str(&self.gen_parse_function(grm, sgraph, stable)?);
+        outs.push_str(&self.gen_parse_function(grm, stable)?);
         outs.push_str(&self.gen_rule_consts(grm));
         outs.push_str(&self.gen_token_epp(&grm));
         match self.yacckind.unwrap() {
@@ -480,7 +478,6 @@ where
     fn gen_parse_function(
         &self,
         grm: &YaccGrammar<StorageT>,
-        sgraph: &StateGraph<StorageT>,
         stable: &StateTable<StorageT>,
     ) -> Result<String, Box<dyn Error>> {
         let mut outs = String::new();
@@ -488,7 +485,6 @@ where
         // bincode format is serialized into constants which the generated
         // source code.
         serialize_bin_output(grm, GRM_CONST_NAME, &mut outs)?;
-        serialize_bin_output(sgraph, SGRAPH_CONST_NAME, &mut outs)?;
         serialize_bin_output(stable, STABLE_CONST_NAME, &mut outs)?;
 
         match self.yacckind.unwrap() {
@@ -529,15 +525,12 @@ where
 
         outs.push_str(&format!(
             "
-        let (grm, sgraph, stable) = ::lrpar::ctbuilder::_reconstitute({},{},{});",
-            GRM_CONST_NAME, SGRAPH_CONST_NAME, STABLE_CONST_NAME
+        let (grm, stable) = ::lrpar::ctbuilder::_reconstitute({}, {});",
+            GRM_CONST_NAME, STABLE_CONST_NAME
         ));
 
-        // grm, sgraph, stable
         let recoverer = match self.recoverer {
             RecoveryKind::CPCTPlus => "CPCTPlus",
-            RecoveryKind::MF => "MF",
-            RecoveryKind::Panic => "Panic",
             RecoveryKind::None => "None",
         };
         match self.yacckind.unwrap() {
@@ -562,7 +555,7 @@ where
                 }
                 outs.push_str(&format!(
                     "
-        match ::lrpar::RTParserBuilder::new(&grm, &sgraph, &stable)
+        match ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{recoverer})
             .parse_actions(lexer, &actions) {{
                 (Some({actionskind}::{actionskindprefix}{ridx}(x)), y) => (Some(x), y),
@@ -578,7 +571,7 @@ where
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 outs.push_str(&format!(
                     "
-        ::lrpar::RTParserBuilder::new(&grm, &sgraph, &stable)
+        ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{})
             .parse_generictree(lexer)\n",
                     recoverer
@@ -587,7 +580,7 @@ where
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
                     "
-        ::lrpar::RTParserBuilder::new(&grm, &sgraph, &stable)
+        ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{})
             .parse_noaction(lexer)\n",
                     recoverer
@@ -889,17 +882,11 @@ fn str_escape(s: &str) -> String {
 #[doc(hidden)]
 pub fn _reconstitute<StorageT: DeserializeOwned + Hash + PrimInt + Unsigned>(
     grm_buf: &[u8],
-    sgraph_buf: &[u8],
     stable_buf: &[u8],
-) -> (
-    YaccGrammar<StorageT>,
-    StateGraph<StorageT>,
-    StateTable<StorageT>,
-) {
+) -> (YaccGrammar<StorageT>, StateTable<StorageT>) {
     let grm = deserialize(grm_buf).unwrap();
-    let sgraph = deserialize(sgraph_buf).unwrap();
     let stable = deserialize(stable_buf).unwrap();
-    (grm, sgraph, stable)
+    (grm, stable)
 }
 
 fn serialize_bin_output<T: Serialize + ?Sized>(

@@ -1,6 +1,9 @@
 use std::{
+    cmp::Ordering,
+    collections::HashSet,
     fmt::Debug,
     hash::{Hash, Hasher},
+    iter::FromIterator,
     time::Instant,
 };
 
@@ -12,12 +15,12 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use super::{
     astar::dijkstra,
     lex::Lexeme,
-    mf::{apply_repairs, rank_cnds, simplify_repairs},
     parser::{AStackType, ParseRepair, Parser, Recoverer},
     Span,
 };
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
+const TRY_PARSE_AT_MOST: usize = 250;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum Repair<StorageT> {
@@ -430,6 +433,154 @@ where
             })
             .collect()
     }
+}
+
+/// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
+/// distance and a new pstack.
+pub fn apply_repairs<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
+    parser: &Parser<StorageT, ActionT>,
+    mut laidx: usize,
+    mut pstack: &mut Vec<StIdx>,
+    mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
+    mut spans: &mut Option<&mut Vec<Span>>,
+    repairs: &[ParseRepair<StorageT>],
+) -> usize
+where
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>,
+{
+    for r in repairs.iter() {
+        match *r {
+            ParseRepair::Insert(tidx) => {
+                let next_lexeme = parser.next_lexeme(laidx);
+                let new_lexeme = Lexeme::new(
+                    StorageT::from(u32::from(tidx)).unwrap(),
+                    next_lexeme.span().start(),
+                    None,
+                );
+                parser.lr_upto(
+                    Some(new_lexeme),
+                    laidx,
+                    laidx + 1,
+                    &mut pstack,
+                    &mut astack,
+                    &mut spans,
+                );
+            }
+            ParseRepair::Delete(_) => {
+                laidx += 1;
+            }
+            ParseRepair::Shift(_) => {
+                laidx =
+                    parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack, &mut spans);
+            }
+        }
+    }
+    laidx
+}
+
+/// Simplifies repair sequences, removes duplicates, and sorts them into order.
+pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
+    parser: &Parser<StorageT, ActionT>,
+    all_rprs: &mut Vec<Vec<ParseRepair<StorageT>>>,
+) where
+    usize: AsPrimitive<StorageT>,
+{
+    for rprs in &mut all_rprs.iter_mut() {
+        // Remove shifts from the end of repairs
+        while !rprs.is_empty() {
+            if let ParseRepair::Shift(_) = rprs[rprs.len() - 1] {
+                rprs.pop();
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Use a HashSet as a quick way of deduplicating repair sequences: occasionally we can end up
+    // with hundreds of thousands (!), and we don't have a sensible ordering on ParseRepair to make
+    // it plausible to do a sort and dedup.
+    let mut hs: HashSet<Vec<ParseRepair<StorageT>>> = HashSet::from_iter(all_rprs.drain(..));
+    all_rprs.extend(hs.drain());
+
+    // Sort repair sequences:
+    //   1) by whether they contain Inserts that are %insert_avoid
+    //   2) by the number of repairs they contain
+    let contains_avoid_insert = |rprs: &Vec<ParseRepair<StorageT>>| -> bool {
+        for r in rprs.iter() {
+            if let ParseRepair::Insert(tidx) = r {
+                if parser.grm.avoid_insert(*tidx) {
+                    return true;
+                }
+            }
+        }
+        false
+    };
+    all_rprs.sort_unstable_by(|x, y| {
+        let x_cai = contains_avoid_insert(x);
+        let y_cai = contains_avoid_insert(y);
+        if x_cai && !y_cai {
+            Ordering::Greater
+        } else if !x_cai && y_cai {
+            Ordering::Less
+        } else {
+            x.len().cmp(&y.len())
+        }
+    });
+}
+
+/// Convert `PathFNode` candidates in `cnds` into vectors of `ParseRepairs`s and rank them (from
+/// highest to lowest) by the distance they allow parsing to continue without error. If two or more
+/// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
+/// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
+/// ordering is non-deterministic.
+fn rank_cnds<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
+    parser: &Parser<StorageT, ActionT>,
+    finish_by: Instant,
+    in_laidx: usize,
+    in_pstack: &[StIdx],
+    in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>,
+) -> Vec<Vec<ParseRepair<StorageT>>>
+where
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>,
+{
+    let mut cnds = Vec::new();
+    let mut furthest = 0;
+    for rpr_seqs in in_cnds {
+        if Instant::now() >= finish_by {
+            return vec![];
+        }
+        let mut pstack = in_pstack.to_owned();
+        let mut laidx = apply_repairs(
+            parser,
+            in_laidx,
+            &mut pstack,
+            &mut None,
+            &mut None,
+            &rpr_seqs[0],
+        );
+        laidx = parser.lr_upto(
+            None,
+            laidx,
+            in_laidx + TRY_PARSE_AT_MOST,
+            &mut pstack,
+            &mut None,
+            &mut None,
+        );
+        if laidx >= furthest {
+            furthest = laidx;
+        }
+        cnds.push((pstack, laidx, rpr_seqs));
+    }
+
+    // Remove any elements except those which parsed as far as possible.
+    cnds = cnds
+        .into_iter()
+        .filter(|x| x.1 == furthest)
+        .collect::<Vec<_>>();
+
+    cnds.into_iter().flat_map(|x| x.2).collect::<Vec<_>>()
 }
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?

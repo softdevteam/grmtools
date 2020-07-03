@@ -184,14 +184,12 @@ pub mod ctbuilder;
 #[doc(hidden)]
 pub mod lex;
 pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer};
-mod panic;
 #[doc(hidden)]
 pub mod parser;
 pub use crate::{
     ctbuilder::{CTParserBuilder, Visibility},
     parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
-mod mf;
 
 /// A convenience macro for including statically compiled `.y` files. A file `src/a/b/c.y` which is
 /// statically compiled by lrpar can then be used in a crate with `lrpar_mod!("a/b/c.y")`.

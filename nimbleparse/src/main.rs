@@ -75,11 +75,9 @@ fn main() {
     let quiet = matches.opt_present("q");
 
     let recoverykind = match matches.opt_str("r") {
-        None => RecoveryKind::MF,
+        None => RecoveryKind::CPCTPlus,
         Some(s) => match &*s.to_lowercase() {
             "cpctplus" => RecoveryKind::CPCTPlus,
-            "mf" => RecoveryKind::MF,
-            "panic" => RecoveryKind::Panic,
             "none" => RecoveryKind::None,
             _ => usage(prog, &format!("Unknown recoverer '{}'.", s)),
         },
@@ -165,7 +163,7 @@ fn main() {
 
     let input = read_file(&matches.free[2]);
     let lexer = lexerdef.lexer(&input);
-    let pb = RTParserBuilder::new(&grm, &sgraph, &stable).recoverer(recoverykind);
+    let pb = RTParserBuilder::new(&grm, &stable).recoverer(recoverykind);
     let (pt, errs) = pb.parse_generictree(&lexer);
     match pt {
         Some(pt) => println!("{}", pt.pp(&grm, &input)),
