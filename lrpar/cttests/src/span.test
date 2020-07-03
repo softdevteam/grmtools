@@ -5,21 +5,7 @@ grammar: |
     %avoid_insert "INT"
     %%
     Expr -> Vec<::lrpar::Span>:
-          Term '+' Expr {
-              let mut spans = $1;
-              spans.extend($3);
-              spans.push($span);
-              spans
-          }
-        | Term {
-              let mut spans = $1;
-              spans.push($span);
-              spans
-          }
-        ;
-
-    Term -> Vec<::lrpar::Span>:
-          Factor '*' Term {
+          Factor '+' Expr {
               let mut spans = $1;
               spans.extend($3);
               spans.push($span);
@@ -33,6 +19,20 @@ grammar: |
         ;
 
     Factor -> Vec<::lrpar::Span>:
+          Term '*' Factor {
+              let mut spans = $1;
+              spans.extend($3);
+              spans.push($span);
+              spans
+          }
+        | Term {
+              let mut spans = $1;
+              spans.push($span);
+              spans
+          }
+        ;
+
+    Term -> Vec<::lrpar::Span>:
           '(' Expr ')' {
               let mut spans = $2;
               spans.push($span);

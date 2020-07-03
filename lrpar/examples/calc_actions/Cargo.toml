@@ -1,5 +1,5 @@
 [package]
-name = "actions"
+name = "calc_actions"
 version = "0.1.0"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
@@ -7,7 +7,7 @@ license = "Apache-2.0/MIT"
 
 [[bin]]
 doc = false
-name = "actions"
+name = "calc_actions"
 
 [build-dependencies]
 cfgrammar = { path="../../../cfgrammar" }

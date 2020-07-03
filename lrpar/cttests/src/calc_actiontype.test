@@ -5,15 +5,15 @@ grammar: |
     %actiontype Result<u64, ()>
     %avoid_insert 'INT'
     %%
-    Expr: Term '+' Expr { Ok($1? + $3?) }
-        | Term { $1 }
-        ;
-
-    Term: Factor '*' Term { Ok($1? * $3?) }
+    Expr: Factor '+' Expr { Ok($1? + $3?) }
         | Factor { $1 }
         ;
 
-    Factor: '(' Expr ')' { $2 }
+    Factor: Term '*' Factor { Ok($1? * $3?) }
+        | Term { $1 }
+        ;
+
+    Term: '(' Expr ')' { $2 }
           | 'INT' {
                 let l = $1.map_err(|_| ())?;
                 match $lexer.span_str(l.span()).parse::<u64>() {
