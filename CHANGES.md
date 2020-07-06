@@ -1,3 +1,17 @@
+# grmtools 0.9.0 (2020-07-06)
+
+## Breaking changes
+
+* The `MF` and `Panic` recoverers (deprecated, and undocumented, since 0.4.3)
+  have been removed. Please change to `RecoveryKind::CPCTPlus` (or, if you
+  don't want error recovery, `RecoveryKind::None`).
+
+## Minor changes
+
+* The stategraph is no longer stored in the generated grammar, leading to
+  useful savings in the generated binary size.
+
+
 # grmtools 0.8.1 (2020-06-11)
 
 * The modules generated for compile-time parsing by lrlex and lrpar have
