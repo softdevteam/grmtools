@@ -65,7 +65,7 @@ impl<'a> Eval<'a> {
             Node::Nonterm {
                 ridx: RIdx(ridx),
                 ref nodes,
-            } if ridx == calc_y::R_FACTOR => {
+            } if ridx == calc_y::R_TERM => {
                 if nodes.len() == 1 {
                     self.eval(&nodes[0])
                 } else {
@@ -76,7 +76,7 @@ impl<'a> Eval<'a> {
             Node::Nonterm {
                 ridx: RIdx(ridx),
                 ref nodes,
-            } if ridx == calc_y::R_TERM => {
+            } if ridx == calc_y::R_FACTOR => {
                 if nodes.len() == 1 {
                     if let Node::Term { lexeme } = nodes[0] {
                         self.s[lexeme.span().start()..lexeme.span().end()]

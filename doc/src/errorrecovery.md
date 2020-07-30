@@ -52,16 +52,16 @@ A simple calculator grammar looks as follows:
 %start Expr
 %%
 Expr -> u64:
-      Factor 'PLUS' Expr { $1 + $3 }
-    | Factor { $1 }
-    ;
-
-Factor -> u64:
-      Term 'MUL' Factor { $1 * $3 }
+      Term 'PLUS' Expr { $1 + $3 }
     | Term { $1 }
     ;
 
 Term -> u64:
+      Factor 'MUL' Term { $1 * $3 }
+    | Factor { $1 }
+    ;
+
+Factor -> u64:
       'LBRACK' Expr 'RBRACK' { $2 }
     | 'INT' { parse_int($lexer.span_str($1.unwrap().unwrap())) }
     ;
@@ -166,16 +166,16 @@ occurring:
 %start Expr
 %%
 Expr -> Result<u64, ()>:
-      Factor 'PLUS' Expr { Ok($1? + $3?) }
-    | Factor { $1 }
-    ;
-
-Factor -> Result<u64, ()>:
-      Term 'MUL' Factor { Ok($1? * $3?) }
+      Term 'PLUS' Expr { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
 Term -> Result<u64, ()>:
+      Factor 'MUL' Term { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor -> Result<u64, ()>:
       'LBRACK' Expr 'RBRACK' { $2 }
     | 'INT' { parse_int($lexer.span_str($1.map_err(|_| ())?.span())) }
     ;
@@ -194,7 +194,7 @@ The basic idea here is that every action returns an instance of `Result<u64,
 ()>`: if we receive `Ok(u64)` we successfully evaluated the expression, but if
 we received `Err(())` we were not able to evaluate the expression. If we
 encounter an integer lexeme which is the result of error recovery, then the
-`INT` lexeme in the second `Term` action will be `Err(<lexeme>)`. By writing
+`INT` lexeme in the second `Factor` action will be `Err(<lexeme>)`. By writing
 `$1.map_err(|_| ())?` we’re saying “if the integer lexeme was created by error
 recovery, percolate `Err(())` upwards”. We then have to tweak a couple of other
 actions to percolate errors upwards, but this is a trivial change.

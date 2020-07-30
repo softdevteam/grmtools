@@ -4,15 +4,15 @@ grammar: |
     %start Expr
     %avoid_insert 'INT'
     %%
-    Expr: Factor '+' Expr
-        | Factor
-        ;
-
-    Factor: Term '*' Factor
+    Expr: Term '+' Expr
         | Term
         ;
 
-    Term: '(' Expr ')'
+    Term: Factor '*' Term
+        | Factor
+        ;
+
+    Factor: '(' Expr ')'
           | 'INT'
           ;
 

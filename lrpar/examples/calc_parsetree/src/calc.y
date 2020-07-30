@@ -1,11 +1,11 @@
 %start Expr
 %avoid_insert "INT"
 %%
-Expr: Factor 'PLUS' Expr
-    | Factor ;
-
-Factor: Term 'MUL' Factor
+Expr: Term 'PLUS' Expr
     | Term ;
 
-Term: 'LBRACK' Expr 'RBRACK'
+Term: Factor 'MUL' Term
+    | Factor ;
+
+Factor: 'LBRACK' Expr 'RBRACK'
       | 'INT';

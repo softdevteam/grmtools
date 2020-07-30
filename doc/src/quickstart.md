@@ -106,16 +106,16 @@ Our initial version of calc.y looks as follows:
 %start Expr
 %%
 Expr -> Result<u64, ()>:
-      Factor 'PLUS' Expr { Ok($1? + $3?) }
-    | Factor { $1 }
-    ;
-
-Factor -> Result<u64, ()>:
-      Term 'MUL' Factor { Ok($1? * $3?) }
+      Term 'PLUS' Expr { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
 Term -> Result<u64, ()>:
+      Factor 'MUL' Term { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor -> Result<u64, ()>:
       'LBRACK' Expr 'RBRACK' { $2 }
     | 'INT'
       {
@@ -144,7 +144,7 @@ start rule (`%start Expr`).
 
 The second part is the [Yacc
 grammar](http://dinosaur.compilertools.net/yacc/index.html). It consists of 3
-rules (`Expr`, `Factor`, and `Term`) and 6 productions (2 for each rule,
+rules (`Expr`, `Term`, and `Factor`) and 6 productions (2 for each rule,
 separated by `|` characters). Because we are using the `Grmtools` Yacc variant,
 each rule has a Rust type associated with it (after `->`) which specifies the
 type that each production’s action must return. A production (sometimes called an “alternative”)

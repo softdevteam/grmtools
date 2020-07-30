@@ -2,16 +2,16 @@
 %avoid_insert "INT"
 %%
 Expr -> Result<Expr, ()>:
-      Factor '+' Expr { Ok(Expr::Add{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
-    | Factor { $1 }
-    ;
-
-Factor -> Result<Expr, ()>:
-      Term '*' Factor { Ok(Expr::Mul{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
+      Term '+' Expr { Ok(Expr::Add{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
     | Term { $1 }
     ;
 
 Term -> Result<Expr, ()>:
+      Factor '*' Term { Ok(Expr::Mul{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
+    | Factor { $1 }
+    ;
+
+Factor -> Result<Expr, ()>:
       '(' Expr ')' { $2 }
     | 'INT' { Ok(Expr::Number{ span: $span }) }
     ;
