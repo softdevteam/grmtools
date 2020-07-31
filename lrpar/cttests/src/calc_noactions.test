@@ -4,11 +4,11 @@ grammar: |
     %start Expr
     %avoid_insert 'INT'
     %%
-    Expr: Term '+' Expr
+    Expr: Expr '+' Term
         | Term
         ;
 
-    Term: Factor '*' Term
+    Term: Term '*' Factor
         | Factor
         ;
 

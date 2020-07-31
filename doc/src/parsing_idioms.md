@@ -143,7 +143,7 @@ possible sources of error:
 %avoid_insert "INT"
 %%
 Expr -> Result<u64, Box<dyn Error>>:
-      Term '+' Expr
+      Expr '+' Term
       {
           Ok($1?.checked_add($3?)
               .ok_or(Box::<dyn Error>::from("Overflow detected."))?)
@@ -152,7 +152,7 @@ Expr -> Result<u64, Box<dyn Error>>:
     ;
 
 Term -> Result<u64, Box<dyn Error>>:
-      Factor '*' Term
+      Term '*' Factor
       {
           Ok($1?.checked_mul($3?)
               .ok_or(Box::<dyn Error>::from("Overflow detected."))?)

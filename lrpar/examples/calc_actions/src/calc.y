@@ -2,14 +2,14 @@
 %avoid_insert "INT"
 %%
 Expr -> Result<u64, Box<dyn Error>>:
-      Term '+' Expr { Ok($1?.checked_add($3?)
+      Expr '+' Term { Ok($1?.checked_add($3?)
                             .ok_or_else(|| Box::<dyn Error>::from("Overflow detected."))?)
                     }
     | Term { $1 }
     ;
 
 Term -> Result<u64, Box<dyn Error>>:
-      Factor '*' Term { Ok($1?.checked_mul($3?)
+      Term '*' Factor { Ok($1?.checked_mul($3?)
                               .ok_or_else(|| Box::<dyn Error>::from("Overflow detected."))?)
                       }
     | Factor { $1 }

@@ -1019,8 +1019,8 @@ L: 'ID'
                     [0-9]+ 'INT'";
         let grms = "%start Expr
 %%
-Expr : Term '+' Expr | Term;
-Term : Factor '*' Term | Factor;
+Expr : Expr '+' Term | Term;
+Term : Term '*' Factor | Factor;
 Factor : 'INT';";
 
         check_parse_output(
@@ -1028,18 +1028,18 @@ Factor : 'INT';";
             &grms,
             "2+3*4",
             "Expr
- Term
-  Factor
-   INT 2
- + +
  Expr
   Term
    Factor
+    INT 2
+ + +
+ Term
+  Term
+   Factor
     INT 3
-   * *
-   Term
-    Factor
-     INT 4
+  * *
+  Factor
+   INT 4
 ",
         );
         check_parse_output(
@@ -1047,18 +1047,18 @@ Factor : 'INT';";
             &grms,
             "2*3+4",
             "Expr
- Term
-  Factor
-   INT 2
-  * *
+ Expr
   Term
+   Term
+    Factor
+     INT 2
+   * *
    Factor
     INT 3
  + +
- Expr
-  Term
-   Factor
-    INT 4
+ Term
+  Factor
+   INT 4
 ",
         );
     }

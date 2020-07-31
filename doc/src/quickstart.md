@@ -106,12 +106,12 @@ Our initial version of calc.y looks as follows:
 %start Expr
 %%
 Expr -> Result<u64, ()>:
-      Term 'PLUS' Expr { Ok($1? + $3?) }
+      Expr 'PLUS' Term { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
 Term -> Result<u64, ()>:
-      Factor 'MUL' Term { Ok($1? * $3?) }
+      Term 'MUL' Factor { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 

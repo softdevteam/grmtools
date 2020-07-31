@@ -52,12 +52,12 @@ A simple calculator grammar looks as follows:
 %start Expr
 %%
 Expr -> u64:
-      Term 'PLUS' Expr { $1 + $3 }
+      Expr 'PLUS' Term { $1 + $3 }
     | Term { $1 }
     ;
 
 Term -> u64:
-      Factor 'MUL' Term { $1 * $3 }
+      Term 'MUL' Factor { $1 * $3 }
     | Factor { $1 }
     ;
 
@@ -166,12 +166,12 @@ occurring:
 %start Expr
 %%
 Expr -> Result<u64, ()>:
-      Term 'PLUS' Expr { Ok($1? + $3?) }
+      Expr 'PLUS' Term { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
 Term -> Result<u64, ()>:
-      Factor 'MUL' Term { Ok($1? * $3?) }
+      Term 'MUL' Factor { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
