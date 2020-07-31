@@ -141,7 +141,7 @@ fn test_span() {
                 == &vec![
                     Span::new(0, 1),
                     Span::new(0, 1),
-                    Span::new(2, 3),
+                    Span::new(0, 1),
                     Span::new(2, 3),
                     Span::new(2, 3),
                     Span::new(0, 3),
@@ -159,7 +159,7 @@ fn test_span() {
                 == &vec![
                     Span::new(0, 1),
                     Span::new(0, 1),
-                    Span::new(4, 5),
+                    Span::new(0, 1),
                     Span::new(4, 5),
                     Span::new(4, 5),
                     Span::new(0, 5),
@@ -177,10 +177,10 @@ fn test_span() {
                 == &vec![
                     Span::new(0, 1),
                     Span::new(0, 1),
+                    Span::new(0, 1),
+                    Span::new(2, 3),
                     Span::new(2, 3),
                     Span::new(4, 5),
-                    Span::new(4, 5),
-                    Span::new(2, 5),
                     Span::new(2, 5),
                     Span::new(0, 5),
                 ] =>
@@ -197,7 +197,7 @@ fn test_span() {
                 == &vec![
                     Span::new(0, 1),
                     Span::new(0, 1),
-                    Span::new(3, 4),
+                    Span::new(0, 1),
                     Span::new(3, 4),
                     Span::new(3, 4),
                     Span::new(0, 4),
@@ -209,7 +209,7 @@ fn test_span() {
     }
 
     let lexer = lexerdef.lexer("(2)))");
-    match span_y::parse(&lexer) {
+    match dbg!(span_y::parse(&lexer)) {
         (Some(ref spans), _)
             if spans
                 == &vec![

@@ -57,12 +57,12 @@
 //! %avoid_insert "INT"
 //! %%
 //! Expr -> Result<u64, ()>:
-//!       Term '+' Expr { Ok($1? + $3?) }
+//!       Expr '+' Term { Ok($1? + $3?) }
 //!     | Term { $1 }
 //!     ;
 //!
 //! Term -> Result<u64, ()>:
-//!       Factor '*' Term { Ok($1? * $3?) }
+//!       Term '*' Factor { Ok($1? * $3?) }
 //!     | Factor { $1 }
 //!     ;
 //!
