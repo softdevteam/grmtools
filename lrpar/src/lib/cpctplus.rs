@@ -216,13 +216,12 @@ where
                     return true;
                 }
 
-                match parser
-                    .stable
-                    .action(*n.pstack.val().unwrap(), parser.next_tidx(n.laidx))
-                {
-                    Action::Accept => true,
-                    _ => false,
-                }
+                matches!(
+                    parser
+                        .stable
+                        .action(*n.pstack.val().unwrap(), parser.next_tidx(n.laidx)),
+                    Action::Accept
+                )
             },
         );
 
