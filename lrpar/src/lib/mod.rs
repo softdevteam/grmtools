@@ -177,10 +177,10 @@
 //! Result: 17
 //! ```
 
-mod astar;
 mod cpctplus;
 #[doc(hidden)]
 pub mod ctbuilder;
+mod dijkstra;
 #[doc(hidden)]
 pub mod lex;
 pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer};
