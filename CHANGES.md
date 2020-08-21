@@ -1,3 +1,8 @@
+# grmtools 0.9.1 (2020-08-21)
+
+* Fix a handful of Clippy warnings.
+
+
 # grmtools 0.9.0 (2020-07-06)
 
 ## Breaking changes
