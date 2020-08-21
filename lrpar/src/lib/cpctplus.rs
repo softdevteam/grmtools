@@ -13,7 +13,7 @@ use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use super::{
-    astar::dijkstra,
+    dijkstra::dijkstra,
     lex::Lexeme,
     parser::{AStackType, ParseRepair, Parser, Recoverer},
     Span,
