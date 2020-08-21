@@ -33,10 +33,10 @@ where
 {
     /// Generates and returns the Follows set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
-        let mut follows = Vec::with_capacity(usize::from(grm.rules_len()));
-        for _ in grm.iter_rules() {
-            follows.push(Vob::from_elem(usize::from(grm.tokens_len()), false));
-        }
+        let mut follows = vec![
+            Vob::from_elem(usize::from(grm.tokens_len()), false);
+            usize::from(grm.rules_len())
+        ];
         follows[usize::from(grm.start_rule_idx())].set(usize::from(grm.eof_token_idx()), true);
 
         let firsts = grm.firsts();

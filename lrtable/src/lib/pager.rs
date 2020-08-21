@@ -147,14 +147,9 @@ where
     let mut new_states = Vec::new();
     // cnd_[rule|token]_weaklies represent which states are possible weakly compatible
     // matches for a given symbol.
-    let mut cnd_rule_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.rules_len()));
-    let mut cnd_token_weaklies: Vec<Vec<StIdx>> = Vec::with_capacity(usize::from(grm.tokens_len()));
-    for _ in 0..usize::from(grm.tokens_len()).checked_add(1).unwrap() {
-        cnd_token_weaklies.push(Vec::new());
-    }
-    for _ in grm.iter_rules() {
-        cnd_rule_weaklies.push(Vec::new());
-    }
+    let mut cnd_rule_weaklies: Vec<Vec<StIdx>> = vec![Vec::new(); usize::from(grm.rules_len())];
+    let mut cnd_token_weaklies: Vec<Vec<StIdx>> =
+        vec![Vec::new(); usize::from(grm.tokens_len()).checked_add(1).unwrap()];
 
     let mut todo = 1; // How many None values are there in closed_states?
     let mut todo_off = 0; // Offset in closed states to start searching for the next todo.

@@ -36,12 +36,11 @@ where
 {
     /// Generates and returns the firsts set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
-        let mut firsts = Vec::with_capacity(usize::from(grm.rules_len()));
-        for _ in grm.iter_rules() {
-            firsts.push(Vob::from_elem(usize::from(grm.tokens_len()), false));
-        }
         let mut firsts = YaccFirsts {
-            firsts,
+            firsts: vec![
+                Vob::from_elem(usize::from(grm.tokens_len()), false);
+                usize::from(grm.rules_len())
+            ],
             epsilons: Vob::from_elem(usize::from(grm.rules_len()), false),
             phantom: PhantomData,
         };

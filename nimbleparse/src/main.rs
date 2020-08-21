@@ -140,7 +140,7 @@ fn main() {
             if let Some(tokens) = missing_from_parser {
                 writeln!(&mut stderr(), "Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:").ok();
                 let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
-                sorted.sort();
+                sorted.sort_unstable();
                 for n in sorted {
                     writeln!(&mut stderr(), "  {}", n).ok();
                 }
@@ -152,7 +152,7 @@ fn main() {
                 )
                 .ok();
                 let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
-                sorted.sort();
+                sorted.sort_unstable();
                 for n in sorted {
                     writeln!(&mut stderr(), "  {}", n).ok();
                 }

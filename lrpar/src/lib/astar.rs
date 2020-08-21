@@ -50,9 +50,7 @@ where
         }
         for (nbr_cost, nbr) in next.drain(..) {
             let off = usize::from(nbr_cost);
-            for _ in todo.len()..off + 1 {
-                todo.push(IndexMap::new());
-            }
+            todo.resize(todo.len() + off + 1, IndexMap::new());
             match todo[off].entry(nbr.clone()) {
                 Entry::Vacant(e) => {
                     e.insert(nbr);
