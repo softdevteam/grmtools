@@ -64,7 +64,7 @@ externally created Yacc files. Several sub-variants are allowed:
   are instances of the `lrpar::parser::Node` enum. This is useful for quickly
   testing whether a parser is accepting the intended language.
 
-* `YaccKind::Original(YaccOriginalActionKind::NoActions)` parses input and
+* `YaccKind::Original(YaccOriginalActionKind::NoAction)` parses input and
   reports errors but does not execute any user actions. This is useful if you
   are trying to find out whether a corpus of input parses successfully against
   your grammar or not.
