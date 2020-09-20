@@ -26,6 +26,9 @@ lrpar_mod!("passthrough.y");
 lrlex_mod!("span.l");
 lrpar_mod!("span.y");
 
+lrlex_mod!("calc_parse_param.l");
+lrpar_mod!("calc_parse_param.y");
+
 #[test]
 fn multitypes() {
     let lexerdef = multitypes_l::lexerdef();
@@ -233,6 +236,20 @@ fn test_passthrough() {
     let lexer = lexerdef.lexer("101");
     match passthrough_y::parse(&lexer) {
         (Some(Ok(ref s)), _) if s == "$101" => (),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_parse_param() {
+    let lexerdef = calc_parse_param_l::lexerdef();
+    let lexer = lexerdef.lexer("1 + 1");
+    let mut x = 0;
+    match calc_parse_param_y::parse(&lexer /* FIXME &mut x */) {
+        (Some(Ok(y)), ref errs) if errs.is_empty() => {
+            assert_eq!(x, 2);
+            assert_eq!(y, 2);
+        }
         _ => unreachable!(),
     }
 }

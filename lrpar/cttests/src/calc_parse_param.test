@@ -1,0 +1,49 @@
+name: Test %parse-param using the calculator grammar
+yacckind: Original(YaccOriginalActionKind::UserAction)
+grammar: |
+    %start Expr
+    %actiontype Result<u64, ()>
+    %avoid_insert 'INT'
+    %parse-param <'a> {x: &'a mut int}
+    %%
+    Expr: Expr '+' Term { let mut x = 0; // FIXME remove.
+                          let x = &mut x;
+                          *x = $1? + $3?;
+                          Ok(*x) }
+        | Term { $1 }
+        ;
+
+    Term: Term '*' Factor { let mut x = 0; // FIXME remove.
+                            let x = &mut x;
+                            *x = $1? * $3?;
+                            Ok(*x) }
+        | Factor { $1 }
+        ;
+
+    Factor: '(' Expr ')' { $2 }
+          | 'INT' {
+                let l = $1.map_err(|_| ())?;
+                match $lexer.span_str(l.span()).parse::<u64>() {
+                    Ok(v) => { let mut x = 0; // FIXME remove.
+                               let x = &mut x;
+                               *x = v;
+                               Ok(*x) },
+                    Err(_) => {
+                        let ((_, col), _) = $lexer.line_col(l.span());
+                        eprintln!("Error at column {}: '{}' cannot be represented as a u64",
+                                  col,
+                                  $lexer.span_str(l.span()));
+                        Err(())
+                    }
+                }
+            }
+          ;
+
+lexer: |
+    %%
+    [0-9]+ "INT"
+    \+ "+"
+    \* "*"
+    \( "("
+    \) ")"
+    [\t ]+ ;

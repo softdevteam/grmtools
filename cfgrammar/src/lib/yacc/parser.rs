@@ -196,6 +196,12 @@ impl YaccParser {
                 }
                 continue;
             }
+            if let Some(j) = self.lookahead_is("%parse-param", i) {
+                i = self.parse_ws(j, false)?;
+                let (j, n) = self.parse_to_eol(i)?;
+                i = self.parse_ws(j, true)?;
+                continue;
+            }
             if let YaccKind::Eco = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
                     i = self.parse_ws(j, false)?;
