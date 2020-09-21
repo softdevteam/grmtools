@@ -458,7 +458,7 @@ impl YaccParser {
             while k < self.src.len() {
                 let c = self.src[k..].chars().next().unwrap();
                 match c {
-                    '\n' | '\r' => break,
+                    '\n' | '\r' => return Err(self.mk_error(YaccParserErrorKind::ReachedEOL, k)),
                     ',' => {
                         k = add_lifetime(k);
                         continue;
