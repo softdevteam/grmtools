@@ -196,10 +196,8 @@ impl YaccParser {
                 }
                 continue;
             }
-            if let Some(j) = self.lookahead_is("%parse-param", i) {
-                i = self.parse_ws(j, false)?;
-                let (j, n) = self.parse_to_eol(i)?;
-                i = self.parse_ws(j, true)?;
+            if let Some(j) = self.lookahead_is("%parse_param", i) {
+                i = self.parse_param(j)?;
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
@@ -426,6 +424,65 @@ impl YaccParser {
         } else {
             Ok(i)
         }
+    }
+
+    // This parses `%parse_param "<"lifetimes">" pat ":" type
+    // Eventually we need to bind type to a known variable name.
+    // And generate actions using pat.
+    //
+    // The single variable case of this is `%parse_param x : int`,
+    // while in the multi-variable case is `%parse_param (x, y) : (int, int)`
+    //
+    // To bind this to a known variable name we drop the pattern,
+    // `known_variable_name : (int, int)`.
+    //
+    // Then for user actions we recombine the pattern and the type.
+    // This all works out because patterns don't have single colons in them.
+    //
+    // This way we can void avoid knowing parameter names,
+    // and dealing commas and parenthesis in the pattern which is difficult
+    // since rust types can contain them.
+    fn parse_param(&mut self, mut i: usize) -> YaccResult<usize> {
+        i = self.parse_ws(i, false)?;
+        // First gobble up all of the '<' lifetime ',' ... '>
+        if let Some(mut j) = self.lookahead_is("<", i) {
+            let mut k = j;
+            let mut lifetimes = HashSet::new();
+            let mut add_lifetime = |k| {
+                let s = self.src[j..k].trim_start().trim_end().to_string();
+                lifetimes.insert(s);
+                j = k + 1;
+                j
+            };
+
+            while k < self.src.len() {
+                let c = self.src[k..].chars().next().unwrap();
+                match c {
+                    '\n' | '\r' => break,
+                    ',' => {
+                        k = add_lifetime(k);
+                        continue;
+                    }
+                    '>' => {
+                        k = add_lifetime(k);
+                        break;
+                    }
+                    _ => k += c.len_utf8(),
+                }
+            }
+            self.ast.parse_param_lifetimes = Some(lifetimes);
+            i = k;
+        }
+
+        i = self.parse_ws(i, false)?;
+        let (i, pat) = self.parse_to_single_colon(i)?;
+        let (i, typ) = self.parse_to_eol(i + ':'.len_utf8())?;
+        let pat = pat.trim_start().trim_end().to_string();
+        let typ = typ.trim_start().trim_end().to_string();
+        if !(pat.is_empty() || typ.is_empty()) {
+            self.ast.parse_param_bindings = Some((pat, typ));
+        }
+        Ok(self.parse_ws(i, true)?)
     }
 
     /// Parse up to (but do not include) the end of line (or, if it comes sooner, the end of file).
@@ -1711,5 +1768,26 @@ x"
             }) => (),
             Err(e) => panic!("Incorrect error returned {}", e),
         }
+    }
+    #[test]
+    fn test_parse_param() {
+        use super::HashSet;
+        use std::iter::FromIterator;
+        let src = "
+          %parse_param <'a, 'b> (x, y) : (&'a (), &'b ())
+          %%
+          A: 'a';
+         ";
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src,
+        )
+        .unwrap();
+
+        let expect_lifetimes = HashSet::from_iter([&"'a", &"'b"].iter().map(|s| s.to_string()));
+        let expect_bindings = ("(x, y)".to_string(), "(&'a (), &'b ())".to_string());
+
+        assert_eq!(grm.parse_param_lifetimes, Some(expect_lifetimes));
+        assert_eq!(grm.parse_param_bindings, Some(expect_bindings));
     }
 }
