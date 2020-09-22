@@ -465,13 +465,9 @@ impl YaccParser {
         if self.lookahead_is("(", i).is_some() {
             let mut j = i;
             let mut bindings: Vec<(String, String)> = Vec::new();
-            while j < self.src.len() {
+            while j < self.src.len() && self.lookahead_is(")", j).is_none() {
                 let c = self.src[j..].chars().next().unwrap();
                 j += c.len_utf8();
-
-                if c == ')' {
-                    break
-                }
 
                 // Some binding name, or pattern.
                 let k = self.parse_ws(j, false)?;
@@ -485,6 +481,7 @@ impl YaccParser {
             }
             i = j;
         }
+        let (i, _) = self.parse_to_eol(i)?;
         Ok(self.parse_ws(i, true)?)
     }
 
