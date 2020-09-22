@@ -462,7 +462,7 @@ impl YaccParser {
 
         // Next, the '(' pattern : type, ... ')'
         i = self.parse_ws(i, false)?;
-        if let Some(_) = self.lookahead_is("(", i) {
+        if self.lookahead_is("(", i).is_some() {
             let mut j = i;
             let mut bindings: Vec<(String, String)> = Vec::new();
             while j < self.src.len() {
