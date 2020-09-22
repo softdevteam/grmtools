@@ -20,7 +20,7 @@ pub struct GrammarAST {
     pub precs: HashMap<String, Precedence>,
     pub avoid_insert: Option<HashSet<String>>,
     pub implicit_tokens: Option<HashSet<String>>,
-    pub parse_param_bindings: Option<(String, String)>,
+    pub parse_param_bindings: Option<Vec<(String, String)>>,
     pub parse_param_lifetimes: Option<HashSet<String>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
