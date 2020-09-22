@@ -497,10 +497,7 @@ impl YaccParser {
             match c {
                 '\n' | '\r' => return Err(self.mk_error(YaccParserErrorKind::ReachedEOL, j)),
                 ')' | ',' if brace_count == 0 => {
-                    return Ok((
-                        j,
-                        self.src[i..j].trim_end().to_string(),
-                    ));
+                    return Ok((j, self.src[i..j].trim_end().to_string()));
                 }
                 '(' | '{' | '[' | '<' => {
                     brace_count += 1;
