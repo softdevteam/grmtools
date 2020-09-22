@@ -462,19 +462,23 @@ impl YaccParser {
 
         // Next, the '(' pattern : type, ... ')'
         i = self.parse_ws(i, false)?;
-        if let Some(mut j) = self.lookahead_is("(", i) {
+        if let Some(_) = self.lookahead_is("(", i) {
+            let mut j = i;
             let mut bindings: Vec<(String, String)> = Vec::new();
-
             while j < self.src.len() {
+                let c = self.src[j..].chars().next().unwrap();
+                j += c.len_utf8();
+
+                if c == ')' {
+                    break
+                }
+
                 // Some binding name, or pattern.
                 let k = self.parse_ws(j, false)?;
                 let (k, binding) = self.parse_to_single_colon(k)?;
-                let (k, typ, done) = self.parse_param_rust_type(k + ':'.len_utf8())?;
+                let (k, typ) = self.parse_param_rust_type(k + ':'.len_utf8())?;
                 j = k;
                 bindings.push((binding.trim_end().to_string(), typ));
-                if done == true {
-                    break;
-                }
             }
             if !bindings.is_empty() {
                 self.ast.parse_param_bindings = Some(bindings);
@@ -484,7 +488,10 @@ impl YaccParser {
         Ok(self.parse_ws(i, true)?)
     }
 
-    fn parse_param_rust_type(&mut self, i: usize) -> YaccResult<(usize, String, bool)> {
+    // Parse a rust type, followed by either a ',' character or an unbalanced ')'
+    // Return the char indice of the trailing character,
+    fn parse_param_rust_type(&mut self, i: usize) -> YaccResult<(usize, String)> {
+        let i = self.parse_ws(i, false)?;
         let mut j = i;
         let mut brace_count = 0;
 
@@ -494,9 +501,8 @@ impl YaccParser {
                 '\n' | '\r' => return Err(self.mk_error(YaccParserErrorKind::ReachedEOL, j)),
                 ')' | ',' if brace_count == 0 => {
                     return Ok((
-                        j + c.len_utf8(),
-                        self.src[i..j].trim_start().trim_end().to_string(),
-                        c == ')',
+                        j,
+                        self.src[i..j].trim_end().to_string(),
                     ));
                 }
                 '(' | '{' | '[' | '<' => {
