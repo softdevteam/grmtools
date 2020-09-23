@@ -4,7 +4,7 @@ grammar: |
     %start Expr
     %actiontype Result<u64, ()>
     %avoid_insert 'INT'
-    %parse_param <'a>(x : &'a mut int)
+    %parse_param <'a>(x : &'a mut u64)
     %%
     Expr: Expr '+' Term { let mut x = 0; // FIXME remove.
                           let x = &mut x;
