@@ -4,6 +4,7 @@ use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
     iter::FromIterator,
+    marker::PhantomData,
     time::Instant,
 };
 
@@ -101,27 +102,50 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct CPCTPlus<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
-    parser: &'a Parser<'a, 'b, 'input, StorageT, ActionT>,
+struct CPCTPlus<
+    'a,
+    'b: 'a,
+    'input: 'b,
+    'arg,
+    StorageT: 'static + Eq + Hash,
+    ActionT: 'a,
+    ParamT: 'arg,
+> {
+    parser: &'a Parser<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>,
+    phantom_arg: PhantomData<&'arg ParamT>,
 }
 
-pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &'a Parser<StorageT, ActionT>,
-) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
+pub(crate) fn recoverer<
+    'a,
+    'b: 'a,
+    'input: 'b,
+    'arg: 'a,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'a,
+    ParamT: 'arg,
+>(
+    parser: &'a Parser<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>,
+) -> Box<dyn Recoverer<StorageT, ActionT, ParamT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
 {
-    Box::new(CPCTPlus { parser })
+    Box::new(CPCTPlus {
+        parser,
+        phantom_arg: PhantomData,
+    })
 }
 
 impl<
         'a,
         'b: 'a,
         'input: 'b,
+        'arg,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-    > Recoverer<StorageT, ActionT> for CPCTPlus<'a, 'b, 'input, StorageT, ActionT>
+        ParamT: 'arg,
+    > Recoverer<StorageT, ActionT, ParamT>
+    for CPCTPlus<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -129,12 +153,13 @@ where
     fn recover(
         &self,
         finish_by: Instant,
-        parser: &Parser<StorageT, ActionT>,
+        parser: &Parser<StorageT, ActionT, ParamT>,
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
         mut astack: &mut Vec<AStackType<ActionT, StorageT>>,
         mut spans: &mut Vec<Span>,
-    ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
+        param: ParamT,
+    ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>, ParamT) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
         //
@@ -226,25 +251,27 @@ where
         );
 
         if astar_cnds.is_empty() {
-            return (in_laidx, vec![]);
+            return (in_laidx, vec![], param);
         }
 
         let full_rprs = self.collect_repairs(in_laidx, astar_cnds);
-        let mut rnk_rprs = rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs);
+        let (mut rnk_rprs, param) =
+            rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs, param);
         if rnk_rprs.is_empty() {
-            return (in_laidx, vec![]);
+            return (in_laidx, vec![], param);
         }
         simplify_repairs(parser, &mut rnk_rprs);
-        let laidx = apply_repairs(
+        let (laidx, param) = apply_repairs(
             parser,
             in_laidx,
             &mut in_pstack,
             &mut Some(&mut astack),
             &mut Some(&mut spans),
             &rnk_rprs[0],
+            param,
         );
 
-        (laidx, rnk_rprs)
+        (laidx, rnk_rprs, param)
     }
 }
 
@@ -252,9 +279,11 @@ impl<
         'a,
         'b: 'a,
         'input: 'b,
+        'arg,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-    > CPCTPlus<'a, 'b, 'input, StorageT, ActionT>
+        ParamT: 'arg,
+    > CPCTPlus<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -436,14 +465,23 @@ where
 
 /// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
 /// distance and a new pstack.
-pub fn apply_repairs<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &Parser<StorageT, ActionT>,
+pub fn apply_repairs<
+    'a,
+    'b: 'a,
+    'input: 'b,
+    'arg: 'a,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'a,
+    ParamT: 'arg,
+>(
+    parser: &'a Parser<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>,
     mut laidx: usize,
     mut pstack: &mut Vec<StIdx>,
     mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
     mut spans: &mut Option<&mut Vec<Span>>,
     repairs: &[ParseRepair<StorageT>],
-) -> usize
+    mut param: ParamT,
+) -> (usize, ParamT)
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -457,30 +495,42 @@ where
                     next_lexeme.span().start(),
                     None,
                 );
-                parser.lr_upto(
-                    Some(new_lexeme),
-                    laidx,
-                    laidx + 1,
-                    &mut pstack,
-                    &mut astack,
-                    &mut spans,
-                );
+                param = parser
+                    .lr_upto(
+                        Some(new_lexeme),
+                        laidx,
+                        laidx + 1,
+                        &mut pstack,
+                        &mut astack,
+                        &mut spans,
+                        param,
+                    )
+                    .1;
             }
             ParseRepair::Delete(_) => {
                 laidx += 1;
             }
             ParseRepair::Shift(_) => {
-                laidx =
-                    parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack, &mut spans);
+                let (laidx_tmp, param_tmp) = parser.lr_upto(
+                    None,
+                    laidx,
+                    laidx + 1,
+                    &mut pstack,
+                    &mut astack,
+                    &mut spans,
+                    param,
+                );
+                laidx = laidx_tmp;
+                param = param_tmp;
             }
         }
     }
-    laidx
+    (laidx, param)
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.
-pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
-    parser: &Parser<StorageT, ActionT>,
+pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT, ParamT>(
+    parser: &Parser<StorageT, ActionT, ParamT>,
     all_rprs: &mut Vec<Vec<ParseRepair<StorageT>>>,
 ) where
     usize: AsPrimitive<StorageT>,
@@ -533,13 +583,20 @@ pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-fn rank_cnds<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &Parser<StorageT, ActionT>,
+fn rank_cnds<
+    'a,
+    'arg,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'a,
+    ParamT: 'arg,
+>(
+    parser: &Parser<StorageT, ActionT, ParamT>,
     finish_by: Instant,
     in_laidx: usize,
     in_pstack: &[StIdx],
     in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>,
-) -> Vec<Vec<ParseRepair<StorageT>>>
+    mut param: ParamT,
+) -> (Vec<Vec<ParseRepair<StorageT>>>, ParamT)
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -548,29 +605,37 @@ where
     let mut furthest = 0;
     for rpr_seqs in in_cnds {
         if Instant::now() >= finish_by {
-            return vec![];
+            return (vec![], param);
         }
+        let mut laidx;
         let mut pstack = in_pstack.to_owned();
-        let mut laidx = apply_repairs(
+        let (laidx_tmp, param_tmp) = apply_repairs(
             parser,
             in_laidx,
             &mut pstack,
             &mut None,
             &mut None,
             &rpr_seqs[0],
+            param,
         );
-        laidx = parser.lr_upto(
+        param = param_tmp;
+        laidx = laidx_tmp;
+
+        let (laidx_tmp, param_tmp) = parser.lr_upto(
             None,
             laidx,
             in_laidx + TRY_PARSE_AT_MOST,
             &mut pstack,
             &mut None,
             &mut None,
+            param,
         );
+        laidx = laidx_tmp;
         if laidx >= furthest {
             furthest = laidx;
         }
         cnds.push((pstack, laidx, rpr_seqs));
+        param = param_tmp;
     }
 
     // Remove any elements except those which parsed as far as possible.
@@ -579,7 +644,10 @@ where
         .filter(|x| x.1 == furthest)
         .collect::<Vec<_>>();
 
-    cnds.into_iter().flat_map(|x| x.2).collect::<Vec<_>>()
+    (
+        cnds.into_iter().flat_map(|x| x.2).collect::<Vec<_>>(),
+        param,
+    )
 }
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?

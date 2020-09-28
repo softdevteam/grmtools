@@ -25,7 +25,7 @@ fn main() {
                 // Now we create a lexer with the `lexer` method with which we can lex an input.
                 let lexer = lexerdef.lexer(l);
                 // Pass the lexer to the parser and lex and parse the input.
-                let (res, errs) = calc_y::parse(&lexer);
+                let (res, errs, _) = calc_y::parse(&lexer, ());
                 for e in errs {
                     println!("{}", e.pp(&lexer, &calc_y::token_epp));
                 }
