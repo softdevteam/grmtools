@@ -249,7 +249,6 @@ fn test_parse_param() {
         (Some(Ok(y)), ref errs, &mut _x) if errs.is_empty() => {
             let _x = &_x;
             assert_eq!(&x, _x);
-            //std::ptr::eq(&x, _x));
             assert_eq!(x, 2);
             assert_eq!(y, 2);
         }

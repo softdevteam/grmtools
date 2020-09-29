@@ -613,13 +613,14 @@ where
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 outs.push_str(&format!(
                     "
-        {{ let (__x, __y, _) = ::lrpar::RTParserBuilder::new(&grm, &stable)
+        {{ let (node, parse_result, {param_pat}) = ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{})
             .parse_generictree(lexer, {param_pat});\n
-            (__x, __y)
+            (node, parse_result)
         }}\n",
                     recoverer,
-                    param_pat = self.param_pattern(grm),
+                    // Since we ignore user actions, ignore parameters as well.
+                    param_pat = "()",
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
@@ -689,8 +690,7 @@ where
             // element from the argument vector (e.g. $1 is replaced by args[0]). At
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
-                "    #[allow(unused_variables)]
-                     fn {prefix}wrapper_{}<'lexer, 'input: 'lexer, {param_lt}>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
+                "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer, {param_lt}>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
                       {prefix}span: ::lrpar::Span,
                       mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>,
@@ -777,7 +777,7 @@ where
                 // added by lrpar) will never be executed, so a dummy function is all
                 // that's required. We add "unreachable" as a check in case some other
                 // detail of lrpar changes in the future.
-                outs.push_str("    unreachable!()");
+                outs.push_str("   #![allow(unused_variables)] unreachable!()");
             } else {
                 panic!(
                     "Production in rule '{}' must have an action body.",
@@ -863,7 +863,7 @@ where
             };
             outs.push_str(&format!(
                 "    // {rulename}
-    #[allow(clippy::too_many_arguments, unused_variables)]
+    #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}<'lexer, 'input: 'lexer, {param_lt}>(
                      {prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
