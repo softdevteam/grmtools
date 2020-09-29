@@ -23,6 +23,7 @@ pub enum YaccParserErrorKind {
     IncompleteAction,
     MissingColon,
     MissingRightArrow,
+    MismatchedBrace,
     PrematureEnd,
     ProgramsNotSupported,
     UnknownDeclaration,
@@ -58,6 +59,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::IncompleteAction => "Incomplete action",
             YaccParserErrorKind::MissingColon => "Missing ':'",
             YaccParserErrorKind::MissingRightArrow => "Missing '->'",
+            YaccParserErrorKind::MismatchedBrace => "Mismatched brace",
             YaccParserErrorKind::PrematureEnd => "File ends prematurely",
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccParserErrorKind::UnknownDeclaration => "Unknown declaration",
@@ -434,11 +436,10 @@ impl YaccParser {
         if let Some(mut j) = self.lookahead_is("<", i) {
             let mut k = j;
             let mut lifetimes = HashSet::new();
-            let mut add_lifetime = |k, c: char| {
-                let s = self.src[j..k].trim_start().trim_end().to_string();
+            let mut add_lifetime = |j, k, c: char| {
+                let s = self.src[j..k].trim().to_string();
                 lifetimes.insert(s);
-                j = k + c.len_utf8();
-                j
+                k + c.len_utf8()
             };
 
             while k < self.src.len() {
@@ -446,11 +447,11 @@ impl YaccParser {
                 match c {
                     '\n' | '\r' => return Err(self.mk_error(YaccParserErrorKind::ReachedEOL, k)),
                     ',' => {
-                        k = add_lifetime(k, ',');
-                        continue;
+                        k = add_lifetime(j, k, ',');
+                        j = k;
                     }
                     '>' => {
-                        k = add_lifetime(k, '>');
+                        k = add_lifetime(j, k, '>');
                         break;
                     }
                     _ => k += c.len_utf8(),
@@ -470,8 +471,8 @@ impl YaccParser {
                 j += c.len_utf8();
 
                 // Some binding name, or pattern.
-                let k = self.parse_ws(j, false)?;
-                let (k, binding) = self.parse_to_single_colon(k)?;
+                j = self.parse_ws(j, false)?;
+                let (k, binding) = self.parse_to_single_colon(j)?;
                 let (k, typ) = self.parse_param_rust_type(k + ':'.len_utf8())?;
                 j = k;
                 bindings.push((binding.trim_end().to_string(), typ));
@@ -503,14 +504,17 @@ impl YaccParser {
                     brace_count += 1;
                     j += c.len_utf8();
                 }
-                ')' | '}' | '>' | ']' if brace_count > 0 => {
+                ')' | '}' | '>' | ']' => {
+                    if brace_count == 0 {
+                        return Err(self.mk_error(YaccParserErrorKind::MismatchedBrace, j));
+                    }
                     brace_count -= 1;
                     j += c.len_utf8();
                 }
                 c => j += c.len_utf8(),
             }
         }
-        return Err(self.mk_error(YaccParserErrorKind::PrematureEnd, j));
+        Err(self.mk_error(YaccParserErrorKind::PrematureEnd, j))
     }
 
     /// Parse up to (but do not include) the end of line (or, if it comes sooner, the end of file).
@@ -710,6 +714,8 @@ impl YaccParser {
 
 #[cfg(test)]
 mod test {
+    use std::{ collections::HashSet, iter::FromIterator };
+
     use super::{
         super::{
             ast::{GrammarAST, Production, Symbol},
@@ -1797,10 +1803,9 @@ x"
             Err(e) => panic!("Incorrect error returned {}", e),
         }
     }
+
     #[test]
     fn test_parse_param() {
-        use super::HashSet;
-        use std::iter::FromIterator;
         let src = "
           %parse_param <'a, 'b> (x: &'a (), (y, z) : (Result<((), ()), ((), ())>, ((u32, u32), &'b ())))
           %%
