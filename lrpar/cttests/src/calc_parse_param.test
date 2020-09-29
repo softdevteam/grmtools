@@ -6,19 +6,19 @@ grammar: |
     %avoid_insert 'INT'
     %parse_param <'a>(x : &'a mut u64)
     %%
-    Expr: Expr '+' Term {
+      Expr: Expr '+' Term {
                 *x = $1? + $3?;
                 Ok(*x)
-          }
-        | Term { #![allow(unused_variables)] $1 }
-        ;
+            }
+          | Term { #![allow(unused_variables)] $1 }
+          ;
 
-    Term: Term '*' Factor {
+      Term: Term '*' Factor {
                 *x = $1? * $3?;
                 Ok(*x)
-          }
-        | Factor { #![allow(unused_variables)] $1 }
-        ;
+            }
+          | Factor { #![allow(unused_variables)] $1 }
+          ;
 
     Factor: '(' Expr ')' { #![allow(unused_variables)] $2 }
           | 'INT' {
