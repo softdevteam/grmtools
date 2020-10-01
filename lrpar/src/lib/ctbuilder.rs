@@ -474,12 +474,34 @@ where
         cache
     }
 
+    fn param_pattern_bind(&self, grm: &YaccGrammar<StorageT>) -> String {
+        // Avoid adding parenthesis around a (single_pattern)
+        if grm.param_args().len() == 1 {
+            format!("mut {}", grm.param_args().iter().next().unwrap().0)
+        } else if grm.param_args().len() == 0 {
+            "()".to_string()
+        }else {
+            // Zero (), or many (z, ...)
+            // It may be wise to just take a single param.
+            // FIXME &mut (), vs (&mut .., &mut ..)?
+            format!(
+                "mut ({})",
+                grm.param_args()
+                    .iter()
+                    .map(|(pat, _)| pat.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+            )
+        }
+    }
     fn param_pattern(&self, grm: &YaccGrammar<StorageT>) -> String {
         // Avoid adding parenthesis around a (single_pattern)
         if grm.param_args().len() == 1 {
-            grm.param_args().iter().next().unwrap().0.to_string()
+            format!("{}", grm.param_args().iter().next().unwrap().0)
         } else {
             // Zero (), or many (z, ...)
+            // It may be wise to just take a single param.
+            // FIXME &mut (), vs (&mut .., &mut ..)?
             format!(
                 "({})",
                 grm.param_args()
@@ -491,10 +513,10 @@ where
         }
     }
 
-    fn param_type(&self, grm: &YaccGrammar<StorageT>) -> String {
+    fn param_type_plain(&self, grm: &YaccGrammar<StorageT>) -> String {
         // Avoid adding parenthesis around a (single_type)
         if grm.param_args().len() == 1 {
-            grm.param_args().iter().next().unwrap().1.to_string()
+            format!("{}", grm.param_args().iter().next().unwrap().1)
         } else {
             format!(
                 "({})",
@@ -505,6 +527,10 @@ where
                     .join(",")
             )
         }
+    }
+
+    fn param_type(&self, grm: &YaccGrammar<StorageT>) -> String {
+        format!("&mut {}", self.param_type_plain(grm))
     }
 
     /// Generate the main parse() function for the output file.
@@ -529,13 +555,13 @@ where
                 lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
                 {param_pat} : {param_typ}
             )
-          -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>, {param_typ})
+          -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
                     storaget = type_name::<StorageT>(),
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap(),
                     param_lt = grm.param_lifetimes().join(","),
                     param_typ = self.param_type(grm),
-                    param_pat = self.param_pattern(grm),
+                    param_pat = self.param_pattern_bind(grm),
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
@@ -577,15 +603,15 @@ where
                 // action function references
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
-        let mut actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
+        let mut actions: ::std::vec::Vec<&dyn for<'c> Fn(::cfgrammar::RIdx<{storaget}>,
                        &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
                        ::lrpar::Span,
-                       ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>,
-                       {param_typ})
-                    -> ({actionskind}<'input>, {param_typ})> = ::std::vec::Vec::new();\n",
+                       &'c mut ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>,
+                       &'c mut {param_typ})
+                    -> {actionskind}<'input>> = ::std::vec::Vec::new();\n",
                     actionskind = ACTIONS_KIND,
                     storaget = type_name::<StorageT>(),
-                    param_typ = self.param_type(grm),
+                    param_typ = self.param_type_plain(grm),
                 ));
                 for pidx in grm.iter_pidxs() {
                     outs.push_str(&format!(
@@ -598,9 +624,9 @@ where
                     "
         match ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{recoverer})
-            .parse_actions(lexer, actions.as_slice(), {param_pat}) {{
-                (Some({actionskind}::{actionskindprefix}{ridx}(__x)), y, {param_pat}) => (Some(__x), y, {param_pat}),
-                (None, y, {param_pat}) => (None, y, {param_pat}),
+            .parse_actions(lexer, &mut actions.as_slice(), &mut {param_pat}) {{
+                (Some({actionskind}::{actionskindprefix}{ridx}(__x)), y) => (Some(__x), y),
+                (None, y) => (None, y),
                 _ => unreachable!()
         }}",
                     actionskind = ACTIONS_KIND,
@@ -613,14 +639,14 @@ where
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 outs.push_str(&format!(
                     "
-        {{ let (node, parse_result, {param_pat}) = ::lrpar::RTParserBuilder::new(&grm, &stable)
+        {{ let (node, parse_result) = ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{})
             .parse_generictree(lexer, {param_pat});\n
             (node, parse_result)
         }}\n",
                     recoverer,
                     // Since we ignore user actions, ignore parameters as well.
-                    param_pat = "()",
+                    param_pat = "&mut ()",
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
@@ -628,7 +654,7 @@ where
                     "
         ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{})
-            .parse_noaction(lexer).0\n",
+            .parse_noaction(lexer)\n",
                     recoverer
                 ));
             }
@@ -693,16 +719,16 @@ where
                 "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer, {param_lt}>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
                       {prefix}span: ::lrpar::Span,
-                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>,
+                      mut {prefix}args: &mut ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>,
                       {param_pat} : {param_typ})
-                   -> ({actionskind}<'input>, {param_typ}) {{",
+                   -> {actionskind}<'input> {{",
                 usize::from(pidx),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
                 actionskind = ACTIONS_KIND,
                 param_lt = grm.param_lifetimes().join(","),
                 param_typ = self.param_type(grm),
-                param_pat = self.param_pattern(grm),
+                param_pat = self.param_pattern_bind(grm),
             ));
 
             if grm.action(pidx).is_some() {
@@ -742,7 +768,7 @@ where
                 // Call the user code
                 let args = (0..grm.prod(pidx).len())
                     .map(|i| format!("{prefix}arg_{i}", prefix = ACTION_PREFIX, i = i + 1))
-                    .chain(grm.param_args().iter().map(|arg| arg.0.clone().to_string()))
+                    .chain(grm.param_args().iter().map(|arg| format!("&mut {}", arg.0.clone())))
                     .collect::<Vec<_>>();
                 // If the rule `r` that we're calling has the unit type then Clippy will warn that
                 // `enum::A(wrapper_r())` is pointless. We thus have to split it into two:
@@ -750,25 +776,25 @@ where
                 match grm.actiontype(ridx) {
                     Some(s) if s == "()" => {
                         outs.push_str(&format!("\n        {prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args});
-        ({actionskind}::{actionskindprefix}{ridx}(()), {param_pat})",
+        {actionskind}::{actionskindprefix}{ridx}(())",
                             actionskind = ACTIONS_KIND,
                             actionskindprefix = ACTIONS_KIND_PREFIX,
                             prefix = ACTION_PREFIX,
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
                             args = args.join(", "),
-                            param_pat = self.param_pattern(grm),
+                            //param_pat = self.param_pattern(grm),
                         ));
                     }
                     _ => {
-                        outs.push_str(&format!("\n        ({actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args})), {param_pat})",
+                        outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args}))",
                             actionskind = ACTIONS_KIND,
                             actionskindprefix = ACTIONS_KIND_PREFIX,
                             prefix = ACTION_PREFIX,
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
                             args = args.join(", "),
-                            param_pat = self.param_pattern(grm),
+                            //param_pat = self.param_pattern(grm),
                         ));
                     }
                 }
@@ -777,7 +803,7 @@ where
                 // added by lrpar) will never be executed, so a dummy function is all
                 // that's required. We add "unreachable" as a check in case some other
                 // detail of lrpar changes in the future.
-                outs.push_str("   #![allow(unused_variables)] unreachable!()");
+                outs.push_str("   #![allow(unused_mut, unused_variables)] unreachable!()");
             } else {
                 panic!(
                     "Production in rule '{}' must have an action body.",
@@ -847,7 +873,7 @@ where
             args.extend(
                 grm.param_args()
                     .iter()
-                    .map(|(arg, typ)| format!("{} : {}", arg, typ)),
+                    .map(|(arg, typ)| format!("mut {} : &mut {}", arg, typ)),
             );
 
             // If this rule's `actiont` is `()` then Clippy will warn that the return type `-> ()`
@@ -863,7 +889,7 @@ where
             };
             outs.push_str(&format!(
                 "    // {rulename}
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, unused_mut)]
     fn {prefix}action_{}<'lexer, 'input: 'lexer, {param_lt}>(
                      {prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,

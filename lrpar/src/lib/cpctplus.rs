@@ -158,8 +158,8 @@ where
         mut in_pstack: &mut Vec<StIdx>,
         mut astack: &mut Vec<AStackType<ActionT, StorageT>>,
         mut spans: &mut Vec<Span>,
-        param: ParamT,
-    ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>, ParamT) {
+        param: &mut ParamT,
+    ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
         //
@@ -251,17 +251,16 @@ where
         );
 
         if astar_cnds.is_empty() {
-            return (in_laidx, vec![], param);
+            return (in_laidx, vec![]);
         }
 
         let full_rprs = self.collect_repairs(in_laidx, astar_cnds);
-        let (mut rnk_rprs, param) =
-            rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs, param);
+        let mut rnk_rprs = { rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs, param) };
         if rnk_rprs.is_empty() {
-            return (in_laidx, vec![], param);
+            return (in_laidx, vec![]);
         }
         simplify_repairs(parser, &mut rnk_rprs);
-        let (laidx, param) = apply_repairs(
+        let laidx = apply_repairs(
             parser,
             in_laidx,
             &mut in_pstack,
@@ -271,7 +270,7 @@ where
             param,
         );
 
-        (laidx, rnk_rprs, param)
+        (laidx, rnk_rprs)
     }
 }
 
@@ -480,8 +479,8 @@ pub fn apply_repairs<
     mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
     mut spans: &mut Option<&mut Vec<Span>>,
     repairs: &[ParseRepair<StorageT>],
-    mut param: ParamT,
-) -> (usize, ParamT)
+    param: &mut ParamT,
+) -> usize
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -495,7 +494,7 @@ where
                     next_lexeme.span().start(),
                     None,
                 );
-                param = parser
+                parser
                     .lr_upto(
                         Some(new_lexeme),
                         laidx,
@@ -504,14 +503,13 @@ where
                         &mut astack,
                         &mut spans,
                         param,
-                    )
-                    .1;
+                    );
             }
             ParseRepair::Delete(_) => {
                 laidx += 1;
             }
             ParseRepair::Shift(_) => {
-                let (laidx_tmp, param_tmp) = parser.lr_upto(
+                laidx = parser.lr_upto(
                     None,
                     laidx,
                     laidx + 1,
@@ -520,12 +518,10 @@ where
                     &mut spans,
                     param,
                 );
-                laidx = laidx_tmp;
-                param = param_tmp;
             }
         }
     }
-    (laidx, param)
+    laidx
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.
@@ -595,8 +591,8 @@ fn rank_cnds<
     in_laidx: usize,
     in_pstack: &[StIdx],
     in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>,
-    mut param: ParamT,
-) -> (Vec<Vec<ParseRepair<StorageT>>>, ParamT)
+    param: &mut ParamT,
+) -> Vec<Vec<ParseRepair<StorageT>>>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -605,11 +601,11 @@ where
     let mut furthest = 0;
     for rpr_seqs in in_cnds {
         if Instant::now() >= finish_by {
-            return (vec![], param);
+            return vec![];
         }
         let mut laidx;
         let mut pstack = in_pstack.to_owned();
-        let (laidx_tmp, param_tmp) = apply_repairs(
+        laidx = apply_repairs(
             parser,
             in_laidx,
             &mut pstack,
@@ -618,10 +614,8 @@ where
             &rpr_seqs[0],
             param,
         );
-        param = param_tmp;
-        laidx = laidx_tmp;
 
-        let (laidx_tmp, param_tmp) = parser.lr_upto(
+        laidx = parser.lr_upto(
             None,
             laidx,
             in_laidx + TRY_PARSE_AT_MOST,
@@ -630,12 +624,10 @@ where
             &mut None,
             param,
         );
-        laidx = laidx_tmp;
         if laidx >= furthest {
             furthest = laidx;
         }
         cnds.push((pstack, laidx, rpr_seqs));
-        param = param_tmp;
     }
 
     // Remove any elements except those which parsed as far as possible.
@@ -644,10 +636,7 @@ where
         .filter(|x| x.1 == furthest)
         .collect::<Vec<_>>();
 
-    (
-        cnds.into_iter().flat_map(|x| x.2).collect::<Vec<_>>(),
-        param,
-    )
+    cnds.into_iter().flat_map(|x| x.2).collect::<Vec<_>>()
 }
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?
