@@ -553,15 +553,22 @@ where
     #[allow(dead_code)]
     pub fn parse<'lexer, 'input: 'lexer, {param_lt}>(
                 lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
-                {param_pat} : {param_typ}
+                {param_decl}
             )
           -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
     {{",
                     storaget = type_name::<StorageT>(),
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap(),
                     param_lt = grm.param_lifetimes().join(","),
-                    param_typ = self.param_type(grm),
-                    param_pat = self.param_pattern_bind(grm),
+                    param_decl = if grm.param_args().len() > 0 {
+                        format!(
+                            "{} : {}",
+                            self.param_pattern_bind(grm),
+                            self.param_type(grm),
+                        )
+                    } else {
+                        "".to_string()
+                    }
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
@@ -787,7 +794,6 @@ where
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
                             args = args.join(", "),
-                            //param_pat = self.param_pattern(grm),
                         ));
                     }
                     _ => {
@@ -798,7 +804,6 @@ where
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
                             args = args.join(", "),
-                            //param_pat = self.param_pattern(grm),
                         ));
                     }
                 }
