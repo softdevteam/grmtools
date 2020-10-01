@@ -1,0 +1,25 @@
+name: Test multiple types
+yacckind: Original(YaccOriginalActionKind::GenericParseTree)
+grammar: |
+    %parse_param <'a>(_a_count: u64, _b_count: u64)
+    %actiontype Result<(), ()>
+    %start S
+    %%
+    S: AorB  { Ok($1?) };
+
+    AorB
+    :        { Ok(())  }
+    | AorB A { Ok($2?) }
+    | AorB B { Ok($2?) };
+
+    A: 'a'   { Ok(*_a_count.deref_mut() += 1) };
+    B: 'b'   { Ok(*_b_count.deref_mut() += 1) };
+
+    %%
+    // We get &mut &mut u64's, use deref_mut to coerce them to &mut u64
+    use std::ops::DerefMut;
+
+lexer: |
+    %%
+    a 'a'
+    b 'b'

@@ -20,6 +20,12 @@ lrpar_mod!("lexer_lifetime.y");
 lrlex_mod!("multitypes.l");
 lrpar_mod!("multitypes.y");
 
+lrlex_mod!("multiparam.l");
+lrpar_mod!("multiparam.y");
+
+lrlex_mod!("multiparam_generic.l");
+lrpar_mod!("multiparam_generic.y");
+
 lrlex_mod!("passthrough.l");
 lrpar_mod!("passthrough.y");
 
@@ -250,6 +256,31 @@ fn test_parse_param() {
             assert_eq!(x, 2);
             assert_eq!(y, 2);
         }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_multiparam() {
+    let lexerdef = multiparam_l::lexerdef();
+    let lexer = lexerdef.lexer("ababa");
+    let mut a: u64 = 0;
+    let mut b: u64 = 0;
+    match multiparam_y::parse(&lexer, &mut (&mut a, &mut b)) {
+        (Some(Ok(())), ref errs) if errs.is_empty() => {
+            assert_eq!(a, 3);
+            assert_eq!(b, 2);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_multiparam_generic() {
+    let lexerdef = multiparam_l::lexerdef();
+    let lexer = lexerdef.lexer("ababa");
+    match multiparam_generic_y::parse(&lexer) {
+        (Some(_), ref errs) if errs.is_empty() => (),
         _ => unreachable!(),
     }
 }

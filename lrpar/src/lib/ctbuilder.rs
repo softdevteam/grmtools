@@ -474,34 +474,13 @@ where
         cache
     }
 
-    fn param_pattern_bind(&self, grm: &YaccGrammar<StorageT>) -> String {
-        // Avoid adding parenthesis around a (single_pattern)
-        if grm.param_args().len() == 1 {
-            format!("mut {}", grm.param_args().iter().next().unwrap().0)
-        } else if grm.param_args().len() == 0 {
-            "()".to_string()
-        } else {
-            // Zero (), or many (z, ...)
-            // It may be wise to just take a single param.
-            // FIXME &mut (), vs (&mut .., &mut ..)?
-            format!(
-                "mut ({})",
-                grm.param_args()
-                    .iter()
-                    .map(|(pat, _)| pat.to_string())
-                    .collect::<Vec<String>>()
-                    .join(",")
-            )
-        }
-    }
     fn param_pattern(&self, grm: &YaccGrammar<StorageT>) -> String {
-        // Avoid adding parenthesis around a (single_pattern)
-        if grm.param_args().len() == 1 {
+        let num_params = grm.param_args().len();
+        if num_params == 1 {
+            // Avoid adding parenthesis around a (single_pattern)
             format!("{}", grm.param_args().iter().next().unwrap().0)
         } else {
             // Zero (), or many (z, ...)
-            // It may be wise to just take a single param.
-            // FIXME &mut (), vs (&mut .., &mut ..)?
             format!(
                 "({})",
                 grm.param_args()
@@ -513,24 +492,65 @@ where
         }
     }
 
-    fn param_type_plain(&self, grm: &YaccGrammar<StorageT>) -> String {
-        // Avoid adding parenthesis around a (single_type)
-        if grm.param_args().len() == 1 {
-            format!("{}", grm.param_args().iter().next().unwrap().1)
+    fn param_pattern_expr(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let num_params = grm.param_args().len();
+        if num_params == 1 {
+            // Avoid adding parenthesis around a (single_pattern)
+            // Or &mut, as we don't want to auto-deref here.
+            format!("{}", grm.param_args().iter().next().unwrap().0)
         } else {
+            // &mut (), or many &mut (*x1, *x2, ...)
             format!(
-                "({})",
+                "&mut ({})",
                 grm.param_args()
                     .iter()
-                    .map(|(_, typ)| typ.to_string())
+                    .map(|(pat, _)| format!("*{}", pat).to_string())
                     .collect::<Vec<String>>()
                     .join(",")
             )
         }
     }
 
-    fn param_type(&self, grm: &YaccGrammar<StorageT>) -> String {
-        format!("&mut {}", self.param_type_plain(grm))
+    fn param_pattern_bind(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let num_params = grm.param_args().len();
+        if num_params == 1 {
+            // Avoid adding parenthesis around a (single_pattern)
+            // however we must add a mut prefix.
+            format!("mut {}", grm.param_args().iter().next().unwrap().0)
+        } else {
+            // Zero (), or many (z, ...)
+            // No `mut` prefix since we don't want auto-deref here.
+            format!(
+                "({})",
+                grm.param_args()
+                    .iter()
+                    .map(|(pat, _)| format!("{}", pat).to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+            )
+        }
+    }
+
+    fn param_type(&self, grm: &YaccGrammar<StorageT>, lifetime: &str) -> String {
+        let num_params = grm.param_args().len();
+        if num_params == 1 {
+            // Avoid adding parenthesis around a (single_type)
+            format!(
+                "&{} mut {}",
+                lifetime,
+                grm.param_args().iter().next().unwrap().1
+            )
+        } else {
+            format!(
+                "&{} mut ({})",
+                lifetime,
+                grm.param_args()
+                    .iter()
+                    .map(|(_, typ)| format!("&mut {}", typ).to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+            )
+        }
     }
 
     /// Generate the main parse() function for the output file.
@@ -564,7 +584,7 @@ where
                         format!(
                             "{} : {}",
                             self.param_pattern_bind(grm),
-                            self.param_type(grm),
+                            self.param_type(grm, ""),
                         )
                     } else {
                         "".to_string()
@@ -614,11 +634,11 @@ where
                        &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
                        ::lrpar::Span,
                        &'c mut ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>,
-                       &'c mut {param_typ})
+                       {param_typ})
                     -> {actionskind}<'input>> = ::std::vec::Vec::new();\n",
                     actionskind = ACTIONS_KIND,
                     storaget = type_name::<StorageT>(),
-                    param_typ = self.param_type_plain(grm),
+                    param_typ = self.param_type(grm, "'c"),
                 ));
                 for pidx in grm.iter_pidxs() {
                     outs.push_str(&format!(
@@ -734,8 +754,8 @@ where
                 prefix = ACTION_PREFIX,
                 actionskind = ACTIONS_KIND,
                 param_lt = grm.param_lifetimes().join(","),
-                param_typ = self.param_type(grm),
-                param_pat = self.param_pattern_bind(grm),
+                param_typ = self.param_type(grm, ""),
+                param_pat = self.param_pattern(grm),
             ));
 
             if grm.action(pidx).is_some() {
@@ -775,11 +795,9 @@ where
                 // Call the user code
                 let args = (0..grm.prod(pidx).len())
                     .map(|i| format!("{prefix}arg_{i}", prefix = ACTION_PREFIX, i = i + 1))
-                    .chain(
-                        grm.param_args()
-                            .iter()
-                            .map(|arg| format!("&mut {}", arg.0.clone())),
-                    )
+                    .chain(std::iter::once(
+                        format!("{}", self.param_pattern_expr(grm)).to_string(),
+                    ))
                     .collect::<Vec<_>>();
                 // If the rule `r` that we're calling has the unit type then Clippy will warn that
                 // `enum::A(wrapper_r())` is pointless. We thus have to split it into two:
@@ -879,11 +897,11 @@ where
                 args.push(format!("mut {}arg_{}: {}", ACTION_PREFIX, i + 1, argt));
             }
 
-            args.extend(
-                grm.param_args()
-                    .iter()
-                    .map(|(arg, typ)| format!("mut {} : &mut {}", arg, typ)),
-            );
+            args.push(format!(
+                "{} : {}",
+                self.param_pattern(grm),
+                self.param_type(grm, "")
+            ));
 
             // If this rule's `actiont` is `()` then Clippy will warn that the return type `-> ()`
             // is pointless (which is true). We therefore avoid outputting a return type if actiont
