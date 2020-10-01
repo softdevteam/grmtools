@@ -4,7 +4,6 @@ use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
     iter::FromIterator,
-    marker::PhantomData,
     time::Instant,
 };
 
@@ -102,50 +101,35 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct CPCTPlus<
-    'a,
-    'b: 'a,
-    'input: 'b,
-    'arg,
-    StorageT: 'static + Eq + Hash,
-    ActionT: 'a,
-    ParamT: 'arg,
-> {
-    parser: &'a Parser<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>,
-    phantom_arg: PhantomData<&'arg ParamT>,
+struct CPCTPlus<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a, ParamT> {
+    parser: &'a Parser<'a, 'b, 'input, StorageT, ActionT, ParamT>,
 }
 
 pub(crate) fn recoverer<
     'a,
     'b: 'a,
     'input: 'b,
-    'arg: 'a,
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     ActionT: 'a,
-    ParamT: 'arg,
+    ParamT,
 >(
-    parser: &'a Parser<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>,
+    parser: &'a Parser<'a, 'b, 'input, StorageT, ActionT, ParamT>,
 ) -> Box<dyn Recoverer<StorageT, ActionT, ParamT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
 {
-    Box::new(CPCTPlus {
-        parser,
-        phantom_arg: PhantomData,
-    })
+    Box::new(CPCTPlus { parser })
 }
 
 impl<
         'a,
         'b: 'a,
         'input: 'b,
-        'arg,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-        ParamT: 'arg,
-    > Recoverer<StorageT, ActionT, ParamT>
-    for CPCTPlus<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>
+        ParamT,
+    > Recoverer<StorageT, ActionT, ParamT> for CPCTPlus<'a, 'b, 'input, StorageT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -278,11 +262,10 @@ impl<
         'a,
         'b: 'a,
         'input: 'b,
-        'arg,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-        ParamT: 'arg,
-    > CPCTPlus<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>
+        ParamT,
+    > CPCTPlus<'a, 'b, 'input, StorageT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -466,14 +449,11 @@ where
 /// distance and a new pstack.
 pub fn apply_repairs<
     'a,
-    'b: 'a,
-    'input: 'b,
-    'arg: 'a,
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     ActionT: 'a,
-    ParamT: 'arg,
+    ParamT,
 >(
-    parser: &'a Parser<'a, 'b, 'input, 'arg, StorageT, ActionT, ParamT>,
+    parser: &'a Parser<StorageT, ActionT, ParamT>,
     mut laidx: usize,
     mut pstack: &mut Vec<StIdx>,
     mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
@@ -494,16 +474,15 @@ where
                     next_lexeme.span().start(),
                     None,
                 );
-                parser
-                    .lr_upto(
-                        Some(new_lexeme),
-                        laidx,
-                        laidx + 1,
-                        &mut pstack,
-                        &mut astack,
-                        &mut spans,
-                        param,
-                    );
+                parser.lr_upto(
+                    Some(new_lexeme),
+                    laidx,
+                    laidx + 1,
+                    &mut pstack,
+                    &mut astack,
+                    &mut spans,
+                    param,
+                );
             }
             ParseRepair::Delete(_) => {
                 laidx += 1;
@@ -579,13 +558,7 @@ pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT, 
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-fn rank_cnds<
-    'a,
-    'arg,
-    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-    ActionT: 'a,
-    ParamT: 'arg,
->(
+fn rank_cnds<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a, ParamT>(
     parser: &Parser<StorageT, ActionT, ParamT>,
     finish_by: Instant,
     in_laidx: usize,
@@ -603,9 +576,8 @@ where
         if Instant::now() >= finish_by {
             return vec![];
         }
-        let mut laidx;
         let mut pstack = in_pstack.to_owned();
-        laidx = apply_repairs(
+        let mut laidx = apply_repairs(
             parser,
             in_laidx,
             &mut pstack,

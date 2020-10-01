@@ -480,7 +480,7 @@ where
             format!("mut {}", grm.param_args().iter().next().unwrap().0)
         } else if grm.param_args().len() == 0 {
             "()".to_string()
-        }else {
+        } else {
             // Zero (), or many (z, ...)
             // It may be wise to just take a single param.
             // FIXME &mut (), vs (&mut .., &mut ..)?
@@ -768,7 +768,11 @@ where
                 // Call the user code
                 let args = (0..grm.prod(pidx).len())
                     .map(|i| format!("{prefix}arg_{i}", prefix = ACTION_PREFIX, i = i + 1))
-                    .chain(grm.param_args().iter().map(|arg| format!("&mut {}", arg.0.clone())))
+                    .chain(
+                        grm.param_args()
+                            .iter()
+                            .map(|arg| format!("&mut {}", arg.0.clone())),
+                    )
                     .collect::<Vec<_>>();
                 // If the rule `r` that we're calling has the unit type then Clippy will warn that
                 // `enum::A(wrapper_r())` is pointless. We thus have to split it into two:
