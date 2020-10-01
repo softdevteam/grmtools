@@ -714,7 +714,7 @@ impl YaccParser {
 
 #[cfg(test)]
 mod test {
-    use std::{ collections::HashSet, iter::FromIterator };
+    use std::{collections::HashSet, iter::FromIterator};
 
     use super::{
         super::{
