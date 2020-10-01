@@ -101,13 +101,20 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct CPCTPlus<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
-    parser: &'a Parser<'a, 'b, 'input, StorageT, ActionT>,
+struct CPCTPlus<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a, ParamT> {
+    parser: &'a Parser<'a, 'b, 'input, StorageT, ActionT, ParamT>,
 }
 
-pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &'a Parser<StorageT, ActionT>,
-) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
+pub(crate) fn recoverer<
+    'a,
+    'b: 'a,
+    'input: 'b,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'a,
+    ParamT,
+>(
+    parser: &'a Parser<'a, 'b, 'input, StorageT, ActionT, ParamT>,
+) -> Box<dyn Recoverer<StorageT, ActionT, ParamT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -121,7 +128,8 @@ impl<
         'input: 'b,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-    > Recoverer<StorageT, ActionT> for CPCTPlus<'a, 'b, 'input, StorageT, ActionT>
+        ParamT,
+    > Recoverer<StorageT, ActionT, ParamT> for CPCTPlus<'a, 'b, 'input, StorageT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -129,11 +137,12 @@ where
     fn recover(
         &self,
         finish_by: Instant,
-        parser: &Parser<StorageT, ActionT>,
+        parser: &Parser<StorageT, ActionT, ParamT>,
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
         mut astack: &mut Vec<AStackType<ActionT, StorageT>>,
         mut spans: &mut Vec<Span>,
+        param: &mut ParamT,
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
@@ -230,7 +239,7 @@ where
         }
 
         let full_rprs = self.collect_repairs(in_laidx, astar_cnds);
-        let mut rnk_rprs = rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs);
+        let mut rnk_rprs = { rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs, param) };
         if rnk_rprs.is_empty() {
             return (in_laidx, vec![]);
         }
@@ -242,6 +251,7 @@ where
             &mut Some(&mut astack),
             &mut Some(&mut spans),
             &rnk_rprs[0],
+            param,
         );
 
         (laidx, rnk_rprs)
@@ -254,7 +264,8 @@ impl<
         'input: 'b,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-    > CPCTPlus<'a, 'b, 'input, StorageT, ActionT>
+        ParamT,
+    > CPCTPlus<'a, 'b, 'input, StorageT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -436,13 +447,19 @@ where
 
 /// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
 /// distance and a new pstack.
-pub fn apply_repairs<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &Parser<StorageT, ActionT>,
+pub fn apply_repairs<
+    'a,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'a,
+    ParamT,
+>(
+    parser: &'a Parser<StorageT, ActionT, ParamT>,
     mut laidx: usize,
     mut pstack: &mut Vec<StIdx>,
     mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
     mut spans: &mut Option<&mut Vec<Span>>,
     repairs: &[ParseRepair<StorageT>],
+    param: &mut ParamT,
 ) -> usize
 where
     usize: AsPrimitive<StorageT>,
@@ -464,14 +481,22 @@ where
                     &mut pstack,
                     &mut astack,
                     &mut spans,
+                    param,
                 );
             }
             ParseRepair::Delete(_) => {
                 laidx += 1;
             }
             ParseRepair::Shift(_) => {
-                laidx =
-                    parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack, &mut spans);
+                laidx = parser.lr_upto(
+                    None,
+                    laidx,
+                    laidx + 1,
+                    &mut pstack,
+                    &mut astack,
+                    &mut spans,
+                    param,
+                );
             }
         }
     }
@@ -479,8 +504,8 @@ where
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.
-pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
-    parser: &Parser<StorageT, ActionT>,
+pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT, ParamT>(
+    parser: &Parser<StorageT, ActionT, ParamT>,
     all_rprs: &mut Vec<Vec<ParseRepair<StorageT>>>,
 ) where
     usize: AsPrimitive<StorageT>,
@@ -533,12 +558,13 @@ pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-fn rank_cnds<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &Parser<StorageT, ActionT>,
+fn rank_cnds<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a, ParamT>(
+    parser: &Parser<StorageT, ActionT, ParamT>,
     finish_by: Instant,
     in_laidx: usize,
     in_pstack: &[StIdx],
     in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>,
+    param: &mut ParamT,
 ) -> Vec<Vec<ParseRepair<StorageT>>>
 where
     usize: AsPrimitive<StorageT>,
@@ -558,7 +584,9 @@ where
             &mut None,
             &mut None,
             &rpr_seqs[0],
+            param,
         );
+
         laidx = parser.lr_upto(
             None,
             laidx,
@@ -566,6 +594,7 @@ where
             &mut pstack,
             &mut None,
             &mut None,
+            param,
         );
         if laidx >= furthest {
             furthest = laidx;

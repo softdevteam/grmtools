@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, error::Error, fmt};
+use std::{cell::RefCell, collections::HashMap, error::Error, fmt, iter::FromIterator};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
@@ -76,6 +76,10 @@ pub struct YaccGrammar<StorageT = u32> {
     implicit_rule: Option<RIdx<StorageT>>,
     /// User defined Rust programs which can be called within actions
     actions: Vec<Option<String>>,
+    /// Extra Parameters to the parse function, for user actions.
+    param_args: Vec<(String, String)>,
+    /// Lifetimes for `param_args`
+    param_lifetimes: Vec<String>,
     /// The programs section of a grammar, if specified; otherwise `None`.
     programs: Option<String>,
     /// The actiontypes of rules (one per rule).
@@ -335,6 +339,8 @@ where
             prod_precs: prod_precs.into_iter().map(Option::unwrap).collect(),
             implicit_rule: implicit_rule.map(|x| rule_map[&x]),
             actions,
+            param_args: Vec::from_iter(ast.parse_param_bindings.iter().flatten().cloned()),
+            param_lifetimes: Vec::from_iter(ast.parse_param_lifetimes.iter().flatten().cloned()),
             programs: ast.programs,
             avoid_insert,
             actiontypes,
@@ -473,6 +479,14 @@ where
 
     pub fn actiontype(&self, ridx: RIdx<StorageT>) -> &Option<String> {
         &self.actiontypes[usize::from(ridx)]
+    }
+
+    pub fn param_args(&self) -> &Vec<(String, String)> {
+        &self.param_args
+    }
+
+    pub fn param_lifetimes(&self) -> &Vec<String> {
+        &self.param_lifetimes
     }
 
     /// Get the programs part of the grammar

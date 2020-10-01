@@ -69,12 +69,14 @@ where
 
 pub(crate) type PStack = Vec<StIdx>; // Parse stack
 pub(crate) type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
-pub(crate) type ActionFn<'a, 'b, 'input, StorageT, ActionT> = &'a dyn Fn(
+pub(crate) type ActionFn<'a, 'b, 'input, StorageT, ActionT, ParamT> = &'a dyn for<'c> Fn(
     RIdx<StorageT>,
     &'b dyn NonStreamingLexer<'input, StorageT>,
     Span,
-    vec::Drain<AStackType<ActionT, StorageT>>,
-) -> ActionT;
+    &'c mut vec::Drain<AStackType<ActionT, StorageT>>,
+    &'c mut ParamT,
+)
+    -> ActionT;
 
 #[derive(Debug)]
 pub enum AStackType<ActionT, StorageT> {
@@ -82,7 +84,7 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>),
 }
 
-pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a, ParamT> {
     pub(crate) rcvry_kind: RecoveryKind,
     pub(crate) grm: &'a YaccGrammar<StorageT>,
     pub(crate) token_cost: Box<TokenCostFn<'a, StorageT>>,
@@ -91,11 +93,11 @@ pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT
     // In the long term, we should remove the `lexemes` field entirely, as the `NonStreamingLexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
     pub(crate) lexemes: Vec<Lexeme<StorageT>>,
-    actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>],
+    actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT, ParamT>],
 }
 
-impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-    Parser<'a, 'b, 'input, StorageT, Node<StorageT>>
+impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ParamT: 'a>
+    Parser<'a, 'b, 'input, StorageT, Node<StorageT>, ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -107,11 +109,13 @@ where
         stable: &StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
+        param: &mut ParamT,
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: Vec<ActionFn<'a, 'b, 'input, StorageT, Node<StorageT>>> = Vec::new();
+        let mut actions: Vec<ActionFn<'a, 'b, 'input, StorageT, Node<StorageT>, ParamT>> =
+            Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::generic_ptree);
         let psr = Parser {
             rcvry_kind,
@@ -126,7 +130,7 @@ where
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
-        let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut spans);
+        let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut spans, param);
         (accpt, errors)
     }
 
@@ -134,7 +138,8 @@ where
         ridx: RIdx<StorageT>,
         _lexer: &dyn NonStreamingLexer<StorageT>,
         _span: Span,
-        astack: vec::Drain<AStackType<Node<StorageT>, StorageT>>,
+        astack: &mut vec::Drain<AStackType<Node<StorageT>, StorageT>>,
+        _param: &mut ParamT,
     ) -> Node<StorageT> {
         let mut nodes = Vec::with_capacity(astack.len());
         for a in astack {
@@ -147,8 +152,8 @@ where
     }
 }
 
-impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned>
-    Parser<'a, 'b, 'input, StorageT, ()>
+impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ParamT: 'a>
+    Parser<'a, 'b, 'input, StorageT, (), ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -160,11 +165,12 @@ where
         stable: &StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
+        param: &mut ParamT,
     ) -> Vec<LexParseError<StorageT>> {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
-        let mut actions: Vec<ActionFn<'a, 'b, 'input, StorageT, ()>> = Vec::new();
+        let mut actions: Vec<ActionFn<'a, 'b, 'input, StorageT, (), ParamT>> = Vec::new();
         actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
         let psr = Parser {
             rcvry_kind,
@@ -179,16 +185,17 @@ where
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
-        psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut spans);
+        let _ = psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut spans, param);
         errors
     }
 
     fn noaction(
         _ridx: RIdx<StorageT>,
-        _lexer: &dyn NonStreamingLexer<StorageT>,
+        _lexer: &'b dyn NonStreamingLexer<StorageT>,
         _span: Span,
-        _astack: vec::Drain<AStackType<(), StorageT>>,
-    ) {
+        _astack: &mut vec::Drain<AStackType<(), StorageT>>,
+        _param: &mut ParamT,
+    ) -> () {
     }
 }
 
@@ -198,7 +205,8 @@ impl<
         'input: 'b,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-    > Parser<'a, 'b, 'input, StorageT, ActionT>
+        ParamT,
+    > Parser<'a, 'b, 'input, StorageT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
@@ -210,7 +218,8 @@ where
         stable: &'a StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
         lexemes: Vec<Lexeme<StorageT>>,
-        actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>],
+        actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT, ParamT>],
+        param: &mut ParamT,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
@@ -228,7 +237,7 @@ where
         let mut astack = Vec::new();
         let mut errors = Vec::new();
         let mut spans = Vec::new();
-        let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut spans);
+        let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut spans, param);
         (accpt, errors)
     }
 
@@ -252,6 +261,7 @@ where
         astack: &mut Vec<AStackType<ActionT, StorageT>>,
         errors: &mut Vec<LexParseError<StorageT>>,
         spans: &mut Vec<Span>,
+        param: &mut ParamT,
     ) -> Option<ActionT> {
         let mut recoverer = None;
         let mut recovery_budget = Duration::from_millis(RECOVERY_TIME_BUDGET);
@@ -283,7 +293,8 @@ where
                         ridx,
                         self.lexer,
                         span,
-                        astack.drain(pop_idx - 1..),
+                        &mut astack.drain(pop_idx - 1..),
+                        param,
                     ));
                     astack.push(v);
                 }
@@ -306,7 +317,7 @@ where
                 Action::Error => {
                     if recoverer.is_none() {
                         recoverer = Some(match self.rcvry_kind {
-                            RecoveryKind::CPCTPlus => cpctplus::recoverer(self),
+                            RecoveryKind::CPCTPlus => cpctplus::recoverer(&self),
                             RecoveryKind::None => {
                                 let la_lexeme = self.next_lexeme(laidx);
                                 errors.push(
@@ -328,7 +339,7 @@ where
                         .as_ref()
                         .unwrap()
                         .as_ref()
-                        .recover(finish_by, self, laidx, pstack, astack, spans);
+                        .recover(finish_by, &self, laidx, pstack, astack, spans, param);
                     let after = Instant::now();
                     recovery_budget = recovery_budget
                         .checked_sub(after - before)
@@ -364,6 +375,7 @@ where
         pstack: &mut PStack,
         astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
         spans: &mut Option<&mut Vec<Span>>,
+        param: &mut ParamT,
     ) -> usize {
         assert!(lexeme_prefix.is_none() || end_laidx == laidx + 1);
         while laidx != end_laidx && laidx <= self.lexemes.len() {
@@ -400,7 +412,8 @@ where
                                 ridx,
                                 self.lexer,
                                 span,
-                                astack_uw.drain(pop_idx - 1..),
+                                &mut astack_uw.drain(pop_idx - 1..),
+                                param,
                             ));
                             astack_uw.push(v);
                         } else {
@@ -544,15 +557,16 @@ where
     }
 }
 
-pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned, ActionT> {
+pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned, ActionT, ParamT> {
     fn recover(
         &self,
         finish_by: Instant,
-        parser: &Parser<StorageT, ActionT>,
+        parser: &Parser<StorageT, ActionT, ParamT>,
         in_laidx: usize,
         in_pstack: &mut PStack,
         astack: &mut Vec<AStackType<ActionT, StorageT>>,
         spans: &mut Vec<Span>,
+        param: &mut ParamT,
     ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>);
 }
 
@@ -701,9 +715,10 @@ where
 
     /// Parse input, and (if possible) return a generic parse tree. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
-    pub fn parse_generictree(
+    pub fn parse_generictree<ParamT>(
         &self,
         lexer: &dyn NonStreamingLexer<StorageT>,
+        param: &mut ParamT,
     ) -> (Option<Node<StorageT>>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
@@ -712,13 +727,14 @@ where
                 Err(e) => return (None, vec![e.into()]),
             }
         }
-        Parser::<StorageT, Node<StorageT>>::parse_generictree(
+        Parser::<StorageT, Node<StorageT>, ParamT>::parse_generictree(
             self.recoverer,
             self.grm,
             self.term_costs,
             self.stable,
             lexer,
             lexemes,
+            param,
         )
     }
 
@@ -735,13 +751,14 @@ where
                 Err(e) => return vec![e.into()],
             }
         }
-        Parser::<StorageT, ()>::parse_noaction(
+        Parser::<StorageT, (), ()>::parse_noaction(
             self.recoverer,
             self.grm,
             self.term_costs,
             self.stable,
             lexer,
             lexemes,
+            &mut (),
         )
     }
 
@@ -751,10 +768,11 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<'b: 'a, 'input: 'b, ActionT: 'a>(
+    pub fn parse_actions<'b: 'a, 'input: 'b, ActionT: 'a, ParamT>(
         &self,
         lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
-        actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>],
+        actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT, ParamT>],
+        param: &mut ParamT,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
@@ -771,6 +789,7 @@ where
             lexer,
             lexemes,
             actions,
+            param,
         )
     }
 }
@@ -879,7 +898,7 @@ pub(crate) mod test {
         let (r, errs) = RTParserBuilder::new(&grm, &stable)
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
-            .parse_generictree(&lexer);
+            .parse_generictree(&lexer, &mut ());
         if r.is_some() && errs.is_empty() {
             (grm, Ok(r.unwrap()))
         } else if r.is_some() && !errs.is_empty() {

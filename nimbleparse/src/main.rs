@@ -164,7 +164,7 @@ fn main() {
     let input = read_file(&matches.free[2]);
     let lexer = lexerdef.lexer(&input);
     let pb = RTParserBuilder::new(&grm, &stable).recoverer(recoverykind);
-    let (pt, errs) = pb.parse_generictree(&lexer);
+    let (pt, errs) = pb.parse_generictree(&lexer, &mut ());
     match pt {
         Some(pt) => println!("{}", pt.pp(&grm, &input)),
         None => println!("Unable to repair input sufficiently to produce parse tree.\n"),

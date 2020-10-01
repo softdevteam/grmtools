@@ -1,0 +1,27 @@
+name: Test multiple types
+yacckind: Grmtools
+grammar: |
+    %parse_param <'a>(_a_count: u64, _b_count: u64)
+    %start S
+    %%
+    S  -> Result<(), ()>
+    : AorB   { Ok($1?) };
+
+    AorB -> Result<(), ()>
+    :        { Ok(())  }
+    | AorB B { Ok($2?) }
+    | AorB A { Ok($2?) };
+
+    A  -> Result<(), ()>
+    : 'a'    { Ok(*_a_count.deref_mut() += 1) };
+
+    B  -> Result<(), ()>
+    : 'b'    { Ok(*_b_count.deref_mut() += 1) };
+    %%
+    // We get &mut &mut u64's, use deref_mut to coerce them to &mut u64
+    use std::ops::DerefMut;
+
+lexer: |
+    %%
+    a 'a'
+    b 'b'
