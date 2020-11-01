@@ -46,7 +46,7 @@ where
         while !st.is_empty() {
             let (indent, e) = st.pop().unwrap();
             for _ in 0..indent {
-                s.push_str(" ");
+                s.push(' ');
             }
             match *e {
                 Node::Term { lexeme } => {
