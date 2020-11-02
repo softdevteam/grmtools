@@ -314,7 +314,7 @@ Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
         }
 
         // Footer
-        outs.push_str("}");
+        outs.push('}');
 
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the

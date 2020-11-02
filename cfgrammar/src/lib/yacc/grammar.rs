@@ -566,7 +566,7 @@ where
         let mut sprod = String::new();
         let ridx = self.prod_to_rule(pidx);
         sprod.push_str(self.rule_name(ridx));
-        sprod.push_str(":");
+        sprod.push(':');
         for sym in self.prod(pidx) {
             let s = match sym {
                 Symbol::Token(tidx) => self.token_name(*tidx).unwrap(),
