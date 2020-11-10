@@ -20,7 +20,7 @@ where:
 * `-q` prevents warnings (e.g. shift/reduce errors) from being reported.
 
 You can use your own Lex/Yacc files. A small repository of example grammars can
-be found at https://github.com/softdevteam/grammars/.
+be found at [https://github.com/softdevteam/grammars/](https://github.com/softdevteam/grammars/).
 
 An example invocation is as follows:
 
