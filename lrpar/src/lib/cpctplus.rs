@@ -3,7 +3,6 @@ use std::{
     collections::HashSet,
     fmt::Debug,
     hash::{Hash, Hasher},
-    iter::FromIterator,
     time::Instant,
 };
 
@@ -499,7 +498,7 @@ pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
     // Use a HashSet as a quick way of deduplicating repair sequences: occasionally we can end up
     // with hundreds of thousands (!), and we don't have a sensible ordering on ParseRepair to make
     // it plausible to do a sort and dedup.
-    let mut hs: HashSet<Vec<ParseRepair<StorageT>>> = HashSet::from_iter(all_rprs.drain(..));
+    let mut hs: HashSet<Vec<ParseRepair<StorageT>>> = all_rprs.drain(..).collect();
     all_rprs.extend(hs.drain());
 
     // Sort repair sequences:
