@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, error::Error, fmt, iter::FromIterator};
+use std::{cell::RefCell, collections::HashMap, error::Error, fmt};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
@@ -339,8 +339,13 @@ where
             prod_precs: prod_precs.into_iter().map(Option::unwrap).collect(),
             implicit_rule: implicit_rule.map(|x| rule_map[&x]),
             actions,
-            param_args: Vec::from_iter(ast.parse_param_bindings.iter().flatten().cloned()),
-            param_lifetimes: Vec::from_iter(ast.parse_param_lifetimes.iter().flatten().cloned()),
+            param_args: ast.parse_param_bindings.iter().flatten().cloned().collect(),
+            param_lifetimes: ast
+                .parse_param_lifetimes
+                .iter()
+                .flatten()
+                .cloned()
+                .collect(),
             programs: ast.programs,
             avoid_insert,
             actiontypes,
