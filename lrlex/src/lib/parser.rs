@@ -128,7 +128,8 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let tok_id = StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
 
-        let rule = Rule::new(Some(tok_id), name, re_str)
+        //TODO is there a way to pass case insensitive option to parser?
+        let rule = Rule::new(Some(tok_id), name, re_str, false)
             .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
         self.rules.push(rule);
         Ok(i + line_len)
