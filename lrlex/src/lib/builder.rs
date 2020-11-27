@@ -67,6 +67,7 @@ impl Visibility {
 /// lexer.
 pub struct LexerBuilder<'a, StorageT = u32> {
     lexerkind: LexerKind,
+    case_insensitive: bool,
     mod_name: Option<&'a str>,
     visibility: Visibility,
     rule_ids_map: Option<HashMap<String, StorageT>>,
@@ -97,6 +98,7 @@ where
     pub fn new() -> Self {
         LexerBuilder {
             lexerkind: LexerKind::LRNonStreamingLexer,
+            case_insensitive: false,
             mod_name: None,
             visibility: Visibility::Private,
             rule_ids_map: None,
@@ -288,10 +290,11 @@ pub fn lexerdef() -> {lexerdef_type} {{
             };
             outs.push_str(&format!(
                 "
-Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
+Rule::new({}, {}, \"{}\".to_string(), {}).unwrap(),",
                 tok_id,
                 n,
-                r.re_str.replace("\\", "\\\\").replace("\"", "\\\"")
+                r.re_str.replace("\\", "\\\\").replace("\"", "\\\""),
+                self.case_insensitive
             ));
         }
 
@@ -347,6 +350,12 @@ Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
     /// as reserved words, which are intentionally not in the grammar).
     pub fn allow_missing_tokens_in_parser(mut self, allow: bool) -> Self {
         self.allow_missing_tokens_in_parser = allow;
+        self
+    }
+
+    ///Allow case insensitive tokenization
+    pub fn case_insensitive(mut self, caseless: bool) -> Self {
+        self.case_insensitive = caseless;
         self
     }
 }
