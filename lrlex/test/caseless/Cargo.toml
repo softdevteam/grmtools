@@ -1,0 +1,12 @@
+[package]
+name = "caseless"
+version = "0.1.0"
+authors = ["Tim Martin <timothy.martin@kcl.ac.uk>"]
+edition = "2018"
+
+[build-dependencies]
+lrlex = { path = "../.." }
+
+[dependencies]
+lrlex = { path = "../.." }
+lrpar = { path = "../../../lrpar" }

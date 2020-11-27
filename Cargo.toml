@@ -3,6 +3,7 @@ members=[
     "cfgrammar",
     "lrlex",
     "lrlex/examples/calclex",
+    "lrlex/test/caseless",
     "lrpar",
     "lrpar/cttests",
     "lrpar/examples/calc_actions",
