@@ -35,10 +35,12 @@ impl<StorageT> Rule<StorageT> {
         tok_id: Option<StorageT>,
         name: Option<String>,
         re_str: String,
+        case_insensitive_tokens: bool,
     ) -> Result<Rule<StorageT>, regex::Error> {
         let re = RegexBuilder::new(&format!("\\A(?:{})", &re_str))
             .multi_line(true)
             .dot_matches_new_line(true)
+            .case_insensitive(case_insensitive_tokens)
             .build()?;
         Ok(Rule {
             tok_id,
