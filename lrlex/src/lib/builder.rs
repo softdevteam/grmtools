@@ -266,6 +266,16 @@ where
             ),
         };
 
+        if self.case_insensitive {
+            match self.lexerkind{
+                LexerKind::Flex => {},
+                LexerKind::Lex |
+                LexerKind::LRNonStreamingLexer => {
+                    panic!("Case insensitive lexing requires Flex type");
+                }
+            }
+        }
+
         outs.push_str(&format!(
             "{mod_vis} mod {mod_name} {{
 use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule}};
