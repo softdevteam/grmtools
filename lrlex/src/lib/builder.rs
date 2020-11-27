@@ -189,7 +189,9 @@ where
         Q: AsRef<Path>,
     {
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
-            LexerKind::LRNonStreamingLexer => {
+            LexerKind::LRNonStreamingLexer |
+            LexerKind::Lex | //TODO need new lexer definitions?
+            LexerKind::Flex => {
                 Box::new(LRNonStreamingLexerDef::from_str(&read_to_string(&inp)?)?)
             }
         };
@@ -254,7 +256,9 @@ where
         // Header
 
         let (lexerdef_name, lexerdef_type) = match self.lexerkind {
-            LexerKind::LRNonStreamingLexer => (
+            LexerKind::LRNonStreamingLexer |
+            LexerKind::Lex | //TODO need new lexer definitions?
+            LexerKind::Flex => (
                 "LRNonStreamingLexerDef",
                 format!("LRNonStreamingLexerDef<{}>", type_name::<StorageT>()),
             ),
