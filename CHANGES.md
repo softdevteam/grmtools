@@ -1,3 +1,10 @@
+# grmtools 0.9.2 (2020-11-29)
+
+* Export the `Visibility` enum from `lrlex`.
+
+* Ensure that lrpar rebuilds a grammar if its `visibility` is changed.
+
+
 # grmtools 0.9.1 (2020-08-21)
 
 * Fix a handful of Clippy warnings.
