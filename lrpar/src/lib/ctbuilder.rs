@@ -456,6 +456,7 @@ where
         cache.push_str(&format!("   Mod name: {:?}\n", self.mod_name));
         cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));
         cache.push_str(&format!("   YaccKind: {:?}\n", self.yacckind));
+        cache.push_str(&format!("   Visibility: {:?}\n", self.visibility.cow_str()));
         cache.push_str(&format!(
             "   Error on conflicts: {:?}\n",
             self.error_on_conflicts
