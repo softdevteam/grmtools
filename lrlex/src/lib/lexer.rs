@@ -212,6 +212,8 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
 pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
     s: &'input str,
     lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
+    /// A sorted list of the byte index of the start of the following line. i.e. for the input
+    /// string `" a\nb\n  c d"` this will contain `[3, 5]`.
     newlines: Vec<usize>,
     phantom: PhantomData<&'lexer ()>,
 }
@@ -347,19 +349,11 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
         }
 
         fn lc_byte<StorageT>(lexer: &LRNonStreamingLexer<StorageT>, i: usize) -> (usize, usize) {
-            if lexer.newlines.is_empty() || i < lexer.newlines[0] {
-                return (1, i);
+            match lexer.newlines.binary_search(&i) {
+                Ok(j) => (j + 2, 0),
+                Err(0) => (1, i),
+                Err(j) => (j + 1, i - lexer.newlines[j - 1]),
             }
-
-            for j in 0..lexer.newlines.len() - 1 {
-                if lexer.newlines[j + 1] > i {
-                    return (j + 2, i - lexer.newlines[j]);
-                }
-            }
-            (
-                lexer.newlines.len() + 1,
-                i - lexer.newlines[lexer.newlines.len() - 1],
-            )
         }
 
         fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
