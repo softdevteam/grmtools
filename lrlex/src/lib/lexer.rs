@@ -353,9 +353,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             match lexer.newlines.binary_search(&i) {
                 Ok(j) => (lexer.newlines[j], j + 2),
                 Err(0) => (0, 1),
-                Err(j) if j == lexer.newlines.len() + 1 => {
-                    (lexer.newlines[j - 1], j + 1)
-                }
+                Err(j) if j == lexer.newlines.len() + 1 => (lexer.newlines[j - 1], j + 1),
                 Err(j) => (lexer.newlines[j - 1], j + 1),
             }
         }
