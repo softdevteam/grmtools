@@ -212,6 +212,8 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
 pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
     s: &'input str,
     lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
+    /// A sorted list of the byte index of the start of the following line. i.e. for the input
+    /// string `" a\nb\n  c d"` this will contain `[3, 5]`.
     newlines: Vec<usize>,
     phantom: PhantomData<&'lexer ()>,
 }
@@ -346,32 +348,29 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             );
         }
 
+        /// Returns `(line byte offset, line index)`.
         fn lc_byte<StorageT>(lexer: &LRNonStreamingLexer<StorageT>, i: usize) -> (usize, usize) {
-            if lexer.newlines.is_empty() || i < lexer.newlines[0] {
-                return (1, i);
+            match lexer.newlines.binary_search(&i) {
+                Ok(j) => (lexer.newlines[j], j + 2),
+                Err(0) => (0, 1),
+                Err(j) if j == lexer.newlines.len() + 1 => (lexer.newlines[j - 1], j + 1),
+                Err(j) => (lexer.newlines[j - 1], j + 1),
             }
-
-            for j in 0..lexer.newlines.len() - 1 {
-                if lexer.newlines[j + 1] > i {
-                    return (j + 2, i - lexer.newlines[j]);
-                }
-            }
-            (
-                lexer.newlines.len() + 1,
-                i - lexer.newlines[lexer.newlines.len() - 1],
-            )
         }
 
         fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
             lexer: &LRNonStreamingLexer<StorageT>,
             i: usize,
+            s: &str,
         ) -> (usize, usize) {
-            let (line_idx, col_byte) = lc_byte(lexer, i);
-            let line = lexer.span_lines_str(Span::new(i, i));
-            (line_idx, line[..col_byte].chars().count() + 1)
+            let (line_byte, line_idx) = lc_byte(lexer, i);
+            (line_idx, s[line_byte..i].chars().count() + 1)
         }
 
-        (lc_char(self, span.start()), lc_char(self, span.end()))
+        (
+            lc_char(self, span.start(), self.s),
+            lc_char(self, span.end(), self.s),
+        )
     }
 }
 
