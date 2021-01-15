@@ -49,25 +49,31 @@ pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
 pub trait NonStreamingLexer<'input, StorageT: Hash + PrimInt + Unsigned>: Lexer<StorageT> {
     /// Return the user input associated with a [Span].
     ///
-    /// # Panics
-    ///
-    /// If the span exceeds the known input.
+    /// The [Span] must be well formed:
+    ///   * The start/end byte indexes must be valid UTF-8 character indexes.
+    ///   * The end byte index must not exceed the input's length.
+    /// If these requirements are not respected this function may panic or return unexpected
+    /// portions of the input.
     fn span_str(&self, span: Span) -> &'input str;
 
     /// Return the lines containing the input at `span` (including *all* the text on the lines
     /// that `span` starts and ends on).
     ///
-    /// # Panics
-    ///
-    /// If the span exceeds the known input.
+    /// The [Span] must be well formed:
+    ///   * The start/end byte indexes must be valid UTF-8 character indexes.
+    ///   * The end byte index must not exceed the input's length.
+    /// If these requirements are not respected this function may panic or return unexpected
+    /// portions of the input.
     fn span_lines_str(&self, span: Span) -> &'input str;
 
     /// Return `((start line, start column), (end line, end column))` for `span`. Note that column
     /// *characters* (not bytes) are returned.
     ///
-    /// # Panics
-    ///
-    /// If the span exceeds the known input.
+    /// The [Span] must be well formed:
+    ///   * The start/end byte indexes must be valid UTF-8 character indexes.
+    ///   * The end byte index must not exceed the input's length.
+    /// If these requirements are not respected this function may panic or return unexpected
+    /// portions of the input.
     fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
 }
 
