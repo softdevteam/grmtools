@@ -7,6 +7,7 @@
 
 #![allow(clippy::new_without_default)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::unnecessary_wraps)]
 
 use std::{error::Error, fmt, hash::Hash};
 

@@ -5,6 +5,7 @@
 #![allow(clippy::range_plus_one)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::unnecessary_wraps)]
 
 //! `lrpar` provides a Yacc-compatible parser (where grammars can be generated at
 //! compile-time or run-time). It can take in traditional `.y` files and convert

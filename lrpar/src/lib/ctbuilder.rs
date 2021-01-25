@@ -411,6 +411,7 @@ where
         ));
         outs.push_str(
             "    #![allow(clippy::type_complexity)]
+    #![allow(clippy::unnecessary_wraps)]
 ",
         );
 
