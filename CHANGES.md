@@ -1,3 +1,17 @@
+# grmtools 0.9.3 (2021-01-28)
+
+* Optimise `NonStreamingLexer::line_col` from *O(n*) to *O(log n)* (where *n*
+  is the number of lines in the file).
+
+* Document more clearly the constraints on what `Span`s one can safely ask a
+  lexer to operate on. Note that it is always safe to use a `Span` generated
+  directly by a lexer: the constraints relate to what happens if a user derives
+  a `Span` themselves.
+
+* Suppress Clippy warnings about `unnecessary_wraps`, including in code
+  generated from grammar files.
+
+
 # grmtools 0.9.2 (2020-11-29)
 
 * Export the `Visibility` enum from `lrlex`.
