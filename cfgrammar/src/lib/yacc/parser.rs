@@ -483,7 +483,7 @@ impl YaccParser {
             i = j;
         }
         let (i, _) = self.parse_to_eol(i)?;
-        Ok(self.parse_ws(i, true)?)
+        self.parse_ws(i, true)
     }
 
     // Parse a rust type, followed by either a ',' character or an unbalanced ')'
