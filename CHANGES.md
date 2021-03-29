@@ -1,3 +1,13 @@
+# grmtools 0.10.0 (2021-03-29)
+
+## Breaking changes
+
+* A number of previously public items (functions, structs, struct attributes)
+  have been made private. Most of these were either not externally visible, or
+  only visible if accessed in undocumented ways, but some were incorrectly
+  public.
+
+
 # grmtools 0.9.3 (2021-01-28)
 
 * Optimise `NonStreamingLexer::line_col` from *O(n*) to *O(log n)* (where *n*
