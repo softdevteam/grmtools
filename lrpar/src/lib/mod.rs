@@ -201,9 +201,6 @@ macro_rules! lrpar_mod {
     };
 }
 
-#[doc(hidden)]
-pub(crate) use cfgrammar::RIdx;
-
 /// A `Span` records what portion of the user's input something (e.g. a lexeme or production)
 /// references (i.e. the `Span` doesn't hold a reference / copy of the actual input).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
