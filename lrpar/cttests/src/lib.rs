@@ -120,7 +120,7 @@ fn test_lexer_lifetime() {
     // This test only exists to make sure that this code compiles: there's no need for us to
     // actually run anything.
 
-    pub fn parse_data<'a>(input: &'a str) -> Option<&'a str> {
+    pub(crate) fn parse_data<'a>(input: &'a str) -> Option<&'a str> {
         let lexer_def = crate::lexer_lifetime_l::lexerdef();
         let l = lexer_def.lexer(input);
         match crate::lexer_lifetime_y::parse(&l) {

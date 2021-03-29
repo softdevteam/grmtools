@@ -104,7 +104,7 @@ struct CPCTPlus<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 
     parser: &'a Parser<'a, 'b, 'input, StorageT, ActionT>,
 }
 
-pub(crate) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
+pub(super) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
     parser: &'a Parser<StorageT, ActionT>,
 ) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
@@ -435,7 +435,7 @@ where
 
 /// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
 /// distance and a new pstack.
-pub fn apply_repairs<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
+fn apply_repairs<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
     parser: &Parser<StorageT, ActionT>,
     mut laidx: usize,
     mut pstack: &mut Vec<StIdx>,
@@ -478,7 +478,7 @@ where
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.
-pub fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
+fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
     parser: &Parser<StorageT, ActionT>,
     all_rprs: &mut Vec<Vec<ParseRepair<StorageT>>>,
 ) where

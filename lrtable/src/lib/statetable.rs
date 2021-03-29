@@ -120,7 +120,7 @@ pub struct StateTable<StorageT> {
     prods_len: PIdx<StorageT>,
     tokens_len: TIdx<StorageT>,
     conflicts: Option<Conflicts<StorageT>>,
-    pub final_state: StIdx,
+    final_state: StIdx,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

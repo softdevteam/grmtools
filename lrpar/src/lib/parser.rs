@@ -67,9 +67,9 @@ where
     }
 }
 
-pub(crate) type PStack = Vec<StIdx>; // Parse stack
-pub(crate) type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
-pub(crate) type ActionFn<'a, 'b, 'input, StorageT, ActionT> = &'a dyn Fn(
+type PStack = Vec<StIdx>; // Parse stack
+type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
+type ActionFn<'a, 'b, 'input, StorageT, ActionT> = &'a dyn Fn(
     RIdx<StorageT>,
     &'b dyn NonStreamingLexer<'input, StorageT>,
     Span,
@@ -82,15 +82,15 @@ pub enum AStackType<ActionT, StorageT> {
     Lexeme(Lexeme<StorageT>),
 }
 
-pub struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
-    pub(crate) rcvry_kind: RecoveryKind,
-    pub(crate) grm: &'a YaccGrammar<StorageT>,
-    pub(crate) token_cost: Box<TokenCostFn<'a, StorageT>>,
-    pub(crate) stable: &'a StateTable<StorageT>,
-    pub(crate) lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
+pub(super) struct Parser<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
+    rcvry_kind: RecoveryKind,
+    pub(super) grm: &'a YaccGrammar<StorageT>,
+    pub(super) token_cost: Box<TokenCostFn<'a, StorageT>>,
+    pub(super) stable: &'a StateTable<StorageT>,
+    lexer: &'b dyn NonStreamingLexer<'input, StorageT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `NonStreamingLexer` API is
     // powerful enough to allow us to incrementally obtain lexemes and buffer them when necessary.
-    pub(crate) lexemes: Vec<Lexeme<StorageT>>,
+    pub(super) lexemes: Vec<Lexeme<StorageT>>,
     actions: &'a [ActionFn<'a, 'b, 'input, StorageT, ActionT>],
 }
 
@@ -245,7 +245,7 @@ where
     /// Return `Some(value)` if the parse reached an accept state (i.e. all the input was consumed,
     /// possibly after making repairs) or `None` (i.e. some of the input was not consumed, even
     /// after possibly making repairs) otherwise.
-    pub fn lr(
+    fn lr(
         &self,
         mut laidx: usize,
         pstack: &mut PStack,
@@ -356,7 +356,7 @@ where
     /// Returns the index of the token it parsed up to (by definition <= end_laidx: can be less if
     /// the input is < end_laidx, or if an error is encountered). Does not do any form of error
     /// recovery.
-    pub fn lr_upto(
+    pub(super) fn lr_upto(
         &self,
         lexeme_prefix: Option<Lexeme<StorageT>>,
         mut laidx: usize,
@@ -440,7 +440,7 @@ where
 
     /// Return a `Lexeme` for the next lemexe (if `laidx` == `self.lexemes.len()` this will be
     /// a lexeme constructed to look as if contains the EOF token).
-    pub(crate) fn next_lexeme(&self, laidx: usize) -> Lexeme<StorageT> {
+    pub(super) fn next_lexeme(&self, laidx: usize) -> Lexeme<StorageT> {
         let llen = self.lexemes.len();
         debug_assert!(laidx <= llen);
         if laidx < llen {
@@ -465,7 +465,7 @@ where
 
     /// Return the `TIdx` of the next lexeme (if `laidx` == `self.lexemes.len()` this will be the
     /// EOF `TIdx`).
-    pub(crate) fn next_tidx(&self, laidx: usize) -> TIdx<StorageT> {
+    pub(super) fn next_tidx(&self, laidx: usize) -> TIdx<StorageT> {
         let ll = self.lexemes.len();
         debug_assert!(laidx <= ll);
         if laidx < ll {
@@ -482,7 +482,7 @@ where
     /// Note that if `lexeme_prefix` is specified, `laidx` will still be incremented, and thus
     /// `end_laidx` *must* be set to `laidx + 1` in order that the parser doesn't skip the real
     /// lexeme at position `laidx`.
-    pub(crate) fn lr_cactus(
+    pub(super) fn lr_cactus(
         &self,
         lexeme_prefix: Option<Lexeme<StorageT>>,
         mut laidx: usize,
@@ -544,7 +544,7 @@ where
     }
 }
 
-pub trait Recoverer<StorageT: Hash + PrimInt + Unsigned, ActionT> {
+pub(super) trait Recoverer<StorageT: Hash + PrimInt + Unsigned, ActionT> {
     fn recover(
         &self,
         finish_by: Instant,
@@ -848,7 +848,7 @@ pub(crate) mod test {
         do_parse_with_costs(rcvry_kind, lexs, grms, input, &HashMap::new())
     }
 
-    pub(crate) fn do_parse_with_costs(
+    fn do_parse_with_costs(
         rcvry_kind: RecoveryKind,
         lexs: &str,
         grms: &str,

@@ -19,12 +19,12 @@ pub struct Rule<StorageT> {
     /// rules a guaranteed unique value, though that value can be overridden by clients who need to
     /// control the ID). If `None`, then this rule specifies lexemes which should not appear in the
     /// user's input.
-    pub tok_id: Option<StorageT>,
+    pub(super) tok_id: Option<StorageT>,
     /// This rule's name. If None, then text which matches this rule will be skipped (i.e. will not
     /// create a lexeme).
     pub name: Option<String>,
-    pub re_str: String,
-    pub re: Regex,
+    pub(super) re_str: String,
+    re: Regex,
 }
 
 impl<StorageT> Rule<StorageT> {
@@ -100,7 +100,7 @@ pub trait LexerDef<StorageT> {
 /// This struct represents, in essence, a .l file in memory. From it one can produce an
 /// [LRNonStreamingLexer] which actually lexes inputs.
 pub struct LRNonStreamingLexerDef<StorageT> {
-    pub(crate) rules: Vec<Rule<StorageT>>,
+    rules: Vec<Rule<StorageT>>,
 }
 
 impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<StorageT>

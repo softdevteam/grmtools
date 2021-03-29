@@ -45,9 +45,9 @@ lazy_static! {
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
-    pub grm: YaccGrammar<StorageT>,
-    pub sgraph: StateGraph<StorageT>,
-    pub stable: StateTable<StorageT>,
+    grm: YaccGrammar<StorageT>,
+    sgraph: StateGraph<StorageT>,
+    stable: StateTable<StorageT>,
 }
 
 impl<StorageT> fmt::Display for CTConflictsError<StorageT>
