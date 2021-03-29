@@ -2,14 +2,14 @@ use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 
-pub struct LexParser<StorageT> {
+pub(super) struct LexParser<StorageT> {
     src: String,
     newlines: Vec<usize>,
-    pub(crate) rules: Vec<Rule<StorageT>>,
+    pub(super) rules: Vec<Rule<StorageT>>,
 }
 
 impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
-    pub(crate) fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
+    pub(super) fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
         let mut p = LexParser {
             src,
             newlines: vec![0],

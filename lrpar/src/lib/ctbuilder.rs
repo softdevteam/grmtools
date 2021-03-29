@@ -45,9 +45,7 @@ lazy_static! {
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
-    pub grm: YaccGrammar<StorageT>,
-    pub sgraph: StateGraph<StorageT>,
-    pub stable: StateTable<StorageT>,
+    stable: StateTable<StorageT>,
 }
 
 impl<StorageT> fmt::Display for CTConflictsError<StorageT>
@@ -363,11 +361,7 @@ where
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
         if stable.conflicts().is_some() && self.error_on_conflicts {
-            return Err(Box::new(CTConflictsError {
-                grm,
-                sgraph,
-                stable,
-            }));
+            return Err(Box::new(CTConflictsError { stable }));
         }
 
         let mod_name = match self.mod_name {
