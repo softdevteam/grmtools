@@ -8,6 +8,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::unnecessary_wraps)]
+#![allow(clippy::upper_case_acronyms)]
 
 use std::{error::Error, fmt, hash::Hash};
 
