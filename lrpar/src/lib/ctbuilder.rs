@@ -31,9 +31,9 @@ use crate::RecoveryKind;
 
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
-const ACTIONS_KIND: &str = "__GTActionsKind";
-const ACTIONS_KIND_PREFIX: &str = "AK";
-const ACTIONS_KIND_HIDDEN: &str = "__GTActionsKindHidden";
+const ACTIONS_KIND: &str = "__GtActionsKind";
+const ACTIONS_KIND_PREFIX: &str = "Ak";
+const ACTIONS_KIND_HIDDEN: &str = "__GtActionsKindHidden";
 
 const RUST_FILE_EXT: &str = "rs";
 
