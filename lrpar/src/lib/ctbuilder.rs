@@ -532,23 +532,28 @@ where
         match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 // action function references
+                let wrappers = grm
+                    .iter_pidxs()
+                    .map(|pidx| {
+                        format!(
+                            "&{prefix}wrapper_{}",
+                            usize::from(pidx),
+                            prefix = ACTION_PREFIX
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",\n                        ");
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
-        let mut actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
+        let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
                        ::lrpar::Span,
                        ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
-                    -> {actionskind}<'input>> = ::std::vec::Vec::new();\n",
+                    -> {actionskind}<'input>> = ::std::vec![{wrappers}];\n",
                     actionskind = ACTIONS_KIND,
-                    storaget = type_name::<StorageT>()
+                    storaget = type_name::<StorageT>(),
+                    wrappers = wrappers
                 ));
-                for pidx in grm.iter_pidxs() {
-                    outs.push_str(&format!(
-                        "        actions.push(&{prefix}wrapper_{});\n",
-                        usize::from(pidx),
-                        prefix = ACTION_PREFIX
-                    ))
-                }
                 outs.push_str(&format!(
                     "
         match ::lrpar::RTParserBuilder::new(&grm, &stable)
