@@ -1,8 +1,9 @@
 // Note: this is the parser for both YaccKind::Original(YaccOriginalActionKind::GenericParseTree) and YaccKind::Eco yacc kinds.
 
-use std::{collections::HashSet, error::Error, fmt};
+use std::{collections::HashSet, error::Error, fmt, str::FromStr};
 
 use lazy_static::lazy_static;
+use num_traits::PrimInt;
 use regex::Regex;
 
 type YaccResult<T> = Result<T, YaccParserError>;
@@ -15,6 +16,7 @@ use super::{
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
 pub enum YaccParserErrorKind {
+    IllegalInteger,
     IllegalName,
     IllegalString,
     IncompleteRule,
@@ -31,6 +33,7 @@ pub enum YaccParserErrorKind {
     PrecNotFollowedByToken,
     DuplicateAvoidInsertDeclaration,
     DuplicateImplicitTokensDeclaration,
+    DuplicateExpectDeclaration,
     DuplicateStartDeclaration,
     DuplicateActiontypeDeclaration,
     DuplicateEPP,
@@ -51,6 +54,7 @@ impl Error for YaccParserError {}
 impl fmt::Display for YaccParserError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self.kind {
+            YaccParserErrorKind::IllegalInteger => "Illegal integer",
             YaccParserErrorKind::IllegalName => "Illegal name",
             YaccParserErrorKind::IllegalString => "Illegal string",
             YaccParserErrorKind::IncompleteRule => "Incomplete rule",
@@ -68,6 +72,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::DuplicateAvoidInsertDeclaration => {
                 "Duplicate %avoid_insert declaration"
             }
+            YaccParserErrorKind::DuplicateExpectDeclaration => "Duplicate %expect declaration",
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration => {
                 "Duplicate %implicit_tokens declaration"
             }
@@ -176,6 +181,16 @@ impl YaccParser {
                 i = self.parse_ws(j, false)?;
                 let (j, v) = self.parse_string(i)?;
                 self.ast.epp.insert(n, v);
+                i = self.parse_ws(j, true)?;
+                continue;
+            }
+            if let Some(j) = self.lookahead_is("%expect", i) {
+                if self.ast.expect.is_some() {
+                    return Err(self.mk_error(YaccParserErrorKind::DuplicateExpectDeclaration, i));
+                }
+                i = self.parse_ws(j, false)?;
+                let (j, n) = self.parse_int(i)?;
+                self.ast.expect = Some(n);
                 i = self.parse_ws(j, true)?;
                 continue;
             }
@@ -552,6 +567,22 @@ impl YaccParser {
             }
         }
         Err(self.mk_error(YaccParserErrorKind::ReachedEOL, j))
+    }
+
+    /// Parse a quoted string, allowing escape characters.
+    fn parse_int<T: FromStr + PrimInt>(&mut self, i: usize) -> YaccResult<(usize, T)> {
+        let mut j = i;
+        while j < self.src.len() {
+            let c = self.src[j..].chars().next().unwrap();
+            match c {
+                '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => j += 1,
+                _ => break,
+            }
+        }
+        match self.src[i..j].parse::<T>() {
+            Ok(x) => Ok((j, x)),
+            Err(_) => Err(self.mk_error(YaccParserErrorKind::IllegalInteger, i)),
+        }
     }
 
     /// Parse a quoted string, allowing escape characters.

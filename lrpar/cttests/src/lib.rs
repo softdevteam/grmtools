@@ -14,6 +14,9 @@ lrpar_mod!("calc_actiontype.y");
 lrlex_mod!("calc_noactions.l");
 lrpar_mod!("calc_noactions.y");
 
+lrlex_mod!("expect.l");
+lrpar_mod!("expect.y");
+
 lrlex_mod!("lexer_lifetime.l");
 lrpar_mod!("lexer_lifetime.y");
 
@@ -235,4 +238,9 @@ fn test_passthrough() {
         (Some(Ok(ref s)), _) if s == "$101" => (),
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_expect() {
+    // This test merely needs to compile in order to be successful.
 }

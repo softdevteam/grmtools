@@ -52,7 +52,16 @@ where
     }
 
     /// Returns a pretty-printed version of the conflicts.
+    #[deprecated(since = "0.10.0", note = "Please use pp_rr() and pp_sr() instead")]
     pub fn pp(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut s = String::new();
+        s.push_str(&self.pp_sr(grm));
+        s.push_str(&self.pp_rr(grm));
+        s
+    }
+
+    /// Returns a pretty-printed version of the shift/reduce conflicts.
+    pub fn pp_sr(&self, grm: &YaccGrammar<StorageT>) -> String {
         let mut s = String::new();
         if self.sr_len() > 0 {
             s.push_str("Shift/Reduce conflicts:\n");
@@ -65,7 +74,12 @@ where
                 ));
             }
         }
+        s
+    }
 
+    /// Returns a pretty-printed version of the reduce/reduce conflicts.
+    pub fn pp_rr(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut s = String::new();
         if self.rr_len() > 0 {
             s.push_str("Reduce/Reduce conflicts:\n");
             for (pidx, r_pidx, stidx) in self.rr_conflicts() {

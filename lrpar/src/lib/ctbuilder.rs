@@ -360,8 +360,13 @@ where
         fs::remove_file(&outp).ok();
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
-        if stable.conflicts().is_some() && self.error_on_conflicts {
-            return Err(Box::new(CTConflictsError { stable }));
+        if self.error_on_conflicts {
+            if let Some(c) = stable.conflicts() {
+                match grm.expect() {
+                    Some(i) if i == c.sr_len() => (),
+                    _ => return Err(Box::new(CTConflictsError { stable })),
+                }
+            }
         }
 
         let mod_name = match self.mod_name {

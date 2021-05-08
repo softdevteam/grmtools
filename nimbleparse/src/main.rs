@@ -124,7 +124,11 @@ fn main() {
 
     if !quiet {
         if let Some(c) = stable.conflicts() {
-            println!("{}", c.pp(&grm));
+            match grm.expect() {
+                Some(i) if i == c.sr_len() => (),
+                _ => println!("{}", c.pp_sr(&grm)),
+            }
+            println!("{}", c.pp_rr(&grm));
             println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
         }
     }

@@ -24,6 +24,7 @@ pub struct GrammarAST {
     pub parse_param_lifetimes: Option<HashSet<String>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
+    pub expect: Option<usize>,
     pub programs: Option<String>,
 }
 
@@ -119,6 +120,7 @@ impl GrammarAST {
             avoid_insert: None,
             implicit_tokens: None,
             epp: HashMap::new(),
+            expect: None,
             programs: None,
             parse_param_bindings: None,
             parse_param_lifetimes: None,
