@@ -31,24 +31,24 @@ where
     usize: AsPrimitive<StorageT>,
     u32: AsPrimitive<StorageT>,
 {
-    /// Return an iterator over all shift/reduce conflicts.
-    pub fn sr_conflicts(&self) -> impl Iterator<Item = &(TIdx<StorageT>, PIdx<StorageT>, StIdx)> {
-        self.shift_reduce.iter()
-    }
-
     /// Return an iterator over all reduce/reduce conflicts.
     pub fn rr_conflicts(&self) -> impl Iterator<Item = &(PIdx<StorageT>, PIdx<StorageT>, StIdx)> {
         self.reduce_reduce.iter()
     }
 
-    /// How many shift/reduce conflicts are there?
-    pub fn sr_len(&self) -> usize {
-        self.shift_reduce.len()
+    /// Return an iterator over all shift/reduce conflicts.
+    pub fn sr_conflicts(&self) -> impl Iterator<Item = &(TIdx<StorageT>, PIdx<StorageT>, StIdx)> {
+        self.shift_reduce.iter()
     }
 
     /// How many reduce/reduce conflicts are there?
     pub fn rr_len(&self) -> usize {
         self.reduce_reduce.len()
+    }
+
+    /// How many shift/reduce conflicts are there?
+    pub fn sr_len(&self) -> usize {
+        self.shift_reduce.len()
     }
 
     /// Returns a pretty-printed version of the conflicts.
@@ -57,23 +57,6 @@ where
         let mut s = String::new();
         s.push_str(&self.pp_sr(grm));
         s.push_str(&self.pp_rr(grm));
-        s
-    }
-
-    /// Returns a pretty-printed version of the shift/reduce conflicts.
-    pub fn pp_sr(&self, grm: &YaccGrammar<StorageT>) -> String {
-        let mut s = String::new();
-        if self.sr_len() > 0 {
-            s.push_str("Shift/Reduce conflicts:\n");
-            for (tidx, pidx, stidx) in self.sr_conflicts() {
-                s.push_str(&format!(
-                    "   State {:?}: Shift(\"{}\") / Reduce({})\n",
-                    usize::from(*stidx),
-                    grm.token_name(*tidx).unwrap(),
-                    grm.pp_prod(*pidx)
-                ));
-            }
-        }
         s
     }
 
@@ -88,6 +71,23 @@ where
                     usize::from(*stidx),
                     grm.pp_prod(*pidx),
                     grm.pp_prod(*r_pidx)
+                ));
+            }
+        }
+        s
+    }
+
+    /// Returns a pretty-printed version of the shift/reduce conflicts.
+    pub fn pp_sr(&self, grm: &YaccGrammar<StorageT>) -> String {
+        let mut s = String::new();
+        if self.sr_len() > 0 {
+            s.push_str("Shift/Reduce conflicts:\n");
+            for (tidx, pidx, stidx) in self.sr_conflicts() {
+                s.push_str(&format!(
+                    "   State {:?}: Shift(\"{}\") / Reduce({})\n",
+                    usize::from(*stidx),
+                    grm.token_name(*tidx).unwrap(),
+                    grm.pp_prod(*pidx)
                 ));
             }
         }

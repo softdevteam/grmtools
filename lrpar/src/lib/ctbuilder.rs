@@ -58,9 +58,9 @@ where
         let conflicts = self.stable.conflicts().unwrap();
         write!(
             f,
-            "CTConflictsError{{{} Shift/Reduce, {} Reduce/Reduce}}",
-            conflicts.sr_len(),
-            conflicts.rr_len()
+            "CTConflictsError{{{} Reduce/Reduce, {} Shift/Reduce}}",
+            conflicts.rr_len(),
+            conflicts.sr_len()
         )
     }
 }
@@ -75,9 +75,9 @@ where
         let conflicts = self.stable.conflicts().unwrap();
         write!(
             f,
-            "CTConflictsError{{{} Shift/Reduce, {} Reduce/Reduce}}",
-            conflicts.sr_len(),
-            conflicts.rr_len()
+            "CTConflictsError{{{} Reduce/Reduce, {} Shift/Reduce}}",
+            conflicts.rr_len(),
+            conflicts.sr_len()
         )
     }
 }
