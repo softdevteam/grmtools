@@ -34,6 +34,7 @@ pub enum YaccParserErrorKind {
     DuplicateAvoidInsertDeclaration,
     DuplicateImplicitTokensDeclaration,
     DuplicateExpectDeclaration,
+    DuplicateExpectRRDeclaration,
     DuplicateStartDeclaration,
     DuplicateActiontypeDeclaration,
     DuplicateEPP,
@@ -73,6 +74,7 @@ impl fmt::Display for YaccParserError {
                 "Duplicate %avoid_insert declaration"
             }
             YaccParserErrorKind::DuplicateExpectDeclaration => "Duplicate %expect declaration",
+            YaccParserErrorKind::DuplicateExpectRRDeclaration => "Duplicate %expect-rr declaration",
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration => {
                 "Duplicate %implicit_tokens declaration"
             }
@@ -181,6 +183,16 @@ impl YaccParser {
                 i = self.parse_ws(j, false)?;
                 let (j, v) = self.parse_string(i)?;
                 self.ast.epp.insert(n, v);
+                i = self.parse_ws(j, true)?;
+                continue;
+            }
+            if let Some(j) = self.lookahead_is("%expect-rr", i) {
+                if self.ast.expectrr.is_some() {
+                    return Err(self.mk_error(YaccParserErrorKind::DuplicateExpectRRDeclaration, i));
+                }
+                i = self.parse_ws(j, false)?;
+                let (j, n) = self.parse_int(i)?;
+                self.ast.expectrr = Some(n);
                 i = self.parse_ws(j, true)?;
                 continue;
             }

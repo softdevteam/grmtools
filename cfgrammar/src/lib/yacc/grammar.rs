@@ -88,6 +88,8 @@ pub struct YaccGrammar<StorageT = u32> {
     avoid_insert: Option<Vob>,
     /// How many shift/reduce conflicts the grammar author expected (if any).
     expect: Option<usize>,
+    /// How many reduce/reduce conflicts the grammar author expected (if any).
+    expectrr: Option<usize>,
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -352,6 +354,7 @@ where
             avoid_insert,
             actiontypes,
             expect: ast.expect,
+            expectrr: ast.expectrr,
         })
     }
 
@@ -536,6 +539,11 @@ where
     // How many shift/reduce conflicts were expected?
     pub fn expect(&self) -> Option<usize> {
         self.expect
+    }
+
+    // How many reduce/reduce conflicts were expected?
+    pub fn expectrr(&self) -> Option<usize> {
+        self.expectrr
     }
 
     /// Is there a path from the `from` rule to the `to` rule? Note that recursive rules
