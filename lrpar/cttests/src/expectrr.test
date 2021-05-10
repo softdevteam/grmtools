@@ -1,0 +1,14 @@
+name: Test %expect
+yacckind: Original(YaccOriginalActionKind::NoAction)
+grammar: |
+    %start A
+    %expect 1
+    %expect-rr 1
+    %%
+    A : 'a' 'b' | B 'b';
+    B : 'a' | C;
+    C : 'a';
+lexer: |
+    %%
+    a 'a'
+    b 'b'

@@ -58,9 +58,9 @@ where
         let conflicts = self.stable.conflicts().unwrap();
         write!(
             f,
-            "CTConflictsError{{{} Shift/Reduce, {} Reduce/Reduce}}",
-            conflicts.sr_len(),
-            conflicts.rr_len()
+            "CTConflictsError{{{} Reduce/Reduce, {} Shift/Reduce}}",
+            conflicts.rr_len(),
+            conflicts.sr_len()
         )
     }
 }
@@ -75,9 +75,9 @@ where
         let conflicts = self.stable.conflicts().unwrap();
         write!(
             f,
-            "CTConflictsError{{{} Shift/Reduce, {} Reduce/Reduce}}",
-            conflicts.sr_len(),
-            conflicts.rr_len()
+            "CTConflictsError{{{} Reduce/Reduce, {} Shift/Reduce}}",
+            conflicts.rr_len(),
+            conflicts.sr_len()
         )
     }
 }
@@ -360,8 +360,16 @@ where
         fs::remove_file(&outp).ok();
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
-        if stable.conflicts().is_some() && self.error_on_conflicts {
-            return Err(Box::new(CTConflictsError { stable }));
+        if self.error_on_conflicts {
+            if let Some(c) = stable.conflicts() {
+                match (grm.expect(), grm.expectrr()) {
+                    (Some(i), Some(j)) if i == c.sr_len() && j == c.rr_len() => (),
+                    (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
+                    (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
+                    (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
+                    _ => return Err(Box::new(CTConflictsError { stable })),
+                }
+            }
         }
 
         let mod_name = match self.mod_name {
@@ -996,8 +1004,66 @@ C : 'a';"
             Ok(_) => panic!("Expected error"),
             Err(e) => {
                 let cs = e.downcast_ref::<CTConflictsError<u32>>();
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
+                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn test_expect_error() {
+        let temp = TempDir::new().unwrap();
+        let mut file_path = PathBuf::from(temp.as_ref());
+        file_path.push("grm.y");
+        let mut f = File::create(&file_path).unwrap();
+        let _ = f.write_all(
+            "%start A
+%expect 2
+%%
+A: 'a' 'b' | B 'b';
+B: 'a';"
+                .as_bytes(),
+        );
+
+        match CTParserBuilder::new()
+            .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
+            .process_file_in_src(file_path.to_str().unwrap())
+        {
+            Ok(_) => panic!("Expected error"),
+            Err(e) => {
+                let cs = e.downcast_ref::<CTConflictsError<u32>>();
+                assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 0);
+                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn test_expectrr_error() {
+        let temp = TempDir::new().unwrap();
+        let mut file_path = PathBuf::from(temp.as_ref());
+        file_path.push("grm.y");
+        let mut f = File::create(&file_path).unwrap();
+        let _ = f.write_all(
+            "%start A
+%expect 1
+%expect-rr 2
+%%
+A : 'a' 'b' | B 'b';
+B : 'a' | C;
+C : 'a';"
+                .as_bytes(),
+        );
+
+        match CTParserBuilder::new()
+            .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
+            .process_file_in_src(file_path.to_str().unwrap())
+        {
+            Ok(_) => panic!("Expected error"),
+            Err(e) => {
+                let cs = e.downcast_ref::<CTConflictsError<u32>>();
+                assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
+                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
             }
         }
     }

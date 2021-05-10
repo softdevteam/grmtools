@@ -124,8 +124,25 @@ fn main() {
 
     if !quiet {
         if let Some(c) = stable.conflicts() {
-            println!("{}", c.pp(&grm));
-            println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
+            let pp_rr = if let Some(i) = grm.expectrr() {
+                i != c.rr_len()
+            } else {
+                0 != c.rr_len()
+            };
+            let pp_sr = if let Some(i) = grm.expect() {
+                i != c.sr_len()
+            } else {
+                0 != c.sr_len()
+            };
+            if pp_rr {
+                println!("{}", c.pp_rr(&grm));
+            }
+            if pp_sr {
+                println!("{}", c.pp_sr(&grm));
+            }
+            if pp_rr || pp_sr {
+                println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
+            }
         }
     }
 
