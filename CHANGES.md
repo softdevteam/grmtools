@@ -1,3 +1,15 @@
+# grmtools 0.10.1 (2021-05-11)
+
+* Add support for Yacc's `%expect` and Bison's `%expect-rr` declarations. These
+  allow grammar authors to specify how many shift/reduce and reduce/reduce
+  conflicts they expect in their grammar, and to error if either quantity is
+  different, which is a more fine-grained check than the `error_on_conflicts`
+  boolean.
+
+* Generate code with "correct" camel case names to avoid Clippy warnings in
+  code that uses grmtools' output.
+
+
 # grmtools 0.10.0 (2021-03-29)
 
 ## Breaking changes

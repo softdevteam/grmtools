@@ -2,7 +2,7 @@
 name = "lrpar"
 description = "Yacc-compatible parser generator"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Lukas Diekmann <http://lukasdiekmann.com/>", "Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
 readme = "README.md"
