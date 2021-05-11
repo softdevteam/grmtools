@@ -27,6 +27,17 @@ There are several differences between Yacc and grmtools including:
    build a parse tree), you may find the ["Original" Yacc
    variant](#original-yacc) useful.
 
+ * grmtools allows both Yacc's `%expect` and Bison's `%expect-rr` declarations
+   in its base "Yacc" mode.
+
+ * Although rare, it is possible to generate accept/reduce conflicts (e.g. for
+   a grammar with the sole rule `A: A;`). grmtools considers accept/reduce
+   conflicts to be a hard error, and refuses to generate anything for the
+   resulting grammar, whereas Yacc allows them through (with unclear
+   consequences). Bison also appears to consider accept/reduce conflicts a hard
+   error, though it appears to detect them in a more generic way (reporting
+   such rules as "not generating any sentences").
+
 
 ## Grmtools
 
