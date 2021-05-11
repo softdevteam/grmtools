@@ -52,7 +52,7 @@ where
     }
 
     /// Returns a pretty-printed version of the conflicts.
-    #[deprecated(since = "0.10.0", note = "Please use pp_rr() and pp_sr() instead")]
+    #[deprecated(since = "0.10.1", note = "Please use pp_rr() and pp_sr() instead")]
     pub fn pp(&self, grm: &YaccGrammar<StorageT>) -> String {
         let mut s = String::new();
         s.push_str(&self.pp_sr(grm));
