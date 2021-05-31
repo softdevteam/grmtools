@@ -442,17 +442,11 @@ impl YaccParser {
     fn parse_programs(&mut self, mut i: usize) -> YaccResult<usize> {
         if let Some(j) = self.lookahead_is("%%", i) {
             i = self.parse_ws(j, true)?;
-            if i == self.src.len() {
-                Ok(i)
-            } else {
-                let prog = self.src[i..].to_string();
-                i += prog.len();
-                self.ast.add_programs(prog);
-                Ok(i)
-            }
-        } else {
-            Ok(i)
+            let prog = self.src[i..].to_string();
+            i += prog.len();
+            self.ast.add_programs(prog);
         }
+        Ok(i)
     }
 
     // Handle parse_param declarations of the form:
