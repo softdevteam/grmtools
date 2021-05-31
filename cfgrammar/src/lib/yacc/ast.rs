@@ -155,7 +155,12 @@ impl GrammarAST {
         });
     }
 
+    #[deprecated(since = "0.10.2", note = "Please use set_programs instead")]
     pub fn add_programs(&mut self, s: String) {
+        self.set_programs(s);
+    }
+
+    pub fn set_programs(&mut self, s: String) {
         self.programs = Some(s)
     }
 
