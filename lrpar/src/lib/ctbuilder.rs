@@ -238,7 +238,7 @@ where
         &Conflicts<StorageT>,
     )> {
         if let Some((grm, sgraph, stable)) = &self.conflicts {
-            return Some((grm, sgraph, stable, &stable.conflicts().unwrap()));
+            return Some((grm, sgraph, stable, stable.conflicts().unwrap()));
         }
         None
     }
@@ -419,11 +419,11 @@ where
 
         outs.push_str(&self.gen_parse_function(grm, stable)?);
         outs.push_str(&self.gen_rule_consts(grm));
-        outs.push_str(&self.gen_token_epp(&grm));
+        outs.push_str(&self.gen_token_epp(grm));
         match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
-                outs.push_str(&self.gen_wrappers(&grm));
-                outs.push_str(&self.gen_user_actions(&grm));
+                outs.push_str(&self.gen_wrappers(grm));
+                outs.push_str(&self.gen_user_actions(grm));
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction)
             | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => (),
@@ -432,7 +432,7 @@ where
         outs.push_str("}\n\n");
 
         // Output the cache so that we can check whether the IDs map is stable.
-        outs.push_str(&cache);
+        outs.push_str(cache);
 
         let mut f = File::create(outp_rs)?;
         f.write_all(outs.as_bytes())?;

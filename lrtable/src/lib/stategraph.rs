@@ -122,7 +122,7 @@ where
         let mut o = String::new();
         for (stidx, &(ref core_st, ref closed_st)) in self.iter_stidxs().zip(self.states.iter()) {
             if stidx != self.start_state {
-                o.push_str(&"\n");
+                o.push('\n');
             }
             {
                 let padding = num_digits(self.all_states_len()) - num_digits(stidx);
@@ -134,7 +134,7 @@ where
             }
 
             let st = if core_states { core_st } else { closed_st };
-            for (i, (&(pidx, sidx), ref ctx)) in st.items.iter().enumerate() {
+            for (i, (&(pidx, sidx), ctx)) in st.items.iter().enumerate() {
                 let padding = if i == 0 {
                     0
                 } else {
@@ -150,7 +150,7 @@ where
                     if i_sidx == usize::from(sidx) {
                         o.push_str(" .");
                     }
-                    o.push_str(&format!(" {}", fmt_sym(&grm, *i_ssym)));
+                    o.push_str(&format!(" {}", fmt_sym(grm, *i_ssym)));
                 }
                 if usize::from(sidx) == grm.prod(pidx).len() {
                     o.push_str(" .");
@@ -177,7 +177,7 @@ where
                 o.push_str(&format!(
                     "\n{}{} -> {}",
                     " ".repeat(num_digits(self.all_states_len()) + 2),
-                    fmt_sym(&grm, *esym),
+                    fmt_sym(grm, *esym),
                     usize::from(*e_stidx)
                 ));
             }
