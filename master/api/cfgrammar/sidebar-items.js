@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Symbol",""]],"mod":[["yacc",""]],"struct":[["PIdx","A type specifically for production indices (e.g. a rule `E::=A|B` would have two productions for the single rule `E`)."],["RIdx","A type specifically for rule indices."],["SIdx","A type specifically for symbol indices (within a production)."],["TIdx","A type specifically for token indices."]]});
