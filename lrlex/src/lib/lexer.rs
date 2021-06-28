@@ -119,8 +119,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<
     }
 
     fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
-        &self
-            .rules
+        self.rules
             .iter()
             .find(|r| r.tok_id == Some(tok_id))
             .unwrap()

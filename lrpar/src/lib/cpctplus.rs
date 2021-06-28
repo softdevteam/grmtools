@@ -229,7 +229,7 @@ where
         }
 
         let full_rprs = self.collect_repairs(in_laidx, astar_cnds);
-        let mut rnk_rprs = rank_cnds(parser, finish_by, in_laidx, &in_pstack, full_rprs);
+        let mut rnk_rprs = rank_cnds(parser, finish_by, in_laidx, in_pstack, full_rprs);
         if rnk_rprs.is_empty() {
             return (in_laidx, vec![]);
         }
