@@ -310,17 +310,15 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             );
         }
 
-        let (st, _) = match self.newlines.binary_search(&span.start()) {
+        let (st, st_line) = match self.newlines.binary_search(&span.start()) {
             Ok(j) => (self.newlines[j], j + 1),
             Err(0) => (0, 0),
-            Err(j) if j == self.newlines.len() + 1 => (self.newlines[j - 1], j),
             Err(j) => (self.newlines[j - 1], j),
         };
-        let en = match self.newlines.binary_search(&span.end()) {
-            Ok(j) if j == self.newlines.len() + 1 => self.s.len(),
-            Ok(j) => self.newlines[j + 1] - 1,
-            Err(j) if j == self.newlines.len() => self.s.len(),
-            Err(j) => self.newlines[j] - 1,
+        let en = match self.newlines[st_line..].binary_search(&span.end()) {
+            Ok(j) => self.newlines[st_line + j + 1] - 1,
+            Err(j) if st_line + j == self.newlines.len() => self.s.len(),
+            Err(j) => self.newlines[st_line + j] - 1,
         };
         &self.s[st..en]
     }
@@ -340,7 +338,6 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             match lexer.newlines.binary_search(&i) {
                 Ok(j) => (lexer.newlines[j], j + 2),
                 Err(0) => (0, 1),
-                Err(j) if j == lexer.newlines.len() + 1 => (lexer.newlines[j - 1], j + 1),
                 Err(j) => (lexer.newlines[j - 1], j + 1),
             }
         }
