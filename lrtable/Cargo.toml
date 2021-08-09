@@ -2,7 +2,7 @@
 name = "lrtable"
 description = "LR grammar table generation"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["Lukas Diekmann <http://lukasdiekmann.com/>", "Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
 readme = "README.md"

@@ -1,3 +1,10 @@
+# grmtools 0.10.2 (2021-08-09)
+
+* Optimise `NonStreamingLexer::span_lines_str` from *O(n)* to *O(log n)*.
+
+* Deprecate GrammarAST::add_programs in favour of GrammarAST::set_programs.
+
+
 # grmtools 0.10.1 (2021-05-11)
 
 * Add support for Yacc's `%expect` and Bison's `%expect-rr` declarations. These
