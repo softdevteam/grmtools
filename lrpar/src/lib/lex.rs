@@ -52,6 +52,7 @@ pub trait NonStreamingLexer<'input, StorageT: Hash + PrimInt + Unsigned>: Lexer<
     /// The [Span] must be well formed:
     ///   * The start/end byte indexes must be valid UTF-8 character indexes.
     ///   * The end byte index must not exceed the input's length.
+    ///
     /// If these requirements are not respected this function may panic or return unexpected
     /// portions of the input.
     fn span_str(&self, span: Span) -> &'input str;
@@ -62,6 +63,7 @@ pub trait NonStreamingLexer<'input, StorageT: Hash + PrimInt + Unsigned>: Lexer<
     /// The [Span] must be well formed:
     ///   * The start/end byte indexes must be valid UTF-8 character indexes.
     ///   * The end byte index must not exceed the input's length.
+    ///
     /// If these requirements are not respected this function may panic or return unexpected
     /// portions of the input.
     fn span_lines_str(&self, span: Span) -> &'input str;
@@ -72,6 +74,7 @@ pub trait NonStreamingLexer<'input, StorageT: Hash + PrimInt + Unsigned>: Lexer<
     /// The [Span] must be well formed:
     ///   * The start/end byte indexes must be valid UTF-8 character indexes.
     ///   * The end byte index must not exceed the input's length.
+    ///
     /// If these requirements are not respected this function may panic or return unexpected
     /// portions of the input.
     fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
