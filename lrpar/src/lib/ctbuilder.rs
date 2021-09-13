@@ -126,9 +126,11 @@ pub struct CTParserBuilder<'a, StorageT = u32>
 where
     StorageT: Eq + Hash,
 {
-    // Anything stored in here (except `conflicts` and `error_on_conflict`) almost certainly needs
-    // to be included as part of the rebuild_cache function below so that, if it's changed, the
-    // grammar is rebuilt.
+    // Anything stored in here (except `output_path`, `conflicts`, and `error_on_conflict`) almost
+    // certainly needs to be included as part of the rebuild_cache function below so that, if it's
+    // changed, the grammar is rebuilt.
+    grammar_path: Option<PathBuf>,
+    output_path: Option<PathBuf>,
     mod_name: Option<&'a str>,
     recoverer: RecoveryKind,
     yacckind: Option<YaccKind>,
@@ -149,8 +151,8 @@ impl<'a> CTParserBuilder<'a, u32> {
     ///
     /// ```text
     /// CTParserBuilder::new()
-    ///     .process_file_in_src("grm.y")
-    ///     .unwrap();
+    ///     .grammar_in_src_dir("grm.y")?
+    ///     .process()?;
     /// ```
     pub fn new() -> Self {
         CTParserBuilder::<u32>::new_with_storaget()
@@ -178,11 +180,13 @@ where
     ///
     /// ```text
     /// CTParserBuilder::<u8>::new_with_storaget()
-    ///     .process_file_in_src("grm.y")
-    ///     .unwrap();
+    ///     .grammar_in_src_dir("grm.y")?
+    ///     .process()?;
     /// ```
     pub fn new_with_storaget() -> Self {
         CTParserBuilder {
+            grammar_path: None,
+            output_path: None,
             mod_name: None,
             recoverer: RecoveryKind::CPCTPlus,
             yacckind: None,
@@ -193,9 +197,68 @@ where
         }
     }
 
+    /// Set the input grammar path to a file relative to this project's `src` directory. This will
+    /// also set the output path (i.e. you do not need to call [CTParserBuilder::output_path]).
+    ///
+    /// For example if `a/b.y` is passed as `inp` then [CTParserBuilder::process] will:
+    ///   * use `src/a/b.y` as the input file.
+    ///   * write output to a file which can then be imported by calling `lrpar_mod!("a/b.y")`.
+    ///   * create a module in that output file named `b_y`.
+    ///
+    /// You can override the output path and/or module name by calling [CTParserBuilder::output_path]
+    /// and/or [CTParserBuilder::mod_name], respectively, after calling this function.
+    ///
+    /// This is a convenience function that makes it easier to compile grammar files stored in a
+    /// project's `src/` directory: please see [CTParserBuilder::process] for additional constraints
+    /// and information about the generated files.
+    pub fn grammar_in_src_dir<P>(mut self, srcp: P) -> Result<Self, Box<dyn Error>>
+    where
+        P: AsRef<Path>,
+    {
+        let mut grmp = current_dir()?;
+        grmp.push("src");
+        grmp.push(srcp.as_ref());
+        self.grammar_path = Some(grmp);
+
+        let mut outp = PathBuf::new();
+        outp.push(var("OUT_DIR").unwrap());
+        outp.push(srcp.as_ref().parent().unwrap().to_str().unwrap());
+        create_dir_all(&outp)?;
+        let mut leaf = srcp
+            .as_ref()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
+        outp.push(leaf);
+        Ok(self.output_path(outp))
+    }
+
+    /// Set the input grammar path to `inp`. If specified, you must also call
+    /// [CTParserBuilder::output_path]. In general it is easier to use
+    /// [CTParserBuilder::grammar_in_src_dir].
+    pub fn grammar_path<P>(mut self, inp: P) -> Self
+    where
+        P: AsRef<Path>,
+    {
+        self.grammar_path = Some(inp.as_ref().to_owned());
+        self
+    }
+
+    /// Set the output grammar path to `outp`.
+    pub fn output_path<P>(mut self, outp: P) -> Self
+    where
+        P: AsRef<Path>,
+    {
+        self.output_path = Some(outp.as_ref().to_owned());
+        self
+    }
+
     /// Set the generated module name to `mod_name`. If no module name is specified,
-    /// [`process_file`](#method.process_file) will attempt to create a sensible default based on
-    /// the input filename.
+    /// [CTParserBuilder::process] will attempt to create a sensible default based on the grammar
+    /// filename.
     pub fn mod_name(mut self, mod_name: &'a str) -> Self {
         self.mod_name = Some(mod_name);
         self
@@ -219,7 +282,7 @@ where
         self
     }
 
-    /// If set to true, `process_file_in_src` will return an error if the given grammar contains
+    /// If set to true, [CTParserBuilder::process] will return an error if the given grammar contains
     /// any Shift/Reduce or Reduce/Reduce conflicts. Defaults to `true`.
     pub fn error_on_conflicts(mut self, b: bool) -> Self {
         self.error_on_conflicts = b;
@@ -243,12 +306,144 @@ where
         None
     }
 
+    /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
+    /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
+    /// additional files will be created with the same name as specified in [self.output_path] but
+    /// with the extensions `grm`, and `stable`, overwriting any existing files with those names.
+    ///
+    /// The generated module follows the form:
+    ///
+    /// ```text
+    ///   mod <modname> {
+    ///     pub fn parse(lexemes: &::std::vec::Vec<::lrpar::Lexeme<StorageT>>) { ... }
+    ///         -> (::std::option::Option<ActionT>,
+    ///             ::std::vec::Vec<::lrpar::LexParseError<StorageT>>)> { ...}
+    ///
+    ///     pub fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str> {
+    ///       ...
+    ///     }
+    ///
+    ///     ...
+    ///   }
+    /// ```
+    ///
+    /// where:
+    ///  * `modname` is either:
+    ///    * the module name specified by [CTParserBuilder::mod_name()];
+    ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.y` the
+    ///      module name is `c_y` (i.e. the file's leaf name, minus its extension, with a prefix of
+    ///      `_y`).
+    ///  * `ActionT` is either:
+    ///    * the `%actiontype` value given to the grammar
+    ///    * or, if the `yacckind` was set
+    ///      `cfgrammar::YaccKind::Original(cfgrammar::YaccOriginalActionKind::UserAction)`, it is
+    ///      [crate::Node<StorageT>].
+    ///
+    /// # Panics
+    ///
+    /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
+    pub fn process(&mut self) -> Result<HashMap<String, StorageT>, Box<dyn Error>> {
+        let grmp = self
+            .grammar_path
+            .as_ref()
+            .expect("grammar_path must be specified before processing.");
+        let outp = self
+            .output_path
+            .as_ref()
+            .expect("output_path must be specified before processing.");
+        let yk = match self.yacckind {
+            None => panic!("yacckind must be specified before processing."),
+            Some(YaccKind::Original(x)) => YaccKind::Original(x),
+            Some(YaccKind::Grmtools) => YaccKind::Grmtools,
+            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
+        };
+        let inc = read_to_string(grmp).unwrap();
+        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc)?;
+        let rule_ids = grm
+            .tokens_map()
+            .iter()
+            .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
+            .collect::<HashMap<_, _>>();
+        let cache = self.rebuild_cache(&grm);
+
+        // We don't need to go through the full rigmarole of generating an output file if all of
+        // the following are true: the output file exists; it is newer than the input file; and the
+        // cache hasn't changed. The last of these might be surprising, but it's vital: we don't
+        // know, for example, what the IDs map might be from one run to the next, and it might
+        // change for reasons beyond lrpar's control. If it does change, that means that the lexer
+        // and lrpar would get out of sync, so we have to play it safe and regenerate in such
+        // cases.
+        if let Ok(ref inmd) = fs::metadata(grmp) {
+            if let Ok(ref out_rs_md) = fs::metadata(outp) {
+                if FileTime::from_last_modification_time(out_rs_md)
+                    > FileTime::from_last_modification_time(inmd)
+                {
+                    if let Ok(outc) = read_to_string(outp) {
+                        if outc.contains(&cache) {
+                            return Ok(rule_ids);
+                        }
+                    }
+                }
+            }
+        }
+
+        // At this point, we know we're going to generate fresh output; however, if something goes
+        // wrong in the process between now and us writing /out/blah.rs, rustc thinks that
+        // everything's gone swimmingly (even if build.rs errored!), and tries to carry on
+        // compilation, leading to weird errors. We therefore delete /out/blah.rs at this point,
+        // which means, at worse, the user gets a "file not found" error from rustc (which is less
+        // confusing than the alternatives).
+        fs::remove_file(outp).ok();
+
+        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
+        if self.error_on_conflicts {
+            if let Some(c) = stable.conflicts() {
+                match (grm.expect(), grm.expectrr()) {
+                    (Some(i), Some(j)) if i == c.sr_len() && j == c.rr_len() => (),
+                    (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
+                    (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
+                    (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
+                    _ => return Err(Box::new(CTConflictsError { stable })),
+                }
+            }
+        }
+
+        let mod_name = match self.mod_name {
+            Some(s) => s.to_owned(),
+            None => {
+                // The user hasn't specified a module name, so we create one automatically: what we
+                // do is strip off all the filename extensions (note that it's likely that inp ends
+                // with `y.rs`, so we potentially have to strip off more than one extension) and
+                // then add `_y` to the end.
+                let mut stem = grmp.to_str().unwrap();
+                loop {
+                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
+                    if stem == new_stem {
+                        break;
+                    }
+                    stem = new_stem;
+                }
+                format!("{}_y", stem)
+            }
+        };
+        self.output_file(&grm, &stable, &mod_name, outp, &cache)?;
+        if stable.conflicts().is_some() {
+            self.conflicts = Some((grm, sgraph, stable));
+        }
+        Ok(rule_ids)
+    }
+
     /// Given the filename `a/b.y` as input, statically compile the grammar `src/a/b.y` into a Rust
     /// module which can then be imported using `lrpar_mod!("a/b.y")`. This is a convenience
     /// function around [`process_file`](#method.process_file) which makes it easier to compile
     /// grammar files stored in a project's `src/` directory: please see
     /// [`process_file`](#method.process_file) for additional constraints and information about the
     /// generated files.
+    #[deprecated(
+        since = "0.10.3",
+        note = "Please use grammar_in_src_dir() and process() instead"
+    )]
+    #[allow(deprecated)]
     pub fn process_file_in_src(
         &mut self,
         srcp: &str,
@@ -306,6 +501,10 @@ where
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
     /// productions.
+    #[deprecated(
+        since = "0.10.3",
+        note = "Please use grammar_path(), output_path(), and process() instead"
+    )]
     pub fn process_file<P, Q>(
         &mut self,
         inp: P,
@@ -315,86 +514,9 @@ where
         P: AsRef<Path>,
         Q: AsRef<Path>,
     {
-        let yk = match self.yacckind {
-            None => panic!("yacckind must be specified before processing."),
-            Some(YaccKind::Original(x)) => YaccKind::Original(x),
-            Some(YaccKind::Grmtools) => YaccKind::Grmtools,
-            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
-        };
-        let inc = read_to_string(&inp).unwrap();
-        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc)?;
-        let rule_ids = grm
-            .tokens_map()
-            .iter()
-            .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
-            .collect::<HashMap<_, _>>();
-        let cache = self.rebuild_cache(&grm);
-
-        // We don't need to go through the full rigmarole of generating an output file if all of
-        // the following are true: the output file exists; it is newer than the input file; and the
-        // cache hasn't changed. The last of these might be surprising, but it's vital: we don't
-        // know, for example, what the IDs map might be from one run to the next, and it might
-        // change for reasons beyond lrpar's control. If it does change, that means that the lexer
-        // and lrpar would get out of sync, so we have to play it safe and regenerate in such
-        // cases.
-        if let Ok(ref inmd) = fs::metadata(&inp) {
-            if let Ok(ref out_rs_md) = fs::metadata(&outp) {
-                if FileTime::from_last_modification_time(out_rs_md)
-                    > FileTime::from_last_modification_time(inmd)
-                {
-                    if let Ok(outc) = read_to_string(&outp) {
-                        if outc.contains(&cache) {
-                            return Ok(rule_ids);
-                        }
-                    }
-                }
-            }
-        }
-
-        // At this point, we know we're going to generate fresh output; however, if something goes
-        // wrong in the process between now and us writing /out/blah.rs, rustc thinks that
-        // everything's gone swimmingly (even if build.rs errored!), and tries to carry on
-        // compilation, leading to weird errors. We therefore delete /out/blah.rs at this point,
-        // which means, at worse, the user gets a "file not found" error from rustc (which is less
-        // confusing than the alternatives).
-        fs::remove_file(&outp).ok();
-
-        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
-        if self.error_on_conflicts {
-            if let Some(c) = stable.conflicts() {
-                match (grm.expect(), grm.expectrr()) {
-                    (Some(i), Some(j)) if i == c.sr_len() && j == c.rr_len() => (),
-                    (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
-                    (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
-                    (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
-                    _ => return Err(Box::new(CTConflictsError { stable })),
-                }
-            }
-        }
-
-        let mod_name = match self.mod_name {
-            Some(s) => s.to_owned(),
-            None => {
-                // The user hasn't specified a module name, so we create one automatically: what we
-                // do is strip off all the filename extensions (note that it's likely that inp ends
-                // with `y.rs`, so we potentially have to strip off more than one extension) and
-                // then add `_y` to the end.
-                let mut stem = inp.as_ref().to_str().unwrap();
-                loop {
-                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
-                    if stem == new_stem {
-                        break;
-                    }
-                    stem = new_stem;
-                }
-                format!("{}_y", stem)
-            }
-        };
-        self.output_file(&grm, &stable, &mod_name, &outp, &cache)?;
-        if stable.conflicts().is_some() {
-            self.conflicts = Some((grm, sgraph, stable));
-        }
-        Ok(rule_ids)
+        self.grammar_path = Some(inp.as_ref().to_owned());
+        self.output_path = Some(outp.as_ref().to_owned());
+        self.process()
     }
 
     fn output_file<P: AsRef<Path>>(
@@ -456,6 +578,7 @@ where
             env!("VERGEN_BUILD_TIMESTAMP")
         ));
 
+        cache.push_str(&format!("   Grammar path: {:?}\n", self.grammar_path));
         cache.push_str(&format!("   Mod name: {:?}\n", self.mod_name));
         cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));
         cache.push_str(&format!("   YaccKind: {:?}\n", self.yacckind));
@@ -970,8 +1093,10 @@ C : 'a';"
 
         let mut ct = CTParserBuilder::new()
             .error_on_conflicts(false)
-            .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree));
-        ct.process_file_in_src(file_path.to_str().unwrap()).unwrap();
+            .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
+            .grammar_path(file_path.to_str().unwrap())
+            .output_path(file_path.with_extension("ignored"));
+        ct.process().unwrap();
 
         match ct.conflicts() {
             Some((_, _, _, conflicts)) => {
@@ -999,7 +1124,9 @@ C : 'a';"
 
         match CTParserBuilder::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
-            .process_file_in_src(file_path.to_str().unwrap())
+            .grammar_path(file_path.to_str().unwrap())
+            .output_path(file_path.with_extension("ignored"))
+            .process()
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
@@ -1027,7 +1154,9 @@ B: 'a';"
 
         match CTParserBuilder::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
-            .process_file_in_src(file_path.to_str().unwrap())
+            .grammar_path(file_path.to_str().unwrap())
+            .output_path(file_path.with_extension("ignored"))
+            .process()
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
@@ -1057,7 +1186,9 @@ C : 'a';"
 
         match CTParserBuilder::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
-            .process_file_in_src(file_path.to_str().unwrap())
+            .grammar_path(file_path.to_str().unwrap())
+            .output_path(file_path.with_extension("ignored"))
+            .process()
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {

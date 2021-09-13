@@ -1,3 +1,23 @@
+# grmtools 0.10.3 (XXXX-YY-ZZ)
+
+* `CTParserBuilder::process_file_in_src` is deprecated in favour of
+  `CTParserBuilder::grammar_in_src_dir` and `CTParserBuilder::process`. In most
+  cases you can change your `build.rs` from:
+  ```rust
+    let lex_rule_ids_map = CTParserBuilder::new()
+        .process_file_in_src("grm.y")?;
+  ```
+  to:
+  ```rust
+    let lex_rule_ids_map = CTParserBuilder::new()
+        .grammar_in_src_dir("grm.y")?
+        .process()?;
+  ```
+
+  The less commonly used `process_file` function is similarly deprecated in
+  favour of the `grammar_path`, `output_path`, and `process` functions.
+
+
 # grmtools 0.10.2 (2021-08-09)
 
 * Optimise `NonStreamingLexer::span_lines_str` from *O(n)* to *O(log n)*.
