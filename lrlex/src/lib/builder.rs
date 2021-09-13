@@ -282,7 +282,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             };
             outs.push_str(&format!(
                 "
-Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
+        Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
                 tok_id,
                 n,
                 r.re_str.replace("\\", "\\\\").replace("\"", "\\\"")
@@ -292,9 +292,10 @@ Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
         // Footer
         outs.push_str(&format!(
             "
-];
+    ];
     {lexerdef_name}::from_rules(rules)
 }}
+
 ",
             lexerdef_name = lexerdef_name
         ));
