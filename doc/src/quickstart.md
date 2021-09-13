@@ -49,7 +49,7 @@ Our `build.rs` file thus looks as follows:
 ```rust,noplaypen
 use cfgrammar::yacc::YaccKind;
 use lrlex::LexerBuilder;
-use lrpar::{CTParserBuilder};
+use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
