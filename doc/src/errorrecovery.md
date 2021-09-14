@@ -516,7 +516,8 @@ the first parsing error, with the `recoverer` method in `CTParserBuilder` or
     let lex_rule_ids_map = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
         .recoverer(lrpar::RecoveryKind::None)
-        .process_file_in_src("calc.y")?;
+        .grammar_path_in_src("calc.y")?
+        .process()?;
 ```
 
 and then no matter how many syntax errors we make, only one is reported:

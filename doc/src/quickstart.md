@@ -54,7 +54,8 @@ use lrpar::CTParserBuilder;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
-        .process_file_in_src("calc.y")?;
+        .grammar_path_in_src("calc.y")?
+        .process()?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
         .process_file_in_src("calc.l")?;
