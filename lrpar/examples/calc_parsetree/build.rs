@@ -15,6 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .process()?;
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
-        .process_file_in_src("calc.l")?;
+        .lexer_in_src_dir("calc.l")?
+        .process()?;
     Ok(())
 }

@@ -61,7 +61,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             outl.set_extension("rs");
             LexerBuilder::new()
                 .rule_ids_map(lex_rule_ids_map)
-                .process_file(pl.to_str().unwrap(), &outl)?;
+                .lexer_path(pl.to_str().unwrap())
+                .output_path(&outl)
+                .process()?;
         }
     }
     Ok(())
