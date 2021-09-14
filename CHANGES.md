@@ -17,6 +17,25 @@
   The less commonly used `process_file` function is similarly deprecated in
   favour of the `grammar_path`, `output_path`, and `process` functions.
 
+* `LexerBuilder::process_file_in_src` is deprecated in favour of
+  `LexerBuilder::lexer_in_src_dir` and `LexerBuilder::process`. In most cases you
+  can change your `build.rs` from:
+  ```rust
+    LexerBuilder::new()
+        .rule_ids_map(lex_rule_ids_map)
+        .process_file_in_src("lex.l")?;
+  ```
+  to:
+  ```rust
+    LexerBuilder::new()
+        .rule_ids_map(lex_rule_ids_map)
+        .lexer_in_src_dir("lex.l")?
+        .process()?;
+  ```
+
+  The less commonly used `process_file` function is similarly deprecated in
+  favour of the `lexer_path`, `output_path`, and `process` functions.
+
 
 # grmtools 0.10.2 (2021-08-09)
 

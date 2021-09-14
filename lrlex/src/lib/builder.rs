@@ -64,6 +64,8 @@ impl Visibility {
 /// A `LexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
 pub struct LexerBuilder<'a, StorageT = u32> {
+    lexer_path: Option<PathBuf>,
+    output_path: Option<PathBuf>,
     lexerkind: LexerKind,
     mod_name: Option<&'a str>,
     visibility: Visibility,
@@ -94,6 +96,8 @@ where
     /// ```
     pub fn new() -> Self {
         LexerBuilder {
+            lexer_path: None,
+            output_path: None,
             lexerkind: LexerKind::LRNonStreamingLexer,
             mod_name: None,
             visibility: Visibility::Private,
@@ -101,6 +105,73 @@ where
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
         }
+    }
+
+    /// Set the input lexer path to a file relative to this project's `src` directory. This will
+    /// also set the output path (i.e. you do not need to call [LexerBuilder::output_path]).
+    ///
+    /// For example if `a/b.l` is passed as `inp` then [LexerBuilder::process] will:
+    ///   * use `src/a/b.l` as the input file.
+    ///   * write output to a file which can then be imported by calling `lrlex_mod!("a/b.l")`.
+    ///   * create a module in that output file named `b_l`.
+    ///
+    /// You can override the output path and/or module name by calling [LexerBuilder::output_path]
+    /// and/or [LexerBuilder::mod_name], respectively, after calling this function.
+    ///
+    /// This is a convenience function that makes it easier to compile lexer files stored in a
+    /// project's `src/` directory: please see [LexerBuilder::process] for additional constraints
+    /// and information about the generated files.
+    pub fn lexer_in_src_dir<P>(mut self, srcp: P) -> Result<Self, Box<dyn Error>>
+    where
+        P: AsRef<Path>,
+    {
+        if !srcp.as_ref().is_relative() {
+            return Err(format!(
+                "Lexer path '{}' must be a relative path.",
+                srcp.as_ref().to_str().unwrap_or("<invalid UTF-8>")
+            )
+            .into());
+        }
+
+        let mut lexp = current_dir()?;
+        lexp.push("src");
+        lexp.push(srcp.as_ref());
+        self.lexer_path = Some(lexp);
+
+        let mut outp = PathBuf::new();
+        outp.push(var("OUT_DIR").unwrap());
+        outp.push(srcp.as_ref().parent().unwrap().to_str().unwrap());
+        create_dir_all(&outp)?;
+        let mut leaf = srcp
+            .as_ref()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
+        outp.push(leaf);
+        Ok(self.output_path(outp))
+    }
+
+    /// Set the input lexer path to `inp`. If specified, you must also call
+    /// [LexerBuilder::output_path]. In general it is easier to use
+    /// [LexerBuilder::lexer_in_src_dir].
+    pub fn lexer_path<P>(mut self, inp: P) -> Self
+    where
+        P: AsRef<Path>,
+    {
+        self.lexer_path = Some(inp.as_ref().to_owned());
+        self
+    }
+
+    /// Set the output lexer path to `outp`.
+    pub fn output_path<P>(mut self, outp: P) -> Self
+    where
+        P: AsRef<Path>,
+    {
+        self.output_path = Some(outp.as_ref().to_owned());
+        self
     }
 
     /// Set the type of lexer to be generated to `lexerkind`.
@@ -138,6 +209,11 @@ where
     /// it easier to compile `.l` files stored in a project's `src/` directory: please see
     /// [`process_file`](#method.process_file) for additional constraints and information about the
     /// generated files.
+    #[deprecated(
+        since = "0.10.3",
+        note = "Please use lexer_in_src_dir() and process() instead"
+    )]
+    #[allow(deprecated)]
     pub fn process_file_in_src(
         self,
         srcp: &str,
@@ -177,8 +253,12 @@ where
     ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
+    #[deprecated(
+        since = "0.10.3",
+        note = "Please use lexer_path() and process() instead"
+    )]
     pub fn process_file<P, Q>(
-        self,
+        mut self,
         inp: P,
         outp: Q,
     ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>>
@@ -186,9 +266,45 @@ where
         P: AsRef<Path>,
         Q: AsRef<Path>,
     {
+        self.lexer_path = Some(inp.as_ref().to_owned());
+        self.output_path = Some(outp.as_ref().to_owned());
+        self.process()
+    }
+
+    /// Statically compile the `.l` file specified by [LexerBuilder::lexer_path()] into Rust,
+    /// placing the output into the file specified by [LexerBuilder::output_path()].
+    ///
+    /// The generated module follows the form:
+    ///
+    /// ```text
+    ///    mod modname {
+    ///      pub fn lexerdef() -> LexerDef<StorageT> { ... }
+    ///
+    ///      ...
+    ///    }
+    /// ```
+    ///
+    /// where:
+    ///  * `modname` is either:
+    ///    * the module name specified by [LexerBuilder::mod_name()]
+    ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
+    ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
+    ///      `_l`).
+    pub fn process(
+        self,
+    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>> {
+        let lexerp = self
+            .lexer_path
+            .as_ref()
+            .expect("lexer_path must be specified before processing.");
+        let outp = self
+            .output_path
+            .as_ref()
+            .expect("output_path must be specified before processing.");
+
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => {
-                Box::new(LRNonStreamingLexerDef::from_str(&read_to_string(&inp)?)?)
+                Box::new(LRNonStreamingLexerDef::from_str(&read_to_string(&lexerp)?)?)
             }
         };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
@@ -235,7 +351,7 @@ where
                 // do is strip off all the filename extensions (note that it's likely that inp ends
                 // with `l.rs`, so we potentially have to strip off more than one extension) and
                 // then add `_l` to the end.
-                let mut stem = inp.as_ref().to_str().unwrap();
+                let mut stem = lexerp.to_str().unwrap();
                 loop {
                     let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
                     if stem == new_stem {

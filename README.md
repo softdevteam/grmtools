@@ -21,10 +21,12 @@ use lrpar::CTParserBuilder;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lex_rule_ids_map = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
-        .process_file_in_src("grammar.y")?;
+        .grammar_in_src_dir("grammar.y")?
+        .process();
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
-        .process_file_in_src("lexer.l")?;
+        .lexer_in_src_dir("lexer.l")?
+        .process();
     Ok(())
 }
 ```
