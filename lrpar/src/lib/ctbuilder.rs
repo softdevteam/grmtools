@@ -136,11 +136,6 @@ where
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     visibility: Visibility,
-    conflicts: Option<(
-        YaccGrammar<StorageT>,
-        StateGraph<StorageT>,
-        StateTable<StorageT>,
-    )>,
     phantom: PhantomData<StorageT>,
 }
 
@@ -192,7 +187,6 @@ where
             yacckind: None,
             error_on_conflicts: true,
             visibility: Visibility::Private,
-            conflicts: None,
             phantom: PhantomData,
         }
     }
@@ -200,7 +194,7 @@ where
     /// Set the input grammar path to a file relative to this project's `src` directory. This will
     /// also set the output path (i.e. you do not need to call [CTParserBuilder::output_path]).
     ///
-    /// For example if `a/b.y` is passed as `inp` then [CTParserBuilder::process] will:
+    /// For example if `a/b.y` is passed as `inp` then [CTParserBuilder::build] will:
     ///   * use `src/a/b.y` as the input file.
     ///   * write output to a file which can then be imported by calling `lrpar_mod!("a/b.y")`.
     ///   * create a module in that output file named `b_y`.
@@ -209,7 +203,7 @@ where
     /// and/or [CTParserBuilder::mod_name], respectively, after calling this function.
     ///
     /// This is a convenience function that makes it easier to compile grammar files stored in a
-    /// project's `src/` directory: please see [CTParserBuilder::process] for additional constraints
+    /// project's `src/` directory: please see [CTParserBuilder::build] for additional constraints
     /// and information about the generated files.
     pub fn grammar_in_src_dir<P>(mut self, srcp: P) -> Result<Self, Box<dyn Error>>
     where
@@ -265,7 +259,7 @@ where
     }
 
     /// Set the generated module name to `mod_name`. If no module name is specified,
-    /// [CTParserBuilder::process] will attempt to create a sensible default based on the grammar
+    /// [CTParserBuilder::build] will attempt to create a sensible default based on the grammar
     /// filename.
     pub fn mod_name(mut self, mod_name: &'a str) -> Self {
         self.mod_name = Some(mod_name);
@@ -290,28 +284,11 @@ where
         self
     }
 
-    /// If set to true, [CTParserBuilder::process] will return an error if the given grammar contains
+    /// If set to true, [CTParserBuilder::build] will return an error if the given grammar contains
     /// any Shift/Reduce or Reduce/Reduce conflicts. Defaults to `true`.
     pub fn error_on_conflicts(mut self, b: bool) -> Self {
         self.error_on_conflicts = b;
         self
-    }
-
-    /// If there are any conflicts in the grammar, return a tuple which allows users to inspect
-    /// and pretty print them; otherwise returns `None`. Note: The conflicts feature is currently
-    /// unstable and may change in the future.
-    pub fn conflicts(
-        &self,
-    ) -> Option<(
-        &YaccGrammar<StorageT>,
-        &StateGraph<StorageT>,
-        &StateTable<StorageT>,
-        &Conflicts<StorageT>,
-    )> {
-        if let Some((grm, sgraph, stable)) = &self.conflicts {
-            return Some((grm, sgraph, stable, stable.conflicts().unwrap()));
-        }
-        None
     }
 
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
@@ -350,7 +327,7 @@ where
     /// # Panics
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
-    pub fn process(&mut self) -> Result<HashMap<String, StorageT>, Box<dyn Error>> {
+    pub fn build(self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
         let grmp = self
             .grammar_path
             .as_ref()
@@ -388,7 +365,11 @@ where
                 {
                     if let Ok(outc) = read_to_string(outp) {
                         if outc.contains(&cache) {
-                            return Ok(rule_ids);
+                            return Ok(CTParser {
+                                regenerated: false,
+                                rule_ids,
+                                conflicts: None,
+                            });
                         }
                     }
                 }
@@ -435,10 +416,16 @@ where
             }
         };
         self.output_file(&grm, &stable, &mod_name, outp, &cache)?;
-        if stable.conflicts().is_some() {
-            self.conflicts = Some((grm, sgraph, stable));
-        }
-        Ok(rule_ids)
+        let conflicts = if stable.conflicts().is_some() {
+            Some((grm, sgraph, stable))
+        } else {
+            None
+        };
+        Ok(CTParser {
+            regenerated: true,
+            rule_ids,
+            conflicts,
+        })
     }
 
     /// Given the filename `a/b.y` as input, statically compile the grammar `src/a/b.y` into a Rust
@@ -448,8 +435,8 @@ where
     /// [`process_file`](#method.process_file) for additional constraints and information about the
     /// generated files.
     #[deprecated(
-        since = "0.10.3",
-        note = "Please use grammar_in_src_dir() and process() instead"
+        since = "0.11.0",
+        note = "Please use grammar_in_src_dir(), build(), and lexeme_id_map() instead"
     )]
     #[allow(deprecated)]
     pub fn process_file_in_src(
@@ -510,9 +497,10 @@ where
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or
     /// productions.
     #[deprecated(
-        since = "0.10.3",
+        since = "0.11.0",
         note = "Please use grammar_path(), output_path(), and process() instead"
     )]
+    #[allow(deprecated)]
     pub fn process_file<P, Q>(
         &mut self,
         inp: P,
@@ -524,7 +512,17 @@ where
     {
         self.grammar_path = Some(inp.as_ref().to_owned());
         self.output_path = Some(outp.as_ref().to_owned());
-        self.process()
+        let cl = CTParserBuilder {
+            grammar_path: self.grammar_path.clone(),
+            output_path: self.output_path.clone(),
+            mod_name: self.mod_name.clone(),
+            recoverer: self.recoverer,
+            yacckind: self.yacckind,
+            error_on_conflicts: self.error_on_conflicts,
+            visibility: self.visibility.clone(),
+            phantom: PhantomData,
+        };
+        Ok(cl.build()?.rule_ids)
     }
 
     fn output_file<P: AsRef<Path>>(
@@ -1076,6 +1074,57 @@ impl Write for ArrayWriter {
     }
 }
 
+/// An interface to the result of [CTParserBuilder::build()].
+pub struct CTParser<StorageT = u32>
+where
+    StorageT: Eq + Hash,
+{
+    regenerated: bool,
+    rule_ids: HashMap<String, StorageT>,
+    conflicts: Option<(
+        YaccGrammar<StorageT>,
+        StateGraph<StorageT>,
+        StateTable<StorageT>,
+    )>,
+}
+
+impl<StorageT> CTParser<StorageT>
+where
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    usize: AsPrimitive<StorageT>,
+    u32: AsPrimitive<StorageT>,
+{
+    /// Returns `true` if this compile-time parser was regenerated or `false` if it was not.
+    pub fn regenerated(&self) -> bool {
+        self.regenerated
+    }
+
+    /// Returns a [HashMap] from lexeme string types to numeric types (e.g. `INT: 2`), suitable for
+    /// handing to a lexer to coordinate the IDs of lexer and parser.
+    pub fn lexeme_id_map(&self) -> &HashMap<String, StorageT> {
+        &self.rule_ids
+    }
+
+    /// If there are any conflicts in the grammar, return a tuple which allows users to inspect and
+    /// pretty print them; otherwise returns `None`. If the grammar was not regenerated, this will
+    /// always return `None`, even if the grammar actually has conflicts.
+    ///
+    /// **Note: The conflicts feature is currently unstable and may change in the future.**
+    pub fn conflicts(
+        &self,
+    ) -> Option<(
+        &YaccGrammar<StorageT>,
+        &StateGraph<StorageT>,
+        &StateTable<StorageT>,
+        &Conflicts<StorageT>,
+    )> {
+        if let Some((grm, sgraph, stable)) = &self.conflicts {
+            return Some((grm, sgraph, stable, stable.conflicts().unwrap()));
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::{fs::File, io::Write, path::PathBuf};
@@ -1099,14 +1148,15 @@ C : 'a';"
                 .as_bytes(),
         );
 
-        let mut ct = CTParserBuilder::new()
+        match CTParserBuilder::new()
             .error_on_conflicts(false)
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
-            .output_path(file_path.with_extension("ignored"));
-        ct.process().unwrap();
-
-        match ct.conflicts() {
+            .output_path(file_path.with_extension("ignored"))
+            .build()
+            .unwrap()
+            .conflicts()
+        {
             Some((_, _, _, conflicts)) => {
                 assert_eq!(conflicts.sr_len(), 1);
                 assert_eq!(conflicts.rr_len(), 1);
@@ -1134,7 +1184,7 @@ C : 'a';"
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))
-            .process()
+            .build()
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
@@ -1164,7 +1214,7 @@ B: 'a';"
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))
-            .process()
+            .build()
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
@@ -1196,7 +1246,7 @@ C : 'a';"
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))
-            .process()
+            .build()
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {

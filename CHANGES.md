@@ -1,21 +1,30 @@
-# grmtools 0.10.3 (XXXX-YY-ZZ)
+# grmtools 0.11.0 (XXXX-YY-ZZ)
+
+## APIs deprecated
 
 * `CTParserBuilder::process_file_in_src` is deprecated in favour of
-  `CTParserBuilder::grammar_in_src_dir` and `CTParserBuilder::process`. In most
-  cases you can change your `build.rs` from:
+  `CTParserBuilder::grammar_in_src_dir` and `CTParserBuilder::build`. The
+  latter method consumes the `CTParserBuilder` returning a `CTParser` which
+  exposes a `lexeme_id_map` method whose result can be passed to lexers such as
+  `lrlex`. 
+
+  In most cases, your old code will work as-is, but with deprecation warnings.
+  To migrate a typical `build.rs` and avoid those warnings, change:
   ```rust
     let lex_rule_ids_map = CTParserBuilder::new()
         .process_file_in_src("grm.y")?;
   ```
   to:
   ```rust
-    let lex_rule_ids_map = CTParserBuilder::new()
+    let cp = CTParserBuilder::new()
         .grammar_in_src_dir("grm.y")?
-        .process()?;
+        .build()?;
   ```
+  You can then use the `HashMap` returned `cp.lexeme_id_map()` to coordinate
+  with a lexer.
 
   The less commonly used `process_file` function is similarly deprecated in
-  favour of the `grammar_path`, `output_path`, and `process` functions.
+  favour of the `grammar_path`, `output_path`, and `build` functions.
 
 * `LexerBuilder::process_file_in_src` is deprecated in favour of
   `LexerBuilder::lexer_in_src_dir` and `LexerBuilder::process`. In most cases you
@@ -35,6 +44,11 @@
 
   The less commonly used `process_file` function is similarly deprecated in
   favour of the `lexer_path`, `output_path`, and `process` functions.
+
+## Unstable API change
+
+* The unstable `CTParserBuilder::conflicts` method has moved to `CTParser`.
+  This interface remains unstable and may change without notice.
 
 
 # grmtools 0.10.2 (2021-08-09)

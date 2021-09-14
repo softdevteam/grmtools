@@ -9,12 +9,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
-    let lex_rule_ids_map = CTParserBuilder::new()
+    let cp = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
         .grammar_in_src_dir("calc.y")?
-        .process()?;
+        .build()?;
     LexerBuilder::new()
-        .rule_ids_map(lex_rule_ids_map)
+        .rule_ids_map(cp.lexeme_id_map())
         .lexer_in_src_dir("calc.l")?
         .process()?;
     Ok(())

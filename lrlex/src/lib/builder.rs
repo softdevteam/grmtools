@@ -198,8 +198,11 @@ where
     /// arbitrary, but distinct, IDs. Setting the map of rule IDs (from rule names to `StorageT`)
     /// allows users to synchronise a lexer and parser and to check that all rules are used by both
     /// parts).
-    pub fn rule_ids_map(mut self, rule_ids_map: HashMap<String, StorageT>) -> Self {
-        self.rule_ids_map = Some(rule_ids_map);
+    pub fn rule_ids_map<T: std::borrow::Borrow<HashMap<String, StorageT>> + Clone>(
+        mut self,
+        rule_ids_map: T,
+    ) -> Self {
+        self.rule_ids_map = Some(rule_ids_map.borrow().to_owned());
         self
     }
 

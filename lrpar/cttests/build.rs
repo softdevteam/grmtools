@@ -50,17 +50,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut outp = PathBuf::from(&out_dir);
             outp.push(format!("{}.y.rs", base));
             outp.set_extension("rs");
-            let lex_rule_ids_map = CTParserBuilder::new()
+            let cp = CTParserBuilder::new()
                 .yacckind(yacckind)
                 .grammar_path(pg.to_str().unwrap())
                 .output_path(&outp)
-                .process()?;
+                .build()?;
 
             let mut outl = PathBuf::from(&out_dir);
             outl.push(format!("{}.l.rs", base));
             outl.set_extension("rs");
             LexerBuilder::new()
-                .rule_ids_map(lex_rule_ids_map)
+                .rule_ids_map(cp.lexeme_id_map())
                 .lexer_path(pl.to_str().unwrap())
                 .output_path(&outl)
                 .process()?;
