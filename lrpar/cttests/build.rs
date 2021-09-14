@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .rule_ids_map(cp.lexeme_id_map())
                 .lexer_path(pl.to_str().unwrap())
                 .output_path(&outl)
-                .process()?;
+                .build()?;
         }
     }
     Ok(())

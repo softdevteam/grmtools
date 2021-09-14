@@ -28,7 +28,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     LexerBuilder::new()
         .rule_ids_map(cp.lexeme_id_map())
-        .process_file_in_src("calc.l")?;
+        .lexer_path_in_src("calc.l")?
+        .build();
     Ok(())
 }
 ```

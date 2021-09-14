@@ -27,7 +27,7 @@
   favour of the `grammar_path`, `output_path`, and `build` functions.
 
 * `LexerBuilder::process_file_in_src` is deprecated in favour of
-  `LexerBuilder::lexer_in_src_dir` and `LexerBuilder::process`. In most cases you
+  `LexerBuilder::lexer_in_src_dir` and `LexerBuilder::build`. In most cases you
   can change your `build.rs` from:
   ```rust
     LexerBuilder::new()
@@ -39,11 +39,11 @@
     LexerBuilder::new()
         .rule_ids_map(lex_rule_ids_map)
         .lexer_in_src_dir("lex.l")?
-        .process()?;
+        .build()?;
   ```
 
   The less commonly used `process_file` function is similarly deprecated in
-  favour of the `lexer_path`, `output_path`, and `process` functions.
+  favour of the `lexer_path`, `output_path`, and `build` functions.
 
 ## Unstable API change
 

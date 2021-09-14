@@ -110,7 +110,7 @@ where
     /// Set the input lexer path to a file relative to this project's `src` directory. This will
     /// also set the output path (i.e. you do not need to call [LexerBuilder::output_path]).
     ///
-    /// For example if `a/b.l` is passed as `inp` then [LexerBuilder::process] will:
+    /// For example if `a/b.l` is passed as `inp` then [LexerBuilder::build] will:
     ///   * use `src/a/b.l` as the input file.
     ///   * write output to a file which can then be imported by calling `lrlex_mod!("a/b.l")`.
     ///   * create a module in that output file named `b_l`.
@@ -119,7 +119,7 @@ where
     /// and/or [LexerBuilder::mod_name], respectively, after calling this function.
     ///
     /// This is a convenience function that makes it easier to compile lexer files stored in a
-    /// project's `src/` directory: please see [LexerBuilder::process] for additional constraints
+    /// project's `src/` directory: please see [LexerBuilder::build] for additional constraints
     /// and information about the generated files.
     pub fn lexer_in_src_dir<P>(mut self, srcp: P) -> Result<Self, Box<dyn Error>>
     where
@@ -206,74 +206,6 @@ where
         self
     }
 
-    /// Given the filename `a/b.l` as input, statically compile the file `src/a/b.l` into a Rust
-    /// module which can then be imported using `lrlex_mod!("a/b.l")`. This is a convenience
-    /// function around [`process_file`](struct.LexerBuilder.html#method.process_file) which makes
-    /// it easier to compile `.l` files stored in a project's `src/` directory: please see
-    /// [`process_file`](#method.process_file) for additional constraints and information about the
-    /// generated files.
-    #[deprecated(
-        since = "0.10.3",
-        note = "Please use lexer_in_src_dir() and process() instead"
-    )]
-    #[allow(deprecated)]
-    pub fn process_file_in_src(
-        self,
-        srcp: &str,
-    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>> {
-        let mut inp = current_dir()?;
-        inp.push("src");
-        inp.push(srcp);
-        let mut outp = PathBuf::new();
-        outp.push(var("OUT_DIR").unwrap());
-        outp.push(Path::new(srcp).parent().unwrap().to_str().unwrap());
-        create_dir_all(&outp)?;
-        let mut leaf = Path::new(srcp)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
-        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
-        outp.push(leaf);
-        self.process_file(inp, outp)
-    }
-
-    /// Statically compile the `.l` file `inp` into Rust, placing the output into the file `outp`.
-    /// The latter defines a module as follows:
-    ///
-    /// ```text
-    ///    mod modname {
-    ///      pub fn lexerdef() -> LexerDef<StorageT> { ... }
-    ///
-    ///      ...
-    ///    }
-    /// ```
-    ///
-    /// where:
-    ///  * `modname` is either:
-    ///    * the module name specified [`mod_name`](#method.mod_name)
-    ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
-    ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
-    ///      `_l`).
-    #[deprecated(
-        since = "0.10.3",
-        note = "Please use lexer_path() and process() instead"
-    )]
-    pub fn process_file<P, Q>(
-        mut self,
-        inp: P,
-        outp: Q,
-    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>>
-    where
-        P: AsRef<Path>,
-        Q: AsRef<Path>,
-    {
-        self.lexer_path = Some(inp.as_ref().to_owned());
-        self.output_path = Some(outp.as_ref().to_owned());
-        self.process()
-    }
-
     /// Statically compile the `.l` file specified by [LexerBuilder::lexer_path()] into Rust,
     /// placing the output into the file specified by [LexerBuilder::output_path()].
     ///
@@ -293,7 +225,7 @@ where
     ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
-    pub fn process(
+    pub fn build(
         self,
     ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>> {
         let lexerp = self
@@ -447,6 +379,74 @@ pub fn lexerdef() -> {lexerdef_type} {{
         let mut f = File::create(outp)?;
         f.write_all(outs.as_bytes())?;
         Ok((missing_from_lexer, missing_from_parser))
+    }
+
+    /// Given the filename `a/b.l` as input, statically compile the file `src/a/b.l` into a Rust
+    /// module which can then be imported using `lrlex_mod!("a/b.l")`. This is a convenience
+    /// function around [`process_file`](struct.LexerBuilder.html#method.process_file) which makes
+    /// it easier to compile `.l` files stored in a project's `src/` directory: please see
+    /// [`process_file`](#method.process_file) for additional constraints and information about the
+    /// generated files.
+    #[deprecated(
+        since = "0.10.3",
+        note = "Please use lexer_in_src_dir() and build() instead"
+    )]
+    #[allow(deprecated)]
+    pub fn process_file_in_src(
+        self,
+        srcp: &str,
+    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>> {
+        let mut inp = current_dir()?;
+        inp.push("src");
+        inp.push(srcp);
+        let mut outp = PathBuf::new();
+        outp.push(var("OUT_DIR").unwrap());
+        outp.push(Path::new(srcp).parent().unwrap().to_str().unwrap());
+        create_dir_all(&outp)?;
+        let mut leaf = Path::new(srcp)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
+        outp.push(leaf);
+        self.process_file(inp, outp)
+    }
+
+    /// Statically compile the `.l` file `inp` into Rust, placing the output into the file `outp`.
+    /// The latter defines a module as follows:
+    ///
+    /// ```text
+    ///    mod modname {
+    ///      pub fn lexerdef() -> LexerDef<StorageT> { ... }
+    ///
+    ///      ...
+    ///    }
+    /// ```
+    ///
+    /// where:
+    ///  * `modname` is either:
+    ///    * the module name specified [`mod_name`](#method.mod_name)
+    ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
+    ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
+    ///      `_l`).
+    #[deprecated(
+        since = "0.10.3",
+        note = "Please use lexer_in_src_dir() and build() instead"
+    )]
+    pub fn process_file<P, Q>(
+        mut self,
+        inp: P,
+        outp: Q,
+    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>>
+    where
+        P: AsRef<Path>,
+        Q: AsRef<Path>,
+    {
+        self.lexer_path = Some(inp.as_ref().to_owned());
+        self.output_path = Some(outp.as_ref().to_owned());
+        self.build()
     }
 
     /// If passed false, tokens used in the grammar but not defined in the lexer will cause a

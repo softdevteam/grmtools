@@ -5,6 +5,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // enough to fit all IDs in) as well as the input file (which must end in ".l").
     LexerBuilder::<u8>::new()
         .lexer_in_src_dir("calc.l")?
-        .process()?;
+        .build()?;
     Ok(())
 }
