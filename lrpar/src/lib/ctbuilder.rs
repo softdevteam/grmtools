@@ -215,6 +215,14 @@ where
     where
         P: AsRef<Path>,
     {
+        if !srcp.as_ref().is_relative() {
+            return Err(format!(
+                "Grammar path '{}' must be a relative path.",
+                srcp.as_ref().to_str().unwrap_or("<invalid UTF-8>")
+            )
+            .into());
+        }
+
         let mut grmp = current_dir()?;
         grmp.push("src");
         grmp.push(srcp.as_ref());
