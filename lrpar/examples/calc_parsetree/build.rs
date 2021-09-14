@@ -1,5 +1,5 @@
 use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
-use lrlex::LexerBuilder;
+use lrlex::CTLexerBuilder;
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
         .grammar_in_src_dir("calc.y")?
         .build()?;
-    LexerBuilder::new()
+    CTLexerBuilder::new()
         .rule_ids_map(cp.lexeme_id_map())
         .lexer_in_src_dir("calc.l")?
         .build()?;

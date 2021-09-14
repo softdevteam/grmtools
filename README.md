@@ -15,18 +15,18 @@ the root of our project with the following content:
 
 ```rust
 use cfgrammar::yacc::YaccKind;
-use lrlex::LexerBuilder;
+use lrlex::CTLexerBuilder;
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let lex_rule_ids_map = CTParserBuilder::new()
+    let cp = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
         .grammar_in_src_dir("grammar.y")?
-        .process();
+        .build()?;
     LexerBuilder::new()
-        .rule_ids_map(lex_rule_ids_map)
+        .rule_ids_map(cp.lexeme_id_map())
         .lexer_in_src_dir("lexer.l")?
-        .process();
+        .build()?;
     Ok(())
 }
 ```

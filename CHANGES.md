@@ -2,6 +2,9 @@
 
 ## APIs deprecated
 
+* lrlex's `LexerBuilder` has been renamed to `CTLexerBuilder` for symmetry with
+  lrpar.
+
 * `CTParserBuilder::process_file_in_src` is deprecated in favour of
   `CTParserBuilder::grammar_in_src_dir` and `CTParserBuilder::build`. The
   latter method consumes the `CTParserBuilder` returning a `CTParser` which

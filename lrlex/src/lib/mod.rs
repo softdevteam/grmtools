@@ -19,8 +19,10 @@ mod builder;
 mod lexer;
 mod parser;
 
+#[allow(deprecated)]
+pub use crate::builder::LexerBuilder;
 pub use crate::{
-    builder::{LexerBuilder, LexerKind, Visibility},
+    builder::{CTLexerBuilder, LexerKind, Visibility},
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
 
