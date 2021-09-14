@@ -156,7 +156,7 @@ where
 
     /// Set the input lexer path to `inp`. If specified, you must also call
     /// [LexerBuilder::output_path]. In general it is easier to use
-    /// [LexerBuilder::lexer_path_in_src].
+    /// [LexerBuilder::lexer_in_src_dir].
     pub fn lexer_path<P>(mut self, inp: P) -> Self
     where
         P: AsRef<Path>,
