@@ -229,9 +229,7 @@ where
     ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
-    pub fn build(
-        self,
-    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>> {
+    pub fn build(self) -> Result<CTLexer, Box<dyn Error>> {
         let lexerp = self
             .lexer_path
             .as_ref()
@@ -377,12 +375,18 @@ pub fn lexerdef() -> {lexerdef_type} {{
         // binary etc).
         if let Ok(curs) = read_to_string(&outp) {
             if curs == outs {
-                return Ok((missing_from_lexer, missing_from_parser));
+                return Ok(CTLexer {
+                    missing_from_lexer,
+                    missing_from_parser,
+                });
             }
         }
         let mut f = File::create(outp)?;
         f.write_all(outs.as_bytes())?;
-        Ok((missing_from_lexer, missing_from_parser))
+        Ok(CTLexer {
+            missing_from_lexer,
+            missing_from_parser,
+        })
     }
 
     /// Given the filename `a/b.l` as input, statically compile the file `src/a/b.l` into a Rust
@@ -450,7 +454,11 @@ pub fn lexerdef() -> {lexerdef_type} {{
     {
         self.lexer_path = Some(inp.as_ref().to_owned());
         self.output_path = Some(outp.as_ref().to_owned());
-        self.build()
+        let cl = self.build()?;
+        Ok((
+            cl.missing_from_lexer().map(|x| x.to_owned()),
+            cl.missing_from_parser().map(|x| x.to_owned()),
+        ))
     }
 
     /// If passed false, tokens used in the grammar but not defined in the lexer will cause a
@@ -466,5 +474,21 @@ pub fn lexerdef() -> {lexerdef_type} {{
     pub fn allow_missing_tokens_in_parser(mut self, allow: bool) -> Self {
         self.allow_missing_tokens_in_parser = allow;
         self
+    }
+}
+
+/// An interface to the result of [CTLexerBuilder::build()].
+pub struct CTLexer {
+    missing_from_lexer: Option<HashSet<String>>,
+    missing_from_parser: Option<HashSet<String>>,
+}
+
+impl CTLexer {
+    fn missing_from_lexer(&self) -> Option<&HashSet<String>> {
+        self.missing_from_lexer.as_ref()
+    }
+
+    fn missing_from_parser(&self) -> Option<&HashSet<String>> {
+        self.missing_from_parser.as_ref()
     }
 }
