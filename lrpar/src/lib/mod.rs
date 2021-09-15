@@ -26,18 +26,18 @@
 //!
 //! ```text
 //! use cfgrammar::yacc::YaccKind;
-//! use lrlex::LexerBuilder;
+//! use lrlex::CTLexerBuilder;
 //! use lrpar::CTParserBuilder;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let lex_rule_ids_map = CTParserBuilder::new()
+//!     let cp = CTParserBuilder::new()
 //!         .yacckind(YaccKind::Grmtools)
 //!         .grammar_in_src_dir("calc.y")?
-//!         .process()?;
-//!     LexerBuilder::new()
-//!         .rule_ids_map(lex_rule_ids_map)
+//!         .build()?;
+//!     CTLexerBuilder::new()
+//!         .rule_ids_map(cp.lexeme_id_map())
 //!         .lexer_in_src_dir("calc.l")?
-//!         .process()?;
+//!         .build()?;
 //!     Ok(())
 //! }
 //! ```
@@ -191,7 +191,7 @@ pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer};
 #[doc(hidden)]
 pub mod parser;
 pub use crate::{
-    ctbuilder::{CTParserBuilder, Visibility},
+    ctbuilder::{CTParser, CTParserBuilder, Visibility},
     parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
 

@@ -48,18 +48,18 @@ Our `build.rs` file thus looks as follows:
 
 ```rust,noplaypen
 use cfgrammar::yacc::YaccKind;
-use lrlex::LexerBuilder;
+use lrlex::CTLexerBuilder;
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let lex_rule_ids_map = CTParserBuilder::new()
+    let cp = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
         .grammar_in_src_dir("calc.y")?
-        .process()?;
-    LexerBuilder::new()
-        .rule_ids_map(lex_rule_ids_map)
+        .build()?;
+    CTLexerBuilder::new()
+        .rule_ids_map(cp.lexeme_id_map())
         .lexer_in_src_dir("calc.l")?
-        .process()?;
+        .build()?;
     Ok(())
 }
 ```

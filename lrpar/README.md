@@ -18,17 +18,18 @@ statically compile the lexer and parser files:
 
 ```rust
 use cfgrammar::yacc::YaccKind;
-use lrlex::LexerBuilder;
+use lrlex::CTLexerBuilder;
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let lex_rule_ids_map = CTParserBuilder::new()
+    let cp = CTParserBuilder::new()
         .yacckind(YaccKind::Grmtools)
         .grammar_path_in_src("calc.y")?
-        .process();
-    LexerBuilder::new()
-        .rule_ids_map(lex_rule_ids_map)
-        .process_file_in_src("calc.l")?;
+        .build()?;
+    CTLexerBuilder::new()
+        .rule_ids_map(cp.lexeme_id_map())
+        .lexer_path_in_src("calc.l")?
+        .build();
     Ok(())
 }
 ```

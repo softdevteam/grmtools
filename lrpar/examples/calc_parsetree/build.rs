@@ -1,5 +1,5 @@
 use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
-use lrlex::LexerBuilder;
+use lrlex::CTLexerBuilder;
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -9,13 +9,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
-    let lex_rule_ids_map = CTParserBuilder::<u8>::new_with_storaget()
+    let cp = CTParserBuilder::<u8>::new_with_storaget()
         .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
         .grammar_in_src_dir("calc.y")?
-        .process()?;
-    LexerBuilder::new()
-        .rule_ids_map(lex_rule_ids_map)
+        .build()?;
+    CTLexerBuilder::new()
+        .rule_ids_map(cp.lexeme_id_map())
         .lexer_in_src_dir("calc.l")?
-        .process()?;
+        .build()?;
     Ok(())
 }

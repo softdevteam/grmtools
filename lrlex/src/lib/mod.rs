@@ -15,12 +15,14 @@ use std::{error::Error, fmt, hash::Hash};
 use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
-mod builder;
+mod ctbuilder;
 mod lexer;
 mod parser;
 
+#[allow(deprecated)]
+pub use crate::ctbuilder::LexerBuilder;
 pub use crate::{
-    builder::{LexerBuilder, LexerKind, Visibility},
+    ctbuilder::{CTLexer, CTLexerBuilder, LexerKind, Visibility},
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
 
