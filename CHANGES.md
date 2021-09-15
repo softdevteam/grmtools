@@ -1,6 +1,41 @@
 # grmtools 0.11.0 (XXXX-YY-ZZ)
 
-## APIs deprecated
+## API deprecation summary
+
+* Several of the functions / structs surrounding the compile-time construction
+  of grammars have changed: more details are given below, but in most cases
+  a `build.rs` that looks as follows:
+  ```rust
+    use lrlex::LexerBuilder;
+    use lrpar::CTParserBuilder;
+
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
+        let lex_rule_ids_map = CTParserBuilder::<u8>::new_with_storaget()
+            .process_file_in_src("config.y")?;
+        LexerBuilder::new()
+            .rule_ids_map(lex_rule_ids_map)
+            .process_file_in_src("config.l")?;
+        Ok(())
+    }
+  ```
+  can be changed to:
+  ```rust
+    use lrlex::CTLexerBuilder;
+    use lrpar::CTParserBuilder;
+
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
+        let cp = CTParserBuilder::<u8>::new_with_storaget()
+            .grammar_in_src_dir("config.y")?
+            .build()?;
+        CTLexerBuilder::new()
+            .rule_ids_map(cp.lexeme_id_map())
+            .lexer_in_src_dir("config.l")?
+            .build()?;
+        Ok(())
+    }
+  ```
+
+## API deprecation details
 
 * lrlex's `LexerBuilder` has been renamed to `CTLexerBuilder` for symmetry with
   lrpar.
@@ -48,7 +83,11 @@
   The less commonly used `process_file` function is similarly deprecated in
   favour of the `lexer_path`, `output_path`, and `build` functions.
 
-## Unstable API change
+* `CTLexerBuilder`'s and `CTParserBuilder`'s `build` methods both consume the
+  builder, producing a `CTLexer` and `CTParser` respectively, which can be
+  queried for additional information.
+
+## Unstable API breaking change
 
 * The unstable `CTParserBuilder::conflicts` method has moved to `CTParser`.
   This interface remains unstable and may change without notice.
