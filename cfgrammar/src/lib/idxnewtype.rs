@@ -40,8 +40,7 @@ IdxNewtype!(
     /// A type specifically for rule indices.
     ///
     /// It is guaranteed that `RIdx` can be converted, without loss of precision, to `usize` with
-    /// the idiom `RIdx::from(x_usize)`. `usize` values can be converted to `RIdx`, causing a
-    /// panic if this would lead to a loss of precision with `usize::from(y_ridx)`.
+    /// the idiom `usize::from(...)`.
     RIdx
 );
 IdxNewtype!(
@@ -49,23 +48,20 @@ IdxNewtype!(
     /// have two productions for the single rule `E`).
     ///
     /// It is guaranteed that `PIdx` can be converted, without loss of precision, to `usize` with
-    /// the idiom `PIdx::from(x_usize)`. `usize` values can be converted to `PTIdx`, causing a
-    /// panic if this would lead to a loss of precision with `usize::from(y_pidx)`.
+    /// the idiom `usize::from(...)`.
     PIdx
 );
 IdxNewtype!(
     /// A type specifically for symbol indices (within a production).
     ///
     /// It is guaranteed that `SIdx` can be converted, without loss of precision, to `usize` with
-    /// the idiom `SIdx::from(x_usize)`. `usize` values can be converted to `RIdx`, causing a
-    /// panic if this would lead to a loss of precision with `usize::from(y_sidx)`.
+    /// the idiom `usize::from(...)`.
     SIdx
 );
 IdxNewtype!(
     /// A type specifically for token indices.
     ///
     /// It is guaranteed that `TIdx` can be converted, without loss of precision, to `usize` with
-    /// the idiom `TIdx::from(x_usize)`. `usize` values can be converted to `TIdx`, causing a
-    /// panic if this would lead to a loss of precision with `usize::from(y_tidx)`.
+    /// the idiom `usize::from(...)`.
     TIdx
 );
