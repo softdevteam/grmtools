@@ -66,7 +66,6 @@ pub fn from_yacc<StorageT: 'static + Hash + PrimInt + Unsigned>(
 ) -> Result<(StateGraph<StorageT>, StateTable<StorageT>), StateTableError<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     match m {
         Minimiser::Pager => {

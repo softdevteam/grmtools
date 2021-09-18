@@ -29,7 +29,6 @@ pub struct Conflicts<StorageT> {
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> Conflicts<StorageT>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     /// Return an iterator over all reduce/reduce conflicts.
     pub fn rr_conflicts(&self) -> impl Iterator<Item = &(PIdx<StorageT>, PIdx<StorageT>, StIdx)> {
@@ -158,7 +157,6 @@ const ERROR: usize = 0;
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateTable<StorageT>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     pub fn new(
         grm: &YaccGrammar<StorageT>,
@@ -538,7 +536,6 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     conflict_stidx: StIdx, // State in which the conflict occured
 ) where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     let tidx_prec = grm.token_precedence(tidx);
     let pidx_prec = grm.prod_precedence(pidx);

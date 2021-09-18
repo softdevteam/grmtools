@@ -98,7 +98,6 @@ impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsign
     Parser<'a, 'b, 'input, StorageT, Node<StorageT>>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     fn parse_generictree(
         rcvry_kind: RecoveryKind,
@@ -151,7 +150,6 @@ impl<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Debug + Hash + PrimInt + Unsign
     Parser<'a, 'b, 'input, StorageT, ()>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     fn parse_noaction(
         rcvry_kind: RecoveryKind,
@@ -201,7 +199,6 @@ impl<
     > Parser<'a, 'b, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     fn parse_actions(
         rcvry_kind: RecoveryKind,
@@ -675,7 +672,6 @@ pub struct RTParserBuilder<'a, StorageT: Eq + Hash> {
 impl<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned> RTParserBuilder<'a, StorageT>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     /// Create a new run-time parser from a `YaccGrammar`, a `StateGraph`, and a `StateTable`.
     pub fn new(grm: &'a YaccGrammar<StorageT>, stable: &'a StateTable<StorageT>) -> Self {

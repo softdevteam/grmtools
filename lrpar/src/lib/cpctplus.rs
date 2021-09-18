@@ -109,7 +109,6 @@ pub(super) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigne
 ) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     Box::new(CPCTPlus { parser })
 }
@@ -123,7 +122,6 @@ impl<
     > Recoverer<StorageT, ActionT> for CPCTPlus<'a, 'b, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     fn recover(
         &self,
@@ -256,7 +254,6 @@ impl<
     > CPCTPlus<'a, 'b, 'input, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     fn insert(&self, n: &PathFNode<StorageT>, nbrs: &mut Vec<(u16, PathFNode<StorageT>)>) {
         let laidx = n.laidx;
@@ -445,7 +442,6 @@ fn apply_repairs<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, Acti
 ) -> usize
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     for r in repairs.iter() {
         match *r {
@@ -541,7 +537,6 @@ fn rank_cnds<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT:
 ) -> Vec<Vec<ParseRepair<StorageT>>>
 where
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     let mut cnds = Vec::new();
     let mut furthest = 0;
