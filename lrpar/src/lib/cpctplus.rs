@@ -266,10 +266,9 @@ where
             }
 
             let next_lexeme = self.parser.next_lexeme(n.laidx);
-            let new_lexeme = Lexeme::new(
+            let new_lexeme = Lexeme::new_faulty(
                 StorageT::from(u32::from(tidx)).unwrap(),
                 next_lexeme.span().start(),
-                None,
             );
             let (new_laidx, n_pstack) = self.parser.lr_cactus(
                 Some(new_lexeme),
@@ -451,10 +450,9 @@ where
         match *r {
             ParseRepair::Insert(tidx) => {
                 let next_lexeme = parser.next_lexeme(laidx);
-                let new_lexeme = Lexeme::new(
+                let new_lexeme = Lexeme::new_faulty(
                     StorageT::from(u32::from(tidx)).unwrap(),
                     next_lexeme.span().start(),
-                    None,
                 );
                 parser.lr_upto(
                     Some(new_lexeme),
@@ -718,7 +716,7 @@ E : 'N'
         let err_tok_id = u32::from(grm.token_idx("N").unwrap()).to_u16().unwrap();
         match &errs[0] {
             LexParseError::ParseError(e) => {
-                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)))
+                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, 1))
             }
             _ => unreachable!(),
         }

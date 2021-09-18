@@ -813,7 +813,7 @@ where
                             "
         let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
             ::lrpar::parser::AStackType::Lexeme(l) => {{
-                if l.inserted() {{
+                if l.faulty() {{
                     Err(l)
                 }} else {{
                     Ok(l)
