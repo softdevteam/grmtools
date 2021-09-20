@@ -52,7 +52,6 @@ impl<StorageT> fmt::Display for CTConflictsError<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let conflicts = self.stable.conflicts().unwrap();
@@ -69,7 +68,6 @@ impl<StorageT> fmt::Debug for CTConflictsError<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let conflicts = self.stable.conflicts().unwrap();
@@ -86,7 +84,6 @@ impl<StorageT> Error for CTConflictsError<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
 }
 
@@ -158,7 +155,6 @@ impl<'a, StorageT> CTParserBuilder<'a, StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     /// Create a new `CTParserBuilder`.
     ///
@@ -1092,7 +1088,6 @@ impl<StorageT> CTParser<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
-    u32: AsPrimitive<StorageT>,
 {
     /// Returns `true` if this compile-time parser was regenerated or `false` if it was not.
     pub fn regenerated(&self) -> bool {
