@@ -34,7 +34,7 @@ where
     /// Generates and returns the Follows set for the given grammar.
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
         let mut follows = vec![
-            Vob::from_elem(usize::from(grm.tokens_len()), false);
+            Vob::from_elem(false, usize::from(grm.tokens_len()));
             usize::from(grm.rules_len())
         ];
         follows[usize::from(grm.start_rule_idx())].set(usize::from(grm.eof_token_idx()), true);
