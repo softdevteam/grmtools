@@ -163,10 +163,10 @@ where
         sg: &StateGraph<StorageT>,
     ) -> Result<Self, StateTableError<StorageT>> {
         let mut state_actions = Vob::from_elem(
+            false,
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.tokens_len()))
                 .unwrap(),
-            false,
         );
         let maxa = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         let maxg = usize::from(grm.rules_len()) * usize::from(sg.all_states_len());
@@ -288,18 +288,18 @@ where
 
         let mut nt_depth = HashMap::new();
         let mut core_reduces = Vob::from_elem(
+            false,
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.prods_len()))
                 .unwrap(),
-            false,
         );
         let mut state_shifts = Vob::from_elem(
+            false,
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.tokens_len()))
                 .unwrap(),
-            false,
         );
-        let mut reduce_states = Vob::from_elem(usize::from(sg.all_states_len()), false);
+        let mut reduce_states = Vob::from_elem(false, usize::from(sg.all_states_len()));
         for stidx in sg.iter_stidxs() {
             nt_depth.clear();
             let mut only_reduces = true;

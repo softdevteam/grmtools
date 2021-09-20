@@ -132,7 +132,7 @@ where
 
     let start_state = StIdx::from(StIdxStorageT::zero());
     let mut state0 = Itemset::new(grm);
-    let mut ctx = Vob::from_elem(usize::from(grm.tokens_len()), false);
+    let mut ctx = Vob::from_elem(false, usize::from(grm.tokens_len()));
     ctx.set(usize::from(grm.eof_token_idx()), true);
     state0.add(grm.start_prod(), SIdx(StorageT::zero()), &ctx);
     closed_states.push(None);
@@ -141,8 +141,8 @@ where
 
     // We maintain two lists of which rules and tokens we've seen; when processing a given
     // state there's no point processing a rule or token more than once.
-    let mut seen_rules = Vob::from_elem(usize::from(grm.rules_len()), false);
-    let mut seen_tokens = Vob::from_elem(usize::from(grm.tokens_len()), false);
+    let mut seen_rules = Vob::from_elem(false, usize::from(grm.rules_len()));
+    let mut seen_tokens = Vob::from_elem(false, usize::from(grm.tokens_len()));
     // new_states is used to separate out iterating over states vs. mutating it
     let mut new_states = Vec::new();
     // cnd_[rule|token]_weaklies represent which states are possible weakly compatible
@@ -393,8 +393,8 @@ mod test {
 
     #[test]
     fn test_vob_intersect() {
-        let mut b1 = Vob::from_elem(8, false);
-        let mut b2 = Vob::from_elem(8, false);
+        let mut b1 = Vob::from_elem(false, 8);
+        let mut b2 = Vob::from_elem(false, 8);
         assert!(!vob_intersect(&b1, &b2));
         // Check that partial blocks (i.e. when only part of a word is used in the bitvec for
         // storage) maintain the expected guarantees.
@@ -405,8 +405,8 @@ mod test {
         b2.push(true);
         assert!(vob_intersect(&b1, &b2));
 
-        b1 = Vob::from_elem(64, false);
-        b2 = Vob::from_elem(64, false);
+        b1 = Vob::from_elem(false, 64);
+        b2 = Vob::from_elem(false, 64);
         b1.push(true);
         b2.push(true);
         for _ in 0..63 {

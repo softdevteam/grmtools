@@ -38,10 +38,10 @@ where
     pub fn new(grm: &YaccGrammar<StorageT>) -> Self {
         let mut firsts = YaccFirsts {
             firsts: vec![
-                Vob::from_elem(usize::from(grm.tokens_len()), false);
+                Vob::from_elem(false, usize::from(grm.tokens_len()));
                 usize::from(grm.rules_len())
             ],
-            epsilons: Vob::from_elem(usize::from(grm.rules_len()), false),
+            epsilons: Vob::from_elem(false, usize::from(grm.rules_len())),
             phantom: PhantomData,
         };
 

@@ -316,7 +316,7 @@ where
         }
 
         let avoid_insert = if let Some(ai) = ast.avoid_insert {
-            let mut aiv = Vob::from_elem(token_names.len(), false);
+            let mut aiv = Vob::from_elem(false, token_names.len());
             for n in ai.iter() {
                 aiv.set(usize::from(token_map[n]), true);
             }

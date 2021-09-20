@@ -18,7 +18,7 @@ fnv = "1.0"
 num-traits = "0.2"
 cfgrammar = { path="../cfgrammar", version = "0.10", features=["serde"] }
 serde = { version="1.0", features=["derive"], optional=true }
-vob = { version="2.0", features=["serde"] }
+vob = { version="3.0", features=["serde"] }
 sparsevec = { version="0.1", features=["serde"] }
 static_assertions = "1.1"
 try_from = "0.3"
