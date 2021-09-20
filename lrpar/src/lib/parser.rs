@@ -452,10 +452,10 @@ where
                 last_la.span().end()
             };
 
-            Lexeme::new(
+            Lexeme::new_faulty(
                 StorageT::from(u32::from(self.grm.eof_token_idx())).unwrap(),
                 last_la_end,
-                None,
+                0,
             )
         }
     }
@@ -951,7 +951,7 @@ pub(crate) mod test {
                 }
             }
             assert!(longest > 0);
-            lexemes.push(Lexeme::new(longest_tok_id, i, Some(longest)));
+            lexemes.push(Lexeme::new(longest_tok_id, i, longest));
             i += longest;
         }
         lexemes
@@ -1085,8 +1085,8 @@ Call: 'ID' '(' ')';";
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
         match &errs[0] {
             LexParseError::ParseError(e) => {
-                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, None));
-                assert!(e.lexeme().inserted());
+                assert_eq!(e.lexeme(), &Lexeme::new_faulty(err_tok_id, 2, 0));
+                assert!(e.lexeme().faulty());
             }
             _ => unreachable!(),
         }
@@ -1097,8 +1097,8 @@ Call: 'ID' '(' ')';";
         let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();
         match &errs[0] {
             LexParseError::ParseError(e) => {
-                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, Some(1)));
-                assert!(!e.lexeme().inserted());
+                assert_eq!(e.lexeme(), &Lexeme::new(err_tok_id, 2, 1));
+                assert!(!e.lexeme().faulty());
             }
             _ => unreachable!(),
         }

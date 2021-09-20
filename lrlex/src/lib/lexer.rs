@@ -254,7 +254,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usiz
                 if r.name.is_some() {
                     match r.tok_id {
                         Some(tok_id) => {
-                            lexemes.push(Ok(Lexeme::new(tok_id, old_i, Some(longest))));
+                            lexemes.push(Ok(Lexeme::new(tok_id, old_i, longest)));
                         }
                         None => {
                             lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));

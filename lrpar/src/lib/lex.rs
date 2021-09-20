@@ -80,36 +80,52 @@ pub trait NonStreamingLexer<'input, StorageT: Hash + PrimInt + Unsigned>: Lexer<
     fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
 }
 
-/// A `Lexeme` represents a segment of the user's input that conforms to a known type. Note that
-/// even if the type of a lexeme seemingly requires it to have `len() > 0` (e.g. integers might
-/// match the regular expressions `[0-9]+`), error recovery might cause a lexeme to have a length
-/// of 0. Users can detect the difference between a lexeme with an intentionally zero length from a
-/// lexeme with zero length due to error recovery through the
-/// [`inserted`](Lexeme::inserted) method.
+/// A `Lexeme` represents a segment of the user's input that conforms to a known type.
+///
+/// Lexemes are assumed to have a definition which describes all possible correct lexemes (e.g. the
+/// regular expression `[0-9]+` defines all integer lexemes). This struct can also represent
+/// "faulty" lexemes -- that is, lexemes that have resulted from error recovery of some sort.
+/// Faulty lexemes can violate the lexeme's type definition in any possible way (e.g. they might
+/// span more or less input than the definition would suggest is possible).
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Lexeme<StorageT> {
     // The long-term aim is to pack this struct so that len can be longer than u32 while everything
     // still fitting into 2 64-bit words.
     start: usize,
-    len: u32,
+    len: usize,
+    faulty: bool,
     tok_id: StorageT,
 }
 
 impl<StorageT: Copy> Lexeme<StorageT> {
-    /// Create a new token with ID `tok_id` and a starting position in the input `start`. If the
-    /// token is the result of user input, then `Some(n)` should be passed to `len`; if the token
-    /// is the result of error recovery, then `None` should be passed to `len`.
-    pub fn new(tok_id: StorageT, start: usize, len: Option<usize>) -> Self {
+    /// Create a new lexeme with ID `tok_id`, a starting position in the input `start`, and length
+    /// `len`.
+    ///
+    /// Lexemes created using this function are expected to be "correct" in the sense that they
+    /// fully respect the lexeme's definition semantics. To create faulty lexemes, use
+    /// [new_faulty](Lexeme::new_faulty).
+    pub fn new(tok_id: StorageT, start: usize, len: usize) -> Self {
         const_assert!(size_of::<usize>() >= size_of::<u32>());
-        let len = if let Some(l) = len {
-            if l >= u32::max_value() as usize {
-                panic!("Can't currently represent lexeme of length {}.", l);
-            }
-            l as u32
-        } else {
-            u32::max_value()
-        };
-        Lexeme { start, len, tok_id }
+        if len >= u32::max_value() as usize {
+            panic!("Can't currently represent lexeme of length {}.", len);
+        }
+        Lexeme {
+            start,
+            len,
+            faulty: false,
+            tok_id,
+        }
+    }
+
+    /// Create a new faulty lexeme with ID `tok_id` and a starting position in the input `start`.
+    pub fn new_faulty(tok_id: StorageT, start: usize, len: usize) -> Self {
+        const_assert!(size_of::<usize>() >= size_of::<u32>());
+        Lexeme {
+            start,
+            len,
+            faulty: true,
+            tok_id,
+        }
     }
 
     /// The token ID.
@@ -124,17 +140,12 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     }
 
     /// Byte offset of the end of the lexeme.
-    ///
-    /// Note that if this lexeme was inserted by error recovery, it will end at the same place it
-    /// started (i.e. `self.start() == self.end()`).
     #[deprecated(since = "0.6.1", note = "Please use span().end() instead")]
     pub fn end(&self) -> usize {
         self.span().end()
     }
 
     /// Length in bytes of the lexeme.
-    ///
-    /// Note that if this lexeme was inserted by error recovery, it will have a length of 0.
     #[deprecated(since = "0.6.1", note = "Please use span().len() instead")]
     pub fn len(&self) -> usize {
         self.span().len()
@@ -142,18 +153,14 @@ impl<StorageT: Copy> Lexeme<StorageT> {
 
     /// Obtain this `Lexeme`'s [Span].
     pub fn span(&self) -> Span {
-        let end = if self.len == u32::max_value() {
-            self.start
-        } else {
-            self.start + (self.len as usize)
-        };
-        Span::new(self.start, end)
+        Span::new(self.start, self.start + self.len)
     }
 
-    /// Returns `true` if this lexeme was inserted as the result of error recovery, or `false`
-    /// otherwise.
-    pub fn inserted(&self) -> bool {
-        self.len == u32::max_value()
+    /// Returns `true` if this lexeme is "faulty" i.e. is the result of error recovery in some way.
+    /// If `true`, note that the lexeme's span may be greater or less than you may expect from the
+    /// lexeme's definition.
+    pub fn faulty(&self) -> bool {
+        self.faulty
     }
 }
 
