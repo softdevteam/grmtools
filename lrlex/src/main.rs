@@ -8,7 +8,7 @@ use std::{
 };
 
 use lrlex::{LRNonStreamingLexerDef, LexerDef};
-use lrpar::Lexer;
+use lrpar::{Lexeme, Lexer};
 
 fn usage(prog: &str, msg: &str) {
     let path = Path::new(prog);

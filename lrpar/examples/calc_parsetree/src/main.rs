@@ -2,7 +2,7 @@ use std::io::{self, BufRead, Write};
 
 use cfgrammar::RIdx;
 use lrlex::lrlex_mod;
-use lrpar::{lrpar_mod, Node};
+use lrpar::{lrpar_mod, Lexeme, Node, StandardLexeme};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
 // `calc_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).
@@ -49,7 +49,7 @@ impl<'a> Eval<'a> {
         Eval { s }
     }
 
-    fn eval(&self, n: &Node<u8>) -> i64 {
+    fn eval(&self, n: &Node<StandardLexeme<u8>, u8>) -> i64 {
         match *n {
             Node::Nonterm {
                 ridx: RIdx(ridx),

@@ -187,7 +187,7 @@ pub mod ctbuilder;
 mod dijkstra;
 #[doc(hidden)]
 pub mod lex;
-pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer};
+pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer, StandardLexeme};
 #[doc(hidden)]
 pub mod parser;
 pub use crate::{

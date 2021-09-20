@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     hash::Hash,
     marker::PhantomData,
     slice::Iter,
@@ -9,7 +10,7 @@ use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 use try_from::TryFrom;
 
-use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span};
+use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span, StandardLexeme};
 
 use crate::{parser::LexParser, LexBuildResult};
 
@@ -192,7 +193,7 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<
     }
 }
 
-impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
+impl<StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + TryFrom<usize> + Unsigned>
     LRNonStreamingLexerDef<StorageT>
 {
     /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
@@ -208,17 +209,20 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
 /// An `LRNonStreamingLexer` holds a reference to a string and can lex it into [lrpar::Lexeme]s.
 /// Although the struct is tied to a single string, no guarantees are made about whether the
 /// lexemes are cached or not.
-pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
+pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT: fmt::Debug> {
     s: &'input str,
-    lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
+    lexemes: Vec<Result<StandardLexeme<StorageT>, LexError>>,
     /// A sorted list of the byte index of the start of the following line. i.e. for the input
     /// string `" a\nb\n  c d"` this will contain `[3, 5]`.
     newlines: Vec<usize>,
     phantom: PhantomData<&'lexer ()>,
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
-    LRNonStreamingLexer<'lexer, 'input, StorageT>
+impl<
+        'lexer,
+        'input: 'lexer,
+        StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + TryFrom<usize> + Unsigned,
+    > LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
     fn new(
         lexerdef: &'lexer LRNonStreamingLexerDef<StorageT>,
@@ -278,16 +282,19 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usiz
     }
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
-    for LRNonStreamingLexer<'lexer, 'input, StorageT>
+impl<'lexer, 'input: 'lexer, StorageT: Copy + fmt::Debug + Eq + Hash + PrimInt + Unsigned>
+    Lexer<StandardLexeme<StorageT>, StorageT> for LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
+    fn iter<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = Result<StandardLexeme<StorageT>, LexError>> + 'a> {
         Box::new(self.lexemes.iter().cloned())
     }
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
-    NonStreamingLexer<'input, StorageT> for LRNonStreamingLexer<'lexer, 'input, StorageT>
+impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + Unsigned>
+    NonStreamingLexer<'input, StandardLexeme<StorageT>, StorageT>
+    for LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
     fn span_str(&self, span: Span) -> &'input str {
         if span.end() > self.s.len() {
@@ -334,7 +341,10 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
         }
 
         /// Returns `(line byte offset, line index)`.
-        fn lc_byte<StorageT>(lexer: &LRNonStreamingLexer<StorageT>, i: usize) -> (usize, usize) {
+        fn lc_byte<StorageT: fmt::Debug>(
+            lexer: &LRNonStreamingLexer<StorageT>,
+            i: usize,
+        ) -> (usize, usize) {
             match lexer.newlines.binary_search(&i) {
                 Ok(j) => (lexer.newlines[j], j + 2),
                 Err(0) => (0, 1),
@@ -342,7 +352,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             }
         }
 
-        fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
+        fn lc_char<StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + Unsigned>(
             lexer: &LRNonStreamingLexer<StorageT>,
             i: usize,
             s: &str,

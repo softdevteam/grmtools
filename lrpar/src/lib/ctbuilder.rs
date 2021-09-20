@@ -27,7 +27,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::RecoveryKind;
+use crate::{Lexeme, RecoveryKind, StandardLexeme};
 
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
@@ -119,7 +119,7 @@ impl Visibility {
 
 /// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
-pub struct CTParserBuilder<'a, StorageT = u32>
+pub struct CTParserBuilder<'a, LexemeT, StorageT = u32>
 where
     StorageT: Eq + Hash,
 {
@@ -133,10 +133,10 @@ where
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     visibility: Visibility,
-    phantom: PhantomData<StorageT>,
+    phantom: PhantomData<(LexemeT, StorageT)>,
 }
 
-impl<'a> CTParserBuilder<'a, u32> {
+impl<'a> CTParserBuilder<'a, StandardLexeme<u32>, u32> {
     /// Create a new `CTParserBuilder`.
     ///
     /// # Examples
@@ -147,12 +147,13 @@ impl<'a> CTParserBuilder<'a, u32> {
     ///     .process()?;
     /// ```
     pub fn new() -> Self {
-        CTParserBuilder::<u32>::new_with_storaget()
+        CTParserBuilder::<StandardLexeme<u32>, u32>::new_with_storaget()
     }
 }
 
-impl<'a, StorageT> CTParserBuilder<'a, StorageT>
+impl<'a, LexemeT, StorageT> CTParserBuilder<'a, LexemeT, StorageT>
 where
+    LexemeT: Lexeme<StorageT>,
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
@@ -508,7 +509,7 @@ where
     {
         self.grammar_path = Some(inp.as_ref().to_owned());
         self.output_path = Some(outp.as_ref().to_owned());
-        let cl = CTParserBuilder {
+        let cl: CTParserBuilder<LexemeT, StorageT> = CTParserBuilder {
             grammar_path: self.grammar_path.clone(),
             output_path: self.output_path.clone(),
             mod_name: self.mod_name,
@@ -538,6 +539,9 @@ where
         outs.push_str(
             "    #![allow(clippy::type_complexity)]
     #![allow(clippy::unnecessary_wraps)]
+
+    #[allow(unused_imports)]
+    use ::lrpar::Lexeme;
 ",
         );
 
@@ -621,9 +625,10 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse<'lexer, 'input: 'lexer>(lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>)
-          -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
+    pub fn parse<'lexer, 'input: 'lexer>(lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>)
+          -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}>>)
     {{",
+                    lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap()
                 ));
@@ -632,10 +637,11 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{storaget}>)
-          -> (::std::option::Option<::lrpar::Node<{storaget}>>,
-              ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>)
+    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexemet}, {storaget}>)
+          -> (::std::option::Option<::lrpar::Node<{lexemet}, {storaget}>>,
+              ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}>>)
     {{",
+                    lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>()
                 ));
             }
@@ -643,9 +649,10 @@ where
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{storaget}>)
-          -> ::std::vec::Vec<::lrpar::LexParseError<{storaget}>>
+    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexemet}, {storaget}>)
+          -> ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}>>
     {{",
+                    lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>()
                 ));
             }
@@ -679,11 +686,12 @@ where
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
         let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
-                       &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
+                       &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                        ::lrpar::Span,
-                       ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
+                       ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>)
                     -> {actionskind}<'input>> = ::std::vec![{wrappers}];\n",
                     actionskind = ACTIONS_KIND,
+                    lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
                     wrappers = wrappers
                 ));
@@ -779,11 +787,12 @@ where
             // the same time extract &str from tokens and actiontype from nonterminals.
             outs.push_str(&format!(
                 "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
+                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                       {prefix}span: ::lrpar::Span,
-                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{actionskind}<'input>, {storaget}>>)
+                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>)
                    -> {actionskind}<'input> {{",
                 usize::from(pidx),
+                lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
                 actionskind = ACTIONS_KIND,
@@ -916,9 +925,9 @@ where
                 let argt = match grm.prod(pidx)[i] {
                     Symbol::Rule(ref_ridx) => grm.actiontype(ref_ridx).as_ref().unwrap().clone(),
                     Symbol::Token(_) => format!(
-                        "::std::result::Result<::lrpar::Lexeme<{storaget}>, ::lrpar::Lexeme<{storaget}>>",
-                        storaget = type_name::<StorageT>()
-                    )
+                        "::std::result::Result<{lexemet}, {lexemet}>",
+                        lexemet = type_name::<LexemeT>(),
+                    ),
                 };
                 args.push(format!("mut {}arg_{}: {}", ACTION_PREFIX, i + 1, argt));
             }
@@ -938,11 +947,12 @@ where
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                     {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {storaget}>,
+                     {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                      {prefix}span: ::lrpar::Span,
                      {args}) {returnt} {{\n",
                 usize::from(pidx),
                 rulename = grm.rule_name(grm.prod_to_rule(pidx)),
+                lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
                 returnt = returnt,
