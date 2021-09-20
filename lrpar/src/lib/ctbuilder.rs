@@ -515,7 +515,7 @@ where
         let cl = CTParserBuilder {
             grammar_path: self.grammar_path.clone(),
             output_path: self.output_path.clone(),
-            mod_name: self.mod_name.clone(),
+            mod_name: self.mod_name,
             recoverer: self.recoverer,
             yacckind: self.yacckind,
             error_on_conflicts: self.error_on_conflicts,
