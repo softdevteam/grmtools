@@ -269,6 +269,7 @@ where
             let new_lexeme = Lexeme::new_faulty(
                 StorageT::from(u32::from(tidx)).unwrap(),
                 next_lexeme.span().start(),
+                0,
             );
             let (new_laidx, n_pstack) = self.parser.lr_cactus(
                 Some(new_lexeme),
@@ -453,6 +454,7 @@ where
                 let new_lexeme = Lexeme::new_faulty(
                     StorageT::from(u32::from(tidx)).unwrap(),
                     next_lexeme.span().start(),
+                    0,
                 );
                 parser.lr_upto(
                     Some(new_lexeme),

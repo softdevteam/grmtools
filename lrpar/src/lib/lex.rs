@@ -92,7 +92,8 @@ pub struct Lexeme<StorageT> {
     // The long-term aim is to pack this struct so that len can be longer than u32 while everything
     // still fitting into 2 64-bit words.
     start: usize,
-    len: u32,
+    len: usize,
+    faulty: bool,
     tok_id: StorageT,
 }
 
@@ -110,17 +111,19 @@ impl<StorageT: Copy> Lexeme<StorageT> {
         }
         Lexeme {
             start,
-            len: len as u32,
+            len,
+            faulty: false,
             tok_id,
         }
     }
 
     /// Create a new faulty lexeme with ID `tok_id` and a starting position in the input `start`.
-    pub fn new_faulty(tok_id: StorageT, start: usize) -> Self {
+    pub fn new_faulty(tok_id: StorageT, start: usize, len: usize) -> Self {
         const_assert!(size_of::<usize>() >= size_of::<u32>());
         Lexeme {
             start,
-            len: u32::max_value(),
+            len,
+            faulty: true,
             tok_id,
         }
     }
@@ -137,17 +140,12 @@ impl<StorageT: Copy> Lexeme<StorageT> {
     }
 
     /// Byte offset of the end of the lexeme.
-    ///
-    /// Note that if this lexeme was inserted by error recovery, it will end at the same place it
-    /// started (i.e. `self.start() == self.end()`).
     #[deprecated(since = "0.6.1", note = "Please use span().end() instead")]
     pub fn end(&self) -> usize {
         self.span().end()
     }
 
     /// Length in bytes of the lexeme.
-    ///
-    /// Note that if this lexeme was inserted by error recovery, it will have a length of 0.
     #[deprecated(since = "0.6.1", note = "Please use span().len() instead")]
     pub fn len(&self) -> usize {
         self.span().len()
@@ -155,19 +153,14 @@ impl<StorageT: Copy> Lexeme<StorageT> {
 
     /// Obtain this `Lexeme`'s [Span].
     pub fn span(&self) -> Span {
-        let end = if self.len == u32::max_value() {
-            self.start
-        } else {
-            self.start + (self.len as usize)
-        };
-        Span::new(self.start, end)
+        Span::new(self.start, self.start + self.len)
     }
 
     /// Returns `true` if this lexeme is "faulty" i.e. is the result of error recovery in some way.
     /// If `true`, note that the lexeme's span may be greater or less than you may expect from the
     /// lexeme's definition.
     pub fn faulty(&self) -> bool {
-        self.len == u32::max_value()
+        self.faulty
     }
 }
 

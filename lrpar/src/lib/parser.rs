@@ -458,6 +458,7 @@ where
             Lexeme::new_faulty(
                 StorageT::from(u32::from(self.grm.eof_token_idx())).unwrap(),
                 last_la_end,
+                0,
             )
         }
     }
@@ -1088,7 +1089,7 @@ Call: 'ID' '(' ')';";
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
         match &errs[0] {
             LexParseError::ParseError(e) => {
-                assert_eq!(e.lexeme(), &Lexeme::new_faulty(err_tok_id, 2));
+                assert_eq!(e.lexeme(), &Lexeme::new_faulty(err_tok_id, 2, 0));
                 assert!(e.lexeme().faulty());
             }
             _ => unreachable!(),
