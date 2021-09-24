@@ -27,7 +27,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{Lexeme, RecoveryKind, StandardLexeme};
+use crate::{Lexeme, RecoveryKind};
 
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
@@ -136,21 +136,6 @@ where
     phantom: PhantomData<(LexemeT, StorageT)>,
 }
 
-impl<'a> CTParserBuilder<'a, StandardLexeme<u32>, u32> {
-    /// Create a new `CTParserBuilder`.
-    ///
-    /// # Examples
-    ///
-    /// ```text
-    /// CTParserBuilder::new()
-    ///     .grammar_in_src_dir("grm.y")?
-    ///     .process()?;
-    /// ```
-    pub fn new() -> Self {
-        CTParserBuilder::<StandardLexeme<u32>, u32>::new_with_storaget()
-    }
-}
-
 impl<'a, LexemeT, StorageT> CTParserBuilder<'a, LexemeT, StorageT>
 where
     LexemeT: Lexeme<StorageT>,
@@ -175,7 +160,7 @@ where
     ///     .grammar_in_src_dir("grm.y")?
     ///     .process()?;
     /// ```
-    pub fn new_with_storaget() -> Self {
+    pub fn new() -> Self {
         CTParserBuilder {
             grammar_path: None,
             output_path: None,
@@ -1135,6 +1120,7 @@ mod test {
     use std::{fs::File, io::Write, path::PathBuf};
 
     use super::{CTConflictsError, CTParserBuilder};
+    use crate::test_utils::TestLexeme;
     use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
     use tempfile::TempDir;
 
@@ -1153,7 +1139,7 @@ C : 'a';"
                 .as_bytes(),
         );
 
-        match CTParserBuilder::new()
+        match CTParserBuilder::<TestLexeme, _>::new()
             .error_on_conflicts(false)
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
@@ -1185,7 +1171,7 @@ C : 'a';"
                 .as_bytes(),
         );
 
-        match CTParserBuilder::new()
+        match CTParserBuilder::<TestLexeme, _>::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))
@@ -1193,7 +1179,7 @@ C : 'a';"
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
-                let cs = e.downcast_ref::<CTConflictsError<u32>>();
+                let cs = e.downcast_ref::<CTConflictsError<u16>>();
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
             }
@@ -1215,7 +1201,7 @@ B: 'a';"
                 .as_bytes(),
         );
 
-        match CTParserBuilder::new()
+        match CTParserBuilder::<TestLexeme, _>::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))
@@ -1223,7 +1209,7 @@ B: 'a';"
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
-                let cs = e.downcast_ref::<CTConflictsError<u32>>();
+                let cs = e.downcast_ref::<CTConflictsError<u16>>();
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 0);
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
             }
@@ -1247,7 +1233,7 @@ C : 'a';"
                 .as_bytes(),
         );
 
-        match CTParserBuilder::new()
+        match CTParserBuilder::<TestLexeme, _>::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))
@@ -1255,7 +1241,7 @@ C : 'a';"
         {
             Ok(_) => panic!("Expected error"),
             Err(e) => {
-                let cs = e.downcast_ref::<CTConflictsError<u32>>();
+                let cs = e.downcast_ref::<CTConflictsError<u16>>();
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
             }

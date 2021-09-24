@@ -1,8 +1,8 @@
 use std::io::{self, BufRead, Write};
 
 use cfgrammar::RIdx;
-use lrlex::lrlex_mod;
-use lrpar::{lrpar_mod, Lexeme, Node, StandardLexeme};
+use lrlex::{lrlex_mod, StandardLexeme};
+use lrpar::{lrpar_mod, Lexeme, Node};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
 // `calc_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).

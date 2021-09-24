@@ -10,9 +10,9 @@ use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 use try_from::TryFrom;
 
-use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span, StandardLexeme};
+use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span};
 
-use crate::{parser::LexParser, LexBuildResult};
+use crate::{parser::LexParser, LexBuildResult, StandardLexeme};
 
 #[doc(hidden)]
 pub struct Rule<StorageT> {

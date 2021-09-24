@@ -863,7 +863,8 @@ pub(crate) mod test {
 
     use super::*;
     use crate::{
-        lex::{Lexeme, Lexer, StandardLexeme},
+        lex::{Lexeme, Lexer},
+        test_utils::TestLexeme,
         Span,
     };
 
@@ -875,10 +876,10 @@ pub(crate) mod test {
     ) -> (
         YaccGrammar<u16>,
         Result<
-            Node<StandardLexeme<u16>, u16>,
+            Node<TestLexeme, u16>,
             (
-                Option<Node<StandardLexeme<u16>, u16>>,
-                Vec<LexParseError<StandardLexeme<u16>, u16>>,
+                Option<Node<TestLexeme, u16>>,
+                Vec<LexParseError<TestLexeme, u16>>,
             ),
         >,
     ) {
@@ -894,10 +895,10 @@ pub(crate) mod test {
     ) -> (
         YaccGrammar<u16>,
         Result<
-            Node<StandardLexeme<u16>, u16>,
+            Node<TestLexeme, u16>,
             (
-                Option<Node<StandardLexeme<u16>, u16>>,
-                Vec<LexParseError<StandardLexeme<u16>, u16>>,
+                Option<Node<TestLexeme, u16>>,
+                Vec<LexParseError<TestLexeme, u16>>,
             ),
         >,
     ) {
@@ -942,18 +943,16 @@ pub(crate) mod test {
     //   * The initial "%%" isn't needed, and only "'" is valid as a rule name delimiter.
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
     struct SmallLexer {
-        lexemes: Vec<StandardLexeme<u16>>,
+        lexemes: Vec<TestLexeme>,
     }
 
-    impl Lexer<StandardLexeme<u16>, u16> for SmallLexer {
-        fn iter<'a>(
-            &'a self,
-        ) -> Box<dyn Iterator<Item = Result<StandardLexeme<u16>, LexError>> + 'a> {
+    impl Lexer<TestLexeme, u16> for SmallLexer {
+        fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<TestLexeme, LexError>> + 'a> {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
     }
 
-    impl<'input> NonStreamingLexer<'input, StandardLexeme<u16>, u16> for SmallLexer {
+    impl<'input> NonStreamingLexer<'input, TestLexeme, u16> for SmallLexer {
         fn span_str(&self, _: Span) -> &'input str {
             unreachable!();
         }
@@ -982,7 +981,7 @@ pub(crate) mod test {
         rules
     }
 
-    fn small_lex(rules: Vec<(u16, Regex)>, input: &str) -> Vec<StandardLexeme<u16>> {
+    fn small_lex(rules: Vec<(u16, Regex)>, input: &str) -> Vec<TestLexeme> {
         let mut lexemes = vec![];
         let mut i = 0;
         while i < input.len() {

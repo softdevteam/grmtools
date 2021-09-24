@@ -2,8 +2,8 @@
 
 use std::io::{self, BufRead, Write};
 
-use lrlex::lrlex_mod;
-use lrpar::{lrpar_mod, NonStreamingLexer, Span, StandardLexeme};
+use lrlex::{lrlex_mod, StandardLexeme};
+use lrpar::{lrpar_mod, NonStreamingLexer, Span};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
 // `calc_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).
@@ -55,7 +55,7 @@ fn main() {
 }
 
 fn eval(
-    lexer: &dyn NonStreamingLexer<StandardLexeme<u32>, u32>,
+    lexer: &dyn NonStreamingLexer<StandardLexeme<u8>, u8>,
     e: Expr,
 ) -> Result<u64, (Span, &'static str)> {
     match e {

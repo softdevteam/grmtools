@@ -16,6 +16,8 @@ use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
 mod ctbuilder;
+#[doc(hidden)]
+pub mod lexeme;
 mod lexer;
 mod parser;
 
@@ -23,6 +25,7 @@ mod parser;
 pub use crate::ctbuilder::LexerBuilder;
 pub use crate::{
     ctbuilder::{CTLexer, CTLexerBuilder, LexerKind, Visibility},
+    lexeme::StandardLexeme,
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
 

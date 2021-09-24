@@ -187,9 +187,12 @@ pub mod ctbuilder;
 mod dijkstra;
 #[doc(hidden)]
 pub mod lex;
-pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer, StandardLexeme};
+pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer};
 #[doc(hidden)]
 pub mod parser;
+#[cfg(test)]
+mod test_utils;
+
 pub use crate::{
     ctbuilder::{CTParser, CTParserBuilder, Visibility},
     parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},

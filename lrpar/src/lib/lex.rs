@@ -1,9 +1,8 @@
 #![allow(clippy::len_without_is_empty)]
 
-use std::{cmp, error::Error, fmt, hash::Hash, marker, mem::size_of};
+use std::{cmp, error::Error, fmt, hash::Hash, marker};
 
 use num_traits::{PrimInt, Unsigned};
-use static_assertions::const_assert;
 
 use crate::Span;
 
@@ -116,62 +115,4 @@ pub trait Lexeme<StorageT>: fmt::Debug + fmt::Display + cmp::Eq + Hash + marker:
     /// If `true`, note that the lexeme's span may be greater or less than you may expect from the
     /// lexeme's definition.
     fn faulty(&self) -> bool;
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct StandardLexeme<StorageT: fmt::Debug = u32> {
-    start: usize,
-    len: usize,
-    faulty: bool,
-    tok_id: StorageT,
-}
-
-impl<StorageT: Copy + fmt::Debug + Hash + cmp::Eq> Lexeme<StorageT> for StandardLexeme<StorageT> {
-    fn new(tok_id: StorageT, start: usize, len: usize) -> Self {
-        const_assert!(size_of::<usize>() >= size_of::<u32>());
-        if len >= u32::max_value() as usize {
-            panic!("Can't currently represent lexeme of length {}.", len);
-        }
-        StandardLexeme {
-            start,
-            len,
-            faulty: false,
-            tok_id,
-        }
-    }
-
-    fn new_faulty(tok_id: StorageT, start: usize, len: usize) -> Self {
-        const_assert!(size_of::<usize>() >= size_of::<u32>());
-        StandardLexeme {
-            start,
-            len,
-            faulty: true,
-            tok_id,
-        }
-    }
-
-    fn tok_id(&self) -> StorageT {
-        self.tok_id
-    }
-
-    fn span(&self) -> Span {
-        Span::new(self.start, self.start + self.len)
-    }
-
-    fn faulty(&self) -> bool {
-        self.faulty
-    }
-}
-
-impl<StorageT: Copy + fmt::Debug + cmp::Eq + Hash + marker::Copy> fmt::Display
-    for StandardLexeme<StorageT>
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Lexeme[{}..{}]", self.span().start(), self.span().end())
-    }
-}
-
-impl<StorageT: Copy + fmt::Debug + cmp::Eq + Hash + marker::Copy> Error
-    for StandardLexeme<StorageT>
-{
 }
