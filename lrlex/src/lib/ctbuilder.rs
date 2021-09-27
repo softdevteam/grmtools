@@ -15,11 +15,13 @@ use std::{
 };
 
 use lazy_static::lazy_static;
-use num_traits::{PrimInt, Unsigned};
+use lrpar::CTParserBuilder;
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
+use serde::Serialize;
 use try_from::TryFrom;
 
-use crate::lexer::{LRNonStreamingLexerDef, LexerDef};
+use crate::{LRNonStreamingLexerDef, LexerDef, StandardLexeme};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -63,7 +65,14 @@ impl Visibility {
 
 /// A `CTLexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
-pub struct CTLexerBuilder<'a, StorageT = u32> {
+pub struct CTLexerBuilder<'a, StorageT: Debug + Eq + Hash = u32> {
+    lrpar_config: Option<
+        Box<
+            dyn Fn(
+                CTParserBuilder<StandardLexeme<StorageT>, StorageT>,
+            ) -> CTParserBuilder<StandardLexeme<StorageT>, StorageT>,
+        >,
+    >,
     lexer_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     lexerkind: LexerKind,
@@ -77,9 +86,17 @@ pub struct CTLexerBuilder<'a, StorageT = u32> {
 #[deprecated(since = "0.10.3", note = "Please refer to this as `CTLexerBuilder`")]
 pub type LexerBuilder<'a, StorageT> = CTLexerBuilder<'a, StorageT>;
 
+impl<'a> CTLexerBuilder<'a, u32> {
+    /// Create a new [CTLexerBuilder].
+    pub fn new() -> Self {
+        CTLexerBuilder::<u32>::new_with_storaget()
+    }
+}
+
 impl<'a, StorageT> CTLexerBuilder<'a, StorageT>
 where
-    StorageT: Copy + Debug + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned,
+    StorageT: 'static + Copy + Debug + Eq + Hash + PrimInt + Serialize + TryFrom<usize> + Unsigned,
+    usize: AsPrimitive<StorageT>,
 {
     /// Create a new [CTLexerBuilder].
     ///
@@ -97,8 +114,9 @@ where
     ///     .lexer_in_src_dir("grm.l", None)?
     ///     .build()?;
     /// ```
-    pub fn new() -> Self {
+    pub fn new_with_storaget() -> Self {
         CTLexerBuilder {
+            lrpar_config: None,
             lexer_path: None,
             output_path: None,
             lexerkind: LexerKind::LRNonStreamingLexer,
@@ -108,6 +126,35 @@ where
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
         }
+    }
+
+    /// An optional convenience function to make it easier to create an (lrlex) lexer and (lrpar)
+    /// parser in one shot. The closure passed to this function will be called during
+    /// [CTLexerBuilder::build]: it will be passed an lrpar `CTParserBuilder` instance upon which
+    /// it can set whatever lrpar options are desired. [`CTLexerBuilder`] will then create both the
+    /// compiler and lexer and link them together as required.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// CTLexerBuilder:::new()
+    ///     .lrpar_config(|ctp| {
+    ///         ctp.yacckind(YaccKind::Grmtools)
+    ///             .grammar_in_src_dir("calc.y")
+    ///             .unwrap()
+    ///     })
+    ///     .lexer_in_src_dir("calc.l")?
+    ///     .build()?;
+    /// ```
+    pub fn lrpar_config<F>(mut self, config_func: F) -> Self
+    where
+        F: 'static
+            + Fn(
+                CTParserBuilder<StandardLexeme<StorageT>, StorageT>,
+            ) -> CTParserBuilder<StandardLexeme<StorageT>, StorageT>,
+    {
+        self.lrpar_config = Some(Box::new(config_func));
+        self
     }
 
     /// Set the input lexer path to a file relative to this project's `src` directory. This will
@@ -229,7 +276,14 @@ where
     ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
-    pub fn build(self) -> Result<CTLexer, Box<dyn Error>> {
+    pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
+        if let Some(ref lrcfg) = self.lrpar_config {
+            let mut ctp = CTParserBuilder::<StandardLexeme<StorageT>, StorageT>::new();
+            ctp = lrcfg(ctp);
+            let map = ctp.build()?;
+            self.rule_ids_map = Some(map.lexeme_id_map().to_owned());
+        }
+
         let lexerp = self
             .lexer_path
             .as_ref()

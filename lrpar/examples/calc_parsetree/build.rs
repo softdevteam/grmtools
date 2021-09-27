@@ -1,20 +1,19 @@
 use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
-use lrlex::{CTLexerBuilder, StandardLexeme};
-use lrpar::CTParserBuilder;
+use lrlex::CTLexerBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // First we create the parser, which returns a HashMap of all the tokens used, then we pass
-    // that HashMap to the lexer.
+    // Since we're using both lrlex and lrpar, we use lrlex's `lrpar_config` convenience function
+    // that makes it easy to a) create a lexer and parser and b) link them together.
     //
     // Note that we specify the integer type (u8) we'll use for token IDs (this type *must* be big
     // enough to fit all IDs in) as well as the input file (which must end in ".y" for lrpar, and
     // ".l" for lrlex).
-    let cp = CTParserBuilder::<StandardLexeme<u8>, _>::new()
-        .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
-        .grammar_in_src_dir("calc.y")?
-        .build()?;
-    CTLexerBuilder::new()
-        .rule_ids_map(cp.lexeme_id_map())
+    CTLexerBuilder::<u8>::new_with_storaget()
+        .lrpar_config(|ctp| {
+            ctp.yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
+                .grammar_in_src_dir("calc.y")
+                .unwrap()
+        })
         .lexer_in_src_dir("calc.l")?
         .build()?;
     Ok(())
