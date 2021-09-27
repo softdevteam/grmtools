@@ -55,7 +55,7 @@ fn main() {
 }
 
 fn eval(
-    lexer: &dyn NonStreamingLexer<DefaultLexeme<u8>, u8>,
+    lexer: &dyn NonStreamingLexer<DefaultLexeme<u32>, u32>,
     e: Expr,
 ) -> Result<u64, (Span, &'static str)> {
     match e {

@@ -49,7 +49,7 @@ impl<'a> Eval<'a> {
         Eval { s }
     }
 
-    fn eval(&self, n: &Node<DefaultLexeme<u8>, u8>) -> i64 {
+    fn eval(&self, n: &Node<DefaultLexeme<u32>, u32>) -> i64 {
         match *n {
             Node::Nonterm {
                 ridx: RIdx(ridx),
