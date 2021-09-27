@@ -2,7 +2,7 @@
 
 use std::{error::Error, fmt, hash::Hash};
 
-use crate::{lex::Lexeme, Span};
+use crate::{Lexeme, Span};
 
 type StorageT = u16;
 

@@ -12,11 +12,7 @@ use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use crate::{
-    cpctplus,
-    lex::{LexError, Lexeme, NonStreamingLexer},
-    Span,
-};
+use crate::{cpctplus, LexError, Lexeme, NonStreamingLexer, Span};
 
 #[cfg(test)]
 const RECOVERY_TIME_BUDGET: u64 = 60_000; // milliseconds
@@ -862,11 +858,7 @@ pub(crate) mod test {
     use regex::Regex;
 
     use super::*;
-    use crate::{
-        lex::{Lexeme, Lexer},
-        test_utils::TestLexeme,
-        Span,
-    };
+    use crate::{test_utils::TestLexeme, Lexeme, Lexer, Span};
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,

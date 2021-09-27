@@ -13,9 +13,8 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use super::{
     dijkstra::dijkstra,
-    lex::Lexeme,
     parser::{AStackType, ParseRepair, Parser, Recoverer},
-    Span,
+    Lexeme, Span,
 };
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
@@ -627,8 +626,8 @@ mod test {
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
     use crate::{
-        lex::Lexeme,
-        parser::{test::do_parse, LexParseError, ParseRepair, RecoveryKind},
+        parser::{test::do_parse, ParseRepair, RecoveryKind},
+        LexParseError, Lexeme,
     };
 
     fn pp_repairs<LexemeT: Lexeme<StorageT>, StorageT: 'static + Hash + PrimInt + Unsigned>(

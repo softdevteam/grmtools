@@ -186,8 +186,8 @@ mod cpctplus;
 pub mod ctbuilder;
 mod dijkstra;
 #[doc(hidden)]
-pub mod lex;
-pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer};
+pub mod lex_api;
+pub use crate::lex_api::{LexError, Lexeme, Lexer, NonStreamingLexer};
 #[doc(hidden)]
 pub mod parser;
 #[cfg(test)]
