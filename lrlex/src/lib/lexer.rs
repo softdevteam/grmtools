@@ -12,7 +12,7 @@ use try_from::TryFrom;
 
 use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span};
 
-use crate::{parser::LexParser, LexBuildResult, StandardLexeme};
+use crate::{parser::LexParser, DefaultLexeme, LexBuildResult};
 
 #[doc(hidden)]
 pub struct Rule<StorageT> {
@@ -211,7 +211,7 @@ impl<StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + TryFrom<usize> + Unsign
 /// lexemes are cached or not.
 pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT: fmt::Debug> {
     s: &'input str,
-    lexemes: Vec<Result<StandardLexeme<StorageT>, LexError>>,
+    lexemes: Vec<Result<DefaultLexeme<StorageT>, LexError>>,
     /// A sorted list of the byte index of the start of the following line. i.e. for the input
     /// string `" a\nb\n  c d"` this will contain `[3, 5]`.
     newlines: Vec<usize>,
@@ -283,17 +283,17 @@ impl<
 }
 
 impl<'lexer, 'input: 'lexer, StorageT: Copy + fmt::Debug + Eq + Hash + PrimInt + Unsigned>
-    Lexer<StandardLexeme<StorageT>, StorageT> for LRNonStreamingLexer<'lexer, 'input, StorageT>
+    Lexer<DefaultLexeme<StorageT>, StorageT> for LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
     fn iter<'a>(
         &'a self,
-    ) -> Box<dyn Iterator<Item = Result<StandardLexeme<StorageT>, LexError>> + 'a> {
+    ) -> Box<dyn Iterator<Item = Result<DefaultLexeme<StorageT>, LexError>> + 'a> {
         Box::new(self.lexemes.iter().cloned())
     }
 }
 
 impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + Unsigned>
-    NonStreamingLexer<'input, StandardLexeme<StorageT>, StorageT>
+    NonStreamingLexer<'input, DefaultLexeme<StorageT>, StorageT>
     for LRNonStreamingLexer<'lexer, 'input, StorageT>
 {
     fn span_str(&self, span: Span) -> &'input str {

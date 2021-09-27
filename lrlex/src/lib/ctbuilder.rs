@@ -21,7 +21,7 @@ use regex::Regex;
 use serde::Serialize;
 use try_from::TryFrom;
 
-use crate::{LRNonStreamingLexerDef, LexerDef, StandardLexeme};
+use crate::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -69,8 +69,8 @@ pub struct CTLexerBuilder<'a, StorageT: Debug + Eq + Hash = u32> {
     lrpar_config: Option<
         Box<
             dyn Fn(
-                CTParserBuilder<StandardLexeme<StorageT>, StorageT>,
-            ) -> CTParserBuilder<StandardLexeme<StorageT>, StorageT>,
+                CTParserBuilder<DefaultLexeme<StorageT>, StorageT>,
+            ) -> CTParserBuilder<DefaultLexeme<StorageT>, StorageT>,
         >,
     >,
     lexer_path: Option<PathBuf>,
@@ -150,8 +150,8 @@ where
     where
         F: 'static
             + Fn(
-                CTParserBuilder<StandardLexeme<StorageT>, StorageT>,
-            ) -> CTParserBuilder<StandardLexeme<StorageT>, StorageT>,
+                CTParserBuilder<DefaultLexeme<StorageT>, StorageT>,
+            ) -> CTParserBuilder<DefaultLexeme<StorageT>, StorageT>,
     {
         self.lrpar_config = Some(Box::new(config_func));
         self
@@ -278,7 +278,7 @@ where
     ///      `_l`).
     pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
         if let Some(ref lrcfg) = self.lrpar_config {
-            let mut ctp = CTParserBuilder::<StandardLexeme<StorageT>, StorageT>::new();
+            let mut ctp = CTParserBuilder::<DefaultLexeme<StorageT>, StorageT>::new();
             ctp = lrcfg(ctp);
             let map = ctp.build()?;
             self.rule_ids_map = Some(map.lexeme_id_map().to_owned());

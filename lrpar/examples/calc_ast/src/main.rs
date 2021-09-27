@@ -2,7 +2,7 @@
 
 use std::io::{self, BufRead, Write};
 
-use lrlex::{lrlex_mod, StandardLexeme};
+use lrlex::{lrlex_mod, DefaultLexeme};
 use lrpar::{lrpar_mod, NonStreamingLexer, Span};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
@@ -55,7 +55,7 @@ fn main() {
 }
 
 fn eval(
-    lexer: &dyn NonStreamingLexer<StandardLexeme<u8>, u8>,
+    lexer: &dyn NonStreamingLexer<DefaultLexeme<u8>, u8>,
     e: Expr,
 ) -> Result<u64, (Span, &'static str)> {
     match e {

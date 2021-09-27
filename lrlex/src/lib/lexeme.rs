@@ -4,16 +4,16 @@ use lrpar::{Lexeme, Span};
 
 /// lrlex's standard lexeme struct: all lexemes are instances of this struct.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct StandardLexeme<StorageT: fmt::Debug = u32> {
+pub struct DefaultLexeme<StorageT: fmt::Debug = u32> {
     start: usize,
     len: usize,
     faulty: bool,
     tok_id: StorageT,
 }
 
-impl<StorageT: Copy + fmt::Debug + Hash + cmp::Eq> Lexeme<StorageT> for StandardLexeme<StorageT> {
+impl<StorageT: Copy + fmt::Debug + Hash + cmp::Eq> Lexeme<StorageT> for DefaultLexeme<StorageT> {
     fn new(tok_id: StorageT, start: usize, len: usize) -> Self {
-        StandardLexeme {
+        DefaultLexeme {
             start,
             len,
             faulty: false,
@@ -22,7 +22,7 @@ impl<StorageT: Copy + fmt::Debug + Hash + cmp::Eq> Lexeme<StorageT> for Standard
     }
 
     fn new_faulty(tok_id: StorageT, start: usize, len: usize) -> Self {
-        StandardLexeme {
+        DefaultLexeme {
             start,
             len,
             faulty: true,
@@ -44,12 +44,12 @@ impl<StorageT: Copy + fmt::Debug + Hash + cmp::Eq> Lexeme<StorageT> for Standard
 }
 
 impl<StorageT: Copy + fmt::Debug + cmp::Eq + Hash + marker::Copy> fmt::Display
-    for StandardLexeme<StorageT>
+    for DefaultLexeme<StorageT>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "StandardLexeme[{}..{}]",
+            "DefaultLexeme[{}..{}]",
             self.span().start(),
             self.span().end()
         )
@@ -57,6 +57,6 @@ impl<StorageT: Copy + fmt::Debug + cmp::Eq + Hash + marker::Copy> fmt::Display
 }
 
 impl<StorageT: Copy + fmt::Debug + cmp::Eq + Hash + marker::Copy> Error
-    for StandardLexeme<StorageT>
+    for DefaultLexeme<StorageT>
 {
 }

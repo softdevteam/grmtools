@@ -25,7 +25,7 @@ mod parser;
 pub use crate::ctbuilder::LexerBuilder;
 pub use crate::{
     ctbuilder::{CTLexer, CTLexerBuilder, LexerKind, Visibility},
-    lexeme::StandardLexeme,
+    lexeme::DefaultLexeme,
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
 
