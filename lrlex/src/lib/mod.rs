@@ -17,7 +17,7 @@ use try_from::TryFrom;
 
 mod ctbuilder;
 #[doc(hidden)]
-pub mod lexeme;
+pub mod lexemes;
 mod lexer;
 mod parser;
 
@@ -25,7 +25,7 @@ mod parser;
 pub use crate::ctbuilder::LexerBuilder;
 pub use crate::{
     ctbuilder::{CTLexer, CTLexerBuilder, LexerKind, Visibility},
-    lexeme::DefaultLexeme,
+    lexemes::DefaultLexeme,
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
 
