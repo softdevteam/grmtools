@@ -159,7 +159,10 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::lexer::{LRNonStreamingLexerDef, LexerDef};
+    use crate::{
+        lexer::{LRNonStreamingLexerDef, LexerDef},
+        DefaultLexeme,
+    };
 
     #[test]
     fn test_nooptions() {
@@ -167,13 +170,13 @@ mod test {
 %option nounput
         "
         .to_string();
-        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
+        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
     }
 
     #[test]
     fn test_minimum() {
         let src = "%%".to_string();
-        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_ok());
+        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_ok());
     }
 
     #[test]
@@ -184,7 +187,7 @@ mod test {
 \\+ '+'
 "
         .to_string();
-        let ast = LRNonStreamingLexerDef::<u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
         let intrule = ast.get_rule_by_name("int").unwrap();
         assert_eq!("int", intrule.name.as_ref().unwrap());
         assert_eq!("[0-9]+", intrule.re_str);
@@ -202,7 +205,7 @@ mod test {
 [0-9]+ ;
 "
         .to_string();
-        let ast = LRNonStreamingLexerDef::<u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
         assert!(intrule.name.is_none());
         assert_eq!("[0-9]+", intrule.re_str);
@@ -214,8 +217,8 @@ mod test {
 [0-9]
 'int'"
             .to_string();
-        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
+        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::MissingSpace,
@@ -231,8 +234,8 @@ mod test {
         let src = "%%
 [0-9] "
             .to_string();
-        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
+        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::MissingSpace,
@@ -248,8 +251,8 @@ mod test {
         let src = "%%
 [0-9] int"
             .to_string();
-        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
+        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::InvalidName,
@@ -265,8 +268,8 @@ mod test {
         let src = "%%
 [0-9] 'int"
             .to_string();
-        assert!(LRNonStreamingLexerDef::<u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
+        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::InvalidName,
@@ -283,7 +286,7 @@ mod test {
 [0-9] 'int'
 [0-9] 'int'"
             .to_string();
-        match LRNonStreamingLexerDef::<u8>::from_str(&src) {
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
             Ok(_) => panic!("Duplicate rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::DuplicateName,
@@ -303,6 +306,6 @@ mod test {
         for i in 0..257 {
             src.push_str(&format!("x 'x{}'\n", i));
         }
-        LRNonStreamingLexerDef::<u8>::from_str(&src).ok();
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).ok();
     }
 }

@@ -15,7 +15,7 @@ use std::{
 };
 
 use lazy_static::lazy_static;
-use lrpar::CTParserBuilder;
+use lrpar::{CTParserBuilder, Lexeme};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
 use serde::Serialize;
@@ -65,13 +65,9 @@ impl Visibility {
 
 /// A `CTLexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
-pub struct CTLexerBuilder<'a, StorageT: Debug + Eq + Hash = u32> {
+pub struct CTLexerBuilder<'a, LexemeT: Lexeme<StorageT>, StorageT: Debug + Eq + Hash = u32> {
     lrpar_config: Option<
-        Box<
-            dyn Fn(
-                CTParserBuilder<DefaultLexeme<StorageT>, StorageT>,
-            ) -> CTParserBuilder<DefaultLexeme<StorageT>, StorageT>,
-        >,
+        Box<dyn Fn(CTParserBuilder<LexemeT, StorageT>) -> CTParserBuilder<LexemeT, StorageT>>,
     >,
     lexer_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
@@ -86,15 +82,16 @@ pub struct CTLexerBuilder<'a, StorageT: Debug + Eq + Hash = u32> {
 #[deprecated(since = "0.10.3", note = "Please refer to this as `CTLexerBuilder`")]
 pub type LexerBuilder<'a, StorageT> = CTLexerBuilder<'a, StorageT>;
 
-impl<'a> CTLexerBuilder<'a, u32> {
+impl<'a> CTLexerBuilder<'a, DefaultLexeme<u32>, u32> {
     /// Create a new [CTLexerBuilder].
     pub fn new() -> Self {
-        CTLexerBuilder::<u32>::new_with_storaget()
+        CTLexerBuilder::<DefaultLexeme<u32>, u32>::new_with_lexemet()
     }
 }
 
-impl<'a, StorageT> CTLexerBuilder<'a, StorageT>
+impl<'a, LexemeT, StorageT> CTLexerBuilder<'a, LexemeT, StorageT>
 where
+    LexemeT: Lexeme<StorageT>,
     StorageT: 'static + Copy + Debug + Eq + Hash + PrimInt + Serialize + TryFrom<usize> + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
@@ -110,11 +107,11 @@ where
     /// # Examples
     ///
     /// ```text
-    /// CTLexerBuilder::<u8>::new()
+    /// CTLexerBuilder::<DefaultLexeme<u8>, u8>::new_with_lexemet()
     ///     .lexer_in_src_dir("grm.l", None)?
     ///     .build()?;
     /// ```
-    pub fn new_with_storaget() -> Self {
+    pub fn new_with_lexemet() -> Self {
         CTLexerBuilder {
             lrpar_config: None,
             lexer_path: None,
@@ -148,10 +145,7 @@ where
     /// ```
     pub fn lrpar_config<F>(mut self, config_func: F) -> Self
     where
-        F: 'static
-            + Fn(
-                CTParserBuilder<DefaultLexeme<StorageT>, StorageT>,
-            ) -> CTParserBuilder<DefaultLexeme<StorageT>, StorageT>,
+        F: 'static + Fn(CTParserBuilder<LexemeT, StorageT>) -> CTParserBuilder<LexemeT, StorageT>,
     {
         self.lrpar_config = Some(Box::new(config_func));
         self
@@ -278,7 +272,7 @@ where
     ///      `_l`).
     pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
         if let Some(ref lrcfg) = self.lrpar_config {
-            let mut ctp = CTParserBuilder::<DefaultLexeme<StorageT>, StorageT>::new();
+            let mut ctp = CTParserBuilder::<LexemeT, StorageT>::new();
             ctp = lrcfg(ctp);
             let map = ctp.build()?;
             self.rule_ids_map = Some(map.lexeme_id_map().to_owned());
@@ -294,9 +288,9 @@ where
             .expect("output_path must be specified before processing.");
 
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
-            LexerKind::LRNonStreamingLexer => {
-                Box::new(LRNonStreamingLexerDef::from_str(&read_to_string(&lexerp)?)?)
-            }
+            LexerKind::LRNonStreamingLexer => Box::new(
+                LRNonStreamingLexerDef::<LexemeT, StorageT>::from_str(&read_to_string(&lexerp)?)?,
+            ),
         };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
@@ -361,7 +355,11 @@ where
         let (lexerdef_name, lexerdef_type) = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => (
                 "LRNonStreamingLexerDef",
-                format!("LRNonStreamingLexerDef<{}>", type_name::<StorageT>()),
+                format!(
+                    "LRNonStreamingLexerDef<{}, {}>",
+                    type_name::<LexemeT>(),
+                    type_name::<StorageT>()
+                ),
             ),
         };
 
