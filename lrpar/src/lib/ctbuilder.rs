@@ -156,7 +156,7 @@ where
     /// # Examples
     ///
     /// ```text
-    /// CTParserBuilder::<u8>::new_with_storaget()
+    /// CTParserBuilder::<DefaultLexeme<u8>, u8>::new()
     ///     .grammar_in_src_dir("grm.y")?
     ///     .process()?;
     /// ```

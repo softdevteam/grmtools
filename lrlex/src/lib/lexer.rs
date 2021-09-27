@@ -54,7 +54,7 @@ impl<StorageT> Rule<StorageT> {
 pub trait LexerDef<StorageT> {
     #[doc(hidden)]
     /// Instantiate a lexer from a set of `Rule`s. This is only intended to be used by compiled
-    /// lexers (see `builder.rs`).
+    /// lexers (see `ctbuilder.rs`).
     fn from_rules(rules: Vec<Rule<StorageT>>) -> Self
     where
         Self: Sized;

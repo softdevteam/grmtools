@@ -13,23 +13,24 @@ is a good place to start.
 Let's assume we want to statically generate a parser for a simple calculator
 language (and let's also assume we are able to use
 [`lrlex`](https://softdevteam.github.io/grmtools/master/book/lrlex.html) for the
-lexer). We need to add a `build.rs` file to our project which tells `lrpar` to
-statically compile the lexer and parser files:
+lexer). We need to add a `build.rs` file to our project which statically
+compiles both the lexer and parser. While we can perform both steps
+individually, it's easiest to use `lrlex` which does both jobs for us in one
+go. Our `build.rs` file thus looks as follows:
 
 ```rust
 use cfgrammar::yacc::YaccKind;
 use lrlex::CTLexerBuilder;
-use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cp = CTParserBuilder::new()
-        .yacckind(YaccKind::Grmtools)
-        .grammar_path_in_src("calc.y")?
-        .build()?;
     CTLexerBuilder::new()
-        .rule_ids_map(cp.lexeme_id_map())
-        .lexer_path_in_src("calc.l")?
-        .build();
+        .lrpar_config(|ctp| {
+            ctp.yacckind(YaccKind::Grmtools)
+                .grammar_in_src_dir("calc.y")
+                .unwrap()
+        })
+        .lexer_in_src_dir("calc.l")?
+        .build()?;
     Ok(())
 }
 ```
@@ -91,7 +92,6 @@ rules have the same type, but that's not a requirement).
 A simple `src/main.rs` is as follows:
 
 ```rust
-
 use std::io::{self, BufRead, Write};
 
 use lrlex::lrlex_mod;
