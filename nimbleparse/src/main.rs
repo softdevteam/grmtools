@@ -8,7 +8,7 @@ use std::{
 
 use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
 use getopts::Options;
-use lrlex::{LRNonStreamingLexerDef, LexerDef};
+use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
 use lrpar::parser::{RTParserBuilder, RecoveryKind};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
@@ -98,16 +98,17 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let mut lexerdef = match LRNonStreamingLexerDef::<u16>::from_str(&read_file(lex_l_path)) {
-        Ok(ast) => ast,
-        Err(s) => {
-            writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
-            process::exit(1);
-        }
-    };
+    let mut lexerdef =
+        match LRNonStreamingLexerDef::<DefaultLexeme<u32>, u32>::from_str(&read_file(lex_l_path)) {
+            Ok(ast) => ast,
+            Err(s) => {
+                writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
+                process::exit(1);
+            }
+        };
 
     let yacc_y_path = &matches.free[1];
-    let grm = match YaccGrammar::<u16>::new_with_storaget(yacckind, &read_file(yacc_y_path)) {
+    let grm = match YaccGrammar::new(yacckind, &read_file(yacc_y_path)) {
         Ok(x) => x,
         Err(s) => {
             writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
@@ -150,7 +151,7 @@ fn main() {
         let rule_ids = grm
             .tokens_map()
             .iter()
-            .map(|(&n, &i)| (n, usize::from(i).to_u16().unwrap()))
+            .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
             .collect();
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
         if !quiet {

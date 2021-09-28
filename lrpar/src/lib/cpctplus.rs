@@ -13,9 +13,8 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use super::{
     dijkstra::dijkstra,
-    lex::Lexeme,
     parser::{AStackType, ParseRepair, Parser, Recoverer},
-    Span,
+    Lexeme, Span,
 };
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
@@ -100,13 +99,25 @@ impl<StorageT: PrimInt + Unsigned> PartialEq for PathFNode<StorageT> {
 
 impl<StorageT: PrimInt + Unsigned> Eq for PathFNode<StorageT> {}
 
-struct CPCTPlus<'a, 'b: 'a, 'input: 'b, StorageT: 'static + Eq + Hash, ActionT: 'a> {
-    parser: &'a Parser<'a, 'b, 'input, StorageT, ActionT>,
+struct CPCTPlus<
+    'a,
+    'b: 'a,
+    'input: 'b,
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Eq + Hash,
+    ActionT: 'a,
+> {
+    parser: &'a Parser<'a, 'b, 'input, LexemeT, StorageT, ActionT>,
 }
 
-pub(super) fn recoverer<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &'a Parser<StorageT, ActionT>,
-) -> Box<dyn Recoverer<StorageT, ActionT> + 'a>
+pub(super) fn recoverer<
+    'a,
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'a,
+>(
+    parser: &'a Parser<LexemeT, StorageT, ActionT>,
+) -> Box<dyn Recoverer<LexemeT, StorageT, ActionT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -117,21 +128,22 @@ impl<
         'a,
         'b: 'a,
         'input: 'b,
+        LexemeT: Lexeme<StorageT>,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-    > Recoverer<StorageT, ActionT> for CPCTPlus<'a, 'b, 'input, StorageT, ActionT>
+    > Recoverer<LexemeT, StorageT, ActionT> for CPCTPlus<'a, 'b, 'input, LexemeT, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
 {
     fn recover(
         &self,
         finish_by: Instant,
-        parser: &Parser<StorageT, ActionT>,
+        parser: &Parser<LexemeT, StorageT, ActionT>,
         in_laidx: usize,
         mut in_pstack: &mut Vec<StIdx>,
-        mut astack: &mut Vec<AStackType<ActionT, StorageT>>,
+        mut astack: &mut Vec<AStackType<LexemeT, ActionT>>,
         mut spans: &mut Vec<Span>,
-    ) -> (usize, Vec<Vec<ParseRepair<StorageT>>>) {
+    ) -> (usize, Vec<Vec<ParseRepair<LexemeT, StorageT>>>) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
         //
@@ -249,9 +261,10 @@ impl<
         'a,
         'b: 'a,
         'input: 'b,
+        LexemeT: Lexeme<StorageT>,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
-    > CPCTPlus<'a, 'b, 'input, StorageT, ActionT>
+    > CPCTPlus<'a, 'b, 'input, LexemeT, StorageT, ActionT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -357,7 +370,7 @@ where
         &self,
         in_laidx: usize,
         cnds: Vec<PathFNode<StorageT>>,
-    ) -> Vec<Vec<Vec<ParseRepair<StorageT>>>> {
+    ) -> Vec<Vec<Vec<ParseRepair<LexemeT, StorageT>>>> {
         fn traverse<StorageT: PrimInt>(
             rm: &Cactus<RepairMerge<StorageT>>,
         ) -> Vec<Vec<Repair<StorageT>>> {
@@ -411,7 +424,7 @@ where
         &self,
         mut laidx: usize,
         from: &[Repair<StorageT>],
-    ) -> Vec<ParseRepair<StorageT>> {
+    ) -> Vec<ParseRepair<LexemeT, StorageT>> {
         from.iter()
             .map(|y| match *y {
                 Repair::InsertTerm(token_idx) => ParseRepair::Insert(token_idx),
@@ -432,13 +445,18 @@ where
 
 /// Apply the `repairs` to `pstack` starting at position `laidx`: return the resulting parse
 /// distance and a new pstack.
-fn apply_repairs<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &Parser<StorageT, ActionT>,
+fn apply_repairs<
+    'a,
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'a,
+>(
+    parser: &Parser<LexemeT, StorageT, ActionT>,
     mut laidx: usize,
     mut pstack: &mut Vec<StIdx>,
-    mut astack: &mut Option<&mut Vec<AStackType<ActionT, StorageT>>>,
+    mut astack: &mut Option<&mut Vec<AStackType<LexemeT, ActionT>>>,
     mut spans: &mut Option<&mut Vec<Span>>,
-    repairs: &[ParseRepair<StorageT>],
+    repairs: &[ParseRepair<LexemeT, StorageT>],
 ) -> usize
 where
     usize: AsPrimitive<StorageT>,
@@ -474,9 +492,13 @@ where
 }
 
 /// Simplifies repair sequences, removes duplicates, and sorts them into order.
-fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
-    parser: &Parser<StorageT, ActionT>,
-    all_rprs: &mut Vec<Vec<ParseRepair<StorageT>>>,
+fn simplify_repairs<
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Hash + PrimInt + Unsigned,
+    ActionT,
+>(
+    parser: &Parser<LexemeT, StorageT, ActionT>,
+    all_rprs: &mut Vec<Vec<ParseRepair<LexemeT, StorageT>>>,
 ) where
     usize: AsPrimitive<StorageT>,
 {
@@ -494,13 +516,13 @@ fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
     // Use a HashSet as a quick way of deduplicating repair sequences: occasionally we can end up
     // with hundreds of thousands (!), and we don't have a sensible ordering on ParseRepair to make
     // it plausible to do a sort and dedup.
-    let mut hs: HashSet<Vec<ParseRepair<StorageT>>> = all_rprs.drain(..).collect();
+    let mut hs: HashSet<Vec<ParseRepair<LexemeT, StorageT>>> = all_rprs.drain(..).collect();
     all_rprs.extend(hs.drain());
 
     // Sort repair sequences:
     //   1) by whether they contain Inserts that are %insert_avoid
     //   2) by the number of repairs they contain
-    let contains_avoid_insert = |rprs: &Vec<ParseRepair<StorageT>>| -> bool {
+    let contains_avoid_insert = |rprs: &Vec<ParseRepair<LexemeT, StorageT>>| -> bool {
         for r in rprs.iter() {
             if let ParseRepair::Insert(tidx) = r {
                 if parser.grm.avoid_insert(*tidx) {
@@ -528,13 +550,18 @@ fn simplify_repairs<StorageT: 'static + Hash + PrimInt + Unsigned, ActionT>(
 /// `ParseRepair`s allow the same distance of parsing, then the `ParseRepair` which requires
 /// repairs over the shortest distance is preferred. Amongst `ParseRepair`s of the same rank, the
 /// ordering is non-deterministic.
-fn rank_cnds<'a, StorageT: 'static + Debug + Hash + PrimInt + Unsigned, ActionT: 'a>(
-    parser: &Parser<StorageT, ActionT>,
+fn rank_cnds<
+    'a,
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    ActionT: 'a,
+>(
+    parser: &Parser<LexemeT, StorageT, ActionT>,
     finish_by: Instant,
     in_laidx: usize,
     in_pstack: &[StIdx],
-    in_cnds: Vec<Vec<Vec<ParseRepair<StorageT>>>>,
-) -> Vec<Vec<ParseRepair<StorageT>>>
+    in_cnds: Vec<Vec<Vec<ParseRepair<LexemeT, StorageT>>>>,
+) -> Vec<Vec<ParseRepair<LexemeT, StorageT>>>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -599,13 +626,13 @@ mod test {
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
     use crate::{
-        lex::Lexeme,
-        parser::{test::do_parse, LexParseError, ParseRepair, RecoveryKind},
+        parser::{test::do_parse, ParseRepair, RecoveryKind},
+        LexParseError, Lexeme,
     };
 
-    fn pp_repairs<StorageT: 'static + Hash + PrimInt + Unsigned>(
+    fn pp_repairs<LexemeT: Lexeme<StorageT>, StorageT: 'static + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
-        repairs: &[ParseRepair<StorageT>],
+        repairs: &[ParseRepair<LexemeT, StorageT>],
     ) -> String
     where
         usize: AsPrimitive<StorageT>,
@@ -623,9 +650,12 @@ mod test {
         out.join(", ")
     }
 
-    fn check_all_repairs<StorageT: 'static + Debug + Hash + PrimInt + Unsigned>(
+    fn check_all_repairs<
+        LexemeT: Lexeme<StorageT>,
+        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    >(
         grm: &YaccGrammar<StorageT>,
-        err: &LexParseError<StorageT>,
+        err: &LexParseError<LexemeT, StorageT>,
         expected: &[&str],
     ) where
         usize: AsPrimitive<StorageT>,

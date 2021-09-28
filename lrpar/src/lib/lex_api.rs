@@ -1,9 +1,8 @@
 #![allow(clippy::len_without_is_empty)]
 
-use std::{error::Error, fmt, hash::Hash, mem::size_of};
+use std::{cmp, error::Error, fmt, hash::Hash, marker};
 
 use num_traits::{PrimInt, Unsigned};
-use static_assertions::const_assert;
 
 use crate::Span;
 
@@ -36,17 +35,19 @@ impl fmt::Display for LexError {
 }
 
 /// The base trait which all lexers which want to interact with `lrpar` must implement.
-pub trait Lexer<StorageT: Hash + PrimInt + Unsigned> {
+pub trait Lexer<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned> {
     /// Iterate over all the lexemes in this lexer. Note that:
     ///   * The lexer may or may not stop after the first [LexError] is encountered.
     ///   * There are no guarantees about what happens if this function is called more than once.
     ///     For example, a streaming lexer may only produce [Lexeme]s on the first call.
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a>;
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<LexemeT, LexError>> + 'a>;
 }
 
 /// A `NonStreamingLexer` is one that takes input in one go, and is then able to hand out
 /// substrings to that input and calculate line and column numbers from a [Span].
-pub trait NonStreamingLexer<'input, StorageT: Hash + PrimInt + Unsigned>: Lexer<StorageT> {
+pub trait NonStreamingLexer<'input, LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned>:
+    Lexer<LexemeT, StorageT>
+{
     /// Return the user input associated with a [Span].
     ///
     /// The [Span] must be well formed:
@@ -80,94 +81,38 @@ pub trait NonStreamingLexer<'input, StorageT: Hash + PrimInt + Unsigned>: Lexer<
     fn line_col(&self, span: Span) -> ((usize, usize), (usize, usize));
 }
 
-/// A `Lexeme` represents a segment of the user's input that conforms to a known type.
+/// A lexeme represents a segment of the user's input that conforms to a known type: this trait
+/// captures the common behaviour of all lexeme structs.
 ///
 /// Lexemes are assumed to have a definition which describes all possible correct lexemes (e.g. the
-/// regular expression `[0-9]+` defines all integer lexemes). This struct can also represent
-/// "faulty" lexemes -- that is, lexemes that have resulted from error recovery of some sort.
-/// Faulty lexemes can violate the lexeme's type definition in any possible way (e.g. they might
-/// span more or less input than the definition would suggest is possible).
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Lexeme<StorageT> {
-    // The long-term aim is to pack this struct so that len can be longer than u32 while everything
-    // still fitting into 2 64-bit words.
-    start: usize,
-    len: usize,
-    faulty: bool,
-    tok_id: StorageT,
-}
-
-impl<StorageT: Copy> Lexeme<StorageT> {
+/// regular expression `[0-9]+` defines all integer lexemes). This trait also allows "faulty"
+/// lexemes to be represented -- that is, lexemes that have resulted from error recovery of some
+/// sort. Faulty lexemes can violate the lexeme's type definition in any possible way (e.g. they
+/// might span more or less input than the definition would suggest is possible).
+pub trait Lexeme<StorageT>: fmt::Debug + fmt::Display + cmp::Eq + Hash + marker::Copy {
     /// Create a new lexeme with ID `tok_id`, a starting position in the input `start`, and length
     /// `len`.
     ///
     /// Lexemes created using this function are expected to be "correct" in the sense that they
     /// fully respect the lexeme's definition semantics. To create faulty lexemes, use
     /// [new_faulty](Lexeme::new_faulty).
-    pub fn new(tok_id: StorageT, start: usize, len: usize) -> Self {
-        const_assert!(size_of::<usize>() >= size_of::<u32>());
-        if len >= u32::max_value() as usize {
-            panic!("Can't currently represent lexeme of length {}.", len);
-        }
-        Lexeme {
-            start,
-            len,
-            faulty: false,
-            tok_id,
-        }
-    }
+    fn new(tok_id: StorageT, start: usize, len: usize) -> Self
+    where
+        Self: Sized;
 
     /// Create a new faulty lexeme with ID `tok_id` and a starting position in the input `start`.
-    pub fn new_faulty(tok_id: StorageT, start: usize, len: usize) -> Self {
-        const_assert!(size_of::<usize>() >= size_of::<u32>());
-        Lexeme {
-            start,
-            len,
-            faulty: true,
-            tok_id,
-        }
-    }
+    fn new_faulty(tok_id: StorageT, start: usize, len: usize) -> Self
+    where
+        Self: Sized;
 
     /// The token ID.
-    pub fn tok_id(&self) -> StorageT {
-        self.tok_id
-    }
-
-    /// Byte offset of the start of the lexeme
-    #[deprecated(since = "0.6.1", note = "Please use span().start() instead")]
-    pub fn start(&self) -> usize {
-        self.start
-    }
-
-    /// Byte offset of the end of the lexeme.
-    #[deprecated(since = "0.6.1", note = "Please use span().end() instead")]
-    pub fn end(&self) -> usize {
-        self.span().end()
-    }
-
-    /// Length in bytes of the lexeme.
-    #[deprecated(since = "0.6.1", note = "Please use span().len() instead")]
-    pub fn len(&self) -> usize {
-        self.span().len()
-    }
+    fn tok_id(&self) -> StorageT;
 
     /// Obtain this `Lexeme`'s [Span].
-    pub fn span(&self) -> Span {
-        Span::new(self.start, self.start + self.len)
-    }
+    fn span(&self) -> Span;
 
     /// Returns `true` if this lexeme is "faulty" i.e. is the result of error recovery in some way.
     /// If `true`, note that the lexeme's span may be greater or less than you may expect from the
     /// lexeme's definition.
-    pub fn faulty(&self) -> bool {
-        self.faulty
-    }
+    fn faulty(&self) -> bool;
 }
-
-impl<StorageT: Copy> fmt::Display for Lexeme<StorageT> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Lexeme[{}..{}]", self.span().start(), self.span().end())
-    }
-}
-
-impl<StorageT: Copy + fmt::Debug> Error for Lexeme<StorageT> {}

@@ -16,6 +16,8 @@ use num_traits::{PrimInt, Unsigned};
 use try_from::TryFrom;
 
 mod ctbuilder;
+#[doc(hidden)]
+pub mod lexemes;
 mod lexer;
 mod parser;
 
@@ -23,6 +25,7 @@ mod parser;
 pub use crate::ctbuilder::LexerBuilder;
 pub use crate::{
     ctbuilder::{CTLexer, CTLexerBuilder, LexerKind, Visibility},
+    lexemes::DefaultLexeme,
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
 
@@ -67,9 +70,12 @@ impl fmt::Display for LexBuildError {
 }
 
 #[deprecated(since = "0.8.0", note = "Please use LRNonStreamingLexerDef::from_str")]
-pub fn build_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>(
+pub fn build_lex<
+    LexemeT: lrpar::Lexeme<StorageT>,
+    StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned,
+>(
     s: &str,
-) -> Result<LRNonStreamingLexerDef<StorageT>, LexBuildError> {
+) -> Result<LRNonStreamingLexerDef<LexemeT, StorageT>, LexBuildError> {
     LRNonStreamingLexerDef::from_str(s)
 }
 
@@ -77,7 +83,7 @@ pub fn build_lex<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigne
     since = "0.8.0",
     note = "This struct has been renamed to LRNonStreamingLexerDef"
 )]
-pub type NonStreamingLexerDef<StorageT> = LRNonStreamingLexerDef<StorageT>;
+pub type NonStreamingLexerDef<LexemeT, StorageT> = LRNonStreamingLexerDef<LexemeT, StorageT>;
 
 /// A convenience macro for including statically compiled `.l` files. A file `src/a/b/c.l` which is
 /// statically compiled by lrlex can then be used in a crate with `lrlex_mod!("a/b/c.l")`.

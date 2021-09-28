@@ -44,20 +44,20 @@ In this situation we want to statically compile the `.y` grammar and `.l` lexer
 into Rust code. We thus need to create a
 [`build.rs`](https://doc.rust-lang.org/cargo/reference/build-scripts.html)
 file inside the root of our project which can process the lexer and grammar.
+`lrlex` provides a simple interface which does both jobs for us in one go.
 Our `build.rs` file thus looks as follows:
 
 ```rust,noplaypen
 use cfgrammar::yacc::YaccKind;
 use lrlex::CTLexerBuilder;
-use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cp = CTParserBuilder::new()
-        .yacckind(YaccKind::Grmtools)
-        .grammar_in_src_dir("calc.y")?
-        .build()?;
     CTLexerBuilder::new()
-        .rule_ids_map(cp.lexeme_id_map())
+        .lrpar_config(|ctp| {
+            ctp.yacckind(YaccKind::Grmtools)
+                .grammar_in_src_dir("calc.y")
+                .unwrap()
+        })
         .lexer_in_src_dir("calc.l")?
         .build()?;
     Ok(())
@@ -69,18 +69,15 @@ to execute Rust code as the input is parsed (rather than creating a generic
 parse tree which we traverse later), so we specified that the `yacckind` (i.e.
 what variant of Yacc file we're using) is `YaccKind::Grmtools`. The grammar file
 is stored in `src/calc.y`, but we only specify `calc.y` as the filename to
-`lrpar`, since it searches relative to `src/` automatically.
+`lrpar`, since it searches relative to `src/` automatically. Similarly, we only
+needed to specify `calc.l` to `lrlex`.
 
 
 ## The lexer
 
 While Yacc-style parsing is powerful, lex-style lexing is less powerful.
 grmtools allows you to use whatever lexer you want with `lrpar`. Fortunately, in
-this case, `lrlex` is powerful enough for us. Our lex file is stored in
-`src/calc.l`. The `rule_ids_map` dance synchronises the parser and lexer (the
-details of this are unimportant to us).
-
-`calc.l` is as follows:
+this case, `lrlex` is powerful enough for us. `calc.l` looks as follows:
 ```lex
 %%
 [0-9]+ "INT"

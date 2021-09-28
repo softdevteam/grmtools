@@ -18,24 +18,24 @@
 //!
 //! ## Example
 //!
-//! Let's assume we want to statically generate a parser for a simple calculator
-//! language (and let's also assume we are able to use
-//! [`lrlex`](https://softdevteam.github.io/grmtools/master/book/lrlex.html) for the
-//! lexer). We need to add a `build.rs` file to our project which tells `lrpar` to
-//! statically compile the lexer and parser files:
+//! Let's assume we want to statically generate a parser for a simple calculator language (and
+//! let's also assume we are able to use
+//! [`lrlex`](https://softdevteam.github.io/grmtools/master/book/lrlex.html) for the lexer). We
+//! need to add a `build.rs` file to our project which statically compiles both the lexer and
+//! parser. While we can perform both steps individually, it's easiest to use `lrlex` which does
+//! both jobs for us in one go. Our `build.rs` file thus looks as follows:
 //!
 //! ```text
 //! use cfgrammar::yacc::YaccKind;
 //! use lrlex::CTLexerBuilder;
-//! use lrpar::CTParserBuilder;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let cp = CTParserBuilder::new()
-//!         .yacckind(YaccKind::Grmtools)
-//!         .grammar_in_src_dir("calc.y")?
-//!         .build()?;
 //!     CTLexerBuilder::new()
-//!         .rule_ids_map(cp.lexeme_id_map())
+//!         .lrpar_config(|ctp| {
+//!             ctp.yacckind(YaccKind::Grmtools)
+//!                 .grammar_in_src_dir("calc.y")
+//!                 .unwrap()
+//!         })
 //!         .lexer_in_src_dir("calc.l")?
 //!         .build()?;
 //!     Ok(())
@@ -186,12 +186,15 @@ mod cpctplus;
 pub mod ctbuilder;
 mod dijkstra;
 #[doc(hidden)]
-pub mod lex;
-pub use crate::lex::{LexError, Lexeme, Lexer, NonStreamingLexer};
+pub mod lex_api;
 #[doc(hidden)]
 pub mod parser;
+#[cfg(test)]
+mod test_utils;
+
 pub use crate::{
     ctbuilder::{CTParser, CTParserBuilder, Visibility},
+    lex_api::{LexError, Lexeme, Lexer, NonStreamingLexer},
     parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
 

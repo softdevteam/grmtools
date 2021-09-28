@@ -7,8 +7,8 @@ use std::{
     process,
 };
 
-use lrlex::{LRNonStreamingLexerDef, LexerDef};
-use lrpar::Lexer;
+use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
+use lrpar::{Lexeme, Lexer};
 
 fn usage(prog: &str, msg: &str) {
     let path = Path::new(prog);
@@ -52,7 +52,7 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let lexerdef = LRNonStreamingLexerDef::<usize>::from_str(&read_file(lex_l_path))
+    let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme, _>::from_str(&read_file(lex_l_path))
         .unwrap_or_else(|s| {
             writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
             process::exit(1);

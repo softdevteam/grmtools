@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     hash::Hash,
     marker::PhantomData,
     slice::Iter,
@@ -53,7 +54,7 @@ impl<StorageT> Rule<StorageT> {
 pub trait LexerDef<StorageT> {
     #[doc(hidden)]
     /// Instantiate a lexer from a set of `Rule`s. This is only intended to be used by compiled
-    /// lexers (see `builder.rs`).
+    /// lexers (see `ctbuilder.rs`).
     fn from_rules(rules: Vec<Rule<StorageT>>) -> Self
     where
         Self: Sized;
@@ -99,19 +100,26 @@ pub trait LexerDef<StorageT> {
 
 /// This struct represents, in essence, a .l file in memory. From it one can produce an
 /// [LRNonStreamingLexer] which actually lexes inputs.
-pub struct LRNonStreamingLexerDef<StorageT> {
+pub struct LRNonStreamingLexerDef<LexemeT, StorageT> {
     rules: Vec<Rule<StorageT>>,
+    phantom: PhantomData<LexemeT>,
 }
 
-impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<StorageT>
-    for LRNonStreamingLexerDef<StorageT>
+impl<LexemeT, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<StorageT>
+    for LRNonStreamingLexerDef<LexemeT, StorageT>
 {
-    fn from_rules(rules: Vec<Rule<StorageT>>) -> LRNonStreamingLexerDef<StorageT> {
-        LRNonStreamingLexerDef { rules }
+    fn from_rules(rules: Vec<Rule<StorageT>>) -> LRNonStreamingLexerDef<LexemeT, StorageT> {
+        LRNonStreamingLexerDef {
+            rules,
+            phantom: PhantomData,
+        }
     }
 
-    fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<StorageT>> {
-        LexParser::new(s.to_string()).map(|p| LRNonStreamingLexerDef { rules: p.rules })
+    fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<LexemeT, StorageT>> {
+        LexParser::new(s.to_string()).map(|p| LRNonStreamingLexerDef {
+            rules: p.rules,
+            phantom: PhantomData,
+        })
     }
 
     fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
@@ -192,15 +200,17 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<
     }
 }
 
-impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
-    LRNonStreamingLexerDef<StorageT>
+impl<
+        LexemeT: Lexeme<StorageT>,
+        StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + TryFrom<usize> + Unsigned,
+    > LRNonStreamingLexerDef<LexemeT, StorageT>
 {
     /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
     /// [LRNonStreamingLexerDef].
     pub fn lexer<'lexer, 'input: 'lexer>(
         &'lexer self,
         s: &'input str,
-    ) -> LRNonStreamingLexer<'lexer, 'input, StorageT> {
+    ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
         LRNonStreamingLexer::new(self, s)
     }
 }
@@ -208,22 +218,26 @@ impl<StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
 /// An `LRNonStreamingLexer` holds a reference to a string and can lex it into [lrpar::Lexeme]s.
 /// Although the struct is tied to a single string, no guarantees are made about whether the
 /// lexemes are cached or not.
-pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, StorageT> {
+pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, LexemeT, StorageT: fmt::Debug> {
     s: &'input str,
-    lexemes: Vec<Result<Lexeme<StorageT>, LexError>>,
+    lexemes: Vec<Result<LexemeT, LexError>>,
     /// A sorted list of the byte index of the start of the following line. i.e. for the input
     /// string `" a\nb\n  c d"` this will contain `[3, 5]`.
     newlines: Vec<usize>,
-    phantom: PhantomData<&'lexer ()>,
+    phantom: PhantomData<(&'lexer (), StorageT)>,
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned>
-    LRNonStreamingLexer<'lexer, 'input, StorageT>
+impl<
+        'lexer,
+        'input: 'lexer,
+        LexemeT: Lexeme<StorageT>,
+        StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + TryFrom<usize> + Unsigned,
+    > LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT>
 {
     fn new(
-        lexerdef: &'lexer LRNonStreamingLexerDef<StorageT>,
+        lexerdef: &'lexer LRNonStreamingLexerDef<LexemeT, StorageT>,
         s: &'input str,
-    ) -> LRNonStreamingLexer<'lexer, 'input, StorageT> {
+    ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
         let mut lexemes = vec![];
         let mut newlines = vec![];
         let mut i = 0;
@@ -278,16 +292,25 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usiz
     }
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned> Lexer<StorageT>
-    for LRNonStreamingLexer<'lexer, 'input, StorageT>
+impl<
+        'lexer,
+        'input: 'lexer,
+        LexemeT: Lexeme<StorageT>,
+        StorageT: Copy + fmt::Debug + Eq + Hash + PrimInt + Unsigned,
+    > Lexer<LexemeT, StorageT> for LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT>
 {
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<Lexeme<StorageT>, LexError>> + 'a> {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<LexemeT, LexError>> + 'a> {
         Box::new(self.lexemes.iter().cloned())
     }
 }
 
-impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
-    NonStreamingLexer<'input, StorageT> for LRNonStreamingLexer<'lexer, 'input, StorageT>
+impl<
+        'lexer,
+        'input: 'lexer,
+        LexemeT: Lexeme<StorageT>,
+        StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + Unsigned,
+    > NonStreamingLexer<'input, LexemeT, StorageT>
+    for LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT>
 {
     fn span_str(&self, span: Span) -> &'input str {
         if span.end() > self.s.len() {
@@ -334,7 +357,10 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
         }
 
         /// Returns `(line byte offset, line index)`.
-        fn lc_byte<StorageT>(lexer: &LRNonStreamingLexer<StorageT>, i: usize) -> (usize, usize) {
+        fn lc_byte<LexemeT, StorageT: fmt::Debug>(
+            lexer: &LRNonStreamingLexer<LexemeT, StorageT>,
+            i: usize,
+        ) -> (usize, usize) {
             match lexer.newlines.binary_search(&i) {
                 Ok(j) => (lexer.newlines[j], j + 2),
                 Err(0) => (0, 1),
@@ -342,8 +368,8 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
             }
         }
 
-        fn lc_char<StorageT: Copy + Eq + Hash + PrimInt + Unsigned>(
-            lexer: &LRNonStreamingLexer<StorageT>,
+        fn lc_char<LexemeT, StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + Unsigned>(
+            lexer: &LRNonStreamingLexer<LexemeT, StorageT>,
             i: usize,
             s: &str,
         ) -> (usize, usize) {
@@ -361,6 +387,7 @@ impl<'lexer, 'input: 'lexer, StorageT: Copy + Eq + Hash + PrimInt + Unsigned>
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::DefaultLexeme;
     use std::collections::HashMap;
 
     #[test]
@@ -372,7 +399,7 @@ mod test {
 [ \t] ;
         "
         .to_string();
-        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("int", 0);
         map.insert("id", 1);
@@ -401,7 +428,7 @@ mod test {
 [0-9]+ 'int'
         "
         .to_string();
-        let lexerdef = LRNonStreamingLexerDef::<u8>::from_str(&src).unwrap();
+        let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
         match lexerdef.lexer(&"abc").iter().next().unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(e) => {
@@ -429,7 +456,7 @@ if 'IF'
             .lexer(&"iff if")
             .iter()
             .map(|x| x.unwrap())
-            .collect::<Vec<_>>();
+            .collect::<Vec<DefaultLexeme<u8>>>();
         assert_eq!(lexemes.len(), 2);
         let lex1 = lexemes[0];
         assert_eq!(lex1.tok_id(), 1u8);
@@ -453,7 +480,10 @@ if 'IF'
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let lexer = lexerdef.lexer("a ❤ a");
-        let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
+        let lexemes = lexer
+            .iter()
+            .map(|x| x.unwrap())
+            .collect::<Vec<DefaultLexeme<u8>>>();
         assert_eq!(lexemes.len(), 3);
         let lex1 = lexemes[0];
         assert_eq!(lex1.span().start(), 0);
@@ -481,7 +511,10 @@ if 'IF'
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let lexer = lexerdef.lexer("a b c");
-        let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
+        let lexemes = lexer
+            .iter()
+            .map(|x| x.unwrap())
+            .collect::<Vec<DefaultLexeme<u8>>>();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_col(lexemes[1].span()), ((1, 3), (1, 4)));
         assert_eq!(lexer.span_lines_str(lexemes[1].span()), "a b c");
@@ -544,7 +577,10 @@ if 'IF'
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let lexer = lexerdef.lexer(" a\n❤ b");
-        let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
+        let lexemes = lexer
+            .iter()
+            .map(|x| x.unwrap())
+            .collect::<Vec<DefaultLexeme<u8>>>();
         assert_eq!(lexemes.len(), 3);
         assert_eq!(lexer.line_col(lexemes[0].span()), ((1, 2), (1, 3)));
         assert_eq!(lexer.line_col(lexemes[1].span()), ((2, 1), (2, 2)));
@@ -561,7 +597,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, _>::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("ID", 0u8);
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
@@ -577,7 +613,7 @@ if 'IF'
 [a-z]+ 'ID'
 [ \\n] ;"
             .to_string();
-        let mut lexerdef = LRNonStreamingLexerDef::from_str(&src).unwrap();
+        let mut lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, _>::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("INT", 0u8);
         let mut missing_from_lexer = HashSet::new();
@@ -611,7 +647,10 @@ if 'IF'
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let lexer = lexerdef.lexer("'a\nb'\n");
-        let lexemes = lexer.iter().map(|x| x.unwrap()).collect::<Vec<_>>();
+        let lexemes = lexer
+            .iter()
+            .map(|x| x.unwrap())
+            .collect::<Vec<DefaultLexeme<u8>>>();
         assert_eq!(lexemes.len(), 1);
         assert_eq!(lexer.line_col(lexemes[0].span()), ((1, 1), (2, 3)));
         assert_eq!(lexer.span_lines_str(lexemes[0].span()), "'a\nb'");

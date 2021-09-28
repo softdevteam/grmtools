@@ -8,8 +8,14 @@ starting at index 7 to index 10"). There is also a simple mechanism to
 differentiate lexemes of zero length (e.g. `DEDENT` tokens in Python) from
 lexemes inserted by [error recovery](errorrecovery.md).
 
-A subset of languages can use a simple `lex`/`flex` style approach to lexing,
-for which [`lrlex`](lrlex.html) can be used. For situations which require more
-flexibility, users can write their own custom lexer provided it implements the
-[`lrpar::lex::NonStreamingLexer`](https://softdevteam.github.io/grmtools/master/api/lrpar/trait.NonStreamingLexer.html)
-trait.
+grmtools provides a "default" lexer in [`lrlex`](lrlex.md), but `lrpar` provides
+a generic lexing interface to which any lexer can plug into. Users can provide
+one or both of a custom lexeme type -- conforming to
+[`lrpar::Lexeme`](https://softdevteam.github.io/grmtools/master/api/lrpar/trait.Lexeme.html)
+-- and a custom lexing type -- conforming to
+[`lrpar::NonStreamingLexer`](https://softdevteam.github.io/grmtools/master/api/lrpar/trait.NonStreamingLexer.html).
+If you wish to use a custom lexer, you will need to instantiate `lrpar`
+appropriately (both
+[`CTParserBuilder`](https://softdevteam.github.io/grmtools/master/api/lrpar/struct.CTParserBuilder.html)
+and
+[`RTParserBuilder`](https://softdevteam.github.io/grmtools/master/api/lrpar/struct.RTParserBuilder.html)).
