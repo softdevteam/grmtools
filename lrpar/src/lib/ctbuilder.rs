@@ -607,15 +607,21 @@ where
 
         match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
+                let parse_param = match grm.parse_param() {
+                    Some((name, tyname)) => format!(", {}: {}", name, tyname),
+                    None => "".to_owned(),
+                };
                 outs.push_str(&format!(
                     "
     #[allow(dead_code)]
-    pub fn parse<'lexer, 'input: 'lexer>(lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>)
+    pub fn parse<'lexer, 'input: 'lexer>(
+        lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>{parse_param})
           -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}>>)
     {{",
                     lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
-                    actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap()
+                    parse_param = parse_param,
+                    actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap(),
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
@@ -668,27 +674,34 @@ where
                     })
                     .collect::<Vec<_>>()
                     .join(",\n                        ");
+                let (parse_param, parse_paramty) = match grm.parse_param() {
+                    Some((name, tyname)) => (name.clone(), tyname.clone()),
+                    None => ("()".to_owned(), "()".to_owned()),
+                };
                 outs.push_str(&format!(
                     "\n        #[allow(clippy::type_complexity)]
         let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                        ::lrpar::Span,
-                       ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>)
+                       ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
+                       {parse_paramty})
                     -> {actionskind}<'input>> = ::std::vec![{wrappers}];\n",
                     actionskind = ACTIONS_KIND,
                     lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
+                    parse_paramty = parse_paramty,
                     wrappers = wrappers
                 ));
                 outs.push_str(&format!(
                     "
         match ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{recoverer})
-            .parse_actions(lexer, &actions) {{
+            .parse_actions(lexer, &actions, {parse_param}) {{
                 (Some({actionskind}::{actionskindprefix}{ridx}(x)), y) => (Some(x), y),
                 (None, y) => (None, y),
                 _ => unreachable!()
         }}",
+                    parse_param = parse_param,
                     actionskind = ACTIONS_KIND,
                     actionskindprefix = ACTIONS_KIND_PREFIX,
                     ridx = usize::from(self.user_start_ridx(grm)),
@@ -764,6 +777,10 @@ where
 
         outs.push_str("\n\n    // Wrappers\n\n");
 
+        let (parse_paramname, parse_paramdef) = match grm.parse_param() {
+            Some((name, tyname)) => (name.to_owned(), format!("{}: {}", name, tyname)),
+            None => ("()".to_owned(), "_: ()".to_owned()),
+        };
         for pidx in grm.iter_pidxs() {
             let ridx = grm.prod_to_rule(pidx);
 
@@ -774,12 +791,16 @@ where
                 "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                       {prefix}span: ::lrpar::Span,
-                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>)
-                   -> {actionskind}<'input> {{",
+                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
+                      {parse_paramdef})
+                   -> {actionskind}<'input> {{
+        let _ = {parse_paramname};",
                 usize::from(pidx),
                 lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
+                parse_paramdef = parse_paramdef,
+                parse_paramname = parse_paramname,
                 actionskind = ACTIONS_KIND,
             ));
 
@@ -826,22 +847,24 @@ where
                 // `wrapper_r(); enum::A(())`.
                 match grm.actiontype(ridx) {
                     Some(s) if s == "()" => {
-                        outs.push_str(&format!("\n        {prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args});
+                        outs.push_str(&format!("\n        {prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {parse_paramname}, {args});
         {actionskind}::{actionskindprefix}{ridx}(())",
                             actionskind = ACTIONS_KIND,
                             actionskindprefix = ACTIONS_KIND_PREFIX,
                             prefix = ACTION_PREFIX,
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
+                            parse_paramname = parse_paramname,
                             args = args.join(", ")));
                     }
                     _ => {
-                        outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {args}))",
+                        outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {parse_paramname}, {args}))",
                             actionskind = ACTIONS_KIND,
                             actionskindprefix = ACTIONS_KIND_PREFIX,
                             prefix = ACTION_PREFIX,
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
+                            parse_paramname = parse_paramname,
                             args = args.join(", ")));
                     }
                 }
@@ -899,6 +922,10 @@ where
 
         // Convert actions to functions
         outs.push_str("\n    // User actions\n\n");
+        let parse_param = match grm.parse_param() {
+            Some((name, tyname)) => format!("{}: {}", name, tyname),
+            None => "_: ()".to_owned(),
+        };
         for pidx in grm.iter_pidxs() {
             if pidx == grm.start_prod() {
                 continue;
@@ -934,6 +961,7 @@ where
     fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                      {prefix}span: ::lrpar::Span,
+                     {parse_param},
                      {args}) {returnt} {{\n",
                 usize::from(pidx),
                 rulename = grm.rule_name(grm.prod_to_rule(pidx)),
@@ -941,6 +969,7 @@ where
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
                 returnt = returnt,
+                parse_param = parse_param,
                 args = args.join(",\n                     ")
             ));
 

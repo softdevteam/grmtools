@@ -225,8 +225,18 @@ impl YaccParser {
                 }
                 continue;
             }
-            if let Some(j) = self.lookahead_is("%parse_param", i) {
-                i = self.parse_param(j)?;
+            if let Some(j) = self.lookahead_is("%parse-param", i) {
+                i = self.parse_ws(j, false)?;
+                let (j, name) = self.parse_to_single_colon(i)?;
+                match self.lookahead_is(":", j) {
+                    Some(j) => i = self.parse_ws(j, false)?,
+                    None => {
+                        return Err(self.mk_error(YaccParserErrorKind::MissingColon, j));
+                    }
+                }
+                let (j, ty) = self.parse_to_eol(i)?;
+                self.ast.parse_param = Some((name, ty));
+                i = self.parse_ws(j, true)?;
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
@@ -449,95 +459,6 @@ impl YaccParser {
         Ok(i)
     }
 
-    // Handle parse_param declarations of the form:
-    // %parse_param <'a>(x: u32, y : (u32, u32))
-    fn parse_param(&mut self, mut i: usize) -> YaccResult<usize> {
-        i = self.parse_ws(i, false)?;
-        // First gobble up all of the '<' lifetime ',' ... '>
-        if let Some(mut j) = self.lookahead_is("<", i) {
-            let mut k = j;
-            let mut lifetimes = HashSet::new();
-            let mut add_lifetime = |j, k, c: char| {
-                let s = self.src[j..k].trim().to_string();
-                lifetimes.insert(s);
-                k + c.len_utf8()
-            };
-
-            while k < self.src.len() {
-                let c = self.src[k..].chars().next().unwrap();
-                match c {
-                    '\n' | '\r' => return Err(self.mk_error(YaccParserErrorKind::ReachedEOL, k)),
-                    ',' => {
-                        k = add_lifetime(j, k, ',');
-                        j = k;
-                    }
-                    '>' => {
-                        k = add_lifetime(j, k, '>');
-                        break;
-                    }
-                    _ => k += c.len_utf8(),
-                }
-            }
-            self.ast.parse_param_lifetimes = Some(lifetimes);
-            i = k;
-        }
-
-        // Next, the '(' pattern : type, ... ')'
-        i = self.parse_ws(i, false)?;
-        if self.lookahead_is("(", i).is_some() {
-            let mut j = i;
-            let mut bindings: Vec<(String, String)> = Vec::new();
-            while j < self.src.len() && self.lookahead_is(")", j).is_none() {
-                let c = self.src[j..].chars().next().unwrap();
-                j += c.len_utf8();
-
-                // Some binding name, or pattern.
-                j = self.parse_ws(j, false)?;
-                let (k, binding) = self.parse_to_single_colon(j)?;
-                let (k, typ) = self.parse_param_rust_type(k + ':'.len_utf8())?;
-                j = k;
-                bindings.push((binding.trim_end().to_string(), typ));
-            }
-            if !bindings.is_empty() {
-                self.ast.parse_param_bindings = Some(bindings);
-            }
-            i = j;
-        }
-        let (i, _) = self.parse_to_eol(i)?;
-        self.parse_ws(i, true)
-    }
-
-    // Parse a rust type, followed by either a ',' character or an unbalanced ')'
-    // Return the char indice of the trailing character,
-    fn parse_param_rust_type(&mut self, i: usize) -> YaccResult<(usize, String)> {
-        let i = self.parse_ws(i, false)?;
-        let mut j = i;
-        let mut brace_count = 0;
-
-        while j < self.src.len() {
-            let c = self.src[j..].chars().next().unwrap();
-            match c {
-                '\n' | '\r' => return Err(self.mk_error(YaccParserErrorKind::ReachedEOL, j)),
-                ')' | ',' if brace_count == 0 => {
-                    return Ok((j, self.src[i..j].trim_end().to_string()));
-                }
-                '(' | '{' | '[' | '<' => {
-                    brace_count += 1;
-                    j += c.len_utf8();
-                }
-                ')' | '}' | '>' | ']' => {
-                    if brace_count == 0 {
-                        return Err(self.mk_error(YaccParserErrorKind::MismatchedBrace, j));
-                    }
-                    brace_count -= 1;
-                    j += c.len_utf8();
-                }
-                c => j += c.len_utf8(),
-            }
-        }
-        Err(self.mk_error(YaccParserErrorKind::PrematureEnd, j))
-    }
-
     /// Parse up to (but do not include) the end of line (or, if it comes sooner, the end of file).
     fn parse_to_eol(&mut self, i: usize) -> YaccResult<(usize, String)> {
         let mut j = i;
@@ -751,8 +672,6 @@ impl YaccParser {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, iter::FromIterator};
-
     use super::{
         super::{
             ast::{GrammarAST, Production, Symbol},
@@ -1844,28 +1763,15 @@ x"
     #[test]
     fn test_parse_param() {
         let src = "
-          %parse_param <'a, 'b> (x: &'a (), (y, z) : (Result<((), ()), ((), ())>, ((u32, u32), &'b ())))
+          %parse-param a::b: (u64, u64)
           %%
           A: 'a';
          ";
-        let grm = parse(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &src,
-        )
-        .unwrap();
+        let grm = parse(YaccKind::Original(YaccOriginalActionKind::UserAction), &src).unwrap();
 
-        let expect_lifetimes = HashSet::from_iter([&"'a", &"'b"].iter().map(|s| s.to_string()));
-        let expect_bindings = [
-            ("x", "&'a ()"),
-            (
-                "(y, z)",
-                "(Result<((), ()), ((), ())>, ((u32, u32), &'b ()))",
-            ),
-        ]
-        .iter()
-        .map(|(v, t)| (v.to_string(), t.to_string()))
-        .collect::<Vec<(String, String)>>();
-        assert_eq!(grm.parse_param_lifetimes, Some(expect_lifetimes));
-        assert_eq!(grm.parse_param_bindings, Some(expect_bindings));
+        assert_eq!(
+            grm.parse_param,
+            Some(("a::b".to_owned(), "(u64, u64)".to_owned()))
+        );
     }
 }

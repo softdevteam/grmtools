@@ -20,12 +20,11 @@ pub struct GrammarAST {
     pub precs: HashMap<String, Precedence>,
     pub avoid_insert: Option<HashSet<String>>,
     pub implicit_tokens: Option<HashSet<String>>,
-    pub parse_param_bindings: Option<Vec<(String, String)>>,
-    pub parse_param_lifetimes: Option<HashSet<String>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
     pub expect: Option<usize>,
     pub expectrr: Option<usize>,
+    pub parse_param: Option<(String, String)>,
     pub programs: Option<String>,
 }
 
@@ -123,9 +122,8 @@ impl GrammarAST {
             epp: HashMap::new(),
             expect: None,
             expectrr: None,
+            parse_param: None,
             programs: None,
-            parse_param_bindings: None,
-            parse_param_lifetimes: None,
         }
     }
 

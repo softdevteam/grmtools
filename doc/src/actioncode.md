@@ -46,3 +46,28 @@ make use of the following:
    to the lexer and return them from rules / store them in structs without
    copying. `Lexer::span_str` returns such strings and the typical idiom of use
    is `&'input str`.
+
+
+## Additional parse parameter
+
+A single extra parameter can be passed to action functions if the `%parse-param
+<var>: <type>` declaration is used. The variable `<var>` is then visible in all
+action code. Note that `<type>` must implement the [`Copy`
+trait](https://doc.rust-lang.org/std/marker/trait.Copy.html). If you wish to
+pass a reference it must currently be tied to the `'input` lifetime (i.e.
+`%parse-param x: &'lifetime ...`).
+
+For example if a grammar has a declaration:
+
+```
+%parse-param p: u64
+```
+
+then the statically generated `parse` function will take two paramaters
+`(lexer: &..., p: u64)` and the variable `p` can be used in action code e.g.:
+
+```
+R -> ...:
+  'ID' { format!("{}{}", p, ...) }
+  ;
+```
