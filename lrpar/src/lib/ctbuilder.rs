@@ -278,13 +278,27 @@ where
     /// additional files will be created with the same name as specified in [self.output_path] but
     /// with the extensions `grm`, and `stable`, overwriting any existing files with those names.
     ///
-    /// The generated module follows the form:
+    /// If `%parse-param` is not specified, the generated module follows the form:
     ///
     /// ```text
     ///   mod <modname> {
-    ///     pub fn parse(lexemes: &::std::vec::Vec<::lrpar::Lexeme<StorageT>>) { ... }
-    ///         -> (::std::option::Option<ActionT>,
-    ///             ::std::vec::Vec<::lrpar::LexParseError<StorageT>>)> { ...}
+    ///     pub fn parse<'lexer, 'input: 'lexer>(lexer: &'lexer dyn NonStreamingLexer<...>)
+    ///       -> (Option<ActionT>, Vec<LexParseError<...>> { ... }
+    ///
+    ///     pub fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str> {
+    ///       ...
+    ///     }
+    ///
+    ///     ...
+    ///   }
+    /// ```
+    ///
+    /// If `%parse-param x: t` is specified, the generated module follows the form:
+    ///
+    /// ```text
+    ///   mod <modname> {
+    ///     pub fn parse<'lexer, 'input: 'lexer>(lexer: &'lexer dyn NonStreamingLexer<...>, x: t)
+    ///       -> (Option<ActionT>, Vec<LexParseError<...>> { ... }
     ///
     ///     pub fn token_epp<'a>(tidx: ::cfgrammar::TIdx<StorageT>) -> ::std::option::Option<&'a str> {
     ///       ...
@@ -301,10 +315,12 @@ where
     ///      module name is `c_y` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_y`).
     ///  * `ActionT` is either:
-    ///    * the `%actiontype` value given to the grammar
-    ///    * or, if the `yacckind` was set
-    ///      `cfgrammar::YaccKind::Original(cfgrammar::YaccOriginalActionKind::UserAction)`, it is
-    ///      [crate::Node<StorageT>].
+    ///    * if the `yacckind` was set to `YaccKind::GrmTools` or
+    ///      `YaccKind::Original(YaccOriginalActionKind::UserAction)`, it is
+    ///      the return type of the `%start` rule;
+    ///    * or, if the `yacckind` was set to
+    ///      `YaccKind::Original(YaccOriginalActionKind::GenericParseTree)`, it
+    ///      is [crate::Node<StorageT>].
     ///
     /// # Panics
     ///
