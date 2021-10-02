@@ -1,44 +1,98 @@
 # grmtools 0.11.0 (XXXX-YY-ZZ)
 
-## API deprecation summary
+## Breaking changes
 
-* Several of the functions / structs surrounding the compile-time construction
-  of grammars have changed: more details are given below, but in most cases
-  a `build.rs` that looks as follows:
+### `Lexeme` is now a trait not a struct
+
+`lrpar` now defines a `Lexeme` *trait* not a `Lexeme` *struct*: this allows the
+parser to abstract away from the particular data-layout of a lexeme (allowing a
+lexer to attach extra data to a lexeme) but does add an extra type parameter to
+several interfaces. Conventionally the `LexemeT` type parameter precedes the
+`StorageT` type parameter in the list of type parameters.
+
+`lrlex` defaults to using its new `DefaultLexeme` struct, which provides a
+generic lexeme struct similar to that previously provided by `lrlex` (though
+note that you can use `lrlex` with a lexeme struct of your own choosing).
+
+The precise effects of these changes will depend on how you use grmtools'
+libraries but in general:
+
+* You will need to change your lexeme imports from:
   ```rust
-    use lrlex::LexerBuilder;
-    use lrpar::CTParserBuilder;
-
-    fn main() -> Result<(), Box<dyn std::error::Error>> {
-        let lex_rule_ids_map = CTParserBuilder::<u8>::new_with_storaget()
-            .process_file_in_src("config.y")?;
-        LexerBuilder::new()
-            .rule_ids_map(lex_rule_ids_map)
-            .process_file_in_src("config.l")?;
-        Ok(())
-    }
+    use lrpar::Lexeme;
   ```
-  can be changed to:
+  to:
   ```rust
-    use lrlex::CTLexerBuilder;
-    use lrpar::CTParserBuilder;
-
-    fn main() -> Result<(), Box<dyn std::error::Error>> {
-        let cp = CTParserBuilder::<u8>::new_with_storaget()
-            .grammar_in_src_dir("config.y")?
-            .build()?;
-        CTLexerBuilder::new()
-            .rule_ids_map(cp.lexeme_id_map())
-            .lexer_in_src_dir("config.l")?
-            .build()?;
-        Ok(())
-    }
+    use lrlex::DefaultLexeme;
+    use lrpar::Lexeme;
   ```
 
-## API deprecation details
+* Most non-import references to `Lexeme` will need to refer to
+  `DefaultLexeme`.
 
-* lrlex's `LexerBuilder` has been renamed to `CTLexerBuilder` for symmetry with
-  lrpar.
+* Any references to `LRNonStreamingLexer` will need to change from:
+  ```rust
+    LRNonStreamingLexer<Lexeme<u32>>
+  ```
+  to:
+  ```rust
+    LRNonStreamingLexerDef<DefaultLexeme<u32>, u32>
+  ```
+  where `u32` is the `StorageT` of your choice.
+
+One of the additional benefits to this change is that it allows `lrpar` and
+other lexers (e.g. `lrlex`) to be clearly separated: `lrpar` now only defines
+traits which lexers have to conform to.
+
+
+### Build API changes
+
+Several of the functions / structs surrounding the compile-time construction
+of grammars have changed: more details are given below, but in most cases
+a `build.rs` that looks as follows:
+
+```rust
+  use cfgrammar::yacc::YaccKind;
+  use lrlex::LexerBuilder;
+  use lrpar::CTParserBuilder;
+
+  fn main() -> Result<(), Box<dyn std::error::Error>> {
+      let lex_rule_ids_map = CTParserBuilder::<u8>::new_with_storaget()
+          .yacckind(YaccKind::GrmTools)
+          .process_file_in_src("calc.y")?;
+      LexerBuilder::new()
+          .rule_ids_map(lex_rule_ids_map)
+          .process_file_in_src("calc.l")?;
+      Ok(())
+  }
+```
+can be changed to:
+```rust
+  use cfgrammar::yacc::YaccKind;
+  use lrlex::CTLexerBuilder;
+  
+  fn main() -> Result<(), Box<dyn std::error::Error>> {
+      CTLexerBuilder::new()
+          .lrpar_config(|ctp| {
+              ctp.yacckind(YaccKind::Grmtools)
+                  .grammar_in_src_dir("calc.y")
+                  .unwrap()
+          })
+          .lexer_in_src_dir("calc.l")?
+          .build()?;
+      Ok(())
+  }
+```
+
+In more detail:
+
+* `lrlex`'s `LexerBuilder` has been renamed to `CTLexerBuilder` for symmetry with
+  `lrpar`.
+
+* `CTLexerBuilder` now provides the `lrpar_config` convenience function which
+  removes some of the grottiness involved in tying together an `lrlex` lexer
+  and `lrpar` parser. `lrpar_config` is passed a `CTParserBuilder` instance to
+  which normal `lrpar` compile-time options can be applied.
 
 * `CTParserBuilder::process_file_in_src` is deprecated in favour of
   `CTParserBuilder::grammar_in_src_dir` and `CTParserBuilder::build`. The
@@ -46,39 +100,11 @@
   exposes a `lexeme_id_map` method whose result can be passed to lexers such as
   `lrlex`. 
 
-  In most cases, your old code will work as-is, but with deprecation warnings.
-  To migrate a typical `build.rs` and avoid those warnings, change:
-  ```rust
-    let lex_rule_ids_map = CTParserBuilder::new()
-        .process_file_in_src("grm.y")?;
-  ```
-  to:
-  ```rust
-    let cp = CTParserBuilder::new()
-        .grammar_in_src_dir("grm.y")?
-        .build()?;
-  ```
-  You can then use the `HashMap` returned `cp.lexeme_id_map()` to coordinate
-  with a lexer.
-
   The less commonly used `process_file` function is similarly deprecated in
   favour of the `grammar_path`, `output_path`, and `build` functions.
 
 * `LexerBuilder::process_file_in_src` is deprecated in favour of
-  `LexerBuilder::lexer_in_src_dir` and `LexerBuilder::build`. In most cases you
-  can change your `build.rs` from:
-  ```rust
-    LexerBuilder::new()
-        .rule_ids_map(lex_rule_ids_map)
-        .process_file_in_src("lex.l")?;
-  ```
-  to:
-  ```rust
-    LexerBuilder::new()
-        .rule_ids_map(lex_rule_ids_map)
-        .lexer_in_src_dir("lex.l")?
-        .build()?;
-  ```
+  `LexerBuilder::lexer_in_src_dir` and `LexerBuilder::build`.
 
   The less commonly used `process_file` function is similarly deprecated in
   favour of the `lexer_path`, `output_path`, and `build` functions.
@@ -87,7 +113,8 @@
   builder, producing a `CTLexer` and `CTParser` respectively, which can be
   queried for additional information.
 
-## Unstable API breaking change
+
+## The conflicts API has moved
 
 * The unstable `CTParserBuilder::conflicts` method has moved to `CTParser`.
   This interface remains unstable and may change without notice.
