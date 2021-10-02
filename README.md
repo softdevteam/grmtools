@@ -16,16 +16,15 @@ the root of our project with the following content:
 ```rust
 use cfgrammar::yacc::YaccKind;
 use lrlex::CTLexerBuilder;
-use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cp = CTParserBuilder::new()
-        .yacckind(YaccKind::Grmtools)
-        .grammar_in_src_dir("grammar.y")?
-        .build()?;
-    LexerBuilder::new()
-        .rule_ids_map(cp.lexeme_id_map())
-        .lexer_in_src_dir("lexer.l")?
+    CTLexerBuilder::new()
+        .lrpar_config(|ctp| {
+            ctp.yacckind(YaccKind::Grmtools)
+                .grammar_in_src_dir("calc.y")
+                .unwrap()
+        })
+        .lexer_in_src_dir("calc.l")?
         .build()?;
     Ok(())
 }
@@ -44,7 +43,7 @@ lexer can be found in `src/calc.l`:
 [\t ]+ ;
 ```
 
-And where the definitions for the parser can be found in `src/calc.y`:
+and where the definitions for the parser can be found in `src/calc.y`:
 
 ```rust
 %start Expr
