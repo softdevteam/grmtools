@@ -23,6 +23,9 @@ lrpar_mod!("lexer_lifetime.y");
 lrlex_mod!("multitypes.l");
 lrpar_mod!("multitypes.y");
 
+lrlex_mod!("parseparam.l");
+lrpar_mod!("parseparam.y");
+
 lrlex_mod!("passthrough.l");
 lrpar_mod!("passthrough.y");
 
@@ -226,6 +229,16 @@ fn test_span() {
         {
             ()
         }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_parseparam() {
+    let lexerdef = parseparam_l::lexerdef();
+    let lexer = lexerdef.lexer("101");
+    match parseparam_y::parse(&lexer, &3) {
+        (Some(i), _) if i == 104 => (),
         _ => unreachable!(),
     }
 }

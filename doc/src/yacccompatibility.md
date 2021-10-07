@@ -30,6 +30,10 @@ There are several differences between Yacc and grmtools including:
  * grmtools allows both Yacc's `%expect` and Bison's `%expect-rr` declarations
    in its base "Yacc" mode.
 
+ * Bison's `%parse-param` can take multiple arguments. grmtools' `%parse-param`
+   takes a single argument which can be a tuple, thus emulating multiple
+   arguments while integrating naturally into Rust's type system.
+
  * Although rare, it is possible to generate accept/reduce conflicts (e.g. for
    a grammar with the sole rule `A: A;`). grmtools considers accept/reduce
    conflicts to be a hard error, and refuses to generate anything for the

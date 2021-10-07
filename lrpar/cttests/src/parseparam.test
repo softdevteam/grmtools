@@ -1,0 +1,13 @@
+name: Test %parse-param
+yacckind: Grmtools
+grammar: |
+    %start S
+    %parse-param p: &'input u64
+    %%
+    S -> u64:
+        'INT' { *p + $lexer.span_str($1.unwrap().span()).parse::<u64>().unwrap() }
+    ;
+    %%
+lexer: |
+    %%
+    [0-9]+ 'INT'
