@@ -27,8 +27,7 @@ libraries but in general:
     use lrpar::Lexeme;
   ```
 
-* Most non-import references to `Lexeme` will need to refer to
-  `DefaultLexeme`.
+* Most references to `Lexeme` will need to refer to `DefaultLexeme`.
 
 * Any references to `LRNonStreamingLexer` will need to change from:
   ```rust
