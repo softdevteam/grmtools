@@ -6,9 +6,9 @@
 
 `lrpar` now defines a `Lexeme` *trait* not a `Lexeme` *struct*: this allows the
 parser to abstract away from the particular data-layout of a lexeme (allowing a
-lexer to attach extra data to a lexeme) but does add an extra type parameter to
-several interfaces. Conventionally the `LexemeT` type parameter precedes the
-`StorageT` type parameter in the list of type parameters.
+lexer to attach extra data to a lexeme) but does add an extra type parameter
+`LexemeT` to several interfaces. Conventionally the `LexemeT` type parameter
+precedes the `StorageT` type parameter in the list of type parameters.
 
 `lrlex` defaults to using its new `DefaultLexeme` struct, which provides a
 generic lexeme struct similar to that previously provided by `lrlex` (though
