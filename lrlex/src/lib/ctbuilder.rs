@@ -79,7 +79,7 @@ pub struct CTLexerBuilder<'a, LexemeT: Lexeme<StorageT>, StorageT: Debug + Eq + 
     allow_missing_tokens_in_parser: bool,
 }
 
-#[deprecated(since = "0.10.3", note = "Please refer to this as `CTLexerBuilder`")]
+#[deprecated(since = "0.11.0", note = "Please refer to this as `CTLexerBuilder`")]
 pub type LexerBuilder<'a, StorageT> = CTLexerBuilder<'a, StorageT>;
 
 impl<'a> CTLexerBuilder<'a, DefaultLexeme<u32>, u32> {
@@ -448,7 +448,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
     /// [`process_file`](#method.process_file) for additional constraints and information about the
     /// generated files.
     #[deprecated(
-        since = "0.10.3",
+        since = "0.11.0",
         note = "Please use lexer_in_src_dir() and build() instead"
     )]
     #[allow(deprecated)]
@@ -492,7 +492,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
     #[deprecated(
-        since = "0.10.3",
+        since = "0.11.0",
         note = "Please use lexer_in_src_dir() and build() instead"
     )]
     pub fn process_file<P, Q>(
