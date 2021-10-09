@@ -113,10 +113,18 @@ In more detail:
   queried for additional information.
 
 
-## The conflicts API has moved
+### The conflicts API has moved
 
 * The unstable `CTParserBuilder::conflicts` method has moved to `CTParser`.
   This interface remains unstable and may change without notice.
+
+## New feature
+
+* Yacc grammars now support the `%parse-param <var>: <type>` declaration. The
+  variable `<var>` is then visible in all action code. Note that `<type>` must
+  implement the [`Copy`
+  trait](https://doc.rust-lang.org/std/marker/trait.Copy.html). The generated
+  `parse` function then takes two parameters `(lexer: &..., <var>: <type>)`.
 
 
 # grmtools 0.10.2 (2021-08-09)
