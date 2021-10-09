@@ -969,7 +969,7 @@ where
                 if actiont == "()" {
                     "".to_owned()
                 } else {
-                    format!("\n->                  {}", actiont)
+                    format!("\n                 -> {}", actiont)
                 }
             };
             outs.push_str(&format!(
@@ -979,7 +979,7 @@ where
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                      {prefix}span: ::lrpar::Span,
                      {parse_paramdef},
-                     {args}) {returnt} {{
+                     {args}){returnt} {{
         let _ = {parse_paramname};\n",
                 usize::from(pidx),
                 rulename = grm.rule_name(grm.prod_to_rule(pidx)),
