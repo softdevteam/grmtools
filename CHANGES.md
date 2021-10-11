@@ -6,9 +6,9 @@
 
 `lrpar` now defines a `Lexeme` *trait* not a `Lexeme` *struct*: this allows the
 parser to abstract away from the particular data-layout of a lexeme (allowing a
-lexer to attach extra data to a lexeme) but does add an extra type parameter to
-several interfaces. Conventionally the `LexemeT` type parameter precedes the
-`StorageT` type parameter in the list of type parameters.
+lexer to attach extra data to a lexeme) but does add an extra type parameter
+`LexemeT` to several interfaces. Conventionally the `LexemeT` type parameter
+precedes the `StorageT` type parameter in the list of type parameters.
 
 `lrlex` defaults to using its new `DefaultLexeme` struct, which provides a
 generic lexeme struct similar to that previously provided by `lrlex` (though
@@ -27,8 +27,7 @@ libraries but in general:
     use lrpar::Lexeme;
   ```
 
-* Most non-import references to `Lexeme` will need to refer to
-  `DefaultLexeme`.
+* Most references to `Lexeme` will need to refer to `DefaultLexeme`.
 
 * Any references to `LRNonStreamingLexer` will need to change from:
   ```rust
@@ -114,10 +113,18 @@ In more detail:
   queried for additional information.
 
 
-## The conflicts API has moved
+### The conflicts API has moved
 
 * The unstable `CTParserBuilder::conflicts` method has moved to `CTParser`.
   This interface remains unstable and may change without notice.
+
+## New feature
+
+* Yacc grammars now support the `%parse-param <var>: <type>` declaration. The
+  variable `<var>` is then visible in all action code. Note that `<type>` must
+  implement the [`Copy`
+  trait](https://doc.rust-lang.org/std/marker/trait.Copy.html). The generated
+  `parse` function then takes two parameters `(lexer: &..., <var>: <type>)`.
 
 
 # grmtools 0.10.2 (2021-08-09)
