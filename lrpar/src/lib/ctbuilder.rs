@@ -809,14 +809,12 @@ where
                       {prefix}span: ::lrpar::Span,
                       mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
                       {parse_paramdef})
-                   -> {actionskind}<'input> {{
-        let _ = {parse_paramname};",
+                   -> {actionskind}<'input> {{",
                 usize::from(pidx),
                 lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
                 parse_paramdef = parse_paramdef,
-                parse_paramname = parse_paramname,
                 actionskind = ACTIONS_KIND,
             ));
 
@@ -889,7 +887,10 @@ where
                 // added by lrpar) will never be executed, so a dummy function is all
                 // that's required. We add "unreachable" as a check in case some other
                 // detail of lrpar changes in the future.
-                outs.push_str("    unreachable!()");
+                outs.push_str(&format!(
+                    "\n        let _ = {parse_paramname};\n        unreachable!()",
+                    parse_paramname = parse_paramname
+                ));
             } else {
                 panic!(
                     "Production in rule '{}' must have an action body.",
@@ -938,9 +939,9 @@ where
 
         // Convert actions to functions
         outs.push_str("\n    // User actions\n\n");
-        let parse_param = match grm.parse_param() {
-            Some((name, tyname)) => format!("{}: {}", name, tyname),
-            None => "_: ()".to_owned(),
+        let (parse_paramname, parse_paramdef) = match grm.parse_param() {
+            Some((name, tyname)) => (name.to_owned(), format!("{}: {}", name, tyname)),
+            None => ("()".to_owned(), "_: ()".to_owned()),
         };
         for pidx in grm.iter_pidxs() {
             if pidx == grm.start_prod() {
@@ -968,7 +969,7 @@ where
                 if actiont == "()" {
                     "".to_owned()
                 } else {
-                    format!("\n->                  {}", actiont)
+                    format!("\n                 -> {}", actiont)
                 }
             };
             outs.push_str(&format!(
@@ -977,15 +978,17 @@ where
     fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                      {prefix}span: ::lrpar::Span,
-                     {parse_param},
-                     {args}) {returnt} {{\n",
+                     {parse_paramdef},
+                     {args}){returnt} {{
+        let _ = {parse_paramname};\n",
                 usize::from(pidx),
                 rulename = grm.rule_name(grm.prod_to_rule(pidx)),
                 lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
                 returnt = returnt,
-                parse_param = parse_param,
+                parse_paramdef = parse_paramdef,
+                parse_paramname = parse_paramname,
                 args = args.join(",\n                     ")
             ));
 
