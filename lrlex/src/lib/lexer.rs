@@ -211,7 +211,51 @@ impl<
         &'lexer self,
         s: &'input str,
     ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
-        LRNonStreamingLexer::new(self, s)
+        let mut lexemes = vec![];
+        let mut newlines = vec![];
+        let mut i = 0;
+        while i < s.len() {
+            let old_i = i;
+            let mut longest = 0; // Length of the longest match
+            let mut longest_ridx = 0; // This is only valid iff longest != 0
+            for (ridx, r) in self.iter_rules().enumerate() {
+                if let Some(m) = r.re.find(&s[old_i..]) {
+                    let len = m.end();
+                    // Note that by using ">", we implicitly prefer an earlier over a later rule, if
+                    // both match an input of the same length.
+                    if len > longest {
+                        longest = len;
+                        longest_ridx = ridx;
+                    }
+                }
+            }
+            if longest > 0 {
+                newlines.extend(
+                    s[old_i..old_i + longest]
+                        .chars()
+                        .enumerate()
+                        .filter(|&(_, c)| c == '\n')
+                        .map(|(j, _)| old_i + j + 1),
+                );
+                let r = self.get_rule(longest_ridx).unwrap();
+                if r.name.is_some() {
+                    match r.tok_id {
+                        Some(tok_id) => {
+                            lexemes.push(Ok(Lexeme::new(tok_id, old_i, longest)));
+                        }
+                        None => {
+                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
+                            break;
+                        }
+                    }
+                }
+                i += longest;
+            } else {
+                lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
+                break;
+            }
+        }
+        LRNonStreamingLexer::new(s, lexemes, newlines)
     }
 }
 
@@ -234,55 +278,18 @@ impl<
         StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + TryFrom<usize> + Unsigned,
     > LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT>
 {
-    fn new(
-        lexerdef: &'lexer LRNonStreamingLexerDef<LexemeT, StorageT>,
+    /// Create a new `LRNonStreamingLexer` that read in: the input `s`; and derived `lexemes` and
+    /// `newlines`. The `newlines` `Vec<usize>` is a sorted list of the byte index of the start of
+    /// the following line. i.e. for the input string `" a\nb\n  c d"` the `Vec` should contain
+    /// `[3, 5]`.
+    ///
+    /// Note that if one or more lexemes or newlines was not created from `s`, subsequent calls to
+    /// the `LRNonStreamingLexer` may cause `panic`s.
+    pub fn new(
         s: &'input str,
+        lexemes: Vec<Result<LexemeT, LexError>>,
+        newlines: Vec<usize>,
     ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
-        let mut lexemes = vec![];
-        let mut newlines = vec![];
-        let mut i = 0;
-        while i < s.len() {
-            let old_i = i;
-            let mut longest = 0; // Length of the longest match
-            let mut longest_ridx = 0; // This is only valid iff longest != 0
-            for (ridx, r) in lexerdef.iter_rules().enumerate() {
-                if let Some(m) = r.re.find(&s[old_i..]) {
-                    let len = m.end();
-                    // Note that by using ">", we implicitly prefer an earlier over a later rule, if
-                    // both match an input of the same length.
-                    if len > longest {
-                        longest = len;
-                        longest_ridx = ridx;
-                    }
-                }
-            }
-            if longest > 0 {
-                newlines.extend(
-                    s[old_i..old_i + longest]
-                        .chars()
-                        .enumerate()
-                        .filter(|&(_, c)| c == '\n')
-                        .map(|(j, _)| old_i + j + 1),
-                );
-                let r = lexerdef.get_rule(longest_ridx).unwrap();
-                if r.name.is_some() {
-                    match r.tok_id {
-                        Some(tok_id) => {
-                            lexemes.push(Ok(Lexeme::new(tok_id, old_i, longest)));
-                        }
-                        None => {
-                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
-                            break;
-                        }
-                    }
-                }
-                i += longest;
-            } else {
-                lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
-                break;
-            }
-        }
-
         LRNonStreamingLexer {
             s,
             lexemes,
