@@ -434,7 +434,7 @@ where
     /// generated files.
     #[deprecated(
         since = "0.11.0",
-        note = "Please use grammar_in_src_dir(), build(), and lexeme_id_map() instead"
+        note = "Please use grammar_in_src_dir(), build(), and token_map() instead"
     )]
     #[allow(deprecated)]
     pub fn process_file_in_src(
@@ -1139,7 +1139,7 @@ where
 
     /// Returns a [HashMap] from lexeme string types to numeric types (e.g. `INT: 2`), suitable for
     /// handing to a lexer to coordinate the IDs of lexer and parser.
-    pub fn lexeme_id_map(&self) -> &HashMap<String, StorageT> {
+    pub fn token_map(&self) -> &HashMap<String, StorageT> {
         &self.rule_ids
     }
 

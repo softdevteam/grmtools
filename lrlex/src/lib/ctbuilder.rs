@@ -275,7 +275,7 @@ where
             let mut ctp = CTParserBuilder::<LexemeT, StorageT>::new();
             ctp = lrcfg(ctp);
             let map = ctp.build()?;
-            self.rule_ids_map = Some(map.lexeme_id_map().to_owned());
+            self.rule_ids_map = Some(map.token_map().to_owned());
         }
 
         let lexerp = self

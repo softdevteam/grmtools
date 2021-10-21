@@ -96,7 +96,7 @@ In more detail:
 * `CTParserBuilder::process_file_in_src` is deprecated in favour of
   `CTParserBuilder::grammar_in_src_dir` and `CTParserBuilder::build`. The
   latter method consumes the `CTParserBuilder` returning a `CTParser` which
-  exposes a `lexeme_id_map` method whose result can be passed to lexers such as
+  exposes a `token_map` method whose result can be passed to lexers such as
   `lrlex`. 
 
   The less commonly used `process_file` function is similarly deprecated in
