@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             outl.push(format!("{}.l.rs", base));
             outl.set_extension("rs");
             CTLexerBuilder::new()
-                .rule_ids_map(cp.lexeme_id_map())
+                .rule_ids_map(cp.token_map())
                 .lexer_path(pl.to_str().unwrap())
                 .output_path(&outl)
                 .build()?;
