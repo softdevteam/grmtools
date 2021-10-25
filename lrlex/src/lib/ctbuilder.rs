@@ -7,7 +7,7 @@ use std::{
     convert::AsRef,
     env::{current_dir, var},
     error::Error,
-    fmt::Debug,
+    fmt::{Debug, Display},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
     io::Write,
@@ -543,4 +543,80 @@ impl CTLexer {
     fn missing_from_parser(&self) -> Option<&HashSet<String>> {
         self.missing_from_parser.as_ref()
     }
+}
+
+/// Create a Rust module named `mod_name` that can be imported with
+/// [`lrlex_mod!(mod_name)`](lrlex_mod). The module contains one `const` `StorageT` per token in
+/// `token_map`, with the token prefixed by `T_`. For example with `StorageT` `u8`, `mod_name` `x`,
+/// and `token_map` `HashMap{"ID": 0, "INT": 1}` the generated module will look roughly as
+/// follows:
+///
+/// ```rust,ignore
+/// mod x {
+///   pub const T_ID: u8 = 0;
+///   pub const T_INT: u8 = 1;
+/// }
+/// ```
+///
+/// You can optionally remap names (for example, because the parser's token names do not lead to
+/// valid Rust identifiers) by specifying the `rename_map` `HashMap`. For example, if `token_map`
+/// is `HashMap{"+": 0, "ID": 1}` and `rename_map` is `HashMap{"+": "PLUS"}` then the generated
+/// module will look roughly as follows:
+///
+/// ```rust,ignore
+/// mod x {
+///   pub const T_PLUS: u8 = 0;
+///   pub const T_ID: u8 = 1;
+/// }
+/// ```
+pub fn ct_token_map<StorageT: Display>(
+    mod_name: &str,
+    token_map: &HashMap<String, StorageT>,
+    rename_map: Option<&HashMap<&str, &str>>,
+) -> Result<(), Box<dyn Error>> {
+    // Record the time that this version of lrlex was built. If the source code changes and rustc
+    // forces a recompile, this will change this value, causing anything which depends on this
+    // build of lrlex to be recompiled too.
+    let mut outs = String::new();
+    outs.push_str(&format!(
+        "// lrlex build time: {:?}\n\nmod {} {{\n",
+        env!("VERGEN_BUILD_TIMESTAMP"),
+        mod_name
+    ));
+    outs.push_str(
+        &token_map
+            .iter()
+            .map(|(k, v)| {
+                let k = match rename_map {
+                    Some(rmap) => *rmap.get(k.as_str()).unwrap_or(&k.as_str()),
+                    _ => k,
+                };
+                format!(
+                    "    #[allow(dead_code)] pub const T_{}: {} = {};",
+                    k,
+                    type_name::<StorageT>(),
+                    v
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+    outs.push_str("\n}");
+
+    let mut outp = PathBuf::from(var("OUT_DIR")?);
+    outp.push(mod_name);
+    outp.set_extension("rs");
+
+    // If the file we're about to write out already exists with the same contents, then we
+    // don't overwrite it (since that will force a recompile of the file, and relinking of the
+    // binary etc).
+    if let Ok(curs) = read_to_string(&outp) {
+        if curs == outs {
+            return Ok(());
+        }
+    }
+
+    let mut f = File::create(outp)?;
+    f.write_all(outs.as_bytes())?;
+    Ok(())
 }

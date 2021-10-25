@@ -24,7 +24,7 @@ mod parser;
 #[allow(deprecated)]
 pub use crate::ctbuilder::LexerBuilder;
 pub use crate::{
-    ctbuilder::{CTLexer, CTLexerBuilder, LexerKind, Visibility},
+    ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, Visibility},
     lexemes::DefaultLexeme,
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
