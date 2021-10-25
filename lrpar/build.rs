@@ -1,7 +1,8 @@
-use vergen::{generate_cargo_keys, ConstantsFlags};
+use vergen::{vergen, Config};
 
 fn main() {
-    let mut flags = ConstantsFlags::empty();
-    flags.insert(ConstantsFlags::BUILD_TIMESTAMP);
-    generate_cargo_keys(flags).unwrap();
+    let mut config = Config::default();
+    *config.build_mut().timestamp_mut() = true;
+    *config.build_mut().semver_mut() = false;
+    vergen(config).unwrap();
 }
