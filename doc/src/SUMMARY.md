@@ -4,6 +4,7 @@
 - [Quickstart Guide](quickstart.md)
 - [Lexing](lexing.md)
   - [Lex compatibility](lexcompatibility.md)
+  - [Hand-written lexers](manuallexer.md)
 - [Parsing](parsing.md)
   - [Yacc compatibility](yacccompatibility.md)
   - [Return types and action code](actioncode.md)

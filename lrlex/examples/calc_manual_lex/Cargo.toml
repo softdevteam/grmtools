@@ -1,0 +1,21 @@
+[package]
+name = "calc_manual_lex"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+edition = "2018"
+license = "Apache-2.0/MIT"
+
+[[bin]]
+doc = false
+name = "calc_manual_lex"
+
+[build-dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../" }
+lrpar = { path="../../../lrpar" }
+maplit = "1"
+
+[dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../.." }
+lrpar = { path="../../../lrpar" }
