@@ -59,11 +59,11 @@ fn lex(s: &str) -> LRNonStreamingLexer<DefaultLexeme<u8>, u8> {
             .chars()
             .take_while(|c| c.is_whitespace())
             .map(|c| c.len_utf8())
-            .fold(0, |a, x| a + x);
+            .sum::<usize>();
         if i == s.len() {
             break;
         }
-        match s[i..].chars().nth(0).unwrap() {
+        match s[i..].chars().next().unwrap() {
             '+' => {
                 lexemes.push(Ok(DefaultLexeme::new(T_PLUS, i, 1)));
                 i += 1;
@@ -83,14 +83,14 @@ fn lex(s: &str) -> LRNonStreamingLexer<DefaultLexeme<u8>, u8> {
             _ => {
                 let old_i = i;
                 while let Some('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') =
-                    s[i..].chars().nth(0)
+                    s[i..].chars().next()
                 {
                     i += 1;
                 }
                 if i > old_i {
                     lexemes.push(Ok(DefaultLexeme::new(T_INT, old_i, i - old_i)));
                 } else {
-                    let c_len = s[i..].chars().nth(0).unwrap().len_utf8();
+                    let c_len = s[i..].chars().next().unwrap().len_utf8();
                     lexemes.push(Ok(DefaultLexeme::new(T_UNMATCHED, i, c_len)));
                     i += c_len;
                 }
