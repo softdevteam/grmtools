@@ -18,6 +18,17 @@ rustup default stable
 cargo test
 cargo test --release
 
+root=`pwd`
+cd $root/lrlex/examples/calc_manual_lex
+echo "2 + 3 * 4" | cargo run | grep "Result: 14"
+cd $root/lrpar/examples/calc_actions
+echo "2 + 3 * 4" | cargo run | grep "Result: 14"
+cd $root/lrpar/examples/calc_ast
+echo "2 + 3 * 4" | cargo run | grep "Result: 14"
+cd $root/lrpar/examples/calc_parsetree
+echo "2 + 3 * 4" | cargo run | grep "Result: 14"
+cd $root
+
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps
 
 which cargo-deny | cargo install cargo-deny || true
