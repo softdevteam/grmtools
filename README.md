@@ -137,7 +137,12 @@ while parsing.
 
 ## Documentation
 
-- [grmtools book](https://softdevteam.github.io/grmtools/master/book/)
-- [lrpar](https://docs.rs/lrpar/)
-- [lrlex](https://docs.rs/lrlex/)
-- [lrtable](https://docs.rs/lrtable/)
+| Latest release                          | master |
+|-----------------------------------------|--------|
+| [grmtools book](https://softdevteam.github.io/grmtools/latest_release/book/) | [grmtools book](https://softdevteam.github.io/grmtools/master/book) |
+| [cfgrammar](https://docs.rs/cfgrammar/) | [cfgrammar](https://softdevteam.github.io/grmtools/master/api/cfgrammar/) |
+| [lrpar](https://docs.rs/lrpar/)         | [lrpar](https://softdevteam.github.io/grmtools/master/api/lrpar/)         |
+| [lrlex](https://docs.rs/lrlex/)         | [lrlex](https://softdevteam.github.io/grmtools/master/api/lrlex/)         |
+| [lrtable](https://docs.rs/lrtable/)     | [lrtable](https://softdevteam.github.io/grmtools/master/api/lrtable/)     |
+
+[Documentation for all past and present releases](https://softdevteam.github.io/grmtools/)
