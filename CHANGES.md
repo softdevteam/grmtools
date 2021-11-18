@@ -1,14 +1,21 @@
-# grmtools 0.11.0 (XXXX-YY-ZZ)
+# grmtools 0.11.0 (2021-11-18)
+
+An overview of the changes in this version:
+  * `Lexeme` is now a trait not a struct, increasing flexibility, but requiring
+    some changes in user code.
+  * The build API has slightly changed, requiring some changes in user code.
+  * `%parse-param` is now supported.
 
 ## Breaking changes
 
 ### `Lexeme` is now a trait not a struct
 
 `lrpar` now defines a `Lexeme` *trait* not a `Lexeme` *struct*: this allows the
-parser to abstract away from the particular data-layout of a lexeme (allowing a
-lexer to attach extra data to a lexeme) but does add an extra type parameter
-`LexemeT` to several interfaces. Conventionally the `LexemeT` type parameter
-precedes the `StorageT` type parameter in the list of type parameters.
+parser to abstract away from the particular data-layout of a lexeme (allowing,
+for example, a lexer to attach extra data to a lexeme that can be accessed by
+parser actions) but does add an extra type parameter `LexemeT` to several
+interfaces. Conventionally the `LexemeT` type parameter precedes the `StorageT`
+type parameter in the list of type parameters.
 
 `lrlex` defaults to using its new `DefaultLexeme` struct, which provides a
 generic lexeme struct similar to that previously provided by `lrlex` (though
