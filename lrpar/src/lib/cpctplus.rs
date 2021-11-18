@@ -144,9 +144,9 @@ where
         finish_by: Instant,
         parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
         in_laidx: usize,
-        mut in_pstack: &mut Vec<StIdx>,
-        mut astack: &mut Vec<AStackType<LexemeT, ActionT>>,
-        mut spans: &mut Vec<Span>,
+        in_pstack: &mut Vec<StIdx>,
+        astack: &mut Vec<AStackType<LexemeT, ActionT>>,
+        spans: &mut Vec<Span>,
     ) -> (usize, Vec<Vec<ParseRepair<LexemeT, StorageT>>>) {
         // This function implements a minor variant of the algorithm from "Repairing syntax errors
         // in LR parsers" by Rafael Corchuelo, Jose A. Perez, Antonio Ruiz, and Miguel Toro.
@@ -251,9 +251,9 @@ where
         let laidx = apply_repairs(
             parser,
             in_laidx,
-            &mut in_pstack,
-            &mut Some(&mut astack),
-            &mut Some(&mut spans),
+            in_pstack,
+            &mut Some(astack),
+            &mut Some(spans),
             &rnk_rprs[0],
         );
 
@@ -459,9 +459,9 @@ fn apply_repairs<
 >(
     parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
     mut laidx: usize,
-    mut pstack: &mut Vec<StIdx>,
-    mut astack: &mut Option<&mut Vec<AStackType<LexemeT, ActionT>>>,
-    mut spans: &mut Option<&mut Vec<Span>>,
+    pstack: &mut Vec<StIdx>,
+    astack: &mut Option<&mut Vec<AStackType<LexemeT, ActionT>>>,
+    spans: &mut Option<&mut Vec<Span>>,
     repairs: &[ParseRepair<LexemeT, StorageT>],
 ) -> usize
 where
@@ -476,21 +476,13 @@ where
                     next_lexeme.span().start(),
                     0,
                 );
-                parser.lr_upto(
-                    Some(new_lexeme),
-                    laidx,
-                    laidx + 1,
-                    &mut pstack,
-                    &mut astack,
-                    &mut spans,
-                );
+                parser.lr_upto(Some(new_lexeme), laidx, laidx + 1, pstack, astack, spans);
             }
             ParseRepair::Delete(_) => {
                 laidx += 1;
             }
             ParseRepair::Shift(_) => {
-                laidx =
-                    parser.lr_upto(None, laidx, laidx + 1, &mut pstack, &mut astack, &mut spans);
+                laidx = parser.lr_upto(None, laidx, laidx + 1, pstack, astack, spans);
             }
         }
     }

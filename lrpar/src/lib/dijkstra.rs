@@ -56,7 +56,7 @@ where
                     e.insert(nbr);
                 }
                 Entry::Occupied(mut e) => {
-                    merge(&mut e.get_mut(), nbr);
+                    merge(e.get_mut(), nbr);
                 }
             }
         }
@@ -82,7 +82,7 @@ where
                         e.insert(nbr);
                     }
                     Entry::Occupied(mut e) => {
-                        merge(&mut e.get_mut(), nbr);
+                        merge(e.get_mut(), nbr);
                     }
                 }
             }
