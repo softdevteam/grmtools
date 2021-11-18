@@ -2,7 +2,7 @@
 name = "lrlex"
 description = "Simple lexer generator"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.10.2"
+version = "0.11.0"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2018"
 readme = "README.md"
@@ -23,7 +23,7 @@ vergen = { version = "5", default-features = false, features = ["build"] }
 [dependencies]
 getopts = "0.2" # only needed for src/main.rs
 lazy_static = "1.4"
-lrpar = { path = "../lrpar", version = "0.10" }
+lrpar = { path = "../lrpar", version = "0.11" }
 regex = "1"
 num-traits = "0.2"
 serde = "1.0"
