@@ -12,6 +12,7 @@ use std::{
     hash::Hash,
     io::Write,
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 use lazy_static::lazy_static;
@@ -27,6 +28,7 @@ const RUST_FILE_EXT: &str = "rs";
 
 lazy_static! {
     static ref RE_TOKEN_ID: Regex = Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap();
+    static ref GENERATED_PATHS: Mutex<HashSet<PathBuf>> = Mutex::new(HashSet::new());
 }
 
 pub enum LexerKind {
@@ -286,6 +288,14 @@ where
             .output_path
             .as_ref()
             .expect("output_path must be specified before processing.");
+
+        {
+            let mut lk = GENERATED_PATHS.lock().unwrap();
+            if lk.contains(outp.as_path()) {
+                return Err(format!("Generating two lexers to the same path ('{}') is not allowed: use CTLexerBuilder::output_path (and, optionally, CTLexerBuilder::mod_name) to differentiate them.", &outp.to_str().unwrap()).into());
+            }
+            lk.insert(outp.clone());
+        }
 
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
