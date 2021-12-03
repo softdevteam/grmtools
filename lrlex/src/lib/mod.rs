@@ -85,8 +85,12 @@ pub fn build_lex<
 )]
 pub type NonStreamingLexerDef<LexemeT, StorageT> = LRNonStreamingLexerDef<LexemeT, StorageT>;
 
-/// A convenience macro for including statically compiled `.l` files. A file `src/a/b/c.l` which is
-/// statically compiled by lrlex can then be used in a crate with `lrlex_mod!("a/b/c.l")`.
+/// A convenience macro for including statically compiled `.l` files. A file `src/a/b/c.l`
+/// processed by [CTLexerBuilder::lexer_in_src_dir] can then be used in a crate with
+/// `lrlex_mod!("a/b/c.l")`.
+///
+/// Note that you can use `lrlex_mod` with [CTLexerBuilder::output_path] if, and only if, the
+/// output file was placed in [std::env::var]`("OUT_DIR")` or one of its subdirectories.
 #[macro_export]
 macro_rules! lrlex_mod {
     ($path:expr) => {

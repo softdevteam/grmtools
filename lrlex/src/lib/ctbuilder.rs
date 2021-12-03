@@ -165,7 +165,9 @@ where
     ///
     /// This is a convenience function that makes it easier to compile lexer files stored in a
     /// project's `src/` directory: please see [CTLexerBuilder::build] for additional constraints
-    /// and information about the generated files.
+    /// and information about the generated files. Note also that each `.l` file can only be
+    /// processed once using this function: if you want to generate multiple lexers from a single
+    /// `.l` file, you will need to use [CTLexerBuilder::output_path].
     pub fn lexer_in_src_dir<P>(mut self, srcp: P) -> Result<Self, Box<dyn Error>>
     where
         P: AsRef<Path>,
@@ -210,7 +212,10 @@ where
         self
     }
 
-    /// Set the output lexer path to `outp`.
+    /// Set the output lexer path to `outp`. Note that there are no requirements on `outp`: the
+    /// file can exist anywhere you can create a valid [Path] to. However, if you wish to use
+    /// [lrlex_mod!] you will need to make sure that `outp` is in [std::env::var]`("OUT_DIR")` or
+    /// one of its subdirectories.
     pub fn output_path<P>(mut self, outp: P) -> Self
     where
         P: AsRef<Path>,
