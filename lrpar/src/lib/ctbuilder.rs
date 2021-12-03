@@ -3,7 +3,7 @@
 use std::{
     any::type_name,
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     convert::AsRef,
     env::{current_dir, var},
     error::Error,
@@ -13,6 +13,7 @@ use std::{
     io::{self, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 use bincode::{deserialize, serialize_into};
@@ -42,6 +43,7 @@ const STABLE_CONST_NAME: &str = "__STABLE_DATA";
 
 lazy_static! {
     static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
+    static ref GENERATED_PATHS: Mutex<HashSet<PathBuf>> = Mutex::new(HashSet::new());
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
@@ -340,6 +342,15 @@ where
             Some(YaccKind::Grmtools) => YaccKind::Grmtools,
             Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
         };
+
+        {
+            let mut lk = GENERATED_PATHS.lock().unwrap();
+            if lk.contains(outp.as_path()) {
+                return Err(format!("Generating two parsers to the same path ('{}') is not allowed: use CTParserBuilder::output_path (and, optionally, CTParserBuilder::mod_name) to differentiate them.", &outp.to_str().unwrap()).into());
+            }
+            lk.insert(outp.clone());
+        }
+
         let inc = read_to_string(grmp).unwrap();
         let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc)?;
         let rule_ids = grm
@@ -413,6 +424,7 @@ where
                 format!("{}_y", stem)
             }
         };
+
         self.output_file(&grm, &stable, &mod_name, outp, &cache)?;
         let conflicts = if stable.conflicts().is_some() {
             Some((grm, sgraph, stable))
