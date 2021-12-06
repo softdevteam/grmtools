@@ -198,8 +198,12 @@ pub use crate::{
     parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
 
-/// A convenience macro for including statically compiled `.y` files. A file `src/a/b/c.y` which is
-/// statically compiled by lrpar can then be used in a crate with `lrpar_mod!("a/b/c.y")`.
+/// A convenience macro for including statically compiled `.y` files. A file `src/a/b/c.ly
+/// processed by [CTParserBuilder::parser_in_src_dir] can then be used in a crate with
+/// `lrpar_mod!("a/b/c.l")`.
+///
+/// Note that you can use `lrpar_mod` with [CTParserBuilder::output_path] if, and only if, the
+/// output file was placed in [std::env::var]`("OUT_DIR")` or one of its subdirectories.
 #[macro_export]
 macro_rules! lrpar_mod {
     ($path:expr) => {
