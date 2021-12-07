@@ -1,3 +1,12 @@
+# grmtools 0.11.1 (2021-12-07)
+
+* Explicitly error if the users tries to generate two or more lexers or parsers
+  with the same output file name. Previously the final lexer/parser created
+  "won the race", leading to a confusing situation where seemingly correct code
+  would not compile. Users can explicitly set an output path via `output_path`
+  that allows multiple lexers/parsers to be generated with unique names.
+
+
 # grmtools 0.11.0 (2021-11-18)
 
 An overview of the changes in this version:
@@ -5,6 +14,8 @@ An overview of the changes in this version:
     some changes in user code.
   * The build API has slightly changed, requiring some changes in user code.
   * `%parse-param` is now supported.
+  * `lrlex` provides a new API to make it easy to use simple hand-written
+    lexers instead of its default lexer.
 
 ## Breaking changes
 
@@ -125,13 +136,18 @@ In more detail:
 * The unstable `CTParserBuilder::conflicts` method has moved to `CTParser`.
   This interface remains unstable and may change without notice.
 
-## New feature
+## New features
 
 * Yacc grammars now support the `%parse-param <var>: <type>` declaration. The
   variable `<var>` is then visible in all action code. Note that `<type>` must
   implement the [`Copy`
   trait](https://doc.rust-lang.org/std/marker/trait.Copy.html). The generated
   `parse` function then takes two parameters `(lexer: &..., <var>: <type>)`.
+
+* `lrlex` now exposes a `ct_token_map` function which creates a module with
+  a parser's token IDs, and allows users to call `LRNonStreamingLexer::new`
+  directly. This makes creating simple hand-written lexers much easier (see
+  the new `calc_manual_lex` example to see this in action).
 
 
 # grmtools 0.10.2 (2021-08-09)
