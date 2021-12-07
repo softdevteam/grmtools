@@ -5,6 +5,8 @@ An overview of the changes in this version:
     some changes in user code.
   * The build API has slightly changed, requiring some changes in user code.
   * `%parse-param` is now supported.
+  * `lrlex` provides a new API to make it easy to use simple hand-written
+    lexers instead of its default lexer.
 
 ## Breaking changes
 
@@ -125,13 +127,18 @@ In more detail:
 * The unstable `CTParserBuilder::conflicts` method has moved to `CTParser`.
   This interface remains unstable and may change without notice.
 
-## New feature
+## New features
 
 * Yacc grammars now support the `%parse-param <var>: <type>` declaration. The
   variable `<var>` is then visible in all action code. Note that `<type>` must
   implement the [`Copy`
   trait](https://doc.rust-lang.org/std/marker/trait.Copy.html). The generated
   `parse` function then takes two parameters `(lexer: &..., <var>: <type>)`.
+
+* `lrlex` now exposes a `ct_token_map` function which creates a module with
+  a parser's token IDs, and allows users to call `LRNonStreamingLexer::new`
+  directly. This makes creating simple hand-written lexers much easier (see
+  the new `calc_manual_lex` example to see this in action).
 
 
 # grmtools 0.10.2 (2021-08-09)
