@@ -1,3 +1,12 @@
+# grmtools 0.11.1 (2021-12-07)
+
+* Explicitly error if the users tries to generate two or more lexers or parsers
+  with the same output file name. Previously the final lexer/parser created
+  "won the race", leading to a confusing situation where seemingly correct code
+  would not compile. Users can explicitly set an output path via `output_path`
+  that allows multiple lexers/parsers to be generated with unique names.
+
+
 # grmtools 0.11.0 (2021-11-18)
 
 An overview of the changes in this version:
