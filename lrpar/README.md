@@ -21,11 +21,11 @@ appropriate documentation for the version of lrpar you are using here:
 
 Let's assume we want to statically generate a parser for a simple calculator
 language (and let's also assume we are able to use
-[`lrlex`](https://softdevteam.github.io/grmtools/master/book/lrlex.html) for the
-lexer). We need to add a `build.rs` file to our project which statically
-compiles both the lexer and parser. While we can perform both steps
-individually, it's easiest to use `lrlex` which does both jobs for us in one
-go. Our `build.rs` file thus looks as follows:
+[`lrlex`](https://crates.io/crates/lrlex) for the lexer). We need to add a
+`build.rs` file to our project which statically compiles both the lexer and
+parser. While we can perform both steps individually, it's easiest to use
+`lrlex` which does both jobs for us in one go. Our `build.rs` file thus looks
+as follows:
 
 ```rust
 use cfgrammar::yacc::YaccKind;

@@ -8,20 +8,28 @@
 #![allow(clippy::unnecessary_wraps)]
 #![allow(clippy::upper_case_acronyms)]
 
-//! `lrpar` provides a Yacc-compatible parser (where grammars can be generated at
-//! compile-time or run-time). It can take in traditional `.y` files and convert
-//! them into an idiomatic Rust parser. More details can be found in the [grmtools
-//! book](https://softdevteam.github.io/grmtools/master/book); the
-//! [quickstart guide](https://softdevteam.github.io/grmtools/master/book/quickstart.html)
-//! is a good place to start.
+//! `lrpar` provides a Yacc-compatible parser (where grammars can be generated at compile-time or
+//! run-time). It can take in traditional `.y` files and convert them into an idiomatic Rust
+//! parser.
+//!
+//! If you're new to `lrpar`, please read the "quick start guide". The "grmtools book" and API
+//! reference have more detailed information.  You can find the appropriate documentation for the
+//! version of lrpar you are using here:
+//!
+//! | Latest release                          | master |
+//! |-----------------------------------------|--------|
+//! | [Quickstart guide](https://softdevteam.github.io/grmtools/latest_release/book/quickstart.html) | [Quickstart guide](https://softdevteam.github.io/grmtools/master/book/quickstart.html) |
+//! | [grmtools book](https://softdevteam.github.io/grmtools/latest_release/book/) | [grmtools book](https://softdevteam.github.io/grmtools/master/book) |
+//! | [lrpar API](https://docs.rs/lrpar/)     | [lrpar API](https://softdevteam.github.io/grmtools/master/api/lrpar/)         |
+//!
+//! [Documentation for all past and present releases](https://softdevteam.github.io/grmtools/)
 //!
 //!
 //! ## Example
 //!
 //! Let's assume we want to statically generate a parser for a simple calculator language (and
-//! let's also assume we are able to use
-//! [`lrlex`](https://softdevteam.github.io/grmtools/master/book/lrlex.html) for the lexer). We
-//! need to add a `build.rs` file to our project which statically compiles both the lexer and
+//! let's also assume we are able to use [`lrlex`](https://crates.io/crates/lrlex) for the lexer).
+//! We need to add a `build.rs` file to our project which statically compiles both the lexer and
 //! parser. While we can perform both steps individually, it's easiest to use `lrlex` which does
 //! both jobs for us in one go. Our `build.rs` file thus looks as follows:
 //!
