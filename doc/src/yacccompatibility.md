@@ -43,7 +43,9 @@ There are several differences between Yacc and grmtools including:
    such rules as "not generating any sentences").
 
 
-## Grmtools
+## YaccKinds
+
+### Grmtools
 
 `YaccKind::Grmtools` is grmtools' own variant of Yacc syntax, and the one that
 most users will want to use. The most significant difference to "normal" Yacc
@@ -68,7 +70,7 @@ Here the rule `R1` has a Rust return type of `Result<X, ()>` (between `->` and
 `Ok(5)` and the second `Err(())`. The rule `R2` has a return type of `u64`.
 
 
-## “Original” Yacc
+### “Original” Yacc
 
 Although the name is not fully accurate (grmtools supports a slightly disjoint
 subset of original Yacc's input), this mode allows users to most easily test
