@@ -16,7 +16,7 @@ name = "lrpar"
 path = "src/lib/mod.rs"
 
 [build-dependencies]
-vergen = { version = "5", default-features = false, features = ["build"] }
+vergen = { version = "6", default-features = false, features = ["build"] }
 
 [dependencies]
 bincode = "1.2"
