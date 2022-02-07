@@ -405,7 +405,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
         Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
                 tok_id,
                 n,
-                r.re_str.replace("\\", "\\\\").replace("\"", "\\\"")
+                r.re_str.replace('\\', "\\\\").replace('"', "\\\"")
             ));
         }
 

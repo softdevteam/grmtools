@@ -55,16 +55,15 @@ pub enum LexErrorKind {
 
 impl fmt::Display for LexBuildError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s;
-        match self.kind {
-            LexErrorKind::PrematureEnd => s = "File ends prematurely",
-            LexErrorKind::RoutinesNotSupported => s = "Routines not currently supported",
-            LexErrorKind::UnknownDeclaration => s = "Unknown declaration",
-            LexErrorKind::MissingSpace => s = "Rule is missing a space",
-            LexErrorKind::InvalidName => s = "Invalid rule name",
-            LexErrorKind::DuplicateName => s = "Rule name already exists",
-            LexErrorKind::RegexError => s = "Invalid regular expression",
-        }
+        let s = match self.kind {
+            LexErrorKind::PrematureEnd => "File ends prematurely",
+            LexErrorKind::RoutinesNotSupported => "Routines not currently supported",
+            LexErrorKind::UnknownDeclaration => "Unknown declaration",
+            LexErrorKind::MissingSpace => "Rule is missing a space",
+            LexErrorKind::InvalidName => "Invalid rule name",
+            LexErrorKind::DuplicateName => "Rule name already exists",
+            LexErrorKind::RegexError => "Invalid regular expression",
+        };
         write!(f, "{} at line {} column {}", s, self.line, self.col)
     }
 }
