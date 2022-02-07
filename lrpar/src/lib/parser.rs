@@ -658,7 +658,7 @@ impl<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned>
                                     rs_out.push(format!("Insert {}", epp(*tidx).unwrap()));
                                 }
                                 ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
-                                    let t = &lexer.span_str(l.span()).replace("\n", "\\n");
+                                    let t = &lexer.span_str(l.span()).replace('\n', "\\n");
                                     if let ParseRepair::Delete(_) = *r {
                                         rs_out.push(format!("Delete {}", t));
                                     } else {

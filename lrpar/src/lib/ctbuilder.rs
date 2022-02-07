@@ -1068,7 +1068,7 @@ where
 
 /// Return a version of the string `s` which is safe to embed in source code as a string.
 fn str_escape(s: &str) -> String {
-    s.replace("\\", "\\\\").replace("\"", "\\\"")
+    s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// This function is called by generated files; it exists so that generated files don't require a

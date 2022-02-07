@@ -17,9 +17,9 @@ fn usage(prog: &str, msg: &str) {
         None => "lrpar",
     };
     if !msg.is_empty() {
-        writeln!(&mut stderr(), "{}", msg).ok();
+        writeln!(stderr(), "{}", msg).ok();
     }
-    writeln!(&mut stderr(), "Usage: {} <lexer.l> <input file>", leaf).ok();
+    writeln!(stderr(), "Usage: {} <lexer.l> <input file>", leaf).ok();
     process::exit(1);
 }
 
@@ -27,7 +27,7 @@ fn read_file(path: &str) -> String {
     let mut f = match File::open(path) {
         Ok(r) => r,
         Err(e) => {
-            writeln!(&mut stderr(), "Can't open file {}: {}", path, e).ok();
+            writeln!(stderr(), "Can't open file {}: {}", path, e).ok();
             process::exit(1);
         }
     };
@@ -54,7 +54,7 @@ fn main() {
     let lex_l_path = &matches.free[0];
     let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme, _>::from_str(&read_file(lex_l_path))
         .unwrap_or_else(|s| {
-            writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
+            writeln!(stderr(), "{}: {}", &lex_l_path, &s).ok();
             process::exit(1);
         });
     let input = &read_file(&matches.free[1]);

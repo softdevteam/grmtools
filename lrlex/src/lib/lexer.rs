@@ -159,38 +159,37 @@ impl<LexemeT, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> 
             }
         }
 
-        let missing_from_parser;
-        if missing_from_parser_idxs.is_empty() {
-            missing_from_parser = None;
+        let missing_from_parser = if missing_from_parser_idxs.is_empty() {
+            None
         } else {
             let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
             for i in &missing_from_parser_idxs {
                 mfp.insert(self.rules[*i].name.as_ref().unwrap().as_str());
             }
-            missing_from_parser = Some(mfp);
+            Some(mfp)
         };
 
-        let missing_from_lexer;
-        if rules_with_names - missing_from_parser_idxs.len() == rule_ids_map.len() {
-            missing_from_lexer = None
-        } else {
-            missing_from_lexer = Some(
-                rule_ids_map
-                    .keys()
-                    .cloned()
-                    .collect::<HashSet<&str>>()
-                    .difference(
-                        &self
-                            .rules
-                            .iter()
-                            .filter(|x| x.name.is_some())
-                            .map(|x| &**x.name.as_ref().unwrap())
-                            .collect::<HashSet<&str>>(),
-                    )
-                    .cloned()
-                    .collect::<HashSet<&str>>(),
-            );
-        }
+        let missing_from_lexer =
+            if rules_with_names - missing_from_parser_idxs.len() == rule_ids_map.len() {
+                None
+            } else {
+                Some(
+                    rule_ids_map
+                        .keys()
+                        .cloned()
+                        .collect::<HashSet<&str>>()
+                        .difference(
+                            &self
+                                .rules
+                                .iter()
+                                .filter(|x| x.name.is_some())
+                                .map(|x| &**x.name.as_ref().unwrap())
+                                .collect::<HashSet<&str>>(),
+                        )
+                        .cloned()
+                        .collect::<HashSet<&str>>(),
+                )
+            };
 
         (missing_from_lexer, missing_from_parser)
     }

@@ -20,10 +20,10 @@ fn usage(prog: &str, msg: &str) -> ! {
         None => "lrpar",
     };
     if !msg.is_empty() {
-        writeln!(&mut stderr(), "{}", msg).ok();
+        writeln!(stderr(), "{}", msg).ok();
     }
     writeln!(
-        &mut stderr(),
+        stderr(),
         "Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-q] <lexer.l> <parser.y> <input file>",
         leaf
     )
@@ -35,7 +35,7 @@ fn read_file(path: &str) -> String {
     let mut f = match File::open(path) {
         Ok(r) => r,
         Err(e) => {
-            writeln!(&mut stderr(), "Can't open file {}: {}", path, e).ok();
+            writeln!(stderr(), "Can't open file {}: {}", path, e).ok();
             process::exit(1);
         }
     };
@@ -102,7 +102,7 @@ fn main() {
         match LRNonStreamingLexerDef::<DefaultLexeme<u32>, u32>::from_str(&read_file(lex_l_path)) {
             Ok(ast) => ast,
             Err(s) => {
-                writeln!(&mut stderr(), "{}: {}", &lex_l_path, &s).ok();
+                writeln!(stderr(), "{}: {}", &lex_l_path, &s).ok();
                 process::exit(1);
             }
         };
@@ -111,14 +111,14 @@ fn main() {
     let grm = match YaccGrammar::new(yacckind, &read_file(yacc_y_path)) {
         Ok(x) => x,
         Err(s) => {
-            writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
+            writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
             process::exit(1);
         }
     };
     let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
-            writeln!(&mut stderr(), "{}: {}", &yacc_y_path, &s).ok();
+            writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
             process::exit(1);
         }
     };
@@ -156,23 +156,23 @@ fn main() {
         let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
         if !quiet {
             if let Some(tokens) = missing_from_parser {
-                writeln!(&mut stderr(), "Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:").ok();
+                writeln!(stderr(), "Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:").ok();
                 let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
                 sorted.sort_unstable();
                 for n in sorted {
-                    writeln!(&mut stderr(), "  {}", n).ok();
+                    writeln!(stderr(), "  {}", n).ok();
                 }
             }
             if let Some(tokens) = missing_from_lexer {
                 writeln!(
-                    &mut stderr(),
+                    stderr(),
                     "Error: these tokens are referenced in the grammar but not defined in the lexer:"
                 )
                 .ok();
                 let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
                 sorted.sort_unstable();
                 for n in sorted {
-                    writeln!(&mut stderr(), "  {}", n).ok();
+                    writeln!(stderr(), "  {}", n).ok();
                 }
                 process::exit(1);
             }

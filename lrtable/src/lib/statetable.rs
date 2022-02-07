@@ -111,10 +111,9 @@ impl<StorageT: Debug> Error for StateTableError<StorageT> {}
 
 impl<StorageT> fmt::Display for StateTableError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s;
-        match self.kind {
-            StateTableErrorKind::AcceptReduceConflict => s = "Accept/reduce conflict",
-        }
+        let s = match self.kind {
+            StateTableErrorKind::AcceptReduceConflict => "Accept/reduce conflict",
+        };
         write!(f, "{}", s)
     }
 }
