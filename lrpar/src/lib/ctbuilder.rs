@@ -653,7 +653,6 @@ where
     {{",
                     lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
-                    parse_param = parse_param,
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap(),
                 ));
             }
@@ -698,13 +697,7 @@ where
                 // action function references
                 let wrappers = grm
                     .iter_pidxs()
-                    .map(|pidx| {
-                        format!(
-                            "&{prefix}wrapper_{}",
-                            usize::from(pidx),
-                            prefix = ACTION_PREFIX
-                        )
-                    })
+                    .map(|pidx| format!("&{ACTION_PREFIX}wrapper_{}", usize::from(pidx),))
                     .collect::<Vec<_>>()
                     .join(",\n                        ");
                 let (parse_param, parse_paramty) = match grm.parse_param() {
@@ -722,8 +715,6 @@ where
                     actionskind = ACTIONS_KIND,
                     lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
-                    parse_paramty = parse_paramty,
-                    wrappers = wrappers
                 ));
                 outs.push_str(&format!(
                     "
@@ -734,29 +725,25 @@ where
                 (None, y) => (None, y),
                 _ => unreachable!()
         }}",
-                    parse_param = parse_param,
                     actionskind = ACTIONS_KIND,
                     actionskindprefix = ACTIONS_KIND_PREFIX,
                     ridx = usize::from(self.user_start_ridx(grm)),
-                    recoverer = recoverer,
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 outs.push_str(&format!(
                     "
         ::lrpar::RTParserBuilder::new(&grm, &stable)
-            .recoverer(::lrpar::RecoveryKind::{})
+            .recoverer(::lrpar::RecoveryKind::{recoverer})
             .parse_generictree(lexer)\n",
-                    recoverer
                 ));
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 outs.push_str(&format!(
                     "
         ::lrpar::RTParserBuilder::new(&grm, &stable)
-            .recoverer(::lrpar::RecoveryKind::{})
+            .recoverer(::lrpar::RecoveryKind::{recoverer})
             .parse_noaction(lexer)\n",
-                    recoverer
                 ));
             }
             YaccKind::Eco => unreachable!(),
@@ -831,7 +818,6 @@ where
                 lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
-                parse_paramdef = parse_paramdef,
                 actionskind = ACTIONS_KIND,
             ));
 
@@ -885,7 +871,6 @@ where
                             prefix = ACTION_PREFIX,
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
-                            parse_paramname = parse_paramname,
                             args = args.join(", ")));
                     }
                     _ => {
@@ -895,7 +880,6 @@ where
                             prefix = ACTION_PREFIX,
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
-                            parse_paramname = parse_paramname,
                             args = args.join(", ")));
                     }
                 }
@@ -906,7 +890,6 @@ where
                 // detail of lrpar changes in the future.
                 outs.push_str(&format!(
                     "\n        let _ = {parse_paramname};\n        unreachable!()",
-                    parse_paramname = parse_paramname
                 ));
             } else {
                 panic!(
@@ -1003,9 +986,6 @@ where
                 lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,
-                returnt = returnt,
-                parse_paramdef = parse_paramdef,
-                parse_paramname = parse_paramname,
                 args = args.join(",\n                     ")
             ));
 
@@ -1021,19 +1001,17 @@ where
                             last = last + off + "$$".len();
                         } else if pre_action[last + off..].starts_with("$lexer") {
                             outs.push_str(&pre_action[last..last + off]);
-                            outs.push_str(
-                                format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str(),
-                            );
+                            outs.push_str(format!("{ACTION_PREFIX}lexer").as_str());
                             last = last + off + "$lexer".len();
                         } else if pre_action[last + off..].starts_with("$span") {
                             outs.push_str(&pre_action[last..last + off]);
-                            outs.push_str(format!("{prefix}span", prefix = ACTION_PREFIX).as_str());
+                            outs.push_str(format!("{ACTION_PREFIX}span").as_str());
                             last = last + off + "$span".len();
                         } else if last + off + 1 < pre_action.len()
                             && pre_action[last + off + 1..].starts_with(|c: char| c.is_numeric())
                         {
                             outs.push_str(&pre_action[last..last + off]);
-                            outs.push_str(format!("{prefix}arg_", prefix = ACTION_PREFIX).as_str());
+                            outs.push_str(format!("{ACTION_PREFIX}arg_").as_str());
                             last = last + off + "$".len();
                         } else {
                             panic!(
