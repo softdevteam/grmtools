@@ -440,66 +440,64 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_stategraph() {
-        let grm = grammar3();
-        let sg = pager_stategraph(&grm);
+        let grm = &grammar3();
+        let sg = pager_stategraph(grm);
 
         assert_eq!(sg.all_states_len(), StIdx(10));
         assert_eq!(sg.all_edges_len(), 10);
 
         assert_eq!(sg.closed_state(sg.start_state()).items.len(), 3);
-        state_exists(&grm, sg.closed_state(sg.start_state()), "^", 0, SIdx(0), vec!["$"]);
-        state_exists(&grm, sg.closed_state(sg.start_state()), "S", 0, SIdx(0), vec!["$", "b"]);
-        state_exists(&grm, sg.closed_state(sg.start_state()), "S", 1, SIdx(0), vec!["$", "b"]);
+        state_exists(grm, sg.closed_state(sg.start_state()), "^", 0, SIdx(0), vec!["$"]);
+        state_exists(grm, sg.closed_state(sg.start_state()), "S", 0, SIdx(0), vec!["$", "b"]);
+        state_exists(grm, sg.closed_state(sg.start_state()), "S", 1, SIdx(0), vec!["$", "b"]);
 
         let s1 = sg.edge(sg.start_state(), Symbol::Rule(grm.rule_idx("S").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s1).items.len(), 2);
-        state_exists(&grm, sg.closed_state(s1), "^", 0, SIdx(1), vec!["$"]);
-        state_exists(&grm, sg.closed_state(s1), "S", 0, SIdx(1), vec!["$", "b"]);
+        state_exists(grm, sg.closed_state(s1), "^", 0, SIdx(1), vec!["$"]);
+        state_exists(grm, sg.closed_state(s1), "S", 0, SIdx(1), vec!["$", "b"]);
 
         let s2 = sg.edge(s1, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s2).items.len(), 1);
-        state_exists(&grm, sg.closed_state(s2), "S", 0, SIdx(2), vec!["$", "b"]);
+        state_exists(grm, sg.closed_state(s2), "S", 0, SIdx(2), vec!["$", "b"]);
 
         let s3 = sg.edge(sg.start_state(), Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s3).items.len(), 4);
-        state_exists(&grm, sg.closed_state(s3), "S", 1, SIdx(1), vec!["$", "b", "c"]);
-        state_exists(&grm, sg.closed_state(s3), "A", 0, SIdx(0), vec!["a"]);
-        state_exists(&grm, sg.closed_state(s3), "A", 1, SIdx(0), vec!["a"]);
-        state_exists(&grm, sg.closed_state(s3), "A", 2, SIdx(0), vec!["a"]);
+        state_exists(grm, sg.closed_state(s3), "S", 1, SIdx(1), vec!["$", "b", "c"]);
+        state_exists(grm, sg.closed_state(s3), "A", 0, SIdx(0), vec!["a"]);
+        state_exists(grm, sg.closed_state(s3), "A", 1, SIdx(0), vec!["a"]);
+        state_exists(grm, sg.closed_state(s3), "A", 2, SIdx(0), vec!["a"]);
 
         let s4 = sg.edge(s3, Symbol::Rule(grm.rule_idx("A").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s4).items.len(), 1);
-        state_exists(&grm, sg.closed_state(s4), "S", 1, SIdx(2), vec!["$", "b", "c"]);
+        state_exists(grm, sg.closed_state(s4), "S", 1, SIdx(2), vec!["$", "b", "c"]);
 
         let s5 = sg.edge(s4, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s5).items.len(), 1);
-        state_exists(&grm, sg.closed_state(s5), "S", 1, SIdx(3), vec!["$", "b", "c"]);
+        state_exists(grm, sg.closed_state(s5), "S", 1, SIdx(3), vec!["$", "b", "c"]);
 
         let s6 = sg.edge(s3, Symbol::Token(grm.token_idx("a").unwrap())).unwrap();
         // result from merging 10 into 3
         assert_eq!(s3, sg.edge(s6, Symbol::Token(grm.token_idx("b").unwrap())).unwrap());
         assert_eq!(sg.closed_state(s6).items.len(), 5);
-        state_exists(&grm, sg.closed_state(s6), "A", 0, SIdx(1), vec!["a"]);
-        state_exists(&grm, sg.closed_state(s6), "A", 1, SIdx(1), vec!["a"]);
-        state_exists(&grm, sg.closed_state(s6), "A", 2, SIdx(1), vec!["a"]);
-        state_exists(&grm, sg.closed_state(s6), "S", 0, SIdx(0), vec!["b", "c"]);
-        state_exists(&grm, sg.closed_state(s6), "S", 1, SIdx(0), vec!["b", "c"]);
+        state_exists(grm, sg.closed_state(s6), "A", 0, SIdx(1), vec!["a"]);
+        state_exists(grm, sg.closed_state(s6), "A", 1, SIdx(1), vec!["a"]);
+        state_exists(grm, sg.closed_state(s6), "A", 2, SIdx(1), vec!["a"]);
+        state_exists(grm, sg.closed_state(s6), "S", 0, SIdx(0), vec!["b", "c"]);
+        state_exists(grm, sg.closed_state(s6), "S", 1, SIdx(0), vec!["b", "c"]);
 
         let s7 = sg.edge(s6, Symbol::Rule(grm.rule_idx("S").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s7).items.len(), 3);
-        state_exists(&grm, sg.closed_state(s7), "A", 0, SIdx(2), vec!["a"]);
-        state_exists(&grm, sg.closed_state(s7), "A", 2, SIdx(2), vec!["a"]);
-        state_exists(&grm, sg.closed_state(s7), "S", 0, SIdx(1), vec!["b", "c"]);
+        state_exists(grm, sg.closed_state(s7), "A", 0, SIdx(2), vec!["a"]);
+        state_exists(grm, sg.closed_state(s7), "A", 2, SIdx(2), vec!["a"]);
+        state_exists(grm, sg.closed_state(s7), "S", 0, SIdx(1), vec!["b", "c"]);
 
         let s8 = sg.edge(s7, Symbol::Token(grm.token_idx("c").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s8).items.len(), 1);
-        state_exists(&grm, sg.closed_state(s8), "A", 0, SIdx(3), vec!["a"]);
-
-        let s9 = sg.edge(s7, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
+        state_exists(grm, sg.closed_state(s8), "A", 0, SIdx(3), vec!["a"]);
+       let s9 = sg.edge(s7, Symbol::Token(grm.token_idx("b").unwrap())).unwrap();
         assert_eq!(sg.closed_state(s9).items.len(), 2);
-        state_exists(&grm, sg.closed_state(s9), "A", 2, SIdx(3), vec!["a"]);
-        state_exists(&grm, sg.closed_state(s9), "S", 0, SIdx(2), vec!["b", "c"]);
-    }
+        state_exists(grm, sg.closed_state(s9), "A", 2, SIdx(3), vec!["a"]);
+       state_exists(grm, sg.closed_state(s9), "S", 0, SIdx(2), vec!["b", "c"]);}
 
     // Pager grammar
     fn grammar_pager() -> YaccGrammar {
