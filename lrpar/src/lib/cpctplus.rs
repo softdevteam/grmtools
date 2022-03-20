@@ -670,14 +670,13 @@ mod test {
                     expected
                 );
                 for i in 0..e.repairs().len() {
-                    if expected
+                    if !expected
                         .iter()
-                        .find(|x| **x == pp_repairs(&grm, &e.repairs()[i]))
-                        .is_none()
+                        .any(|x| *x == pp_repairs(grm, &e.repairs()[i]))
                     {
                         panic!(
                             "No match found for:\n  {}",
-                            pp_repairs(&grm, &e.repairs()[i])
+                            pp_repairs(grm, &e.repairs()[i])
                         );
                     }
                 }
@@ -702,7 +701,7 @@ E : 'N'
 ";
 
         let us = "(nn";
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, us);
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
         let (pt, errs) = pr.unwrap_err();
         let pp = pt.unwrap().pp(&grm, us);
         // Note that:
@@ -757,13 +756,13 @@ E : 'N'
             ],
         );
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "n)+n+n+n)");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_all_repairs(&grm, &errs[0], &["Delete"]);
         check_all_repairs(&grm, &errs[1], &["Delete"]);
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "(((+n)+n+n+n)");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
         check_all_repairs(&grm, &errs[0], &["Insert \"N\"", "Delete"]);
@@ -787,7 +786,7 @@ U: 'd';
 ";
 
         let us = "";
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, &us);
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,

@@ -115,7 +115,7 @@ fn test_input_lifetime() {
     let lexerdef = lexer_lifetime_l::lexerdef();
     let input = "a";
     let _ = {
-        let lexer = lexerdef.lexer(&input);
+        let lexer = lexerdef.lexer(input);
         let lx = lexer.iter().next().unwrap().unwrap();
         lexer.span_str(lx.span())
     };
@@ -126,7 +126,7 @@ fn test_lexer_lifetime() {
     // This test only exists to make sure that this code compiles: there's no need for us to
     // actually run anything.
 
-    pub(crate) fn parse_data<'a>(input: &'a str) -> Option<&'a str> {
+    pub(crate) fn parse_data(input: &'_ str) -> Option<&'_ str> {
         let lexer_def = crate::lexer_lifetime_l::lexerdef();
         let l = lexer_def.lexer(input);
         match crate::lexer_lifetime_y::parse(&l) {
@@ -151,10 +151,7 @@ fn test_span() {
                     Span::new(2, 3),
                     Span::new(2, 3),
                     Span::new(0, 3),
-                ] =>
-        {
-            ()
-        }
+                ] => {}
         _ => unreachable!(),
     }
 
@@ -169,10 +166,7 @@ fn test_span() {
                     Span::new(4, 5),
                     Span::new(4, 5),
                     Span::new(0, 5),
-                ] =>
-        {
-            ()
-        }
+                ] => {}
         _ => unreachable!(),
     }
 
@@ -189,10 +183,7 @@ fn test_span() {
                     Span::new(4, 5),
                     Span::new(2, 5),
                     Span::new(0, 5),
-                ] =>
-        {
-            ()
-        }
+                ] => {}
         _ => unreachable!(),
     }
 
@@ -207,10 +198,7 @@ fn test_span() {
                     Span::new(3, 4),
                     Span::new(3, 4),
                     Span::new(0, 4),
-                ] =>
-        {
-            ()
-        }
+                ] => {}
         _ => unreachable!(),
     }
 
@@ -225,10 +213,7 @@ fn test_span() {
                     Span::new(0, 3),
                     Span::new(0, 3),
                     Span::new(0, 3),
-                ] =>
-        {
-            ()
-        }
+                ] => {}
         _ => unreachable!(),
     }
 }

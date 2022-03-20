@@ -2,7 +2,6 @@ use std::{collections::hash_map::HashMap, hash::Hash};
 
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use try_from::TryFrom;
 
 use crate::{itemset::Itemset, StIdx, StIdxStorageT};
 
@@ -256,7 +255,7 @@ mod test {
         // Taken from p13 of https://link.springer.com/article/10.1007/s00236-010-0115-6
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
             %start A
             %%
             A: 'OPEN_BRACKET' A 'CLOSE_BRACKET'

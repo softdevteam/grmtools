@@ -1229,7 +1229,7 @@ x"
         for src in srcs.iter() {
             match parse(
                 YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-                &src.to_string(),
+                src,
             ) {
                 Ok(_) => panic!("Duplicate precedence parsed"),
                 Err(YaccParserError {
@@ -1257,7 +1257,7 @@ x"
                  | '-'  expr %prec '*'
                  | NAME ;
         ";
-        let grm = parse(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &src).unwrap();
+        let grm = parse(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), src).unwrap();
         assert_eq!(grm.precs.len(), 4);
         assert_eq!(grm.prods[grm.rules["expr"].pidxs[0]].precedence, None);
         assert_eq!(grm.prods[grm.rules["expr"].pidxs[3]].symbols.len(), 3);
@@ -1269,7 +1269,7 @@ x"
     fn test_bad_prec_overrides() {
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %%
           S: 'A' %prec ;
           ",
@@ -1285,7 +1285,7 @@ x"
 
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %%
           S: 'A' %prec B;
           B: ;
@@ -1305,7 +1305,7 @@ x"
     fn test_parse_avoid_insert() {
         let ast = parse(
             YaccKind::Eco,
-            &"
+            "
           %avoid_insert ws1 ws2
           %start R
           %%
@@ -1330,7 +1330,7 @@ x"
     fn test_multiple_avoid_insert() {
         let ast = parse(
             YaccKind::Eco,
-            &"
+            "
           %avoid_insert X
           %avoid_insert Y
           %%
@@ -1347,7 +1347,7 @@ x"
     fn test_duplicate_avoid_insert() {
         match parse(
             YaccKind::Eco,
-            &"
+            "
           %avoid_insert X Y
           %avoid_insert Y
           %%
@@ -1367,7 +1367,7 @@ x"
     fn test_duplicate_avoid_insert2() {
         match parse(
             YaccKind::Eco,
-            &"
+            "
           %avoid_insert X
           %avoid_insert Y Y
           %%
@@ -1387,7 +1387,7 @@ x"
     fn test_no_implicit_tokens_in_original_yacc() {
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %implicit_tokens X
           %%
           ",
@@ -1406,7 +1406,7 @@ x"
     fn test_parse_implicit_tokens() {
         let ast = parse(
             YaccKind::Eco,
-            &"
+            "
           %implicit_tokens ws1 ws2
           %start R
           %%
@@ -1431,7 +1431,7 @@ x"
     fn test_multiple_implicit_tokens() {
         let ast = parse(
             YaccKind::Eco,
-            &"
+            "
           %implicit_tokens X
           %implicit_tokens Y
           %%
@@ -1448,7 +1448,7 @@ x"
     fn test_duplicate_implicit_tokens() {
         match parse(
             YaccKind::Eco,
-            &"
+            "
           %implicit_tokens X
           %implicit_tokens X Y
           %%
@@ -1468,7 +1468,7 @@ x"
     fn test_duplicate_implicit_tokens2() {
         match parse(
             YaccKind::Eco,
-            &"
+            "
           %implicit_tokens X X
           %implicit_tokens Y
           %%
@@ -1488,7 +1488,7 @@ x"
     fn test_parse_epp() {
         let ast = parse(
             YaccKind::Eco,
-            &"
+            "
           %epp A \"a\"
           %epp B 'a'
           %epp C '\"'
@@ -1515,7 +1515,7 @@ x"
     fn test_duplicate_epp() {
         match parse(
             YaccKind::Eco,
-            &"
+            "
           %epp A \"a\"
           %epp A \"a\"
           %%
@@ -1535,7 +1535,7 @@ x"
     fn test_broken_string() {
         match parse(
             YaccKind::Eco,
-            &"
+            "
           %epp A \"a
           %%
           ",
@@ -1549,11 +1549,7 @@ x"
             Err(e) => panic!("Incorrect error returned {}", e),
         }
 
-        match parse(
-            YaccKind::Eco,
-            &"
-          %epp A \"a",
-        ) {
+        match parse(YaccKind::Eco, "%epp A \"a") {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::InvalidString,
@@ -1568,7 +1564,7 @@ x"
     fn test_duplicate_start() {
         match parse(
             YaccKind::Eco,
-            &"
+            "
           %start X
           %start X
           %%
@@ -1588,7 +1584,7 @@ x"
     fn test_implicit_start() {
         let ast = parse(
             YaccKind::Eco,
-            &"
+            "
           %%
           R: ;
           R2: ;
@@ -1603,7 +1599,7 @@ x"
     fn test_action() {
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %%
           A: 'a' B { println!(\"test\"); }
            ;
@@ -1628,7 +1624,7 @@ x"
     fn test_programs() {
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
          %%
          A: 'a';
          %%
@@ -1642,7 +1638,7 @@ x"
     fn test_actions_with_newlines() {
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
          %%
          A: 'a' { foo();
                   bar(); }
@@ -1672,7 +1668,7 @@ x"
 
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
             /* An invalid comment * /
             %token   a
             %%\n
@@ -1689,7 +1685,7 @@ x"
 
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
             %token   a
             %%
             /* A valid
@@ -1709,7 +1705,7 @@ x"
 
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
             %token   a
             %%
             // Valid comment
@@ -1729,7 +1725,7 @@ x"
     fn test_action_type() {
         let grm = parse(
             YaccKind::Original(YaccOriginalActionKind::UserAction),
-            &"
+            "
          %actiontype T
          %%
          A: 'a';
@@ -1744,7 +1740,7 @@ x"
     fn test_only_one_type() {
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
          %actiontype T1
          %actiontype T2
          %%
@@ -1767,7 +1763,7 @@ x"
           %%
           A: 'a';
          ";
-        let grm = parse(YaccKind::Original(YaccOriginalActionKind::UserAction), &src).unwrap();
+        let grm = parse(YaccKind::Original(YaccOriginalActionKind::UserAction), src).unwrap();
 
         assert_eq!(
             grm.parse_param,

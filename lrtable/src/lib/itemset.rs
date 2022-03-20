@@ -172,7 +172,7 @@ mod test {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
         let grm = &YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start S
           %%
           S: L '=' R | R;
@@ -182,25 +182,25 @@ mod test {
         ).unwrap();
         let firsts = grm.firsts();
 
-        let mut is = Itemset::new(&grm);
+        let mut is = Itemset::new(grm);
         let mut la = Vob::from_elem(false, usize::from(grm.tokens_len()));
         la.set(usize::from(grm.eof_token_idx()), true);
         is.add(grm.rule_to_prods(grm.rule_idx("^").unwrap())[0], SIdx(0), &la);
-        let cls_is = is.close(&grm, &firsts);
+        let cls_is = is.close(grm, &firsts);
         println!("{:?}", cls_is);
         assert_eq!(cls_is.items.len(), 6);
-        state_exists(&grm, &cls_is, "^", 0, SIdx(0), vec!["$"]);
-        state_exists(&grm, &cls_is, "S", 0, SIdx(0), vec!["$"]);
-        state_exists(&grm, &cls_is, "S", 1, SIdx(0), vec!["$"]);
-        state_exists(&grm, &cls_is, "L", 0, SIdx(0), vec!["$", "="]);
-        state_exists(&grm, &cls_is, "L", 1, SIdx(0), vec!["$", "="]);
-        state_exists(&grm, &cls_is, "R", 0, SIdx(0), vec!["$"]);
+        state_exists(grm, &cls_is, "^", 0, SIdx(0), vec!["$"]);
+        state_exists(grm, &cls_is, "S", 0, SIdx(0), vec!["$"]);
+        state_exists(grm, &cls_is, "S", 1, SIdx(0), vec!["$"]);
+        state_exists(grm, &cls_is, "L", 0, SIdx(0), vec!["$", "="]);
+        state_exists(grm, &cls_is, "L", 1, SIdx(0), vec!["$", "="]);
+        state_exists(grm, &cls_is, "R", 0, SIdx(0), vec!["$"]);
     }
 
     fn eco_grammar() -> YaccGrammar {
         YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start S
           %token a b c d f
           %%
@@ -251,7 +251,7 @@ mod test {
     fn grammar3() -> YaccGrammar {
         YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start S
           %token a b c d
           %%

@@ -1238,9 +1238,9 @@ mod test {
         let itfs_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(itfs_rule_idx)][0])];
         assert_eq!(itfs_prod1.len(), 2);
         assert_eq!(itfs_prod1[0], Symbol::Rule(grm.rule_idx(IMPLICIT_RULE).unwrap()));
-        assert_eq!(itfs_prod1[1], Symbol::Rule(grm.rule_idx(&"S").unwrap()));
+        assert_eq!(itfs_prod1[1], Symbol::Rule(grm.rule_idx("S").unwrap()));
 
-        let s_rule_idx = grm.rule_idx(&"S").unwrap();
+        let s_rule_idx = grm.rule_idx("S").unwrap();
         assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
 
         let s_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(s_rule_idx)][0])];
@@ -1252,7 +1252,7 @@ mod test {
         assert_eq!(s_prod2.len(), 1);
         assert_eq!(s_prod2[0], Symbol::Rule(grm.rule_idx("T").unwrap()));
 
-        let t_rule_idx = grm.rule_idx(&"T").unwrap();
+        let t_rule_idx = grm.rule_idx("T").unwrap();
         assert_eq!(grm.rules_prods[usize::from(s_rule_idx)].len(), 2);
 
         let t_prod1 = &grm.prods[usize::from(grm.rules_prods[usize::from(t_rule_idx)][0])];
@@ -1299,9 +1299,9 @@ mod test {
           "
         ).unwrap();
 
-        let a_ridx = grm.rule_idx(&"A").unwrap();
-        let b_ridx = grm.rule_idx(&"B").unwrap();
-        let c_ridx = grm.rule_idx(&"C").unwrap();
+        let a_ridx = grm.rule_idx("A").unwrap();
+        let b_ridx = grm.rule_idx("B").unwrap();
+        let c_ridx = grm.rule_idx("C").unwrap();
         assert!(grm.has_path(a_ridx, b_ridx));
         assert!(grm.has_path(a_ridx, c_ridx));
         assert!(grm.has_path(b_ridx, b_ridx));
@@ -1329,11 +1329,11 @@ mod test {
         ).unwrap();
 
         let scores = rule_min_costs(&grm, &[1, 1, 1]);
-        assert_eq!(scores[usize::from(grm.rule_idx(&"A").unwrap())], 0);
-        assert_eq!(scores[usize::from(grm.rule_idx(&"B").unwrap())], 1);
-        assert_eq!(scores[usize::from(grm.rule_idx(&"C").unwrap())], 1);
-        assert_eq!(scores[usize::from(grm.rule_idx(&"D").unwrap())], 2);
-        assert_eq!(scores[usize::from(grm.rule_idx(&"E").unwrap())], 1);
+        assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], 0);
+        assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], 1);
+        assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], 1);
+        assert_eq!(scores[usize::from(grm.rule_idx("D").unwrap())], 2);
+        assert_eq!(scores[usize::from(grm.rule_idx("E").unwrap())], 1);
     }
 
     #[test]
