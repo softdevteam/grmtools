@@ -2,7 +2,7 @@
 name = "calc_actions"
 version = "0.1.0"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0/MIT"
 
 [[bin]]

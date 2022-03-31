@@ -23,7 +23,7 @@ a `Cargo.toml` file with the following dependencies:
 name = "calc"
 version = "0.0.1"
 authors = ["<authors>"]
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 doc = false
