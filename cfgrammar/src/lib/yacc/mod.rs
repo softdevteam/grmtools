@@ -10,8 +10,12 @@ pub use self::{
     parser::{YaccParserError, YaccParserErrorKind},
 };
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// The particular Yacc variant this grammar makes use of.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum YaccKind {
     /// The original Yacc style as documented by
     /// [Johnson](http://dinosaur.compilertools.net/yacc/index.html),
@@ -24,6 +28,7 @@ pub enum YaccKind {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum YaccOriginalActionKind {
     /// Execute user-specified actions attached to each production; also requires a %actiontype
     /// declaration.
