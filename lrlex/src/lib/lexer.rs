@@ -412,7 +412,7 @@ mod test {
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let lexemes = lexerdef
-            .lexer(&"abc 123")
+            .lexer("abc 123")
             .iter()
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -435,7 +435,7 @@ mod test {
         "
         .to_string();
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
-        match lexerdef.lexer(&"abc").iter().next().unwrap() {
+        match lexerdef.lexer("abc").iter().next().unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(e) => {
                 if e.span().start() != 0 || e.span().end() != 0 {
@@ -459,7 +459,7 @@ if 'IF'
         assert_eq!(lexerdef.set_rule_ids(&map), (None, None));
 
         let lexemes = lexerdef
-            .lexer(&"iff if")
+            .lexer("iff if")
             .iter()
             .map(|x| x.unwrap())
             .collect::<Vec<DefaultLexeme<u8>>>();
@@ -631,7 +631,7 @@ if 'IF'
             (Some(missing_from_lexer), Some(missing_from_parser))
         );
 
-        match lexerdef.lexer(&" a ").iter().next().unwrap() {
+        match lexerdef.lexer(" a ").iter().next().unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
             Err(e) => {
                 if e.span().start() != 1 || e.span().end() != 1 {

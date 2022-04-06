@@ -158,10 +158,7 @@ mod test {
     {
         let ridx = grm.rule_idx(rn).unwrap();
         for tidx in grm.iter_tidxs() {
-            let n = match grm.token_name(tidx) {
-                Some(n) => n,
-                None => &"<no name>",
-            };
+            let n = grm.token_name(tidx).unwrap_or("<no name>");
             match should_be.iter().position(|&x| x == n) {
                 Some(_) => {
                     if !firsts.is_set(ridx, tidx) {
@@ -184,7 +181,7 @@ mod test {
     fn test_first() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start C
           %token c d
           %%
@@ -206,7 +203,7 @@ mod test {
     fn test_first_no_subsequent_rules() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start C
           %token c d
           %%
@@ -224,7 +221,7 @@ mod test {
     fn test_first_epsilon() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start A
           %token a b c
           %%
@@ -245,7 +242,7 @@ mod test {
     fn test_last_epsilon() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start A
           %token b c
           %%
@@ -265,7 +262,7 @@ mod test {
     fn test_first_no_multiples() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start A
           %token b c
           %%
@@ -281,7 +278,7 @@ mod test {
     fn eco_grammar() -> YaccGrammar {
         YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start S
           %token a b c d f
           %%
@@ -312,7 +309,7 @@ mod test {
     fn test_first_from_eco_bug() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
           %start E
           %token a b c d e f
           %%
