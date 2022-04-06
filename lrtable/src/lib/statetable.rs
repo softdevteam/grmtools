@@ -526,7 +526,7 @@ where
 
 fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
-    actions: &mut Vec<usize>,
+    actions: &mut [usize],
     off: usize,
     tidx: TIdx<StorageT>,
     pidx: PIdx<StorageT>,
@@ -599,7 +599,7 @@ mod test {
         // Taken from p19 of www.cs.umd.edu/~mvz/cmsc430-s07/M10lr.pdf
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
             %start Expr
             %%
             Expr : Term '-' Expr | Term;
@@ -679,7 +679,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_default_reduce_reduce() {
-        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &"
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
             %start A
             %%
             A : B 'x' | C 'x' 'x';
@@ -703,7 +703,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_default_shift_reduce() {
-        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &"
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
             %start Expr
             %%
             Expr : Expr '+' Expr
@@ -733,7 +733,7 @@ mod test {
     #[rustfmt::skip]
     fn test_conflict_resolution() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &"
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
             %start S
             %%
             S: A 'c' 'd'
@@ -758,7 +758,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_left_associativity() {
-        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &"
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
             %start Expr
             %left '+'
             %left '*'
@@ -797,7 +797,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_left_right_associativity() {
-        let grm = &YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &"
+        let grm = &YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
             %start Expr
             %right '='
             %left '+'
@@ -808,8 +808,8 @@ mod test {
                  | Expr '=' Expr
                  | 'id' ;
           ").unwrap();
-        let sg = pager_stategraph(&grm);
-        let st = StateTable::new(&grm, &sg).unwrap();
+        let sg = &pager_stategraph(grm);
+        let st = StateTable::new(grm, sg).unwrap();
         let len = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         assert_eq!(st.actions.len(), len);
 
@@ -853,7 +853,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_left_right_nonassoc_associativity() {
-        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &"
+        let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
             %start Expr
             %right '='
             %left '+'
@@ -929,7 +929,7 @@ mod test {
     fn conflicts() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
 %start A
 %%
 A : 'a' 'b' | B 'b';
@@ -965,7 +965,7 @@ C : 'a';
     fn accept_reduce_conflict() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
 %start D
 %%
 D : D;

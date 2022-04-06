@@ -936,10 +936,12 @@ pub(crate) mod test {
             .recoverer(rcvry_kind)
             .term_costs(&|tidx| **costs_tidx.get(&tidx).unwrap_or(&&1))
             .parse_generictree(&lexer);
-        if r.is_some() && errs.is_empty() {
-            (grm, Ok(r.unwrap()))
-        } else if r.is_some() && !errs.is_empty() {
-            (grm, Err((Some(r.unwrap()), errs)))
+        if let Some(node) = r {
+            if errs.is_empty() {
+                (grm, Ok(node))
+            } else {
+                (grm, Err((Some(node), errs)))
+            }
         } else {
             (grm, Err((None, errs)))
         }
@@ -947,7 +949,7 @@ pub(crate) mod test {
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
         let (grm, pt) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, input);
-        assert_eq!(expected, pt.unwrap().pp(&grm, &input));
+        assert_eq!(expected, pt.unwrap().pp(&grm, input));
     }
 
     // SmallLexer is our highly simplified version of lrlex (allowing us to avoid having to have
@@ -980,7 +982,7 @@ pub(crate) mod test {
 
     fn small_lexer(lexs: &str, ids_map: HashMap<String, u16>) -> Vec<(u16, Regex)> {
         let mut rules = Vec::new();
-        for l in lexs.split("\n").map(|x| x.trim()).filter(|x| !x.is_empty()) {
+        for l in lexs.split('\n').map(|x| x.trim()).filter(|x| !x.is_empty()) {
             assert!(l.rfind('\'') == Some(l.len() - 1));
             let i = l[..l.len() - 1].rfind('\'').unwrap();
             let name = &l[i + 1..l.len() - 1];
@@ -1050,14 +1052,14 @@ L: 'ID'
  | ;
 ";
         check_parse_output(
-            &lexs, &grms, "", "S
+            lexs, grms, "", "S
  L
 ",
         );
 
         check_parse_output(
-            &lexs,
-            &grms,
+            lexs,
+            grms,
             "x",
             "S
  L
@@ -1078,8 +1080,8 @@ Term : Term '*' Factor | Factor;
 Factor : 'INT';";
 
         check_parse_output(
-            &lexs,
-            &grms,
+            lexs,
+            grms,
             "2+3*4",
             "Expr
  Expr
@@ -1097,8 +1099,8 @@ Factor : 'INT';";
 ",
         );
         check_parse_output(
-            &lexs,
-            &grms,
+            lexs,
+            grms,
             "2*3+4",
             "Expr
  Expr
@@ -1127,8 +1129,8 @@ Factor : 'INT';";
 Call: 'ID' '(' ')';";
 
         check_parse_output(
-            &lexs,
-            &grms,
+            lexs,
+            grms,
             "f()",
             "Call
  ID f
@@ -1137,7 +1139,7 @@ Call: 'ID' '(' ')';";
 ",
         );
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "f(");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
@@ -1149,7 +1151,7 @@ Call: 'ID' '(' ')';";
             _ => unreachable!(),
         }
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, &lexs, &grms, "f(f(");
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();

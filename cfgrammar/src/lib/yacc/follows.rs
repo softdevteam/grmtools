@@ -135,7 +135,7 @@ mod test {
             } else {
                 grm.token_name(tidx).unwrap_or("<no name>")
             };
-            if should_be.iter().find(|&x| x == &n).is_none() {
+            if !should_be.iter().any(|x| x == &n) {
                 if follows.is_set(ridx, tidx) {
                     panic!("{} is incorrectly set in {}", n, rn);
                 }
@@ -150,7 +150,7 @@ mod test {
         // Adapted from p2 of https://www.cs.uaf.edu/~cs331/notes/FirstFollow.pdf
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
                 %start E
                 %%
                 E: T E2 ;
@@ -174,7 +174,7 @@ mod test {
         // Adapted from https://www.l2f.inesc-id.pt/~david/w/pt/Top-Down_Parsing/Exercise_5:_Test_2010/07/01
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
                 %start A
                 %%
                 A : 't' B2 D | 'v' D2 ;
@@ -197,7 +197,7 @@ mod test {
     fn test_follow3() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
                 %start S
                 %%
                 S: A 'b';
@@ -214,7 +214,7 @@ mod test {
     fn test_follow_corchuelo() {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            &"
+            "
                 %start E
                 %%
                 E : 'N'
