@@ -526,7 +526,7 @@ where
 
 fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
-    actions: &mut Vec<usize>,
+    actions: &mut [usize],
     off: usize,
     tidx: TIdx<StorageT>,
     pidx: PIdx<StorageT>,
