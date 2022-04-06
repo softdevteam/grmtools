@@ -11,6 +11,7 @@ use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use serde::{Deserialize, Serialize};
 
 use crate::{cpctplus, LexError, Lexeme, NonStreamingLexer, Span};
 
@@ -591,7 +592,7 @@ pub(super) trait Recoverer<
 }
 
 /// What recovery algorithm should be used when a syntax error is encountered?
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum RecoveryKind {
     /// The CPCT+ algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
     /// Parsers".
