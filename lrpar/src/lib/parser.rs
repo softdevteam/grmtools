@@ -720,7 +720,7 @@ impl<'a, LexemeT: Lexeme<StorageT>, StorageT: 'static + Debug + Hash + PrimInt +
 where
     usize: AsPrimitive<StorageT>,
 {
-    /// Create a new run-time parser from a `YaccGrammar`, a `StateGraph`, and a `StateTable`.
+    /// Create a new run-time parser from a `YaccGrammar`, and a `StateTable`.
     pub fn new(grm: &'a YaccGrammar<StorageT>, stable: &'a StateTable<StorageT>) -> Self {
         RTParserBuilder {
             grm,
