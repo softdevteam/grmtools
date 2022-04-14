@@ -18,7 +18,7 @@ name = "lrlex"
 path = "src/lib/mod.rs"
 
 [build-dependencies]
-vergen = { version = "6", default-features = false, features = ["build"] }
+vergen = { version = "7", default-features = false, features = ["build"] }
 
 [dependencies]
 getopts = "0.2" # only needed for src/main.rs
