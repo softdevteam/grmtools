@@ -1,3 +1,10 @@
+# grmtools 0.12.0 (2022-04-14)
+
+* Move to Rust 2021 edition.
+
+* Various minor clean-ups.
+
+
 # grmtools 0.11.1 (2021-12-07)
 
 * Explicitly error if the users tries to generate two or more lexers or parsers
