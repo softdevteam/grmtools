@@ -400,11 +400,17 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 Some(ref n) => format!("Some({:?}.to_string())", n),
                 None => "None".to_owned(),
             };
+            let n_span = format!(
+                "lrpar::Span::new({}, {})",
+                r.name_span.start(),
+                r.name_span.end()
+            );
             outs.push_str(&format!(
                 "
-        Rule::new({}, {}, \"{}\".to_string()).unwrap(),",
+        Rule::new({}, {}, {}, \"{}\".to_string()).unwrap(),",
                 tok_id,
                 n,
+                n_span,
                 r.re_str.replace('\\', "\\\\").replace('"', "\\\"")
             ));
         }
