@@ -12,7 +12,7 @@ use super::{
     parser::{YaccParser, YaccParserError},
     YaccKind,
 };
-use crate::{PIdx, RIdx, SIdx, Symbol, TIdx};
+use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
 const START_RULE: &str = "^";
 const IMPLICIT_RULE: &str = "~";
@@ -42,9 +42,9 @@ pub struct YaccGrammar<StorageT = u32> {
     rules_len: RIdx<StorageT>,
     /// A mapping from `RIdx` -> `String`.
     rule_names: Vec<String>,
-    /// A mapping from `TIdx` -> `Option<String>`. Every user-specified token will have a name,
+    /// A mapping from `TIdx` -> `Option<(Span, String)>`. Every user-specified token will have a name,
     /// but tokens inserted by cfgrammar (e.g. the EOF token) won't.
-    token_names: Vec<Option<String>>,
+    token_names: Vec<Option<(Span, String)>>,
     /// A mapping from `TIdx` -> `Option<Precedence>`
     token_precs: Vec<Option<Precedence>>,
     /// A mapping from `TIdx` -> `Option<String>` for the %epp declaration, giving pretty-printed
@@ -188,11 +188,11 @@ where
             rule_map.insert(v.clone(), RIdx(i.as_()));
         }
 
-        let mut token_names: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
+        let mut token_names: Vec<Option<(Span, String)>> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut token_precs: Vec<Option<Precedence>> = Vec::with_capacity(ast.tokens.len() + 1);
         let mut token_epp: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
-        for k in &ast.tokens {
-            token_names.push(Some(k.clone()));
+        for (i, k) in ast.tokens.iter().enumerate() {
+            token_names.push(Some((ast.spans[i], k.clone())));
             token_precs.push(ast.precs.get(k).cloned());
             token_epp.push(Some(ast.epp.get(k).unwrap_or(k).clone()));
         }
@@ -202,7 +202,7 @@ where
         token_epp.push(None);
         let mut token_map = HashMap::<String, TIdx<StorageT>>::new();
         for (i, v) in token_names.iter().enumerate() {
-            if let Some(n) = v.as_ref() {
+            if let Some((_, n)) = v.as_ref() {
                 token_map.insert(n.clone(), TIdx(i.as_()));
             }
         }
@@ -460,7 +460,9 @@ where
     /// Return the name of token `tidx` (where `None` indicates "the rule has no name"). Panics if
     /// `tidx` doesn't exist.
     pub fn token_name(&self, tidx: TIdx<StorageT>) -> Option<&str> {
-        self.token_names[usize::from(tidx)].as_deref()
+        self.token_names[usize::from(tidx)]
+            .as_ref()
+            .map(|x| x.1.as_str())
     }
 
     /// Return the precedence of token `tidx` (where `None` indicates "no precedence specified").
@@ -473,6 +475,11 @@ where
     /// pretty-printed value"). Panics if `tidx` doesn't exist.
     pub fn token_epp(&self, tidx: TIdx<StorageT>) -> Option<&str> {
         self.token_epp[usize::from(tidx)].as_deref()
+    }
+    pub fn token_span(&self, tidx: TIdx<StorageT>) -> Option<&Span> {
+        self.token_names[usize::from(tidx)]
+            .as_ref()
+            .map(|(span, _)| span)
     }
 
     /// Get the action for production `pidx`. Panics if `pidx` doesn't exist.
@@ -498,7 +505,7 @@ where
     pub fn tokens_map(&self) -> HashMap<&str, TIdx<StorageT>> {
         let mut m = HashMap::with_capacity(usize::from(self.tokens_len) - 1);
         for tidx in self.iter_tidxs() {
-            if let Some(n) = self.token_names[usize::from(tidx)].as_ref() {
+            if let Some((_, n)) = self.token_names[usize::from(tidx)].as_ref() {
                 m.insert(&**n, tidx);
             }
         }
@@ -509,7 +516,7 @@ where
     pub fn token_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
         self.token_names
             .iter()
-            .position(|x| x.as_ref().map_or(false, |x| x == n))
+            .position(|x| x.as_ref().map_or(false, |(_, x)| x == n))
             // The call to as_() is safe because token_names is guaranteed to be small
             // enough to fit into StorageT
             .map(|x| TIdx(x.as_()))
@@ -1032,7 +1039,7 @@ mod test {
         super::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind},
         rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE,
     };
-    use crate::{PIdx, RIdx, Symbol, TIdx};
+    use crate::{PIdx, RIdx, Span, Symbol, TIdx};
     use std::collections::HashMap;
 
     #[test]
@@ -1459,5 +1466,19 @@ mod test {
                 RIdx(0)
             ]
         );
+    }
+
+    #[test]
+    fn test_token_spans() {
+        let src = "%%\nAB: 'a' | 'foo';";
+        let grm =
+            YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
+        let token_map = grm.tokens_map();
+        let a_tidx = token_map.get("a");
+        let foo_tidx = token_map.get("foo");
+        let a_span = grm.token_span(*a_tidx.unwrap());
+        let foo_span = grm.token_span(*foo_tidx.unwrap());
+        assert_eq!(a_span, Some(&Span::new(8, 9)));
+        assert_eq!(foo_span, Some(&Span::new(14, 17)));
     }
 }
