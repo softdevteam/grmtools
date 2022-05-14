@@ -113,7 +113,7 @@ where
             usize: AsPrimitive<StorageT>,
         {
             match sym {
-                Symbol::Rule(ridx) => grm.rule_name(ridx).to_string(),
+                Symbol::Rule(ridx) => grm.rule_name_str(ridx).to_string(),
                 Symbol::Token(tidx) => format!("'{}'", grm.token_name(tidx).unwrap_or("")),
             }
         }
@@ -143,7 +143,7 @@ where
                 o.push_str(&format!(
                     "{} [{} ->",
                     " ".repeat(padding),
-                    grm.rule_name(grm.prod_to_rule(pidx))
+                    grm.rule_name_str(grm.prod_to_rule(pidx))
                 ));
                 for (i_sidx, i_ssym) in grm.prod(pidx).iter().enumerate() {
                     if i_sidx == usize::from(sidx) {

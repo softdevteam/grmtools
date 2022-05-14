@@ -53,7 +53,7 @@ where
                     s.push_str(&format!("{} {}\n", tn, lt));
                 }
                 Node::Nonterm { ridx, ref nodes } => {
-                    s.push_str(&format!("{}\n", grm.rule_name(ridx)));
+                    s.push_str(&format!("{}\n", grm.rule_name_str(ridx)));
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }
