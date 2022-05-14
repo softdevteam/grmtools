@@ -8,6 +8,8 @@ use indexmap::{IndexMap, IndexSet};
 
 use super::Precedence;
 
+use crate::Span;
+
 /// An AST representing a grammar. This is built up gradually: when it is finished, the
 /// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
 /// point, any further mutations made to the struct lead to undefined behaviour.
@@ -17,6 +19,7 @@ pub struct GrammarAST {
     pub rules: IndexMap<String, Rule>,
     pub prods: Vec<Production>,
     pub tokens: IndexSet<String>,
+    pub spans: Vec<Span>,
     pub precs: HashMap<String, Precedence>,
     pub avoid_insert: Option<HashSet<String>>,
     pub implicit_tokens: Option<HashSet<String>>,
@@ -115,6 +118,7 @@ impl GrammarAST {
             rules: IndexMap::new(), // Using an IndexMap means that we retain the order
             // of rules as they're found in the input file.
             prods: Vec::new(),
+            spans: Vec::new(),
             tokens: IndexSet::new(),
             precs: HashMap::new(),
             avoid_insert: None,

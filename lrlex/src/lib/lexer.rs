@@ -24,6 +24,7 @@ pub struct Rule<StorageT> {
     /// This rule's name. If None, then text which matches this rule will be skipped (i.e. will not
     /// create a lexeme).
     pub name: Option<String>,
+    pub name_span: Span,
     pub(super) re_str: String,
     re: Regex,
 }
@@ -35,6 +36,7 @@ impl<StorageT> Rule<StorageT> {
     pub fn new(
         tok_id: Option<StorageT>,
         name: Option<String>,
+        name_span: Span,
         re_str: String,
     ) -> Result<Rule<StorageT>, regex::Error> {
         let re = RegexBuilder::new(&format!("\\A(?:{})", &re_str))
@@ -44,6 +46,7 @@ impl<StorageT> Rule<StorageT> {
         Ok(Rule {
             tok_id,
             name,
+            name_span,
             re_str,
             re,
         })
@@ -660,5 +663,28 @@ if 'IF'
         assert_eq!(lexemes.len(), 1);
         assert_eq!(lexer.line_col(lexemes[0].span()), ((1, 1), (2, 3)));
         assert_eq!(lexer.span_lines_str(lexemes[0].span()), "'a\nb'");
+    }
+
+    #[test]
+    fn test_token_span() {
+        let src = "%%
+a 'A'
+b 'B'
+[ \\n] ;"
+            .to_string();
+        let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        assert_eq!(
+            lexerdef.get_rule_by_name("A").unwrap().name_span,
+            lrpar::Span::new(6, 7)
+        );
+        assert_eq!(
+            lexerdef.get_rule_by_name("B").unwrap().name_span,
+            lrpar::Span::new(12, 13)
+        );
+        let anonymous_rules = lexerdef
+            .iter_rules()
+            .filter(|rule| rule.name.is_none())
+            .collect::<Vec<_>>();
+        assert_eq!(anonymous_rules[0].name_span, lrpar::Span::new(21, 21));
     }
 }

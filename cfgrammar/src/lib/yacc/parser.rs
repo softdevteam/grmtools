@@ -8,6 +8,8 @@ use regex::Regex;
 
 type YaccResult<T> = Result<T, YaccParserError>;
 
+use crate::Span;
+
 use super::{
     ast::{GrammarAST, Symbol},
     AssocKind, Precedence, YaccKind,
@@ -144,8 +146,9 @@ impl YaccParser {
                     if self.lookahead_is("%", i).is_some() {
                         break;
                     }
-                    let (j, n) = self.parse_token(i)?;
+                    let (j, n, span) = self.parse_token(i)?;
                     self.ast.tokens.insert(n);
+                    self.ast.spans.push(span);
                     i = self.parse_ws(j, true)?;
                 }
                 continue;
@@ -176,7 +179,7 @@ impl YaccParser {
             }
             if let Some(j) = self.lookahead_is("%epp", i) {
                 i = self.parse_ws(j, false)?;
-                let (j, n) = self.parse_token(i)?;
+                let (j, n, _) = self.parse_token(i)?;
                 if self.ast.epp.contains_key(&n) {
                     return Err(self.mk_error(YaccParserErrorKind::DuplicateEPP, i));
                 }
@@ -213,8 +216,9 @@ impl YaccParser {
                     self.ast.avoid_insert = Some(HashSet::new());
                 }
                 while j < self.src.len() && self.newlines.len() == num_newlines {
-                    let (j, n) = self.parse_token(i)?;
+                    let (j, n, span) = self.parse_token(i)?;
                     self.ast.tokens.insert(n.clone());
+                    self.ast.spans.push(span);
                     if self.ast.avoid_insert.as_ref().unwrap().contains(&n) {
                         return Err(
                             self.mk_error(YaccParserErrorKind::DuplicateAvoidInsertDeclaration, i)
@@ -247,8 +251,9 @@ impl YaccParser {
                         self.ast.implicit_tokens = Some(HashSet::new());
                     }
                     while j < self.src.len() && self.newlines.len() == num_newlines {
-                        let (j, n) = self.parse_token(i)?;
+                        let (j, n, span) = self.parse_token(i)?;
                         self.ast.tokens.insert(n.clone());
+                        self.ast.spans.push(span);
                         if self.ast.implicit_tokens.as_ref().unwrap().contains(&n) {
                             return Err(self.mk_error(
                                 YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
@@ -280,7 +285,7 @@ impl YaccParser {
                 i = self.parse_ws(k, false)?;
                 let num_newlines = self.newlines.len();
                 while i < self.src.len() && num_newlines == self.newlines.len() {
-                    let (j, n) = self.parse_token(i)?;
+                    let (j, n, _) = self.parse_token(i)?;
                     if self.ast.precs.contains_key(&n) {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
                     }
@@ -365,13 +370,14 @@ impl YaccParser {
             }
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
-                let (j, sym) = self.parse_token(i)?;
+                let (j, sym, span) = self.parse_token(i)?;
                 i = self.parse_ws(j, true)?;
                 self.ast.tokens.insert(sym.clone());
+                self.ast.spans.push(span);
                 syms.push(Symbol::Token(sym));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = self.parse_ws(j, true)?;
-                let (k, sym) = self.parse_token(i)?;
+                let (k, sym, _) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
                     prec = Some(sym);
                 } else {
@@ -383,7 +389,7 @@ impl YaccParser {
                 i = j;
                 action = Some(a);
             } else {
-                let (j, sym) = self.parse_token(i)?;
+                let (j, sym, _) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
                     syms.push(Symbol::Token(sym));
                 } else {
@@ -406,16 +412,26 @@ impl YaccParser {
         }
     }
 
-    fn parse_token(&self, i: usize) -> YaccResult<(usize, String)> {
+    fn parse_token(&self, i: usize) -> YaccResult<(usize, String, Span)> {
         match RE_TOKEN.find(&self.src[i..]) {
             Some(m) => {
                 assert!(m.start() == 0 && m.end() > 0);
                 match self.src[i..].chars().next().unwrap() {
                     '"' | '\'' => {
                         debug_assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
-                        Ok((i + m.end(), self.src[i + 1..i + m.end() - 1].to_string()))
+                        let start_cidx = i + 1;
+                        let end_cidx = i + m.end() - 1;
+                        Ok((
+                            i + m.end(),
+                            self.src[start_cidx..end_cidx].to_string(),
+                            Span::new(start_cidx, end_cidx),
+                        ))
                     }
-                    _ => Ok((i + m.end(), self.src[i..i + m.end()].to_string())),
+                    _ => Ok((
+                        i + m.end(),
+                        self.src[i..i + m.end()].to_string(),
+                        Span::new(i, i + m.end()),
+                    )),
                 }
             }
             None => Err(self.mk_error(YaccParserErrorKind::IllegalString, i)),

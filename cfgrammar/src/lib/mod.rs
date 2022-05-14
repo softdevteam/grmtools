@@ -53,7 +53,10 @@
 use serde::{Deserialize, Serialize};
 
 mod idxnewtype;
+pub mod span;
 pub mod yacc;
+
+pub use span::Span;
 
 /// A type specifically for rule indices.
 pub use crate::idxnewtype::{PIdx, RIdx, SIdx, TIdx};

@@ -103,8 +103,11 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
 
         let name;
         let orig_name = &line[rspace + 1..];
+        let name_span;
         if orig_name == ";" {
             name = None;
+            let pos = i + rspace + 1;
+            name_span = lrpar::Span::new(pos, pos);
         } else {
             debug_assert!(!orig_name.is_empty());
             if !((orig_name.starts_with('\'') && orig_name.ends_with('\''))
@@ -113,6 +116,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                 return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1));
             }
             name = Some(orig_name[1..orig_name.len() - 1].to_string());
+            name_span = lrpar::Span::new(i + rspace + 2, i + rspace + orig_name.len());
             let dup_name = self.rules.iter().any(|r| {
                 r.name
                     .as_ref()
@@ -128,7 +132,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let tok_id = StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
 
-        let rule = Rule::new(Some(tok_id), name, re_str)
+        let rule = Rule::new(Some(tok_id), name, name_span, re_str)
             .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
         self.rules.push(rule);
         Ok(i + line_len)
