@@ -375,7 +375,7 @@ impl YaccParser {
                 i = self.parse_ws(j, true)?;
                 self.ast.tokens.insert(sym.clone());
                 self.ast.spans.push(span);
-                syms.push(Symbol::Token(sym));
+                syms.push(Symbol::Token(sym, Some(span)));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = self.parse_ws(j, true)?;
                 let (k, sym, _) = self.parse_token(i)?;
@@ -390,11 +390,11 @@ impl YaccParser {
                 i = j;
                 action = Some(a);
             } else {
-                let (j, sym, _) = self.parse_token(i)?;
+                let (j, sym, span) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
-                    syms.push(Symbol::Token(sym));
+                    syms.push(Symbol::Token(sym, Some(span)));
                 } else {
-                    syms.push(Symbol::Rule(sym));
+                    syms.push(Symbol::Rule(sym, Some(span)));
                 }
                 i = j;
             }
@@ -704,16 +704,16 @@ mod test {
     }
 
     fn rule(n: &str) -> Symbol {
-        Symbol::Rule(n.to_string())
+        Symbol::Rule(n.to_string(), None)
     }
 
     fn token(n: &str) -> Symbol {
-        Symbol::Token(n.to_string())
+        Symbol::Token(n.to_string(), None)
     }
 
     #[test]
     fn test_macro() {
-        assert_eq!(Symbol::Token("A".to_string()), token("A"));
+        assert_eq!(Symbol::Token("A".to_string(), None), token("A"));
     }
 
     #[test]
