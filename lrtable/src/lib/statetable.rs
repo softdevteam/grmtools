@@ -94,25 +94,20 @@ where
     }
 }
 
-/// The various different possible Yacc parser errors.
-#[derive(Debug)]
-pub enum StateTableErrorKind {
-    AcceptReduceConflict,
-}
-
 /// Any error from the Yacc parser returns an instance of this struct.
 #[derive(Debug)]
-pub struct StateTableError<StorageT> {
-    pub kind: StateTableErrorKind,
-    pub pidx: PIdx<StorageT>,
+pub enum StateTableError<StorageT> {
+    AcceptReduceConflict(PIdx<StorageT>),
+    StateGraphSelfLoop(RIdx<StorageT>),
 }
 
 impl<StorageT: Debug> Error for StateTableError<StorageT> {}
 
 impl<StorageT> fmt::Display for StateTableError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match self.kind {
-            StateTableErrorKind::AcceptReduceConflict => "Accept/reduce conflict",
+        let s = match self {
+            StateTableError::AcceptReduceConflict(_) => "Accept/reduce conflict",
+            StateTableError::StateGraphSelfLoop(_) => "Recursive rule",
         };
         write!(f, "{}", s)
     }
@@ -209,10 +204,7 @@ where
                         Action::Reduce(r_pidx) => {
                             if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
                             {
-                                return Err(StateTableError {
-                                    kind: StateTableErrorKind::AcceptReduceConflict,
-                                    pidx,
-                                });
+                                return Err(StateTableError::AcceptReduceConflict(pidx));
                             }
                             // By default, Yacc resolves reduce/reduce conflicts in favour
                             // of the earlier production in the grammar.
@@ -226,10 +218,7 @@ where
                             }
                         }
                         Action::Accept => {
-                            return Err(StateTableError {
-                                kind: StateTableErrorKind::AcceptReduceConflict,
-                                pidx,
-                            });
+                            return Err(StateTableError::AcceptReduceConflict(pidx));
                         }
                         Action::Error => {
                             if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
@@ -255,6 +244,10 @@ where
                         debug_assert!(gotos[off] == 0);
                         // Since 0 is reserved for no entry, encode states by adding 1
                         gotos[off] = usize::from(*ref_stidx) + 1;
+
+                        if usize::from(stidx) == usize::from(*ref_stidx) {
+                            return Err(StateTableError::StateGraphSelfLoop(s_ridx));
+                        }
                     }
                     Symbol::Token(s_tidx) => {
                         // Populate shifts
@@ -590,7 +583,7 @@ mod test {
     };
     use std::collections::HashSet;
 
-    use super::{Action, StateTable, StateTableError, StateTableErrorKind};
+    use super::{Action, StateTable, StateTableError};
     use crate::{pager::pager_stategraph, StIdx};
 
     #[test]
@@ -975,10 +968,27 @@ D : D;
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
-            Err(StateTableError {
-                kind: StateTableErrorKind::AcceptReduceConflict,
-                pidx,
-            }) if pidx == PIdx(1) => (),
+            Err(StateTableError::AcceptReduceConflict(pidx)) if pidx == PIdx(1) => (),
+            Err(e) => panic!("Incorrect error returned {:?}", e),
+        }
+    }
+    #[test]
+    fn recursive_rule() {
+        // issue #290
+        let grm = YaccGrammar::new(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            r#"
+%%
+Start: Bar;
+Foo: "a" | ;
+Bar: Foo | Foo Bar;
+"#,
+        )
+        .unwrap();
+        let sg = pager_stategraph(&grm);
+        match StateTable::new(&grm, &sg) {
+            Ok(_) => panic!("Infinitely recursive rule let through"),
+            Err(StateTableError::StateGraphSelfLoop(_)) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e),
         }
     }

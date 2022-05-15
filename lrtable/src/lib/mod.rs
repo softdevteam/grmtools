@@ -16,7 +16,7 @@ pub mod statetable;
 
 pub use crate::{
     stategraph::StateGraph,
-    statetable::{Action, StateTable, StateTableError, StateTableErrorKind},
+    statetable::{Action, StateTable, StateTableError},
 };
 use cfgrammar::yacc::YaccGrammar;
 
