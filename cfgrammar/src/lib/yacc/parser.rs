@@ -379,7 +379,7 @@ impl YaccParser {
                 if self.ast.tokens.insert(sym.clone()) {
                     self.ast.spans.push(span);
                 }
-                syms.push(Symbol::Token(sym));
+                syms.push(Symbol::Token(sym, span));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = self.parse_ws(j, true)?;
                 let (k, sym, _) = self.parse_token(i)?;
@@ -394,11 +394,11 @@ impl YaccParser {
                 i = j;
                 action = Some(a);
             } else {
-                let (j, sym, _) = self.parse_token(i)?;
+                let (j, sym, span) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
-                    syms.push(Symbol::Token(sym));
+                    syms.push(Symbol::Token(sym, span));
                 } else {
-                    syms.push(Symbol::Rule(sym));
+                    syms.push(Symbol::Rule(sym, span));
                 }
                 i = j;
             }
@@ -698,7 +698,7 @@ mod test {
             ast::{GrammarAST, Production, Symbol},
             AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
-        YaccParser, YaccParserError, YaccParserErrorKind,
+        Span, YaccParser, YaccParserError, YaccParserErrorKind,
     };
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, YaccParserError> {
@@ -708,23 +708,30 @@ mod test {
     }
 
     fn rule(n: &str) -> Symbol {
-        Symbol::Rule(n.to_string())
+        Symbol::Rule(n.to_string(), Span::new(0, 0))
+    }
+
+    fn rule_span(n: &str, span: Span) -> Symbol {
+        Symbol::Rule(n.to_string(), span)
     }
 
     fn token(n: &str) -> Symbol {
-        Symbol::Token(n.to_string())
+        Symbol::Token(n.to_string(), Span::new(0, 0))
+    }
+    fn token_span(n: &str, span: Span) -> Symbol {
+        Symbol::Token(n.to_string(), span)
     }
 
     #[test]
-    fn test_macro() {
-        assert_eq!(Symbol::Token("A".to_string()), token("A"));
+    fn test_helper_fn() {
+        assert_eq!(Symbol::Token("A".to_string(), Span::new(0, 0)), token("A"));
     }
 
     #[test]
     fn test_symbol_eq() {
         assert_eq!(rule("A"), rule("A"));
-        assert!(rule("A") != rule("B"));
-        assert!(rule("A") != token("A"));
+        assert_ne!(rule("A"), rule("B"));
+        assert_ne!(rule("A"), token("A"));
     }
 
     #[test]
@@ -740,14 +747,16 @@ mod test {
         )
         .unwrap();
         assert_eq!(grm.get_rule("A").unwrap().pidxs, vec![0]);
+        let a_span = Span::new(33, 34);
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
-                symbols: vec![token("a")],
+                symbols: vec![token_span("a", a_span)],
                 precedence: None,
                 action: None
             }
         );
+        assert_eq!(&src[a_span.start()..a_span.end()], "a");
     }
 
     #[test]
@@ -763,22 +772,26 @@ mod test {
             &src,
         )
         .unwrap();
+        let a_span = Span::new(33, 34);
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
-                symbols: vec![token("a")],
+                symbols: vec![token_span("a", a_span)],
                 precedence: None,
                 action: None
             }
         );
+        assert_eq!(&src[a_span.start()..a_span.end()], "a");
+        let b_span = Span::new(54, 55);
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap().pidxs[1]],
             Production {
-                symbols: vec![token("b")],
+                symbols: vec![token_span("b", Span::new(54, 55))],
                 precedence: None,
                 action: None
             }
         );
+        assert_eq!(&src[b_span.start()..b_span.end()], "b");
     }
 
     #[test]
@@ -805,14 +818,16 @@ mod test {
             }
         );
 
+        let b_span = Span::new(51, 52);
         assert_eq!(
             grm.prods[grm.get_rule("B").unwrap().pidxs[0]],
             Production {
-                symbols: vec![token("b")],
+                symbols: vec![token_span("b", b_span)],
                 precedence: None,
                 action: None
             }
         );
+        assert_eq!(&src[b_span.start()..b_span.end()], "b");
         assert_eq!(
             grm.prods[grm.get_rule("B").unwrap().pidxs[1]],
             Production {
@@ -830,14 +845,16 @@ mod test {
                 action: None
             }
         );
+        let c_span = Span::new(77, 78);
         assert_eq!(
             grm.prods[grm.get_rule("C").unwrap().pidxs[1]],
             Production {
-                symbols: vec![token("c")],
+                symbols: vec![token_span("c", c_span)],
                 precedence: None,
                 action: None
             }
         );
+        assert_eq!(&src[c_span.start()..c_span.end()], "c");
     }
 
     #[test]
@@ -858,14 +875,18 @@ mod test {
             &src,
         )
         .unwrap();
+        let a_span = Span::new(8, 9);
+        let b_span = Span::new(11, 12);
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
-                symbols: vec![token("a"), rule("B")],
+                symbols: vec![token_span("a", a_span), rule_span("B", b_span)],
                 precedence: None,
                 action: None
             }
         );
+        assert_eq!(&src[a_span.start()..a_span.end()], "a");
+        assert_eq!(&src[b_span.start()..b_span.end()], "B");
     }
 
     #[test]
@@ -876,14 +897,18 @@ mod test {
             &src,
         )
         .unwrap();
+        let a_span = Span::new(8, 9);
+        let b_span = Span::new(12, 13);
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
-                symbols: vec![token("a"), token("b")],
+                symbols: vec![token_span("a", a_span), token_span("b", b_span)],
                 precedence: None,
                 action: None
             }
         );
+        assert_eq!(&src[a_span.start()..a_span.end()], "a");
+        assert_eq!(&src[b_span.start()..b_span.end()], "b");
     }
 
     #[test]
@@ -952,14 +977,16 @@ mod test {
         )
         .unwrap();
         assert!(grm.has_token("T"));
+        let t_span = Span::new(16, 17);
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
-                symbols: vec![token("T")],
+                symbols: vec![token_span("T", t_span)],
                 precedence: None,
                 action: None
             }
         );
+        assert_eq!(&src[t_span.start()..t_span.end() + 1], "T;");
     }
 
     #[test]

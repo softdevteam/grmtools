@@ -38,17 +38,19 @@ pub struct Rule {
     pub actiont: Option<String>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Production {
     pub symbols: Vec<Symbol>,
     pub precedence: Option<String>,
     pub action: Option<String>,
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub enum Symbol {
-    Rule(String),
-    Token(String),
+    Rule(String, Span),
+    Token(String, Span),
 }
 
 /// The various different possible grammar validation errors.
@@ -105,8 +107,8 @@ impl fmt::Display for GrammarValidationError {
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Symbol::Rule(ref s) => write!(f, "{}", s),
-            Symbol::Token(ref s) => write!(f, "{}", s),
+            Symbol::Rule(ref s, _) => write!(f, "{}", s),
+            Symbol::Token(ref s, _) => write!(f, "{}", s),
         }
     }
 }
@@ -194,7 +196,7 @@ impl GrammarAST {
                 if !self.rules.contains_key(s) {
                     return Err(GrammarValidationError {
                         kind: GrammarValidationErrorKind::InvalidStartRule,
-                        sym: Some(Symbol::Rule(s.clone())),
+                        sym: Some(Symbol::Rule(s.clone(), Span::new(0, 0))),
                     });
                 }
             }
@@ -206,19 +208,19 @@ impl GrammarAST {
                     if !self.tokens.contains(n) {
                         return Err(GrammarValidationError {
                             kind: GrammarValidationErrorKind::UnknownToken,
-                            sym: Some(Symbol::Token(n.clone())),
+                            sym: Some(Symbol::Token(n.clone(), Span::new(0, 0))),
                         });
                     }
                     if !self.precs.contains_key(n) {
                         return Err(GrammarValidationError {
                             kind: GrammarValidationErrorKind::NoPrecForToken,
-                            sym: Some(Symbol::Token(n.clone())),
+                            sym: Some(Symbol::Token(n.clone(), Span::new(0, 0))),
                         });
                     }
                 }
                 for sym in &prod.symbols {
                     match *sym {
-                        Symbol::Rule(ref name) => {
+                        Symbol::Rule(ref name, _) => {
                             if !self.rules.contains_key(name) {
                                 return Err(GrammarValidationError {
                                     kind: GrammarValidationErrorKind::UnknownRuleRef,
@@ -226,7 +228,7 @@ impl GrammarAST {
                                 });
                             }
                         }
-                        Symbol::Token(ref name) => {
+                        Symbol::Token(ref name, _) => {
                             if !self.tokens.contains(name) {
                                 return Err(GrammarValidationError {
                                     kind: GrammarValidationErrorKind::UnknownToken,
@@ -249,7 +251,7 @@ impl GrammarAST {
             }
             return Err(GrammarValidationError {
                 kind: GrammarValidationErrorKind::UnknownEPP,
-                sym: Some(Symbol::Token(k.clone())),
+                sym: Some(Symbol::Token(k.clone(), Span::new(0, 0))),
             });
         }
         Ok(())
@@ -264,11 +266,11 @@ mod test {
     };
 
     fn rule(n: &str) -> Symbol {
-        Symbol::Rule(n.to_string())
+        Symbol::Rule(n.to_string(), Span::new(0, 0))
     }
 
     fn token(n: &str) -> Symbol {
-        Symbol::Token(n.to_string())
+        Symbol::Token(n.to_string(), Span::new(0, 0))
     }
 
     #[test]
