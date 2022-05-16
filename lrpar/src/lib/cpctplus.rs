@@ -7,14 +7,14 @@ use std::{
 };
 
 use cactus::Cactus;
-use cfgrammar::TIdx;
+use cfgrammar::{Span, TIdx};
 use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use super::{
     dijkstra::dijkstra,
     parser::{AStackType, ParseRepair, Parser, Recoverer},
-    Lexeme, Span,
+    Lexeme,
 };
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.

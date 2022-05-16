@@ -23,7 +23,7 @@ Action code is normal Rust code with the addition of the following special varia
    stored by the grammar without copying memory.
 
  * `$span` is a
-   [`lrpar::Span`](https://softdevteam.github.io/grmtools/master/api/lrpar/struct.Span.html)
+   [`cfgrammar::Span`](https://softdevteam.github.io/grmtools/master/api/cfgrammar/struct.Span.html)
    tuple (with both elements of type `usize`) which captures how much of the
    user's input the current production matched.
 

@@ -1,7 +1,7 @@
+#[cfg(test)]
+use cfgrammar::Span;
 use lrlex::lrlex_mod;
 use lrpar::lrpar_mod;
-#[cfg(test)]
-use lrpar::Span;
 #[cfg(test)]
 use lrpar::{Lexeme, Lexer, NonStreamingLexer};
 

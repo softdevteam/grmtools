@@ -30,7 +30,7 @@ Factor -> Result<Expr, ()>:
     ;
 %%
 
-use lrpar::Span;
+use cfgrammar::Span;
 
 #[derive(Debug)]
 pub enum Expr {

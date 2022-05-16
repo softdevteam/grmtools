@@ -2,9 +2,8 @@
 
 use std::{cmp, error::Error, fmt, hash::Hash, marker};
 
+use cfgrammar::Span;
 use num_traits::{PrimInt, Unsigned};
-
-use crate::Span;
 
 /// A Lexing error.
 #[derive(Copy, Clone, Debug)]

@@ -3,7 +3,7 @@
 //! compiles it to Rust code. The resulting [LRNonStreamingLexerDef] can then be given an input
 //! string, from which it instantiates an [LRNonStreamingLexer]. This provides an iterator which
 //! can produce the sequence of [lrpar::Lexeme]s for that input, as well as answer basic queries
-//! about [lrpar::Span]s (e.g. extracting substrings, calculating line and column numbers).
+//! about [cfgrammar::Span]s (e.g. extracting substrings, calculating line and column numbers).
 
 #![allow(clippy::new_without_default)]
 #![allow(clippy::type_complexity)]

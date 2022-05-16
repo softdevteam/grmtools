@@ -8,12 +8,12 @@ use std::{
 };
 
 use cactus::Cactus;
-use cfgrammar::{yacc::YaccGrammar, RIdx, TIdx};
+use cfgrammar::{yacc::YaccGrammar, RIdx, Span, TIdx};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use serde::{Deserialize, Serialize};
 
-use crate::{cpctplus, LexError, Lexeme, NonStreamingLexer, Span};
+use crate::{cpctplus, LexError, Lexeme, NonStreamingLexer};
 
 #[cfg(test)]
 const RECOVERY_TIME_BUDGET: u64 = 60_000; // milliseconds
@@ -873,13 +873,16 @@ impl<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned> ParseError<
 pub(crate) mod test {
     use std::collections::HashMap;
 
-    use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
+    use cfgrammar::{
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+        Span,
+    };
     use lrtable::{from_yacc, Minimiser};
     use num_traits::ToPrimitive;
     use regex::Regex;
 
     use super::*;
-    use crate::{test_utils::TestLexeme, Lexeme, Lexer, Span};
+    use crate::{test_utils::TestLexeme, Lexeme, Lexer};
 
     pub(crate) fn do_parse(
         rcvry_kind: RecoveryKind,

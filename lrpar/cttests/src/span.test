@@ -4,7 +4,7 @@ grammar: |
     %start Expr
     %avoid_insert "INT"
     %%
-    Expr -> Vec<::lrpar::Span>:
+    Expr -> Vec<::cfgrammar::Span>:
           Expr '+' Term {
               let mut spans = $1;
               spans.extend($3);
@@ -18,7 +18,7 @@ grammar: |
           }
         ;
 
-    Term -> Vec<::lrpar::Span>:
+    Term -> Vec<::cfgrammar::Span>:
           Term '*' Factor {
               let mut spans = $1;
               spans.extend($3);
@@ -32,7 +32,7 @@ grammar: |
           }
         ;
 
-    Factor -> Vec<::lrpar::Span>:
+    Factor -> Vec<::cfgrammar::Span>:
           '(' Expr ')' {
               let mut spans = $2;
               spans.push($span);

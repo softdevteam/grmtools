@@ -25,7 +25,7 @@ Unmatched -> ():
     ;
 %%
 
-use lrpar::Span;
+use cfgrammar::Span;
 
 #[derive(Debug)]
 pub enum Expr {
