@@ -21,6 +21,7 @@ path = "src/lib/mod.rs"
 vergen = { version = "7", default-features = false, features = ["build"] }
 
 [dependencies]
+cfgrammar = { path = "../cfgrammar", version = "0.12" }
 getopts = "0.2" # only needed for src/main.rs
 lazy_static = "1.4"
 lrpar = { path = "../lrpar", version = "0.12" }

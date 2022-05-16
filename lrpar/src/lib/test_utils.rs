@@ -1,8 +1,9 @@
 #![allow(clippy::len_without_is_empty)]
 
+use cfgrammar::Span;
 use std::{error::Error, fmt, hash::Hash};
 
-use crate::{Lexeme, Span};
+use crate::Lexeme;
 
 type StorageT = u16;
 

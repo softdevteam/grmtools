@@ -401,7 +401,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 None => "None".to_owned(),
             };
             let n_span = format!(
-                "lrpar::Span::new({}, {})",
+                "::cfgrammar::Span::new({}, {})",
                 r.name_span.start(),
                 r.name_span.end()
             );

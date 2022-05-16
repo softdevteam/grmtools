@@ -13,5 +13,6 @@ name = "calclex"
 lrlex = { path = "../.." }
 
 [dependencies]
+cfgrammar = { path = "../../../cfgrammar" }
 lrlex = { path = "../.." }
 lrpar = { path = "../../../lrpar" }

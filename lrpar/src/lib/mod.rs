@@ -219,6 +219,8 @@ macro_rules! lrpar_mod {
     };
 }
 
-// For backwards compatibility reexport Span which lived here,
-// before it was moved to cfgrammar.
+#[deprecated(
+    since = "0.13.0",
+    note = "Please import this as `cfgrammar::Span` instead"
+)]
 pub use cfgrammar::Span;

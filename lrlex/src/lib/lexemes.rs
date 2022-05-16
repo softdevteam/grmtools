@@ -1,6 +1,7 @@
 use std::{cmp, error::Error, fmt, hash::Hash, marker};
 
-use lrpar::{Lexeme, Span};
+use cfgrammar::Span;
+use lrpar::Lexeme;
 
 /// lrlex's standard lexeme struct: all lexemes are instances of this struct.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

@@ -715,7 +715,7 @@ where
                     "\n        #[allow(clippy::type_complexity)]
         let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
-                       ::lrpar::Span,
+                       ::cfgrammar::Span,
                        ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
                        {parse_paramty})
                     -> {actionskind}<'input>> = ::std::vec![{wrappers}];\n",
@@ -823,7 +823,7 @@ where
             outs.push_str(&format!(
                 "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
-                      {prefix}span: ::lrpar::Span,
+                      {prefix}span: ::cfgrammar::Span,
                       mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
                       {parse_paramdef})
                    -> {actionskind}<'input> {{",
@@ -994,7 +994,7 @@ where
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
-                     {prefix}span: ::lrpar::Span,
+                     {prefix}span: ::cfgrammar::Span,
                      {parse_paramdef},
                      {args}){returnt} {{
         let _ = {parse_paramname};\n",

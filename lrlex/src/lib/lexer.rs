@@ -6,11 +6,12 @@ use std::{
     slice::Iter,
 };
 
+use cfgrammar::Span;
 use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 use try_from::TryFrom;
 
-use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer, Span};
+use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer};
 
 use crate::{parser::LexParser, LexBuildResult};
 
@@ -675,16 +676,16 @@ b 'B'
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
         assert_eq!(
             lexerdef.get_rule_by_name("A").unwrap().name_span,
-            lrpar::Span::new(6, 7)
+            Span::new(6, 7)
         );
         assert_eq!(
             lexerdef.get_rule_by_name("B").unwrap().name_span,
-            lrpar::Span::new(12, 13)
+            Span::new(12, 13)
         );
         let anonymous_rules = lexerdef
             .iter_rules()
             .filter(|rule| rule.name.is_none())
             .collect::<Vec<_>>();
-        assert_eq!(anonymous_rules[0].name_span, lrpar::Span::new(21, 21));
+        assert_eq!(anonymous_rules[0].name_span, Span::new(21, 21));
     }
 }

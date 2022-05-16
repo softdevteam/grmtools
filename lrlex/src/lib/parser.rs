@@ -1,3 +1,4 @@
+use cfgrammar::Span;
 use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
@@ -107,7 +108,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         if orig_name == ";" {
             name = None;
             let pos = i + rspace + 1;
-            name_span = lrpar::Span::new(pos, pos);
+            name_span = Span::new(pos, pos);
         } else {
             debug_assert!(!orig_name.is_empty());
             if !((orig_name.starts_with('\'') && orig_name.ends_with('\''))
@@ -116,7 +117,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                 return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1));
             }
             name = Some(orig_name[1..orig_name.len() - 1].to_string());
-            name_span = lrpar::Span::new(i + rspace + 2, i + rspace + orig_name.len());
+            name_span = Span::new(i + rspace + 2, i + rspace + orig_name.len());
             let dup_name = self.rules.iter().any(|r| {
                 r.name
                     .as_ref()
