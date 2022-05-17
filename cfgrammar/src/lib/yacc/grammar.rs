@@ -40,8 +40,8 @@ pub enum AssocKind {
 pub struct YaccGrammar<StorageT = u32> {
     /// How many rules does this grammar have?
     rules_len: RIdx<StorageT>,
-    /// A mapping from `RIdx` -> `String`.
-    rule_names: Vec<String>,
+    /// A mapping from `RIdx` -> `(Span, String)`.
+    rule_names: Vec<(String, Span)>,
     /// A mapping from `TIdx` -> `Option<(Span, String)>`. Every user-specified token will have a name,
     /// but tokens inserted by cfgrammar (e.g. the EOF token) won't.
     token_names: Vec<Option<(Span, String)>>,
@@ -138,7 +138,7 @@ where
             }
         }
 
-        let mut rule_names: Vec<String> = Vec::with_capacity(ast.rules.len() + 1);
+        let mut rule_names: Vec<(String, Span)> = Vec::with_capacity(ast.rules.len() + 1);
 
         // Generate a guaranteed unique start rule name. We simply keep making the string longer
         // until we've hit something unique (at the very worst, this will require looping for as
@@ -148,7 +148,7 @@ where
         while ast.rules.get(&start_rule).is_some() {
             start_rule += START_RULE;
         }
-        rule_names.push(start_rule.clone());
+        rule_names.push((start_rule.clone(), Span::new(0, 0)));
 
         let implicit_rule;
         let implicit_start_rule;
@@ -163,13 +163,13 @@ where
                     while ast.rules.get(&n1).is_some() {
                         n1 += IMPLICIT_RULE;
                     }
-                    rule_names.push(n1.clone());
+                    rule_names.push((n1.clone(), Span::new(0, 0)));
                     implicit_rule = Some(n1);
                     let mut n2 = IMPLICIT_START_RULE.to_string();
                     while ast.rules.get(&n2).is_some() {
                         n2 += IMPLICIT_START_RULE;
                     }
-                    rule_names.push(n2.clone());
+                    rule_names.push((n2.clone(), Span::new(0, 0)));
                     implicit_start_rule = Some(n2);
                 } else {
                     implicit_rule = None;
@@ -178,12 +178,12 @@ where
             }
         };
 
-        for k in ast.rules.keys() {
-            rule_names.push(k.clone());
+        for (k, rule) in &ast.rules {
+            rule_names.push((k.clone(), rule.name.1));
         }
         let mut rules_prods: Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(rule_names.len());
         let mut rule_map = HashMap::<String, RIdx<StorageT>>::new();
-        for (i, v) in rule_names.iter().enumerate() {
+        for (i, (v, _)) in rule_names.iter().enumerate() {
             rules_prods.push(Vec::new());
             rule_map.insert(v.clone(), RIdx(i.as_()));
         }
@@ -215,7 +215,7 @@ where
         let mut prods_rules = vec![None; ast.prods.len()];
         let mut actions = vec![None; ast.prods.len()];
         let mut actiontypes = vec![None; rule_names.len()];
-        for astrulename in &rule_names {
+        for (astrulename, _) in &rule_names {
             let ridx = rule_map[astrulename];
             if astrulename == &start_rule {
                 // Add the special start rule which has a single production which references a
@@ -413,8 +413,13 @@ where
     }
 
     /// Return the name of rule `ridx`. Panics if `ridx` doesn't exist.
-    pub fn rule_name(&self, ridx: RIdx<StorageT>) -> &str {
-        &self.rule_names[usize::from(ridx)]
+    pub fn rule_name_str(&self, ridx: RIdx<StorageT>) -> &str {
+        self.rule_names[usize::from(ridx)].0.as_str()
+    }
+
+    /// Return the span of rule `ridx`. Panics if `ridx` doesn't exist.
+    pub fn rule_name_span(&self, ridx: RIdx<StorageT>) -> Span {
+        self.rule_names[usize::from(ridx)].1
     }
 
     /// Return the `RIdx` of the implict rule if it exists, or `None` otherwise.
@@ -426,7 +431,7 @@ where
     pub fn rule_idx(&self, n: &str) -> Option<RIdx<StorageT>> {
         self.rule_names
             .iter()
-            .position(|x| x == n)
+            .position(|(x, _)| x == n)
             // The call to as_() is safe because rule_names is guaranteed to be
             // small enough to fit into StorageT
             .map(|x| RIdx(x.as_()))
@@ -581,12 +586,12 @@ where
     pub fn pp_prod(&self, pidx: PIdx<StorageT>) -> String {
         let mut sprod = String::new();
         let ridx = self.prod_to_rule(pidx);
-        sprod.push_str(self.rule_name(ridx));
+        sprod.push_str(self.rule_name_str(ridx));
         sprod.push(':');
         for sym in self.prod(pidx) {
             let s = match sym {
                 Symbol::Token(tidx) => self.token_name(*tidx).unwrap(),
-                Symbol::Rule(ridx) => self.rule_name(*ridx),
+                Symbol::Rule(ridx) => self.rule_name_str(*ridx),
             };
             sprod.push_str(&format!(" \"{}\"", s));
         }
@@ -1476,9 +1481,14 @@ mod test {
         let token_map = grm.tokens_map();
         let a_tidx = token_map.get("a");
         let foo_tidx = token_map.get("foo");
-        let a_span = grm.token_span(*a_tidx.unwrap());
-        let foo_span = grm.token_span(*foo_tidx.unwrap());
-        assert_eq!(a_span, Some(&Span::new(8, 9)));
-        assert_eq!(foo_span, Some(&Span::new(14, 17)));
+        let a_span = grm.token_span(*a_tidx.unwrap()).unwrap();
+        let foo_span = grm.token_span(*foo_tidx.unwrap()).unwrap();
+        let ab_span = grm.rule_name_span(grm.rule_idx("AB").unwrap());
+        assert_eq!(a_span, &Span::new(8, 9));
+        assert_eq!(foo_span, &Span::new(14, 17));
+        assert_eq!(ab_span, Span::new(3, 5));
+        assert_eq!(&src[a_span.start()..a_span.end()], "a");
+        assert_eq!(&src[foo_span.start()..foo_span.end()], "foo");
+        assert_eq!(&src[ab_span.start()..ab_span.end()], "AB");
     }
 }

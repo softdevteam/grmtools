@@ -772,7 +772,7 @@ where
             if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
                 outs.push_str(&format!(
                     "    #[allow(dead_code)]\n    pub const R_{}: {} = {:?};\n",
-                    grm.rule_name(ridx).to_ascii_uppercase(),
+                    grm.rule_name_str(ridx).to_ascii_uppercase(),
                     type_name::<StorageT>(),
                     usize::from(ridx)
                 ));
@@ -911,7 +911,7 @@ where
             } else {
                 panic!(
                     "Production in rule '{}' must have an action body.",
-                    grm.rule_name(grm.prod_to_rule(pidx))
+                    grm.rule_name_str(grm.prod_to_rule(pidx))
                 );
             }
             outs.push_str("\n    }\n\n");
@@ -999,7 +999,7 @@ where
                      {args}){returnt} {{
         let _ = {parse_paramname};\n",
                 usize::from(pidx),
-                rulename = grm.rule_name(grm.prod_to_rule(pidx)),
+                rulename = grm.rule_name_str(grm.prod_to_rule(pidx)),
                 lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
                 prefix = ACTION_PREFIX,

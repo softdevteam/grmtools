@@ -321,11 +321,12 @@ impl YaccParser {
         if self.ast.start.is_none() {
             self.ast.start = Some(rn.clone());
         }
+        let span = Span::new(i, j);
         match self.yacc_kind {
             YaccKind::Original(_) | YaccKind::Eco => {
                 if self.ast.get_rule(&rn).is_none() {
                     self.ast
-                        .add_rule(rn.clone(), self.global_actiontype.clone());
+                        .add_rule((rn.clone(), span), self.global_actiontype.clone());
                 }
                 i = j;
             }
@@ -341,7 +342,7 @@ impl YaccParser {
                 }
                 i = self.parse_ws(i, true)?;
                 let (j, actiont) = self.parse_to_single_colon(i)?;
-                self.ast.add_rule(rn.clone(), Some(actiont));
+                self.ast.add_rule((rn.clone(), span), Some(actiont));
                 i = j;
             }
         }
