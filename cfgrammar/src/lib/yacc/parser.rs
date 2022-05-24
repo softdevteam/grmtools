@@ -147,8 +147,9 @@ impl YaccParser {
                         break;
                     }
                     let (j, n, span) = self.parse_token(i)?;
-                    self.ast.tokens.insert(n);
-                    self.ast.spans.push(span);
+                    if self.ast.tokens.insert(n) {
+                        self.ast.spans.push(span);
+                    }
                     i = self.parse_ws(j, true)?;
                 }
                 continue;
@@ -217,8 +218,9 @@ impl YaccParser {
                 }
                 while j < self.src.len() && self.newlines.len() == num_newlines {
                     let (j, n, span) = self.parse_token(i)?;
-                    self.ast.tokens.insert(n.clone());
-                    self.ast.spans.push(span);
+                    if self.ast.tokens.insert(n.clone()) {
+                        self.ast.spans.push(span);
+                    }
                     if self.ast.avoid_insert.as_ref().unwrap().contains(&n) {
                         return Err(
                             self.mk_error(YaccParserErrorKind::DuplicateAvoidInsertDeclaration, i)
@@ -252,8 +254,9 @@ impl YaccParser {
                     }
                     while j < self.src.len() && self.newlines.len() == num_newlines {
                         let (j, n, span) = self.parse_token(i)?;
-                        self.ast.tokens.insert(n.clone());
-                        self.ast.spans.push(span);
+                        if self.ast.tokens.insert(n.clone()) {
+                            self.ast.spans.push(span);
+                        }
                         if self.ast.implicit_tokens.as_ref().unwrap().contains(&n) {
                             return Err(self.mk_error(
                                 YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
@@ -373,8 +376,9 @@ impl YaccParser {
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
                 let (j, sym, span) = self.parse_token(i)?;
                 i = self.parse_ws(j, true)?;
-                self.ast.tokens.insert(sym.clone());
-                self.ast.spans.push(span);
+                if self.ast.tokens.insert(sym.clone()) {
+                    self.ast.spans.push(span);
+                }
                 syms.push(Symbol::Token(sym));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = self.parse_ws(j, true)?;
