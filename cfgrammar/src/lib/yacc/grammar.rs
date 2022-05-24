@@ -481,10 +481,16 @@ where
     pub fn token_epp(&self, tidx: TIdx<StorageT>) -> Option<&str> {
         self.token_epp[usize::from(tidx)].as_deref()
     }
-    pub fn token_span(&self, tidx: TIdx<StorageT>) -> Option<&Span> {
+
+    /// Return the span for token given by `tidx` if one exists.
+    /// If `None`, the token is either implicit and not derived from a token
+    /// in the source, otherwise the `YaccGrammar` itself may not derived from a
+    /// textual source in which case the token may be explicit but still lack spans
+    /// from its construction.
+    pub fn token_span(&self, tidx: TIdx<StorageT>) -> Option<Span> {
         self.token_names[usize::from(tidx)]
             .as_ref()
-            .map(|(span, _)| span)
+            .map(|(span, _)| *span)
     }
 
     /// Get the action for production `pidx`. Panics if `pidx` doesn't exist.
@@ -1484,8 +1490,8 @@ mod test {
         let a_span = grm.token_span(*a_tidx.unwrap()).unwrap();
         let foo_span = grm.token_span(*foo_tidx.unwrap()).unwrap();
         let ab_span = grm.rule_name_span(grm.rule_idx("AB").unwrap());
-        assert_eq!(a_span, &Span::new(8, 9));
-        assert_eq!(foo_span, &Span::new(14, 17));
+        assert_eq!(a_span, Span::new(8, 9));
+        assert_eq!(foo_span, Span::new(14, 17));
         assert_eq!(ab_span, Span::new(3, 5));
         assert_eq!(&src[a_span.start()..a_span.end()], "a");
         assert_eq!(&src[foo_span.start()..foo_span.end()], "foo");
