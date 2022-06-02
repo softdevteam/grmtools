@@ -7,6 +7,7 @@ use std::{
     process,
 };
 
+use cfgrammar::span::NewlineToLineColCache;
 use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{Lexeme, Lexer};
 
@@ -52,9 +53,23 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme, _>::from_str(&read_file(lex_l_path))
-        .unwrap_or_else(|s| {
-            writeln!(stderr(), "{}: {}", &lex_l_path, &s).ok();
+    let lex_src = read_file(lex_l_path);
+    let lexerdef =
+        LRNonStreamingLexerDef::<DefaultLexeme, _>::from_str(&lex_src).unwrap_or_else(|s| {
+            let mut line_cache = NewlineToLineColCache::default();
+            line_cache.feed(&lex_src);
+            if let Some((line, column)) = line_cache.byte_to_line_and_col(&lex_src, s.span.start())
+            {
+                writeln!(
+                    stderr(),
+                    "{}: {} at line {line} column {column}",
+                    &lex_l_path,
+                    &s
+                )
+                .ok();
+            } else {
+                writeln!(stderr(), "{}: {}", &lex_l_path, &s).ok();
+            }
             process::exit(1);
         });
     let input = &read_file(&matches.free[1]);

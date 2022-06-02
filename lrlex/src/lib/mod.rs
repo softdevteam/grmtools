@@ -29,14 +29,15 @@ pub use crate::{
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
 };
 
+use cfgrammar::Span;
+
 pub type LexBuildResult<T> = Result<T, LexBuildError>;
 
 /// Any error from the Lex parser returns an instance of this struct.
 #[derive(Debug)]
 pub struct LexBuildError {
     pub kind: LexErrorKind,
-    line: usize,
-    col: usize,
+    pub span: Span,
 }
 
 impl Error for LexBuildError {}
@@ -64,7 +65,7 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::DuplicateName => "Rule name already exists",
             LexErrorKind::RegexError => "Invalid regular expression",
         };
-        write!(f, "{} at line {} column {}", s, self.line, self.col)
+        write!(f, "{s}")
     }
 }
 

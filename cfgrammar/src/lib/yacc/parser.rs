@@ -48,8 +48,7 @@ pub enum YaccParserErrorKind {
 #[derive(Debug)]
 pub struct YaccParserError {
     pub kind: YaccParserErrorKind,
-    line: usize,
-    col: usize,
+    pub span: Span,
 }
 
 impl Error for YaccParserError {}
@@ -90,14 +89,14 @@ impl fmt::Display for YaccParserError {
             }
             YaccParserErrorKind::InvalidString => "Invalid string",
         };
-        write!(f, "{} at line {} column {}", s, self.line, self.col)
+        write!(f, "{}", s)
     }
 }
 
 pub(crate) struct YaccParser {
     yacc_kind: YaccKind,
     src: String,
-    newlines: Vec<usize>,
+    num_newlines: usize,
     ast: GrammarAST,
     global_actiontype: Option<String>,
 }
@@ -114,7 +113,7 @@ impl YaccParser {
         YaccParser {
             yacc_kind,
             src,
-            newlines: vec![0],
+            num_newlines: 0,
             ast: GrammarAST::new(),
             global_actiontype: None,
         }
@@ -212,11 +211,11 @@ impl YaccParser {
             }
             if let Some(j) = self.lookahead_is("%avoid_insert", i) {
                 i = self.parse_ws(j, false)?;
-                let num_newlines = self.newlines.len();
+                let num_newlines = self.num_newlines;
                 if self.ast.avoid_insert.is_none() {
                     self.ast.avoid_insert = Some(HashSet::new());
                 }
-                while j < self.src.len() && self.newlines.len() == num_newlines {
+                while j < self.src.len() && self.num_newlines == num_newlines {
                     let (j, n, span) = self.parse_token(i)?;
                     if self.ast.tokens.insert(n.clone()) {
                         self.ast.spans.push(span);
@@ -248,11 +247,11 @@ impl YaccParser {
             if let YaccKind::Eco = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
                     i = self.parse_ws(j, false)?;
-                    let num_newlines = self.newlines.len();
+                    let num_newlines = self.num_newlines;
                     if self.ast.implicit_tokens.is_none() {
                         self.ast.implicit_tokens = Some(HashSet::new());
                     }
-                    while j < self.src.len() && self.newlines.len() == num_newlines {
+                    while j < self.src.len() && self.num_newlines == num_newlines {
                         let (j, n, span) = self.parse_token(i)?;
                         if self.ast.tokens.insert(n.clone()) {
                             self.ast.spans.push(span);
@@ -286,8 +285,8 @@ impl YaccParser {
                 }
 
                 i = self.parse_ws(k, false)?;
-                let num_newlines = self.newlines.len();
-                while i < self.src.len() && num_newlines == self.newlines.len() {
+                let num_newlines = self.num_newlines;
+                while i < self.src.len() && num_newlines == self.num_newlines {
                     let (j, n, _) = self.parse_token(i)?;
                     if self.ast.precs.contains_key(&n) {
                         return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
@@ -456,7 +455,7 @@ impl YaccParser {
                 }
                 '}' => c -= 1,
                 '\n' | '\r' => {
-                    self.newlines.push(j + 1);
+                    self.num_newlines += 1;
                 }
                 _ => (),
             };
@@ -508,7 +507,7 @@ impl YaccParser {
                     j += 2 * ':'.len_utf8();
                 }
                 '\n' | '\r' => {
-                    self.newlines.push(i + 1);
+                    self.num_newlines += 1;
                     j += c.len_utf8();
                 }
                 _ => j += c.len_utf8(),
@@ -591,7 +590,7 @@ impl YaccParser {
                     if !inc_newlines {
                         return Err(self.mk_error(YaccParserErrorKind::ReachedEOL, i));
                     }
-                    self.newlines.push(i + 1);
+                    self.num_newlines += 1;
                     i += c.len_utf8();
                 }
                 '/' => {
@@ -606,7 +605,7 @@ impl YaccParser {
                                 for c in self.src[i..].chars() {
                                     i += c.len_utf8();
                                     if c == '\n' || c == '\r' {
-                                        self.newlines.push(i);
+                                        self.num_newlines += 1;
                                         break;
                                     }
                                 }
@@ -625,7 +624,7 @@ impl YaccParser {
                                                 return Err(self
                                                     .mk_error(YaccParserErrorKind::ReachedEOL, i));
                                             }
-                                            self.newlines.push(i + 1);
+                                            self.num_newlines += 1;
                                         }
                                         '*' => (),
                                         _ => continue,
@@ -664,30 +663,8 @@ impl YaccParser {
     }
 
     fn mk_error(&self, k: YaccParserErrorKind, off: usize) -> YaccParserError {
-        let (line, col) = self.off_to_line_col(off);
-        YaccParserError { kind: k, line, col }
-    }
-
-    fn off_to_line_col(&self, off: usize) -> (usize, usize) {
-        if off == self.src.len() {
-            let line_off = *self.newlines.iter().last().unwrap();
-            return (
-                self.newlines.len(),
-                self.src[line_off..].chars().count() + 1,
-            );
-        }
-        let (line_m1, &line_off) = self
-            .newlines
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|&(_, &line_off)| line_off <= off)
-            .unwrap();
-        let c_off = self.src[line_off..]
-            .char_indices()
-            .position(|(c_off, _)| c_off == off - line_off)
-            .unwrap();
-        (line_m1 + 1, c_off + 1)
+        let span = Span::new(off, off);
+        YaccParserError { kind: k, span }
     }
 }
 
@@ -720,6 +697,35 @@ mod test {
     }
     fn token_span(n: &str, span: Span) -> Symbol {
         Symbol::Token(n.to_string(), span)
+    }
+
+    fn line_of_offset(s: &str, off: usize) -> usize {
+        s[..off].lines().count()
+    }
+
+    macro_rules! incorrect_err {
+        ($src:ident, $e:ident) => {{
+            let mut line_cache = crate::span::NewlineToLineColCache::default();
+            line_cache.feed(&$src);
+            if let Some((line, column)) = line_cache.byte_to_line_and_col(&$src, $e.span.start()) {
+                panic!(
+                    "Incorrect error returned {} at line {line} column {column}",
+                    $e
+                )
+            } else {
+                panic!("Incorrect error returned {} with unknown span", $e)
+            }
+        }};
+    }
+
+    macro_rules! line_col {
+        ($src:ident, $span: ident) => {{
+            let mut line_cache = crate::span::NewlineToLineColCache::default();
+            line_cache.feed(&$src);
+            line_cache
+                .byte_to_line_and_col(&$src, $span.start())
+                .unwrap()
+        }};
     }
 
     #[test]
@@ -1010,10 +1016,9 @@ mod test {
             Ok(_) => panic!("Incorrect token parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IllegalString,
-                line: 1,
-                col: 12,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (1, 12) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1027,10 +1032,9 @@ mod test {
             Ok(_) => panic!("Incorrect token parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IllegalString,
-                line: 3,
-                col: 11,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (3, 11) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1066,10 +1070,9 @@ mod test {
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
-                line: 1,
-                col: 5,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (1, 5) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1085,10 +1088,9 @@ A:"
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
-                line: 2,
-                col: 3,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (2, 3) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1105,10 +1107,9 @@ A:
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
-                line: 3,
-                col: 1,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (3, 1) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1125,10 +1126,9 @@ A:
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::UnknownDeclaration,
-                line: 3,
-                col: 9,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (3, 9) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1142,10 +1142,9 @@ A:
             Ok(_) => panic!("Missing colon parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::MissingColon,
-                line: 1,
-                col: 5,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (1, 5) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1159,10 +1158,9 @@ A:
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::PrematureEnd,
-                line: 1,
-                col: 8,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (1, 8) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1178,10 +1176,9 @@ x"
             Ok(_) => panic!("Incomplete rule parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::ReachedEOL,
-                line: 1,
-                col: 7,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (1, 7) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1193,10 +1190,9 @@ x"
             Ok(_) => panic!("Unknown declaration parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::UnknownDeclaration,
-                line: 1,
-                col: 1
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e)
+                span,
+            }) if line_col!(src, span) == (1, 1) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1282,10 +1278,9 @@ x"
                 Ok(_) => panic!("Duplicate precedence parsed"),
                 Err(YaccParserError {
                     kind: YaccParserErrorKind::DuplicatePrecedence,
-                    line: 3,
-                    ..
-                }) => (),
-                Err(e) => panic!("Incorrect error returned {}", e),
+                    span,
+                }) if line_of_offset(src, span.start()) == 3 => (),
+                Err(e) => incorrect_err!(src, e),
             }
         }
     }
@@ -1315,37 +1310,38 @@ x"
 
     #[test]
     fn test_bad_prec_overrides() {
+        let src = "
+        %%
+        S: 'A' %prec ;
+        ";
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "
-          %%
-          S: 'A' %prec ;
-          ",
+            src,
         ) {
             Ok(_) => panic!("Incorrect %prec parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IllegalString,
-                line: 3,
+                span,
                 ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+            }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
         }
 
+        let src = "
+        %%
+        S: 'A' %prec B;
+        B: ;
+        ";
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "
-          %%
-          S: 'A' %prec B;
-          B: ;
-          ",
+            src,
         ) {
             Ok(_) => panic!("Incorrect %prec parsed"),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::PrecNotFollowedByToken,
-                line: 3,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1393,60 +1389,54 @@ x"
 
     #[test]
     fn test_duplicate_avoid_insert() {
-        match parse(
-            YaccKind::Eco,
-            "
+        let src = "
           %avoid_insert X Y
           %avoid_insert Y
           %%
-          ",
-        ) {
+          ";
+        match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration,
-                line: 3,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
     #[test]
     fn test_duplicate_avoid_insert2() {
-        match parse(
-            YaccKind::Eco,
-            "
-          %avoid_insert X
-          %avoid_insert Y Y
-          %%
-          ",
-        ) {
+        let src = "
+        %avoid_insert X
+        %avoid_insert Y Y
+        %%
+        ";
+        match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration,
-                line: 3,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
     #[test]
     fn test_no_implicit_tokens_in_original_yacc() {
+        let src = "
+        %implicit_tokens X
+        %%
+        ";
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "
-          %implicit_tokens X
-          %%
-          ",
+            src,
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::UnknownDeclaration,
-                line: 2,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 2 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1494,41 +1484,35 @@ x"
 
     #[test]
     fn test_duplicate_implicit_tokens() {
-        match parse(
-            YaccKind::Eco,
-            "
-          %implicit_tokens X
-          %implicit_tokens X Y
-          %%
-          ",
-        ) {
+        let src = "
+        %implicit_tokens X
+        %implicit_tokens X Y
+        %%
+        ";
+        match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
-                line: 3,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
     #[test]
     fn test_duplicate_implicit_tokens2() {
-        match parse(
-            YaccKind::Eco,
-            "
-          %implicit_tokens X X
-          %implicit_tokens Y
-          %%
-          ",
-        ) {
+        let src = "
+        %implicit_tokens X X
+        %implicit_tokens Y
+        %%
+        ";
+        match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
-                line: 2,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 2 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1561,74 +1545,61 @@ x"
 
     #[test]
     fn test_duplicate_epp() {
-        match parse(
-            YaccKind::Eco,
-            "
-          %epp A \"a\"
-          %epp A \"a\"
-          %%
-          ",
-        ) {
+        let src = "
+        %epp A \"a\"
+        %epp A \"a\"
+        %%
+        ";
+        match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateEPP,
-                line: 3,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
     #[test]
     fn test_broken_string() {
-        match parse(
-            YaccKind::Eco,
-            "
+        let src = "
           %epp A \"a
           %%
-          ",
-        ) {
+          ";
+        match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::InvalidString,
-                line: 2,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 2 => (),
+            Err(e) => incorrect_err!(src, e),
         }
-
-        match parse(
-            YaccKind::Eco,
-            "
-          %epp A \"a",
-        ) {
+        let src = "
+        %epp A \"a";
+        match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::InvalidString,
-                line: 2,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 2 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
     #[test]
     fn test_duplicate_start() {
-        match parse(
-            YaccKind::Eco,
-            "
+        let src = "
           %start X
           %start X
           %%
-          ",
-        ) {
+          ";
+        match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateStartDeclaration,
-                line: 3,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1688,18 +1659,19 @@ x"
 
     #[test]
     fn test_actions_with_newlines() {
+        let src = "
+        %%
+        A: 'a' { foo();
+                 bar(); }
+        ;
+        B: b';";
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "
-         %%
-         A: 'a' { foo();
-                  bar(); }
-         ;
-         B: b';",
+            src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccParserError { line: 6, .. }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+            Err(YaccParserError { span, .. }) if line_of_offset(src, span.start()) == 6 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1718,58 +1690,58 @@ x"
         .unwrap();
         assert!(grm.has_token("a"));
 
+        let src = "
+        /* An invalid comment * /
+        %token   a
+        %%\n
+        A : a;";
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "
-            /* An invalid comment * /
-            %token   a
-            %%\n
-            A : a;",
+            src,
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteComment,
-                line: 2,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 2 => (),
+            Err(e) => incorrect_err!(src, e),
         }
 
+        let src = "
+        %token   a
+        %%
+        /* A valid
+         * multi-line comment
+         */
+        /* An invalid comment * /
+        A : a;";
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "
-            %token   a
-            %%
-            /* A valid
-             * multi-line comment
-             */
-            /* An invalid comment * /
-            A : a;",
+            src,
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteComment,
-                line: 7,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 7 => (),
+            Err(e) => incorrect_err!(src, e),
         }
 
+        let src = "
+        %token   a
+        %%
+        // Valid comment
+        A : a";
         match parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "
-            %token   a
-            %%
-            // Valid comment
-            A : a",
+            src,
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
                 kind: YaccParserErrorKind::IncompleteRule,
-                line: 5,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 5 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -1790,21 +1762,21 @@ x"
 
     #[test]
     fn test_only_one_type() {
-        match parse(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            "
+        let src = "
          %actiontype T1
          %actiontype T2
          %%
-         A: 'a';",
+         A: 'a';";
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                line: 3,
                 kind: YaccParserErrorKind::DuplicateActiontypeDeclaration,
-                ..
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
