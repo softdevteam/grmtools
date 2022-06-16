@@ -53,6 +53,7 @@
 use serde::{Deserialize, Serialize};
 
 mod idxnewtype;
+pub mod newlinecache;
 pub mod span;
 pub mod yacc;
 
