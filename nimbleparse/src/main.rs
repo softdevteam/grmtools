@@ -7,7 +7,7 @@ use std::{
 };
 
 use cfgrammar::{
-    span::NewlineToLineColCache,
+    newlinecache::NewlineToLineColCache,
     yacc::{YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
 };
 use getopts::Options;

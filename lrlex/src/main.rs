@@ -7,7 +7,7 @@ use std::{
     process,
 };
 
-use cfgrammar::span::NewlineToLineColCache;
+use cfgrammar::newlinecache::NewlineToLineColCache;
 use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{Lexeme, Lexer};
 

@@ -146,7 +146,7 @@ mod test {
 
     macro_rules! incorrect_err {
         ($src:ident, $e:ident) => {{
-            let mut line_cache = ::cfgrammar::span::NewlineToLineColCache::default();
+            let mut line_cache = ::cfgrammar::newlinecache::NewlineToLineColCache::default();
             line_cache.feed(&$src);
             if let Some((line, column)) = line_cache.byte_to_line_and_col(&$src, $e.span.start()) {
                 panic!(
@@ -161,7 +161,7 @@ mod test {
 
     macro_rules! line_col {
         ($src:ident, $span: ident) => {{
-            let mut line_cache = cfgrammar::span::NewlineToLineColCache::default();
+            let mut line_cache = cfgrammar::newlinecache::NewlineToLineColCache::default();
             line_cache.feed(&$src);
             line_cache
                 .byte_to_line_and_col(&$src, $span.start())

@@ -18,7 +18,7 @@ use std::{
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
-    span::NewlineToLineColCache,
+    newlinecache::NewlineToLineColCache,
     yacc::{YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
     RIdx, Symbol,
 };

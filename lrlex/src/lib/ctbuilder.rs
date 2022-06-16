@@ -15,7 +15,7 @@ use std::{
     sync::Mutex,
 };
 
-use cfgrammar::span::NewlineToLineColCache;
+use cfgrammar::newlinecache::NewlineToLineColCache;
 use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, Lexeme};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
