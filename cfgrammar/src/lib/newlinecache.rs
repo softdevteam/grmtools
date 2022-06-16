@@ -3,16 +3,14 @@ pub struct NewlineCache {
     trailing_bytes: usize,
 }
 
-impl Default for NewlineCache {
-    fn default() -> NewlineCache {
-        NewlineCache {
+impl NewlineCache {
+    pub fn new() -> Self {
+        Self {
             newlines: vec![0],
             trailing_bytes: 0,
         }
     }
-}
 
-impl NewlineCache {
     /// Feed more input into the cache, calculating newlines data from it.
     /// The `src` string given is treated as was concatenated with the previous calls
     /// to `feed`.
@@ -118,7 +116,7 @@ mod tests {
     use super::NewlineCache;
 
     fn newline_test_helper(feed: &[&str], tests: &[(usize, usize)]) {
-        let mut cache = NewlineCache::default();
+        let mut cache = NewlineCache::new();
         let mut full_string = String::new();
         for f in feed {
             cache.feed(f);
@@ -207,7 +205,7 @@ mod tests {
 
     #[test]
     fn newline_cache_negative() {
-        let mut cache = NewlineCache::default();
+        let mut cache = NewlineCache::new();
 
         // Byte exceeds input length
         cache.feed("1");

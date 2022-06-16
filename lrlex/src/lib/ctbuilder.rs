@@ -307,7 +307,7 @@ where
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
                 LRNonStreamingLexerDef::<LexemeT, StorageT>::from_str(&lex_src).map_err(|e| {
-                    let mut line_cache = NewlineCache::default();
+                    let mut line_cache = NewlineCache::new();
                     line_cache.feed(&lex_src);
                     if let Some((line, column)) =
                         line_cache.byte_to_line_and_col(&lex_src, e.span.start())
