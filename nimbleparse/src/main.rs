@@ -7,7 +7,7 @@ use std::{
 };
 
 use cfgrammar::{
-    newlinecache::NewlineToLineColCache,
+    newlinecache::NewlineCache,
     yacc::{YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
 };
 use getopts::Options;
@@ -105,7 +105,7 @@ fn main() {
     let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexeme<u32>, u32>::from_str(&lex_src) {
         Ok(ast) => ast,
         Err(s) => {
-            let mut line_cache = NewlineToLineColCache::default();
+            let mut line_cache = NewlineCache::default();
             line_cache.feed(&lex_src);
             if let Some((line, column)) = line_cache.byte_to_line_and_col(&lex_src, s.span.start())
             {
@@ -128,7 +128,7 @@ fn main() {
     let grm = match YaccGrammar::new(yacckind, &yacc_src) {
         Ok(x) => x,
         Err(YaccGrammarError::YaccParserError(s)) => {
-            let mut line_cache = NewlineToLineColCache::default();
+            let mut line_cache = NewlineCache::default();
             line_cache.feed(&yacc_src);
             if let Some((line, column)) = line_cache.byte_to_line_and_col(&yacc_src, s.span.start())
             {

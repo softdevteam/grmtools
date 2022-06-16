@@ -7,7 +7,7 @@ use std::{
     process,
 };
 
-use cfgrammar::newlinecache::NewlineToLineColCache;
+use cfgrammar::newlinecache::NewlineCache;
 use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{Lexeme, Lexer};
 
@@ -56,7 +56,7 @@ fn main() {
     let lex_src = read_file(lex_l_path);
     let lexerdef =
         LRNonStreamingLexerDef::<DefaultLexeme, _>::from_str(&lex_src).unwrap_or_else(|s| {
-            let mut line_cache = NewlineToLineColCache::default();
+            let mut line_cache = NewlineCache::default();
             line_cache.feed(&lex_src);
             if let Some((line, column)) = line_cache.byte_to_line_and_col(&lex_src, s.span.start())
             {

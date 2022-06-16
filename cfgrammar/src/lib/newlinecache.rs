@@ -1,18 +1,18 @@
-pub struct NewlineToLineColCache {
+pub struct NewlineCache {
     newlines: Vec<usize>,
     trailing_bytes: usize,
 }
 
-impl Default for NewlineToLineColCache {
-    fn default() -> NewlineToLineColCache {
-        NewlineToLineColCache {
+impl Default for NewlineCache {
+    fn default() -> NewlineCache {
+        NewlineCache {
             newlines: vec![0],
             trailing_bytes: 0,
         }
     }
 }
 
-impl NewlineToLineColCache {
+impl NewlineCache {
     /// Feed more input into the cache, calculating newlines data from it.
     /// The `src` string given is treated as was concatenated with the previous calls
     /// to `feed`.
@@ -115,10 +115,10 @@ impl NewlineToLineColCache {
 
 #[cfg(test)]
 mod tests {
-    use super::NewlineToLineColCache;
+    use super::NewlineCache;
 
     fn newline_test_helper(feed: &[&str], tests: &[(usize, usize)]) {
-        let mut cache = NewlineToLineColCache::default();
+        let mut cache = NewlineCache::default();
         let mut full_string = String::new();
         for f in feed {
             cache.feed(f);
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn newline_cache_negative() {
-        let mut cache = NewlineToLineColCache::default();
+        let mut cache = NewlineCache::default();
 
         // Byte exceeds input length
         cache.feed("1");
