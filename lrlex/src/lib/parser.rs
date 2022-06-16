@@ -5,7 +5,6 @@ use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 
 pub(super) struct LexParser<StorageT> {
     src: String,
-    newlines: Vec<usize>,
     pub(super) rules: Vec<Rule<StorageT>>,
 }
 
@@ -13,7 +12,6 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     pub(super) fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
         let mut p = LexParser {
             src,
-            newlines: vec![0],
             rules: Vec::new(),
         };
         p.parse()?;
@@ -21,30 +19,8 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     }
 
     fn mk_error(&self, kind: LexErrorKind, off: usize) -> LexBuildError {
-        let (line, col) = self.off_to_line_col(off);
-        LexBuildError { kind, line, col }
-    }
-
-    fn off_to_line_col(&self, off: usize) -> (usize, usize) {
-        if off == self.src.len() {
-            let line_off = *self.newlines.iter().last().unwrap();
-            return (
-                self.newlines.len(),
-                self.src[line_off..].chars().count() + 1,
-            );
-        }
-        let (line_m1, &line_off) = self
-            .newlines
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|&(_, &line_off)| line_off <= off)
-            .unwrap();
-        let c_off = self.src[line_off..]
-            .char_indices()
-            .position(|(c_off, _)| c_off == off - line_off)
-            .unwrap();
-        (line_m1 + 1, c_off + 1)
+        let span = Span::new(off, off);
+        LexBuildError { kind, span }
     }
 
     fn parse(&mut self) -> LexBuildResult<usize> {
@@ -143,8 +119,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let mut j = i;
         for c in self.src[i..].chars() {
             match c {
-                ' ' | '\t' => (),
-                '\n' | '\r' => self.newlines.push(j + 1),
+                ' ' | '\t' | '\n' | '\r' => (),
                 _ => break,
             }
             j += c.len_utf8();
@@ -168,6 +143,31 @@ mod test {
         lexer::{LRNonStreamingLexerDef, LexerDef},
         DefaultLexeme,
     };
+
+    macro_rules! incorrect_err {
+        ($src:ident, $e:ident) => {{
+            let mut line_cache = ::cfgrammar::span::NewlineToLineColCache::default();
+            line_cache.feed(&$src);
+            if let Some((line, column)) = line_cache.byte_to_line_and_col(&$src, $e.span.start()) {
+                panic!(
+                    "Incorrect error returned {} at line {line} column {column}",
+                    $e
+                )
+            } else {
+                panic!("{}", $e)
+            }
+        }};
+    }
+
+    macro_rules! line_col {
+        ($src:ident, $span: ident) => {{
+            let mut line_cache = cfgrammar::span::NewlineToLineColCache::default();
+            line_cache.feed(&$src);
+            line_cache
+                .byte_to_line_and_col(&$src, $span.start())
+                .unwrap()
+        }};
+    }
 
     #[test]
     fn test_nooptions() {
@@ -227,10 +227,9 @@ mod test {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::MissingSpace,
-                line: 2,
-                col: 1,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (2, 1) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -244,10 +243,9 @@ mod test {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::MissingSpace,
-                line: 2,
-                col: 1,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (2, 1) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -261,10 +259,9 @@ mod test {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::InvalidName,
-                line: 2,
-                col: 7,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (2, 7) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -278,10 +275,9 @@ mod test {
             Ok(_) => panic!("Broken rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::InvalidName,
-                line: 2,
-                col: 7,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (2, 7) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 
@@ -295,10 +291,9 @@ mod test {
             Ok(_) => panic!("Duplicate rule parsed"),
             Err(LexBuildError {
                 kind: LexErrorKind::DuplicateName,
-                line: 3,
-                col: 7,
-            }) => (),
-            Err(e) => panic!("Incorrect error returned {}", e),
+                span,
+            }) if line_col!(src, span) == (3, 7) => (),
+            Err(e) => incorrect_err!(src, e),
         }
     }
 

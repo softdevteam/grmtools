@@ -15,6 +15,7 @@ use std::{
     sync::Mutex,
 };
 
+use cfgrammar::span::NewlineToLineColCache;
 use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, Lexeme};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -302,9 +303,20 @@ where
             lk.insert(outp.clone());
         }
 
+        let lex_src = read_to_string(&lexerp)?;
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
-                LRNonStreamingLexerDef::<LexemeT, StorageT>::from_str(&read_to_string(&lexerp)?)?,
+                LRNonStreamingLexerDef::<LexemeT, StorageT>::from_str(&lex_src).map_err(|e| {
+                    let mut line_cache = NewlineToLineColCache::default();
+                    line_cache.feed(&lex_src);
+                    if let Some((line, column)) =
+                        line_cache.byte_to_line_and_col(&lex_src, e.span.start())
+                    {
+                        format!("{} at line {line} column {column}", e)
+                    } else {
+                        format!("{}", e)
+                    }
+                })?,
             ),
         };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {

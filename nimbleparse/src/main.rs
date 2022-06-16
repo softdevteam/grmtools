@@ -6,7 +6,10 @@ use std::{
     process,
 };
 
-use cfgrammar::yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind};
+use cfgrammar::{
+    span::NewlineToLineColCache,
+    yacc::{YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
+};
 use getopts::Options;
 use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
 use lrpar::parser::{RTParserBuilder, RecoveryKind};
@@ -98,19 +101,50 @@ fn main() {
     }
 
     let lex_l_path = &matches.free[0];
-    let mut lexerdef =
-        match LRNonStreamingLexerDef::<DefaultLexeme<u32>, u32>::from_str(&read_file(lex_l_path)) {
-            Ok(ast) => ast,
-            Err(s) => {
+    let lex_src = read_file(lex_l_path);
+    let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexeme<u32>, u32>::from_str(&lex_src) {
+        Ok(ast) => ast,
+        Err(s) => {
+            let mut line_cache = NewlineToLineColCache::default();
+            line_cache.feed(&lex_src);
+            if let Some((line, column)) = line_cache.byte_to_line_and_col(&lex_src, s.span.start())
+            {
+                writeln!(
+                    stderr(),
+                    "{}: {} at line {line} column: {column}",
+                    &lex_l_path,
+                    &s
+                )
+                .ok();
+            } else {
                 writeln!(stderr(), "{}: {}", &lex_l_path, &s).ok();
-                process::exit(1);
             }
-        };
+            process::exit(1);
+        }
+    };
 
     let yacc_y_path = &matches.free[1];
-    let grm = match YaccGrammar::new(yacckind, &read_file(yacc_y_path)) {
+    let yacc_src = read_file(yacc_y_path);
+    let grm = match YaccGrammar::new(yacckind, &yacc_src) {
         Ok(x) => x,
-        Err(s) => {
+        Err(YaccGrammarError::YaccParserError(s)) => {
+            let mut line_cache = NewlineToLineColCache::default();
+            line_cache.feed(&yacc_src);
+            if let Some((line, column)) = line_cache.byte_to_line_and_col(&yacc_src, s.span.start())
+            {
+                writeln!(
+                    stderr(),
+                    "{}: {} at line {line} column {column}",
+                    &yacc_y_path,
+                    &s
+                )
+                .ok();
+            } else {
+                writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
+            }
+            process::exit(1);
+        }
+        Err(YaccGrammarError::GrammarValidationError(s)) => {
             writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
             process::exit(1);
         }
