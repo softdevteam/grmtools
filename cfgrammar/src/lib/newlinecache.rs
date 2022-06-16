@@ -8,6 +8,7 @@ pub struct NewlineCache {
 }
 
 impl NewlineCache {
+    /// Create an empty `NewlineCache`.
     pub fn new() -> Self {
         Self {
             newlines: vec![0],
@@ -15,9 +16,11 @@ impl NewlineCache {
         }
     }
 
-    /// Feed more input into the cache, calculating newlines data from it.
-    /// The `src` string given is treated as was concatenated with the previous calls
-    /// to `feed`.
+    /// Feed further input into the cache. This input is considered to be a direct continuation of
+    /// any previous input fed into the cache. Feeding new data thus appends to the cache. If the
+    /// previous input contained a partial line (i.e. did not end in a newline), then the new input
+    /// (unless it starts with a newline) will be considered to be a continuation of that partial
+    /// line.
     pub fn feed(&mut self, src: &str) {
         let start_pos = self.newlines.last().unwrap() + self.trailing_bytes;
         self.newlines
@@ -33,8 +36,8 @@ impl NewlineCache {
             }));
     }
 
-    /// Convert a byte offset in the input to a logical line number. Returns None if
-    /// the byte offset exceeds the known input length.
+    /// Convert a byte offset in the input to a logical line number (i.e. a "human friendly" line
+    /// number, starting from 1). Returns None if the byte offset exceeds the known input length.
     pub fn byte_to_line_num(&self, byte: usize) -> Option<usize> {
         if byte > self.input_length() {
             return None;
@@ -80,9 +83,14 @@ impl NewlineCache {
             .and_then(|line_num| self.line_num_to_byte(line_num))
     }
 
-    /// Given a `src` string, which should have strings previously passed to `feed` concatenated together.
-    /// Convert the given `byte` offset in the input to logical line and column numbers.
-    /// Returns None if the byte offset exceeds the known input length, or the src and input length differ.
+    /// A convenience method to return the logical line and logical column number of a byte. This
+    /// requires passing a `&str` which *must* be equivalent to the string(s) passed to `feed`:
+    /// if not, nondeterminstic results, including panics, are possible.
+    //
+    /// # Panics
+    ///
+    /// May panic if `src` is different than the string(s) passed to `feed` (or might not panic and
+    /// return non-deterministic results).
     pub fn byte_to_line_and_col(&self, src: &str, byte: usize) -> Option<(usize, usize)> {
         if byte > self.input_length() || src.len() != self.input_length() {
             return None;
@@ -119,7 +127,7 @@ impl FromStr for NewlineCache {
     type Err = ();
 
     /// Construct a `NewlineCache` directly from a `&str`. This is equivalent to creating a blank
-    /// `NewlineCache` and [`feed()`]ing the string directly in.
+    /// `NewlineCache` and [Self::feed()]ing the string directly in.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut x = Self::new();
         x.feed(s);
