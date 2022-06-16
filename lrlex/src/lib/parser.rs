@@ -161,7 +161,7 @@ mod test {
 
     macro_rules! line_col {
         ($src:ident, $span: ident) => {{
-            let mut line_cache = cfgrammar::newlinecache::NewlineToLineColCache::default();
+            let mut line_cache = ::cfgrammar::newlinecache::NewlineToLineColCache::default();
             line_cache.feed(&$src);
             line_cache
                 .byte_to_line_and_col(&$src, $span.start())
