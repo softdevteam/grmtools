@@ -1,3 +1,7 @@
+use std::str::FromStr;
+
+/// Cache newlines from an input. These can be used to turn UTF-8 byte offsets into user-friendly
+/// line numbers without having to store the full input.
 pub struct NewlineCache {
     newlines: Vec<usize>,
     trailing_bytes: usize,
@@ -108,6 +112,18 @@ impl NewlineCache {
             }
             (line_num, column)
         })
+    }
+}
+
+impl FromStr for NewlineCache {
+    type Err = ();
+
+    /// Construct a `NewlineCache` directly from a `&str`. This is equivalent to creating a blank
+    /// `NewlineCache` and [`feed()`]ing the string directly in.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut x = Self::new();
+        x.feed(s);
+        Ok(x)
     }
 }
 
