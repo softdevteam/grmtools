@@ -83,6 +83,7 @@ One can then write a simple custom lexer which lexes all the input in one go
 and returns an `LRNonStreamingLexer` as follows:
 
 ```rust
+use cfgrammar::NewlineCache;
 use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
 use lrpar::{lrpar_mod, Lexeme, NonStreamingLexer, Span};
 
@@ -91,7 +92,7 @@ use token_map::*;
 
 fn lex(s: &str) -> LRNonStreamingLexer<DefaultLexeme<u8>, u8> {
   let mut lexemes = Vec::new();
-  let mut newlines = Vec::new();
+  let mut newlines = NewlineCache::new();
   let mut i = 0;
   while i < s.len() {
     if i == ... {
