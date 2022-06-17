@@ -135,17 +135,26 @@ impl FromStr for NewlineCache {
     }
 }
 
+impl<'a> FromIterator<&'a str> for NewlineCache {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = &'a str>,
+    {
+        let mut nlcache = NewlineCache::new();
+        for s in iter.into_iter() {
+            nlcache.feed(s)
+        }
+        nlcache
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::NewlineCache;
 
     fn newline_test_helper(feed: &[&str], tests: &[(usize, usize)]) {
-        let mut cache = NewlineCache::new();
-        let mut full_string = String::new();
-        for f in feed {
-            cache.feed(f);
-            full_string.push_str(f);
-        }
+        let cache: NewlineCache = feed.iter().copied().collect();
+        let full_string = feed.concat();
 
         let mut src_pos = 0;
         let mut result = Vec::new();
