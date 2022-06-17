@@ -22,7 +22,12 @@ pub enum YaccParserErrorKind {
     IllegalName,
     IllegalString,
     IncompleteRule,
-    DuplicateRule,
+
+    DuplicateRule {
+        /// While [`YaccParserError`] has the span of the duplicate.<br/>
+        /// `original_span` contains a span for the rule being duplicated.
+        original_span: Span,
+    },
     IncompleteComment,
     IncompleteAction,
     MissingColon,
@@ -60,7 +65,7 @@ impl fmt::Display for YaccParserError {
             YaccParserErrorKind::IllegalName => "Illegal name",
             YaccParserErrorKind::IllegalString => "Illegal string",
             YaccParserErrorKind::IncompleteRule => "Incomplete rule",
-            YaccParserErrorKind::DuplicateRule => "Duplicate rule",
+            YaccParserErrorKind::DuplicateRule { .. } => "Duplicate rule",
             YaccParserErrorKind::IncompleteComment => "Incomplete comment",
             YaccParserErrorKind::IncompleteAction => "Incomplete action",
             YaccParserErrorKind::MissingColon => "Missing ':'",
@@ -333,8 +338,11 @@ impl YaccParser {
                 i = j;
             }
             YaccKind::Grmtools => {
-                if self.ast.get_rule(&rn).is_some() {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateRule, i));
+                if let Some(rule) = self.ast.get_rule(&rn) {
+                    let (_, original_span) = rule.name;
+                    return Err(
+                        self.mk_error(YaccParserErrorKind::DuplicateRule { original_span }, i)
+                    );
                 }
                 i = self.parse_ws(j, true)?;
                 if let Some(j) = self.lookahead_is("->", i) {
