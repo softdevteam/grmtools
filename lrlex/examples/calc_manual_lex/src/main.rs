@@ -2,7 +2,7 @@
 
 use std::io::{self, BufRead, Write};
 
-use cfgrammar::Span;
+use cfgrammar::{NewlineCache, Span};
 use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
 use lrpar::{lrpar_mod, Lexeme, NonStreamingLexer};
 
@@ -98,7 +98,7 @@ fn lex(s: &str) -> LRNonStreamingLexer<DefaultLexeme<u8>, u8> {
             }
         }
     }
-    LRNonStreamingLexer::new(s, lexemes, Vec::new())
+    LRNonStreamingLexer::new(s, lexemes, NewlineCache::new())
 }
 
 fn eval(

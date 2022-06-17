@@ -1,3 +1,4 @@
+use crate::Span;
 use std::str::FromStr;
 
 /// Cache newlines from an input. These can be used to turn UTF-8 byte offsets into user-friendly
@@ -121,6 +122,26 @@ impl NewlineCache {
             (line_num, column)
         })
     }
+
+    /// Return the (start byte, end byte) of the lines containing `span`. This will always cover
+    /// at least 1 logical line.
+    pub fn span_line_bytes(&self, span: Span) -> (usize, usize) {
+        let (st, st_line) = match self.newlines.binary_search(&span.start()) {
+            Ok(j) => (self.newlines[j], j + 1),
+            Err(j) => (self.newlines[j - 1], j),
+        };
+        let en = match self.newlines[st_line..].binary_search(&span.end()) {
+            Ok(j) if st_line + j == self.newlines.len() - st_line => {
+                self.newlines.last().unwrap() + self.trailing_bytes
+            }
+            Ok(j) => self.newlines[st_line + j + 1] - 1,
+            Err(j) if st_line + j == self.newlines.len() => {
+                self.newlines.last().unwrap() + self.trailing_bytes
+            }
+            Err(j) => self.newlines[st_line + j] - 1,
+        };
+        (st, en)
+    }
 }
 
 impl FromStr for NewlineCache {
@@ -151,6 +172,8 @@ impl<'a> FromIterator<&'a str> for NewlineCache {
 #[cfg(test)]
 mod tests {
     use super::NewlineCache;
+    use crate::Span;
+    use std::str::FromStr;
 
     fn newline_test_helper(feed: &[&str], tests: &[(usize, usize)]) {
         let cache: NewlineCache = feed.iter().copied().collect();
@@ -250,5 +273,42 @@ mod tests {
 
         // Byte valid, but src.len() exceeds input length.
         assert_eq!(None, cache.byte_to_line_and_col("1\n234", 1));
+    }
+
+    #[test]
+    fn spanlines_str() {
+        fn span_line_eq(input: &str, byte_st: usize, byte_en: usize, substr: &str) {
+            let nlc = NewlineCache::from_str(input).unwrap();
+            let (lines_st, lines_en) = nlc.span_line_bytes(Span::new(byte_st, byte_en));
+            assert_eq!(&input[lines_st..lines_en], substr);
+        }
+
+        span_line_eq("a b c", 2, 3, "a b c");
+        span_line_eq("a b c", 4, 5, "a b c");
+
+        span_line_eq("a b c\n", 2, 3, "a b c");
+        span_line_eq("a b c\n", 4, 5, "a b c");
+        span_line_eq("a b c\n", 5, 5, "a b c");
+        span_line_eq("a b c\n", 6, 6, "");
+
+        span_line_eq(" a\nb\n  c d", 1, 2, " a");
+        span_line_eq(" a\nb\n  c d", 3, 4, "b");
+        span_line_eq(" a\nb\n  c d", 7, 8, "  c d");
+        span_line_eq(" a\nb\n  c d", 9, 10, "  c d");
+
+        span_line_eq("ab\n", 2, 3, "ab\n");
+        span_line_eq("ab\ncd", 2, 3, "ab\ncd");
+        span_line_eq("ab\ncd\nef", 2, 3, "ab\ncd");
+
+        let s = "\na\na a\na a a\na a a a";
+        span_line_eq(s, 0, 0, "");
+        span_line_eq(s, 0, 2, "\na");
+        span_line_eq(s, 0, 4, "\na\na a");
+        span_line_eq(s, 0, 7, "\na\na a\na a a");
+        span_line_eq(s, 4, 7, "a a\na a a");
+
+        span_line_eq(" a\n❤ b", 1, 2, " a");
+        span_line_eq(" a\n❤ b", 3, 4, "❤ b");
+        span_line_eq(" a\n❤ b", 5, 6, "❤ b");
     }
 }

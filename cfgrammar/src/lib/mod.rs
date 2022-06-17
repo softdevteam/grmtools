@@ -57,6 +57,7 @@ pub mod newlinecache;
 pub mod span;
 pub mod yacc;
 
+pub use newlinecache::NewlineCache;
 pub use span::Span;
 
 /// A type specifically for rule indices.

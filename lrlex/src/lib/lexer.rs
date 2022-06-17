@@ -4,9 +4,10 @@ use std::{
     hash::Hash,
     marker::PhantomData,
     slice::Iter,
+    str::FromStr,
 };
 
-use cfgrammar::Span;
+use cfgrammar::{NewlineCache, Span};
 use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 use try_from::TryFrom;
@@ -215,7 +216,6 @@ impl<
         s: &'input str,
     ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
         let mut lexemes = vec![];
-        let mut newlines = vec![];
         let mut i = 0;
         while i < s.len() {
             let old_i = i;
@@ -233,13 +233,6 @@ impl<
                 }
             }
             if longest > 0 {
-                newlines.extend(
-                    s[old_i..old_i + longest]
-                        .chars()
-                        .enumerate()
-                        .filter(|&(_, c)| c == '\n')
-                        .map(|(j, _)| old_i + j + 1),
-                );
                 let r = self.get_rule(longest_ridx).unwrap();
                 if r.name.is_some() {
                     match r.tok_id {
@@ -258,7 +251,7 @@ impl<
                 break;
             }
         }
-        LRNonStreamingLexer::new(s, lexemes, newlines)
+        LRNonStreamingLexer::new(s, lexemes, NewlineCache::from_str(s).unwrap())
     }
 }
 
@@ -268,9 +261,7 @@ impl<
 pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, LexemeT, StorageT: fmt::Debug> {
     s: &'input str,
     lexemes: Vec<Result<LexemeT, LexError>>,
-    /// A sorted list of the byte index of the start of the following line. i.e. for the input
-    /// string `" a\nb\n  c d"` this will contain `[3, 5]`.
-    newlines: Vec<usize>,
+    newlines: NewlineCache,
     phantom: PhantomData<(&'lexer (), StorageT)>,
 }
 
@@ -282,16 +273,14 @@ impl<
     > LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT>
 {
     /// Create a new `LRNonStreamingLexer` that read in: the input `s`; and derived `lexemes` and
-    /// `newlines`. The `newlines` `Vec<usize>` is a sorted list of the byte index of the start of
-    /// the following line. i.e. for the input string `" a\nb\n  c d"` the `Vec` should contain
-    /// `[3, 5]`.
+    /// `newlines`.
     ///
     /// Note that if one or more lexemes or newlines was not created from `s`, subsequent calls to
     /// the `LRNonStreamingLexer` may cause `panic`s.
     pub fn new(
         s: &'input str,
         lexemes: Vec<Result<LexemeT, LexError>>,
-        newlines: Vec<usize>,
+        newlines: NewlineCache,
     ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
         LRNonStreamingLexer {
             s,
@@ -343,16 +332,7 @@ impl<
             );
         }
 
-        let (st, st_line) = match self.newlines.binary_search(&span.start()) {
-            Ok(j) => (self.newlines[j], j + 1),
-            Err(0) => (0, 0),
-            Err(j) => (self.newlines[j - 1], j),
-        };
-        let en = match self.newlines[st_line..].binary_search(&span.end()) {
-            Ok(j) => self.newlines[st_line + j + 1] - 1,
-            Err(j) if st_line + j == self.newlines.len() => self.s.len(),
-            Err(j) => self.newlines[st_line + j] - 1,
-        };
+        let (st, en) = self.newlines.span_line_bytes(span);
         &self.s[st..en]
     }
 
@@ -366,30 +346,13 @@ impl<
             );
         }
 
-        /// Returns `(line byte offset, line index)`.
-        fn lc_byte<LexemeT, StorageT: fmt::Debug>(
-            lexer: &LRNonStreamingLexer<LexemeT, StorageT>,
-            i: usize,
-        ) -> (usize, usize) {
-            match lexer.newlines.binary_search(&i) {
-                Ok(j) => (lexer.newlines[j], j + 2),
-                Err(0) => (0, 1),
-                Err(j) => (lexer.newlines[j - 1], j + 1),
-            }
-        }
-
-        fn lc_char<LexemeT, StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + Unsigned>(
-            lexer: &LRNonStreamingLexer<LexemeT, StorageT>,
-            i: usize,
-            s: &str,
-        ) -> (usize, usize) {
-            let (line_byte, line_idx) = lc_byte(lexer, i);
-            (line_idx, s[line_byte..i].chars().count() + 1)
-        }
-
         (
-            lc_char(self, span.start(), self.s),
-            lc_char(self, span.end(), self.s),
+            self.newlines
+                .byte_to_line_and_col(self.s, span.start())
+                .unwrap(),
+            self.newlines
+                .byte_to_line_and_col(self.s, span.end())
+                .unwrap(),
         )
     }
 }
