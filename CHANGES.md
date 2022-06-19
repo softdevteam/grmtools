@@ -26,6 +26,9 @@
   https://github.com/rust-lang/rust/issues/30827 this unfortunately does not
   show as a formal deprecation warning).
 
+* `cfgrammar::yacc::grammar::YaccGrammar::rule_name` has been renamed to
+  `rule_name_str`. The old name is still available but is deprecated.
+
 ## New features
 
 * Improved error messages, with various parts of grammar and lexer files now

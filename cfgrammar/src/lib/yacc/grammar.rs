@@ -413,6 +413,12 @@ where
     }
 
     /// Return the name of rule `ridx`. Panics if `ridx` doesn't exist.
+    #[deprecated(since = "0.13.0", note = "Please use rule_name_str instead")]
+    pub fn rule_name(&self, ridx: RIdx<StorageT>) -> &str {
+        self.rule_name_str(ridx)
+    }
+
+    /// Return the name of rule `ridx`. Panics if `ridx` doesn't exist.
     pub fn rule_name_str(&self, ridx: RIdx<StorageT>) -> &str {
         self.rule_names[usize::from(ridx)].0.as_str()
     }
