@@ -1,3 +1,44 @@
+# grmtools 0.13.0 (XXXX-XX-XX)
+
+## Breaking changes
+
+* `cfgrammar::yacc::grammar::YaccGrammar::token_span` now returns
+  `Option<Span>` rather than `Option<&Span>`.
+
+* `cfgrammar::yacc::ast::{Production, Symbol}` no longer derive `Eq`, `Hash`,
+  and `PartialEq`. Since both now carry a `Span`, it's easy to confuse "two
+  {productions, symbols} have the same name" with "at the same place in the
+  input file."
+
+* `cfgrammar::yacc::ast::add_rule`'s signature has changed from:
+  ```
+    pub fn add_rule(&mut self, name: String, actiont: Option<String>) {
+  ```
+  to:
+  ```
+    pub fn add_rule(&mut self, (name, name_span): (String, Span), actiont: Option<String>) {
+  ```
+
+## Deprecations
+
+* `Span` has moved from `lrpar` to `cfgrammar`. The import is still available
+  via `lrpar` but is deprecated (though due to
+  https://github.com/rust-lang/rust/issues/30827 this unfortunately does not
+  show as a formal deprecation warning).
+
+* `cfgrammar::yacc::grammar::YaccGrammar::rule_name` has been renamed to
+  `rule_name_str`. The old name is still available but is deprecated.
+
+## New features
+
+* Improved error messages, with various parts of grammar and lexer files now
+  carrying around `Span` information to help pinpoint errors.
+
+* The new `cfgrammar::NewlineCache` struct makes it easier to store the
+  minimal information needed to convert byte offsets in an input into logical
+  line numbers.
+
+
 # grmtools 0.12.0 (2022-04-14)
 
 * Move to Rust 2021 edition.
