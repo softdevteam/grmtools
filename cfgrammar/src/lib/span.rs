@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// A `Span` records what portion of the user's input something (e.g. a lexeme or production)
 /// references (i.e. the `Span` doesn't hold a reference / copy of the actual input).
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Span {
     start: usize,

@@ -1,10 +1,14 @@
 // Note: this is the parser for both YaccKind::Original(YaccOriginalActionKind::GenericParseTree) and YaccKind::Eco yacc kinds.
 
-use std::{collections::HashSet, error::Error, fmt, str::FromStr};
-
 use lazy_static::lazy_static;
 use num_traits::PrimInt;
 use regex::Regex;
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt,
+    str::FromStr,
+};
 
 type YaccResult<T> = Result<T, YaccParserError>;
 
@@ -16,13 +20,14 @@ use super::{
 };
 
 /// The various different possible Yacc parser errors.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum YaccParserErrorKind {
     IllegalInteger,
     IllegalName,
     IllegalString,
     IncompleteRule,
-    DuplicateRule,
+    /// Contains the spans of all duplicate rules.
+    DuplicateRule(Vec<Span>),
     IncompleteComment,
     IncompleteAction,
     MissingColon,
@@ -45,7 +50,7 @@ pub enum YaccParserErrorKind {
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct YaccParserError {
     pub kind: YaccParserErrorKind,
     pub span: Span,
@@ -55,12 +60,18 @@ impl Error for YaccParserError {}
 
 impl fmt::Display for YaccParserError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match self.kind {
+        write!(f, "{}", self.kind)
+    }
+}
+
+impl fmt::Display for YaccParserErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
             YaccParserErrorKind::IllegalInteger => "Illegal integer",
             YaccParserErrorKind::IllegalName => "Illegal name",
             YaccParserErrorKind::IllegalString => "Illegal string",
             YaccParserErrorKind::IncompleteRule => "Incomplete rule",
-            YaccParserErrorKind::DuplicateRule => "Duplicate rule",
+            YaccParserErrorKind::DuplicateRule(_) => "Duplicated rule",
             YaccParserErrorKind::IncompleteComment => "Incomplete comment",
             YaccParserErrorKind::IncompleteAction => "Incomplete action",
             YaccParserErrorKind::MissingColon => "Missing ':'",
@@ -99,6 +110,9 @@ pub(crate) struct YaccParser {
     num_newlines: usize,
     ast: GrammarAST,
     global_actiontype: Option<String>,
+    /// The key is the span of the [Rule](crate::yacc::ast::Rule) being duplicated.
+    /// The value contains one span for every duplicate of the key.
+    duplicate_rule_spans: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -116,6 +130,7 @@ impl YaccParser {
             num_newlines: 0,
             ast: GrammarAST::new(),
             global_actiontype: None,
+            duplicate_rule_spans: HashMap::new(),
         }
     }
 
@@ -315,6 +330,14 @@ impl YaccParser {
             i = self.parse_rule(i)?;
             i = self.parse_ws(i, true)?;
         }
+
+        if let Some((orig_span, spans)) = self.duplicate_rule_spans.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateRule(spans.clone()),
+                span: *orig_span,
+            });
+        }
+
         Ok(i)
     }
 
@@ -333,9 +356,6 @@ impl YaccParser {
                 i = j;
             }
             YaccKind::Grmtools => {
-                if self.ast.get_rule(&rn).is_some() {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateRule, i));
-                }
                 i = self.parse_ws(j, true)?;
                 if let Some(j) = self.lookahead_is("->", i) {
                     i = j;
@@ -344,7 +364,14 @@ impl YaccParser {
                 }
                 i = self.parse_ws(i, true)?;
                 let (j, actiont) = self.parse_to_single_colon(i)?;
-                self.ast.add_rule((rn.clone(), span), Some(actiont));
+                match self.ast.get_rule(&rn) {
+                    None => self.ast.add_rule((rn.clone(), span), Some(actiont)),
+                    Some(orig) => self
+                        .duplicate_rule_spans
+                        .entry(orig.name.1)
+                        .or_insert_with(Vec::new)
+                        .push(span),
+                }
                 i = j;
             }
         }
@@ -1792,6 +1819,32 @@ x"
         assert_eq!(
             grm.parse_param,
             Some(("a::b".to_owned(), "(u64, u64)".to_owned()))
+        );
+    }
+
+    #[test]
+    fn test_multi_span_error_kinds() {
+        let e = parse(
+            YaccKind::Grmtools,
+            "%start A
+             %%
+             A -> (): 'a1';
+             B -> (): 'bb';
+             A -> (): 'a2';
+             C -> (): 'cc';
+             A -> (): 'a3';
+            ",
+        )
+        .expect_err("parse successful while expecting error");
+        assert_eq!(
+            e,
+            YaccParserError {
+                span: Span::new(38, 39),
+                kind: YaccParserErrorKind::DuplicateRule(vec![
+                    Span::new(94, 95),
+                    Span::new(150, 151)
+                ])
+            }
         );
     }
 }
