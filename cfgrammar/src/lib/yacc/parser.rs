@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use num_traits::PrimInt;
 use regex::Regex;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     error::Error,
     fmt,
     str::FromStr,
@@ -38,7 +38,8 @@ pub enum YaccParserErrorKind {
     UnknownDeclaration,
     DuplicatePrecedence,
     PrecNotFollowedByToken,
-    DuplicateAvoidInsertDeclaration,
+    /// Contains the spans of all duplicate avoid-insert declarations.
+    DuplicateAvoidInsertDeclaration(Vec<Span>),
     DuplicateImplicitTokensDeclaration,
     DuplicateExpectDeclaration,
     DuplicateExpectRRDeclaration,
@@ -82,8 +83,8 @@ impl fmt::Display for YaccParserErrorKind {
             YaccParserErrorKind::UnknownDeclaration => "Unknown declaration",
             YaccParserErrorKind::DuplicatePrecedence => "Token already has a precedence",
             YaccParserErrorKind::PrecNotFollowedByToken => "%prec not followed by token name",
-            YaccParserErrorKind::DuplicateAvoidInsertDeclaration => {
-                "Duplicate %avoid_insert declaration"
+            YaccParserErrorKind::DuplicateAvoidInsertDeclaration(_) => {
+                "Duplicated %avoid_insert declaration"
             }
             YaccParserErrorKind::DuplicateExpectDeclaration => "Duplicate %expect declaration",
             YaccParserErrorKind::DuplicateExpectRRDeclaration => "Duplicate %expect-rr declaration",
@@ -113,6 +114,7 @@ pub(crate) struct YaccParser {
     /// The key is the span of the [Rule](crate::yacc::ast::Rule) being duplicated.
     /// The value contains one span for every duplicate of the key.
     duplicate_rule_spans: HashMap<Span, Vec<Span>>,
+    duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -131,6 +133,7 @@ impl YaccParser {
             ast: GrammarAST::new(),
             global_actiontype: None,
             duplicate_rule_spans: HashMap::new(),
+            duplicate_avoid_insert_spans: HashMap::new(),
         }
     }
 
@@ -139,6 +142,12 @@ impl YaccParser {
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
         let mut i = self.parse_declarations(0)?;
+        if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
         i = self.parse_rules(i)?;
         self.parse_programs(i)
     }
@@ -228,19 +237,25 @@ impl YaccParser {
                 i = self.parse_ws(j, false)?;
                 let num_newlines = self.num_newlines;
                 if self.ast.avoid_insert.is_none() {
-                    self.ast.avoid_insert = Some(HashSet::new());
+                    self.ast.avoid_insert = Some(HashMap::new());
                 }
                 while j < self.src.len() && self.num_newlines == num_newlines {
                     let (j, n, span) = self.parse_token(i)?;
                     if self.ast.tokens.insert(n.clone()) {
                         self.ast.spans.push(span);
                     }
-                    if self.ast.avoid_insert.as_ref().unwrap().contains(&n) {
-                        return Err(
-                            self.mk_error(YaccParserErrorKind::DuplicateAvoidInsertDeclaration, i)
-                        );
+
+                    match self.ast.avoid_insert.as_mut().unwrap().entry(n) {
+                        Entry::Occupied(occupied) => {
+                            self.duplicate_avoid_insert_spans
+                                .entry(*occupied.get())
+                                .or_insert_with(Vec::new)
+                                .push(span);
+                        }
+                        Entry::Vacant(vacant) => {
+                            vacant.insert(span);
+                        }
                     }
-                    self.ast.avoid_insert.as_mut().unwrap().insert(n);
                     i = self.parse_ws(j, true)?;
                 }
                 continue;
@@ -1387,10 +1402,13 @@ x"
         assert_eq!(
             ast.avoid_insert,
             Some(
-                ["ws1".to_string(), "ws2".to_string()]
-                    .iter()
-                    .cloned()
-                    .collect()
+                [
+                    ("ws1".to_string(), Span::new(25, 28)),
+                    ("ws2".to_string(), Span::new(29, 32))
+                ]
+                .iter()
+                .cloned()
+                .collect()
             )
         );
         assert!(ast.tokens.get("ws1").is_some());
@@ -1410,7 +1428,15 @@ x"
         .unwrap();
         assert_eq!(
             ast.avoid_insert,
-            Some(["X".to_string(), "Y".to_string()].iter().cloned().collect())
+            Some(
+                [
+                    ("X".to_string(), Span::new(25, 26)),
+                    ("Y".to_string(), Span::new(51, 52))
+                ]
+                .iter()
+                .cloned()
+                .collect()
+            )
         );
     }
 
@@ -1424,9 +1450,11 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration,
+                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, vec![Span::new(53, 54)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
@@ -1441,9 +1469,11 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration,
+                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 3 => {
+                assert_eq!(spans, vec![Span::new(49, 50)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }

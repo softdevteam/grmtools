@@ -22,7 +22,7 @@ pub struct GrammarAST {
     pub tokens: IndexSet<String>,
     pub spans: Vec<Span>,
     pub precs: HashMap<String, Precedence>,
-    pub avoid_insert: Option<HashSet<String>>,
+    pub avoid_insert: Option<HashMap<String, Span>>,
     pub implicit_tokens: Option<HashSet<String>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
