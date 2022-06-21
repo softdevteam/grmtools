@@ -13,6 +13,7 @@ use crate::Span;
 /// An AST representing a grammar. This is built up gradually: when it is finished, the
 /// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
 /// point, any further mutations made to the struct lead to undefined behaviour.
+#[derive(Debug)]
 pub struct GrammarAST {
     pub start: Option<String>,
     // map from a rule name to indexes into prods
