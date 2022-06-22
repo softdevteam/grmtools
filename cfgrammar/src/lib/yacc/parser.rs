@@ -49,7 +49,8 @@ pub enum YaccParserErrorKind {
     DuplicateExpectRRDeclaration(Vec<Span>),
     /// Contains the spans of all duplicate start declarations.
     DuplicateStartDeclaration(Vec<Span>),
-    DuplicateActiontypeDeclaration,
+    /// Contains the spans of all duplicate action type declarations.
+    DuplicateActiontypeDeclaration(Vec<Span>),
     DuplicateEPP,
     ReachedEOL,
     InvalidString,
@@ -101,7 +102,7 @@ impl fmt::Display for YaccParserErrorKind {
                 "Duplicated %implicit_tokens declaration"
             }
             YaccParserErrorKind::DuplicateStartDeclaration(_) => "Duplicated %start declaration",
-            YaccParserErrorKind::DuplicateActiontypeDeclaration => {
+            YaccParserErrorKind::DuplicateActiontypeDeclaration(_) => {
                 "Duplicate %actiontype declaration"
             }
             YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
@@ -119,7 +120,7 @@ pub(crate) struct YaccParser {
     src: String,
     num_newlines: usize,
     ast: GrammarAST,
-    global_actiontype: Option<String>,
+    global_actiontype: Option<(String, Span)>,
     /// The key is the span of the [Rule](crate::yacc::ast::Rule) being duplicated.
     /// The value contains one span for every duplicate of the key.
     duplicate_rule_spans: HashMap<Span, Vec<Span>>,
@@ -129,6 +130,7 @@ pub(crate) struct YaccParser {
     duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
     duplicate_expectrr_declarations: Option<(Span, Vec<Span>)>,
     duplicate_start_declarations: Option<(Span, Vec<Span>)>,
+    duplicate_actiontype_declarations: Option<Vec<Span>>,
 }
 
 lazy_static! {
@@ -153,6 +155,7 @@ impl YaccParser {
             duplicate_expect_declarations: None,
             duplicate_expectrr_declarations: None,
             duplicate_start_declarations: None,
+            duplicate_actiontype_declarations: None,
         }
     }
 
@@ -197,6 +200,16 @@ impl YaccParser {
                 span: *orig_span,
             });
         }
+        if let Some(spans) = &self.duplicate_actiontype_declarations {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateActiontypeDeclaration(spans.clone()),
+                span: *self
+                    .global_actiontype
+                    .as_ref()
+                    .map(|(_, span)| span)
+                    .unwrap(),
+            });
+        }
         i = self.parse_rules(i)?;
         self.parse_programs(i)
     }
@@ -228,14 +241,16 @@ impl YaccParser {
             }
             if let YaccKind::Original(_) = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%actiontype", i) {
-                    if self.global_actiontype.is_some() {
-                        return Err(
-                            self.mk_error(YaccParserErrorKind::DuplicateActiontypeDeclaration, i)
-                        );
-                    }
                     i = self.parse_ws(j, false)?;
                     let (j, n) = self.parse_to_eol(i)?;
-                    self.global_actiontype = Some(n);
+                    let span = Span::new(i, j);
+                    if self.global_actiontype.is_some() {
+                        self.duplicate_actiontype_declarations
+                            .get_or_insert_with(Vec::new)
+                            .push(span);
+                    } else {
+                        self.global_actiontype = Some((n, span));
+                    }
                     i = self.parse_ws(j, true)?;
                     continue;
                 }
@@ -442,8 +457,10 @@ impl YaccParser {
         match self.yacc_kind {
             YaccKind::Original(_) | YaccKind::Eco => {
                 if self.ast.get_rule(&rn).is_none() {
-                    self.ast
-                        .add_rule((rn.clone(), span), self.global_actiontype.clone());
+                    self.ast.add_rule(
+                        (rn.clone(), span),
+                        self.global_actiontype.clone().map(|(s, _)| s),
+                    );
                 }
                 i = j;
             }
@@ -1965,6 +1982,7 @@ x"
         let src = "
          %actiontype T1
          %actiontype T2
+         %actiontype T3
          %%
          A: 'a';";
         match parse(
@@ -1973,9 +1991,11 @@ x"
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateActiontypeDeclaration,
+                kind: YaccParserErrorKind::DuplicateActiontypeDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(46, 48), Span::new(70, 72)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
