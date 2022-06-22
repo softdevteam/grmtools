@@ -20,8 +20,10 @@ pub struct GrammarAST {
     pub precs: HashMap<String, (Precedence, Span)>,
     pub avoid_insert: Option<HashMap<String, Span>>,
     pub implicit_tokens: Option<HashMap<String, Span>>,
-    // Error pretty-printers
-    pub epp: HashMap<String, String>,
+    // Error pretty-printers,
+    // The first span of the value is the span of the key,
+    // The second span in the value, is the span of the values string.
+    pub epp: HashMap<String, (Span, (String, Span))>,
     pub expect: Option<(usize, Span)>,
     pub expectrr: Option<(usize, Span)>,
     pub parse_param: Option<(String, String)>,
@@ -399,7 +401,8 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![], None, None);
-        grm.epp.insert("k".to_owned(), "v".to_owned());
+        grm.epp
+            .insert("k".to_owned(), (empty_span, ("v".to_owned(), empty_span)));
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
                 kind: GrammarValidationErrorKind::UnknownEPP,

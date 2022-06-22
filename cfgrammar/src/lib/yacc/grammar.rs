@@ -194,7 +194,9 @@ where
         for (i, k) in ast.tokens.iter().enumerate() {
             token_names.push(Some((ast.spans[i], k.clone())));
             token_precs.push(ast.precs.get(k).map(|(prec, _)| prec).cloned());
-            token_epp.push(Some(ast.epp.get(k).unwrap_or(k).clone()));
+            token_epp.push(Some(
+                ast.epp.get(k).map(|(_, (s, _))| s).unwrap_or(k).clone(),
+            ));
         }
         let eof_token_idx = TIdx(token_names.len().as_());
         token_names.push(None);

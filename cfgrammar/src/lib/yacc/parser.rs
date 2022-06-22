@@ -51,7 +51,8 @@ pub enum YaccParserErrorKind {
     DuplicateStartDeclaration(Vec<Span>),
     /// Contains the spans of all duplicate action type declarations.
     DuplicateActiontypeDeclaration(Vec<Span>),
-    DuplicateEPP,
+    /// Contains the spans of all duplicate epp declaration.
+    DuplicateEPP(Vec<Span>),
     ReachedEOL,
     InvalidString,
 }
@@ -105,7 +106,7 @@ impl fmt::Display for YaccParserErrorKind {
             YaccParserErrorKind::DuplicateActiontypeDeclaration(_) => {
                 "Duplicate %actiontype declaration"
             }
-            YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
+            YaccParserErrorKind::DuplicateEPP(_) => "Duplicate %epp declaration for this token",
             YaccParserErrorKind::ReachedEOL => {
                 "Reached end of line without finding expected content"
             }
@@ -131,6 +132,7 @@ pub(crate) struct YaccParser {
     duplicate_expectrr_declarations: Option<(Span, Vec<Span>)>,
     duplicate_start_declarations: Option<(Span, Vec<Span>)>,
     duplicate_actiontype_declarations: Option<Vec<Span>>,
+    duplicate_epp_declarations: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -156,6 +158,7 @@ impl YaccParser {
             duplicate_expectrr_declarations: None,
             duplicate_start_declarations: None,
             duplicate_actiontype_declarations: None,
+            duplicate_epp_declarations: HashMap::new(),
         }
     }
 
@@ -197,6 +200,12 @@ impl YaccParser {
         if let Some((orig_span, spans)) = &self.duplicate_start_declarations {
             return Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateStartDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = self.duplicate_epp_declarations.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateEPP(spans.clone()),
                 span: *orig_span,
             });
         }
@@ -273,12 +282,20 @@ impl YaccParser {
             if let Some(j) = self.lookahead_is("%epp", i) {
                 i = self.parse_ws(j, false)?;
                 let (j, n, _) = self.parse_token(i)?;
-                if self.ast.epp.contains_key(&n) {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateEPP, i));
-                }
+                let span = Span::new(i, j);
                 i = self.parse_ws(j, false)?;
                 let (j, v) = self.parse_string(i)?;
-                self.ast.epp.insert(n, v);
+                let vspan = Span::new(i, j);
+                match self.ast.epp.entry(n) {
+                    Entry::Occupied(orig) => self
+                        .duplicate_epp_declarations
+                        .entry(orig.get().0)
+                        .or_insert_with(Vec::new)
+                        .push(span),
+                    Entry::Vacant(epp) => {
+                        epp.insert((span, (v, vspan)));
+                    }
+                }
                 i = self.parse_ws(j, true)?;
                 continue;
             }
@@ -1686,30 +1703,31 @@ x"
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_parse_epp() {
         let ast = parse(
             YaccKind::Eco,
-            "
-          %epp A \"a\"
+            r#"
+          %epp A "a"
           %epp B 'a'
-          %epp C '\"'
-          %epp D \"'\"
-          %epp E \"\\\"\"
-          %epp F '\\''
-          %epp G \"a\\\"b\"
+          %epp C '"'
+          %epp D "'"
+          %epp E "\""
+          %epp F '\''
+          %epp G "a\"b"
           %%
           R: 'A';
-          ",
+          "#,
         )
         .unwrap();
         assert_eq!(ast.epp.len(), 7);
-        assert_eq!(ast.epp["A"], "a");
-        assert_eq!(ast.epp["B"], "a");
-        assert_eq!(ast.epp["C"], "\"");
-        assert_eq!(ast.epp["D"], "'");
-        assert_eq!(ast.epp["E"], "\"");
-        assert_eq!(ast.epp["F"], "'");
-        assert_eq!(ast.epp["G"], "a\"b");
+        assert_eq!(ast.epp["A"], (Span::new(16, 17),   ("a".to_string(),   Span::new(18, 21))));
+        assert_eq!(ast.epp["B"], (Span::new(37, 38),   ("a".to_string(),   Span::new(39, 42))));
+        assert_eq!(ast.epp["C"], (Span::new(58, 59),   ("\"".to_string(),  Span::new(60, 63))));
+        assert_eq!(ast.epp["D"], (Span::new(79, 80),   ("'".to_string(),   Span::new(81, 84))));
+        assert_eq!(ast.epp["E"], (Span::new(100, 101), ("\"".to_string(),  Span::new(102, 106))));
+        assert_eq!(ast.epp["F"], (Span::new(122, 123), ("'".to_string(),   Span::new(124, 128))));
+        assert_eq!(ast.epp["G"], (Span::new(144, 145), ("a\"b".to_string(),Span::new(146, 152))));
     }
 
     #[test]
@@ -1717,14 +1735,17 @@ x"
         let src = "
         %epp A \"a\"
         %epp A \"a\"
+        %epp A \"a\"
         %%
         ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateEPP,
+                kind: YaccParserErrorKind::DuplicateEPP(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(33, 34), Span::new(52, 53)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
