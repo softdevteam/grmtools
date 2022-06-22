@@ -1,4 +1,5 @@
 use cfgrammar::Span;
+use std::collections::HashMap;
 use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
@@ -6,6 +7,7 @@ use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 pub(super) struct LexParser<StorageT> {
     src: String,
     pub(super) rules: Vec<Rule<StorageT>>,
+    duplicate_names: HashMap<Span, Vec<Span>>,
 }
 
 impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
@@ -13,6 +15,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let mut p = LexParser {
             src,
             rules: Vec::new(),
+            duplicate_names: HashMap::new(),
         };
         p.parse()?;
         Ok(p)
@@ -65,6 +68,12 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             }
             i = self.parse_rule(i)?;
         }
+        if let Some((orig_span, spans)) = self.duplicate_names.iter().next() {
+            return Err(LexBuildError {
+                span: *orig_span,
+                kind: LexErrorKind::DuplicateName(spans.clone()),
+            });
+        }
         Ok(i)
     }
 
@@ -81,10 +90,11 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let name;
         let orig_name = &line[rspace + 1..];
         let name_span;
-        if orig_name == ";" {
+        let dupe = if orig_name == ";" {
             name = None;
             let pos = i + rspace + 1;
             name_span = Span::new(pos, pos);
+            false
         } else {
             debug_assert!(!orig_name.is_empty());
             if !((orig_name.starts_with('\'') && orig_name.ends_with('\''))
@@ -94,24 +104,31 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             }
             name = Some(orig_name[1..orig_name.len() - 1].to_string());
             name_span = Span::new(i + rspace + 2, i + rspace + orig_name.len());
-            let dup_name = self.rules.iter().any(|r| {
-                r.name
+            self.rules.iter().any(|r| {
+                let dupe = r
+                    .name
                     .as_ref()
-                    .map_or(false, |n| n == name.as_ref().unwrap())
-            });
-            if dup_name {
-                return Err(self.mk_error(LexErrorKind::DuplicateName, i + rspace + 1));
-            }
-        }
+                    .map_or(false, |n| n == name.as_ref().unwrap());
+                if dupe {
+                    self.duplicate_names
+                        .entry(r.name_span)
+                        .or_insert_with(Vec::new)
+                        .push(name_span);
+                }
+                dupe
+            })
+        };
 
-        let re_str = line[..rspace].trim_end().to_string();
-        let rules_len = self.rules.len();
-        let tok_id = StorageT::try_from(rules_len)
+        if !dupe {
+            let re_str = line[..rspace].trim_end().to_string();
+            let rules_len = self.rules.len();
+            let tok_id = StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
 
-        let rule = Rule::new(Some(tok_id), name, name_span, re_str)
-            .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
-        self.rules.push(rule);
+            let rule = Rule::new(Some(tok_id), name, name_span, re_str)
+                .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
+            self.rules.push(rule);
+        }
         Ok(i + line_len)
     }
 
@@ -285,14 +302,18 @@ mod test {
     fn test_duplicate_rule() {
         let src = "%%
 [0-9] 'int'
+[0-9] 'int'
 [0-9] 'int'"
             .to_string();
         match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
             Ok(_) => panic!("Duplicate rule parsed"),
             Err(LexBuildError {
-                kind: LexErrorKind::DuplicateName,
+                kind: LexErrorKind::DuplicateName(spans),
                 span,
-            }) if line_col!(src, span) == (3, 7) => (),
+            }) if line_col!(src, span) == (2, 8) => {
+                assert_eq!(spans, [Span::new(22, 25), Span::new(34, 37)])
+            }
+
             Err(e) => incorrect_err!(src, e),
         }
     }
