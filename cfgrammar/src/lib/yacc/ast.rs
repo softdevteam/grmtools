@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    error::Error,
-    fmt,
-};
+use std::{collections::HashMap, error::Error, fmt};
 
 use indexmap::{IndexMap, IndexSet};
 
@@ -23,7 +19,7 @@ pub struct GrammarAST {
     pub spans: Vec<Span>,
     pub precs: HashMap<String, (Precedence, Span)>,
     pub avoid_insert: Option<HashMap<String, Span>>,
-    pub implicit_tokens: Option<HashSet<String>>,
+    pub implicit_tokens: Option<HashMap<String, Span>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
     pub expect: Option<usize>,
@@ -246,7 +242,7 @@ impl GrammarAST {
                 continue;
             }
             if let Some(ref it) = self.implicit_tokens {
-                if it.contains(k) {
+                if it.contains_key(k) {
                     continue;
                 }
             }

@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use num_traits::PrimInt;
 use regex::Regex;
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     error::Error,
     fmt,
     str::FromStr,
@@ -41,7 +41,8 @@ pub enum YaccParserErrorKind {
     PrecNotFollowedByToken,
     /// Contains the spans of all duplicate avoid-insert declarations.
     DuplicateAvoidInsertDeclaration(Vec<Span>),
-    DuplicateImplicitTokensDeclaration,
+    /// Contains the spans of all duplicate implicit token declarations.
+    DuplicateImplicitTokensDeclaration(Vec<Span>),
     DuplicateExpectDeclaration,
     DuplicateExpectRRDeclaration,
     DuplicateStartDeclaration,
@@ -91,8 +92,8 @@ impl fmt::Display for YaccParserErrorKind {
             }
             YaccParserErrorKind::DuplicateExpectDeclaration => "Duplicate %expect declaration",
             YaccParserErrorKind::DuplicateExpectRRDeclaration => "Duplicate %expect-rr declaration",
-            YaccParserErrorKind::DuplicateImplicitTokensDeclaration => {
-                "Duplicate %implicit_tokens declaration"
+            YaccParserErrorKind::DuplicateImplicitTokensDeclaration(_) => {
+                "Duplicated %implicit_tokens declaration"
             }
             YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
             YaccParserErrorKind::DuplicateActiontypeDeclaration => {
@@ -119,6 +120,7 @@ pub(crate) struct YaccParser {
     duplicate_rule_spans: HashMap<Span, Vec<Span>>,
     duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
     duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
+    duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -139,6 +141,7 @@ impl YaccParser {
             duplicate_rule_spans: HashMap::new(),
             duplicate_avoid_insert_spans: HashMap::new(),
             duplicate_precedence_spans: HashMap::new(),
+            duplicate_implicit_token_spans: HashMap::new(),
         }
     }
 
@@ -156,6 +159,12 @@ impl YaccParser {
         if let Some((orig_span, spans)) = self.duplicate_precedence_spans.iter().next() {
             return Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicatePrecedence(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = self.duplicate_implicit_token_spans.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration(spans.clone()),
                 span: *orig_span,
             });
         }
@@ -290,20 +299,24 @@ impl YaccParser {
                     i = self.parse_ws(j, false)?;
                     let num_newlines = self.num_newlines;
                     if self.ast.implicit_tokens.is_none() {
-                        self.ast.implicit_tokens = Some(HashSet::new());
+                        self.ast.implicit_tokens = Some(HashMap::new());
                     }
                     while j < self.src.len() && self.num_newlines == num_newlines {
                         let (j, n, span) = self.parse_token(i)?;
                         if self.ast.tokens.insert(n.clone()) {
                             self.ast.spans.push(span);
                         }
-                        if self.ast.implicit_tokens.as_ref().unwrap().contains(&n) {
-                            return Err(self.mk_error(
-                                YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
-                                i,
-                            ));
+                        match self.ast.implicit_tokens.as_mut().unwrap().entry(n) {
+                            Entry::Occupied(entry) => {
+                                self.duplicate_implicit_token_spans
+                                    .entry(*entry.get())
+                                    .or_insert_with(Vec::new)
+                                    .push(span);
+                            }
+                            Entry::Vacant(entry) => {
+                                entry.insert(span);
+                            }
                         }
-                        self.ast.implicit_tokens.as_mut().unwrap().insert(n);
                         i = self.parse_ws(j, true)?;
                     }
                     continue;
@@ -1535,10 +1548,13 @@ x"
         assert_eq!(
             ast.implicit_tokens,
             Some(
-                ["ws1".to_string(), "ws2".to_string()]
-                    .iter()
-                    .cloned()
-                    .collect()
+                [
+                    ("ws1".to_string(), Span::new(28, 31)),
+                    ("ws2".to_string(), Span::new(32, 35))
+                ]
+                .iter()
+                .cloned()
+                .collect()
             )
         );
         assert!(ast.tokens.get("ws1").is_some());
@@ -1558,7 +1574,15 @@ x"
         .unwrap();
         assert_eq!(
             ast.implicit_tokens,
-            Some(["X".to_string(), "Y".to_string()].iter().cloned().collect())
+            Some(
+                [
+                    ("X".to_string(), Span::new(28, 29)),
+                    ("Y".to_string(), Span::new(57, 58))
+                ]
+                .iter()
+                .cloned()
+                .collect()
+            )
         );
     }
 
@@ -1572,9 +1596,11 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
+                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(53, 54)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
@@ -1589,9 +1615,11 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
+                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 2 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(28, 29)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }

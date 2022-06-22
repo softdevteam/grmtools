@@ -257,7 +257,7 @@ where
                 // Add the implicit rule: ~: "IMPLICIT_TOKEN_1" ~ | ... | "IMPLICIT_TOKEN_N" ~ | ;
                 let implicit_prods = &mut rules_prods[usize::from(rule_map[astrulename])];
                 // Add a production for each implicit token
-                for t in ast.implicit_tokens.as_ref().unwrap().iter() {
+                for (t, _) in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(PIdx(prods.len().as_()));
                     prods.push(Some(vec![Symbol::Token(token_map[t]), Symbol::Rule(ridx)]));
                     prod_precs.push(Some(None));
