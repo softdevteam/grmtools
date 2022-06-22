@@ -346,7 +346,7 @@ where
             avoid_insert,
             actiontypes,
             expect: ast.expect.map(|(n, _)| n),
-            expectrr: ast.expectrr,
+            expectrr: ast.expectrr.map(|(n, _)| n),
         })
     }
 

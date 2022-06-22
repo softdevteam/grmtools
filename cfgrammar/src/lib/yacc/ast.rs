@@ -23,7 +23,7 @@ pub struct GrammarAST {
     // Error pretty-printers
     pub epp: HashMap<String, String>,
     pub expect: Option<(usize, Span)>,
-    pub expectrr: Option<usize>,
+    pub expectrr: Option<(usize, Span)>,
     pub parse_param: Option<(String, String)>,
     pub programs: Option<String>,
 }
