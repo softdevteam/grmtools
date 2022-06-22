@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use num_traits::PrimInt;
 use regex::Regex;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     error::Error,
     fmt,
     str::FromStr,
@@ -36,15 +36,23 @@ pub enum YaccParserErrorKind {
     PrematureEnd,
     ProgramsNotSupported,
     UnknownDeclaration,
-    DuplicatePrecedence,
+    /// Contains the spans of all duplicate precedences.
+    DuplicatePrecedence(Vec<Span>),
     PrecNotFollowedByToken,
-    DuplicateAvoidInsertDeclaration,
-    DuplicateImplicitTokensDeclaration,
-    DuplicateExpectDeclaration,
-    DuplicateExpectRRDeclaration,
-    DuplicateStartDeclaration,
-    DuplicateActiontypeDeclaration,
-    DuplicateEPP,
+    /// Contains the spans of all duplicate avoid-insert declarations.
+    DuplicateAvoidInsertDeclaration(Vec<Span>),
+    /// Contains the spans of all duplicate implicit token declarations.
+    DuplicateImplicitTokensDeclaration(Vec<Span>),
+    /// Contains the spans of all duplicate expect declarations.
+    DuplicateExpectDeclaration(Vec<Span>),
+    /// Contains the spans of all duplicate expectrr declarations.
+    DuplicateExpectRRDeclaration(Vec<Span>),
+    /// Contains the spans of all duplicate start declarations.
+    DuplicateStartDeclaration(Vec<Span>),
+    /// Contains the spans of all duplicate action type declarations.
+    DuplicateActiontypeDeclaration(Vec<Span>),
+    /// Contains the spans of all duplicate epp declaration.
+    DuplicateEPP(Vec<Span>),
     ReachedEOL,
     InvalidString,
 }
@@ -80,21 +88,25 @@ impl fmt::Display for YaccParserErrorKind {
             YaccParserErrorKind::PrematureEnd => "File ends prematurely",
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccParserErrorKind::UnknownDeclaration => "Unknown declaration",
-            YaccParserErrorKind::DuplicatePrecedence => "Token already has a precedence",
+            YaccParserErrorKind::DuplicatePrecedence(_) => {
+                "Token has multiple precedences specified"
+            }
             YaccParserErrorKind::PrecNotFollowedByToken => "%prec not followed by token name",
-            YaccParserErrorKind::DuplicateAvoidInsertDeclaration => {
-                "Duplicate %avoid_insert declaration"
+            YaccParserErrorKind::DuplicateAvoidInsertDeclaration(_) => {
+                "Duplicated %avoid_insert declaration"
             }
-            YaccParserErrorKind::DuplicateExpectDeclaration => "Duplicate %expect declaration",
-            YaccParserErrorKind::DuplicateExpectRRDeclaration => "Duplicate %expect-rr declaration",
-            YaccParserErrorKind::DuplicateImplicitTokensDeclaration => {
-                "Duplicate %implicit_tokens declaration"
+            YaccParserErrorKind::DuplicateExpectDeclaration(_) => "Duplicated %expect declaration",
+            YaccParserErrorKind::DuplicateExpectRRDeclaration(_) => {
+                "Duplicate %expect-rr declaration"
             }
-            YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
-            YaccParserErrorKind::DuplicateActiontypeDeclaration => {
+            YaccParserErrorKind::DuplicateImplicitTokensDeclaration(_) => {
+                "Duplicated %implicit_tokens declaration"
+            }
+            YaccParserErrorKind::DuplicateStartDeclaration(_) => "Duplicated %start declaration",
+            YaccParserErrorKind::DuplicateActiontypeDeclaration(_) => {
                 "Duplicate %actiontype declaration"
             }
-            YaccParserErrorKind::DuplicateEPP => "Duplicate %epp declaration for this token",
+            YaccParserErrorKind::DuplicateEPP(_) => "Duplicate %epp declaration for this token",
             YaccParserErrorKind::ReachedEOL => {
                 "Reached end of line without finding expected content"
             }
@@ -109,10 +121,18 @@ pub(crate) struct YaccParser {
     src: String,
     num_newlines: usize,
     ast: GrammarAST,
-    global_actiontype: Option<String>,
+    global_actiontype: Option<(String, Span)>,
     /// The key is the span of the [Rule](crate::yacc::ast::Rule) being duplicated.
     /// The value contains one span for every duplicate of the key.
     duplicate_rule_spans: HashMap<Span, Vec<Span>>,
+    duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
+    duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
+    duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
+    duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
+    duplicate_expectrr_declarations: Option<(Span, Vec<Span>)>,
+    duplicate_start_declarations: Option<(Span, Vec<Span>)>,
+    duplicate_actiontype_declarations: Option<Vec<Span>>,
+    duplicate_epp_declarations: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -131,6 +151,14 @@ impl YaccParser {
             ast: GrammarAST::new(),
             global_actiontype: None,
             duplicate_rule_spans: HashMap::new(),
+            duplicate_avoid_insert_spans: HashMap::new(),
+            duplicate_precedence_spans: HashMap::new(),
+            duplicate_implicit_token_spans: HashMap::new(),
+            duplicate_expect_declarations: None,
+            duplicate_expectrr_declarations: None,
+            duplicate_start_declarations: None,
+            duplicate_actiontype_declarations: None,
+            duplicate_epp_declarations: HashMap::new(),
         }
     }
 
@@ -139,6 +167,58 @@ impl YaccParser {
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
         let mut i = self.parse_declarations(0)?;
+        if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = self.duplicate_precedence_spans.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicatePrecedence(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = self.duplicate_implicit_token_spans.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = &self.duplicate_expect_declarations {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateExpectDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = &self.duplicate_expectrr_declarations {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateExpectRRDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = &self.duplicate_start_declarations {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateStartDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = self.duplicate_epp_declarations.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateEPP(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some(spans) = &self.duplicate_actiontype_declarations {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateActiontypeDeclaration(spans.clone()),
+                span: *self
+                    .global_actiontype
+                    .as_ref()
+                    .map(|(_, span)| span)
+                    .unwrap(),
+            });
+        }
         i = self.parse_rules(i)?;
         self.parse_programs(i)
     }
@@ -170,57 +250,82 @@ impl YaccParser {
             }
             if let YaccKind::Original(_) = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%actiontype", i) {
-                    if self.global_actiontype.is_some() {
-                        return Err(
-                            self.mk_error(YaccParserErrorKind::DuplicateActiontypeDeclaration, i)
-                        );
-                    }
                     i = self.parse_ws(j, false)?;
                     let (j, n) = self.parse_to_eol(i)?;
-                    self.global_actiontype = Some(n);
+                    let span = Span::new(i, j);
+                    if self.global_actiontype.is_some() {
+                        self.duplicate_actiontype_declarations
+                            .get_or_insert_with(Vec::new)
+                            .push(span);
+                    } else {
+                        self.global_actiontype = Some((n, span));
+                    }
                     i = self.parse_ws(j, true)?;
                     continue;
                 }
             }
             if let Some(j) = self.lookahead_is("%start", i) {
-                if self.ast.start.is_some() {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateStartDeclaration, i));
-                }
                 i = self.parse_ws(j, false)?;
                 let (j, n) = self.parse_name(i)?;
-                self.ast.start = Some(n);
+                let span = Span::new(i, j);
+                if let Some((_, orig_span)) = self.ast.start {
+                    self.duplicate_start_declarations
+                        .get_or_insert_with(|| (orig_span, Vec::new()))
+                        .1
+                        .push(span)
+                } else {
+                    self.ast.start = Some((n, span));
+                }
                 i = self.parse_ws(j, true)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%epp", i) {
                 i = self.parse_ws(j, false)?;
                 let (j, n, _) = self.parse_token(i)?;
-                if self.ast.epp.contains_key(&n) {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateEPP, i));
-                }
+                let span = Span::new(i, j);
                 i = self.parse_ws(j, false)?;
                 let (j, v) = self.parse_string(i)?;
-                self.ast.epp.insert(n, v);
+                let vspan = Span::new(i, j);
+                match self.ast.epp.entry(n) {
+                    Entry::Occupied(orig) => self
+                        .duplicate_epp_declarations
+                        .entry(orig.get().0)
+                        .or_insert_with(Vec::new)
+                        .push(span),
+                    Entry::Vacant(epp) => {
+                        epp.insert((span, (v, vspan)));
+                    }
+                }
                 i = self.parse_ws(j, true)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%expect-rr", i) {
-                if self.ast.expectrr.is_some() {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateExpectRRDeclaration, i));
-                }
                 i = self.parse_ws(j, false)?;
                 let (j, n) = self.parse_int(i)?;
-                self.ast.expectrr = Some(n);
+                let span = Span::new(i, j);
+                if let Some((_, orig_span)) = self.ast.expectrr {
+                    self.duplicate_expectrr_declarations
+                        .get_or_insert_with(|| (orig_span, Vec::new()))
+                        .1
+                        .push(span)
+                } else {
+                    self.ast.expectrr = Some((n, span));
+                }
                 i = self.parse_ws(j, true)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%expect", i) {
-                if self.ast.expect.is_some() {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateExpectDeclaration, i));
-                }
                 i = self.parse_ws(j, false)?;
                 let (j, n) = self.parse_int(i)?;
-                self.ast.expect = Some(n);
+                let span = Span::new(i, j);
+                if let Some((_, orig_span)) = self.ast.expect {
+                    self.duplicate_expect_declarations
+                        .get_or_insert_with(|| (orig_span, Vec::new()))
+                        .1
+                        .push(span)
+                } else {
+                    self.ast.expect = Some((n, span));
+                }
                 i = self.parse_ws(j, true)?;
                 continue;
             }
@@ -228,19 +333,25 @@ impl YaccParser {
                 i = self.parse_ws(j, false)?;
                 let num_newlines = self.num_newlines;
                 if self.ast.avoid_insert.is_none() {
-                    self.ast.avoid_insert = Some(HashSet::new());
+                    self.ast.avoid_insert = Some(HashMap::new());
                 }
                 while j < self.src.len() && self.num_newlines == num_newlines {
                     let (j, n, span) = self.parse_token(i)?;
                     if self.ast.tokens.insert(n.clone()) {
                         self.ast.spans.push(span);
                     }
-                    if self.ast.avoid_insert.as_ref().unwrap().contains(&n) {
-                        return Err(
-                            self.mk_error(YaccParserErrorKind::DuplicateAvoidInsertDeclaration, i)
-                        );
+
+                    match self.ast.avoid_insert.as_mut().unwrap().entry(n) {
+                        Entry::Occupied(occupied) => {
+                            self.duplicate_avoid_insert_spans
+                                .entry(*occupied.get())
+                                .or_insert_with(Vec::new)
+                                .push(span);
+                        }
+                        Entry::Vacant(vacant) => {
+                            vacant.insert(span);
+                        }
                     }
-                    self.ast.avoid_insert.as_mut().unwrap().insert(n);
                     i = self.parse_ws(j, true)?;
                 }
                 continue;
@@ -264,20 +375,24 @@ impl YaccParser {
                     i = self.parse_ws(j, false)?;
                     let num_newlines = self.num_newlines;
                     if self.ast.implicit_tokens.is_none() {
-                        self.ast.implicit_tokens = Some(HashSet::new());
+                        self.ast.implicit_tokens = Some(HashMap::new());
                     }
                     while j < self.src.len() && self.num_newlines == num_newlines {
                         let (j, n, span) = self.parse_token(i)?;
                         if self.ast.tokens.insert(n.clone()) {
                             self.ast.spans.push(span);
                         }
-                        if self.ast.implicit_tokens.as_ref().unwrap().contains(&n) {
-                            return Err(self.mk_error(
-                                YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
-                                i,
-                            ));
+                        match self.ast.implicit_tokens.as_mut().unwrap().entry(n) {
+                            Entry::Occupied(entry) => {
+                                self.duplicate_implicit_token_spans
+                                    .entry(*entry.get())
+                                    .or_insert_with(Vec::new)
+                                    .push(span);
+                            }
+                            Entry::Vacant(entry) => {
+                                entry.insert(span);
+                            }
                         }
-                        self.ast.implicit_tokens.as_mut().unwrap().insert(n);
                         i = self.parse_ws(j, true)?;
                     }
                     continue;
@@ -302,15 +417,24 @@ impl YaccParser {
                 i = self.parse_ws(k, false)?;
                 let num_newlines = self.num_newlines;
                 while i < self.src.len() && num_newlines == self.num_newlines {
-                    let (j, n, _) = self.parse_token(i)?;
-                    if self.ast.precs.contains_key(&n) {
-                        return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
+                    let (j, n, span) = self.parse_token(i)?;
+                    match self.ast.precs.entry(n) {
+                        Entry::Occupied(orig) => {
+                            let (_, orig_span) = orig.get();
+                            self.duplicate_precedence_spans
+                                .entry(*orig_span)
+                                .or_insert_with(Vec::new)
+                                .push(span);
+                        }
+                        Entry::Vacant(entry) => {
+                            let prec = Precedence {
+                                level: prec_level,
+                                kind,
+                            };
+                            entry.insert((prec, span));
+                        }
                     }
-                    let prec = Precedence {
-                        level: prec_level,
-                        kind,
-                    };
-                    self.ast.precs.insert(n, prec);
+
                     i = self.parse_ws(j, true)?;
                 }
                 prec_level += 1;
@@ -343,15 +467,17 @@ impl YaccParser {
 
     fn parse_rule(&mut self, mut i: usize) -> YaccResult<usize> {
         let (j, rn) = self.parse_name(i)?;
-        if self.ast.start.is_none() {
-            self.ast.start = Some(rn.clone());
-        }
         let span = Span::new(i, j);
+        if self.ast.start.is_none() {
+            self.ast.start = Some((rn.clone(), span));
+        }
         match self.yacc_kind {
             YaccKind::Original(_) | YaccKind::Eco => {
                 if self.ast.get_rule(&rn).is_none() {
-                    self.ast
-                        .add_rule((rn.clone(), span), self.global_actiontype.clone());
+                    self.ast.add_rule(
+                        (rn.clone(), span),
+                        self.global_actiontype.clone().map(|(s, _)| s),
+                    );
                 }
                 i = j;
             }
@@ -952,7 +1078,7 @@ mod test {
             &src,
         )
         .unwrap();
-        assert_eq!(grm.start.unwrap(), "A");
+        assert_eq!(grm.start.unwrap(), ("A".to_string(), Span::new(9, 10)));
     }
 
     #[test]
@@ -1255,58 +1381,61 @@ x"
           ".to_string();
         let grm = parse(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &src).unwrap();
         assert_eq!(grm.precs.len(), 6);
-        assert_eq!(grm.precs["+"], Precedence{level: 0, kind: AssocKind::Left});
-        assert_eq!(grm.precs["-"], Precedence{level: 0, kind: AssocKind::Left});
-        assert_eq!(grm.precs["*"], Precedence{level: 1, kind: AssocKind::Left});
-        assert_eq!(grm.precs["/"], Precedence{level: 2, kind: AssocKind::Right});
-        assert_eq!(grm.precs["^"], Precedence{level: 3, kind: AssocKind::Right});
-        assert_eq!(grm.precs["~"], Precedence{level: 4, kind: AssocKind::Nonassoc});
+        assert_eq!(grm.precs["+"], (Precedence{level: 0, kind: AssocKind::Left}, Span::new(18, 19)));
+        assert_eq!(grm.precs["-"], (Precedence{level: 0, kind: AssocKind::Left}, Span::new(22, 23)));
+        assert_eq!(grm.precs["*"], (Precedence{level: 1, kind: AssocKind::Left}, Span::new(42, 43)));
+        assert_eq!(grm.precs["/"], (Precedence{level: 2, kind: AssocKind::Right}, Span::new(63, 64)));
+        assert_eq!(grm.precs["^"], (Precedence{level: 3, kind: AssocKind::Right}, Span::new(84, 85)));
+        assert_eq!(grm.precs["~"], (Precedence{level: 4, kind: AssocKind::Nonassoc}, Span::new(108, 109)));
     }
 
     #[test]
     fn test_dup_precs() {
+        #[rustfmt::skip]
         let srcs = vec![
-            "
+            ("
           %left 'x'
           %left 'x'
           %%
-          ",
-            "
+          ", Span::new(38, 39)),
+            ("
           %left 'x'
           %right 'x'
           %%
-          ",
-            "
+          ", Span::new(39, 40)),
+            ("
           %right 'x'
           %right 'x'
           %%
-          ",
-            "
+          ", Span::new(40, 41)),
+            ("
           %nonassoc 'x'
           %nonassoc 'x'
           %%
-          ",
-            "
+          ", Span::new(46, 47)),
+            ("
           %left 'x'
           %nonassoc 'x'
           %%
-          ",
-            "
+          ", Span::new(42, 43)),
+            ("
           %right 'x'
           %nonassoc 'x'
           %%
-          ",
+          ", Span::new(43, 44))
         ];
-        for src in srcs.iter() {
+        for (src, expected_span) in srcs.iter() {
             match parse(
                 YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
                 src,
             ) {
                 Ok(_) => panic!("Duplicate precedence parsed"),
                 Err(YaccParserError {
-                    kind: YaccParserErrorKind::DuplicatePrecedence,
+                    kind: YaccParserErrorKind::DuplicatePrecedence(spans),
                     span,
-                }) if line_of_offset(src, span.start()) == 3 => (),
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, vec![*expected_span])
+                }
                 Err(e) => incorrect_err!(src, e),
             }
         }
@@ -1387,10 +1516,13 @@ x"
         assert_eq!(
             ast.avoid_insert,
             Some(
-                ["ws1".to_string(), "ws2".to_string()]
-                    .iter()
-                    .cloned()
-                    .collect()
+                [
+                    ("ws1".to_string(), Span::new(25, 28)),
+                    ("ws2".to_string(), Span::new(29, 32))
+                ]
+                .iter()
+                .cloned()
+                .collect()
             )
         );
         assert!(ast.tokens.get("ws1").is_some());
@@ -1410,7 +1542,15 @@ x"
         .unwrap();
         assert_eq!(
             ast.avoid_insert,
-            Some(["X".to_string(), "Y".to_string()].iter().cloned().collect())
+            Some(
+                [
+                    ("X".to_string(), Span::new(25, 26)),
+                    ("Y".to_string(), Span::new(51, 52))
+                ]
+                .iter()
+                .cloned()
+                .collect()
+            )
         );
     }
 
@@ -1424,9 +1564,11 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration,
+                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, vec![Span::new(53, 54)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
@@ -1441,9 +1583,11 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration,
+                kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 3 => {
+                assert_eq!(spans, vec![Span::new(49, 50)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
@@ -1482,10 +1626,13 @@ x"
         assert_eq!(
             ast.implicit_tokens,
             Some(
-                ["ws1".to_string(), "ws2".to_string()]
-                    .iter()
-                    .cloned()
-                    .collect()
+                [
+                    ("ws1".to_string(), Span::new(28, 31)),
+                    ("ws2".to_string(), Span::new(32, 35))
+                ]
+                .iter()
+                .cloned()
+                .collect()
             )
         );
         assert!(ast.tokens.get("ws1").is_some());
@@ -1505,7 +1652,15 @@ x"
         .unwrap();
         assert_eq!(
             ast.implicit_tokens,
-            Some(["X".to_string(), "Y".to_string()].iter().cloned().collect())
+            Some(
+                [
+                    ("X".to_string(), Span::new(28, 29)),
+                    ("Y".to_string(), Span::new(57, 58))
+                ]
+                .iter()
+                .cloned()
+                .collect()
+            )
         );
     }
 
@@ -1519,9 +1674,11 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
+                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(53, 54)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
@@ -1536,38 +1693,41 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration,
+                kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 2 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(28, 29)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
 
     #[test]
+    #[rustfmt::skip]
     fn test_parse_epp() {
         let ast = parse(
             YaccKind::Eco,
-            "
-          %epp A \"a\"
+            r#"
+          %epp A "a"
           %epp B 'a'
-          %epp C '\"'
-          %epp D \"'\"
-          %epp E \"\\\"\"
-          %epp F '\\''
-          %epp G \"a\\\"b\"
+          %epp C '"'
+          %epp D "'"
+          %epp E "\""
+          %epp F '\''
+          %epp G "a\"b"
           %%
           R: 'A';
-          ",
+          "#,
         )
         .unwrap();
         assert_eq!(ast.epp.len(), 7);
-        assert_eq!(ast.epp["A"], "a");
-        assert_eq!(ast.epp["B"], "a");
-        assert_eq!(ast.epp["C"], "\"");
-        assert_eq!(ast.epp["D"], "'");
-        assert_eq!(ast.epp["E"], "\"");
-        assert_eq!(ast.epp["F"], "'");
-        assert_eq!(ast.epp["G"], "a\"b");
+        assert_eq!(ast.epp["A"], (Span::new(16, 17),   ("a".to_string(),   Span::new(18, 21))));
+        assert_eq!(ast.epp["B"], (Span::new(37, 38),   ("a".to_string(),   Span::new(39, 42))));
+        assert_eq!(ast.epp["C"], (Span::new(58, 59),   ("\"".to_string(),  Span::new(60, 63))));
+        assert_eq!(ast.epp["D"], (Span::new(79, 80),   ("'".to_string(),   Span::new(81, 84))));
+        assert_eq!(ast.epp["E"], (Span::new(100, 101), ("\"".to_string(),  Span::new(102, 106))));
+        assert_eq!(ast.epp["F"], (Span::new(122, 123), ("'".to_string(),   Span::new(124, 128))));
+        assert_eq!(ast.epp["G"], (Span::new(144, 145), ("a\"b".to_string(),Span::new(146, 152))));
     }
 
     #[test]
@@ -1575,14 +1735,17 @@ x"
         let src = "
         %epp A \"a\"
         %epp A \"a\"
+        %epp A \"a\"
         %%
         ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateEPP,
+                kind: YaccParserErrorKind::DuplicateEPP(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(33, 34), Span::new(52, 53)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
@@ -1623,9 +1786,57 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateStartDeclaration,
+                kind: YaccParserErrorKind::DuplicateStartDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(37, 38)])
+            }
+            Err(e) => incorrect_err!(src, e),
+        }
+    }
+
+    #[test]
+    fn test_duplicate_expect() {
+        let src = "
+          %expect 1
+          %expect 2
+          %expect 3
+          %%
+          ";
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateExpectDeclaration(spans),
+                span,
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(39, 40), Span::new(59, 60)]);
+            }
+            Err(e) => incorrect_err!(src, e),
+        }
+    }
+
+    #[test]
+    fn test_duplicate_expectrr() {
+        let src = "
+          %expect-rr 1
+          %expect-rr 2
+          %expect-rr 3
+          %%
+          ";
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateExpectRRDeclaration(spans),
+                span,
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(45, 46), Span::new(68, 69)]);
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
@@ -1642,7 +1853,7 @@ x"
           ",
         )
         .unwrap();
-        assert_eq!(ast.start, Some("R".to_string()));
+        assert_eq!(ast.start, Some(("R".to_string(), Span::new(24, 25))));
     }
 
     #[test]
@@ -1792,6 +2003,7 @@ x"
         let src = "
          %actiontype T1
          %actiontype T2
+         %actiontype T3
          %%
          A: 'a';";
         match parse(
@@ -1800,9 +2012,11 @@ x"
         ) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateActiontypeDeclaration,
+                kind: YaccParserErrorKind::DuplicateActiontypeDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(46, 48), Span::new(70, 72)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }

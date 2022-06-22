@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    error::Error,
-    fmt,
-};
+use std::{collections::HashMap, error::Error, fmt};
 
 use indexmap::{IndexMap, IndexSet};
 
@@ -15,19 +11,21 @@ use crate::Span;
 /// point, any further mutations made to the struct lead to undefined behaviour.
 #[derive(Debug)]
 pub struct GrammarAST {
-    pub start: Option<String>,
+    pub start: Option<(String, Span)>,
     // map from a rule name to indexes into prods
     pub rules: IndexMap<String, Rule>,
     pub prods: Vec<Production>,
     pub tokens: IndexSet<String>,
     pub spans: Vec<Span>,
-    pub precs: HashMap<String, Precedence>,
-    pub avoid_insert: Option<HashSet<String>>,
-    pub implicit_tokens: Option<HashSet<String>>,
-    // Error pretty-printers
-    pub epp: HashMap<String, String>,
-    pub expect: Option<usize>,
-    pub expectrr: Option<usize>,
+    pub precs: HashMap<String, (Precedence, Span)>,
+    pub avoid_insert: Option<HashMap<String, Span>>,
+    pub implicit_tokens: Option<HashMap<String, Span>>,
+    // Error pretty-printers,
+    // The first span of the value is the span of the key,
+    // The second span in the value, is the span of the values string.
+    pub epp: HashMap<String, (Span, (String, Span))>,
+    pub expect: Option<(usize, Span)>,
+    pub expectrr: Option<(usize, Span)>,
     pub parse_param: Option<(String, String)>,
     pub programs: Option<String>,
 }
@@ -193,11 +191,11 @@ impl GrammarAST {
                     sym: None,
                 });
             }
-            Some(ref s) => {
+            Some((ref s, span)) => {
                 if !self.rules.contains_key(s) {
                     return Err(GrammarValidationError {
                         kind: GrammarValidationErrorKind::InvalidStartRule,
-                        sym: Some(Symbol::Rule(s.clone(), Span::new(0, 0))),
+                        sym: Some(Symbol::Rule(s.clone(), span)),
                     });
                 }
             }
@@ -246,7 +244,7 @@ impl GrammarAST {
                 continue;
             }
             if let Some(ref it) = self.implicit_tokens {
-                if it.contains(k) {
+                if it.contains_key(k) {
                     continue;
                 }
             }
@@ -290,7 +288,7 @@ mod test {
     fn test_invalid_start_rule() {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("B".to_string(), empty_span), None);
         grm.add_prod("B".to_string(), vec![], None, None);
         match grm.complete_and_validate() {
@@ -306,7 +304,7 @@ mod test {
     fn test_valid_start_rule() {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![], None, None);
         assert!(grm.complete_and_validate().is_ok());
@@ -316,7 +314,7 @@ mod test {
     fn test_valid_rule_ref() {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_rule(("B".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("B")], None, None);
@@ -328,7 +326,7 @@ mod test {
     fn test_invalid_rule_ref() {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("B")], None, None);
         match grm.complete_and_validate() {
@@ -345,7 +343,7 @@ mod test {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
         grm.tokens.insert("b".to_string());
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![token("b")], None, None);
         assert!(grm.complete_and_validate().is_ok());
@@ -358,7 +356,7 @@ mod test {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
         grm.tokens.insert("b".to_string());
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("b")], None, None);
         assert!(grm.complete_and_validate().is_err());
@@ -368,7 +366,7 @@ mod test {
     fn test_invalid_token_ref() {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![token("b")], None, None);
         match grm.complete_and_validate() {
@@ -384,7 +382,7 @@ mod test {
     fn test_invalid_rule_forgotten_token() {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("b"), token("b")], None, None);
         match grm.complete_and_validate() {
@@ -400,10 +398,11 @@ mod test {
     fn test_invalid_epp() {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![], None, None);
-        grm.epp.insert("k".to_owned(), "v".to_owned());
+        grm.epp
+            .insert("k".to_owned(), (empty_span, ("v".to_owned(), empty_span)));
         match grm.complete_and_validate() {
             Err(GrammarValidationError {
                 kind: GrammarValidationErrorKind::UnknownEPP,
@@ -419,12 +418,15 @@ mod test {
         let empty_span = Span::new(0, 0);
         grm.precs.insert(
             "b".to_string(),
-            Precedence {
-                level: 1,
-                kind: AssocKind::Left,
-            },
+            (
+                Precedence {
+                    level: 1,
+                    kind: AssocKind::Left,
+                },
+                Span::new(0, 0),
+            ),
         );
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.tokens.insert("b".to_string());
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod(
@@ -440,7 +442,7 @@ mod test {
     fn test_invalid_precedence_override() {
         let mut grm = GrammarAST::new();
         let empty_span = Span::new(0, 0);
-        grm.start = Some("A".to_string());
+        grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod(
             "A".to_string(),

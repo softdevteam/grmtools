@@ -193,8 +193,10 @@ where
         let mut token_epp: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
         for (i, k) in ast.tokens.iter().enumerate() {
             token_names.push(Some((ast.spans[i], k.clone())));
-            token_precs.push(ast.precs.get(k).cloned());
-            token_epp.push(Some(ast.epp.get(k).unwrap_or(k).clone()));
+            token_precs.push(ast.precs.get(k).map(|(prec, _)| prec).cloned());
+            token_epp.push(Some(
+                ast.epp.get(k).map(|(_, (s, _))| s).unwrap_or(k).clone(),
+            ));
         }
         let eof_token_idx = TIdx(token_names.len().as_());
         token_names.push(None);
@@ -224,7 +226,7 @@ where
                 let start_prod = match implicit_start_rule {
                     None => {
                         // Add ^: S;
-                        vec![Symbol::Rule(rule_map[ast.start.as_ref().unwrap()])]
+                        vec![Symbol::Rule(rule_map[&ast.start.as_ref().unwrap().0])]
                     }
                     Some(ref s) => {
                         // An implicit rule has been specified, so the special start rule
@@ -248,7 +250,7 @@ where
                 rules_prods[usize::from(rule_map[astrulename])].push(PIdx(prods.len().as_()));
                 prods.push(Some(vec![
                     Symbol::Rule(rule_map[implicit_rule.as_ref().unwrap()]),
-                    Symbol::Rule(rule_map[ast.start.as_ref().unwrap()]),
+                    Symbol::Rule(rule_map[&ast.start.as_ref().unwrap().0]),
                 ]));
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(ridx));
@@ -257,7 +259,7 @@ where
                 // Add the implicit rule: ~: "IMPLICIT_TOKEN_1" ~ | ... | "IMPLICIT_TOKEN_N" ~ | ;
                 let implicit_prods = &mut rules_prods[usize::from(rule_map[astrulename])];
                 // Add a production for each implicit token
-                for t in ast.implicit_tokens.as_ref().unwrap().iter() {
+                for (t, _) in ast.implicit_tokens.as_ref().unwrap().iter() {
                     implicit_prods.push(PIdx(prods.len().as_()));
                     prods.push(Some(vec![Symbol::Token(token_map[t]), Symbol::Rule(ridx)]));
                     prod_precs.push(Some(None));
@@ -305,7 +307,7 @@ where
                 }
                 (*rule).push(PIdx(pidx.as_()));
                 prods[pidx] = Some(prod);
-                prod_precs[pidx] = Some(prec);
+                prod_precs[pidx] = Some(prec.map(|(prec, _)| prec));
                 prods_rules[pidx] = Some(ridx);
                 if let Some(ref s) = astprod.action {
                     actions[pidx] = Some(s.clone());
@@ -315,7 +317,7 @@ where
 
         let avoid_insert = if let Some(ai) = ast.avoid_insert {
             let mut aiv = Vob::from_elem(false, token_names.len());
-            for n in ai.iter() {
+            for n in ai.keys() {
                 aiv.set(usize::from(token_map[n]), true);
             }
             Some(aiv)
@@ -345,8 +347,8 @@ where
             programs: ast.programs,
             avoid_insert,
             actiontypes,
-            expect: ast.expect,
-            expectrr: ast.expectrr,
+            expect: ast.expect.map(|(n, _)| n),
+            expectrr: ast.expectrr.map(|(n, _)| n),
         })
     }
 
