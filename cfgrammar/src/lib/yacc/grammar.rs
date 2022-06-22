@@ -193,7 +193,7 @@ where
         let mut token_epp: Vec<Option<String>> = Vec::with_capacity(ast.tokens.len() + 1);
         for (i, k) in ast.tokens.iter().enumerate() {
             token_names.push(Some((ast.spans[i], k.clone())));
-            token_precs.push(ast.precs.get(k).cloned());
+            token_precs.push(ast.precs.get(k).map(|(prec, _)| prec).cloned());
             token_epp.push(Some(ast.epp.get(k).unwrap_or(k).clone()));
         }
         let eof_token_idx = TIdx(token_names.len().as_());
@@ -305,7 +305,7 @@ where
                 }
                 (*rule).push(PIdx(pidx.as_()));
                 prods[pidx] = Some(prod);
-                prod_precs[pidx] = Some(prec);
+                prod_precs[pidx] = Some(prec.map(|(prec, _)| prec));
                 prods_rules[pidx] = Some(ridx);
                 if let Some(ref s) = astprod.action {
                     actions[pidx] = Some(s.clone());

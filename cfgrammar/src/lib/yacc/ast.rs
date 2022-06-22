@@ -21,7 +21,7 @@ pub struct GrammarAST {
     pub prods: Vec<Production>,
     pub tokens: IndexSet<String>,
     pub spans: Vec<Span>,
-    pub precs: HashMap<String, Precedence>,
+    pub precs: HashMap<String, (Precedence, Span)>,
     pub avoid_insert: Option<HashMap<String, Span>>,
     pub implicit_tokens: Option<HashSet<String>>,
     // Error pretty-printers
@@ -419,10 +419,13 @@ mod test {
         let empty_span = Span::new(0, 0);
         grm.precs.insert(
             "b".to_string(),
-            Precedence {
-                level: 1,
-                kind: AssocKind::Left,
-            },
+            (
+                Precedence {
+                    level: 1,
+                    kind: AssocKind::Left,
+                },
+                Span::new(0, 0),
+            ),
         );
         grm.start = Some("A".to_string());
         grm.tokens.insert("b".to_string());

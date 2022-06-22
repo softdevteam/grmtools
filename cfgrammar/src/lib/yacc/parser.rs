@@ -36,7 +36,8 @@ pub enum YaccParserErrorKind {
     PrematureEnd,
     ProgramsNotSupported,
     UnknownDeclaration,
-    DuplicatePrecedence,
+    /// Contains the spans of all duplicate precedences.
+    DuplicatePrecedence(Vec<Span>),
     PrecNotFollowedByToken,
     /// Contains the spans of all duplicate avoid-insert declarations.
     DuplicateAvoidInsertDeclaration(Vec<Span>),
@@ -81,7 +82,9 @@ impl fmt::Display for YaccParserErrorKind {
             YaccParserErrorKind::PrematureEnd => "File ends prematurely",
             YaccParserErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccParserErrorKind::UnknownDeclaration => "Unknown declaration",
-            YaccParserErrorKind::DuplicatePrecedence => "Token already has a precedence",
+            YaccParserErrorKind::DuplicatePrecedence(_) => {
+                "Token has multiple precedences specified"
+            }
             YaccParserErrorKind::PrecNotFollowedByToken => "%prec not followed by token name",
             YaccParserErrorKind::DuplicateAvoidInsertDeclaration(_) => {
                 "Duplicated %avoid_insert declaration"
@@ -115,6 +118,7 @@ pub(crate) struct YaccParser {
     /// The value contains one span for every duplicate of the key.
     duplicate_rule_spans: HashMap<Span, Vec<Span>>,
     duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
+    duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -134,6 +138,7 @@ impl YaccParser {
             global_actiontype: None,
             duplicate_rule_spans: HashMap::new(),
             duplicate_avoid_insert_spans: HashMap::new(),
+            duplicate_precedence_spans: HashMap::new(),
         }
     }
 
@@ -145,6 +150,12 @@ impl YaccParser {
         if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
             return Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateAvoidInsertDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = self.duplicate_precedence_spans.iter().next() {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicatePrecedence(spans.clone()),
                 span: *orig_span,
             });
         }
@@ -317,15 +328,24 @@ impl YaccParser {
                 i = self.parse_ws(k, false)?;
                 let num_newlines = self.num_newlines;
                 while i < self.src.len() && num_newlines == self.num_newlines {
-                    let (j, n, _) = self.parse_token(i)?;
-                    if self.ast.precs.contains_key(&n) {
-                        return Err(self.mk_error(YaccParserErrorKind::DuplicatePrecedence, i));
+                    let (j, n, span) = self.parse_token(i)?;
+                    match self.ast.precs.entry(n) {
+                        Entry::Occupied(orig) => {
+                            let (_, orig_span) = orig.get();
+                            self.duplicate_precedence_spans
+                                .entry(*orig_span)
+                                .or_insert_with(Vec::new)
+                                .push(span);
+                        }
+                        Entry::Vacant(entry) => {
+                            let prec = Precedence {
+                                level: prec_level,
+                                kind,
+                            };
+                            entry.insert((prec, span));
+                        }
                     }
-                    let prec = Precedence {
-                        level: prec_level,
-                        kind,
-                    };
-                    self.ast.precs.insert(n, prec);
+
                     i = self.parse_ws(j, true)?;
                 }
                 prec_level += 1;
@@ -1270,58 +1290,61 @@ x"
           ".to_string();
         let grm = parse(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &src).unwrap();
         assert_eq!(grm.precs.len(), 6);
-        assert_eq!(grm.precs["+"], Precedence{level: 0, kind: AssocKind::Left});
-        assert_eq!(grm.precs["-"], Precedence{level: 0, kind: AssocKind::Left});
-        assert_eq!(grm.precs["*"], Precedence{level: 1, kind: AssocKind::Left});
-        assert_eq!(grm.precs["/"], Precedence{level: 2, kind: AssocKind::Right});
-        assert_eq!(grm.precs["^"], Precedence{level: 3, kind: AssocKind::Right});
-        assert_eq!(grm.precs["~"], Precedence{level: 4, kind: AssocKind::Nonassoc});
+        assert_eq!(grm.precs["+"], (Precedence{level: 0, kind: AssocKind::Left}, Span::new(18, 19)));
+        assert_eq!(grm.precs["-"], (Precedence{level: 0, kind: AssocKind::Left}, Span::new(22, 23)));
+        assert_eq!(grm.precs["*"], (Precedence{level: 1, kind: AssocKind::Left}, Span::new(42, 43)));
+        assert_eq!(grm.precs["/"], (Precedence{level: 2, kind: AssocKind::Right}, Span::new(63, 64)));
+        assert_eq!(grm.precs["^"], (Precedence{level: 3, kind: AssocKind::Right}, Span::new(84, 85)));
+        assert_eq!(grm.precs["~"], (Precedence{level: 4, kind: AssocKind::Nonassoc}, Span::new(108, 109)));
     }
 
     #[test]
     fn test_dup_precs() {
+        #[rustfmt::skip]
         let srcs = vec![
-            "
+            ("
           %left 'x'
           %left 'x'
           %%
-          ",
-            "
+          ", Span::new(38, 39)),
+            ("
           %left 'x'
           %right 'x'
           %%
-          ",
-            "
+          ", Span::new(39, 40)),
+            ("
           %right 'x'
           %right 'x'
           %%
-          ",
-            "
+          ", Span::new(40, 41)),
+            ("
           %nonassoc 'x'
           %nonassoc 'x'
           %%
-          ",
-            "
+          ", Span::new(46, 47)),
+            ("
           %left 'x'
           %nonassoc 'x'
           %%
-          ",
-            "
+          ", Span::new(42, 43)),
+            ("
           %right 'x'
           %nonassoc 'x'
           %%
-          ",
+          ", Span::new(43, 44))
         ];
-        for src in srcs.iter() {
+        for (src, expected_span) in srcs.iter() {
             match parse(
                 YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
                 src,
             ) {
                 Ok(_) => panic!("Duplicate precedence parsed"),
                 Err(YaccParserError {
-                    kind: YaccParserErrorKind::DuplicatePrecedence,
+                    kind: YaccParserErrorKind::DuplicatePrecedence(spans),
                     span,
-                }) if line_of_offset(src, span.start()) == 3 => (),
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, vec![*expected_span])
+                }
                 Err(e) => incorrect_err!(src, e),
             }
         }
