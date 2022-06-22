@@ -224,7 +224,7 @@ where
                 let start_prod = match implicit_start_rule {
                     None => {
                         // Add ^: S;
-                        vec![Symbol::Rule(rule_map[ast.start.as_ref().unwrap()])]
+                        vec![Symbol::Rule(rule_map[&ast.start.as_ref().unwrap().0])]
                     }
                     Some(ref s) => {
                         // An implicit rule has been specified, so the special start rule
@@ -248,7 +248,7 @@ where
                 rules_prods[usize::from(rule_map[astrulename])].push(PIdx(prods.len().as_()));
                 prods.push(Some(vec![
                     Symbol::Rule(rule_map[implicit_rule.as_ref().unwrap()]),
-                    Symbol::Rule(rule_map[ast.start.as_ref().unwrap()]),
+                    Symbol::Rule(rule_map[&ast.start.as_ref().unwrap().0]),
                 ]));
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(ridx));

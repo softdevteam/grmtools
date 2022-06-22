@@ -47,7 +47,8 @@ pub enum YaccParserErrorKind {
     DuplicateExpectDeclaration(Vec<Span>),
     /// Contains the spans of all duplicate expectrr declarations.
     DuplicateExpectRRDeclaration(Vec<Span>),
-    DuplicateStartDeclaration,
+    /// Contains the spans of all duplicate start declarations.
+    DuplicateStartDeclaration(Vec<Span>),
     DuplicateActiontypeDeclaration,
     DuplicateEPP,
     ReachedEOL,
@@ -99,7 +100,7 @@ impl fmt::Display for YaccParserErrorKind {
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration(_) => {
                 "Duplicated %implicit_tokens declaration"
             }
-            YaccParserErrorKind::DuplicateStartDeclaration => "Duplicate %start declaration",
+            YaccParserErrorKind::DuplicateStartDeclaration(_) => "Duplicated %start declaration",
             YaccParserErrorKind::DuplicateActiontypeDeclaration => {
                 "Duplicate %actiontype declaration"
             }
@@ -127,6 +128,7 @@ pub(crate) struct YaccParser {
     duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
     duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
     duplicate_expectrr_declarations: Option<(Span, Vec<Span>)>,
+    duplicate_start_declarations: Option<(Span, Vec<Span>)>,
 }
 
 lazy_static! {
@@ -150,6 +152,7 @@ impl YaccParser {
             duplicate_implicit_token_spans: HashMap::new(),
             duplicate_expect_declarations: None,
             duplicate_expectrr_declarations: None,
+            duplicate_start_declarations: None,
         }
     }
 
@@ -185,6 +188,12 @@ impl YaccParser {
         if let Some((orig_span, spans)) = &self.duplicate_expectrr_declarations {
             return Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateExpectRRDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = &self.duplicate_start_declarations {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateStartDeclaration(spans.clone()),
                 span: *orig_span,
             });
         }
@@ -232,12 +241,17 @@ impl YaccParser {
                 }
             }
             if let Some(j) = self.lookahead_is("%start", i) {
-                if self.ast.start.is_some() {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateStartDeclaration, i));
-                }
                 i = self.parse_ws(j, false)?;
                 let (j, n) = self.parse_name(i)?;
-                self.ast.start = Some(n);
+                let span = Span::new(i, j);
+                if let Some((_, orig_span)) = self.ast.start {
+                    self.duplicate_start_declarations
+                        .get_or_insert_with(|| (orig_span, Vec::new()))
+                        .1
+                        .push(span)
+                } else {
+                    self.ast.start = Some((n, span));
+                }
                 i = self.parse_ws(j, true)?;
                 continue;
             }
@@ -421,10 +435,10 @@ impl YaccParser {
 
     fn parse_rule(&mut self, mut i: usize) -> YaccResult<usize> {
         let (j, rn) = self.parse_name(i)?;
-        if self.ast.start.is_none() {
-            self.ast.start = Some(rn.clone());
-        }
         let span = Span::new(i, j);
+        if self.ast.start.is_none() {
+            self.ast.start = Some((rn.clone(), span));
+        }
         match self.yacc_kind {
             YaccKind::Original(_) | YaccKind::Eco => {
                 if self.ast.get_rule(&rn).is_none() {
@@ -1030,7 +1044,7 @@ mod test {
             &src,
         )
         .unwrap();
-        assert_eq!(grm.start.unwrap(), "A");
+        assert_eq!(grm.start.unwrap(), ("A".to_string(), Span::new(9, 10)));
     }
 
     #[test]
@@ -1734,9 +1748,11 @@ x"
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
             Err(YaccParserError {
-                kind: YaccParserErrorKind::DuplicateStartDeclaration,
+                kind: YaccParserErrorKind::DuplicateStartDeclaration(spans),
                 span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(37, 38)])
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }
@@ -1799,7 +1815,7 @@ x"
           ",
         )
         .unwrap();
-        assert_eq!(ast.start, Some("R".to_string()));
+        assert_eq!(ast.start, Some(("R".to_string(), Span::new(24, 25))));
     }
 
     #[test]
