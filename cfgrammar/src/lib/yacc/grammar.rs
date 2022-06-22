@@ -345,7 +345,7 @@ where
             programs: ast.programs,
             avoid_insert,
             actiontypes,
-            expect: ast.expect,
+            expect: ast.expect.map(|(n, _)| n),
             expectrr: ast.expectrr,
         })
     }

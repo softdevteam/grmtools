@@ -43,7 +43,8 @@ pub enum YaccParserErrorKind {
     DuplicateAvoidInsertDeclaration(Vec<Span>),
     /// Contains the spans of all duplicate implicit token declarations.
     DuplicateImplicitTokensDeclaration(Vec<Span>),
-    DuplicateExpectDeclaration,
+    /// Contains the spans of all duplicate expect declarations.
+    DuplicateExpectDeclaration(Vec<Span>),
     DuplicateExpectRRDeclaration,
     DuplicateStartDeclaration,
     DuplicateActiontypeDeclaration,
@@ -90,7 +91,7 @@ impl fmt::Display for YaccParserErrorKind {
             YaccParserErrorKind::DuplicateAvoidInsertDeclaration(_) => {
                 "Duplicated %avoid_insert declaration"
             }
-            YaccParserErrorKind::DuplicateExpectDeclaration => "Duplicate %expect declaration",
+            YaccParserErrorKind::DuplicateExpectDeclaration(_) => "Duplicated %expect declaration",
             YaccParserErrorKind::DuplicateExpectRRDeclaration => "Duplicate %expect-rr declaration",
             YaccParserErrorKind::DuplicateImplicitTokensDeclaration(_) => {
                 "Duplicated %implicit_tokens declaration"
@@ -121,6 +122,7 @@ pub(crate) struct YaccParser {
     duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
     duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
     duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
+    duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
 }
 
 lazy_static! {
@@ -142,6 +144,7 @@ impl YaccParser {
             duplicate_avoid_insert_spans: HashMap::new(),
             duplicate_precedence_spans: HashMap::new(),
             duplicate_implicit_token_spans: HashMap::new(),
+            duplicate_expect_declarations: None,
         }
     }
 
@@ -165,6 +168,12 @@ impl YaccParser {
         if let Some((orig_span, spans)) = self.duplicate_implicit_token_spans.iter().next() {
             return Err(YaccParserError {
                 kind: YaccParserErrorKind::DuplicateImplicitTokensDeclaration(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Some((orig_span, spans)) = &self.duplicate_expect_declarations {
+            return Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateExpectDeclaration(spans.clone()),
                 span: *orig_span,
             });
         }
@@ -244,12 +253,17 @@ impl YaccParser {
                 continue;
             }
             if let Some(j) = self.lookahead_is("%expect", i) {
-                if self.ast.expect.is_some() {
-                    return Err(self.mk_error(YaccParserErrorKind::DuplicateExpectDeclaration, i));
-                }
                 i = self.parse_ws(j, false)?;
                 let (j, n) = self.parse_int(i)?;
-                self.ast.expect = Some(n);
+                let span = Span::new(i, j);
+                if let Some((_, orig_span)) = self.ast.expect {
+                    self.duplicate_expect_declarations
+                        .get_or_insert_with(|| (orig_span, Vec::new()))
+                        .1
+                        .push(span)
+                } else {
+                    self.ast.expect = Some((n, span));
+                }
                 i = self.parse_ws(j, true)?;
                 continue;
             }
@@ -1707,6 +1721,29 @@ x"
                 kind: YaccParserErrorKind::DuplicateStartDeclaration,
                 span,
             }) if line_of_offset(src, span.start()) == 3 => (),
+            Err(e) => incorrect_err!(src, e),
+        }
+    }
+
+    #[test]
+    fn test_duplicate_expect() {
+        let src = "
+          %expect 1
+          %expect 2
+          %expect 3
+          %%
+          ";
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
+        ) {
+            Ok(_) => panic!(),
+            Err(YaccParserError {
+                kind: YaccParserErrorKind::DuplicateExpectDeclaration(spans),
+                span,
+            }) if line_of_offset(src, span.start()) == 2 => {
+                assert_eq!(spans, [Span::new(39, 40), Span::new(59, 60)]);
+            }
             Err(e) => incorrect_err!(src, e),
         }
     }

@@ -22,7 +22,7 @@ pub struct GrammarAST {
     pub implicit_tokens: Option<HashMap<String, Span>>,
     // Error pretty-printers
     pub epp: HashMap<String, String>,
-    pub expect: Option<usize>,
+    pub expect: Option<(usize, Span)>,
     pub expectrr: Option<usize>,
     pub parse_param: Option<(String, String)>,
     pub programs: Option<String>,
