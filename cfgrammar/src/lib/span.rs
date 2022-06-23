@@ -43,3 +43,8 @@ impl Span {
         self.len() == 0
     }
 }
+
+pub trait Spanned {
+    fn span(&self) -> Span;
+    fn spans_of_duplicates(&self) -> Option<&[Span]>;
+}

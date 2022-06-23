@@ -127,18 +127,7 @@ fn main() {
     let grm = match YaccGrammar::new(yacckind, &yacc_src) {
         Ok(x) => x,
         Err(YaccGrammarError::YaccParserError(s)) => {
-            let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
-            if let Some((line, column)) = nlcache.byte_to_line_and_col(&yacc_src, s.span.start()) {
-                writeln!(
-                    stderr(),
-                    "{}: {} at line {line} column {column}",
-                    &yacc_y_path,
-                    &s
-                )
-                .ok();
-            } else {
-                writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
-            }
+            s.display_with_src_path(&yacc_src, yacc_y_path).unwrap();
             process::exit(1);
         }
         Err(YaccGrammarError::GrammarValidationError(s)) => {

@@ -12,7 +12,7 @@ use super::{
     parser::{YaccParser, YaccParserError},
     YaccKind,
 };
-use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
+use crate::{Errors, PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
 const START_RULE: &str = "^";
 const IMPLICIT_RULE: &str = "~";
@@ -1025,14 +1025,14 @@ where
 
 #[derive(Debug)]
 pub enum YaccGrammarError {
-    YaccParserError(YaccParserError),
+    YaccParserError(Errors<YaccParserError>),
     GrammarValidationError(GrammarValidationError),
 }
 
 impl Error for YaccGrammarError {}
 
-impl From<YaccParserError> for YaccGrammarError {
-    fn from(err: YaccParserError) -> YaccGrammarError {
+impl From<Errors<YaccParserError>> for YaccGrammarError {
+    fn from(err: Errors<YaccParserError>) -> YaccGrammarError {
         YaccGrammarError::YaccParserError(err)
     }
 }

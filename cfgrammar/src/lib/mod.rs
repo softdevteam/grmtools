@@ -52,11 +52,13 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+pub mod errors;
 mod idxnewtype;
 pub mod newlinecache;
 pub mod span;
 pub mod yacc;
 
+pub use errors::Errors;
 pub use newlinecache::NewlineCache;
 pub use span::Span;
 

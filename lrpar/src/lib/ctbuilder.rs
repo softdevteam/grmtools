@@ -10,7 +10,7 @@ use std::{
     fmt::{self, Debug, Write as fmtWrite},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
-    io::{self, Write},
+    io::{self, BufWriter, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -18,7 +18,6 @@ use std::{
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
-    newlinecache::NewlineCache,
     yacc::{YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
     RIdx, Symbol,
 };
@@ -361,14 +360,12 @@ where
 
         let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc).map_err(|e| match e {
             YaccGrammarError::YaccParserError(e) => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                if let Some((line, column)) = line_cache.byte_to_line_and_col(&inc, e.span.start())
+                let mut e_str = String::new();
                 {
-                    format!("{} at line {line} column {column}", e)
-                } else {
-                    format!("{}", e)
+                    let mut buf = BufWriter::new(unsafe { e_str.as_mut_vec() });
+                    e.format_with_src_path(&mut buf, &inc, &grmp).unwrap();
                 }
+                e_str
             }
             e => e.to_string(),
         })?;
