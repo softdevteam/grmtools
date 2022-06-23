@@ -50,7 +50,7 @@ pub enum LexErrorKind {
     UnknownDeclaration,
     MissingSpace,
     InvalidName,
-    DuplicateName,
+    DuplicateName(Vec<Span>),
     RegexError,
 }
 
@@ -62,7 +62,7 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::UnknownDeclaration => "Unknown declaration",
             LexErrorKind::MissingSpace => "Rule is missing a space",
             LexErrorKind::InvalidName => "Invalid rule name",
-            LexErrorKind::DuplicateName => "Rule name already exists",
+            LexErrorKind::DuplicateName(_) => "Rule name already exists",
             LexErrorKind::RegexError => "Invalid regular expression",
         };
         write!(f, "{s}")
