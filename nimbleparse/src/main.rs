@@ -130,18 +130,20 @@ fn main() {
         Ok(x) => x,
         Err(s) => {
             let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
-            if let Some((line, column)) =
-                nlcache.byte_to_line_num_and_col_num(&yacc_src, s.span.start())
-            {
-                writeln!(
-                    stderr(),
-                    "{}: {} at line {line} column {column}",
-                    &yacc_y_path,
-                    &s
-                )
-                .ok();
-            } else {
-                writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
+            for s in s {
+                if let Some((line, column)) =
+                    nlcache.byte_to_line_num_and_col_num(&yacc_src, s.span.start())
+                {
+                    writeln!(
+                        stderr(),
+                        "{}: {} at line {line} column {column}",
+                        &yacc_y_path,
+                        &s
+                    )
+                    .ok();
+                } else {
+                    writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
+                }
             }
             process::exit(1);
         }

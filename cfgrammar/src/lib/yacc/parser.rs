@@ -188,55 +188,58 @@ impl YaccParser {
         }
     }
 
-    pub(crate) fn parse(&mut self) -> YaccResult<usize> {
+    pub(crate) fn parse(&mut self) -> Result<usize, Vec<YaccGrammarError>> {
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let mut i = self.parse_declarations(0)?;
-        if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
-            return Err(YaccGrammarError {
+
+        let mut errors = Vec::new();
+        let mut i = self.parse_declarations(0);
+
+        for (orig_span, spans) in &self.duplicate_avoid_insert_spans {
+            errors.push(YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans.clone()),
                 span: *orig_span,
             });
         }
-        if let Some((orig_span, spans)) = self.duplicate_precedence_spans.iter().next() {
-            return Err(YaccGrammarError {
+        for (orig_span, spans) in &self.duplicate_precedence_spans {
+            errors.push(YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicatePrecedence(spans.clone()),
                 span: *orig_span,
             });
         }
-        if let Some((orig_span, spans)) = self.duplicate_implicit_token_spans.iter().next() {
-            return Err(YaccGrammarError {
+        for (orig_span, spans) in &self.duplicate_implicit_token_spans {
+            errors.push(YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration(spans.clone()),
                 span: *orig_span,
             });
         }
-        if let Some((orig_span, spans)) = &self.duplicate_expect_declarations {
-            return Err(YaccGrammarError {
+        for (orig_span, spans) in &self.duplicate_expect_declarations {
+            errors.push(YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateExpectDeclaration(spans.clone()),
                 span: *orig_span,
             });
         }
         if let Some((orig_span, spans)) = &self.duplicate_expectrr_declarations {
-            return Err(YaccGrammarError {
+            errors.push(YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateExpectRRDeclaration(spans.clone()),
                 span: *orig_span,
             });
         }
         if let Some((orig_span, spans)) = &self.duplicate_start_declarations {
-            return Err(YaccGrammarError {
+            errors.push(YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateStartDeclaration(spans.clone()),
                 span: *orig_span,
             });
         }
-        if let Some((orig_span, spans)) = self.duplicate_epp_declarations.iter().next() {
-            return Err(YaccGrammarError {
+        for (orig_span, spans) in self.duplicate_epp_declarations.iter() {
+            errors.push(YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateEPP(spans.clone()),
                 span: *orig_span,
             });
         }
         if let Some(spans) = &self.duplicate_actiontype_declarations {
-            return Err(YaccGrammarError {
+            errors.push(YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateActiontypeDeclaration(spans.clone()),
                 span: *self
                     .global_actiontype
@@ -245,8 +248,37 @@ impl YaccParser {
                     .unwrap(),
             });
         }
-        i = self.parse_rules(i)?;
-        self.parse_programs(i)
+        if let Err(e) = i {
+            errors.push(e);
+            return Err(errors);
+        }
+
+        i = self.parse_rules(i.unwrap());
+        for (orig_span, spans) in &self.duplicate_rule_spans {
+            errors.push(YaccGrammarError {
+                kind: YaccGrammarErrorKind::DuplicateRule(spans.clone()),
+                span: *orig_span,
+            });
+        }
+        if let Err(e) = i {
+            errors.push(e);
+            return Err(errors);
+        }
+
+        i = self.parse_programs(i.unwrap());
+        match i {
+            Err(e) => {
+                errors.push(e);
+                Err(errors)
+            }
+            Ok(i) => {
+                if !errors.is_empty() {
+                    Err(errors)
+                } else {
+                    Ok(i)
+                }
+            }
+        }
     }
 
     pub(crate) fn ast(self) -> GrammarAST {
@@ -480,14 +512,6 @@ impl YaccParser {
             i = self.parse_rule(i)?;
             i = self.parse_ws(i, true)?;
         }
-
-        if let Some((orig_span, spans)) = self.duplicate_rule_spans.iter().next() {
-            return Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateRule(spans.clone()),
-                span: *orig_span,
-            });
-        }
-
         Ok(i)
     }
 
@@ -859,7 +883,7 @@ mod test {
         Span, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
 
-    fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, YaccGrammarError> {
+    fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
         let mut yp = YaccParser::new(yacc_kind, s.to_string());
         yp.parse()?;
         Ok(yp.ast())
@@ -1197,11 +1221,14 @@ mod test {
             &src,
         ) {
             Ok(_) => panic!("Incorrect token parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IllegalString,
-                span,
-            }) if line_col!(src, span) == (1, 12) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IllegalString,
+                    span,
+                }) if line_col!(src, span) == (1, 12) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1213,11 +1240,14 @@ mod test {
             &src,
         ) {
             Ok(_) => panic!("Incorrect token parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IllegalString,
-                span,
-            }) if line_col!(src, span) == (3, 11) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IllegalString,
+                    span,
+                }) if line_col!(src, span) == (3, 11) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1250,12 +1280,15 @@ mod test {
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &src,
         ) {
-            Ok(_) => panic!("Incomplete rule parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IncompleteRule,
-                span,
-            }) if line_col!(src, span) == (1, 5) => (),
-            Err(e) => incorrect_err!(src, e),
+            Ok(_) => panic!("Incorrect token parsed"),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IncompleteRule,
+                    span,
+                }) if line_col!(src, span) == (1, 5) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1268,12 +1301,15 @@ A:"
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &src,
         ) {
-            Ok(_) => panic!("Incomplete rule parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IncompleteRule,
-                span,
-            }) if line_col!(src, span) == (2, 3) => (),
-            Err(e) => incorrect_err!(src, e),
+            Ok(_) => panic!("Incorrect token parsed"),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IncompleteRule,
+                    span,
+                }) if line_col!(src, span) == (2, 3) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1288,11 +1324,14 @@ A:
             &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IncompleteRule,
-                span,
-            }) if line_col!(src, span) == (3, 1) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IncompleteRule,
+                    span,
+                }) if line_col!(src, span) == (3, 1) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1307,11 +1346,14 @@ A:
             &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::UnknownDeclaration,
-                span,
-            }) if line_col!(src, span) == (3, 9) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::UnknownDeclaration,
+                    span,
+                }) if line_col!(src, span) == (3, 9) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1323,11 +1365,14 @@ A:
             &src,
         ) {
             Ok(_) => panic!("Missing colon parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::MissingColon,
-                span,
-            }) if line_col!(src, span) == (1, 5) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::MissingColon,
+                    span,
+                }) if line_col!(src, span) == (1, 5) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1339,11 +1384,14 @@ A:
             &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::PrematureEnd,
-                span,
-            }) if line_col!(src, span) == (1, 8) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::PrematureEnd,
+                    span,
+                }) if line_col!(src, span) == (1, 8) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1357,11 +1405,14 @@ x"
             &src,
         ) {
             Ok(_) => panic!("Incomplete rule parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::ReachedEOL,
-                span,
-            }) if line_col!(src, span) == (1, 7) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::ReachedEOL,
+                    span,
+                }) if line_col!(src, span) == (1, 7) => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1371,11 +1422,16 @@ x"
         let src = "%woo".to_string();
         match parse(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), &src) {
             Ok(_) => panic!("Unknown declaration parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::UnknownDeclaration,
-                span,
-            }) if line_col!(src, span) == (1, 1) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => {
+                match errors.first() {
+                    Some(YaccGrammarError {
+                        kind: YaccGrammarErrorKind::UnknownDeclaration,
+                        span,
+                    }) if line_col!(src, span) == (1, 1) => (),
+                    Some(e) => incorrect_err!(src, e),
+                    _ => panic!("No Error")
+                }
+            }
         }
     }
 
@@ -1460,13 +1516,16 @@ x"
                 src,
             ) {
                 Ok(_) => panic!("Duplicate precedence parsed"),
-                Err(YaccGrammarError {
-                    kind: YaccGrammarErrorKind::DuplicatePrecedence(spans),
-                    span,
-                }) if line_of_offset(src, span.start()) == 2 => {
-                    assert_eq!(spans, vec![*expected_span])
-                }
-                Err(e) => incorrect_err!(src, e),
+                Err(errors) => match errors.first() {
+                    Some(YaccGrammarError {
+                        kind: YaccGrammarErrorKind::DuplicatePrecedence(spans),
+                        span,
+                    }) if line_of_offset(src, span.start()) == 2 => {
+                        assert_eq!(spans, &[*expected_span])
+                    }
+                    Some(e) => incorrect_err!(src, e),
+                    _ => panic!("No Error"),
+                },
             }
         }
     }
@@ -1505,12 +1564,14 @@ x"
             src,
         ) {
             Ok(_) => panic!("Incorrect %prec parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IllegalString,
-                span,
-                ..
-            }) if line_of_offset(src, span.start()) == 3 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IllegalString,
+                    span,
+                }) if line_of_offset(src, span.start()) == 3 => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
 
         let src = "
@@ -1523,11 +1584,14 @@ x"
             src,
         ) {
             Ok(_) => panic!("Incorrect %prec parsed"),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::PrecNotFollowedByToken,
-                span,
-            }) if line_of_offset(src, span.start()) == 3 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::PrecNotFollowedByToken,
+                    span,
+                }) if line_of_offset(src, span.start()) == 3 => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1593,13 +1657,16 @@ x"
           ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => {
-                assert_eq!(spans, vec![Span::new(53, 54)])
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans),
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, &[Span::new(53, 54)])
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1612,13 +1679,16 @@ x"
         ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 3 => {
-                assert_eq!(spans, vec![Span::new(49, 50)])
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans),
+                    span,
+                }) if line_of_offset(src, span.start()) == 3 => {
+                    assert_eq!(spans, &[Span::new(49, 50)])
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1633,11 +1703,14 @@ x"
             src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::UnknownDeclaration,
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::UnknownDeclaration,
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1703,13 +1776,16 @@ x"
         ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => {
-                assert_eq!(spans, [Span::new(53, 54)])
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration(spans),
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, &[Span::new(53, 54)])
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1722,13 +1798,16 @@ x"
         ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => {
-                assert_eq!(spans, [Span::new(28, 29)])
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration(spans),
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, &[Span::new(28, 29)])
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1770,13 +1849,16 @@ x"
         ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateEPP(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => {
-                assert_eq!(spans, [Span::new(33, 34), Span::new(52, 53)])
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateEPP(spans),
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, &[Span::new(33, 34), Span::new(52, 53)])
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1788,21 +1870,28 @@ x"
           ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::InvalidString,
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::InvalidString,
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
+
         let src = "
         %epp A \"a";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::InvalidString,
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::InvalidString,
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1815,13 +1904,16 @@ x"
           ";
         match parse(YaccKind::Eco, src) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateStartDeclaration(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => {
-                assert_eq!(spans, [Span::new(37, 38)])
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateStartDeclaration(spans),
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, &[Span::new(37, 38)])
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1838,13 +1930,16 @@ x"
             src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateExpectDeclaration(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => {
-                assert_eq!(spans, [Span::new(39, 40), Span::new(59, 60)]);
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateExpectDeclaration(spans),
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, &[Span::new(39, 40), Span::new(59, 60)]);
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1861,13 +1956,17 @@ x"
             src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateExpectRRDeclaration(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => {
-                assert_eq!(spans, [Span::new(45, 46), Span::new(68, 69)]);
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateExpectRRDeclaration(spans),
+
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, &[Span::new(45, 46), Span::new(68, 69)]);
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1938,8 +2037,11 @@ x"
             src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError { span, .. }) if line_of_offset(src, span.start()) == 6 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError { span, .. }) if line_of_offset(src, span.start()) == 6 => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -1968,11 +2070,14 @@ x"
             src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IncompleteComment,
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IncompleteComment,
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
 
         let src = "
@@ -1988,11 +2093,14 @@ x"
             src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IncompleteComment,
-                span,
-            }) if line_of_offset(src, span.start()) == 7 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IncompleteComment,
+                    span,
+                }) if line_of_offset(src, span.start()) == 7 => (),
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
 
         let src = "
@@ -2005,11 +2113,15 @@ x"
             src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::IncompleteRule,
-                span,
-            }) if line_of_offset(src, span.start()) == 5 => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::IncompleteRule,
+                    span,
+                }) if line_of_offset(src, span.start()) == 5 => (),
+
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -2041,13 +2153,16 @@ x"
             src,
         ) {
             Ok(_) => panic!(),
-            Err(YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateActiontypeDeclaration(spans),
-                span,
-            }) if line_of_offset(src, span.start()) == 2 => {
-                assert_eq!(spans, [Span::new(46, 48), Span::new(70, 72)])
-            }
-            Err(e) => incorrect_err!(src, e),
+            Err(errors) => match errors.first() {
+                Some(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateActiontypeDeclaration(spans),
+                    span,
+                }) if line_of_offset(src, span.start()) == 2 => {
+                    assert_eq!(spans, &[Span::new(46, 48), Span::new(70, 72)])
+                }
+                Some(e) => incorrect_err!(src, e),
+                _ => panic!("No Error"),
+            },
         }
     }
 
@@ -2082,13 +2197,13 @@ x"
         .expect_err("parse successful while expecting error");
         assert_eq!(
             e,
-            YaccGrammarError {
+            vec![YaccGrammarError {
                 span: Span::new(38, 39),
                 kind: YaccGrammarErrorKind::DuplicateRule(vec![
                     Span::new(94, 95),
                     Span::new(150, 151)
                 ])
-            }
+            }]
         );
     }
 }

@@ -360,15 +360,19 @@ where
         let inc = read_to_string(grmp).unwrap();
 
         let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc).map_err(|e| {
-            let mut line_cache = NewlineCache::new();
-            line_cache.feed(&inc);
-            if let Some((line, column)) =
-                line_cache.byte_to_line_num_and_col_num(&inc, e.span.start())
-            {
-                format!("{} at line {line} column {column}", e)
-            } else {
-                format!("{}", e)
+            let mut s = String::new();
+            for e in e {
+                let mut line_cache = NewlineCache::new();
+                line_cache.feed(&inc);
+                if let Some((line, column)) =
+                    line_cache.byte_to_line_num_and_col_num(&inc, e.span.start())
+                {
+                    s.push_str(&format!("{} at line {line} column {column}\n", e))
+                } else {
+                    s.push_str(&format!("{}\n", e))
+                }
             }
+            s
         })?;
         let rule_ids = grm
             .tokens_map()
