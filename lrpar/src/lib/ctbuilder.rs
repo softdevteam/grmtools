@@ -363,7 +363,8 @@ where
             YaccGrammarError::YaccParserError(e) => {
                 let mut line_cache = NewlineCache::new();
                 line_cache.feed(&inc);
-                if let Some((line, column)) = line_cache.byte_to_line_and_col(&inc, e.span.start())
+                if let Some((line, column)) =
+                    line_cache.byte_to_line_num_and_col_num(&inc, e.span.start())
                 {
                     format!("{} at line {line} column {column}", e)
                 } else {

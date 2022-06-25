@@ -348,10 +348,10 @@ impl<
 
         (
             self.newlines
-                .byte_to_line_and_col(self.s, span.start())
+                .byte_to_line_num_and_col_num(self.s, span.start())
                 .unwrap(),
             self.newlines
-                .byte_to_line_and_col(self.s, span.end())
+                .byte_to_line_num_and_col_num(self.s, span.end())
                 .unwrap(),
         )
     }

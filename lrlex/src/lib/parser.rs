@@ -165,7 +165,9 @@ mod test {
         ($src:ident, $e:ident) => {{
             let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
             line_cache.feed(&$src);
-            if let Some((line, column)) = line_cache.byte_to_line_and_col(&$src, $e.span.start()) {
+            if let Some((line, column)) =
+                line_cache.byte_to_line_num_and_col_num(&$src, $e.span.start())
+            {
                 panic!(
                     "Incorrect error returned {} at line {line} column {column}",
                     $e
@@ -181,7 +183,7 @@ mod test {
             let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
             line_cache.feed(&$src);
             line_cache
-                .byte_to_line_and_col(&$src, $span.start())
+                .byte_to_line_num_and_col_num(&$src, $span.start())
                 .unwrap()
         }};
     }

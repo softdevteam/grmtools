@@ -1,8 +1,17 @@
 use crate::Span;
 use std::str::FromStr;
 
-/// Cache newlines from an input. These can be used to turn UTF-8 byte offsets into user-friendly
-/// line numbers without having to store the full input.
+/// Cache newlines from an input. These can be used to turn UTF-8 byte offsets into human-friendly
+/// line numbers (and vice versa) without having to store the full input. The cache stores only
+/// newline positions, and not the actual user input; the cache can only be filled incrementally
+/// using the [NewlineCache::feed] method.
+///
+/// It is easy to to intermix bytes and human-friendly line numbers so `NewlineCache` uses the
+/// following terminology:
+///   * `byte` and `byte`s: a UTF-8 byte offset.
+///   * `line_byte` and `line_byte`s: the UTF-8 byte offset of a line start or end.
+///   * `line_num`: a human-friendly line number.
+///   * `col_num`: a human-friendly column number.
 pub struct NewlineCache {
     newlines: Vec<usize>,
     trailing_bytes: usize,
@@ -37,10 +46,15 @@ impl NewlineCache {
             }));
     }
 
+    /// Number of bytes fed into the newline cache.
+    fn feed_len(&self) -> usize {
+        self.newlines.last().unwrap() + self.trailing_bytes
+    }
+
     /// Convert a byte offset in the input to a logical line number (i.e. a "human friendly" line
     /// number, starting from 1). Returns None if the byte offset exceeds the known input length.
     pub fn byte_to_line_num(&self, byte: usize) -> Option<usize> {
-        if byte > self.input_length() {
+        if byte > self.feed_len() {
             return None;
         }
 
@@ -59,11 +73,6 @@ impl NewlineCache {
                 .unwrap();
             Some(line_m1 + 1)
         }
-    }
-
-    /// Total known input length
-    fn input_length(&self) -> usize {
-        self.newlines.last().unwrap() + self.trailing_bytes
     }
 
     /// Convert a logical line number into a byte offset.
@@ -92,8 +101,8 @@ impl NewlineCache {
     ///
     /// May panic if `src` is different than the string(s) passed to `feed` (or might not panic and
     /// return non-deterministic results).
-    pub fn byte_to_line_and_col(&self, src: &str, byte: usize) -> Option<(usize, usize)> {
-        if byte > self.input_length() || src.len() != self.input_length() {
+    pub fn byte_to_line_num_and_col_num(&self, src: &str, byte: usize) -> Option<(usize, usize)> {
+        if byte > self.feed_len() || src.len() != self.feed_len() {
             return None;
         }
 
@@ -183,7 +192,8 @@ mod tests {
         let mut result = Vec::new();
         for f in feed {
             for (offset, _) in f.char_indices() {
-                let line_col = cache.byte_to_line_and_col(full_string.as_str(), offset + src_pos);
+                let line_col =
+                    cache.byte_to_line_num_and_col_num(full_string.as_str(), offset + src_pos);
                 result.push(line_col.unwrap())
             }
             src_pos += f.len();
@@ -266,13 +276,13 @@ mod tests {
         // Byte exceeds input length
         cache.feed("1");
         assert_eq!(None, cache.byte_to_line_num(2));
-        assert_eq!(None, cache.byte_to_line_and_col("1", 2));
+        assert_eq!(None, cache.byte_to_line_num_and_col_num("1", 2));
         cache.feed("\n23");
         assert_eq!(None, cache.byte_to_line_num(5));
-        assert_eq!(None, cache.byte_to_line_and_col("1\n23", 5));
+        assert_eq!(None, cache.byte_to_line_num_and_col_num("1\n23", 5));
 
         // Byte valid, but src.len() exceeds input length.
-        assert_eq!(None, cache.byte_to_line_and_col("1\n234", 1));
+        assert_eq!(None, cache.byte_to_line_num_and_col_num("1\n234", 1));
     }
 
     #[test]
