@@ -40,7 +40,7 @@ impl NewlineCache {
     /// Convert a byte offset in the input to a logical line number (i.e. a "human friendly" line
     /// number, starting from 1). Returns None if the byte offset exceeds the known input length.
     pub fn byte_to_line_num(&self, byte: usize) -> Option<usize> {
-        if byte > self.input_length() {
+        if byte > self.feed_len() {
             return None;
         }
 
@@ -62,7 +62,7 @@ impl NewlineCache {
     }
 
     /// Total known input length
-    fn input_length(&self) -> usize {
+    fn feed_len(&self) -> usize {
         self.newlines.last().unwrap() + self.trailing_bytes
     }
 
@@ -93,7 +93,7 @@ impl NewlineCache {
     /// May panic if `src` is different than the string(s) passed to `feed` (or might not panic and
     /// return non-deterministic results).
     pub fn byte_to_line_and_col(&self, src: &str, byte: usize) -> Option<(usize, usize)> {
-        if byte > self.input_length() || src.len() != self.input_length() {
+        if byte > self.feed_len() || src.len() != self.feed_len() {
             return None;
         }
 
