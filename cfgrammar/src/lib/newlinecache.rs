@@ -37,6 +37,11 @@ impl NewlineCache {
             }));
     }
 
+    /// Number of bytes fed into the newline cache.
+    fn feed_len(&self) -> usize {
+        self.newlines.last().unwrap() + self.trailing_bytes
+    }
+
     /// Convert a byte offset in the input to a logical line number (i.e. a "human friendly" line
     /// number, starting from 1). Returns None if the byte offset exceeds the known input length.
     pub fn byte_to_line_num(&self, byte: usize) -> Option<usize> {
@@ -59,11 +64,6 @@ impl NewlineCache {
                 .unwrap();
             Some(line_m1 + 1)
         }
-    }
-
-    /// Number of bytes fed into the newline cache.
-    fn feed_len(&self) -> usize {
-        self.newlines.last().unwrap() + self.trailing_bytes
     }
 
     /// Convert a logical line number into a byte offset.
