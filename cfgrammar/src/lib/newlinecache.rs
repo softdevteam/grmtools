@@ -61,7 +61,7 @@ impl NewlineCache {
         }
     }
 
-    /// Total known input length
+    /// Number of bytes fed into the newline cache.
     fn feed_len(&self) -> usize {
         self.newlines.last().unwrap() + self.trailing_bytes
     }
