@@ -1,8 +1,17 @@
 use crate::Span;
 use std::str::FromStr;
 
-/// Cache newlines from an input. These can be used to turn UTF-8 byte offsets into user-friendly
-/// line numbers without having to store the full input.
+/// Cache newlines from an input. These can be used to turn UTF-8 byte offsets into human-friendly
+/// line numbers (and vice versa) without having to store the full input. The cache stores only
+/// newline positions, and not the actual user input; the cache can only be filled incrementally
+/// using the [NewlineCache::feed] method.
+///
+/// It is easy to to intermix bytes and human-friendly line numbers so `NewlineCache` uses the
+/// following terminology:
+///   * `byte` and `byte`s: a UTF-8 byte offset.
+///   * `line_byte` and `line_byte`s: the UTF-8 byte offset of a line start or end.
+///   * `line_num`: a human-friendly line number.
+///   * `col_num`: a human-friendly column number.
 pub struct NewlineCache {
     newlines: Vec<usize>,
     trailing_bytes: usize,
