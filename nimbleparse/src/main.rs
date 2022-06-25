@@ -107,7 +107,9 @@ fn main() {
         Ok(ast) => ast,
         Err(s) => {
             let nlcache = NewlineCache::from_str(&lex_src).unwrap();
-            if let Some((line, column)) = nlcache.byte_to_line_and_col(&lex_src, s.span.start()) {
+            if let Some((line, column)) =
+                nlcache.byte_to_line_num_and_col_num(&lex_src, s.span.start())
+            {
                 writeln!(
                     stderr(),
                     "{}: {} at line {line} column: {column}",
@@ -128,7 +130,9 @@ fn main() {
         Ok(x) => x,
         Err(YaccGrammarError::YaccParserError(s)) => {
             let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
-            if let Some((line, column)) = nlcache.byte_to_line_and_col(&yacc_src, s.span.start()) {
+            if let Some((line, column)) =
+                nlcache.byte_to_line_num_and_col_num(&yacc_src, s.span.start())
+            {
                 writeln!(
                     stderr(),
                     "{}: {} at line {line} column {column}",

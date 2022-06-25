@@ -58,7 +58,9 @@ fn main() {
     let lexerdef =
         LRNonStreamingLexerDef::<DefaultLexeme, _>::from_str(&lex_src).unwrap_or_else(|s| {
             let nlcache = NewlineCache::from_str(&lex_src).unwrap();
-            if let Some((line, column)) = nlcache.byte_to_line_and_col(&lex_src, s.span.start()) {
+            if let Some((line, column)) =
+                nlcache.byte_to_line_num_and_col_num(&lex_src, s.span.start())
+            {
                 writeln!(
                     stderr(),
                     "{}: {} at line {line} column {column}",

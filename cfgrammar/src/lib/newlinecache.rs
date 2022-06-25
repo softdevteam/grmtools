@@ -92,7 +92,7 @@ impl NewlineCache {
     ///
     /// May panic if `src` is different than the string(s) passed to `feed` (or might not panic and
     /// return non-deterministic results).
-    pub fn byte_to_line_and_col(&self, src: &str, byte: usize) -> Option<(usize, usize)> {
+    pub fn byte_to_line_num_and_col_num(&self, src: &str, byte: usize) -> Option<(usize, usize)> {
         if byte > self.feed_len() || src.len() != self.feed_len() {
             return None;
         }
@@ -183,7 +183,8 @@ mod tests {
         let mut result = Vec::new();
         for f in feed {
             for (offset, _) in f.char_indices() {
-                let line_col = cache.byte_to_line_and_col(full_string.as_str(), offset + src_pos);
+                let line_col =
+                    cache.byte_to_line_num_and_col_num(full_string.as_str(), offset + src_pos);
                 result.push(line_col.unwrap())
             }
             src_pos += f.len();
@@ -266,13 +267,13 @@ mod tests {
         // Byte exceeds input length
         cache.feed("1");
         assert_eq!(None, cache.byte_to_line_num(2));
-        assert_eq!(None, cache.byte_to_line_and_col("1", 2));
+        assert_eq!(None, cache.byte_to_line_num_and_col_num("1", 2));
         cache.feed("\n23");
         assert_eq!(None, cache.byte_to_line_num(5));
-        assert_eq!(None, cache.byte_to_line_and_col("1\n23", 5));
+        assert_eq!(None, cache.byte_to_line_num_and_col_num("1\n23", 5));
 
         // Byte valid, but src.len() exceeds input length.
-        assert_eq!(None, cache.byte_to_line_and_col("1\n234", 1));
+        assert_eq!(None, cache.byte_to_line_num_and_col_num("1\n234", 1));
     }
 
     #[test]
