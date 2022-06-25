@@ -9,7 +9,7 @@ use std::{
 
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
+    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
 };
 use getopts::Options;
 use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
@@ -128,7 +128,7 @@ fn main() {
     let yacc_src = read_file(yacc_y_path);
     let grm = match YaccGrammar::new(yacckind, &yacc_src) {
         Ok(x) => x,
-        Err(YaccGrammarError::YaccParserError(s)) => {
+        Err(s) => {
             let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
             if let Some((line, column)) =
                 nlcache.byte_to_line_num_and_col_num(&yacc_src, s.span.start())
@@ -143,10 +143,6 @@ fn main() {
             } else {
                 writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
             }
-            process::exit(1);
-        }
-        Err(YaccGrammarError::GrammarValidationError(s)) => {
-            writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
             process::exit(1);
         }
     };

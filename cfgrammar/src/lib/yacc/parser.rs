@@ -55,6 +55,12 @@ pub enum YaccParserErrorKind {
     DuplicateEPP(Vec<Span>),
     ReachedEOL,
     InvalidString,
+    NoStartRule,
+    InvalidStartRule(String),
+    UnknownRuleRef(String),
+    UnknownToken(String),
+    NoPrecForToken(String),
+    UnknownEPP(String),
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -111,6 +117,26 @@ impl fmt::Display for YaccParserErrorKind {
                 "Reached end of line without finding expected content"
             }
             YaccParserErrorKind::InvalidString => "Invalid string",
+            YaccParserErrorKind::NoStartRule => return write!(f, "No start rule specified"),
+            YaccParserErrorKind::InvalidStartRule(name) => {
+                return write!(f, "Start rule '{}' does not appear in grammar", name)
+            }
+            YaccParserErrorKind::UnknownRuleRef(name) => {
+                return write!(f, "Unknown reference to rule '{}'", name)
+            }
+            YaccParserErrorKind::UnknownToken(name) => {
+                return write!(f, "Unknown token '{}'", name)
+            }
+            YaccParserErrorKind::NoPrecForToken(name) => {
+                return write!(
+                    f,
+                    "Token '{}' used in %prec has no precedence attached",
+                    name
+                )
+            }
+            YaccParserErrorKind::UnknownEPP(name) => {
+                return write!(f, "Unknown token '{}' in %epp declaration", name)
+            }
         };
         write!(f, "{}", s)
     }

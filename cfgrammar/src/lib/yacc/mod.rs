@@ -5,8 +5,7 @@ pub mod grammar;
 pub mod parser;
 
 pub use self::{
-    ast::{GrammarValidationError, GrammarValidationErrorKind},
-    grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar, YaccGrammarError},
+    grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar},
     parser::{YaccParserError, YaccParserErrorKind},
 };
 
