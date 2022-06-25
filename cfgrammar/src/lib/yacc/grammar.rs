@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, error::Error, fmt};
+use std::{cell::RefCell, collections::HashMap};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use vob::Vob;
 
 use super::{
-    ast::{self, GrammarValidationError},
+    ast,
     firsts::YaccFirsts,
     follows::YaccFollows,
     parser::{YaccParser, YaccParserError},
@@ -94,7 +94,7 @@ pub struct YaccGrammar<StorageT = u32> {
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
 impl YaccGrammar<u32> {
-    pub fn new(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
+    pub fn new(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccParserError> {
         YaccGrammar::new_with_storaget(yacc_kind, s)
     }
 }
@@ -110,7 +110,7 @@ where
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
+    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccParserError> {
         let ast = match yacc_kind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
@@ -1021,35 +1021,6 @@ where
         }
     }
     costs
-}
-
-#[derive(Debug)]
-pub enum YaccGrammarError {
-    YaccParserError(YaccParserError),
-    GrammarValidationError(GrammarValidationError),
-}
-
-impl Error for YaccGrammarError {}
-
-impl From<YaccParserError> for YaccGrammarError {
-    fn from(err: YaccParserError) -> YaccGrammarError {
-        YaccGrammarError::YaccParserError(err)
-    }
-}
-
-impl From<GrammarValidationError> for YaccGrammarError {
-    fn from(err: GrammarValidationError) -> YaccGrammarError {
-        YaccGrammarError::GrammarValidationError(err)
-    }
-}
-
-impl fmt::Display for YaccGrammarError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            YaccGrammarError::YaccParserError(ref e) => e.fmt(f),
-            YaccGrammarError::GrammarValidationError(ref e) => e.fmt(f),
-        }
-    }
 }
 
 #[cfg(test)]
