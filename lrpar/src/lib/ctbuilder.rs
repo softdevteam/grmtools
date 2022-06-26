@@ -19,7 +19,7 @@ use std::{
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
+    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
     RIdx, Symbol,
 };
 use filetime::FileTime;
@@ -359,19 +359,16 @@ where
 
         let inc = read_to_string(grmp).unwrap();
 
-        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc).map_err(|e| match e {
-            YaccGrammarError::YaccParserError(e) => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                if let Some((line, column)) =
-                    line_cache.byte_to_line_num_and_col_num(&inc, e.span.start())
-                {
-                    format!("{} at line {line} column {column}", e)
-                } else {
-                    format!("{}", e)
-                }
+        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc).map_err(|e| {
+            let mut line_cache = NewlineCache::new();
+            line_cache.feed(&inc);
+            if let Some((line, column)) =
+                line_cache.byte_to_line_num_and_col_num(&inc, e.span.start())
+            {
+                format!("{} at line {line} column {column}", e)
+            } else {
+                format!("{}", e)
             }
-            e => e.to_string(),
         })?;
         let rule_ids = grm
             .tokens_map()
