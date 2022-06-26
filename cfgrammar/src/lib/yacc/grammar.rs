@@ -6,11 +6,7 @@ use serde::{Deserialize, Serialize};
 use vob::Vob;
 
 use super::{
-    ast,
-    firsts::YaccFirsts,
-    follows::YaccFollows,
-    parser::{YaccGrammarError, YaccParser},
-    YaccKind,
+    ast, firsts::YaccFirsts, follows::YaccFollows, parser::YaccParser, YaccGrammarError, YaccKind,
 };
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
