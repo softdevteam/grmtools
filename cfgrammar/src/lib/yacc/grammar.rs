@@ -9,7 +9,7 @@ use super::{
     ast,
     firsts::YaccFirsts,
     follows::YaccFollows,
-    parser::{YaccParser, YaccParserError},
+    parser::{YaccGrammarError, YaccParser},
     YaccKind,
 };
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
@@ -94,7 +94,7 @@ pub struct YaccGrammar<StorageT = u32> {
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
 impl YaccGrammar<u32> {
-    pub fn new(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccParserError> {
+    pub fn new(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
         YaccGrammar::new_with_storaget(yacc_kind, s)
     }
 }
@@ -105,12 +105,12 @@ where
 {
     /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
     /// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
-    /// ([`YaccParserError`](grammar/enum.YaccParserError.html) on error).
+    /// ([`YaccGrammarError`](grammar/enum.YaccGrammarError.html) on error).
     ///
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccParserError> {
+    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
         let ast = match yacc_kind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());

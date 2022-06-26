@@ -6,7 +6,7 @@ pub mod parser;
 
 pub use self::{
     grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar},
-    parser::{YaccParserError, YaccParserErrorKind},
+    parser::{YaccGrammarError, YaccGrammarErrorKind},
 };
 
 #[cfg(feature = "serde")]
