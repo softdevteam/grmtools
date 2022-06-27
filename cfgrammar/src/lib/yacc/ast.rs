@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use indexmap::{IndexMap, IndexSet};
 
-use super::{Precedence, YaccParserError, YaccParserErrorKind};
+use super::{Precedence, YaccGrammarError, YaccGrammarErrorKind};
 
 use crate::Span;
 
@@ -132,18 +132,18 @@ impl GrammarAST {
     ///   4) If a production has a precedence token, then it references a declared token
     ///   5) Every token declared with %epp matches a known token
     /// If the validation succeeds, None is returned.
-    pub(crate) fn complete_and_validate(&mut self) -> Result<(), YaccParserError> {
+    pub(crate) fn complete_and_validate(&mut self) -> Result<(), YaccGrammarError> {
         match self.start {
             None => {
-                return Err(YaccParserError {
-                    kind: YaccParserErrorKind::NoStartRule,
+                return Err(YaccGrammarError {
+                    kind: YaccGrammarErrorKind::NoStartRule,
                     span: Span::new(0, 0),
                 });
             }
             Some((ref s, span)) => {
                 if !self.rules.contains_key(s) {
-                    return Err(YaccParserError {
-                        kind: YaccParserErrorKind::InvalidStartRule(s.clone()),
+                    return Err(YaccGrammarError {
+                        kind: YaccGrammarErrorKind::InvalidStartRule(s.clone()),
                         span,
                     });
                 }
@@ -154,14 +154,14 @@ impl GrammarAST {
                 let prod = &self.prods[pidx];
                 if let Some(ref n) = prod.precedence {
                     if !self.tokens.contains(n) {
-                        return Err(YaccParserError {
-                            kind: YaccParserErrorKind::UnknownToken(n.clone()),
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::UnknownToken(n.clone()),
                             span: Span::new(0, 0),
                         });
                     }
                     if !self.precs.contains_key(n) {
-                        return Err(YaccParserError {
-                            kind: YaccParserErrorKind::NoPrecForToken(n.clone()),
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::NoPrecForToken(n.clone()),
                             span: Span::new(0, 0),
                         });
                     }
@@ -170,16 +170,16 @@ impl GrammarAST {
                     match *sym {
                         Symbol::Rule(ref name, span) => {
                             if !self.rules.contains_key(name) {
-                                return Err(YaccParserError {
-                                    kind: YaccParserErrorKind::UnknownRuleRef(name.clone()),
+                                return Err(YaccGrammarError {
+                                    kind: YaccGrammarErrorKind::UnknownRuleRef(name.clone()),
                                     span,
                                 });
                             }
                         }
                         Symbol::Token(ref name, span) => {
                             if !self.tokens.contains(name) {
-                                return Err(YaccParserError {
-                                    kind: YaccParserErrorKind::UnknownToken(name.clone()),
+                                return Err(YaccGrammarError {
+                                    kind: YaccGrammarErrorKind::UnknownToken(name.clone()),
                                     span,
                                 });
                             }
@@ -197,8 +197,8 @@ impl GrammarAST {
                     continue;
                 }
             }
-            return Err(YaccParserError {
-                kind: YaccParserErrorKind::UnknownEPP(k.clone()),
+            return Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::UnknownEPP(k.clone()),
                 span: Span::new(0, 0),
             });
         }
@@ -210,7 +210,7 @@ impl GrammarAST {
 mod test {
     use super::{
         super::{AssocKind, Precedence},
-        GrammarAST, Span, Symbol, YaccParserError, YaccParserErrorKind,
+        GrammarAST, Span, Symbol, YaccGrammarError, YaccGrammarErrorKind,
     };
 
     fn rule(n: &str) -> Symbol {
@@ -225,8 +225,8 @@ mod test {
     fn test_empty_grammar() {
         let mut grm = GrammarAST::new();
         match grm.complete_and_validate() {
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::NoStartRule,
+            Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::NoStartRule,
                 ..
             }) => (),
             _ => panic!("Validation error"),
@@ -241,8 +241,8 @@ mod test {
         grm.add_rule(("B".to_string(), empty_span), None);
         grm.add_prod("B".to_string(), vec![], None, None);
         match grm.complete_and_validate() {
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::InvalidStartRule(_),
+            Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::InvalidStartRule(_),
                 ..
             }) => (),
             _ => panic!("Validation error"),
@@ -279,8 +279,8 @@ mod test {
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("B")], None, None);
         match grm.complete_and_validate() {
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::UnknownRuleRef(_),
+            Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::UnknownRuleRef(_),
                 ..
             }) => (),
             _ => panic!("Validation error"),
@@ -319,8 +319,8 @@ mod test {
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![token("b")], None, None);
         match grm.complete_and_validate() {
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::UnknownToken(_),
+            Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::UnknownToken(_),
                 ..
             }) => (),
             _ => panic!("Validation error"),
@@ -335,8 +335,8 @@ mod test {
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("b"), token("b")], None, None);
         match grm.complete_and_validate() {
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::UnknownRuleRef(_),
+            Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::UnknownRuleRef(_),
                 ..
             }) => (),
             _ => panic!("Validation error"),
@@ -353,8 +353,8 @@ mod test {
         grm.epp
             .insert("k".to_owned(), (empty_span, ("v".to_owned(), empty_span)));
         match grm.complete_and_validate() {
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::UnknownEPP(_),
+            Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::UnknownEPP(_),
                 ..
             }) => (),
             _ => panic!("Validation error"),
@@ -400,16 +400,16 @@ mod test {
             None,
         );
         match grm.complete_and_validate() {
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::UnknownToken(_),
+            Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::UnknownToken(_),
                 ..
             }) => (),
             _ => panic!("Validation error"),
         }
         grm.tokens.insert("b".to_string());
         match grm.complete_and_validate() {
-            Err(YaccParserError {
-                kind: YaccParserErrorKind::NoPrecForToken(_),
+            Err(YaccGrammarError {
+                kind: YaccGrammarErrorKind::NoPrecForToken(_),
                 ..
             }) => (),
             _ => panic!("Validation error"),
