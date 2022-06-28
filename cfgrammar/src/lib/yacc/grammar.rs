@@ -90,7 +90,7 @@ pub struct YaccGrammar<StorageT = u32> {
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
 impl YaccGrammar<u32> {
-    pub fn new(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
+    pub fn new(yacc_kind: YaccKind, s: &str) -> Result<Self, Vec<YaccGrammarError>> {
         YaccGrammar::new_with_storaget(yacc_kind, s)
     }
 }
@@ -106,13 +106,17 @@ where
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, YaccGrammarError> {
+    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, Vec<YaccGrammarError>> {
         let ast = match yacc_kind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
                 yp.parse()?;
                 let mut ast = yp.ast();
-                ast.complete_and_validate()?;
+                let r = ast.complete_and_validate();
+                if r.is_err() {
+                    return Err(vec![r.unwrap_err()]);
+                }
+
                 ast
             }
         };
