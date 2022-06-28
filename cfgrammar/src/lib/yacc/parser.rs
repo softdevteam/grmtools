@@ -882,6 +882,7 @@ mod test {
         },
         Span, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
+    use std::collections::HashSet;
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
         let mut yp = YaccParser::new(yacc_kind, s.to_string());
@@ -1693,6 +1694,76 @@ x"
                 }],
             ) if line_of_offset(src, span.start()) == 2 => {
                 assert_eq!(spans, &[Span::new(53, 54)])
+            }
+            Err(e) => incorrect_errs!(src, e),
+        }
+    }
+
+    #[test]
+    fn test_multiple_duplicate_avoid_insert() {
+        let src = "
+          %avoid_insert X Y
+          %avoid_insert Y X
+          %%
+          ";
+        match parse(YaccKind::Eco, src).as_ref().map_err(Vec::as_slice) {
+            Ok(_) => panic!(),
+            Err(
+                [YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans),
+                    span,
+                }, YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans2),
+                    span: span2,
+                }],
+            ) if line_of_offset(src, span.start()) == 2
+                && line_of_offset(src, span2.start()) == 2 =>
+            {
+                let spans_set = HashSet::<&Span>::from_iter(spans.iter().chain(spans2.iter()));
+                assert_eq!(
+                    spans_set,
+                    HashSet::from_iter(&[Span::new(53, 54), Span::new(55, 56)])
+                )
+            }
+            Err(e) => incorrect_errs!(src, e),
+        }
+    }
+
+    #[test]
+    fn test_multiple_duplicate_avoid_insert2() {
+        let src = "
+          %avoid_insert X
+          %avoid_insert Y
+          %avoid_insert Y
+          %avoid_insert X
+          %%
+          ";
+        match parse(YaccKind::Eco, src).as_ref().map_err(Vec::as_slice) {
+            Ok(_) => panic!(),
+            Err(
+                [YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans),
+                    span,
+                }, YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans2),
+                    span: span2,
+                }],
+            ) if HashSet::<usize>::from_iter([
+                line_of_offset(src, span.start()),
+                line_of_offset(src, span2.start()),
+            ]) == HashSet::from_iter([2, 3]) =>
+            {
+                let spans_set = HashSet::<(usize, &[Span])>::from_iter([
+                    (line_of_offset(src, span.start()), spans.as_slice()),
+                    (line_of_offset(src, span2.start()), spans2.as_slice()),
+                ]);
+                assert_eq!(
+                    spans_set,
+                    HashSet::from_iter([
+                        (3, [Span::new(77, 78)].as_slice()),
+                        (2, &[Span::new(103, 104)])
+                    ])
+                )
             }
             Err(e) => incorrect_errs!(src, e),
         }
