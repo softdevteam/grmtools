@@ -306,17 +306,24 @@ where
         let lex_src = read_to_string(&lexerp)?;
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
-                LRNonStreamingLexerDef::<LexemeT, StorageT>::from_str(&lex_src).map_err(|e| {
-                    let mut line_cache = NewlineCache::new();
-                    line_cache.feed(&lex_src);
-                    if let Some((line, column)) =
-                        line_cache.byte_to_line_num_and_col_num(&lex_src, e.span.start())
-                    {
-                        format!("{} at line {line} column {column}", e)
-                    } else {
-                        format!("{}", e)
-                    }
-                })?,
+                LRNonStreamingLexerDef::<LexemeT, StorageT>::from_str(&lex_src).map_err(
+                    |errs| {
+                        errs.iter()
+                            .map(|e| {
+                                let mut line_cache = NewlineCache::new();
+                                line_cache.feed(&lex_src);
+                                if let Some((line, column)) = line_cache
+                                    .byte_to_line_num_and_col_num(&lex_src, e.span.start())
+                                {
+                                    format!("{} at line {line} column {column}", e)
+                                } else {
+                                    format!("{}", e)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    },
+                )?,
             ),
         };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {

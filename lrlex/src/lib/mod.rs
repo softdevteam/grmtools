@@ -10,10 +10,7 @@
 #![allow(clippy::unnecessary_wraps)]
 #![allow(clippy::upper_case_acronyms)]
 
-use std::{error::Error, fmt, hash::Hash};
-
-use num_traits::{PrimInt, Unsigned};
-use try_from::TryFrom;
+use std::{error::Error, fmt};
 
 mod ctbuilder;
 #[doc(hidden)]
@@ -31,7 +28,7 @@ pub use crate::{
 
 use cfgrammar::Span;
 
-pub type LexBuildResult<T> = Result<T, LexBuildError>;
+pub type LexBuildResult<T> = Result<T, Vec<LexBuildError>>;
 
 /// Any error from the Lex parser returns an instance of this struct.
 #[derive(Debug)]
@@ -67,16 +64,6 @@ impl fmt::Display for LexBuildError {
         };
         write!(f, "{s}")
     }
-}
-
-#[deprecated(since = "0.8.0", note = "Please use LRNonStreamingLexerDef::from_str")]
-pub fn build_lex<
-    LexemeT: lrpar::Lexeme<StorageT>,
-    StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned,
->(
-    s: &str,
-) -> Result<LRNonStreamingLexerDef<LexemeT, StorageT>, LexBuildError> {
-    LRNonStreamingLexerDef::from_str(s)
 }
 
 #[deprecated(
