@@ -4,6 +4,8 @@ use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 
+type LexInternalBuildResult<T> = Result<T, LexBuildError>;
+
 pub(super) struct LexParser<StorageT> {
     src: String,
     pub(super) rules: Vec<Rule<StorageT>>,
@@ -45,7 +47,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         }
     }
 
-    fn parse_declarations(&mut self, mut i: usize) -> LexBuildResult<usize> {
+    fn parse_declarations(&mut self, mut i: usize) -> LexInternalBuildResult<usize> {
         i = self.parse_ws(i)?;
         if let Some(j) = self.lookahead_is("%%", i) {
             return Ok(j);
@@ -57,7 +59,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         }
     }
 
-    fn parse_rules(&mut self, mut i: usize) -> LexBuildResult<usize> {
+    fn parse_rules(&mut self, mut i: usize) -> LexInternalBuildResult<usize> {
         loop {
             i = self.parse_ws(i)?;
             if i == self.src.len() {
@@ -77,7 +79,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         Ok(i)
     }
 
-    fn parse_rule(&mut self, i: usize) -> LexBuildResult<usize> {
+    fn parse_rule(&mut self, i: usize) -> LexInternalBuildResult<usize> {
         let line_len = self.src[i..]
             .find(|c| c == '\n')
             .unwrap_or(self.src.len() - i);
@@ -132,7 +134,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         Ok(i + line_len)
     }
 
-    fn parse_ws(&mut self, i: usize) -> LexBuildResult<usize> {
+    fn parse_ws(&mut self, i: usize) -> LexInternalBuildResult<usize> {
         let mut j = i;
         for c in self.src[i..].chars() {
             match c {
