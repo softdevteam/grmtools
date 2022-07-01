@@ -1,0 +1,20 @@
+[package]
+name = "start_states"
+version = "0.1.0"
+authors = ["Simon Martin <havvoric@gmail.com>"]
+edition = "2021"
+license = "Apache-2.0/MIT"
+
+[[bin]]
+doc = false
+name = "start_states"
+
+[build-dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }
+
+[dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }

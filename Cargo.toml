@@ -9,6 +9,7 @@ members=[
     "lrpar/examples/calc_actions",
     "lrpar/examples/calc_ast",
     "lrpar/examples/calc_parsetree",
+    "lrpar/examples/start_states",
     "lrtable",
     "nimbleparse",
 ]

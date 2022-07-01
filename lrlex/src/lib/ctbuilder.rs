@@ -399,15 +399,26 @@ where
 
         outs.push_str(&format!(
             "{mod_vis} mod {mod_name} {{
-use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule}};
+use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule, StartState}};
 
 #[allow(dead_code)]
 pub fn lexerdef() -> {lexerdef_type} {{
-    let rules = vec![",
+",
             mod_vis = self.visibility.cow_str(),
             mod_name = mod_name,
             lexerdef_type = lexerdef_type
         ));
+
+        outs.push_str("    let start_states: Vec<StartState> = vec![");
+        for ss in lexerdef.iter_start_states() {
+            outs.push_str(&format!(
+                "
+        StartState::new({}, {:?}, {}),",
+                ss.id, ss.name, ss.exclusive
+            ));
+        }
+        outs.push_str("\n    ];\n");
+        outs.push_str("    let rules = vec![");
 
         // Individual rules
         for r in lexerdef.iter_rules() {
@@ -419,6 +430,10 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 Some(ref n) => format!("Some({:?}.to_string())", n),
                 None => "None".to_owned(),
             };
+            let target_state = match r.target_state {
+                Some(id) => format!("Some({})", id),
+                None => "None".to_owned(),
+            };
             let n_span = format!(
                 "::cfgrammar::Span::new({}, {})",
                 r.name_span.start(),
@@ -426,11 +441,13 @@ pub fn lexerdef() -> {lexerdef_type} {{
             );
             outs.push_str(&format!(
                 "
-        Rule::new({}, {}, {}, \"{}\".to_string()).unwrap(),",
+        Rule::new({}, {}, {}, \"{}\".to_string(), {:?}.to_vec(), {}).unwrap(),",
                 tok_id,
                 n,
                 n_span,
-                r.re_str.replace('\\', "\\\\").replace('"', "\\\"")
+                r.re_str.replace('\\', "\\\\").replace('"', "\\\""),
+                r.start_states,
+                target_state,
             ));
         }
 
@@ -438,7 +455,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
         outs.push_str(&format!(
             "
     ];
-    {lexerdef_name}::from_rules(rules)
+    {lexerdef_name}::from_rules(start_states, rules)
 }}
 
 ",

@@ -14,8 +14,9 @@ use try_from::TryFrom;
 
 use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer};
 
-use crate::{parser::LexParser, LexBuildResult};
+use crate::{parser::LexParser, parser::StartState, LexBuildResult};
 
+#[derive(Debug)]
 #[doc(hidden)]
 pub struct Rule<StorageT> {
     /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
@@ -29,6 +30,12 @@ pub struct Rule<StorageT> {
     pub name_span: Span,
     pub(super) re_str: String,
     re: Regex,
+    /// Id(s) of permitted start conditions for the lexer to match this rule.
+    pub start_states: Vec<usize>,
+    /// If Some(state), successful matching of this rule will cause the current start condition of
+    /// the lexer to be changed to the enclosed value. If none, successful matching causes no change
+    /// to the current start condition.
+    pub target_state: Option<usize>,
 }
 
 impl<StorageT> Rule<StorageT> {
@@ -40,8 +47,10 @@ impl<StorageT> Rule<StorageT> {
         name: Option<String>,
         name_span: Span,
         re_str: String,
+        start_states: Vec<usize>,
+        target_state: Option<usize>,
     ) -> Result<Rule<StorageT>, regex::Error> {
-        let re = RegexBuilder::new(&format!("\\A(?:{})", &re_str))
+        let re = RegexBuilder::new(&format!("\\A(?:{})", re_str))
             .multi_line(true)
             .dot_matches_new_line(true)
             .build()?;
@@ -51,6 +60,8 @@ impl<StorageT> Rule<StorageT> {
             name_span,
             re_str,
             re,
+            start_states,
+            target_state,
         })
     }
 }
@@ -60,7 +71,7 @@ pub trait LexerDef<StorageT> {
     #[doc(hidden)]
     /// Instantiate a lexer from a set of `Rule`s. This is only intended to be used by compiled
     /// lexers (see `ctbuilder.rs`).
-    fn from_rules(rules: Vec<Rule<StorageT>>) -> Self
+    fn from_rules(start_states: Vec<StartState>, rules: Vec<Rule<StorageT>>) -> Self
     where
         Self: Sized;
 
@@ -101,21 +112,29 @@ pub trait LexerDef<StorageT> {
 
     /// Returns an iterator over all rules in this AST.
     fn iter_rules(&self) -> Iter<Rule<StorageT>>;
+
+    /// Returns an iterator over all start states in this AST.
+    fn iter_start_states(&self) -> Iter<StartState>;
 }
 
 /// This struct represents, in essence, a .l file in memory. From it one can produce an
 /// [LRNonStreamingLexer] which actually lexes inputs.
 pub struct LRNonStreamingLexerDef<LexemeT, StorageT> {
     rules: Vec<Rule<StorageT>>,
+    start_states: Vec<StartState>,
     phantom: PhantomData<LexemeT>,
 }
 
 impl<LexemeT, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> LexerDef<StorageT>
     for LRNonStreamingLexerDef<LexemeT, StorageT>
 {
-    fn from_rules(rules: Vec<Rule<StorageT>>) -> LRNonStreamingLexerDef<LexemeT, StorageT> {
+    fn from_rules(
+        start_states: Vec<StartState>,
+        rules: Vec<Rule<StorageT>>,
+    ) -> LRNonStreamingLexerDef<LexemeT, StorageT> {
         LRNonStreamingLexerDef {
             rules,
+            start_states,
             phantom: PhantomData,
         }
     }
@@ -123,6 +142,7 @@ impl<LexemeT, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> 
     fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<LexemeT, StorageT>> {
         LexParser::new(s.to_string()).map(|p| LRNonStreamingLexerDef {
             rules: p.rules,
+            start_states: p.start_states,
             phantom: PhantomData,
         })
     }
@@ -202,6 +222,10 @@ impl<LexemeT, StorageT: Copy + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned> 
     fn iter_rules(&self) -> Iter<Rule<StorageT>> {
         self.rules.iter()
     }
+
+    fn iter_start_states(&self) -> Iter<StartState> {
+        self.start_states.iter()
+    }
 }
 
 impl<
@@ -217,11 +241,22 @@ impl<
     ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
         let mut lexemes = vec![];
         let mut i = 0;
+        let state = self.get_start_state_by_id(0);
+        let mut state = match state {
+            None => {
+                lexemes.push(Err(LexError::new(Span::new(i, i))));
+                return LRNonStreamingLexer::new(s, lexemes, NewlineCache::from_str(s).unwrap());
+            }
+            Some(state) => state,
+        };
         while i < s.len() {
             let old_i = i;
             let mut longest = 0; // Length of the longest match
             let mut longest_ridx = 0; // This is only valid iff longest != 0
             for (ridx, r) in self.iter_rules().enumerate() {
+                if !Self::state_matches(state, &r.start_states) {
+                    continue;
+                }
                 if let Some(m) = r.re.find(&s[old_i..]) {
                     let len = m.end();
                     // Note that by using ">", we implicitly prefer an earlier over a later rule, if
@@ -245,6 +280,15 @@ impl<
                         }
                     }
                 }
+                if let Some(target_state_id) = r.target_state {
+                    state = match self.get_start_state_by_id(target_state_id) {
+                        None => {
+                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
+                            break;
+                        }
+                        Some(state) => state,
+                    }
+                }
                 i += longest;
             } else {
                 lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
@@ -252,6 +296,18 @@ impl<
             }
         }
         LRNonStreamingLexer::new(s, lexemes, NewlineCache::from_str(s).unwrap())
+    }
+
+    fn state_matches(state: &StartState, rule_states: &Vec<usize>) -> bool {
+        if rule_states.is_empty() {
+            !state.exclusive
+        } else {
+            rule_states.contains(&state.id)
+        }
+    }
+
+    fn get_start_state_by_id(&self, id: usize) -> Option<&StartState> {
+        self.start_states.iter().find(|state| state.id == id)
     }
 }
 
@@ -650,5 +706,134 @@ b 'B'
             .filter(|rule| rule.name.is_none())
             .collect::<Vec<_>>();
         assert_eq!(anonymous_rules[0].name_span, Span::new(21, 21));
+    }
+
+    #[test]
+    fn test_token_start_states() {
+        let src = "%x EXCLUSIVE_START
+%s INCLUSIVE_START
+%%
+a 'A'
+b 'B'
+[ \\n] ;"
+            .to_string();
+        let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        assert_eq!(
+            lexerdef.get_rule_by_name("A").unwrap().name_span,
+            Span::new(44, 45)
+        );
+        assert_eq!(
+            lexerdef.get_rule_by_name("B").unwrap().name_span,
+            Span::new(50, 51)
+        );
+    }
+
+    #[test]
+    fn test_rule_start_states() {
+        let src = "%x EXCLUSIVE_START
+%s INCLUSIVE_START
+%%
+<EXCLUSIVE_START>a 'A'
+<INCLUSIVE_START>b 'B'
+[ \\n] ;"
+            .to_string();
+        let lexerdef = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let a_rule = lexerdef.get_rule_by_name("A").unwrap();
+        assert_eq!(a_rule.name_span, Span::new(61, 62));
+        assert_eq!(a_rule.re_str, "a");
+
+        let b_rule = lexerdef.get_rule_by_name("B").unwrap();
+        assert_eq!(b_rule.name_span, Span::new(84, 85));
+        assert_eq!(b_rule.re_str, "b");
+    }
+
+    #[test]
+    fn test_state_matches_regular_no_rule_states() {
+        let all_states = &[
+            StartState::new(0, "INITIAL", false),
+            StartState::new(1, "EXCLUSIVE", true),
+        ];
+        let rule_states = vec![];
+        let current_state = all_states.get(0).unwrap();
+        let m = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::state_matches(
+            current_state,
+            &rule_states,
+        );
+        assert!(m);
+    }
+
+    #[test]
+    fn test_state_matches_exclusive_no_rule_states() {
+        let all_states = &[
+            StartState::new(0, "INITIAL", false),
+            StartState::new(1, "EXCLUSIVE", true),
+        ];
+        let rule_states = vec![];
+        let current_state = all_states.get(1).unwrap();
+        let m = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::state_matches(
+            current_state,
+            &rule_states,
+        );
+        assert!(!m);
+    }
+
+    #[test]
+    fn test_state_matches_regular_matching_rule_states() {
+        let all_states = &[
+            StartState::new(0, "INITIAL", false),
+            StartState::new(1, "EXCLUSIVE", true),
+        ];
+        let rule_states = vec![0];
+        let current_state = all_states.get(0).unwrap();
+        let m = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::state_matches(
+            current_state,
+            &rule_states,
+        );
+        assert!(m);
+    }
+
+    #[test]
+    fn test_state_matches_exclusive_matching_rule_states() {
+        let all_states = &[
+            StartState::new(0, "INITIAL", false),
+            StartState::new(1, "EXCLUSIVE", true),
+        ];
+        let rule_states = vec![1];
+        let current_state = all_states.get(1).unwrap();
+        let m = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::state_matches(
+            current_state,
+            &rule_states,
+        );
+        assert!(m);
+    }
+
+    #[test]
+    fn test_state_matches_regular_other_rule_states() {
+        let all_states = &[
+            StartState::new(0, "INITIAL", false),
+            StartState::new(1, "EXCLUSIVE", true),
+        ];
+        let rule_states = vec![1];
+        let current_state = all_states.get(0).unwrap();
+        let m = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::state_matches(
+            current_state,
+            &rule_states,
+        );
+        assert!(!m);
+    }
+
+    #[test]
+    fn test_state_matches_exclusive_other_rule_states() {
+        let all_states = &[
+            StartState::new(0, "INITIAL", false),
+            StartState::new(1, "EXCLUSIVE", true),
+        ];
+        let rule_states = vec![0];
+        let current_state = all_states.get(1).unwrap();
+        let m = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::state_matches(
+            current_state,
+            &rule_states,
+        );
+        assert!(!m);
     }
 }
