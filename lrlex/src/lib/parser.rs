@@ -4,6 +4,8 @@ use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 
+type LexInternalBuildResult<T> = Result<T, LexBuildError>;
+
 pub(super) struct LexParser<StorageT> {
     src: String,
     pub(super) rules: Vec<Rule<StorageT>>,
@@ -27,15 +29,24 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     }
 
     fn parse(&mut self) -> LexBuildResult<usize> {
-        let mut i = self.parse_declarations(0)?;
-        i = self.parse_rules(i)?;
+        let mut i = self.parse_declarations(0).map_err(|e| vec![e])?;
+        i = self.parse_rules(i).map_err(|e| vec![e]).and_then(|i| {
+            if let Some((orig_span, spans)) = self.duplicate_names.iter().next() {
+                return Err(vec![LexBuildError {
+                    span: *orig_span,
+                    kind: LexErrorKind::DuplicateName(spans.clone()),
+                }]);
+            }
+            Ok(i)
+        })?;
         // We don't currently support the subroutines part of a specification. One day we might...
         match self.lookahead_is("%%", i) {
             Some(j) => {
-                if self.parse_ws(j)? == self.src.len() {
+                let k = self.parse_ws(j).map_err(|e| vec![e])?;
+                if k == self.src.len() {
                     Ok(i)
                 } else {
-                    Err(self.mk_error(LexErrorKind::RoutinesNotSupported, i))
+                    Err(vec![self.mk_error(LexErrorKind::RoutinesNotSupported, i)])
                 }
             }
             None => {
@@ -45,7 +56,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         }
     }
 
-    fn parse_declarations(&mut self, mut i: usize) -> LexBuildResult<usize> {
+    fn parse_declarations(&mut self, mut i: usize) -> LexInternalBuildResult<usize> {
         i = self.parse_ws(i)?;
         if let Some(j) = self.lookahead_is("%%", i) {
             return Ok(j);
@@ -57,7 +68,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         }
     }
 
-    fn parse_rules(&mut self, mut i: usize) -> LexBuildResult<usize> {
+    fn parse_rules(&mut self, mut i: usize) -> LexInternalBuildResult<usize> {
         loop {
             i = self.parse_ws(i)?;
             if i == self.src.len() {
@@ -68,16 +79,10 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             }
             i = self.parse_rule(i)?;
         }
-        if let Some((orig_span, spans)) = self.duplicate_names.iter().next() {
-            return Err(LexBuildError {
-                span: *orig_span,
-                kind: LexErrorKind::DuplicateName(spans.clone()),
-            });
-        }
         Ok(i)
     }
 
-    fn parse_rule(&mut self, i: usize) -> LexBuildResult<usize> {
+    fn parse_rule(&mut self, i: usize) -> LexInternalBuildResult<usize> {
         let line_len = self.src[i..]
             .find(|c| c == '\n')
             .unwrap_or(self.src.len() - i);
@@ -132,7 +137,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         Ok(i + line_len)
     }
 
-    fn parse_ws(&mut self, i: usize) -> LexBuildResult<usize> {
+    fn parse_ws(&mut self, i: usize) -> LexInternalBuildResult<usize> {
         let mut j = i;
         for c in self.src[i..].chars() {
             match c {
@@ -161,19 +166,21 @@ mod test {
         DefaultLexeme,
     };
 
-    macro_rules! incorrect_err {
-        ($src:ident, $e:ident) => {{
-            let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
-            line_cache.feed(&$src);
-            if let Some((line, column)) =
-                line_cache.byte_to_line_num_and_col_num(&$src, $e.span.start())
-            {
-                panic!(
-                    "Incorrect error returned {} at line {line} column {column}",
-                    $e
-                )
-            } else {
-                panic!("{}", $e)
+    macro_rules! incorrect_errs {
+        ($src:ident, $errs:expr) => {{
+            for e in $errs {
+                let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
+                line_cache.feed(&$src);
+                if let Some((line, column)) =
+                    line_cache.byte_to_line_num_and_col_num(&$src, e.span.start())
+                {
+                    panic!(
+                        "Incorrect error returned {} at line {line} column {column}",
+                        e
+                    )
+                } else {
+                    panic!("{}", e)
+                }
             }
         }};
     }
@@ -242,13 +249,18 @@ mod test {
 'int'"
             .to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            .as_ref()
+            .map_err(Vec::as_slice)
+        {
             Ok(_) => panic!("Broken rule parsed"),
-            Err(LexBuildError {
-                kind: LexErrorKind::MissingSpace,
-                span,
-            }) if line_col!(src, span) == (2, 1) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(
+                [LexBuildError {
+                    kind: LexErrorKind::MissingSpace,
+                    span,
+                }],
+            ) if line_col!(src, span) == (2, 1) => (),
+            Err(e) => incorrect_errs!(src, e),
         }
     }
 
@@ -258,13 +270,18 @@ mod test {
 [0-9] "
             .to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            .as_ref()
+            .map_err(Vec::as_slice)
+        {
             Ok(_) => panic!("Broken rule parsed"),
-            Err(LexBuildError {
-                kind: LexErrorKind::MissingSpace,
-                span,
-            }) if line_col!(src, span) == (2, 1) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(
+                [LexBuildError {
+                    kind: LexErrorKind::MissingSpace,
+                    span,
+                }],
+            ) if line_col!(src, span) == (2, 1) => (),
+            Err(e) => incorrect_errs!(src, e),
         }
     }
 
@@ -274,13 +291,18 @@ mod test {
 [0-9] int"
             .to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            .as_ref()
+            .map_err(Vec::as_slice)
+        {
             Ok(_) => panic!("Broken rule parsed"),
-            Err(LexBuildError {
-                kind: LexErrorKind::InvalidName,
-                span,
-            }) if line_col!(src, span) == (2, 7) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(
+                [LexBuildError {
+                    kind: LexErrorKind::InvalidName,
+                    span,
+                }],
+            ) if line_col!(src, span) == (2, 7) => (),
+            Err(e) => incorrect_errs!(src, e),
         }
     }
 
@@ -290,13 +312,18 @@ mod test {
 [0-9] 'int"
             .to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            .as_ref()
+            .map_err(Vec::as_slice)
+        {
             Ok(_) => panic!("Broken rule parsed"),
-            Err(LexBuildError {
-                kind: LexErrorKind::InvalidName,
-                span,
-            }) if line_col!(src, span) == (2, 7) => (),
-            Err(e) => incorrect_err!(src, e),
+            Err(
+                [LexBuildError {
+                    kind: LexErrorKind::InvalidName,
+                    span,
+                }],
+            ) if line_col!(src, span) == (2, 7) => (),
+            Err(e) => incorrect_errs!(src, e),
         }
     }
 
@@ -307,16 +334,21 @@ mod test {
 [0-9] 'int'
 [0-9] 'int'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src) {
+        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            .as_ref()
+            .map_err(Vec::as_slice)
+        {
             Ok(_) => panic!("Duplicate rule parsed"),
-            Err(LexBuildError {
-                kind: LexErrorKind::DuplicateName(spans),
-                span,
-            }) if line_col!(src, span) == (2, 8) => {
-                assert_eq!(spans, [Span::new(22, 25), Span::new(34, 37)])
+            Err(
+                [LexBuildError {
+                    kind: LexErrorKind::DuplicateName(spans),
+                    span,
+                }],
+            ) if line_col!(src, span) == (2, 8) => {
+                assert_eq!(spans, &[Span::new(22, 25), Span::new(34, 37)])
             }
 
-            Err(e) => incorrect_err!(src, e),
+            Err(e) => incorrect_errs!(src, e),
         }
     }
 

@@ -105,20 +105,22 @@ fn main() {
     let lex_src = read_file(lex_l_path);
     let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexeme<u32>, u32>::from_str(&lex_src) {
         Ok(ast) => ast,
-        Err(s) => {
+        Err(errs) => {
             let nlcache = NewlineCache::from_str(&lex_src).unwrap();
-            if let Some((line, column)) =
-                nlcache.byte_to_line_num_and_col_num(&lex_src, s.span.start())
-            {
-                writeln!(
-                    stderr(),
-                    "{}: {} at line {line} column: {column}",
-                    &lex_l_path,
-                    &s
-                )
-                .ok();
-            } else {
-                writeln!(stderr(), "{}: {}", &lex_l_path, &s).ok();
+            for e in errs {
+                if let Some((line, column)) =
+                    nlcache.byte_to_line_num_and_col_num(&lex_src, e.span.start())
+                {
+                    writeln!(
+                        stderr(),
+                        "{}: {} at line {line} column: {column}",
+                        &lex_l_path,
+                        &e
+                    )
+                    .ok();
+                } else {
+                    writeln!(stderr(), "{}: {}", &lex_l_path, &e).ok();
+                }
             }
             process::exit(1);
         }
