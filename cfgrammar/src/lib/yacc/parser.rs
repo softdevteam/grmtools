@@ -10,8 +10,6 @@ use std::{
     str::FromStr,
 };
 
-type YaccResult<T> = Result<T, YaccGrammarError>;
-
 use crate::Span;
 
 use super::{
@@ -259,7 +257,7 @@ impl YaccParser {
         self.ast
     }
 
-    fn parse_declarations(&mut self, mut i: usize) -> YaccResult<usize> {
+    fn parse_declarations(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         i = self.parse_ws(i, true)?;
         let mut prec_level = 0;
         while i < self.src.len() {
@@ -475,7 +473,7 @@ impl YaccParser {
         Err(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i - 1))
     }
 
-    fn parse_rules(&mut self, mut i: usize) -> YaccResult<usize> {
+    fn parse_rules(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         // self.parse_declarations should have left the input at '%%'
         i = self.lookahead_is("%%", i).unwrap();
         i = self.parse_ws(i, true)?;
@@ -489,7 +487,7 @@ impl YaccParser {
         Ok(i)
     }
 
-    fn parse_rule(&mut self, mut i: usize) -> YaccResult<usize> {
+    fn parse_rule(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         let (j, rn) = self.parse_name(i)?;
         let span = Span::new(i, j);
         if self.ast.start.is_none() {
@@ -583,7 +581,7 @@ impl YaccParser {
         Err(self.mk_error(YaccGrammarErrorKind::IncompleteRule, i))
     }
 
-    fn parse_name(&self, i: usize) -> YaccResult<(usize, String)> {
+    fn parse_name(&self, i: usize) -> Result<(usize, String), YaccGrammarError> {
         match RE_NAME.find(&self.src[i..]) {
             Some(m) => {
                 assert_eq!(m.start(), 0);
@@ -593,7 +591,7 @@ impl YaccParser {
         }
     }
 
-    fn parse_token(&self, i: usize) -> YaccResult<(usize, String, Span)> {
+    fn parse_token(&self, i: usize) -> Result<(usize, String, Span), YaccGrammarError> {
         match RE_TOKEN.find(&self.src[i..]) {
             Some(m) => {
                 assert!(m.start() == 0 && m.end() > 0);
@@ -619,7 +617,7 @@ impl YaccParser {
         }
     }
 
-    fn parse_action(&mut self, i: usize) -> YaccResult<(usize, String)> {
+    fn parse_action(&mut self, i: usize) -> Result<(usize, String), YaccGrammarError> {
         let mut j = i;
         let mut c = 0; // Count braces
         while j < self.src.len() {
@@ -646,7 +644,7 @@ impl YaccParser {
         }
     }
 
-    fn parse_programs(&mut self, mut i: usize) -> YaccResult<usize> {
+    fn parse_programs(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         if let Some(j) = self.lookahead_is("%%", i) {
             i = self.parse_ws(j, true)?;
             let prog = self.src[i..].to_string();
@@ -657,7 +655,7 @@ impl YaccParser {
     }
 
     /// Parse up to (but do not include) the end of line (or, if it comes sooner, the end of file).
-    fn parse_to_eol(&mut self, i: usize) -> YaccResult<(usize, String)> {
+    fn parse_to_eol(&mut self, i: usize) -> Result<(usize, String), YaccGrammarError> {
         let mut j = i;
         while j < self.src.len() {
             let c = self.src[j..].chars().next().unwrap();
@@ -671,7 +669,7 @@ impl YaccParser {
 
     /// Parse up to (but do not include) a single colon (double colons are allowed so that strings
     /// like `a::b::c:` treat `a::b::c` as a single name. Errors if EOL encountered.
-    fn parse_to_single_colon(&mut self, i: usize) -> YaccResult<(usize, String)> {
+    fn parse_to_single_colon(&mut self, i: usize) -> Result<(usize, String), YaccGrammarError> {
         let mut j = i;
         while j < self.src.len() {
             let c = self.src[j..].chars().next().unwrap();
@@ -694,7 +692,10 @@ impl YaccParser {
     }
 
     /// Parse a quoted string, allowing escape characters.
-    fn parse_int<T: FromStr + PrimInt>(&mut self, i: usize) -> YaccResult<(usize, T)> {
+    fn parse_int<T: FromStr + PrimInt>(
+        &mut self,
+        i: usize,
+    ) -> Result<(usize, T), YaccGrammarError> {
         let mut j = i;
         while j < self.src.len() {
             let c = self.src[j..].chars().next().unwrap();
@@ -710,7 +711,7 @@ impl YaccParser {
     }
 
     /// Parse a quoted string, allowing escape characters.
-    fn parse_string(&mut self, mut i: usize) -> YaccResult<(usize, String)> {
+    fn parse_string(&mut self, mut i: usize) -> Result<(usize, String), YaccGrammarError> {
         let qc = if self.lookahead_is("'", i).is_some() {
             '\''
         } else if self.lookahead_is("\"", i).is_some() {
@@ -758,7 +759,7 @@ impl YaccParser {
 
     /// Skip whitespace from `i` onwards. If `inc_newlines` is `false`, will return `Err` if a
     /// newline is encountered; otherwise newlines are consumed and skipped.
-    fn parse_ws(&mut self, mut i: usize, inc_newlines: bool) -> YaccResult<usize> {
+    fn parse_ws(&mut self, mut i: usize, inc_newlines: bool) -> Result<usize, YaccGrammarError> {
         while i < self.src.len() {
             let c = self.src[i..].chars().next().unwrap();
             match c {
