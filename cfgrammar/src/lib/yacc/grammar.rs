@@ -6,7 +6,11 @@ use serde::{Deserialize, Serialize};
 use vob::Vob;
 
 use super::{
-    ast, firsts::YaccFirsts, follows::YaccFollows, parser::YaccParser, YaccGrammarError, YaccKind,
+    ast,
+    firsts::YaccFirsts,
+    follows::YaccFollows,
+    parser::{YaccGrammarResult, YaccParser},
+    YaccKind,
 };
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
@@ -90,7 +94,7 @@ pub struct YaccGrammar<StorageT = u32> {
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
 impl YaccGrammar<u32> {
-    pub fn new(yacc_kind: YaccKind, s: &str) -> Result<Self, Vec<YaccGrammarError>> {
+    pub fn new(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
         YaccGrammar::new_with_storaget(yacc_kind, s)
     }
 }
@@ -106,7 +110,7 @@ where
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> Result<Self, Vec<YaccGrammarError>> {
+    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
         let ast = match yacc_kind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
