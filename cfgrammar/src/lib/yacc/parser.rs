@@ -15,7 +15,7 @@ type YaccResult<T> = Result<T, YaccGrammarError>;
 use crate::Span;
 
 use super::{
-    ast::{GrammarAST, Symbol},
+    ast::{ASTSymbol, GrammarAST},
     AssocKind, Precedence, YaccKind,
 };
 
@@ -555,7 +555,7 @@ impl YaccParser {
                 if self.ast.tokens.insert(sym.clone()) {
                     self.ast.spans.push(span);
                 }
-                syms.push(Symbol::Token(sym, span));
+                syms.push(ASTSymbol::Token(sym, span));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = self.parse_ws(j, true)?;
                 let (k, sym, _) = self.parse_token(i)?;
@@ -572,9 +572,9 @@ impl YaccParser {
             } else {
                 let (j, sym, span) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
-                    syms.push(Symbol::Token(sym, span));
+                    syms.push(ASTSymbol::Token(sym, span));
                 } else {
-                    syms.push(Symbol::Rule(sym, span));
+                    syms.push(ASTSymbol::Rule(sym, span));
                 }
                 i = j;
             }
@@ -851,7 +851,7 @@ impl YaccParser {
 mod test {
     use super::{
         super::{
-            ast::{GrammarAST, Production, Symbol},
+            ast::{ASTSymbol, GrammarAST, Production},
             AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
         Span, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
@@ -863,19 +863,19 @@ mod test {
         Ok(yp.ast())
     }
 
-    fn rule(n: &str) -> Symbol {
-        Symbol::Rule(n.to_string(), Span::new(0, 0))
+    fn rule(n: &str) -> ASTSymbol {
+        ASTSymbol::Rule(n.to_string(), Span::new(0, 0))
     }
 
-    fn rule_span(n: &str, span: Span) -> Symbol {
-        Symbol::Rule(n.to_string(), span)
+    fn rule_span(n: &str, span: Span) -> ASTSymbol {
+        ASTSymbol::Rule(n.to_string(), span)
     }
 
-    fn token(n: &str) -> Symbol {
-        Symbol::Token(n.to_string(), Span::new(0, 0))
+    fn token(n: &str) -> ASTSymbol {
+        ASTSymbol::Token(n.to_string(), Span::new(0, 0))
     }
-    fn token_span(n: &str, span: Span) -> Symbol {
-        Symbol::Token(n.to_string(), span)
+    fn token_span(n: &str, span: Span) -> ASTSymbol {
+        ASTSymbol::Token(n.to_string(), span)
     }
 
     fn line_of_offset(s: &str, off: usize) -> usize {
@@ -914,7 +914,10 @@ mod test {
 
     #[test]
     fn test_helper_fn() {
-        assert_eq!(Symbol::Token("A".to_string(), Span::new(0, 0)), token("A"));
+        assert_eq!(
+            ASTSymbol::Token("A".to_string(), Span::new(0, 0)),
+            token("A")
+        );
     }
 
     #[test]

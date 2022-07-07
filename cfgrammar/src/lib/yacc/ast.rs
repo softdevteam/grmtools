@@ -40,23 +40,23 @@ pub struct Rule {
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Production {
-    pub symbols: Vec<Symbol>,
+    pub symbols: Vec<ASTSymbol>,
     pub precedence: Option<String>,
     pub action: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-pub enum Symbol {
+pub enum ASTSymbol {
     Rule(String, Span),
     Token(String, Span),
 }
 
-impl fmt::Display for Symbol {
+impl fmt::Display for ASTSymbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Symbol::Rule(ref s, _) => write!(f, "{}", s),
-            Symbol::Token(ref s, _) => write!(f, "{}", s),
+            ASTSymbol::Rule(ref s, _) => write!(f, "{}", s),
+            ASTSymbol::Token(ref s, _) => write!(f, "{}", s),
         }
     }
 }
@@ -95,7 +95,7 @@ impl GrammarAST {
     pub fn add_prod(
         &mut self,
         rule_name: String,
-        symbols: Vec<Symbol>,
+        symbols: Vec<ASTSymbol>,
         precedence: Option<String>,
         action: Option<String>,
     ) {
@@ -168,7 +168,7 @@ impl GrammarAST {
                 }
                 for sym in &prod.symbols {
                     match *sym {
-                        Symbol::Rule(ref name, span) => {
+                        ASTSymbol::Rule(ref name, span) => {
                             if !self.rules.contains_key(name) {
                                 return Err(YaccGrammarError {
                                     kind: YaccGrammarErrorKind::UnknownRuleRef(name.clone()),
@@ -176,7 +176,7 @@ impl GrammarAST {
                                 });
                             }
                         }
-                        Symbol::Token(ref name, span) => {
+                        ASTSymbol::Token(ref name, span) => {
                             if !self.tokens.contains(name) {
                                 return Err(YaccGrammarError {
                                     kind: YaccGrammarErrorKind::UnknownToken(name.clone()),
@@ -210,15 +210,15 @@ impl GrammarAST {
 mod test {
     use super::{
         super::{AssocKind, Precedence},
-        GrammarAST, Span, Symbol, YaccGrammarError, YaccGrammarErrorKind,
+        ASTSymbol, GrammarAST, Span, YaccGrammarError, YaccGrammarErrorKind,
     };
 
-    fn rule(n: &str) -> Symbol {
-        Symbol::Rule(n.to_string(), Span::new(0, 0))
+    fn rule(n: &str) -> ASTSymbol {
+        ASTSymbol::Rule(n.to_string(), Span::new(0, 0))
     }
 
-    fn token(n: &str) -> Symbol {
-        Symbol::Token(n.to_string(), Span::new(0, 0))
+    fn token(n: &str) -> ASTSymbol {
+        ASTSymbol::Token(n.to_string(), Span::new(0, 0))
     }
 
     #[test]

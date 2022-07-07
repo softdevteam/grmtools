@@ -281,10 +281,10 @@ where
                 let mut prod = Vec::with_capacity(astprod.symbols.len());
                 for astsym in &astprod.symbols {
                     match *astsym {
-                        ast::Symbol::Rule(ref n, _) => {
+                        ast::ASTSymbol::Rule(ref n, _) => {
                             prod.push(Symbol::Rule(rule_map[n]));
                         }
-                        ast::Symbol::Token(ref n, _) => {
+                        ast::ASTSymbol::Token(ref n, _) => {
                             prod.push(Symbol::Token(token_map[n]));
                             if implicit_rule.is_some() {
                                 prod.push(Symbol::Rule(rule_map[&implicit_rule.clone().unwrap()]));
@@ -297,7 +297,7 @@ where
                     prec = Some(ast.precs[n]);
                 } else {
                     for astsym in astprod.symbols.iter().rev() {
-                        if let ast::Symbol::Token(ref n, _) = *astsym {
+                        if let ast::ASTSymbol::Token(ref n, _) = *astsym {
                             if let Some(p) = ast.precs.get(n) {
                                 prec = Some(*p);
                             }
