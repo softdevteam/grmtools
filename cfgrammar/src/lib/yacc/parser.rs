@@ -20,7 +20,7 @@ use super::{
 };
 
 /// The various different possible Yacc parser errors.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum YaccGrammarErrorKind {
     IllegalInteger,
     IllegalName,
@@ -64,7 +64,7 @@ pub enum YaccGrammarErrorKind {
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct YaccGrammarError {
     pub kind: YaccGrammarErrorKind,
     pub span: Span,
@@ -189,10 +189,11 @@ impl YaccParser {
     }
 
     pub(crate) fn parse(&mut self) -> YaccGrammarResult<usize> {
+        let mut errs = Vec::new();
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let mut i = self.parse_declarations(0).map_err(|e| vec![e]);
+        let i = self.parse_declarations(0).map_err(|e| vec![e]);
         if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
             return Err(vec![YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans.clone()),
@@ -245,14 +246,32 @@ impl YaccParser {
                     .unwrap(),
             }]);
         }
-        i = self.parse_rules(i?).map_err(|e| vec![e]);
-        if let Some((orig_span, spans)) = self.duplicate_rule_spans.iter().next() {
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateRule(spans.clone()),
-                span: *orig_span,
-            }]);
+        let r = self.parse_rules(i?);
+        // As a side-effect the call to `parse_rules` may add items to self.duplicate_rule_spans.
+        // Convert into errors, while continuing to process the file as much as possible.
+        errs.extend(
+            self.duplicate_rule_spans
+                .iter()
+                .map(|(orig_span, spans)| YaccGrammarError {
+                    kind: YaccGrammarErrorKind::DuplicateRule(spans.clone()),
+                    span: *orig_span,
+                }),
+        );
+        let i = match r {
+            Err(e) => {
+                errs.push(e);
+                return Err(errs);
+            }
+            Ok(i) => i,
+        };
+        match self.parse_programs(i) {
+            Ok(i) if errs.is_empty() => Ok(i),
+            Err(e) => {
+                errs.push(e);
+                Err(errs)
+            }
+            _ => Err(errs),
         }
-        self.parse_programs(i?).map_err(|e| vec![e])
     }
 
     pub(crate) fn ast(self) -> GrammarAST {
@@ -859,6 +878,7 @@ mod test {
         },
         Span, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
+    use std::collections::HashSet;
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
         let mut yp = YaccParser::new(yacc_kind, s.to_string());
@@ -883,6 +903,12 @@ mod test {
 
     fn line_of_offset(s: &str, off: usize) -> usize {
         s[..off].lines().count()
+    }
+
+    fn check_errors(errs: &[YaccGrammarError], errs_expect: &[YaccGrammarError]) -> bool {
+        let es = errs.iter().collect::<HashSet<&YaccGrammarError>>();
+        let es_expect = errs_expect.iter().collect::<HashSet<&YaccGrammarError>>();
+        errs.len() == es.len() && es == es_expect
     }
 
     macro_rules! incorrect_errs {
@@ -2217,5 +2243,46 @@ x"
                 ])
             }]
         );
+    }
+
+    #[test]
+    fn test_duplicate_rules_and_missing_arrow() {
+        let src = "
+        %%
+        A -> () : 'a1';
+        A -> () : 'a2';
+        B -> () : 'b1';
+        A -> () : 'a3';
+        B -> () : 'b2';
+        B";
+        match parse(YaccKind::Grmtools, src)
+            .as_ref()
+            .map_err(Vec::as_slice)
+        {
+            Ok(_) => panic!(),
+            Err(e)
+                if check_errors(
+                    e,
+                    &[
+                        YaccGrammarError {
+                            kind: YaccGrammarErrorKind::DuplicateRule(vec![
+                                Span::new(44, 45),
+                                Span::new(92, 93),
+                            ]),
+                            span: Span::new(20, 21),
+                        },
+                        YaccGrammarError {
+                            kind: YaccGrammarErrorKind::DuplicateRule(vec![Span::new(116, 117)]),
+                            span: Span::new(68, 69),
+                        },
+                        YaccGrammarError {
+                            kind: YaccGrammarErrorKind::MissingRightArrow,
+
+                            span: Span::new(141, 141),
+                        },
+                    ],
+                ) => {}
+            Err(e) => incorrect_errs!(src, e),
+        }
     }
 }
