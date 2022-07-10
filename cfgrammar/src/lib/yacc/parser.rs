@@ -913,6 +913,12 @@ mod test {
         s[..off].lines().count()
     }
 
+    /// Helper function which tests for equivalence between slices containing YaccGrammarErrors.
+    /// Does not assume that the slices are in the same order.
+    /// `errs` is the `&[YaccGrammarError]` obtained from a call to parse
+    /// `errs_expect` is the expected result of that call
+    /// Returns `false` if `errs` contains duplicates or the slices contain different
+    /// elements using an unordered comparison.
     fn check_errors(errs: &[YaccGrammarError], errs_expect: &[YaccGrammarError]) -> bool {
         let es = errs.iter().collect::<HashSet<&YaccGrammarError>>();
         let es_expect = errs_expect.iter().collect::<HashSet<&YaccGrammarError>>();
