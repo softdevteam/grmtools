@@ -193,7 +193,9 @@ impl YaccParser {
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let i = self.parse_declarations(0).map_err(|e| vec![e]);
+        let mut r = self.parse_declarations(0);
+        // As a side-effect the above call to `parse_declarations` may have added items to `self.duplicate_*`.
+        // Convert into errors, while continuing to process the file as much as possible.
         if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
             return Err(vec![YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration(spans.clone()),
@@ -236,17 +238,23 @@ impl YaccParser {
                 span: *orig_span,
             }]);
         }
-        if let Some(spans) = &self.duplicate_actiontype_declarations {
-            return Err(vec![YaccGrammarError {
+        errs.extend(self.duplicate_actiontype_declarations.iter().map(|spans| {
+            YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateActiontypeDeclaration(spans.clone()),
                 span: *self
                     .global_actiontype
                     .as_ref()
                     .map(|(_, span)| span)
                     .unwrap(),
-            }]);
-        }
-        let r = self.parse_rules(i?);
+            }
+        }));
+        r = self.parse_rules(match r {
+            Ok(i) => i,
+            Err(e) => {
+                errs.push(e);
+                return Err(errs);
+            }
+        });
         // As a side-effect the call to `parse_rules` may add items to self.duplicate_rule_spans.
         // Convert into errors, while continuing to process the file as much as possible.
         errs.extend(
@@ -2200,6 +2208,41 @@ x"
             ) if line_of_offset(src, span.start()) == 2 => {
                 assert_eq!(spans, &[Span::new(46, 48), Span::new(70, 72)])
             }
+            Err(e) => incorrect_errs!(src, e),
+        }
+    }
+
+    #[test]
+    fn test_duplicate_avoid_insert_and_premature_end() {
+        let src = "
+         %actiontype T1
+         %actiontype T2
+         %actiontype T3";
+        match parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
+        )
+        .as_ref()
+        .map_err(Vec::as_slice)
+        {
+            Ok(_) => panic!(),
+            Err(e)
+                if check_errors(
+                    e,
+                    &[
+                        YaccGrammarError {
+                            kind: YaccGrammarErrorKind::DuplicateActiontypeDeclaration(vec![
+                                Span::new(46, 48),
+                                Span::new(70, 72),
+                            ]),
+                            span: Span::new(22, 24),
+                        },
+                        YaccGrammarError {
+                            kind: YaccGrammarErrorKind::PrematureEnd,
+                            span: Span::new(71, 71),
+                        },
+                    ],
+                ) => {}
             Err(e) => incorrect_errs!(src, e),
         }
     }
