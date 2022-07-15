@@ -137,14 +137,14 @@ impl GrammarAST {
             None => {
                 return Err(YaccGrammarError {
                     kind: YaccGrammarErrorKind::NoStartRule,
-                    span: Span::new(0, 0),
+                    spans: vec![Span::new(0, 0)],
                 });
             }
             Some((ref s, span)) => {
                 if !self.rules.contains_key(s) {
                     return Err(YaccGrammarError {
                         kind: YaccGrammarErrorKind::InvalidStartRule(s.clone()),
-                        span,
+                        spans: vec![span],
                     });
                 }
             }
@@ -156,13 +156,13 @@ impl GrammarAST {
                     if !self.tokens.contains(n) {
                         return Err(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownToken(n.clone()),
-                            span: Span::new(0, 0),
+                            spans: vec![Span::new(0, 0)],
                         });
                     }
                     if !self.precs.contains_key(n) {
                         return Err(YaccGrammarError {
                             kind: YaccGrammarErrorKind::NoPrecForToken(n.clone()),
-                            span: Span::new(0, 0),
+                            spans: vec![Span::new(0, 0)],
                         });
                     }
                 }
@@ -172,7 +172,7 @@ impl GrammarAST {
                             if !self.rules.contains_key(name) {
                                 return Err(YaccGrammarError {
                                     kind: YaccGrammarErrorKind::UnknownRuleRef(name.clone()),
-                                    span,
+                                    spans: vec![span],
                                 });
                             }
                         }
@@ -180,7 +180,7 @@ impl GrammarAST {
                             if !self.tokens.contains(name) {
                                 return Err(YaccGrammarError {
                                     kind: YaccGrammarErrorKind::UnknownToken(name.clone()),
-                                    span,
+                                    spans: vec![span],
                                 });
                             }
                         }
@@ -199,7 +199,7 @@ impl GrammarAST {
             }
             return Err(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownEPP(k.clone()),
-                span: Span::new(0, 0),
+                spans: vec![Span::new(0, 0)],
             });
         }
         Ok(())
