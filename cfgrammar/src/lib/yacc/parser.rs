@@ -199,7 +199,6 @@ pub(crate) struct YaccParser {
     duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
     duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
     duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
-    duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
 }
 
 lazy_static! {
@@ -241,7 +240,6 @@ impl YaccParser {
             duplicate_avoid_insert_spans: HashMap::new(),
             duplicate_precedence_spans: HashMap::new(),
             duplicate_implicit_token_spans: HashMap::new(),
-            duplicate_expect_declarations: None,
         }
     }
 
@@ -272,14 +270,6 @@ impl YaccParser {
             tmp.extend(spans);
             return Err(vec![YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
-                spans: tmp,
-            }]);
-        }
-        if let Some((orig_span, spans)) = &self.duplicate_expect_declarations {
-            let mut tmp = vec![*orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateExpectDeclaration,
                 spans: tmp,
             }]);
         }
@@ -419,10 +409,12 @@ impl YaccParser {
                 let (j, n) = self.parse_int(i)?;
                 let span = Span::new(i, j);
                 if let Some((_, orig_span)) = self.ast.expect {
-                    self.duplicate_expect_declarations
-                        .get_or_insert_with(|| (orig_span, Vec::new()))
-                        .1
-                        .push(span)
+                    add_duplicate_occurrence(
+                        errs,
+                        YaccGrammarErrorKind::DuplicateExpectDeclaration,
+                        orig_span,
+                        span,
+                    );
                 } else {
                     self.ast.expect = Some((n, span));
                 }
@@ -1943,6 +1935,31 @@ x"
             src,
             YaccGrammarErrorKind::DuplicateExpectDeclaration,
             &mut [(2, 19), (3, 19), (4, 19)].into_iter(),
+        )
+    }
+
+    #[test]
+    fn test_duplicate_expect_and_missing_colon() {
+        let src = "
+          %expect 1
+          %expect 2
+          %expect 3
+          %%
+          A ;";
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
+        )
+        .expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateExpectDeclaration,
+                    vec![(2, 19), (3, 19), (4, 19)],
+                ),
+                (YaccGrammarErrorKind::MissingColon, vec![(6, 13)]),
+            ]
+            .into_iter(),
         )
     }
 
