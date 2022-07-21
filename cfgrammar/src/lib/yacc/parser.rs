@@ -197,7 +197,6 @@ pub(crate) struct YaccParser {
     ast: GrammarAST,
     global_actiontype: Option<(String, Span)>,
     duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
-    duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -237,7 +236,6 @@ impl YaccParser {
             ast: GrammarAST::new(),
             global_actiontype: None,
             duplicate_avoid_insert_spans: HashMap::new(),
-            duplicate_precedence_spans: HashMap::new(),
         }
     }
 
@@ -252,14 +250,6 @@ impl YaccParser {
             tmp.extend(spans);
             return Err(vec![YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration,
-                spans: tmp,
-            }]);
-        }
-        if let Some((orig_span, spans)) = self.duplicate_precedence_spans.iter().next() {
-            let mut tmp = vec![*orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicatePrecedence,
                 spans: tmp,
             }]);
         }
@@ -506,10 +496,12 @@ impl YaccParser {
                     match self.ast.precs.entry(n) {
                         Entry::Occupied(orig) => {
                             let (_, orig_span) = orig.get();
-                            self.duplicate_precedence_spans
-                                .entry(*orig_span)
-                                .or_insert_with(Vec::new)
-                                .push(span);
+                            add_duplicate_occurrence(
+                                errs,
+                                YaccGrammarErrorKind::DuplicatePrecedence,
+                                *orig_span,
+                                span,
+                            );
                         }
                         Entry::Vacant(entry) => {
                             let prec = Precedence {
@@ -1573,6 +1565,38 @@ x"
                 &mut [*expected_origin, *expected_dup].into_iter(),
             );
         }
+    }
+
+    #[test]
+    fn test_multiple_dup_precs() {
+        let src = "
+          %left 'x'
+          %left 'x'
+          %right 'x'
+          %nonassoc 'x'
+          %left 'y'
+          %nonassoc 'y'
+          %right 'y'
+          %%";
+
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
+        )
+        .expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicatePrecedence,
+                    vec![(2, 18), (3, 18), (4, 19), (5, 22)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicatePrecedence,
+                    vec![(6, 18), (7, 22), (8, 19)],
+                ),
+            ]
+            .into_iter(),
+        );
     }
 
     #[test]
