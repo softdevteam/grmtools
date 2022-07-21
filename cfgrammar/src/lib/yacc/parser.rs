@@ -200,7 +200,6 @@ pub(crate) struct YaccParser {
     duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
     duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
     duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
-    duplicate_expectrr_declarations: Option<(Span, Vec<Span>)>,
 }
 
 lazy_static! {
@@ -243,7 +242,6 @@ impl YaccParser {
             duplicate_precedence_spans: HashMap::new(),
             duplicate_implicit_token_spans: HashMap::new(),
             duplicate_expect_declarations: None,
-            duplicate_expectrr_declarations: None,
         }
     }
 
@@ -285,15 +283,6 @@ impl YaccParser {
                 spans: tmp,
             }]);
         }
-        if let Some((orig_span, spans)) = &self.duplicate_expectrr_declarations {
-            let mut tmp = vec![*orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
-                spans: tmp,
-            }]);
-        }
-
         result = self.parse_rules(
             match result {
                 Ok(i) => i,
@@ -413,10 +402,12 @@ impl YaccParser {
                 let (j, n) = self.parse_int(i)?;
                 let span = Span::new(i, j);
                 if let Some((_, orig_span)) = self.ast.expectrr {
-                    self.duplicate_expectrr_declarations
-                        .get_or_insert_with(|| (orig_span, Vec::new()))
-                        .1
-                        .push(span)
+                    add_duplicate_occurrence(
+                        errs,
+                        YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
+                        orig_span,
+                        span,
+                    );
                 } else {
                     self.ast.expectrr = Some((n, span));
                 }
@@ -1971,6 +1962,31 @@ x"
             src,
             YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
             &mut [(2, 22), (3, 22), (4, 22)].into_iter(),
+        );
+    }
+
+    #[test]
+    fn test_duplicate_expectrr_illegal_name() {
+        let src = "
+          %expect-rr 1
+          %expect-rr 2
+          %expect-rr 3
+          %%
+          +IllegalRuleName+:;";
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
+        )
+        .expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
+                    vec![(2, 22), (3, 22), (4, 22)],
+                ),
+                (YaccGrammarErrorKind::IllegalName, vec![(6, 11)]),
+            ]
+            .into_iter(),
         );
     }
 
