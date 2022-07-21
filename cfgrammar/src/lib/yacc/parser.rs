@@ -196,9 +196,6 @@ pub(crate) struct YaccParser {
     num_newlines: usize,
     ast: GrammarAST,
     global_actiontype: Option<(String, Span)>,
-    /// The key is the span of the [Rule](crate::yacc::ast::Rule) being duplicated.
-    /// The value contains one span for every duplicate of the key.
-    duplicate_rule_spans: HashMap<Span, Vec<Span>>,
     duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
     duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
     duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
@@ -215,6 +212,27 @@ lazy_static! {
         Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap();
 }
 
+fn add_duplicate_occurrence(
+    errs: &mut Vec<YaccGrammarError>,
+    kind: YaccGrammarErrorKind,
+    orig_span: Span,
+    dup_span: Span,
+) {
+    if !errs.iter_mut().any(|e| {
+        if e.kind == kind && e.spans[0] == orig_span {
+            e.spans.push(dup_span);
+            true
+        } else {
+            false
+        }
+    }) {
+        errs.push(YaccGrammarError {
+            kind,
+            spans: vec![orig_span, dup_span],
+        });
+    }
+}
+
 /// The actual parser is intended to be entirely opaque from outside users.
 impl YaccParser {
     pub(crate) fn new(yacc_kind: YaccKind, src: String) -> YaccParser {
@@ -224,7 +242,6 @@ impl YaccParser {
             num_newlines: 0,
             ast: GrammarAST::new(),
             global_actiontype: None,
-            duplicate_rule_spans: HashMap::new(),
             duplicate_avoid_insert_spans: HashMap::new(),
             duplicate_precedence_spans: HashMap::new(),
             duplicate_implicit_token_spans: HashMap::new(),
@@ -237,10 +254,11 @@ impl YaccParser {
     }
 
     pub(crate) fn parse(&mut self) -> YaccGrammarResult<usize> {
+        let mut errs: Vec<YaccGrammarError> = Vec::new();
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let mut i = self.parse_declarations(0).map_err(|e| vec![e]);
+        let mut result = self.parse_declarations(0);
         if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
             let mut tmp = vec![*orig_span];
             tmp.extend(spans);
@@ -310,16 +328,33 @@ impl YaccParser {
                 spans: tmp,
             }]);
         }
-        i = self.parse_rules(i?).map_err(|e| vec![e]);
-        if let Some((orig_span, spans)) = self.duplicate_rule_spans.iter().next() {
-            let mut tmp = vec![*orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateRule,
-                spans: tmp,
-            }]);
+
+        result = self.parse_rules(
+            match result {
+                Ok(i) => i,
+                Err(e) => {
+                    errs.push(e);
+                    return Err(errs);
+                }
+            },
+            &mut errs,
+        );
+        let i = match result {
+            Err(e) => {
+                errs.push(e);
+                return Err(errs);
+            }
+            Ok(i) => i,
+        };
+
+        match self.parse_programs(i, &mut errs) {
+            Ok(i) if errs.is_empty() => Ok(i),
+            Err(e) => {
+                errs.push(e);
+                Err(errs)
+            }
+            _ => Err(errs),
         }
-        self.parse_programs(i?).map_err(|e| vec![e])
     }
 
     pub(crate) fn ast(self) -> GrammarAST {
@@ -542,7 +577,11 @@ impl YaccParser {
         Err(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i - 1))
     }
 
-    fn parse_rules(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
+    fn parse_rules(
+        &mut self,
+        mut i: usize,
+        errs: &mut Vec<YaccGrammarError>,
+    ) -> Result<usize, YaccGrammarError> {
         // self.parse_declarations should have left the input at '%%'
         i = self.lookahead_is("%%", i).unwrap();
         i = self.parse_ws(i, true)?;
@@ -550,13 +589,17 @@ impl YaccParser {
             if self.lookahead_is("%%", i).is_some() {
                 break;
             }
-            i = self.parse_rule(i)?;
+            i = self.parse_rule(i, errs)?;
             i = self.parse_ws(i, true)?;
         }
         Ok(i)
     }
 
-    fn parse_rule(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
+    fn parse_rule(
+        &mut self,
+        mut i: usize,
+        errs: &mut Vec<YaccGrammarError>,
+    ) -> Result<usize, YaccGrammarError> {
         let (j, rn) = self.parse_name(i)?;
         let span = Span::new(i, j);
         if self.ast.start.is_none() {
@@ -583,11 +626,12 @@ impl YaccParser {
                 let (j, actiont) = self.parse_to_single_colon(i)?;
                 match self.ast.get_rule(&rn) {
                     None => self.ast.add_rule((rn.clone(), span), Some(actiont)),
-                    Some(orig) => self
-                        .duplicate_rule_spans
-                        .entry(orig.name.1)
-                        .or_insert_with(Vec::new)
-                        .push(span),
+                    Some(orig) => add_duplicate_occurrence(
+                        errs,
+                        YaccGrammarErrorKind::DuplicateRule,
+                        orig.name.1,
+                        span,
+                    ),
                 }
                 i = j;
             }
@@ -713,7 +757,11 @@ impl YaccParser {
         }
     }
 
-    fn parse_programs(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
+    fn parse_programs(
+        &mut self,
+        mut i: usize,
+        _: &mut Vec<YaccGrammarError>,
+    ) -> Result<usize, YaccGrammarError> {
         if let Some(j) = self.lookahead_is("%%", i) {
             i = self.parse_ws(j, true)?;
             let prog = self.src[i..].to_string();
@@ -1000,6 +1048,11 @@ mod test {
             kind: YaccGrammarErrorKind,
             lines_cols: &mut dyn Iterator<Item = (usize, usize)>,
         );
+        fn expect_multiple_errors(
+            self,
+            src: &str,
+            expected: &mut dyn Iterator<Item = (YaccGrammarErrorKind, Vec<(usize, usize)>)>,
+        );
     }
 
     impl ErrorsHelper for Result<GrammarAST, Vec<YaccGrammarError>> {
@@ -1046,6 +1099,29 @@ mod test {
                     )
                 }
                 Err(e) => incorrect_errs!(src, e),
+            }
+        }
+
+        fn expect_multiple_errors(
+            self,
+            src: &str,
+            expected: &mut dyn Iterator<Item = (YaccGrammarErrorKind, Vec<(usize, usize)>)>,
+        ) {
+            match self {
+                Ok(_) => panic!("Parsed ok while expecting error"),
+                Err(errs)
+                    if errs
+                        .iter()
+                        .map(|e| {
+                            (
+                                e.kind.clone(),
+                                e.spans()
+                                    .map(|span| line_col!(src, span))
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .eq(expected) => {}
+                Err(errs) => incorrect_errs!(src, errs),
             }
         }
     }
@@ -2069,5 +2145,29 @@ x"
                 spans: vec![Span::new(38, 39), Span::new(94, 95), Span::new(150, 151)],
             }]
         );
+    }
+
+    #[test]
+    fn test_duplicate_rules_and_missing_arrow() {
+        let src = "
+        %%
+        A -> () : 'a1';
+        A -> () : 'a2';
+        B -> () : 'b1';
+        A -> () : 'a3';
+        B -> () : 'b2';
+        B";
+        parse(YaccKind::Grmtools, src).expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateRule,
+                    vec![(3, 9), (4, 9), (6, 9)],
+                ),
+                (YaccGrammarErrorKind::DuplicateRule, vec![(5, 9), (7, 9)]),
+                (YaccGrammarErrorKind::MissingRightArrow, vec![(8, 10)]),
+            ]
+            .into_iter(),
+        )
     }
 }
