@@ -201,7 +201,6 @@ pub(crate) struct YaccParser {
     duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
     duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
     duplicate_expectrr_declarations: Option<(Span, Vec<Span>)>,
-    duplicate_start_declarations: Option<(Span, Vec<Span>)>,
 }
 
 lazy_static! {
@@ -245,7 +244,6 @@ impl YaccParser {
             duplicate_implicit_token_spans: HashMap::new(),
             duplicate_expect_declarations: None,
             duplicate_expectrr_declarations: None,
-            duplicate_start_declarations: None,
         }
     }
 
@@ -292,14 +290,6 @@ impl YaccParser {
             tmp.extend(spans);
             return Err(vec![YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
-                spans: tmp,
-            }]);
-        }
-        if let Some((orig_span, spans)) = &self.duplicate_start_declarations {
-            let mut tmp = vec![*orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateStartDeclaration,
                 spans: tmp,
             }]);
         }
@@ -385,10 +375,12 @@ impl YaccParser {
                 let (j, n) = self.parse_name(i)?;
                 let span = Span::new(i, j);
                 if let Some((_, orig_span)) = self.ast.start {
-                    self.duplicate_start_declarations
-                        .get_or_insert_with(|| (orig_span, Vec::new()))
-                        .1
-                        .push(span)
+                    add_duplicate_occurrence(
+                        errs,
+                        YaccGrammarErrorKind::DuplicateStartDeclaration,
+                        orig_span,
+                        span,
+                    );
                 } else {
                     self.ast.start = Some((n, span));
                 }
@@ -1923,6 +1915,24 @@ x"
             src,
             YaccGrammarErrorKind::DuplicateStartDeclaration,
             &mut [(2, 18), (3, 18)].into_iter(),
+        );
+    }
+
+    #[test]
+    fn test_duplicate_start_premature_end() {
+        let src = "
+          %start X
+          %start X";
+        parse(YaccKind::Eco, src).expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateStartDeclaration,
+                    vec![(2, 18), (3, 18)],
+                ),
+                (YaccGrammarErrorKind::PrematureEnd, vec![(3, 18)]),
+            ]
+            .into_iter(),
         );
     }
 
