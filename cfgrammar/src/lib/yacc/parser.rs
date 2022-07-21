@@ -196,7 +196,6 @@ pub(crate) struct YaccParser {
     num_newlines: usize,
     ast: GrammarAST,
     global_actiontype: Option<(String, Span)>,
-    duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -235,7 +234,6 @@ impl YaccParser {
             num_newlines: 0,
             ast: GrammarAST::new(),
             global_actiontype: None,
-            duplicate_avoid_insert_spans: HashMap::new(),
         }
     }
 
@@ -245,14 +243,6 @@ impl YaccParser {
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
         let mut result = self.parse_declarations(0, &mut errs);
-        if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
-            let mut tmp = vec![*orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration,
-                spans: tmp,
-            }]);
-        }
         result = self.parse_rules(
             match result {
                 Ok(i) => i,
@@ -415,10 +405,12 @@ impl YaccParser {
 
                     match self.ast.avoid_insert.as_mut().unwrap().entry(n) {
                         Entry::Occupied(occupied) => {
-                            self.duplicate_avoid_insert_spans
-                                .entry(*occupied.get())
-                                .or_insert_with(Vec::new)
-                                .push(span);
+                            add_duplicate_occurrence(
+                                errs,
+                                YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration,
+                                *occupied.get(),
+                                span,
+                            );
                         }
                         Entry::Vacant(vacant) => {
                             vacant.insert(span);
@@ -1724,6 +1716,29 @@ x"
             src,
             YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration,
             &mut [(3, 23), (3, 25)].into_iter(),
+        );
+    }
+
+    #[test]
+    fn test_multiple_duplicate_avoid_insert() {
+        let src = "
+        %avoid_insert X
+        %avoid_insert Y Y X
+        %%
+        ";
+        parse(YaccKind::Eco, src).expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration,
+                    vec![(3, 23), (3, 25)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration,
+                    vec![(2, 23), (3, 27)],
+                ),
+            ]
+            .into_iter(),
         );
     }
 
