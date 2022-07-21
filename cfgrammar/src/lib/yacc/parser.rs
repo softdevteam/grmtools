@@ -202,7 +202,6 @@ pub(crate) struct YaccParser {
     duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
     duplicate_expectrr_declarations: Option<(Span, Vec<Span>)>,
     duplicate_start_declarations: Option<(Span, Vec<Span>)>,
-    duplicate_epp_declarations: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -247,7 +246,6 @@ impl YaccParser {
             duplicate_expect_declarations: None,
             duplicate_expectrr_declarations: None,
             duplicate_start_declarations: None,
-            duplicate_epp_declarations: HashMap::new(),
         }
     }
 
@@ -302,14 +300,6 @@ impl YaccParser {
             tmp.extend(spans);
             return Err(vec![YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicateStartDeclaration,
-                spans: tmp,
-            }]);
-        }
-        if let Some((orig_span, spans)) = self.duplicate_epp_declarations.iter().next() {
-            let mut tmp = vec![*orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateEPP,
                 spans: tmp,
             }]);
         }
@@ -413,11 +403,12 @@ impl YaccParser {
                 let (j, v) = self.parse_string(i)?;
                 let vspan = Span::new(i, j);
                 match self.ast.epp.entry(n) {
-                    Entry::Occupied(orig) => self
-                        .duplicate_epp_declarations
-                        .entry(orig.get().0)
-                        .or_insert_with(Vec::new)
-                        .push(span),
+                    Entry::Occupied(orig) => add_duplicate_occurrence(
+                        errs,
+                        YaccGrammarErrorKind::DuplicateEPP,
+                        orig.get().0,
+                        span,
+                    ),
                     Entry::Vacant(epp) => {
                         epp.insert((span, (v, vspan)));
                     }
@@ -1878,6 +1869,33 @@ x"
             src,
             YaccGrammarErrorKind::DuplicateEPP,
             &mut [(2, 14), (3, 14), (4, 14)].into_iter(),
+        );
+    }
+
+    #[test]
+    fn test_multiple_duplicate_epp() {
+        let src = "
+        %epp A \"a1\"
+        %epp A \"a2\"
+        %epp A \"a3\"
+        %epp B \"b1\"
+        %epp B \"b2\"
+        %epp B \"b3\"
+        %%
+        ";
+        parse(YaccKind::Eco, src).expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateEPP,
+                    vec![(2, 14), (3, 14), (4, 14)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateEPP,
+                    vec![(5, 14), (6, 14), (7, 14)],
+                ),
+            ]
+            .into_iter(),
         );
     }
 
