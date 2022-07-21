@@ -202,7 +202,6 @@ pub(crate) struct YaccParser {
     duplicate_expect_declarations: Option<(Span, Vec<Span>)>,
     duplicate_expectrr_declarations: Option<(Span, Vec<Span>)>,
     duplicate_start_declarations: Option<(Span, Vec<Span>)>,
-    duplicate_actiontype_declarations: Option<Vec<Span>>,
     duplicate_epp_declarations: HashMap<Span, Vec<Span>>,
 }
 
@@ -248,7 +247,6 @@ impl YaccParser {
             duplicate_expect_declarations: None,
             duplicate_expectrr_declarations: None,
             duplicate_start_declarations: None,
-            duplicate_actiontype_declarations: None,
             duplicate_epp_declarations: HashMap::new(),
         }
     }
@@ -258,7 +256,7 @@ impl YaccParser {
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let mut result = self.parse_declarations(0);
+        let mut result = self.parse_declarations(0, &mut errs);
         if let Some((orig_span, spans)) = self.duplicate_avoid_insert_spans.iter().next() {
             let mut tmp = vec![*orig_span];
             tmp.extend(spans);
@@ -315,19 +313,6 @@ impl YaccParser {
                 spans: tmp,
             }]);
         }
-        if let Some(spans) = &self.duplicate_actiontype_declarations {
-            let orig_span = *self
-                .global_actiontype
-                .as_ref()
-                .map(|(_, span)| span)
-                .unwrap();
-            let mut tmp = vec![orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
-                spans: tmp,
-            }]);
-        }
 
         result = self.parse_rules(
             match result {
@@ -361,7 +346,11 @@ impl YaccParser {
         self.ast
     }
 
-    fn parse_declarations(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
+    fn parse_declarations(
+        &mut self,
+        mut i: usize,
+        errs: &mut Vec<YaccGrammarError>,
+    ) -> Result<usize, YaccGrammarError> {
         i = self.parse_ws(i, true)?;
         let mut prec_level = 0;
         while i < self.src.len() {
@@ -387,10 +376,13 @@ impl YaccParser {
                     i = self.parse_ws(j, false)?;
                     let (j, n) = self.parse_to_eol(i)?;
                     let span = Span::new(i, j);
-                    if self.global_actiontype.is_some() {
-                        self.duplicate_actiontype_declarations
-                            .get_or_insert_with(Vec::new)
-                            .push(span);
+                    if let Some((_, orig_span)) = self.global_actiontype {
+                        add_duplicate_occurrence(
+                            errs,
+                            YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
+                            orig_span,
+                            span,
+                        );
                     } else {
                         self.global_actiontype = Some((n, span));
                     }
@@ -2107,6 +2099,29 @@ x"
             YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
             &mut [(2, 22), (3, 22), (4, 22)].into_iter(),
         );
+    }
+
+    #[test]
+    fn test_duplicate_actiontype_and_premature_end() {
+        let src = "
+         %actiontype T1
+         %actiontype T2
+         %actiontype T3";
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            src,
+        )
+        .expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
+                    vec![(2, 22), (3, 22), (4, 22)],
+                ),
+                (YaccGrammarErrorKind::PrematureEnd, vec![(4, 23)]),
+            ]
+            .into_iter(),
+        )
     }
 
     #[test]
