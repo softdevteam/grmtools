@@ -198,7 +198,6 @@ pub(crate) struct YaccParser {
     global_actiontype: Option<(String, Span)>,
     duplicate_avoid_insert_spans: HashMap<Span, Vec<Span>>,
     duplicate_precedence_spans: HashMap<Span, Vec<Span>>,
-    duplicate_implicit_token_spans: HashMap<Span, Vec<Span>>,
 }
 
 lazy_static! {
@@ -239,7 +238,6 @@ impl YaccParser {
             global_actiontype: None,
             duplicate_avoid_insert_spans: HashMap::new(),
             duplicate_precedence_spans: HashMap::new(),
-            duplicate_implicit_token_spans: HashMap::new(),
         }
     }
 
@@ -262,14 +260,6 @@ impl YaccParser {
             tmp.extend(spans);
             return Err(vec![YaccGrammarError {
                 kind: YaccGrammarErrorKind::DuplicatePrecedence,
-                spans: tmp,
-            }]);
-        }
-        if let Some((orig_span, spans)) = self.duplicate_implicit_token_spans.iter().next() {
-            let mut tmp = vec![*orig_span];
-            tmp.extend(spans);
-            return Err(vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
                 spans: tmp,
             }]);
         }
@@ -476,10 +466,13 @@ impl YaccParser {
                         }
                         match self.ast.implicit_tokens.as_mut().unwrap().entry(n) {
                             Entry::Occupied(entry) => {
-                                self.duplicate_implicit_token_spans
-                                    .entry(*entry.get())
-                                    .or_insert_with(Vec::new)
-                                    .push(span);
+                                let orig_span = *entry.get();
+                                add_duplicate_occurrence(
+                                    errs,
+                                    YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
+                                    orig_span,
+                                    span,
+                                );
                             }
                             Entry::Vacant(entry) => {
                                 entry.insert(span);
@@ -1801,6 +1794,31 @@ x"
             src,
             YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
             &mut [(2, 26), (2, 28)].into_iter(),
+        );
+    }
+
+    #[test]
+    fn test_multiple_duplicate_implicit_tokens_and_invalid_rule() {
+        let src = "
+        %implicit_tokens X
+        %implicit_tokens X Y
+        %implicit_tokens Y
+        %%
+        IncompleteRule: ";
+        parse(YaccKind::Eco, src).expect_multiple_errors(
+            src,
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
+                    vec![(2, 26), (3, 26)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
+                    vec![(3, 28), (4, 26)],
+                ),
+                (YaccGrammarErrorKind::IncompleteRule, vec![(6, 25)]),
+            ]
+            .into_iter(),
         );
     }
 
