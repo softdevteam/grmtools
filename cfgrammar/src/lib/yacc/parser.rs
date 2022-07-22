@@ -253,15 +253,18 @@ impl YaccParser {
             },
             &mut errs,
         );
-        let i = match result {
-            Err(e) => {
-                errs.push(e);
-                return Err(errs);
-            }
-            Ok(i) => i,
-        };
+        result = self.parse_programs(
+            match result {
+                Ok(i) => i,
+                Err(e) => {
+                    errs.push(e);
+                    return Err(errs);
+                }
+            },
+            &mut errs,
+        );
 
-        match self.parse_programs(i, &mut errs) {
+        match result {
             Ok(i) if errs.is_empty() => Ok(i),
             Err(e) => {
                 errs.push(e);
