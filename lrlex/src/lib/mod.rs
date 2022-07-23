@@ -24,6 +24,7 @@ pub use crate::{
     ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, Visibility},
     lexemes::DefaultLexeme,
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
+    parser::StartState,
 };
 
 use cfgrammar::Span;
@@ -47,6 +48,10 @@ pub enum LexErrorKind {
     UnknownDeclaration,
     MissingSpace,
     InvalidName,
+    UnknownStartState,
+    DuplicateStartState,
+    InvalidStartState,
+    InvalidStartStateName,
     DuplicateName(Vec<Span>),
     RegexError,
 }
@@ -59,6 +64,10 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::UnknownDeclaration => "Unknown declaration",
             LexErrorKind::MissingSpace => "Rule is missing a space",
             LexErrorKind::InvalidName => "Invalid rule name",
+            LexErrorKind::UnknownStartState => "Start state not known",
+            LexErrorKind::DuplicateStartState => "Start state already exists",
+            LexErrorKind::InvalidStartState => "Invalid start state",
+            LexErrorKind::InvalidStartStateName => "Invalid start state name",
             LexErrorKind::DuplicateName(_) => "Rule name already exists",
             LexErrorKind::RegexError => "Invalid regular expression",
         };

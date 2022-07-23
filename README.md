@@ -130,7 +130,8 @@ contains several examples on how to use the `lrpar`/`lrlex` libraries, showing
 how to generate [parse
 trees](https://github.com/softdevteam/grmtools/tree/master/lrpar/examples/calc_parsetree)
 and
-[ASTs](https://github.com/softdevteam/grmtools/tree/master/lrpar/examples/calc_ast),
+[ASTs](https://github.com/softdevteam/grmtools/tree/master/lrpar/examples/calc_ast), use
+[start conditions/states](https://github.com/softdevteam/grmtools/tree/master/lrpar/examples/start_states)
 or [execute
 code](https://github.com/softdevteam/grmtools/tree/master/lrpar/examples/calc_actions)
 while parsing.
