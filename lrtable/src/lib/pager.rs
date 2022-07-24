@@ -250,7 +250,7 @@ where
                     }
                 }
                 None => {
-                    assert!(core_states.len() <= usize::from(StIdxStorageT::max_value()));
+                    assert!(core_states.len() <= usize::try_from(StIdxStorageT::max_value()).unwrap());
                     // The assert above guarantees that the cast below is safe.
                     let stidx = StIdx(core_states.len() as StIdxStorageT);
                     match sym {
