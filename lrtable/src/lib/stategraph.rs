@@ -23,6 +23,7 @@ where
         start_state: StIdx<StorageT>,
         edges: Vec<HashMap<Symbol<StorageT>, StIdx<StorageT>>>,
     ) -> Self {
+        assert!(states.len() < num_traits::cast(StorageT::max_value()).unwrap());
         StateGraph {
             states,
             start_state,
