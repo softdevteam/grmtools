@@ -4,10 +4,10 @@ use std::{
 };
 
 use cfgrammar::{yacc::YaccGrammar, SIdx, Symbol};
-use num_traits::{AsPrimitive, PrimInt, Unsigned, Zero};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use crate::{itemset::Itemset, stategraph::StateGraph, StIdx, StIdxStorageT};
+use crate::{itemset::Itemset, stategraph::StateGraph, StIdx};
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -128,9 +128,9 @@ where
     // closed_states also implicitly serves as a todo list.
     let mut closed_states = Vec::new();
     let mut core_states = Vec::new();
-    let mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>> = Vec::new();
+    let mut edges: Vec<HashMap<Symbol<StorageT>, StIdx<StorageT>>> = Vec::new();
 
-    let start_state = StIdx::from(StIdxStorageT::zero());
+    let start_state = StIdx(StorageT::zero());
     let mut state0 = Itemset::new(grm);
     let mut ctx = Vob::from_elem(false, usize::from(grm.tokens_len()));
     ctx.set(usize::from(grm.eof_token_idx()), true);
@@ -147,8 +147,9 @@ where
     let mut new_states = Vec::new();
     // cnd_[rule|token]_weaklies represent which states are possible weakly compatible
     // matches for a given symbol.
-    let mut cnd_rule_weaklies: Vec<Vec<StIdx>> = vec![Vec::new(); usize::from(grm.rules_len())];
-    let mut cnd_token_weaklies: Vec<Vec<StIdx>> =
+    let mut cnd_rule_weaklies: Vec<Vec<StIdx<StorageT>>> =
+        vec![Vec::new(); usize::from(grm.rules_len())];
+    let mut cnd_token_weaklies: Vec<Vec<StIdx<StorageT>>> =
         vec![Vec::new(); usize::from(grm.tokens_len()).checked_add(1).unwrap()];
 
     let mut todo = 1; // How many None values are there in closed_states?
@@ -250,9 +251,13 @@ where
                     }
                 }
                 None => {
-                    assert!(core_states.len() <= usize::try_from(StIdxStorageT::max_value()).unwrap());
+                    // Check that StorageT is big enough to hold RIdx/PIdx/SIdx/TIdx values; after these
+                    // checks we can guarantee that things like RIdx(ast.rules.len().as_()) are safe.
+                    if core_states.len() >= num_traits::cast(StorageT::max_value()).unwrap() {
+                        panic!("StorageT is not big enough to store this stategraph.");
+                    }
                     // The assert above guarantees that the cast below is safe.
-                    let stidx = StIdx(core_states.len() as StIdxStorageT);
+                    let stidx = StIdx(core_states.len().as_());
                     match sym {
                         Symbol::Rule(s_ridx) => {
                             cnd_rule_weaklies[usize::from(s_ridx)].push(stidx);
@@ -285,19 +290,23 @@ where
         start_state,
         edges,
     );
+
     StateGraph::new(gc_states, start_state, gc_edges)
 }
 
 /// Garbage collect `zip_states` (of `(core_states, closed_state)`) and `edges`. Returns a new pair
 /// with unused states and their corresponding edges removed.
-fn gc<StorageT: Eq + Hash + PrimInt>(
+fn gc<StorageT: 'static + Eq + Hash + PrimInt + Unsigned>(
     mut states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-    start_state: StIdx,
-    mut edges: Vec<HashMap<Symbol<StorageT>, StIdx>>,
+    start_state: StIdx<StorageT>,
+    mut edges: Vec<HashMap<Symbol<StorageT>, StIdx<StorageT>>>,
 ) -> (
     Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-    Vec<HashMap<Symbol<StorageT>, StIdx>>,
-) {
+    Vec<HashMap<Symbol<StorageT>, StIdx<StorageT>>>,
+)
+where
+    usize: AsPrimitive<StorageT>,
+{
     // First of all, do a simple pass over all states. All state indexes reachable from the
     // start state will be inserted into the 'seen' set.
     let mut todo = HashSet::new();
@@ -336,19 +345,12 @@ fn gc<StorageT: Eq + Hash + PrimInt>(
     // The way we do this is to first iterate over all states, working out what the mapping
     // from seen states to their new offsets is.
     let mut gc_states = Vec::with_capacity(seen.len());
-    let mut offsets = Vec::with_capacity(states.len());
+    let mut offsets = Vec::<StIdx<StorageT>>::with_capacity(states.len());
     let mut offset = 0;
-    for (state_i, zstate) in states
-        .drain(..)
-        .enumerate()
-        // edges goes from 0..states_len(), and we know the latter can safely fit into an
-        // StIdxStorageT, so the cast is safe.
-        .map(|(x, y)| (StIdx(x as StIdxStorageT), y))
-    {
-        // state_i <= states_len(), which fits in StIdxStorageT, so state_i - offset must also be
-        // <= states_len, making the cast safe
-        offsets.push(StIdx((usize::from(state_i) - offset) as StIdxStorageT));
-        if !seen.contains(&state_i) {
+    for (state_i, zstate) in states.drain(..).enumerate() {
+        // state_i <= states_len(), which fits in StorageT, so state_i.as_() is safe.
+        offsets.push(StIdx((state_i - offset).as_()));
+        if !seen.contains(&StIdx(state_i.as_())) {
             offset += 1;
             continue;
         }
@@ -358,14 +360,10 @@ fn gc<StorageT: Eq + Hash + PrimInt>(
     // At this point the offsets list will be [0, 1, 1]. We now create new edges where each
     // offset is corrected by looking it up in the offsets list.
     let mut gc_edges = Vec::with_capacity(seen.len());
-    for (st_edge_i, st_edges) in edges
-        .drain(..)
-        .enumerate()
+    for (st_edge_i, st_edges) in edges.drain(..).enumerate() {
         // edges goes from 0..states_len(), and we know the latter can safely fit into an
-        // StIdxStorageT, so the cast is safe.
-        .map(|(x, y)| (StIdx(x as StIdxStorageT), y))
-    {
-        if !seen.contains(&st_edge_i) {
+        // StorageT, so the cast is safe.
+        if !seen.contains(&StIdx(st_edge_i.as_())) {
             continue;
         }
         gc_edges.push(

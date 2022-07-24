@@ -64,7 +64,7 @@ where
     }
 }
 
-type PStack = Vec<StIdx>; // Parse stack
+type PStack<StorageT> = Vec<StIdx<StorageT>>; // Parse stack
 type TokenCostFn<'a, StorageT> = &'a (dyn Fn(TIdx<StorageT>) -> u8 + 'a);
 type ActionFn<'a, 'b, 'input, LexemeT, StorageT, ActionT, ParamT> = &'a dyn Fn(
     RIdx<StorageT>,
@@ -275,7 +275,7 @@ where
     fn lr(
         &self,
         mut laidx: usize,
-        pstack: &mut PStack,
+        pstack: &mut PStack<StorageT>,
         astack: &mut Vec<AStackType<LexemeT, ActionT>>,
         errors: &mut Vec<LexParseError<LexemeT, StorageT>>,
         spans: &mut Vec<Span>,
@@ -389,7 +389,7 @@ where
         lexeme_prefix: Option<LexemeT>,
         mut laidx: usize,
         end_laidx: usize,
-        pstack: &mut PStack,
+        pstack: &mut PStack<StorageT>,
         astack: &mut Option<&mut Vec<AStackType<LexemeT, ActionT>>>,
         spans: &mut Option<&mut Vec<Span>>,
     ) -> usize {
@@ -516,9 +516,9 @@ where
         lexeme_prefix: Option<LexemeT>,
         mut laidx: usize,
         end_laidx: usize,
-        mut pstack: Cactus<StIdx>,
+        mut pstack: Cactus<StIdx<StorageT>>,
         tstack: &mut Option<&mut Vec<Node<LexemeT, StorageT>>>,
-    ) -> (usize, Cactus<StIdx>) {
+    ) -> (usize, Cactus<StIdx<StorageT>>) {
         assert!(lexeme_prefix.is_none() || end_laidx == laidx + 1);
         while laidx != end_laidx {
             let stidx = *pstack.val().unwrap();
@@ -585,7 +585,7 @@ pub(super) trait Recoverer<
         finish_by: Instant,
         parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
         in_laidx: usize,
-        in_pstack: &mut PStack,
+        in_pstack: &mut PStack<StorageT>,
         astack: &mut Vec<AStackType<LexemeT, ActionT>>,
         spans: &mut Vec<Span>,
     ) -> (usize, Vec<Vec<ParseRepair<LexemeT, StorageT>>>);
@@ -838,7 +838,7 @@ pub enum ParseRepair<LexemeT: Lexeme<StorageT>, StorageT: Hash> {
 /// Records a single parse error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParseError<LexemeT: Lexeme<StorageT>, StorageT: Hash> {
-    stidx: StIdx,
+    stidx: StIdx<StorageT>,
     lexeme: LexemeT,
     repairs: Vec<Vec<ParseRepair<LexemeT, StorageT>>>,
 }
@@ -853,7 +853,7 @@ impl<LexemeT: Lexeme<StorageT>, StorageT: Debug + Hash> Error for ParseError<Lex
 
 impl<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned> ParseError<LexemeT, StorageT> {
     /// Return the state table index where this error was detected.
-    pub fn stidx(&self) -> StIdx {
+    pub fn stidx(&self) -> StIdx<StorageT> {
         self.stidx
     }
 

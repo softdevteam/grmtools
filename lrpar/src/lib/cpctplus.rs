@@ -39,7 +39,7 @@ enum RepairMerge<StorageT> {
 
 #[derive(Clone, Debug)]
 struct PathFNode<StorageT> {
-    pstack: Cactus<StIdx>,
+    pstack: Cactus<StIdx<StorageT>>,
     laidx: usize,
     repairs: Cactus<RepairMerge<StorageT>>,
     cf: u16,
@@ -55,7 +55,7 @@ impl<StorageT: PrimInt + Unsigned> PathFNode<StorageT> {
     }
 }
 
-impl<StorageT: PrimInt + Unsigned> Hash for PathFNode<StorageT> {
+impl<StorageT: Hash + PrimInt + Unsigned> Hash for PathFNode<StorageT> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.pstack.hash(state);
         self.laidx.hash(state);
@@ -144,7 +144,7 @@ where
         finish_by: Instant,
         parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
         in_laidx: usize,
-        in_pstack: &mut Vec<StIdx>,
+        in_pstack: &mut Vec<StIdx<StorageT>>,
         astack: &mut Vec<AStackType<LexemeT, ActionT>>,
         spans: &mut Vec<Span>,
     ) -> (usize, Vec<Vec<ParseRepair<LexemeT, StorageT>>>) {
@@ -459,7 +459,7 @@ fn apply_repairs<
 >(
     parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
     mut laidx: usize,
-    pstack: &mut Vec<StIdx>,
+    pstack: &mut Vec<StIdx<StorageT>>,
     astack: &mut Option<&mut Vec<AStackType<LexemeT, ActionT>>>,
     spans: &mut Option<&mut Vec<Span>>,
     repairs: &[ParseRepair<LexemeT, StorageT>],
@@ -559,7 +559,7 @@ fn rank_cnds<
     parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
     finish_by: Instant,
     in_laidx: usize,
-    in_pstack: &[StIdx],
+    in_pstack: &[StIdx<StorageT>],
     in_cnds: Vec<Vec<Vec<ParseRepair<LexemeT, StorageT>>>>,
 ) -> Vec<Vec<ParseRepair<LexemeT, StorageT>>>
 where
