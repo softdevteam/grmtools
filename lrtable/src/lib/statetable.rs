@@ -127,12 +127,12 @@ impl<StorageT> fmt::Display for StateTableError<StorageT> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StateTable<StorageT> {
     actions: SparseVec<usize>,
-    state_actions: Vob,
+    state_actions: Vob<u64>,
     gotos: SparseVec<usize>,
     start_state: StIdx<StorageT>,
-    core_reduces: Vob,
-    state_shifts: Vob,
-    reduce_states: Vob,
+    core_reduces: Vob<u64>,
+    state_shifts: Vob<u64>,
+    reduce_states: Vob<u64>,
     prods_len: PIdx<StorageT>,
     tokens_len: TIdx<StorageT>,
     conflicts: Option<Conflicts<StorageT>>,
@@ -165,7 +165,7 @@ where
         grm: &YaccGrammar<StorageT>,
         sg: &StateGraph<StorageT>,
     ) -> Result<Self, StateTableError<StorageT>> {
-        let mut state_actions = Vob::from_elem(
+        let mut state_actions = Vob::<u64>::from_elem_with_storage_type(
             false,
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.tokens_len()))
@@ -289,19 +289,20 @@ where
         assert!(final_state.is_some());
 
         let mut nt_depth = HashMap::new();
-        let mut core_reduces = Vob::from_elem(
+        let mut core_reduces = Vob::<u64>::from_elem_with_storage_type(
             false,
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.prods_len()))
                 .unwrap(),
         );
-        let mut state_shifts = Vob::from_elem(
+        let mut state_shifts = Vob::<u64>::from_elem_with_storage_type(
             false,
             usize::from(sg.all_states_len())
                 .checked_mul(usize::from(grm.tokens_len()))
                 .unwrap(),
         );
-        let mut reduce_states = Vob::from_elem(false, usize::from(sg.all_states_len()));
+        let mut reduce_states =
+            Vob::<u64>::from_elem_with_storage_type(false, usize::from(sg.all_states_len()));
         for stidx in sg.iter_stidxs() {
             nt_depth.clear();
             let mut only_reduces = true;
@@ -490,7 +491,7 @@ fn actions_offset<StorageT: PrimInt + Unsigned>(
 }
 
 pub struct StateActionsIterator<'a, StorageT> {
-    iter: IterSetBits<'a, usize>,
+    iter: IterSetBits<'a, u64>,
     start: usize,
     phantom: PhantomData<StorageT>,
 }
@@ -509,7 +510,7 @@ where
 }
 
 pub struct CoreReducesIterator<'a, StorageT> {
-    iter: IterSetBits<'a, usize>,
+    iter: IterSetBits<'a, u64>,
     start: usize,
     phantom: PhantomData<StorageT>,
 }
