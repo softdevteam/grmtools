@@ -1,6 +1,33 @@
 # grmtools 0.13.0 (XXXX-XX-XX)
 
+This release contains a number of new features and breaking changes -- most of
+the latter are in advanced/niche parts of the API which don't affect most users
+(with the exception of the `StorageT` change, the first noted in "breaking
+changes" below, which may affect a minority of users).
+
+
+## New features
+
+* Improved error messages, with various parts of grammar and lexer files now
+  carrying around `Span` information to help pinpoint errors.
+
+* A single error can be related to multiple `Span`s. For example, if you
+  duplicate a rule name in a grammar, all duplicates are reported in a single
+  error.
+
+* The new `cfgrammar::NewlineCache` struct makes it easier to store the
+  minimal information needed to convert byte offsets in an input into logical
+  line numbers.
+
+* lrlex now supports start states.
+
+
 ## Breaking changes
+
+* `StorageT` is now used to represent parser states (whereas before it was
+  hard-coded to a `u16`). If you used a custom `StorageT`, it may no longer be
+  big enough, and you may need to increase it (e.g. you might need to change
+  `StorageT` from `u8` to `u16`).
 
 * `cfgrammar::yacc::grammar::YaccGrammar::token_span` now returns
   `Option<Span>` rather than `Option<&Span>`.
@@ -19,6 +46,15 @@
     pub fn add_rule(&mut self, (name, name_span): (String, Span), actiont: Option<String>) {
   ```
 
+* `GrammarValidationError` and `YaccParserError` have been combined into a
+  struct `YaccGrammarError` (which replaces the previous enum of that name).
+  The new `YaccGrammarError` has a private enum, so will mean fewer
+  semver-breaking changes.
+
+* `LexBuildresult` returns on failure `Err(Vec<LexBuildError>)` rather than
+  `Err(LexBuildError)`.
+
+
 ## Deprecations
 
 * `Span` has moved from `lrpar` to `cfgrammar`. The import is still available
@@ -28,15 +64,6 @@
 
 * `cfgrammar::yacc::grammar::YaccGrammar::rule_name` has been renamed to
   `rule_name_str`. The old name is still available but is deprecated.
-
-## New features
-
-* Improved error messages, with various parts of grammar and lexer files now
-  carrying around `Span` information to help pinpoint errors.
-
-* The new `cfgrammar::NewlineCache` struct makes it easier to store the
-  minimal information needed to convert byte offsets in an input into logical
-  line numbers.
 
 
 # grmtools 0.12.0 (2022-04-14)
