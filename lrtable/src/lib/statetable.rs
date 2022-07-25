@@ -17,13 +17,13 @@ use serde::{Deserialize, Serialize};
 use sparsevec::SparseVec;
 use vob::{IterSetBits, Vob};
 
-use crate::{stategraph::StateGraph, StIdx, StIdxStorageT};
+use crate::{stategraph::StateGraph, StIdx};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Conflicts<StorageT> {
-    reduce_reduce: Vec<(PIdx<StorageT>, PIdx<StorageT>, StIdx)>,
-    shift_reduce: Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx)>,
+    reduce_reduce: Vec<(PIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)>,
+    shift_reduce: Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)>,
 }
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> Conflicts<StorageT>
@@ -31,12 +31,16 @@ where
     usize: AsPrimitive<StorageT>,
 {
     /// Return an iterator over all reduce/reduce conflicts.
-    pub fn rr_conflicts(&self) -> impl Iterator<Item = &(PIdx<StorageT>, PIdx<StorageT>, StIdx)> {
+    pub fn rr_conflicts(
+        &self,
+    ) -> impl Iterator<Item = &(PIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)> {
         self.reduce_reduce.iter()
     }
 
     /// Return an iterator over all shift/reduce conflicts.
-    pub fn sr_conflicts(&self) -> impl Iterator<Item = &(TIdx<StorageT>, PIdx<StorageT>, StIdx)> {
+    pub fn sr_conflicts(
+        &self,
+    ) -> impl Iterator<Item = &(TIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)> {
         self.shift_reduce.iter()
     }
 
@@ -125,21 +129,21 @@ pub struct StateTable<StorageT> {
     actions: SparseVec<usize>,
     state_actions: Vob,
     gotos: SparseVec<usize>,
-    start_state: StIdx,
+    start_state: StIdx<StorageT>,
     core_reduces: Vob,
     state_shifts: Vob,
     reduce_states: Vob,
     prods_len: PIdx<StorageT>,
     tokens_len: TIdx<StorageT>,
     conflicts: Option<Conflicts<StorageT>>,
-    final_state: StIdx,
+    final_state: StIdx<StorageT>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Action<StorageT> {
     /// Shift to state X in the statetable.
-    Shift(StIdx),
+    Shift(StIdx<StorageT>),
     /// Reduce production X in the grammar.
     Reduce(PIdx<StorageT>),
     /// Accept this input.
@@ -176,7 +180,7 @@ where
 
         // Since 0 is reserved for the error type, and states are encoded by adding 1, we can only
         // store max_value - 1 states within the goto table
-        assert!(usize::from(sg.all_states_len()) < (usize::from(StIdx::max_value()) - 1));
+        assert!(sg.all_states_len().as_storaget() < StorageT::max_value() - StorageT::one());
         let mut gotos: Vec<usize> = vec![0; maxg];
 
         // Store automatically resolved conflicts, so we can print them out later
@@ -187,9 +191,8 @@ where
         for (stidx, state) in sg
             .iter_closed_states()
             .enumerate()
-            // x goes from 0..states_len(), and we know the latter can safely fit into an
-            // StIdxStorageT, so the cast is safe.
-            .map(|(x, y)| (StIdx(x as StIdxStorageT), y))
+            // Since stidx comes from the stategraph it can be safely cast to StorageT.
+            .map(|(x, y)| (StIdx(x.as_()), y))
         {
             // Populate reduce and accepts
             for (&(pidx, dot), ctx) in &state.items {
@@ -261,7 +264,7 @@ where
                         let off = actions_offset(grm.tokens_len(), stidx, s_tidx);
                         state_actions.set(off, true);
                         match StateTable::decode(actions[off]) {
-                            Action::Shift(x) => assert_eq!(*ref_stidx, x),
+                            Action::Shift(x) => assert!(*ref_stidx == x),
                             Action::Reduce(r_pidx) => {
                                 resolve_shift_reduce(
                                     grm,
@@ -373,7 +376,7 @@ where
             SHIFT => {
                 // Since val was originally stored in an StIdxStorageT, we know that it's safe to
                 // cast it back to an StIdxStorageT here.
-                Action::Shift(StIdx::from(val as StIdxStorageT))
+                Action::Shift(StIdx(val.as_()))
             }
             REDUCE => Action::Reduce(PIdx(val.as_())),
             ACCEPT => Action::Accept,
@@ -392,7 +395,7 @@ where
     }
 
     /// Return the action for `stidx` and `sym`, or `None` if there isn't any.
-    pub fn action(&self, stidx: StIdx, tidx: TIdx<StorageT>) -> Action<StorageT> {
+    pub fn action(&self, stidx: StIdx<StorageT>, tidx: TIdx<StorageT>) -> Action<StorageT> {
         StateTable::decode(
             self.actions
                 .get(usize::from(stidx), usize::from(tidx))
@@ -401,7 +404,7 @@ where
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `stidx`.
-    pub fn state_actions(&self, stidx: StIdx) -> StateActionsIterator<StorageT> {
+    pub fn state_actions(&self, stidx: StIdx<StorageT>) -> StateActionsIterator<StorageT> {
         let start = usize::from(stidx) * usize::from(self.tokens_len);
         let end = start + usize::from(self.tokens_len);
         StateActionsIterator {
@@ -413,7 +416,7 @@ where
 
     /// Return an iterator over the indexes of all shift actions of `stidx`. By definition this
     /// is a subset of the indexes produced by [`state_actions`](#method.state_actions).
-    pub fn state_shifts(&self, stidx: StIdx) -> StateActionsIterator<StorageT> {
+    pub fn state_shifts(&self, stidx: StIdx<StorageT>) -> StateActionsIterator<StorageT> {
         let start = usize::from(stidx) * usize::from(self.tokens_len);
         let end = start + usize::from(self.tokens_len);
         StateActionsIterator {
@@ -425,7 +428,7 @@ where
 
     /// Does the state `stidx` 1) only contain reduce (and error) actions 2) do those
     /// reductions all reduce to the same production?
-    pub fn reduce_only_state(&self, stidx: StIdx) -> bool {
+    pub fn reduce_only_state(&self, stidx: StIdx<StorageT>) -> bool {
         self.reduce_states[usize::from(stidx)]
     }
 
@@ -444,7 +447,7 @@ where
     ///   And:    [F -> c., $]
     ///
     /// since the two [E -> ...] items both have the same effects on a parse stack.
-    pub fn core_reduces(&self, stidx: StIdx) -> CoreReducesIterator<StorageT> {
+    pub fn core_reduces(&self, stidx: StIdx<StorageT>) -> CoreReducesIterator<StorageT> {
         let start = usize::from(stidx) * usize::from(self.prods_len);
         let end = start + usize::from(self.prods_len);
         CoreReducesIterator {
@@ -455,20 +458,20 @@ where
     }
 
     /// Return the goto state for `stidx` and `ridx`, or `None` if there isn't any.
-    pub fn goto(&self, stidx: StIdx, ridx: RIdx<StorageT>) -> Option<StIdx> {
+    pub fn goto(&self, stidx: StIdx<StorageT>, ridx: RIdx<StorageT>) -> Option<StIdx<StorageT>> {
         // Goto entries are encoded by adding 1 to their value, while 0 is reserved for no entry
         // (i.e. error)
         match self.gotos.get(usize::from(stidx), usize::from(ridx)) {
             Some(0) => None,
             // gotos can only contain state id's which we know can fit into StIdxStorageT so this
             // cast is safe
-            Some(i) => Some(StIdx((i - 1) as StIdxStorageT)),
+            Some(i) => Some(StIdx((i - 1).as_())),
             None => unreachable!(),
         }
     }
 
     /// Return this state table's start state.
-    pub fn start_state(&self) -> StIdx {
+    pub fn start_state(&self) -> StIdx<StorageT> {
         self.start_state
     }
 
@@ -480,7 +483,7 @@ where
 
 fn actions_offset<StorageT: PrimInt + Unsigned>(
     tokens_len: TIdx<StorageT>,
-    stidx: StIdx,
+    stidx: StIdx<StorageT>,
     tidx: TIdx<StorageT>,
 ) -> usize {
     usize::from(stidx) * usize::from(tokens_len) + usize::from(tidx)
@@ -530,9 +533,9 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     off: usize,
     tidx: TIdx<StorageT>,
     pidx: PIdx<StorageT>,
-    stidx: StIdx, // State we want to shift to
-    shift_reduce: &mut Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx)>,
-    conflict_stidx: StIdx, // State in which the conflict occured
+    stidx: StIdx<StorageT>, // State we want to shift to
+    shift_reduce: &mut Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)>,
+    conflict_stidx: StIdx<StorageT>, // State in which the conflict occured
 ) where
     usize: AsPrimitive<StorageT>,
 {
@@ -624,7 +627,7 @@ mod test {
 
         // Actions
         assert_eq!(st.actions.len(), 9*4);
-        let assert_reduce = |stidx: StIdx, tidx: TIdx<_>, rule: &str, prod_off: usize| {
+        let assert_reduce = |stidx: StIdx<_>, tidx: TIdx<_>, rule: &str, prod_off: usize| {
             let pidx = grm.rule_to_prods(grm.rule_idx(rule).unwrap())[prod_off];
             assert_eq!(st.action(stidx, tidx), Action::Reduce(pidx));
         };
@@ -948,7 +951,7 @@ C : 'a';
             &(
                 grm.token_idx("b").unwrap(),
                 grm.rule_to_prods(grm.rule_idx("B").unwrap())[0],
-                StIdx::from(2)
+                StIdx(2)
             )
         );
         assert_eq!(
@@ -956,7 +959,7 @@ C : 'a';
             &(
                 grm.rule_to_prods(grm.rule_idx("B").unwrap())[0],
                 grm.rule_to_prods(grm.rule_idx("C").unwrap())[0],
-                StIdx::from(2)
+                StIdx(2)
             )
         );
     }

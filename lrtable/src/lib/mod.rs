@@ -7,7 +7,6 @@ use std::{hash::Hash, mem::size_of};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use static_assertions::const_assert;
 
 mod itemset;
 mod pager;
@@ -20,40 +19,42 @@ pub use crate::{
 };
 use cfgrammar::yacc::YaccGrammar;
 
-/// The type of the inner value of an StIdx.
-pub type StIdxStorageT = u16;
+macro_rules! IdxNewtype {
+    ($(#[$attr:meta])* $n: ident) => {
+        $(#[$attr])*
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
+        pub struct $n<T>(pub T);
 
-/// StIdx is a wrapper for a state index. Its internal type is `StIdxStorageT`. The only guarantee
-/// we make about `StIdx' is that it can be infallibly converted to usize.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        impl<T: PrimInt + Unsigned> From<$n<T>> for usize {
+            fn from(st: $n<T>) -> Self {
+                debug_assert!(size_of::<usize>() >= size_of::<T>());
+                num_traits::cast(st.0).unwrap()
+            }
+        }
 
-pub struct StIdx(StIdxStorageT);
+        impl<T: PrimInt + Unsigned> From<$n<T>> for u32 {
+            fn from(st: $n<T>) -> Self {
+                debug_assert!(size_of::<u32>() >= size_of::<T>());
+                num_traits::cast(st.0).unwrap()
+            }
+        }
 
-impl StIdx {
-    fn max_value() -> StIdx {
-        StIdx(StIdxStorageT::max_value())
+        impl<T: PrimInt + Unsigned> $n<T> {
+            pub fn as_storaget(&self) -> T {
+                self.0
+            }
+        }
     }
 }
 
-impl From<StIdxStorageT> for StIdx {
-    fn from(v: StIdxStorageT) -> Self {
-        StIdx(v)
-    }
-}
-
-impl From<StIdx> for usize {
-    fn from(st: StIdx) -> Self {
-        const_assert!(size_of::<usize>() >= size_of::<StIdxStorageT>());
-        st.0 as usize
-    }
-}
-
-impl From<StIdx> for StIdxStorageT {
-    fn from(st: StIdx) -> Self {
-        st.0 as StIdxStorageT
-    }
-}
+IdxNewtype!(
+    /// A type specifically for state table indices.
+    ///
+    /// It is guaranteed that `StIdx` can be converted, without loss of precision, to `usize` with
+    /// the idiom `usize::from(...)`.
+    StIdx
+);
 
 #[derive(Clone, Copy)]
 pub enum Minimiser {

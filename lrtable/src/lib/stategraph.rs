@@ -3,15 +3,15 @@ use std::{collections::hash_map::HashMap, hash::Hash};
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use crate::{itemset::Itemset, StIdx, StIdxStorageT};
+use crate::{itemset::Itemset, StIdx};
 
 #[derive(Debug)]
 pub struct StateGraph<StorageT: Eq + Hash> {
     /// A vector of `(core_states, closed_states)` tuples.
     states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-    start_state: StIdx,
+    start_state: StIdx<StorageT>,
     /// For each state in `states`, edges is a hashmap from symbols to state offsets.
-    edges: Vec<HashMap<Symbol<StorageT>, StIdx>>,
+    edges: Vec<HashMap<Symbol<StorageT>, StIdx<StorageT>>>,
 }
 
 impl<StorageT: 'static + Hash + PrimInt + Unsigned> StateGraph<StorageT>
@@ -20,12 +20,10 @@ where
 {
     pub(crate) fn new(
         states: Vec<(Itemset<StorageT>, Itemset<StorageT>)>,
-        start_state: StIdx,
-        edges: Vec<HashMap<Symbol<StorageT>, StIdx>>,
+        start_state: StIdx<StorageT>,
+        edges: Vec<HashMap<Symbol<StorageT>, StIdx<StorageT>>>,
     ) -> Self {
-        // states.len() needs to fit into StIdxStorageT; however we don't need to worry about
-        // edges.len() (which merely needs to fit in a usize)
-        assert!(StIdxStorageT::try_from(states.len()).is_ok());
+        assert!(states.len() < num_traits::cast(StorageT::max_value()).unwrap());
         StateGraph {
             states,
             start_state,
@@ -34,20 +32,20 @@ where
     }
 
     /// Return this state graph's start state.
-    pub fn start_state(&self) -> StIdx {
+    pub fn start_state(&self) -> StIdx<StorageT> {
         self.start_state
     }
 
     /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
     /// grammar's valid `RIdx`s.
-    pub fn iter_stidxs(&self) -> Box<dyn Iterator<Item = StIdx>> {
+    pub fn iter_stidxs(&self) -> Box<dyn Iterator<Item = StIdx<StorageT>>> {
         // We can use as safely, because we know that we're only generating integers from
         // 0..self.states.len() which we've already checked fits within StIdxStorageT.
-        Box::new((0..self.states.len()).map(|x| StIdx(x as StIdxStorageT)))
+        Box::new((0..self.states.len()).map(|x| StIdx(x.as_())))
     }
 
     /// Return the itemset for closed state `stidx`. Panics if `stidx` doesn't exist.
-    pub fn closed_state(&self, stidx: StIdx) -> &Itemset<StorageT> {
+    pub fn closed_state(&self, stidx: StIdx<StorageT>) -> &Itemset<StorageT> {
         &self.states[usize::from(stidx)].1
     }
 
@@ -59,7 +57,7 @@ where
     }
 
     /// Return the itemset for core state `stidx` or `None` if it doesn't exist.
-    pub fn core_state(&self, stidx: StIdx) -> &Itemset<StorageT> {
+    pub fn core_state(&self, stidx: StIdx<StorageT>) -> &Itemset<StorageT> {
         &self.states[usize::from(stidx)].0
     }
 
@@ -70,13 +68,13 @@ where
 
     /// How many states does this `StateGraph` contain? NB: By definition the `StateGraph` contains
     /// the same number of core and closed states.
-    pub fn all_states_len(&self) -> StIdx {
+    pub fn all_states_len(&self) -> StIdx<StorageT> {
         // We checked in the constructor that self.states.len() can fit into StIdxStorageT
-        StIdx::from(self.states.len() as StIdxStorageT)
+        StIdx(self.states.len().as_())
     }
 
     /// Return the state pointed to by `sym` from `stidx` or `None` otherwise.
-    pub fn edge(&self, stidx: StIdx, sym: Symbol<StorageT>) -> Option<StIdx> {
+    pub fn edge(&self, stidx: StIdx<StorageT>, sym: Symbol<StorageT>) -> Option<StIdx<StorageT>> {
         self.edges
             .get(usize::from(stidx))
             .and_then(|x| x.get(&sym))
@@ -84,7 +82,7 @@ where
     }
 
     /// Return the edges for state `stidx`. Panics if `stidx` doesn't exist.
-    pub fn edges(&self, stidx: StIdx) -> &HashMap<Symbol<StorageT>, StIdx> {
+    pub fn edges(&self, stidx: StIdx<StorageT>) -> &HashMap<Symbol<StorageT>, StIdx<StorageT>> {
         &self.edges[usize::from(stidx)]
     }
 
@@ -97,7 +95,10 @@ where
     /// states are pretty printed; if set to false, all states (including non-core states) are
     /// pretty printed.
     pub fn pp(&self, grm: &YaccGrammar<StorageT>, core_states: bool) -> String {
-        fn num_digits(i: StIdx) -> usize {
+        fn num_digits<StorageT: 'static + Hash + PrimInt + Unsigned>(i: StIdx<StorageT>) -> usize
+        where
+            usize: AsPrimitive<StorageT>,
+        {
             if usize::from(i) == 0 {
                 1
             } else {
@@ -125,11 +126,7 @@ where
             }
             {
                 let padding = num_digits(self.all_states_len()) - num_digits(stidx);
-                o.push_str(&format!(
-                    "{}:{}",
-                    StIdxStorageT::from(stidx),
-                    " ".repeat(padding)
-                ));
+                o.push_str(&format!("{}:{}", usize::from(stidx), " ".repeat(padding)));
             }
 
             let st = if core_states { core_st } else { closed_st };

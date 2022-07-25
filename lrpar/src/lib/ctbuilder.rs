@@ -147,14 +147,16 @@ where
 {
     /// Create a new `CTParserBuilder`.
     ///
-    /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough to index
-    /// (separately) all the tokens, rules, and productions in the grammar and less than or
-    /// equal in size to `usize` (e.g. on a 64-bit machine `u128` would be too big). In other
-    /// words, if you have a grammar with 256 tokens, 256 rules, and 256 productions, you
-    /// can safely specify `u8` here; but if any of those counts becomes 256 you will need to
-    /// specify `u16`. If you are parsing large files, the additional storage requirements of
-    /// larger integer types can be noticeable, and in such cases it can be worth specifying a
-    /// smaller type. `StorageT` defaults to `u32` if unspecified.
+    /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is:
+    ///   * big enough to index (separately) all the tokens, rules, productions in the grammar,
+    ///   * big enough to index the state table created from the grammar,
+    ///   * less than or equal in size to `u32`.
+    /// In other words, if you have a grammar with 256 tokens, 256 rules, and 256 productions,
+    /// which creates a state table of 256 states you can safely specify `u8` here; but if any of
+    /// those counts becomes 257 or greater you will need to specify `u16`. If you are parsing
+    /// large files, the additional storage requirements of larger integer types can be noticeable,
+    /// and in such cases it can be worth specifying a smaller type. `StorageT` defaults to `u32`
+    /// if unspecified.
     ///
     /// # Examples
     ///
