@@ -419,8 +419,12 @@ pub fn lexerdef() -> {lexerdef_type} {{
             write!(
                 outs,
                 "
-        StartState::new({}, {:?}, {}),",
-                ss.id, ss.name, ss.exclusive
+        StartState::new({}, {:?}, {}, ::cfgrammar::Span::new({}, {})),",
+                ss.id,
+                ss.name,
+                ss.exclusive,
+                ss.name_span.start(),
+                ss.name_span.end()
             )
             .ok();
         }

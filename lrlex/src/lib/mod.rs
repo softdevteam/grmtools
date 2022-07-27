@@ -72,11 +72,8 @@ impl LexBuildError {
             | LexErrorKind::UnknownStartState
             | LexErrorKind::InvalidStartState
             | LexErrorKind::InvalidStartStateName
-            | LexErrorKind::RegexError
-            // TODO DuplicateStartState should be a DuplicationError,
-            // but currently behaves as a SpansKind::Error.
-            | LexErrorKind::DuplicateStartState => SpansKind::Error,
-            LexErrorKind::DuplicateName => {
+            | LexErrorKind::RegexError => SpansKind::Error,
+            LexErrorKind::DuplicateName | LexErrorKind::DuplicateStartState => {
                 SpansKind::DuplicationError
             }
         }

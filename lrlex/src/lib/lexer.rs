@@ -750,8 +750,8 @@ b 'B'
     #[test]
     fn test_state_matches_regular_no_rule_states() {
         let all_states = &[
-            StartState::new(0, "INITIAL", false),
-            StartState::new(1, "EXCLUSIVE", true),
+            StartState::new(0, "INITIAL", false, Span::new(0, 0)),
+            StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![];
         let current_state = all_states.get(0).unwrap();
@@ -765,8 +765,8 @@ b 'B'
     #[test]
     fn test_state_matches_exclusive_no_rule_states() {
         let all_states = &[
-            StartState::new(0, "INITIAL", false),
-            StartState::new(1, "EXCLUSIVE", true),
+            StartState::new(0, "INITIAL", false, Span::new(0, 0)),
+            StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![];
         let current_state = all_states.get(1).unwrap();
@@ -780,8 +780,8 @@ b 'B'
     #[test]
     fn test_state_matches_regular_matching_rule_states() {
         let all_states = &[
-            StartState::new(0, "INITIAL", false),
-            StartState::new(1, "EXCLUSIVE", true),
+            StartState::new(0, "INITIAL", false, Span::new(0, 0)),
+            StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![0];
         let current_state = all_states.get(0).unwrap();
@@ -795,8 +795,8 @@ b 'B'
     #[test]
     fn test_state_matches_exclusive_matching_rule_states() {
         let all_states = &[
-            StartState::new(0, "INITIAL", false),
-            StartState::new(1, "EXCLUSIVE", true),
+            StartState::new(0, "INITIAL", false, Span::new(0, 0)),
+            StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![1];
         let current_state = all_states.get(1).unwrap();
@@ -810,8 +810,8 @@ b 'B'
     #[test]
     fn test_state_matches_regular_other_rule_states() {
         let all_states = &[
-            StartState::new(0, "INITIAL", false),
-            StartState::new(1, "EXCLUSIVE", true),
+            StartState::new(0, "INITIAL", false, Span::new(0, 0)),
+            StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![1];
         let current_state = all_states.get(0).unwrap();
@@ -825,8 +825,8 @@ b 'B'
     #[test]
     fn test_state_matches_exclusive_other_rule_states() {
         let all_states = &[
-            StartState::new(0, "INITIAL", false),
-            StartState::new(1, "EXCLUSIVE", true),
+            StartState::new(0, "INITIAL", false, Span::new(0, 0)),
+            StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![0];
         let current_state = all_states.get(1).unwrap();

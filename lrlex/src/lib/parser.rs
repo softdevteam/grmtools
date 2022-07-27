@@ -27,6 +27,7 @@ pub struct StartState {
     /// Name of this start state, as supplied in the declaration section, and
     /// used in prerequisite and target start state sections of the rules.
     pub(super) name: String,
+    pub(super) name_span: Span,
     /// If false, a rule with _no_ start state will match when this state is active.
     /// If true, only rules which have include this start state will match when
     /// this state is active.
@@ -34,10 +35,11 @@ pub struct StartState {
 }
 
 impl StartState {
-    pub fn new(id: usize, name: &str, exclusive: bool) -> Self {
+    pub fn new(id: usize, name: &str, exclusive: bool, name_span: Span) -> Self {
         Self {
             id,
             name: name.to_string(),
+            name_span,
             exclusive,
         }
     }
@@ -75,7 +77,12 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let mut p = LexParser {
             src,
             rules: Vec::new(),
-            start_states: vec![StartState::new(0, INITIAL_START_STATE_NAME, false)],
+            start_states: vec![StartState::new(
+                0,
+                INITIAL_START_STATE_NAME,
+                false,
+                Span::new(0, 0),
+            )],
         };
         p.parse()?;
         Ok(p)
@@ -194,14 +201,19 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         if declaration_parameters.is_empty() {
             return Err(self.mk_error(LexErrorKind::UnknownDeclaration, off));
         }
-        let start_states: HashSet<&str> = declaration_parameters
+        let start_states: HashSet<(&str, Span)> = declaration_parameters
             .split_whitespace()
-            .map(|name| self.validate_start_state(off, name, errs))
-            .collect::<LexInternalBuildResult<HashSet<&str>>>()?;
+            .map(|name| {
+                let off = name.as_ptr() as usize - self.src.as_ptr() as usize;
+                let span = Span::new(off, off + name.len());
+                self.validate_start_state(span, name, errs)
+            })
+            .filter_map(Result::transpose)
+            .collect::<LexInternalBuildResult<HashSet<(&str, Span)>>>()?;
 
-        for name in start_states {
+        for (name, name_span) in start_states {
             let id = self.start_states.len();
-            let start_state = StartState::new(id, name, exclusive);
+            let start_state = StartState::new(id, name, exclusive, name_span);
             self.start_states.push(start_state);
         }
         Ok(off + line_len)
@@ -209,22 +221,27 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
 
     fn validate_start_state<'a>(
         &self,
-        off: usize,
+        span: Span,
         name: &'a str,
-        _errs: &mut Vec<LexBuildError>,
-    ) -> LexInternalBuildResult<&'a str> {
-        self.validate_start_state_name(off, name)?;
-        if self.start_states.iter().any(|state| state.name == name) {
-            // FIXME add to _errs.
-            Err(self.mk_error(LexErrorKind::DuplicateStartState, off))
+        errs: &mut Vec<LexBuildError>,
+    ) -> LexInternalBuildResult<Option<(&'a str, Span)>> {
+        self.validate_start_state_name(span, name)?;
+        if let Some(state) = self.start_states.iter().find(|state| state.name == name) {
+            add_duplicate_occurrence(
+                errs,
+                LexErrorKind::DuplicateStartState,
+                state.name_span,
+                span,
+            );
+            Ok(None)
         } else {
-            Ok(name)
+            Ok(Some((name, span)))
         }
     }
 
-    fn validate_start_state_name(&self, off: usize, name: &str) -> LexInternalBuildResult<()> {
+    fn validate_start_state_name(&self, span: Span, name: &str) -> LexInternalBuildResult<()> {
         if !RE_START_STATE_NAME.is_match(name) {
-            return Err(self.mk_error(LexErrorKind::InvalidStartStateName, off));
+            return Err(self.mk_error(LexErrorKind::InvalidStartStateName, span.start()));
         }
         Ok(())
     }
@@ -699,7 +716,7 @@ mod test {
             &src,
             LexErrorKind::InvalidStartStateName,
             1,
-            1,
+            4,
         )
     }
 
@@ -713,7 +730,7 @@ mod test {
             &src,
             LexErrorKind::InvalidStartStateName,
             1,
-            1,
+            4,
         )
     }
 
@@ -834,7 +851,7 @@ mod test {
             &src,
             LexErrorKind::InvalidStartStateName,
             1,
-            1,
+            4,
         )
     }
 
@@ -896,11 +913,27 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_lines_cols(
             &src,
             LexErrorKind::DuplicateStartState,
-            2,
-            1,
+            &mut [(1, 4), (2, 4)].into_iter(),
+        )
+    }
+
+    #[test]
+    fn multiple_duplicate_start_state_definition() {
+        let src = "%s test test2
+%s test test2
+%%
+. 'TEST'"
+            .to_string();
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_multiple_errors(
+            &src,
+            &mut [
+                (LexErrorKind::DuplicateStartState, vec![(1, 4), (2, 4)]),
+                (LexErrorKind::DuplicateStartState, vec![(1, 9), (2, 9)]),
+            ]
+            .into_iter(),
         )
     }
 
@@ -911,11 +944,10 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_lines_cols(
             &src,
             LexErrorKind::DuplicateStartState,
-            2,
-            1,
+            &mut [(1, 4), (2, 4)].into_iter(),
         )
     }
 
