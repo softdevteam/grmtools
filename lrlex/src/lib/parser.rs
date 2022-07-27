@@ -1,7 +1,7 @@
 use cfgrammar::Span;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
@@ -46,8 +46,28 @@ impl StartState {
 pub(super) struct LexParser<StorageT> {
     src: String,
     pub(super) rules: Vec<Rule<StorageT>>,
-    duplicate_names: HashMap<Span, Vec<Span>>,
     pub(super) start_states: Vec<StartState>,
+}
+
+fn add_duplicate_occurrence(
+    errs: &mut Vec<LexBuildError>,
+    kind: LexErrorKind,
+    orig_span: Span,
+    dup_span: Span,
+) {
+    if !errs.iter_mut().any(|e| {
+        if e.kind == kind && e.spans[0] == orig_span {
+            e.spans.push(dup_span);
+            true
+        } else {
+            false
+        }
+    }) {
+        errs.push(LexBuildError {
+            kind,
+            spans: vec![orig_span, dup_span],
+        });
+    }
 }
 
 impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
@@ -55,7 +75,6 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let mut p = LexParser {
             src,
             rules: Vec::new(),
-            duplicate_names: HashMap::new(),
             start_states: vec![StartState::new(0, INITIAL_START_STATE_NAME, false)],
         };
         p.parse()?;
@@ -71,37 +90,59 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     }
 
     fn parse(&mut self) -> LexBuildResult<usize> {
-        let mut i = self.parse_declarations(0).map_err(|e| vec![e])?;
-        i = self.parse_rules(i).map_err(|e| vec![e]).and_then(|i| {
-            if let Some((orig_span, spans)) = self.duplicate_names.iter().next() {
-                let spans = std::iter::once(*orig_span)
-                    .chain(spans.iter().copied())
-                    .collect::<Vec<Span>>();
-                return Err(vec![LexBuildError {
-                    spans,
-                    kind: LexErrorKind::DuplicateName,
-                }]);
+        let mut errs = Vec::new();
+        let mut i = match self.parse_declarations(0, &mut errs) {
+            Ok(i) => i,
+            Err(e) => {
+                errs.push(e);
+                return Err(errs);
             }
-            Ok(i)
-        })?;
+        };
         // We don't currently support the subroutines part of a specification. One day we might...
+        i = match self.parse_rules(i, &mut errs) {
+            Ok(i) => i,
+            Err(e) => {
+                errs.push(e);
+                return Err(errs);
+            }
+        };
+
         match self.lookahead_is("%%", i) {
             Some(j) => {
-                let k = self.parse_ws(j).map_err(|e| vec![e])?;
+                let k = match self.parse_ws(j) {
+                    Ok(k) => k,
+                    Err(e) => {
+                        errs.push(e);
+                        return Err(errs);
+                    }
+                };
                 if k == self.src.len() {
-                    Ok(i)
+                    if errs.is_empty() {
+                        Ok(i)
+                    } else {
+                        Err(errs)
+                    }
                 } else {
-                    Err(vec![self.mk_error(LexErrorKind::RoutinesNotSupported, i)])
+                    errs.push(self.mk_error(LexErrorKind::RoutinesNotSupported, i));
+                    Err(errs)
                 }
             }
             None => {
                 assert_eq!(i, self.src.len());
-                Ok(i)
+                if errs.is_empty() {
+                    Ok(i)
+                } else {
+                    Err(errs)
+                }
             }
         }
     }
 
-    fn parse_declarations(&mut self, mut i: usize) -> LexInternalBuildResult<usize> {
+    fn parse_declarations(
+        &mut self,
+        mut i: usize,
+        errs: &mut Vec<LexBuildError>,
+    ) -> LexInternalBuildResult<usize> {
         loop {
             i = self.parse_ws(i)?;
             if i == self.src.len() {
@@ -110,11 +151,15 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             if let Some(j) = self.lookahead_is("%%", i) {
                 break Ok(j);
             }
-            i = self.parse_declaration(i)?;
+            i = self.parse_declaration(i, errs)?;
         }
     }
 
-    fn parse_declaration(&mut self, i: usize) -> LexInternalBuildResult<usize> {
+    fn parse_declaration(
+        &mut self,
+        i: usize,
+        errs: &mut Vec<LexBuildError>,
+    ) -> LexInternalBuildResult<usize> {
         let line_len = self.src[i..]
             .find(|c| c == '\n')
             .unwrap_or(self.src.len() - i);
@@ -128,9 +173,9 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         // The rest of the line, after the first word, is considered to be one or more
         // blank-character-separated names of start conditions.
         if RE_INCLUSIVE_START_STATE_DECLARATION.is_match(declaration) {
-            self.declare_start_states(false, i, declaration_len, line_len)
+            self.declare_start_states(false, i, declaration_len, line_len, errs)
         } else if RE_EXCLUSIVE_START_STATE_DECLARATION.is_match(declaration) {
-            self.declare_start_states(true, i, declaration_len, line_len)
+            self.declare_start_states(true, i, declaration_len, line_len, errs)
         } else {
             Err(self.mk_error(LexErrorKind::UnknownDeclaration, i))
         }
@@ -142,6 +187,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         off: usize,
         declaration_len: usize,
         line_len: usize,
+        errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<usize> {
         // Start state declarations are REQUIRED to have at least one start state name
         let declaration_parameters = self.src[off + declaration_len..off + line_len].trim();
@@ -150,7 +196,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         }
         let start_states: HashSet<&str> = declaration_parameters
             .split_whitespace()
-            .map(|name| self.validate_start_state(off, name))
+            .map(|name| self.validate_start_state(off, name, errs))
             .collect::<LexInternalBuildResult<HashSet<&str>>>()?;
 
         for name in start_states {
@@ -165,9 +211,11 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         &self,
         off: usize,
         name: &'a str,
+        _errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<&'a str> {
         self.validate_start_state_name(off, name)?;
         if self.start_states.iter().any(|state| state.name == name) {
+            // FIXME add to _errs.
             Err(self.mk_error(LexErrorKind::DuplicateStartState, off))
         } else {
             Ok(name)
@@ -181,7 +229,11 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         Ok(())
     }
 
-    fn parse_rules(&mut self, mut i: usize) -> LexInternalBuildResult<usize> {
+    fn parse_rules(
+        &mut self,
+        mut i: usize,
+        errs: &mut Vec<LexBuildError>,
+    ) -> LexInternalBuildResult<usize> {
         loop {
             i = self.parse_ws(i)?;
             if i == self.src.len() {
@@ -190,12 +242,16 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             if self.lookahead_is("%%", i).is_some() {
                 break;
             }
-            i = self.parse_rule(i)?;
+            i = self.parse_rule(i, errs)?;
         }
         Ok(i)
     }
 
-    fn parse_rule(&mut self, i: usize) -> LexInternalBuildResult<usize> {
+    fn parse_rule(
+        &mut self,
+        i: usize,
+        errs: &mut Vec<LexBuildError>,
+    ) -> LexInternalBuildResult<usize> {
         let line_len = self.src[i..]
             .find(|c| c == '\n')
             .unwrap_or(self.src.len() - i);
@@ -244,10 +300,12 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                     .as_ref()
                     .map_or(false, |n| n == name.as_ref().unwrap());
                 if dupe {
-                    self.duplicate_names
-                        .entry(r.name_span)
-                        .or_insert_with(Vec::new)
-                        .push(name_span);
+                    add_duplicate_occurrence(
+                        errs,
+                        LexErrorKind::DuplicateName,
+                        r.name_span,
+                        name_span,
+                    );
                 }
                 dupe
             })
@@ -566,6 +624,26 @@ mod test {
             &src,
             LexErrorKind::DuplicateName,
             &mut [(2, 8), (3, 8), (4, 8)].into_iter(),
+        )
+    }
+
+    #[test]
+    fn multiple_duplicate_rules() {
+        let src = "%%
+[0-9] 'int'
+[A-Z] 'ALPHA'
+[0-9] 'int'
+[A-Z] 'ALPHA'
+[0-9] 'int'
+[A-Z] 'ALPHA'"
+            .to_string();
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_multiple_errors(
+            &src,
+            &mut [
+                (LexErrorKind::DuplicateName, vec![(2, 8), (4, 8), (6, 8)]),
+                (LexErrorKind::DuplicateName, vec![(3, 8), (5, 8), (7, 8)]),
+            ]
+            .into_iter(),
         )
     }
 
