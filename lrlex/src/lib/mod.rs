@@ -42,7 +42,7 @@ pub struct LexBuildError {
 impl Error for LexBuildError {}
 
 /// The various different possible Lex parser errors.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LexErrorKind {
     PrematureEnd,
     RoutinesNotSupported,

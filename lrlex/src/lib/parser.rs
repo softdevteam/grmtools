@@ -366,6 +366,91 @@ mod test {
         }};
     }
 
+    fn line_of_offset(s: &str, off: usize) -> usize {
+        s[..off].lines().count()
+    }
+
+    trait ErrorsHelper {
+        fn expect_error_at_line(self, src: &str, kind: LexErrorKind, line: usize);
+        fn expect_error_at_line_col(self, src: &str, kind: LexErrorKind, line: usize, col: usize);
+        fn expect_error_at_lines_cols(
+            self,
+            src: &str,
+            kind: LexErrorKind,
+            lines_cols: &mut dyn Iterator<Item = (usize, usize)>,
+        );
+        fn expect_multiple_errors(
+            self,
+            src: &str,
+            expected: &mut dyn Iterator<Item = (LexErrorKind, Vec<(usize, usize)>)>,
+        );
+    }
+
+    impl ErrorsHelper for Result<LRNonStreamingLexerDef<DefaultLexeme<u8>, u8>, Vec<LexBuildError>> {
+        fn expect_error_at_line(self, src: &str, kind: LexErrorKind, line: usize) {
+            match self.as_ref().map_err(Vec::as_slice) {
+                Ok(_) => panic!("Parsed ok while expecting error"),
+                Err([e])
+                    if e.kind == kind
+                        && line_of_offset(src, e.spans().next().unwrap().start()) == line
+                        && e.spans.len() == 1 => {}
+                Err(e) => incorrect_errs!(src, e),
+            }
+        }
+
+        fn expect_error_at_line_col(self, src: &str, kind: LexErrorKind, line: usize, col: usize) {
+            self.expect_error_at_lines_cols(src, kind, &mut std::iter::once((line, col)))
+        }
+
+        fn expect_error_at_lines_cols(
+            self,
+            src: &str,
+            kind: LexErrorKind,
+            lines_cols: &mut dyn Iterator<Item = (usize, usize)>,
+        ) {
+            match self.as_ref().map_err(Vec::as_slice) {
+                Ok(_) => panic!("Parsed ok while expecting error"),
+                Err([e])
+                    if e.kind == kind
+                        && line_col!(src, e.spans().next().unwrap())
+                            == lines_cols.next().unwrap() =>
+                {
+                    assert_eq!(
+                        e.spans()
+                            .skip(1)
+                            .map(|span| line_col!(src, span))
+                            .collect::<Vec<(usize, usize)>>(),
+                        lines_cols.collect::<Vec<(usize, usize)>>()
+                    )
+                }
+                Err(e) => incorrect_errs!(src, e),
+            }
+        }
+
+        fn expect_multiple_errors(
+            self,
+            src: &str,
+            expected: &mut dyn Iterator<Item = (LexErrorKind, Vec<(usize, usize)>)>,
+        ) {
+            match self {
+                Ok(_) => panic!("Parsed ok while expecting error"),
+                Err(errs)
+                    if errs
+                        .iter()
+                        .map(|e| {
+                            (
+                                e.kind.clone(),
+                                e.spans()
+                                    .map(|span| line_col!(src, span))
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .eq(expected) => {}
+                Err(errs) => incorrect_errs!(src, errs),
+            }
+        }
+    }
+
     #[test]
     fn test_nooptions() {
         let src = "
@@ -420,19 +505,12 @@ mod test {
 'int'"
             .to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::MissingSpace,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::MissingSpace,
+            2,
+            1,
+        )
     }
 
     #[test]
@@ -441,19 +519,12 @@ mod test {
 [0-9] "
             .to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::MissingSpace,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::MissingSpace,
+            2,
+            1,
+        )
     }
 
     #[test]
@@ -462,19 +533,12 @@ mod test {
 [0-9] int"
             .to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::InvalidName,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 7) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::InvalidName,
+            2,
+            7,
+        )
     }
 
     #[test]
@@ -483,19 +547,12 @@ mod test {
 [0-9] 'int"
             .to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::InvalidName,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 7) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::InvalidName,
+            2,
+            7,
+        )
     }
 
     #[test]
@@ -505,22 +562,11 @@ mod test {
 [0-9] 'int'
 [0-9] 'int'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Duplicate rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::DuplicateName,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 8) => {
-                assert_eq!(&spans[1..], &[Span::new(22, 25), Span::new(34, 37)])
-            }
-
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_lines_cols(
+            &src,
+            LexErrorKind::DuplicateName,
+            &mut [(2, 8), (3, 8), (4, 8)].into_iter(),
+        )
     }
 
     #[test]
@@ -529,19 +575,12 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownDeclaration,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (1, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownDeclaration,
+            1,
+            1,
+        )
     }
 
     #[test]
@@ -550,19 +589,12 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownDeclaration,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (1, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownDeclaration,
+            1,
+            1,
+        )
     }
 
     #[test]
@@ -571,19 +603,12 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownDeclaration,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (1, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownDeclaration,
+            1,
+            1,
+        )
     }
 
     #[test]
@@ -592,19 +617,12 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::InvalidStartStateName,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (1, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::InvalidStartStateName,
+            1,
+            1,
+        )
     }
 
     #[test]
@@ -613,19 +631,12 @@ mod test {
 %%
 <123>. 'known'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::InvalidStartStateName,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (1, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::InvalidStartStateName,
+            1,
+            1,
+        )
     }
 
     #[test]
@@ -633,19 +644,12 @@ mod test {
         let src = "%%
 <1>. 'known'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownStartState,
+            2,
+            1,
+        )
     }
 
     #[test]
@@ -653,19 +657,12 @@ mod test {
         let src = "%%
 . <1>'known'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Broken rule parsed"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 3) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownStartState,
+            2,
+            3,
+        )
     }
 
     #[test]
@@ -688,19 +685,12 @@ mod test {
         let src = "%%
 <UNKNOWN>. 'unknown'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownStartState,
+            2,
+            1,
+        )
     }
 
     #[test]
@@ -722,19 +712,12 @@ mod test {
         let src = "%%
 . <UNKNOWN>'unknown'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 3) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownStartState,
+            2,
+            3,
+        )
     }
 
     #[test]
@@ -742,19 +725,12 @@ mod test {
         let src = "%%
 <test. 'TEST'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::InvalidStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::InvalidStartState,
+            2,
+            1,
+        )
     }
 
     #[test]
@@ -762,19 +738,12 @@ mod test {
         let src = "%%
 . <test'TEST'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::InvalidStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 2) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::InvalidStartState,
+            2,
+            2,
+        )
     }
 
     #[test]
@@ -783,19 +752,12 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::InvalidStartStateName,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (1, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::InvalidStartStateName,
+            1,
+            1,
+        )
     }
 
     #[test]
@@ -856,19 +818,12 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::DuplicateStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::DuplicateStartState,
+            2,
+            1,
+        )
     }
 
     #[test]
@@ -878,19 +833,12 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::DuplicateStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::DuplicateStartState,
+            2,
+            1,
+        )
     }
 
     #[test]
@@ -898,19 +846,12 @@ mod test {
         let src = "%%
 <1test>. 'TEST'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 1) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownStartState,
+            2,
+            1,
+        )
     }
 
     #[test]
@@ -918,19 +859,12 @@ mod test {
         let src = "%%
 . <1test>'TEST'"
             .to_string();
-        match LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
-            .as_ref()
-            .map_err(Vec::as_slice)
-        {
-            Ok(_) => panic!("Parsing should fail"),
-            Err(
-                [LexBuildError {
-                    kind: LexErrorKind::UnknownStartState,
-                    spans,
-                }],
-            ) if line_col!(src, spans[0]) == (2, 3) => (),
-            Err(e) => incorrect_errs!(src, e),
-        }
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::UnknownStartState,
+            2,
+            3,
+        )
     }
 
     #[test]
