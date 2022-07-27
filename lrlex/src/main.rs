@@ -59,8 +59,8 @@ fn main() {
         LRNonStreamingLexerDef::<DefaultLexeme, _>::from_str(&lex_src).unwrap_or_else(|errs| {
             let nlcache = NewlineCache::from_str(&lex_src).unwrap();
             for e in errs {
-                if let Some((line, column)) =
-                    nlcache.byte_to_line_num_and_col_num(&lex_src, e.span.start())
+                if let Some((line, column)) = nlcache
+                    .byte_to_line_num_and_col_num(&lex_src, e.spans().next().unwrap().start())
                 {
                     writeln!(
                         stderr(),

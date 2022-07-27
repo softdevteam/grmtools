@@ -313,7 +313,10 @@ where
                         errs.iter()
                             .map(|e| {
                                 if let Some((line, column)) = line_cache
-                                    .byte_to_line_num_and_col_num(&lex_src, e.span.start())
+                                    .byte_to_line_num_and_col_num(
+                                        &lex_src,
+                                        e.spans().next().unwrap().start(),
+                                    )
                                 {
                                     format!("{} at line {line} column {column}", e)
                                 } else {

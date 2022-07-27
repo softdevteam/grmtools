@@ -64,16 +64,22 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
 
     fn mk_error(&self, kind: LexErrorKind, off: usize) -> LexBuildError {
         let span = Span::new(off, off);
-        LexBuildError { kind, span }
+        LexBuildError {
+            kind,
+            spans: vec![span],
+        }
     }
 
     fn parse(&mut self) -> LexBuildResult<usize> {
         let mut i = self.parse_declarations(0).map_err(|e| vec![e])?;
         i = self.parse_rules(i).map_err(|e| vec![e]).and_then(|i| {
             if let Some((orig_span, spans)) = self.duplicate_names.iter().next() {
+                let spans = std::iter::once(*orig_span)
+                    .chain(spans.iter().copied())
+                    .collect::<Vec<Span>>();
                 return Err(vec![LexBuildError {
-                    span: *orig_span,
-                    kind: LexErrorKind::DuplicateName(spans.clone()),
+                    spans,
+                    kind: LexErrorKind::DuplicateName,
                 }]);
             }
             Ok(i)
@@ -336,8 +342,8 @@ mod test {
             for e in $errs {
                 let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
                 line_cache.feed(&$src);
-                if let Some((line, column)) =
-                    line_cache.byte_to_line_num_and_col_num(&$src, e.span.start())
+                if let Some((line, column)) = line_cache
+                    .byte_to_line_num_and_col_num(&$src, e.spans().next().unwrap().start())
                 {
                     panic!(
                         "Incorrect error returned {} at line {line} column {column}",
@@ -351,7 +357,7 @@ mod test {
     }
 
     macro_rules! line_col {
-        ($src:ident, $span: ident) => {{
+        ($src:ident, $span: expr) => {{
             let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
             line_cache.feed(&$src);
             line_cache
@@ -422,9 +428,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::MissingSpace,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 1) => (),
+            ) if line_col!(src, spans[0]) == (2, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -443,9 +449,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::MissingSpace,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 1) => (),
+            ) if line_col!(src, spans[0]) == (2, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -464,9 +470,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::InvalidName,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 7) => (),
+            ) if line_col!(src, spans[0]) == (2, 7) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -485,9 +491,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::InvalidName,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 7) => (),
+            ) if line_col!(src, spans[0]) == (2, 7) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -506,11 +512,11 @@ mod test {
             Ok(_) => panic!("Duplicate rule parsed"),
             Err(
                 [LexBuildError {
-                    kind: LexErrorKind::DuplicateName(spans),
-                    span,
+                    kind: LexErrorKind::DuplicateName,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 8) => {
-                assert_eq!(spans, &[Span::new(22, 25), Span::new(34, 37)])
+            ) if line_col!(src, spans[0]) == (2, 8) => {
+                assert_eq!(&spans[1..], &[Span::new(22, 25), Span::new(34, 37)])
             }
 
             Err(e) => incorrect_errs!(src, e),
@@ -531,9 +537,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownDeclaration,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (1, 1) => (),
+            ) if line_col!(src, spans[0]) == (1, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -552,9 +558,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownDeclaration,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (1, 1) => (),
+            ) if line_col!(src, spans[0]) == (1, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -573,9 +579,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownDeclaration,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (1, 1) => (),
+            ) if line_col!(src, spans[0]) == (1, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -594,9 +600,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::InvalidStartStateName,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (1, 1) => (),
+            ) if line_col!(src, spans[0]) == (1, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -615,9 +621,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::InvalidStartStateName,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (1, 1) => (),
+            ) if line_col!(src, spans[0]) == (1, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -635,9 +641,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 1) => (),
+            ) if line_col!(src, spans[0]) == (2, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -655,9 +661,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 3) => (),
+            ) if line_col!(src, spans[0]) == (2, 3) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -690,9 +696,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 1) => (),
+            ) if line_col!(src, spans[0]) == (2, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -724,9 +730,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 3) => (),
+            ) if line_col!(src, spans[0]) == (2, 3) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -744,9 +750,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::InvalidStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 1) => (),
+            ) if line_col!(src, spans[0]) == (2, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -764,9 +770,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::InvalidStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 2) => (),
+            ) if line_col!(src, spans[0]) == (2, 2) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -785,9 +791,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::InvalidStartStateName,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (1, 1) => (),
+            ) if line_col!(src, spans[0]) == (1, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -858,9 +864,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::DuplicateStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 1) => (),
+            ) if line_col!(src, spans[0]) == (2, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -880,9 +886,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::DuplicateStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 1) => (),
+            ) if line_col!(src, spans[0]) == (2, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -900,9 +906,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 1) => (),
+            ) if line_col!(src, spans[0]) == (2, 1) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
@@ -920,9 +926,9 @@ mod test {
             Err(
                 [LexBuildError {
                     kind: LexErrorKind::UnknownStartState,
-                    span,
+                    spans,
                 }],
-            ) if line_col!(src, span) == (2, 3) => (),
+            ) if line_col!(src, spans[0]) == (2, 3) => (),
             Err(e) => incorrect_errs!(src, e),
         }
     }
