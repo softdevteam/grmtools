@@ -7,7 +7,7 @@ use std::{
     convert::AsRef,
     env::{current_dir, var},
     error::Error,
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write as _},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
     io::Write,
@@ -200,7 +200,7 @@ where
             .to_str()
             .unwrap()
             .to_owned();
-        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
+        write!(leaf, ".{}", RUST_FILE_EXT).ok();
         outp.push(leaf);
         Ok(self.output_path(outp))
     }
@@ -397,7 +397,8 @@ where
             ),
         };
 
-        outs.push_str(&format!(
+        write!(
+            outs,
             "{mod_vis} mod {mod_name} {{
 use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule, StartState}};
 
@@ -407,15 +408,18 @@ pub fn lexerdef() -> {lexerdef_type} {{
             mod_vis = self.visibility.cow_str(),
             mod_name = mod_name,
             lexerdef_type = lexerdef_type
-        ));
+        )
+        .ok();
 
         outs.push_str("    let start_states: Vec<StartState> = vec![");
         for ss in lexerdef.iter_start_states() {
-            outs.push_str(&format!(
+            write!(
+                outs,
                 "
         StartState::new({}, {:?}, {}),",
                 ss.id, ss.name, ss.exclusive
-            ));
+            )
+            .ok();
         }
         outs.push_str("\n    ];\n");
         outs.push_str("    let rules = vec![");
@@ -439,7 +443,8 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 r.name_span.start(),
                 r.name_span.end()
             );
-            outs.push_str(&format!(
+            write!(
+                outs,
                 "
         Rule::new({}, {}, {}, \"{}\".to_string(), {:?}.to_vec(), {}).unwrap(),",
                 tok_id,
@@ -448,11 +453,13 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 r.re_str.replace('\\', "\\\\").replace('"', "\\\""),
                 r.start_states,
                 target_state,
-            ));
+            )
+            .ok();
         }
 
         // Footer
-        outs.push_str(&format!(
+        write!(
+            outs,
             "
     ];
     {lexerdef_name}::from_rules(start_states, rules)
@@ -460,18 +467,21 @@ pub fn lexerdef() -> {lexerdef_type} {{
 
 ",
             lexerdef_name = lexerdef_name
-        ));
+        )
+        .ok();
 
         // Token IDs
         if let Some(ref rim) = self.rule_ids_map {
             for (n, id) in rim {
                 if RE_TOKEN_ID.is_match(n) {
-                    outs.push_str(&format!(
+                    write!(
+                        outs,
                         "#[allow(dead_code)]\npub const T_{}: {} = {:?};\n",
                         n.to_ascii_uppercase(),
                         type_name::<StorageT>(),
                         *id
-                    ));
+                    )
+                    .ok();
                 }
             }
         }
@@ -526,7 +536,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             .to_str()
             .unwrap()
             .to_owned();
-        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
+        write!(leaf, ".{}", RUST_FILE_EXT).ok();
         outp.push(leaf);
         self.process_file(inp, outp)
     }
@@ -635,11 +645,13 @@ pub fn ct_token_map<StorageT: Display>(
     // forces a recompile, this will change this value, causing anything which depends on this
     // build of lrlex to be recompiled too.
     let mut outs = String::new();
-    outs.push_str(&format!(
+    write!(
+        outs,
         "// lrlex build time: {:?}\n\nmod {} {{\n",
         env!("VERGEN_BUILD_TIMESTAMP"),
         mod_name
-    ));
+    )
+    .ok();
     outs.push_str(
         &token_map
             .iter()

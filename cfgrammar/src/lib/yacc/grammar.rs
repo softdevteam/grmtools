@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, fmt::Write};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
@@ -611,7 +611,7 @@ where
                 Symbol::Token(tidx) => self.token_name(*tidx).unwrap(),
                 Symbol::Rule(ridx) => self.rule_name_str(*ridx),
             };
-            sprod.push_str(&format!(" \"{}\"", s));
+            write!(sprod, " \"{}\"", s).ok();
         }
         sprod
     }

@@ -222,7 +222,7 @@ where
             .to_str()
             .unwrap()
             .to_owned();
-        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
+        write!(leaf, ".{}", RUST_FILE_EXT).ok();
         outp.push(leaf);
         Ok(self.output_path(outp))
     }
@@ -490,7 +490,7 @@ where
             .to_str()
             .unwrap()
             .to_owned();
-        leaf.push_str(&format!(".{}", RUST_FILE_EXT));
+        write!(leaf, ".{}", RUST_FILE_EXT).ok();
         outp.push(leaf);
         self.process_file(inp, outp)
     }
@@ -568,11 +568,7 @@ where
         cache: &str,
     ) -> Result<(), Box<dyn Error>> {
         let mut outs = String::new();
-        outs.push_str(&format!(
-            "{} mod {} {{\n",
-            self.visibility.cow_str(),
-            mod_name
-        ));
+        writeln!(outs, "{} mod {} {{", self.visibility.cow_str(), mod_name).ok();
         outs.push_str(
             "    #![allow(clippy::type_complexity)]
     #![allow(clippy::unnecessary_wraps)]
@@ -616,20 +612,19 @@ where
         // Record the time that this version of lrpar was built. If the source code changes and
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
-        cache.push_str(&format!(
-            "   Build time: {:?}\n",
-            env!("VERGEN_BUILD_TIMESTAMP")
-        ));
+        writeln!(cache, "   Build time: {:?}", env!("VERGEN_BUILD_TIMESTAMP")).ok();
 
-        cache.push_str(&format!("   Grammar path: {:?}\n", self.grammar_path));
-        cache.push_str(&format!("   Mod name: {:?}\n", self.mod_name));
-        cache.push_str(&format!("   Recoverer: {:?}\n", self.recoverer));
-        cache.push_str(&format!("   YaccKind: {:?}\n", self.yacckind));
-        cache.push_str(&format!("   Visibility: {:?}\n", self.visibility.cow_str()));
-        cache.push_str(&format!(
+        writeln!(cache, "   Grammar path: {:?}", self.grammar_path).ok();
+        writeln!(cache, "   Mod name: {:?}", self.mod_name).ok();
+        writeln!(cache, "   Recoverer: {:?}", self.recoverer).ok();
+        writeln!(cache, "   YaccKind: {:?}", self.yacckind).ok();
+        writeln!(cache, "   Visibility: {:?}", self.visibility.cow_str()).ok();
+        writeln!(
+            cache,
             "   Error on conflicts: {:?}\n",
             self.error_on_conflicts
-        ));
+        )
+        .ok();
 
         // Record the rule IDs map
         for tidx in grm.iter_tidxs() {
@@ -637,7 +632,7 @@ where
                 Some(n) => format!("'{}'", n),
                 None => "<unknown>".to_string(),
             };
-            cache.push_str(&format!("   {} {}\n", usize::from(tidx), n));
+            writeln!(cache, "   {} {}", usize::from(tidx), n).ok();
         }
 
         cache.push_str("*/\n");
@@ -663,7 +658,7 @@ where
                     Some((name, tyname)) => format!(", {}: {}", name, tyname),
                     None => "".to_owned(),
                 };
-                outs.push_str(&format!(
+                write!(outs,
                     "
     #[allow(dead_code)]
     pub fn parse<'lexer, 'input: 'lexer>(
@@ -674,10 +669,11 @@ where
                     storaget = type_name::<StorageT>(),
                     parse_param = parse_param,
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap(),
-                ));
+                ).ok();
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
-                outs.push_str(&format!(
+                write!(
+                    outs,
                     "
     #[allow(dead_code)]
     pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexemet}, {storaget}>)
@@ -686,10 +682,12 @@ where
     {{",
                     lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>()
-                ));
+                )
+                .ok();
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
-                outs.push_str(&format!(
+                write!(
+                    outs,
                     "
     #[allow(dead_code)]
     pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexemet}, {storaget}>)
@@ -697,16 +695,19 @@ where
     {{",
                     lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>()
-                ));
+                )
+                .ok();
             }
             YaccKind::Eco => unreachable!(),
         };
 
-        outs.push_str(&format!(
+        write!(
+            outs,
             "
         let (grm, stable) = ::lrpar::ctbuilder::_reconstitute({}, {});",
             GRM_CONST_NAME, STABLE_CONST_NAME
-        ));
+        )
+        .ok();
 
         let recoverer = match self.recoverer {
             RecoveryKind::CPCTPlus => "CPCTPlus",
@@ -730,7 +731,7 @@ where
                     Some((name, tyname)) => (name.clone(), tyname.clone()),
                     None => ("()".to_owned(), "()".to_owned()),
                 };
-                outs.push_str(&format!(
+                write!(outs,
                     "\n        #[allow(clippy::type_complexity)]
         let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
@@ -743,8 +744,9 @@ where
                     storaget = type_name::<StorageT>(),
                     parse_paramty = parse_paramty,
                     wrappers = wrappers
-                ));
-                outs.push_str(&format!(
+                ).ok();
+                write!(
+                    outs,
                     "
         match ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{recoverer})
@@ -758,25 +760,30 @@ where
                     actionskindprefix = ACTIONS_KIND_PREFIX,
                     ridx = usize::from(self.user_start_ridx(grm)),
                     recoverer = recoverer,
-                ));
+                )
+                .ok();
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
-                outs.push_str(&format!(
+                write!(
+                    outs,
                     "
         ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{})
             .parse_generictree(lexer)\n",
                     recoverer
-                ));
+                )
+                .ok();
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
-                outs.push_str(&format!(
+                write!(
+                    outs,
                     "
         ::lrpar::RTParserBuilder::new(&grm, &stable)
             .recoverer(::lrpar::RecoveryKind::{})
             .parse_noaction(lexer)\n",
                     recoverer
-                ));
+                )
+                .ok();
             }
             YaccKind::Eco => unreachable!(),
         };
@@ -789,12 +796,14 @@ where
         let mut outs = String::new();
         for ridx in grm.iter_rules() {
             if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
-                outs.push_str(&format!(
+                write!(
+                    outs,
                     "    #[allow(dead_code)]\n    pub const R_{}: {} = {:?};\n",
                     grm.rule_name_str(ridx).to_ascii_uppercase(),
                     type_name::<StorageT>(),
                     usize::from(ridx)
-                ));
+                )
+                .ok();
             }
         }
         outs
@@ -839,7 +848,7 @@ where
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]). At
             // the same time extract &str from tokens and actiontype from nonterminals.
-            outs.push_str(&format!(
+            write!(outs,
                 "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                       {prefix}span: ::cfgrammar::Span,
@@ -852,13 +861,14 @@ where
                 prefix = ACTION_PREFIX,
                 parse_paramdef = parse_paramdef,
                 actionskind = ACTIONS_KIND,
-            ));
+            ).ok();
 
             if grm.action(pidx).is_some() {
                 // Unpack the arguments passed to us by the drain
                 for i in 0..grm.prod(pidx).len() {
                     match grm.prod(pidx)[i] {
-                        Symbol::Rule(ref_ridx) => outs.push_str(&format!(
+                        Symbol::Rule(ref_ridx) => {
+                            write!(outs,
                             "
         let {prefix}arg_{i} = match {prefix}args.next().unwrap() {{
             ::lrpar::parser::AStackType::ActionType({actionskind}::{actionskindprefix}{ref_ridx}(x)) => x,
@@ -869,9 +879,12 @@ where
                             prefix = ACTION_PREFIX,
                             actionskind = ACTIONS_KIND,
                             actionskindprefix = ACTIONS_KIND_PREFIX
-                        )),
-                        Symbol::Token(_) => outs.push_str(&format!(
-                            "
+                        ).ok();
+                        }
+                        Symbol::Token(_) => {
+                            write!(
+                                outs,
+                                "
         let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
             ::lrpar::parser::AStackType::Lexeme(l) => {{
                 if l.faulty() {{
@@ -882,9 +895,11 @@ where
             }},
             ::lrpar::parser::AStackType::ActionType(_) => unreachable!()
         }};",
-                            i + 1,
-                            prefix = ACTION_PREFIX
-                        ))
+                                i + 1,
+                                prefix = ACTION_PREFIX
+                            )
+                            .ok();
+                        }
                     }
                 }
 
@@ -897,7 +912,7 @@ where
                 // `wrapper_r(); enum::A(())`.
                 match grm.actiontype(ridx) {
                     Some(s) if s == "()" => {
-                        outs.push_str(&format!("\n        {prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {parse_paramname}, {args});
+                        write!(outs, "\n        {prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {parse_paramname}, {args});
         {actionskind}::{actionskindprefix}{ridx}(())",
                             actionskind = ACTIONS_KIND,
                             actionskindprefix = ACTIONS_KIND_PREFIX,
@@ -905,17 +920,17 @@ where
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
                             parse_paramname = parse_paramname,
-                            args = args.join(", ")));
+                            args = args.join(", ")).ok();
                     }
                     _ => {
-                        outs.push_str(&format!("\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {parse_paramname}, {args}))",
+                        write!(outs, "\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {parse_paramname}, {args}))",
                             actionskind = ACTIONS_KIND,
                             actionskindprefix = ACTIONS_KIND_PREFIX,
                             prefix = ACTION_PREFIX,
                             ridx = usize::from(ridx),
                             pidx = usize::from(pidx),
                             parse_paramname = parse_paramname,
-                            args = args.join(", ")));
+                            args = args.join(", ")).ok();
                     }
                 }
             } else if pidx == grm.start_prod() {
@@ -923,10 +938,12 @@ where
                 // added by lrpar) will never be executed, so a dummy function is all
                 // that's required. We add "unreachable" as a check in case some other
                 // detail of lrpar changes in the future.
-                outs.push_str(&format!(
-                    "\n        let _ = {parse_paramname};\n        unreachable!()",
-                    parse_paramname = parse_paramname
-                ));
+                if parse_paramname != "()" {
+                    // If the parse parameter is the unit type, `let _ = ();` leads to Clippy
+                    // warnings.
+                    write!(outs, "\n        let _ = {parse_paramname:};").ok();
+                }
+                outs.push_str("\n        unreachable!()");
             } else {
                 panic!(
                     "Production in rule '{}' must have an action body.",
@@ -938,28 +955,34 @@ where
 
         // Wrappers enum
 
-        outs.push_str(&format!(
+        write!(
+            outs,
             "    #[allow(dead_code)]
     enum {}<'input> {{\n",
             ACTIONS_KIND
-        ));
+        )
+        .ok();
         for ridx in grm.iter_rules() {
             if grm.actiontype(ridx).is_none() {
                 continue;
             }
 
-            outs.push_str(&format!(
-                "        {actionskindprefix}{ridx}({actiont}),\n",
+            writeln!(
+                outs,
+                "        {actionskindprefix}{ridx}({actiont}),",
                 actionskindprefix = ACTIONS_KIND_PREFIX,
                 ridx = usize::from(ridx),
                 actiont = grm.actiontype(ridx).as_ref().unwrap()
-            ));
+            )
+            .ok();
         }
-        outs.push_str(&format!(
+        write!(
+            outs,
             "    _{actionskindhidden}(::std::marker::PhantomData<&'input ()>)
     }}\n\n",
             actionskindhidden = ACTIONS_KIND_HIDDEN
-        ));
+        )
+        .ok();
 
         outs
     }
@@ -1008,15 +1031,14 @@ where
                     format!("\n                 -> {}", actiont)
                 }
             };
-            outs.push_str(&format!(
+            write!(outs,
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
     fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                      {prefix}span: ::cfgrammar::Span,
                      {parse_paramdef},
-                     {args}){returnt} {{
-        let _ = {parse_paramname};\n",
+                     {args}){returnt} {{\n",
                 usize::from(pidx),
                 rulename = grm.rule_name_str(grm.prod_to_rule(pidx)),
                 lexemet = type_name::<LexemeT>(),
@@ -1024,9 +1046,14 @@ where
                 prefix = ACTION_PREFIX,
                 returnt = returnt,
                 parse_paramdef = parse_paramdef,
-                parse_paramname = parse_paramname,
                 args = args.join(",\n                     ")
-            ));
+            ).ok();
+
+            if parse_paramname != "()" {
+                // If the parse parameter is the unit type, `let _ = ();` leads to Clippy
+                // warnings.
+                writeln!(outs, "        let _ = {parse_paramname:};").ok();
+            }
 
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]).
@@ -1040,19 +1067,17 @@ where
                             last = last + off + "$$".len();
                         } else if pre_action[last + off..].starts_with("$lexer") {
                             outs.push_str(&pre_action[last..last + off]);
-                            outs.push_str(
-                                format!("{prefix}lexer", prefix = ACTION_PREFIX).as_str(),
-                            );
+                            write!(outs, "{prefix}lexer", prefix = ACTION_PREFIX).ok();
                             last = last + off + "$lexer".len();
                         } else if pre_action[last + off..].starts_with("$span") {
                             outs.push_str(&pre_action[last..last + off]);
-                            outs.push_str(format!("{prefix}span", prefix = ACTION_PREFIX).as_str());
+                            write!(outs, "{prefix}span", prefix = ACTION_PREFIX).ok();
                             last = last + off + "$span".len();
                         } else if last + off + 1 < pre_action.len()
                             && pre_action[last + off + 1..].starts_with(|c: char| c.is_numeric())
                         {
                             outs.push_str(&pre_action[last..last + off]);
-                            outs.push_str(format!("{prefix}arg_", prefix = ACTION_PREFIX).as_str());
+                            write!(outs, "{prefix}arg_", prefix = ACTION_PREFIX).ok();
                             last = last + off + "$".len();
                         } else {
                             panic!(

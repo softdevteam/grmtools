@@ -1,6 +1,6 @@
 use std::{
     error::Error,
-    fmt::{self, Debug, Display},
+    fmt::{self, Debug, Display, Write as _},
     hash::Hash,
     marker::PhantomData,
     time::{Duration, Instant},
@@ -50,10 +50,10 @@ where
                     let tidx = TIdx(lexeme.tok_id());
                     let tn = grm.token_name(tidx).unwrap();
                     let lt = &input[lexeme.span().start()..lexeme.span().end()];
-                    s.push_str(&format!("{} {}\n", tn, lt));
+                    writeln!(s, "{} {}", tn, lt).ok();
                 }
                 Node::Nonterm { ridx, ref nodes } => {
-                    s.push_str(&format!("{}\n", grm.rule_name_str(ridx)));
+                    writeln!(s, "{}", grm.rule_name_str(ridx)).ok();
                     for x in nodes.iter().rev() {
                         st.push((indent + 1, x));
                     }
@@ -651,7 +651,7 @@ impl<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned>
                         let padding = ((repairs_len as f64).log10() as usize)
                             - (((i + 1) as f64).log10() as usize)
                             + 1;
-                        out.push_str(&format!("\n  {}{}: ", " ".repeat(padding), i + 1));
+                        write!(out, "\n  {}{}: ", " ".repeat(padding), i + 1).ok();
                         let mut rs_out = Vec::new();
                         for r in rs {
                             match r {
