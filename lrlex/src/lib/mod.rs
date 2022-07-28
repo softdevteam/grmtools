@@ -27,6 +27,7 @@ pub use crate::{
     parser::StartState,
 };
 
+use cfgrammar::yacc::parser::SpansKind;
 use cfgrammar::Span;
 
 pub type LexBuildResult<T> = Result<T, Vec<LexBuildError>>;
@@ -34,14 +35,14 @@ pub type LexBuildResult<T> = Result<T, Vec<LexBuildError>>;
 /// Any error from the Lex parser returns an instance of this struct.
 #[derive(Debug)]
 pub struct LexBuildError {
-    pub kind: LexErrorKind,
-    pub span: Span,
+    pub(crate) kind: LexErrorKind,
+    pub(crate) spans: Vec<Span>,
 }
 
 impl Error for LexBuildError {}
 
 /// The various different possible Lex parser errors.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LexErrorKind {
     PrematureEnd,
     RoutinesNotSupported,
@@ -52,8 +53,31 @@ pub enum LexErrorKind {
     DuplicateStartState,
     InvalidStartState,
     InvalidStartStateName,
-    DuplicateName(Vec<Span>),
+    DuplicateName,
     RegexError,
+}
+
+impl LexBuildError {
+    pub fn spans(&self) -> impl Iterator<Item = Span> + '_ {
+        self.spans.iter().copied()
+    }
+
+    pub fn spanskind(&self) -> SpansKind {
+        match self.kind {
+            LexErrorKind::PrematureEnd
+            | LexErrorKind::RoutinesNotSupported
+            | LexErrorKind::UnknownDeclaration
+            | LexErrorKind::MissingSpace
+            | LexErrorKind::InvalidName
+            | LexErrorKind::UnknownStartState
+            | LexErrorKind::InvalidStartState
+            | LexErrorKind::InvalidStartStateName
+            | LexErrorKind::RegexError => SpansKind::Error,
+            LexErrorKind::DuplicateName | LexErrorKind::DuplicateStartState => {
+                SpansKind::DuplicationError
+            }
+        }
+    }
 }
 
 impl fmt::Display for LexBuildError {
@@ -68,7 +92,7 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::DuplicateStartState => "Start state already exists",
             LexErrorKind::InvalidStartState => "Invalid start state",
             LexErrorKind::InvalidStartStateName => "Invalid start state name",
-            LexErrorKind::DuplicateName(_) => "Rule name already exists",
+            LexErrorKind::DuplicateName => "Rule name already exists",
             LexErrorKind::RegexError => "Invalid regular expression",
         };
         write!(f, "{s}")
