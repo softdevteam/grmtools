@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     collections::hash_map::HashMap,
     error::Error,
-    fmt::{self, Debug},
+    fmt::{self, Debug, Write},
     hash::Hash,
     marker::PhantomData,
 };
@@ -69,12 +69,14 @@ where
         if self.rr_len() > 0 {
             s.push_str("Reduce/Reduce conflicts:\n");
             for (pidx, r_pidx, stidx) in self.rr_conflicts() {
-                s.push_str(&format!(
-                    "   State {:?}: Reduce({}) / Reduce({})\n",
+                writeln!(
+                    s,
+                    "   State {:?}: Reduce({}) / Reduce({})",
                     usize::from(*stidx),
                     grm.pp_prod(*pidx),
                     grm.pp_prod(*r_pidx)
-                ));
+                )
+                .ok();
             }
         }
         s
@@ -86,12 +88,14 @@ where
         if self.sr_len() > 0 {
             s.push_str("Shift/Reduce conflicts:\n");
             for (tidx, pidx, stidx) in self.sr_conflicts() {
-                s.push_str(&format!(
-                    "   State {:?}: Shift(\"{}\") / Reduce({})\n",
+                writeln!(
+                    s,
+                    "   State {:?}: Shift(\"{}\") / Reduce({})",
                     usize::from(*stidx),
                     grm.token_name(*tidx).unwrap(),
                     grm.pp_prod(*pidx)
-                ));
+                )
+                .ok();
             }
         }
         s

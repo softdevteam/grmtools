@@ -329,6 +329,7 @@ mod test {
         lexer::{LRNonStreamingLexerDef, LexerDef},
         DefaultLexeme,
     };
+    use std::fmt::Write as _;
 
     macro_rules! incorrect_errs {
         ($src:ident, $errs:expr) => {{
@@ -925,6 +926,7 @@ mod test {
             Err(e) => incorrect_errs!(src, e),
         }
     }
+
     #[test]
     #[should_panic]
     fn exceed_tok_id_capacity() {
@@ -932,7 +934,7 @@ mod test {
 "
         .to_string();
         for i in 0..257 {
-            src.push_str(&format!("x 'x{}'\n", i));
+            writeln!(src, "x 'x{}'\n", i).ok();
         }
         LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).ok();
     }

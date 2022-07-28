@@ -1,4 +1,4 @@
-use std::{collections::hash_map::HashMap, hash::Hash};
+use std::{collections::hash_map::HashMap, fmt::Write, hash::Hash};
 
 use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -126,7 +126,7 @@ where
             }
             {
                 let padding = num_digits(self.all_states_len()) - num_digits(stidx);
-                o.push_str(&format!("{}:{}", usize::from(stidx), " ".repeat(padding)));
+                write!(o, "{}:{}", usize::from(stidx), " ".repeat(padding)).ok();
             }
 
             let st = if core_states { core_st } else { closed_st };
@@ -137,16 +137,18 @@ where
                     o.push_str("\n "); // Extra space to compensate for ":" printed above
                     num_digits(self.all_states_len())
                 };
-                o.push_str(&format!(
+                write!(
+                    o,
                     "{} [{} ->",
                     " ".repeat(padding),
                     grm.rule_name_str(grm.prod_to_rule(pidx))
-                ));
+                )
+                .ok();
                 for (i_sidx, i_ssym) in grm.prod(pidx).iter().enumerate() {
                     if i_sidx == usize::from(sidx) {
                         o.push_str(" .");
                     }
-                    o.push_str(&format!(" {}", fmt_sym(grm, *i_ssym)));
+                    write!(o, " {}", fmt_sym(grm, *i_ssym)).ok();
                 }
                 if usize::from(sidx) == grm.prod(pidx).len() {
                     o.push_str(" .");
@@ -164,18 +166,20 @@ where
                     if tidx == grm.eof_token_idx() {
                         o.push_str("'$'");
                     } else {
-                        o.push_str(&format!("'{}'", grm.token_name(tidx).unwrap()));
+                        write!(o, "'{}'", grm.token_name(tidx).unwrap()).ok();
                     }
                 }
                 o.push_str("}]");
             }
             for (esym, e_stidx) in self.edges(stidx).iter() {
-                o.push_str(&format!(
+                write!(
+                    o,
                     "\n{}{} -> {}",
                     " ".repeat(num_digits(self.all_states_len()) + 2),
                     fmt_sym(grm, *esym),
                     usize::from(*e_stidx)
-                ));
+                )
+                .ok();
             }
         }
         o
