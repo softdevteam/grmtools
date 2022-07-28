@@ -923,10 +923,12 @@ where
                 // added by lrpar) will never be executed, so a dummy function is all
                 // that's required. We add "unreachable" as a check in case some other
                 // detail of lrpar changes in the future.
-                outs.push_str(&format!(
-                    "\n        let _ = {parse_paramname};\n        unreachable!()",
-                    parse_paramname = parse_paramname
-                ));
+                if parse_paramname != "()" {
+                    // If the parse parameter is the unit type, `let _ = ();` leads to Clippy
+                    // warnings.
+                    outs.push_str(&format!("\n        let _ = {parse_paramname:};"));
+                }
+                outs.push_str("\n        unreachable!()");
             } else {
                 panic!(
                     "Production in rule '{}' must have an action body.",
@@ -1015,8 +1017,7 @@ where
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                      {prefix}span: ::cfgrammar::Span,
                      {parse_paramdef},
-                     {args}){returnt} {{
-        let _ = {parse_paramname};\n",
+                     {args}){returnt} {{\n",
                 usize::from(pidx),
                 rulename = grm.rule_name_str(grm.prod_to_rule(pidx)),
                 lexemet = type_name::<LexemeT>(),
@@ -1024,9 +1025,14 @@ where
                 prefix = ACTION_PREFIX,
                 returnt = returnt,
                 parse_paramdef = parse_paramdef,
-                parse_paramname = parse_paramname,
                 args = args.join(",\n                     ")
             ));
+
+            if parse_paramname != "()" {
+                // If the parse parameter is the unit type, `let _ = ();` leads to Clippy
+                // warnings.
+                outs.push_str(&format!("        let _ = {parse_paramname:};\n"));
+            }
 
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]).
