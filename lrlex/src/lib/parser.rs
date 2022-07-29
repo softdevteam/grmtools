@@ -1,7 +1,6 @@
 use cfgrammar::Span;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::collections::HashSet;
 use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
@@ -201,30 +200,40 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         if declaration_parameters.is_empty() {
             return Err(self.mk_error(LexErrorKind::UnknownDeclaration, off));
         }
-        let start_states: HashSet<(&str, Span)> = declaration_parameters
+        let start_states = declaration_parameters
             .split_whitespace()
             .map(|name| {
                 let off = name.as_ptr() as usize - self.src.as_ptr() as usize;
                 let span = Span::new(off, off + name.len());
-                self.validate_start_state(span, name, errs)
+                (name, span)
             })
-            .filter_map(Result::transpose)
-            .collect::<LexInternalBuildResult<HashSet<(&str, Span)>>>()?;
+            .collect::<Vec<_>>();
 
         for (name, name_span) in start_states {
             let id = self.start_states.len();
-            let start_state = StartState::new(id, name, exclusive, name_span);
-            self.start_states.push(start_state);
+            if self.validate_start_state(name_span, name, errs)? {
+                let start_state = StartState::new(id, name, exclusive, name_span);
+                self.start_states.push(start_state);
+            }
         }
         Ok(off + line_len)
     }
 
+    /// Validates a `StartState`
+    ///
+    /// Return `Ok(true)` if the start state is valid.
+    ///
+    /// A return value of `Ok(false)` indicates the state state is invalid. The site of error will be added to `errs`,
+    /// and may be coalesced with related errors.  After which it is safe to continue parsing handling the error
+    /// in the future.
+    ///
+    /// An `Err()` value returned will *not* be added to `errs`.
     fn validate_start_state<'a>(
         &self,
         span: Span,
         name: &'a str,
         errs: &mut Vec<LexBuildError>,
-    ) -> LexInternalBuildResult<Option<(&'a str, Span)>> {
+    ) -> LexInternalBuildResult<bool> {
         self.validate_start_state_name(span, name)?;
         if let Some(state) = self.start_states.iter().find(|state| state.name == name) {
             add_duplicate_occurrence(
@@ -233,9 +242,9 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                 state.name_span,
                 span,
             );
-            Ok(None)
+            Ok(false)
         } else {
-            Ok(Some((name, span)))
+            Ok(true)
         }
     }
 
@@ -917,6 +926,19 @@ mod test {
             &src,
             LexErrorKind::DuplicateStartState,
             &mut [(1, 4), (2, 4)].into_iter(),
+        )
+    }
+
+    #[test]
+    fn duplicate_start_state_definition_one_line() {
+        let src = "%s test test1 test
+        %%
+        . 'TEST'"
+            .to_string();
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_lines_cols(
+            &src,
+            LexErrorKind::DuplicateStartState,
+            &mut [(1, 4), (1, 15)].into_iter(),
         )
     }
 
