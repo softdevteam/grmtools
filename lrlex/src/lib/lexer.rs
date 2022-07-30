@@ -51,6 +51,7 @@ impl<StorageT> Rule<StorageT> {
         target_state: Option<usize>,
     ) -> Result<Rule<StorageT>, regex::Error> {
         let re = RegexBuilder::new(&format!("\\A(?:{})", re_str))
+            .octal(true)
             .multi_line(true)
             .dot_matches_new_line(true)
             .build()?;
