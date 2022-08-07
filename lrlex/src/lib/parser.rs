@@ -311,15 +311,15 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             &line[rspace + 1..]
         };
         let name_span;
-        let dupe = if orig_name == ";" {
+        let dupe = if orig_name == ";" || orig_name == r#""""# || orig_name == "''" {
             name = None;
             let pos = i + rspace + 1;
             name_span = Span::new(pos, pos);
             false
         } else {
-            debug_assert!(!orig_name.is_empty());
-            if !((orig_name.starts_with('\'') && orig_name.ends_with('\''))
-                || (orig_name.starts_with('\"') && orig_name.ends_with('"')))
+            if orig_name.len() <= 2
+                || !((orig_name.starts_with('\'') && orig_name.ends_with('\''))
+                    || (orig_name.starts_with('\"') && orig_name.ends_with('"')))
             {
                 return Err(self.mk_error(LexErrorKind::InvalidName, i + rspace + 1));
             }
@@ -733,6 +733,55 @@ mod test {
             2,
             7,
         )
+    }
+
+    #[test]
+    fn test_broken_rule_names_with_spaces() {
+        let srcs = [r#"a ""#, "a '", r#"a '""#, r#"a "'"#];
+        for line_two in srcs {
+            let src = format!("%%\n{line_two}");
+            LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+                .expect_error_at_line_col(&src, LexErrorKind::InvalidName, 2, 3);
+        }
+
+        let srcs = [
+            r#"a " ""#,
+            "a ' '",
+            r#"a ' "'"#,
+            r#"a " Name"#,
+            r#"a " Name""#,
+            "a ' Name",
+            "a ' Name'",
+            r#"a " '""#,
+        ];
+
+        for line_two in srcs {
+            let src = format!("%%\n{line_two}");
+            LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+                .expect_error_at_line_col(&src, LexErrorKind::InvalidName, 2, 5);
+        }
+    }
+
+    #[test]
+    fn test_unusual_ok_rules() {
+        // Unusual cases of valid regexes and names, that make splitting them tricky.
+        let srcs = [
+            r#"[ "] 'a'"#,
+            r#"[ "] "a""#,
+            r#"[ "] ;"#,
+            r#"[ "] """#,
+            r#"[ "] ''"#,
+            r#"[ '] "a""#,
+            r#"[ '] ;"#,
+            r#"[ '] """#,
+            "[ '] ''",
+            "[ '] 'a'",
+            "[ '] ;",
+        ];
+        for line_two in srcs {
+            let src = format!("%%\n{line_two}");
+            assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_ok());
+        }
     }
 
     #[test]
