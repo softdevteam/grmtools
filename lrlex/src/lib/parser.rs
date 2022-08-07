@@ -11,6 +11,7 @@ type LexInternalBuildResult<T> = Result<T, LexBuildError>;
 
 lazy_static! {
     static ref RE_START_STATE_NAME: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_.]*$").unwrap();
+    static ref RE_START_STATE_ID: Regex = Regex::new(r"^[0-9]+$").unwrap();
     static ref RE_INCLUSIVE_START_STATE_DECLARATION: Regex =
         Regex::new(r"^%[sS][a-zA-Z0-9]*$").unwrap();
     static ref RE_EXCLUSIVE_START_STATE_DECLARATION: Regex =
@@ -297,11 +298,11 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let orig_name = if line[rspace + 1..].starts_with('<') {
             match line[rspace + 1..].find('>') {
                 Some(l) => {
-                    let state = self.get_start_state_by_name(
+                    let state_id = self.get_start_state_id_by_name(
                         i + rspace + 1,
                         &line[rspace + 2..rspace + 1 + l],
                     )?;
-                    target_state = Some(state.id);
+                    target_state = Some(state_id);
                     &line[rspace + 1 + l + 1..]
                 }
                 None => return Err(self.mk_error(LexErrorKind::InvalidStartState, rspace + i)),
@@ -467,8 +468,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                     let start_states = re_str[1..j]
                         .split(',')
                         .map(|s| s.trim())
-                        .map(|s| self.get_start_state_by_name(off, s))
-                        .map(|s| s.map(|ss| ss.id))
+                        .map(|s| self.get_start_state_id_by_name(off, s))
                         .collect::<LexInternalBuildResult<Vec<usize>>>()?;
                     Ok((start_states, Cow::from(&re_str[j + 1..])))
                 }
@@ -476,15 +476,20 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         }
     }
 
-    fn get_start_state_by_name(
+    fn get_start_state_id_by_name(
         &self,
         off: usize,
         state: &str,
-    ) -> LexInternalBuildResult<&StartState> {
-        self.start_states
-            .iter()
-            .find(|r| r.name == state)
-            .ok_or_else(|| self.mk_error(LexErrorKind::UnknownStartState, off))
+    ) -> LexInternalBuildResult<usize> {
+        if RE_START_STATE_ID.is_match(state) {
+            state.parse().map_err(|_| self.mk_error(LexErrorKind::InvalidStartState, off))
+        } else {
+            self.start_states
+                .iter()
+                .find(|r| r.name == state)
+                .map(|s| s.id)
+                .ok_or_else(|| self.mk_error(LexErrorKind::UnknownStartState, off))
+        }
     }
 
     fn parse_ws(&mut self, i: usize) -> LexInternalBuildResult<usize> {
@@ -844,12 +849,13 @@ mod test {
         let src = "%%
 <1>. 'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
-            &src,
-            LexErrorKind::UnknownStartState,
-            2,
-            1,
-        )
+        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let intrule = ast.get_rule(0).unwrap();
+        assert_eq!("known", intrule.name.as_ref().unwrap());
+        assert_eq!(".", intrule.re_str);
+        assert!(intrule.target_state.is_none());
+        assert_eq!(1, intrule.start_states.len());
+        assert_eq!(1, *intrule.start_states.get(0).unwrap());
     }
 
     #[test]
@@ -857,12 +863,12 @@ mod test {
         let src = "%%
 . <1>'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
-            &src,
-            LexErrorKind::UnknownStartState,
-            2,
-            3,
-        )
+        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let intrule = ast.get_rule(0).unwrap();
+        assert_eq!("known", intrule.name.as_ref().unwrap());
+        assert_eq!(".", intrule.re_str);
+        assert_eq!(1, intrule.target_state.unwrap());
+        assert_eq!(0, intrule.start_states.len());
     }
 
     #[test]
