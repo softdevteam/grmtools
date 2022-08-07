@@ -30,3 +30,30 @@ There are several major differences between Lex and grmtools:
    use a token name prefix.
 
  * Character sets, and changes to internal array sizes are not supported by grmtools.
+
+ * Escape sequences:
+
+   In addition to escape sequences involved in the escaping of regular expressions.
+   Lex and grmtools support the escape sequences `\123` (octal) `\x1234` (hexadecimal)
+   and ASCII escape sequences. `\\` `\a` `\f` `\n` `\r` `\t` `\v`.
+
+   Lex also interprets the escape sequence `\b` as `backspace`.  While regex treats `\b`
+   as a word boundary subsequently grmtools will too.
+
+   Additional escape sequences supported by regex:
+
+   The `\u1234` and `\U12345678` escape sequences for unicode characters,
+   the `\p`,`\P` unicode character classes, as well as the `\d` `\D` `\s` `\S`
+   `\w` `\W` perl character classes, and `\A` `\b` `\B` `\z` escape sequences.
+
+   Both Lex and grmtools support escaping arbitrary characters, for all other characters
+   besides those listed above, when given an escaped character `\c` it will be passed to
+   the regex engine as the character `c`.  This is useful when a character is used within
+   the lex format.
+
+   An example of this is when the character `<` is used at the beginning of a regex. Both Lex
+   and grmtools interpret this as the beginning of a start condition prefix. Which can be
+   escaped with `\<` to ensure it is treated as the start of a regular expression.
+
+   But the characters to which this behavior applies is impacted by the escape sequence
+   differences listed above.

@@ -1,6 +1,8 @@
 use cfgrammar::Span;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::borrow::{Borrow as _, Cow};
+use std::ops::Not;
 use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
@@ -13,6 +15,9 @@ lazy_static! {
         Regex::new(r"^%[sS][a-zA-Z0-9]*$").unwrap();
     static ref RE_EXCLUSIVE_START_STATE_DECLARATION: Regex =
         Regex::new(r"^%[xX][a-zA-Z0-9]*$").unwrap();
+    // Documented in `Escape sequences` in lexcompatibility.m
+    static ref RE_LEX_ESC_LITERAL: Regex =
+        Regex::new(r"^(([xuU][[:xdigit:]])|[[:digit:]]|[afnrtv\\]|[pP]|[dDsSwW]|[AbBz])").unwrap();
 }
 const INITIAL_START_STATE_NAME: &str = "INITIAL";
 
@@ -361,9 +366,100 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         &self,
         off: usize,
         re_str: &'a str,
-    ) -> LexInternalBuildResult<(Vec<usize>, &'a str)> {
+    ) -> LexInternalBuildResult<(Vec<usize>, std::borrow::Cow<'a, str>)> {
         if !re_str.starts_with('<') {
-            Ok((vec![], re_str))
+            /// This implements the 'Table: Escape Sequences in lex' from POSIX lex specification
+            ///
+            /// Most of the escape handling is left to regex, except this part:
+            ///
+            /// Escape: \c
+            ///
+            /// Description:
+            /// A <backslash> character followed by any character not described in this table or in the table in
+            /// XBD File Format Notation ( '\\', '\a', '\b', '\f' , '\n', '\r', '\t', '\v' ).
+            ///
+            /// Meaning: The character 'c', unchanged.
+            fn unescape(re: Cow<str>) -> Cow<str> {
+                // POSIX lex has two layers of escaping, there are escapes for the regular
+                // expressions themselves and the escapes which get handled by lex directly.
+                // We can find what the `regex` crate needs to be escaped with `is_meta_character`.
+                //
+                // We need to avoid sending Regex an escaped character which it does not consider
+                // a meta_character. As that would fail to compile. While ensuring we retain
+                // the escape sequences for the meta characters that it does require.
+                //
+                // '<' is interesting because when used at the beginning of a regex, intended to
+                // be part of the regex, it needs to be escaped, otherwise lex will interpret it
+                // as the beginning of a [`StartState`](StartState)
+                //
+                // If regex_syntax changes behavior here, it is highly likely that we should just
+                // remove this assertion, and send regex `\<`. Instead of unescaping `\<` into `<`.
+                // still it may be worthwhile to ensure that we notice such a change.
+                debug_assert!(regex_syntax::is_meta_character('<').not());
+                let re_str: &str = re.borrow();
+                let mut re_chars = re_str.char_indices();
+
+                // Look for an escape sequence which needs unescaping
+                let mut cursor = loop {
+                    if let Some((i, c)) = re_chars.next() {
+                        if c == '\\' {
+                            // Look at the next character and whether it is something we need to unescape
+                            if let Some((j, c2)) = re_chars.next() {
+                                let s = &re_str[j..];
+                                if !(regex_syntax::is_meta_character(c2)
+                                    || RE_LEX_ESC_LITERAL.is_match(s))
+                                {
+                                    break (Some((i, s, j, c2)));
+                                }
+                            }
+                        }
+                    } else {
+                        break None;
+                    }
+                };
+
+                if cursor.is_none() {
+                    // There is nothing to unescape, return the original parameter
+                    return re;
+                }
+
+                // At this point we have found something to unescape
+                let mut unescaped = String::new();
+                let mut last_pos = 0;
+
+                'outer: while let Some((i, s, j, c)) = cursor {
+                    if regex_syntax::is_meta_character(c) || RE_LEX_ESC_LITERAL.is_match(s) {
+                        // For both meta characters and literals we want to push the entire substring
+                        // up to and including the c match back into the string still escaped.
+                        unescaped.push_str(&re_str[last_pos..j + c.len_utf8()]);
+                        last_pos = j + c.len_utf8();
+                    } else {
+                        // Given '\c' in the original string, push 'c' to the new string.
+                        unescaped.push_str(&re_str[last_pos..i]);
+                        last_pos = j + c.len_utf8();
+                        unescaped.push_str(&re_str[j..last_pos]);
+                    }
+
+                    // Continue looking for the next escape sequence in the original unmodified string.
+                    loop {
+                        if let Some((step1_pos, step1)) = re_chars.next() {
+                            if step1 == '\\' {
+                                cursor = re_chars.next().map(|(step2_pos, step2)| {
+                                    (step1_pos, &re_str[step2_pos..], step2_pos, step2)
+                                });
+                                continue 'outer;
+                            }
+                        } else {
+                            // Hit the end without finding another escape sequence. Copy over the trailing string.
+                            unescaped.push_str(&re_str[last_pos..]);
+                            break 'outer;
+                        }
+                    }
+                }
+                Cow::from(unescaped)
+            }
+
+            Ok((vec![], unescape(Cow::from(re_str))))
         } else {
             match re_str.find('>') {
                 None => Err(self.mk_error(LexErrorKind::InvalidStartState, off)),
@@ -374,7 +470,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                         .map(|s| self.get_start_state_by_name(off, s))
                         .map(|s| s.map(|ss| ss.id))
                         .collect::<LexInternalBuildResult<Vec<usize>>>()?;
-                    Ok((start_states, &re_str[j + 1..]))
+                    Ok((start_states, Cow::from(&re_str[j + 1..])))
                 }
             }
         }
@@ -957,6 +1053,132 @@ mod test {
             ]
             .into_iter(),
         )
+    }
+
+    #[test]
+    fn start_state_operators_begin_of_regex() {
+        // As a sanity check, since we rely on this for proper escaping behavior
+        // This is guaranteed not to change without a semver bump by regex_syntax.
+        assert!(regex_syntax::is_meta_character('<').not());
+        // Test escaping '<' and '>' start state operators, as the initial characters of a regex.
+        let src = r#"
+%%
+\> 'gt'
+\< 'lt'
+a< 'alt'
+a> 'agt'
+e\<\< 'elt'
+e\>\> 'egt'
+\∀ 'forall'
+\∀\∀ 'forall2'
+\∀∀∀∀\∀ 'forall3'
+∀∀∀\∀∀ 'forall4'
+\[\] 'box'
+a\[\] 'abox'
+a\[\]a 'aboxa'
+\x2a 'hex'
+\052 'octal'
+\n* 'newline'
+\a* 'alert'
+\\* 'backslash'
+\\\\* 'backslash2'
+[\\\na]* 'backslash_newline_a'
+[\\<a]* 'backslash_angle_a'
+[\\\<a]* 'backslash_angle_a2'
+\u2200 'forall5'
+\U00002200 'forall6'
+[\nabcdefg\t] 'bookend'
+[\nabc\adefg\t] 'bookend2'
+[\nabc\<defg\t] 'bookend3'
+[\tabcdefg\<] 'bookend4'
+[\<abcdefg\t] 'bookend5'
+"#
+        .to_string();
+        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let mut rule = ast.get_rule_by_name("gt").unwrap();
+        assert_eq!("gt", rule.name.as_ref().unwrap());
+        assert_eq!(">", rule.re_str);
+        rule = ast.get_rule_by_name("lt").unwrap();
+        assert_eq!("lt", rule.name.as_ref().unwrap());
+        assert_eq!("<", rule.re_str);
+        rule = ast.get_rule_by_name("alt").unwrap();
+        assert_eq!("alt", rule.name.as_ref().unwrap());
+        assert_eq!("a<", rule.re_str);
+        rule = ast.get_rule_by_name("agt").unwrap();
+        assert_eq!("agt", rule.name.as_ref().unwrap());
+        assert_eq!("a>", rule.re_str);
+        rule = ast.get_rule_by_name("elt").unwrap();
+        assert_eq!("elt", rule.name.as_ref().unwrap());
+        assert_eq!("e<<", rule.re_str);
+        rule = ast.get_rule_by_name("egt").unwrap();
+        assert_eq!("egt", rule.name.as_ref().unwrap());
+        assert_eq!("e>>", rule.re_str);
+        rule = ast.get_rule_by_name("forall").unwrap();
+        assert_eq!("forall", rule.name.as_ref().unwrap());
+        assert_eq!("∀", rule.re_str);
+        rule = ast.get_rule_by_name("forall2").unwrap();
+        assert_eq!("forall2", rule.name.as_ref().unwrap());
+        assert_eq!("∀∀", rule.re_str);
+        rule = ast.get_rule_by_name("forall3").unwrap();
+        assert_eq!("forall3", rule.name.as_ref().unwrap());
+        assert_eq!("∀∀∀∀∀", rule.re_str);
+        rule = ast.get_rule_by_name("forall4").unwrap();
+        assert_eq!("forall4", rule.name.as_ref().unwrap());
+        assert_eq!("∀∀∀∀∀", rule.re_str);
+        rule = ast.get_rule_by_name("box").unwrap();
+        assert_eq!("box", rule.name.as_ref().unwrap());
+        assert_eq!(r"\[\]", rule.re_str);
+        rule = ast.get_rule_by_name("abox").unwrap();
+        assert_eq!("abox", rule.name.as_ref().unwrap());
+        assert_eq!(r"a\[\]", rule.re_str);
+        rule = ast.get_rule_by_name("aboxa").unwrap();
+        assert_eq!("aboxa", rule.name.as_ref().unwrap());
+        assert_eq!(r"a\[\]a", rule.re_str);
+        rule = ast.get_rule_by_name("hex").unwrap();
+        assert_eq!("hex", rule.name.as_ref().unwrap());
+        assert_eq!(r"\x2a", rule.re_str);
+        rule = ast.get_rule_by_name("octal").unwrap();
+        assert_eq!("octal", rule.name.as_ref().unwrap());
+        assert_eq!(r"\052", rule.re_str);
+        rule = ast.get_rule_by_name("newline").unwrap();
+        assert_eq!("newline", rule.name.as_ref().unwrap());
+        assert_eq!(r"\n*", rule.re_str);
+        rule = ast.get_rule_by_name("alert").unwrap();
+        assert_eq!("alert", rule.name.as_ref().unwrap());
+        assert_eq!(r"\a*", rule.re_str);
+        rule = ast.get_rule_by_name("backslash").unwrap();
+        assert_eq!("backslash", rule.name.as_ref().unwrap());
+        assert_eq!(r"\\*", rule.re_str);
+        rule = ast.get_rule_by_name("backslash2").unwrap();
+        assert_eq!("backslash2", rule.name.as_ref().unwrap());
+        assert_eq!(r"\\\\*", rule.re_str);
+        rule = ast.get_rule_by_name("backslash_newline_a").unwrap();
+        assert_eq!("backslash_newline_a", rule.name.as_ref().unwrap());
+        assert_eq!(r"[\\\na]*", rule.re_str);
+        rule = ast.get_rule_by_name("backslash_angle_a").unwrap();
+        assert_eq!("backslash_angle_a", rule.name.as_ref().unwrap());
+        assert_eq!(r"[\\<a]*", rule.re_str);
+        rule = ast.get_rule_by_name("forall5").unwrap();
+        assert_eq!("forall5", rule.name.as_ref().unwrap());
+        assert_eq!(r"\u2200", rule.re_str);
+        rule = ast.get_rule_by_name("forall6").unwrap();
+        assert_eq!("forall6", rule.name.as_ref().unwrap());
+        assert_eq!(r"\U00002200", rule.re_str);
+        rule = ast.get_rule_by_name("bookend").unwrap();
+        assert_eq!("bookend", rule.name.as_ref().unwrap());
+        assert_eq!(r"[\nabcdefg\t]", rule.re_str);
+        rule = ast.get_rule_by_name("bookend2").unwrap();
+        assert_eq!("bookend2", rule.name.as_ref().unwrap());
+        assert_eq!(r"[\nabc\adefg\t]", rule.re_str);
+        rule = ast.get_rule_by_name("bookend3").unwrap();
+        assert_eq!("bookend3", rule.name.as_ref().unwrap());
+        assert_eq!(r"[\nabc<defg\t]", rule.re_str);
+        rule = ast.get_rule_by_name("bookend4").unwrap();
+        assert_eq!("bookend4", rule.name.as_ref().unwrap());
+        assert_eq!(r"[\tabcdefg<]", rule.re_str);
+        rule = ast.get_rule_by_name("bookend5").unwrap();
+        assert_eq!("bookend5", rule.name.as_ref().unwrap());
+        assert_eq!(r"[<abcdefg\t]", rule.re_str);
     }
 
     #[test]
