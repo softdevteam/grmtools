@@ -670,6 +670,7 @@ impl YaccParser {
     }
 
     fn parse_action(&mut self, i: usize) -> Result<(usize, String), YaccGrammarError> {
+        debug_assert!(self.lookahead_is("{", i).is_some());
         let mut j = i;
         let mut c = 0; // Count braces
         while j < self.src.len() {
@@ -691,8 +692,9 @@ impl YaccParser {
         if c > 0 {
             Err(self.mk_error(YaccGrammarErrorKind::IncompleteAction, j))
         } else {
-            let s = self.src[i + 1..j - 1].trim().to_string();
-            Ok((j + 1, s))
+            debug_assert!(self.lookahead_is("}", j).is_some());
+            let s = self.src[i + '{'.len_utf8()..j].trim().to_string();
+            Ok((j + '}'.len_utf8(), s))
         }
     }
 
@@ -2118,6 +2120,8 @@ x"
           B: 'b' 'c' { add($1, $2); }
            | 'd'
            ;
+          D: 'd' {}
+           ;
           ",
         )
         .unwrap();
@@ -2130,6 +2134,19 @@ x"
             Some("add($1, $2);".to_string())
         );
         assert_eq!(grm.prods[grm.rules["B"].pidxs[1]].action, None);
+    }
+
+    #[test]
+    fn test_action_ends_in_multibyte() {
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            "%%A: '_' {(); // 🦀};",
+        )
+        .unwrap();
+        assert_eq!(
+            grm.prods[grm.rules["A"].pidxs[0]].action,
+            Some("(); // 🦀".to_string())
+        );
     }
 
     #[test]
