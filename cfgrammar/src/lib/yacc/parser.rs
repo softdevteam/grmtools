@@ -512,7 +512,8 @@ impl YaccParser {
                 prec_level += 1;
             }
         }
-        Err(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i - 1))
+        debug_assert!(i == self.src.len());
+        Err(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i))
     }
 
     fn parse_rules(
@@ -669,6 +670,7 @@ impl YaccParser {
     }
 
     fn parse_action(&mut self, i: usize) -> Result<(usize, String), YaccGrammarError> {
+        debug_assert!(self.lookahead_is("{", i).is_some());
         let mut j = i;
         let mut c = 0; // Count braces
         while j < self.src.len() {
@@ -690,8 +692,9 @@ impl YaccParser {
         if c > 0 {
             Err(self.mk_error(YaccGrammarErrorKind::IncompleteAction, j))
         } else {
-            let s = self.src[i + 1..j - 1].trim().to_string();
-            Ok((j + 1, s))
+            debug_assert!(self.lookahead_is("}", j).is_some());
+            let s = self.src[i + '{'.len_utf8()..j].trim().to_string();
+            Ok((j + '}'.len_utf8(), s))
         }
     }
 
@@ -795,8 +798,8 @@ impl YaccParser {
                 }
                 '\\' => {
                     debug_assert!('\\'.len_utf8() == 1);
-                    match self.src[j + 1..].chars().next().unwrap() {
-                        '\'' | '"' => {
+                    match self.src[j + 1..].chars().next() {
+                        Some(c) if c == '\'' || c == '"' => {
                             s.push_str(&self.src[i..j]);
                             i = j + 1;
                             j += 2;
@@ -1363,25 +1366,33 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
+    fn test_missing_end_quote() {
+        let src = "%epp X \"f\\".to_string();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src,
+        )
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::InvalidString, 1, 10);
+    }
+
+    #[test]
     fn test_simple_decl_fail() {
         let src = "%fail x\n%%\nA : a".to_string();
         parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &src,
         )
-        .unwrap();
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::UnknownDeclaration, 1, 1);
     }
 
     #[test]
-    #[should_panic]
     fn test_empty() {
         let src = "".to_string();
         parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &src,
         )
-        .unwrap();
+        .expect_error_at_line_col("", YaccGrammarErrorKind::PrematureEnd, 1, 1);
     }
 
     #[test]
@@ -1449,7 +1460,23 @@ A:
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &src,
         )
-        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 8);
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 9);
+    }
+
+    #[test]
+    fn test_premature_end_multibyte() {
+        let src = "%actiontype 🦀".to_string();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src,
+        )
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 14);
+        let src = "%parse-param c:🦀".to_string();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src,
+        )
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 17);
     }
 
     #[test]
@@ -1973,7 +2000,7 @@ x"
                     YaccGrammarErrorKind::DuplicateStartDeclaration,
                     vec![(2, 18), (3, 18)],
                 ),
-                (YaccGrammarErrorKind::PrematureEnd, vec![(3, 18)]),
+                (YaccGrammarErrorKind::PrematureEnd, vec![(3, 19)]),
             ]
             .into_iter(),
         );
@@ -2093,6 +2120,8 @@ x"
           B: 'b' 'c' { add($1, $2); }
            | 'd'
            ;
+          D: 'd' {}
+           ;
           ",
         )
         .unwrap();
@@ -2105,6 +2134,19 @@ x"
             Some("add($1, $2);".to_string())
         );
         assert_eq!(grm.prods[grm.rules["B"].pidxs[1]].action, None);
+    }
+
+    #[test]
+    fn test_action_ends_in_multibyte() {
+        let grm = parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            "%%A: '_' {(); // 🦀};",
+        )
+        .unwrap();
+        assert_eq!(
+            grm.prods[grm.rules["A"].pidxs[0]].action,
+            Some("(); // 🦀".to_string())
+        );
     }
 
     #[test]
@@ -2239,7 +2281,7 @@ x"
                     YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
                     vec![(2, 22), (3, 22), (4, 22)],
                 ),
-                (YaccGrammarErrorKind::PrematureEnd, vec![(4, 23)]),
+                (YaccGrammarErrorKind::PrematureEnd, vec![(4, 24)]),
             ]
             .into_iter(),
         )
