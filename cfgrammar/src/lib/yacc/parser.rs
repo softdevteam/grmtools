@@ -512,7 +512,8 @@ impl YaccParser {
                 prec_level += 1;
             }
         }
-        Err(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i - 1))
+        debug_assert!(i == self.src.len());
+        Err(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i))
     }
 
     fn parse_rules(
@@ -1374,14 +1375,13 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
     fn test_empty() {
         let src = "".to_string();
         parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &src,
         )
-        .unwrap();
+        .expect_error_at_line_col("", YaccGrammarErrorKind::PrematureEnd, 1, 1);
     }
 
     #[test]
@@ -1449,7 +1449,23 @@ A:
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &src,
         )
-        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 8);
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 9);
+    }
+
+    #[test]
+    fn test_premature_end_multibyte() {
+        let src = "%actiontype 🦀".to_string();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src,
+        )
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 14);
+        let src = "%parse-param c:🦀".to_string();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src,
+        )
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 17);
     }
 
     #[test]
@@ -1973,7 +1989,7 @@ x"
                     YaccGrammarErrorKind::DuplicateStartDeclaration,
                     vec![(2, 18), (3, 18)],
                 ),
-                (YaccGrammarErrorKind::PrematureEnd, vec![(3, 18)]),
+                (YaccGrammarErrorKind::PrematureEnd, vec![(3, 19)]),
             ]
             .into_iter(),
         );
@@ -2239,7 +2255,7 @@ x"
                     YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
                     vec![(2, 22), (3, 22), (4, 22)],
                 ),
-                (YaccGrammarErrorKind::PrematureEnd, vec![(4, 23)]),
+                (YaccGrammarErrorKind::PrematureEnd, vec![(4, 24)]),
             ]
             .into_iter(),
         )
