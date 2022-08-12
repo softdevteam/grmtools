@@ -796,8 +796,8 @@ impl YaccParser {
                 }
                 '\\' => {
                     debug_assert!('\\'.len_utf8() == 1);
-                    match self.src[j + 1..].chars().next().unwrap() {
-                        '\'' | '"' => {
+                    match self.src[j + 1..].chars().next() {
+                        Some(c) if c == '\'' || c == '"' => {
                             s.push_str(&self.src[i..j]);
                             i = j + 1;
                             j += 2;
@@ -1361,6 +1361,16 @@ mod test {
             &src,
         )
         .expect_error_at_line_col(&src, YaccGrammarErrorKind::IllegalString, 3, 11);
+    }
+
+    #[test]
+    fn test_missing_end_quote() {
+        let src = "%epp X \"f\\".to_string();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src,
+        )
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::InvalidString, 1, 10);
     }
 
     #[test]
