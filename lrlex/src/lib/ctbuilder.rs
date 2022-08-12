@@ -218,8 +218,8 @@ where
 
     /// Set the output lexer path to `outp`. Note that there are no requirements on `outp`: the
     /// file can exist anywhere you can create a valid [Path] to. However, if you wish to use
-    /// [lrlex_mod!] you will need to make sure that `outp` is in [std::env::var]`("OUT_DIR")` or
-    /// one of its subdirectories.
+    /// [crate::lrlex_mod!] you will need to make sure that `outp` is in
+    /// [std::env::var]`("OUT_DIR")` or one of its subdirectories.
     pub fn output_path<P>(mut self, outp: P) -> Self
     where
         P: AsRef<Path>,
@@ -620,10 +620,10 @@ impl CTLexer {
 }
 
 /// Create a Rust module named `mod_name` that can be imported with
-/// [`lrlex_mod!(mod_name)`](lrlex_mod). The module contains one `const` `StorageT` per token in
-/// `token_map`, with the token prefixed by `T_`. For example with `StorageT` `u8`, `mod_name` `x`,
-/// and `token_map` `HashMap{"ID": 0, "INT": 1}` the generated module will look roughly as
-/// follows:
+/// [`lrlex_mod!(mod_name)`](crate::lrlex_mod). The module contains one `const` `StorageT` per
+/// token in `token_map`, with the token prefixed by `T_`. For example with `StorageT` `u8`,
+/// `mod_name` `x`, and `token_map` `HashMap{"ID": 0, "INT": 1}` the generated module will look
+/// roughly as follows:
 ///
 /// ```rust,ignore
 /// mod x {
