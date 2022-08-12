@@ -240,7 +240,7 @@ where
 
     /// Set the output grammar path to `outp`. Note that there are no requirements on `outp`: the
     /// file can exist anywhere you can create a valid [Path] to. However, if you wish to use
-    /// [lrpar_mod!] you will need to make sure that `outp` is in [std::env::var]`("OUT_DIR")` or
+    /// [lrpar_mod!](crate::lrpar_mod) you will need to make sure that `outp` is in [std::env::var]`("OUT_DIR")` or
     /// one of its subdirectories.
     pub fn output_path<P>(mut self, outp: P) -> Self
     where
