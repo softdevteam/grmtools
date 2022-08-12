@@ -1364,14 +1364,13 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
     fn test_simple_decl_fail() {
         let src = "%fail x\n%%\nA : a".to_string();
         parse(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             &src,
         )
-        .unwrap();
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::UnknownDeclaration, 1, 1);
     }
 
     #[test]
