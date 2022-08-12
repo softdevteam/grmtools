@@ -157,7 +157,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         loop {
             i = self.parse_ws(i)?;
             if i == self.src.len() {
-                break Err(self.mk_error(LexErrorKind::PrematureEnd, i - 1));
+                break Err(self.mk_error(LexErrorKind::PrematureEnd, i.saturating_sub(1)));
             }
             if let Some(j) = self.lookahead_is("%%", i) {
                 break Ok(j);
@@ -644,6 +644,16 @@ mod test {
     fn test_minimum() {
         let src = "%%".to_string();
         assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_ok());
+    }
+
+    #[test]
+    fn test_empty() {
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str("").expect_error_at_line_col(
+            "",
+            LexErrorKind::PrematureEnd,
+            1,
+            1,
+        );
     }
 
     #[test]
