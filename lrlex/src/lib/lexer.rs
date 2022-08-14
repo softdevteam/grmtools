@@ -12,9 +12,12 @@ use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 use try_from::TryFrom;
 
-use lrpar::{LexError, Lexeme, Lexer, NonStreamingLexer};
+use lrpar::{lex_api::StartStateId, LexError, Lexeme, Lexer, NonStreamingLexer};
 
-use crate::{parser::LexParser, parser::StartState, LexBuildResult};
+use crate::{
+    parser::{LexParser, StartState, StartStateOperation},
+    LexBuildResult,
+};
 
 #[derive(Debug)]
 #[doc(hidden)]
@@ -32,10 +35,11 @@ pub struct Rule<StorageT> {
     re: Regex,
     /// Id(s) of permitted start conditions for the lexer to match this rule.
     pub start_states: Vec<usize>,
-    /// If Some(state), successful matching of this rule will cause the current start condition of
-    /// the lexer to be changed to the enclosed value. If none, successful matching causes no change
-    /// to the current start condition.
-    pub target_state: Option<usize>,
+    /// If Some(_), successful matching of this rule will cause the current stack of start
+    /// conditions in the lexer to be updated with the enclosed value, using the designated
+    /// operation.
+    /// If None, successful matching causes no change to the current start condition.
+    pub target_state: Option<(usize, StartStateOperation)>,
 }
 
 impl<StorageT> Rule<StorageT> {
@@ -48,7 +52,7 @@ impl<StorageT> Rule<StorageT> {
         name_span: Span,
         re_str: String,
         start_states: Vec<usize>,
-        target_state: Option<usize>,
+        target_state: Option<(usize, StartStateOperation)>,
     ) -> Result<Rule<StorageT>, regex::Error> {
         let re = RegexBuilder::new(&format!("\\A(?:{})", re_str))
             .octal(true)
@@ -242,20 +246,33 @@ impl<
     ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
         let mut lexemes = vec![];
         let mut i = 0;
-        let state = self.get_start_state_by_id(0);
-        let mut state = match state {
+        let mut state_stack: Vec<(usize, &StartState)> = Vec::new();
+        let initial_state = match self.get_start_state_by_id(0) {
             None => {
-                lexemes.push(Err(LexError::new(Span::new(i, i))));
+                lexemes.push(Err(LexError::new(Span::new(i, i), None)));
                 return LRNonStreamingLexer::new(s, lexemes, NewlineCache::from_str(s).unwrap());
             }
             Some(state) => state,
         };
+        state_stack.push((1, initial_state));
+
         while i < s.len() {
             let old_i = i;
             let mut longest = 0; // Length of the longest match
             let mut longest_ridx = 0; // This is only valid iff longest != 0
+            let current_state = match state_stack.last() {
+                None => {
+                    lexemes.push(Err(LexError::new(Span::new(i, i), None)));
+                    return LRNonStreamingLexer::new(
+                        s,
+                        lexemes,
+                        NewlineCache::from_str(s).unwrap(),
+                    );
+                }
+                Some((_, s)) => s,
+            };
             for (ridx, r) in self.iter_rules().enumerate() {
-                if !Self::state_matches(state, &r.start_states) {
+                if !Self::state_matches(current_state, &r.start_states) {
                     continue;
                 }
                 if let Some(m) = r.re.find(&s[old_i..]) {
@@ -276,23 +293,55 @@ impl<
                             lexemes.push(Ok(Lexeme::new(tok_id, old_i, longest)));
                         }
                         None => {
-                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
+                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i), None)));
                             break;
                         }
                     }
                 }
-                if let Some(target_state_id) = r.target_state {
-                    state = match self.get_start_state_by_id(target_state_id) {
+                if let Some((target_state_id, op)) = &r.target_state {
+                    let state = match self.get_start_state_by_id(*target_state_id) {
                         None => {
-                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
+                            // TODO: I can see an argument for lexing state to be either `None` or `Some(target_state_id)` here
+                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i), None)));
                             break;
                         }
                         Some(state) => state,
+                    };
+                    let head = state_stack.last_mut();
+                    match op {
+                        StartStateOperation::ReplaceStack => {
+                            state_stack.clear();
+                            state_stack.push((1, state));
+                        }
+                        StartStateOperation::Push => match head {
+                            Some((count, s)) if s.id == state.id => *count += 1,
+                            _ => state_stack.push((1, state)),
+                        },
+                        StartStateOperation::Pop => match head {
+                            Some((count, _s)) if *count > 1 => {
+                                *count -= 1;
+                            }
+                            Some(_) => {
+                                state_stack.pop();
+                                if state_stack.is_empty() {
+                                    state_stack.push((1, initial_state));
+                                }
+                            }
+                            None => {
+                                lexemes.push(Err(LexError::new(Span::new(old_i, old_i), None)));
+                                break;
+                            }
+                        },
                     }
                 }
                 i += longest;
             } else {
-                lexemes.push(Err(LexError::new(Span::new(old_i, old_i))));
+                let current_state_id: Option<StartStateId> =
+                    StartStateId::try_from(current_state.id).ok();
+                lexemes.push(Err(LexError::new(
+                    Span::new(old_i, old_i),
+                    current_state_id,
+                )));
                 break;
             }
         }

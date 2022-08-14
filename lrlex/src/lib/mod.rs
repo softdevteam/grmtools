@@ -26,6 +26,7 @@ pub use crate::{
     lexemes::DefaultLexeme,
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
     parser::StartState,
+    parser::StartStateOperation,
 };
 
 use cfgrammar::yacc::parser::SpansKind;
