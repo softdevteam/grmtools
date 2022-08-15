@@ -157,7 +157,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         loop {
             i = self.parse_ws(i)?;
             if i == self.src.len() {
-                break Err(self.mk_error(LexErrorKind::PrematureEnd, i.saturating_sub(1)));
+                break Err(self.mk_error(LexErrorKind::PrematureEnd, i));
             }
             if let Some(j) = self.lookahead_is("%%", i) {
                 break Ok(j);
@@ -601,7 +601,11 @@ mod test {
                             .map(|span| line_col!(src, span))
                             .collect::<Vec<(usize, usize)>>(),
                         lines_cols.collect::<Vec<(usize, usize)>>()
-                    )
+                    );
+                    // Check that it is valid to slice the source with the spans.
+                    for span in e.spans() {
+                        let _ = &src[span.start()..span.end()];
+                    }
                 }
                 Err(e) => incorrect_errs!(src, e),
             }
@@ -618,6 +622,10 @@ mod test {
                     if errs
                         .iter()
                         .map(|e| {
+                            // Check that it is valid to slice the source with the spans.
+                            for span in e.spans() {
+                                let _ = &src[span.start()..span.end()];
+                            }
                             (
                                 e.kind.clone(),
                                 e.spans()
@@ -653,6 +661,18 @@ mod test {
             LexErrorKind::PrematureEnd,
             1,
             1,
+        );
+    }
+
+    #[test]
+    fn test_premature_end_multibyte() {
+        // Ends in LineSeparator multibyte whitespace.
+        let src = "%S X ".to_string();
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::PrematureEnd,
+            1,
+            6,
         );
     }
 
