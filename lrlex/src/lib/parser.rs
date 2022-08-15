@@ -18,6 +18,12 @@ lazy_static! {
     // Documented in `Escape sequences` in lexcompatibility.m
     static ref RE_LEX_ESC_LITERAL: Regex =
         Regex::new(r"^(([xuU][[:xdigit:]])|[[:digit:]]|[afnrtv\\]|[pP]|[dDsSwW]|[AbBz])").unwrap();
+    // Vertical line separators.
+    static ref RE_LINE_SEP: Regex = Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]").unwrap();
+    // Horizontal space separators
+    static ref RE_SPACE_SEP: Regex = Regex::new(r#"[\p{Pattern_White_Space}&&[\p{Zs}\t]]"#).unwrap();
+    static ref RE_LEADING_WS: Regex = Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap();
+    static ref RE_WS: Regex = Regex::new(r"\p{Pattern_White_Space}").unwrap();
 }
 const INITIAL_START_STATE_NAME: &str = "INITIAL";
 
@@ -74,6 +80,11 @@ fn add_duplicate_occurrence(
             spans: vec![orig_span, dup_span],
         });
     }
+}
+
+fn matches_whitespace(ch: char) -> bool {
+    let mut cbuf = [0; 4];
+    RE_WS.is_match(ch.encode_utf8(&mut cbuf))
 }
 
 impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
@@ -157,7 +168,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         loop {
             i = self.parse_ws(i)?;
             if i == self.src.len() {
-                break Err(self.mk_error(LexErrorKind::PrematureEnd, i.saturating_sub(1)));
+                break Err(self.mk_error(LexErrorKind::PrematureEnd, i));
             }
             if let Some(j) = self.lookahead_is("%%", i) {
                 break Ok(j);
@@ -171,12 +182,14 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         i: usize,
         errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<usize> {
-        let line_len = self.src[i..]
-            .find(|c| c == '\n')
+        let line_len = RE_LINE_SEP
+            .find(&self.src[i..])
+            .map(|m| m.start())
             .unwrap_or(self.src.len() - i);
-        let line = self.src[i..i + line_len].trim_end();
-        let declaration_len = line.find(|c: char| c.is_whitespace()).unwrap_or(line_len);
-        let declaration = self.src[i..i + declaration_len].trim_end();
+
+        let line = self.src[i..i + line_len].trim_end_matches(matches_whitespace);
+        let declaration_len = RE_WS.find(line).map(|m| m.start()).unwrap_or(line_len);
+        let declaration = self.src[i..i + declaration_len].trim_end_matches(matches_whitespace);
         // Any line beginning with a '%' (percent sign) character and followed by an alphanumeric word
         // beginning with either 's' or 'S' shall define a set of start conditions.
         // Any line beginning with a '%' followed by an alphanumeric word beginning with either
@@ -195,21 +208,26 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     fn declare_start_states(
         &mut self,
         exclusive: bool,
-        off: usize,
+        mut i: usize,
         declaration_len: usize,
         line_len: usize,
         errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<usize> {
+        let line_end = i + line_len;
         // Start state declarations are REQUIRED to have at least one start state name
-        let declaration_parameters = self.src[off + declaration_len..off + line_len].trim();
+        let declaration_parameters =
+            self.src[i + declaration_len..line_end].trim_matches(matches_whitespace);
+
         if declaration_parameters.is_empty() {
-            return Err(self.mk_error(LexErrorKind::UnknownDeclaration, off));
+            return Err(self.mk_error(LexErrorKind::UnknownDeclaration, i));
         }
-        let start_states = declaration_parameters
-            .split_whitespace()
+
+        let start_states = RE_WS
+            .split(declaration_parameters)
             .map(|name| {
                 let off = name.as_ptr() as usize - self.src.as_ptr() as usize;
-                let span = Span::new(off, off + name.len());
+                i = off + name.len();
+                let span = Span::new(off, i);
                 (name, span)
             })
             .collect::<Vec<_>>();
@@ -221,7 +239,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                 self.start_states.push(start_state);
             }
         }
-        Ok(off + line_len)
+        self.parse_ws(i)
     }
 
     /// Validates a `StartState`
@@ -283,11 +301,13 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         i: usize,
         errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<usize> {
-        let line_len = self.src[i..]
-            .find(|c| c == '\n')
+        let mut cbuf = [0; 4];
+        let line_len = RE_LINE_SEP
+            .find(&self.src[i..])
+            .map(|m| m.start())
             .unwrap_or(self.src.len() - i);
-        let line = self.src[i..i + line_len].trim_end();
-        let rspace = match line.rfind(' ') {
+        let line = self.src[i..i + line_len].trim_end_matches(matches_whitespace);
+        let rspace = match line.rfind(|ch: char| RE_SPACE_SEP.is_match(ch.encode_utf8(&mut cbuf))) {
             Some(j) => j,
             None => return Err(self.mk_error(LexErrorKind::MissingSpace, i)),
         };
@@ -343,7 +363,8 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         };
 
         if !dupe {
-            let (start_states, re_str) = self.parse_start_states(i, line[..rspace].trim_end())?;
+            let (start_states, re_str) =
+                self.parse_start_states(i, line[..rspace].trim_end_matches(matches_whitespace))?;
             let rules_len = self.rules.len();
             let tok_id = StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
@@ -466,7 +487,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                 Some(j) => {
                     let start_states = re_str[1..j]
                         .split(',')
-                        .map(|s| s.trim())
+                        .map(|s| s.trim_matches(matches_whitespace))
                         .map(|s| self.get_start_state_by_name(off, s))
                         .map(|s| s.map(|ss| ss.id))
                         .collect::<LexInternalBuildResult<Vec<usize>>>()?;
@@ -488,15 +509,10 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
     }
 
     fn parse_ws(&mut self, i: usize) -> LexInternalBuildResult<usize> {
-        let mut j = i;
-        for c in self.src[i..].chars() {
-            match c {
-                ' ' | '\t' | '\n' | '\r' => (),
-                _ => break,
-            }
-            j += c.len_utf8();
-        }
-        Ok(j)
+        Ok(RE_LEADING_WS
+            .find(&self.src[i..])
+            .map(|m| m.end() + i)
+            .unwrap_or(i))
     }
 
     fn lookahead_is(&self, s: &'static str, i: usize) -> Option<usize> {
@@ -601,7 +617,11 @@ mod test {
                             .map(|span| line_col!(src, span))
                             .collect::<Vec<(usize, usize)>>(),
                         lines_cols.collect::<Vec<(usize, usize)>>()
-                    )
+                    );
+                    // Check that it is valid to slice the source with the spans.
+                    for span in e.spans() {
+                        let _ = &src[span.start()..span.end()];
+                    }
                 }
                 Err(e) => incorrect_errs!(src, e),
             }
@@ -618,6 +638,10 @@ mod test {
                     if errs
                         .iter()
                         .map(|e| {
+                            // Check that it is valid to slice the source with the spans.
+                            for span in e.spans() {
+                                let _ = &src[span.start()..span.end()];
+                            }
                             (
                                 e.kind.clone(),
                                 e.spans()
@@ -653,6 +677,18 @@ mod test {
             LexErrorKind::PrematureEnd,
             1,
             1,
+        );
+    }
+
+    #[test]
+    fn test_premature_end_multibyte() {
+        // Ends in LineSeparator multibyte whitespace.
+        let src = "%S X ".to_string();
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::PrematureEnd,
+            1,
+            6,
         );
     }
 
@@ -1290,5 +1326,24 @@ a\[\]a 'aboxa'
             writeln!(src, "x 'x{}'\n", i).ok();
         }
         LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).ok();
+    }
+
+    /// Test that we accept various [Pattern_White_Space](https://unicode.org/reports/tr31/)
+    /// separators and reject other unicode whitespace separators.
+    #[test]
+    fn test_various_whitespace() {
+        let src = "
+        %x X1 X2
+        %S S1	S2
+        %%
+        A	;
+        B 'b' C 'c' D	'A'";
+        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(src).is_ok());
+        // En Space isn't part of Pattern_White_Space.
+        let srcs = ["%S X Y", "%S X "];
+        for src in srcs {
+            LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(src)
+                .expect_error_at_line_col(src, LexErrorKind::InvalidStartStateName, 1, 4);
+        }
     }
 }

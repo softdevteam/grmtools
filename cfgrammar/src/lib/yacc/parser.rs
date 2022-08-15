@@ -1037,7 +1037,11 @@ mod test {
                             .map(|span| line_col!(src, span))
                             .collect::<Vec<(usize, usize)>>(),
                         lines_cols.collect::<Vec<(usize, usize)>>()
-                    )
+                    );
+                    // Check that it is valid to slice.
+                    for span in e.spans() {
+                        let _ = &src[span.start()..span.end()];
+                    }
                 }
                 Err(e) => incorrect_errs!(src, e),
             }
@@ -1054,6 +1058,10 @@ mod test {
                     if errs
                         .iter()
                         .map(|e| {
+                            // Check that it is valid to slice the source with the spans.
+                            for span in e.spans() {
+                                let _ = &src[span.start()..span.end()];
+                            }
                             (
                                 e.kind.clone(),
                                 e.spans()
@@ -1477,6 +1485,12 @@ A:
             &src,
         )
         .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 17);
+        let src = "// 🦀".to_string();
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            &src,
+        )
+        .expect_error_at_line_col(&src, YaccGrammarErrorKind::PrematureEnd, 1, 5);
     }
 
     #[test]
