@@ -2362,4 +2362,36 @@ x"
             .into_iter(),
         )
     }
+
+    #[test]
+    fn test_routines_multiple_errors() {
+        let mut src = String::from(
+            "
+        %start A
+        %start B
+        %%
+        A -> () : 'a';
+        A -> () : 'a';
+        %%
+        ",
+        );
+        let mut expected_errs = vec![
+            (
+                YaccGrammarErrorKind::DuplicateStartDeclaration,
+                vec![(2, 16), (3, 16)],
+            ),
+            (YaccGrammarErrorKind::DuplicateRule, vec![(5, 9), (6, 9)]),
+        ];
+        parse(YaccKind::Grmtools, &src)
+            .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
+
+        src.push_str(
+            "
+                /* Incomplete comment
+        ",
+        );
+        expected_errs.push((YaccGrammarErrorKind::IncompleteComment, vec![(9, 17)]));
+        parse(YaccKind::Grmtools, &src)
+            .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
+    }
 }

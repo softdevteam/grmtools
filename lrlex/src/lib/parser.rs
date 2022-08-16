@@ -1346,4 +1346,35 @@ a\[\]a 'aboxa'
                 .expect_error_at_line_col(src, LexErrorKind::InvalidStartStateName, 1, 4);
         }
     }
+
+    #[test]
+    fn test_routines_multiple_errors() {
+        let mut src = String::from(
+            r#"
+        %s A
+        %s A
+        %%
+        a "A"
+        b "A"
+        %%
+        "#,
+        );
+
+        let mut expected_errs = vec![
+            (LexErrorKind::DuplicateStartState, vec![(2, 12), (3, 12)]),
+            (LexErrorKind::DuplicateName, vec![(5, 12), (6, 12)]),
+        ];
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
+
+        src.push_str(
+            "
+            fn not_supported() {
+            }
+        ",
+        );
+        expected_errs.push((LexErrorKind::RoutinesNotSupported, vec![(7, 9)]));
+        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            .expect_multiple_errors(&src, &mut expected_errs.into_iter());
+    }
 }
