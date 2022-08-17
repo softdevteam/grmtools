@@ -20,3 +20,7 @@ lrlex = { path="../lrlex", version="0.12" }
 lrpar = { path="../lrpar", version="0.12" }
 lrtable = { path="../lrtable", version="0.12" }
 num-traits = "0.2"
+
+[features]
+default = []
+test_known_failures = []

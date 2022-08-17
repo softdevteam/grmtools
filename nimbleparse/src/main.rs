@@ -229,3 +229,73 @@ fn main() {
         process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod test {
+    use cfgrammar::{
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+        RIdx, Span,
+    };
+    use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
+    use lrpar::{lex_api::NonStreamingLexer, parser::AStackType, RTParserBuilder};
+    use num_traits::ToPrimitive;
+    use std::sync::atomic::{AtomicU8, Ordering};
+
+    static COUNT: AtomicU8 = AtomicU8::new(0);
+
+    type TestAction<'a> = &'a dyn Fn(
+        RIdx<u32>,
+        &dyn NonStreamingLexer<DefaultLexeme, u32>,
+        Span,
+        std::vec::Drain<AStackType<DefaultLexeme, ()>>,
+        (),
+    );
+
+    fn test_action(
+        _ridx: RIdx<u32>,
+        _lexer: &dyn NonStreamingLexer<DefaultLexeme, u32>,
+        _span: Span,
+        _astack: std::vec::Drain<AStackType<DefaultLexeme, ()>>,
+        _param: (),
+    ) {
+        let x = COUNT.load(Ordering::SeqCst);
+        if x < std::u8::MAX {
+            COUNT.store(x + 1, Ordering::SeqCst);
+        } else {
+            panic!("actions executed too many times")
+        }
+    }
+
+    #[test]
+    #[cfg_attr(not(feature = "test_known_failures"), ignore)]
+    fn test_issue_290_infinite_recursive_rule() {
+        let mut lexerdef = LRNonStreamingLexerDef::<DefaultLexeme, u32>::from_str(
+            r"
+                %%
+                a 'a'
+                [\t\n ] ;",
+        )
+        .unwrap();
+        let grm = YaccGrammar::new(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            // This rule has conflicts which when ignored and passed input
+            // can lead to calling the action in an infinite loop.
+            r"%%
+                Start: Bar;
+                Foo: 'a' | ;
+                Bar: Foo | Foo Bar;",
+        )
+        .unwrap();
+        let (_, state_tbl) = lrtable::from_yacc(&grm, lrtable::Minimiser::Pager).unwrap();
+        let rule_ids = grm
+            .tokens_map()
+            .iter()
+            .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
+            .collect();
+        lexerdef.set_rule_ids(&rule_ids);
+        let lexer = lexerdef.lexer("a");
+        let pb = RTParserBuilder::new(&grm, &state_tbl);
+        let actions: &[TestAction] = &[&test_action, &test_action, &test_action];
+        pb.parse_actions(&lexer, actions, ());
+    }
+}
