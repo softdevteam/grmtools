@@ -141,6 +141,7 @@ pub struct StateTable<StorageT> {
     tokens_len: TIdx<StorageT>,
     conflicts: Option<Conflicts<StorageT>>,
     final_state: StIdx<StorageT>,
+    rule_usage: Vec<(RIdx<StorageT>, bool)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -191,6 +192,10 @@ where
         let mut reduce_reduce = Vec::new();
         let mut shift_reduce = Vec::new();
         let mut final_state = None;
+        let mut rule_usage = grm
+            .iter_rules()
+            .map(|ridx| (ridx, false))
+            .collect::<Vec<_>>();
 
         for (stidx, state) in sg
             .iter_closed_states()
@@ -226,6 +231,8 @@ where
                             match pidx.cmp(&r_pidx) {
                                 Ordering::Less => {
                                     reduce_reduce.push((pidx, r_pidx, stidx));
+                                    let ridx = grm.prod_to_rule(pidx);
+                                    *rule_usage.get_mut(usize::from(ridx)).unwrap() = (ridx, true);
                                     actions[off] = StateTable::encode(Action::Reduce(pidx));
                                 }
                                 Ordering::Greater => reduce_reduce.push((r_pidx, pidx, stidx)),
@@ -261,6 +268,7 @@ where
                         let off = (usize::from(stidx) * usize::from(nt_len)) + usize::from(s_ridx);
                         debug_assert!(gotos[off] == 0);
                         // Since 0 is reserved for no entry, encode states by adding 1
+                        *rule_usage.get_mut(usize::from(s_ridx)).unwrap() = (s_ridx, true);
                         gotos[off] = usize::from(*ref_stidx) + 1;
                     }
                     Symbol::Token(s_tidx) => {
@@ -279,6 +287,7 @@ where
                                     *ref_stidx,
                                     &mut shift_reduce,
                                     stidx,
+                                    &mut rule_usage,
                                 );
                             }
                             Action::Accept => panic!("Internal error"),
@@ -370,6 +379,7 @@ where
             tokens_len: grm.tokens_len(),
             conflicts,
             final_state: final_state.unwrap(),
+            rule_usage,
         })
     }
 
@@ -484,6 +494,21 @@ where
     pub fn conflicts(&self) -> Option<&Conflicts<StorageT>> {
         self.conflicts.as_ref()
     }
+
+    pub fn rules_used(&self) -> Vec<RIdx<StorageT>> {
+        self.rule_usage
+            .iter()
+            .filter(|(_, used)| *used)
+            .map(|(ridx, _)| *ridx)
+            .collect::<Vec<RIdx<StorageT>>>()
+    }
+    pub fn rules_unused(&self) -> Vec<RIdx<StorageT>> {
+        self.rule_usage
+            .iter()
+            .filter(|(_, used)| !*used)
+            .map(|(ridx, _)| *ridx)
+            .collect::<Vec<RIdx<StorageT>>>()
+    }
 }
 
 fn actions_offset<StorageT: PrimInt + Unsigned>(
@@ -541,6 +566,7 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
     stidx: StIdx<StorageT>, // State we want to shift to
     shift_reduce: &mut Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)>,
     conflict_stidx: StIdx<StorageT>, // State in which the conflict occured
+    rule_usage: &mut [(RIdx<StorageT>, bool)],
 ) where
     usize: AsPrimitive<StorageT>,
 {
@@ -551,6 +577,8 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
             // If the token and production don't both have precedences, we use Yacc's default
             // resolution, which is in favour of the shift.
             actions[off] = StateTable::encode(Action::Shift(stidx));
+            let ridx = grm.prod_to_rule(pidx);
+            *rule_usage.get_mut(usize::from(ridx)).unwrap() = (ridx, true);
             shift_reduce.push((tidx, pidx, conflict_stidx));
         }
         (Some(token_prec), Some(prod_prec)) => {
@@ -565,6 +593,8 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
                         }
                         (AssocKind::Right, AssocKind::Right) => {
                             // Right associativity is resolved in favour of the shift.
+                            let ridx = grm.prod_to_rule(pidx);
+                            *rule_usage.get_mut(usize::from(ridx)).unwrap() = (ridx, true);
                             actions[off] = StateTable::encode(Action::Shift(stidx));
                         }
                         (AssocKind::Nonassoc, AssocKind::Nonassoc) => {
@@ -579,6 +609,8 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
                 }
                 Ordering::Greater => {
                     // The token has higher level precedence, so resolve in favour of shift.
+                    let ridx = grm.prod_to_rule(pidx);
+                    *rule_usage.get_mut(usize::from(ridx)).unwrap() = (ridx, true);
                     actions[off] = StateTable::encode(Action::Shift(stidx));
                 }
                 Ordering::Less => {
@@ -989,5 +1021,27 @@ D : D;
             }) if pidx == PIdx(1) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e),
         }
+    }
+
+    #[test]
+    fn rule_usage() {
+        let grm = YaccGrammar::new(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            "
+    %start A
+    %%
+    A: | 'a' | C;
+    B: 'b';
+    C: 'c';
+    D: B;
+        ",
+        )
+        .unwrap();
+        let sg = pager_stategraph(&grm);
+        let st = StateTable::new(&grm, &sg).unwrap();
+        assert!(st.rules_used().contains(&grm.rule_idx("A").unwrap()));
+        assert!(st.rules_used().contains(&grm.rule_idx("C").unwrap()));
+        assert!(st.rules_unused().contains(&grm.rule_idx("B").unwrap()));
+        assert!(st.rules_unused().contains(&grm.rule_idx("D").unwrap()));
     }
 }
