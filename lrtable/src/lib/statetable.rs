@@ -196,6 +196,12 @@ where
             .iter_rules()
             .map(|ridx| (ridx, false))
             .collect::<Vec<_>>();
+        // Mark the start rule as used
+        {
+            let start_ridx = grm.start_rule_idx();
+            let start_idx = usize::from(start_ridx);
+            rule_usage[start_idx] = (start_ridx, true);
+        }
 
         for (stidx, state) in sg
             .iter_closed_states()
@@ -1041,6 +1047,7 @@ D : D;
         let st = StateTable::new(&grm, &sg).unwrap();
         assert!(st.rules_used().contains(&grm.rule_idx("A").unwrap()));
         assert!(st.rules_used().contains(&grm.rule_idx("C").unwrap()));
+        assert![st.rules_used().contains(&grm.rule_idx("^").unwrap())];
         assert!(st.rules_unused().contains(&grm.rule_idx("B").unwrap()));
         assert!(st.rules_unused().contains(&grm.rule_idx("D").unwrap()));
     }
