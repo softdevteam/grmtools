@@ -267,7 +267,7 @@ mod test {
     }
 
     #[test]
-    fn test_issue_290_useless_recursive_rule() {
+    fn test_issue_290_recursive_rules() {
         let mut lexerdef = LRNonStreamingLexerDef::<DefaultLexeme, u32>::from_str(
             r"
                 %%
@@ -275,63 +275,41 @@ mod test {
                 [\t\n ] ;",
         )
         .unwrap();
-        let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::NoAction),
-            // This rule has conflicts which when ignored and passed input
-            // can lead to calling the action in an infinite loop.
-            //
-            // Yacc seems to ignore these silently, while bison produces a "useless rule" warning.
+        // These rules have conflicts which when ignored and passed input
+        // can lead to calling the action in an infinite loop.
+        //
+        // Yacc seems to ignore these silently, while bison produces a "useless rule" warning.
+        let srcs = [
             r"%%
                 Start: Bar;
                 Foo: 'a' | ;
-                Bar: Foo | Foo Bar;",
-        )
-        .unwrap();
-        let (_, state_tbl) = lrtable::from_yacc(&grm, lrtable::Minimiser::Pager).unwrap();
-        let rule_ids = grm
-            .tokens_map()
-            .iter()
-            .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
-            .collect();
-        lexerdef.set_rule_ids(&rule_ids);
-        let lexer = lexerdef.lexer("a");
-        let pb = RTParserBuilder::new(&grm, &state_tbl);
-        let actions: &[TestAction] = &[&test_action, &test_action, &test_action];
-        pb.parse_actions(&lexer, actions, ());
-    }
-
-    #[test]
-    fn test_issue_290_useless_mutual_recursive_rule() {
-        let mut lexerdef = LRNonStreamingLexerDef::<DefaultLexeme, u32>::from_str(
-            r"
-                %%
-                a 'a'
-                [\t\n ] ;",
-        )
-        .unwrap();
-        let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::NoAction),
-            // This rule has conflicts which when ignored and passed input
-            // can lead to calling the action in an infinite loop.
-            //
-            // Yacc seems to ignore these silently, while bison produces a "useless rule" warning.
+                Bar: Foo | Foo Bar;
+            ",
             r"%%
                 Start: Bar;
                 Foo: 'a' | ;
                 Bar: Foo | Foo Baz;
-                Baz: Foo | Foo Bar;",
-        )
-        .unwrap();
-        let (_, state_tbl) = lrtable::from_yacc(&grm, lrtable::Minimiser::Pager).unwrap();
-        let rule_ids = grm
-            .tokens_map()
-            .iter()
-            .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
-            .collect();
-        lexerdef.set_rule_ids(&rule_ids);
-        let lexer = lexerdef.lexer("a");
-        let pb = RTParserBuilder::new(&grm, &state_tbl);
-        let actions: &[TestAction] = &[&test_action, &test_action, &test_action, &test_action];
-        pb.parse_actions(&lexer, actions, ());
+                Baz: Foo | Foo Bar;
+            ",
+        ];
+        for src in srcs {
+            let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::NoAction), src)
+                .unwrap();
+            let (_, state_tbl) = lrtable::from_yacc(&grm, lrtable::Minimiser::Pager).unwrap();
+            let rule_ids = grm
+                .tokens_map()
+                .iter()
+                .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
+                .collect();
+            lexerdef.set_rule_ids(&rule_ids);
+            let lexer = lexerdef.lexer("a");
+
+            std::panic::catch_unwind(|| {
+                let pb = RTParserBuilder::new(&grm, &state_tbl);
+                let actions: &[TestAction] = &[&test_action, &test_action, &test_action, &test_action];
+                pb.parse_actions(&lexer, actions, ());
+            })
+            .unwrap();
+        }
     }
 }
