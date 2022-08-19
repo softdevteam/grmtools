@@ -303,13 +303,9 @@ mod test {
                 .collect();
             lexerdef.set_rule_ids(&rule_ids);
             let lexer = lexerdef.lexer("a");
-
-            std::panic::catch_unwind(|| {
-                let pb = RTParserBuilder::new(&grm, &state_tbl);
-                let actions: &[TestAction] = &[&test_action, &test_action, &test_action, &test_action];
-                pb.parse_actions(&lexer, actions, ());
-            })
-            .unwrap();
+            let pb = RTParserBuilder::new(&grm, &state_tbl);
+            let actions: &[TestAction] = &[&test_action, &test_action, &test_action, &test_action];
+            pb.parse_actions(&lexer, actions, ());
         }
     }
 }
