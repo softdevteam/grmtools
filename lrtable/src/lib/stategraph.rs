@@ -36,8 +36,8 @@ where
         self.start_state
     }
 
-    /// Return an iterator which produces (in order from `0..self.rules_len()`) all this
-    /// grammar's valid `RIdx`s.
+    /// Return an iterator which produces (in order from `StorageT::zero()..self.all_states_len()`)
+    /// all this grammar's valid `StIdx`s.
     pub fn iter_stidxs(&self) -> Box<dyn Iterator<Item = StIdx<StorageT>>> {
         // We can use as safely, because we know that we're only generating integers from
         // 0..self.states.len() which we've already checked fits within StIdxStorageT.
