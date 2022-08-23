@@ -111,7 +111,7 @@ impl fmt::Display for YaccGrammarErrorKind {
                 "Reached end of line without finding expected content"
             }
             YaccGrammarErrorKind::InvalidString => "Invalid string",
-            YaccGrammarErrorKind::NoStartRule => return write!(f, "No start rule specified"),
+            YaccGrammarErrorKind::NoStartRule => "No start rule specified",
             YaccGrammarErrorKind::InvalidStartRule(name) => {
                 return write!(f, "Start rule '{}' does not appear in grammar", name)
             }
