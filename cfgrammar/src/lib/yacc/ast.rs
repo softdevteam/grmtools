@@ -28,6 +28,8 @@ pub struct GrammarAST {
     pub expectrr: Option<(usize, Span)>,
     pub parse_param: Option<(String, String)>,
     pub programs: Option<String>,
+    // Unchecked `Symbol` names, with spans pointing into the `%allow-unused` declaration.
+    pub allow_unused: Vec<Symbol>,
 }
 
 #[derive(Debug)]
@@ -78,6 +80,7 @@ impl GrammarAST {
             expectrr: None,
             parse_param: None,
             programs: None,
+            allow_unused: Vec::new(),
         }
     }
 
@@ -201,6 +204,27 @@ impl GrammarAST {
                 kind: YaccGrammarErrorKind::UnknownEPP(k.clone()),
                 spans: vec![Span::new(0, 0)],
             });
+        }
+
+        for sym in &self.allow_unused {
+            match sym {
+                crate::yacc::ast::Symbol::Rule(sym_name, sym_span) => {
+                    if self.get_rule(sym_name).is_none() {
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::UnknownRuleRef(sym_name.clone()),
+                            spans: vec![*sym_span],
+                        });
+                    }
+                }
+                crate::yacc::ast::Symbol::Token(sym_name, sym_span) => {
+                    if !self.has_token(sym_name) {
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::UnknownToken(sym_name.clone()),
+                            spans: vec![*sym_span],
+                        });
+                    }
+                }
+            }
         }
         Ok(())
     }

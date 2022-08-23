@@ -9,7 +9,7 @@ use super::{
     ast,
     firsts::YaccFirsts,
     follows::YaccFollows,
-    parser::{YaccGrammarResult, YaccParser},
+    parser::{YaccGrammarResult, YaccGrammarWarning, YaccGrammarWarningKind, YaccParser},
     YaccKind,
 };
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
@@ -88,6 +88,8 @@ pub struct YaccGrammar<StorageT = u32> {
     expect: Option<usize>,
     /// How many reduce/reduce conflicts the grammar author expected (if any).
     expectrr: Option<usize>,
+    // Symbols which if unused do not produce warnings.
+    allow_unused: Vec<Symbol<StorageT>>,
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
@@ -329,6 +331,36 @@ where
             None
         };
 
+        let allow_unused = ast
+            .allow_unused
+            .iter()
+            .filter_map(|sym| match &sym {
+                ast::Symbol::Rule(sym_name, _) => {
+                    rule_names
+                        .iter()
+                        .enumerate()
+                        .find_map(|(ridx, (rule_name, _))| {
+                            if rule_name == sym_name {
+                                Some(Symbol::Rule(RIdx(ridx.as_())))
+                            } else {
+                                None
+                            }
+                        })
+                }
+
+                ast::Symbol::Token(sym_name, _) => {
+                    token_names.iter().enumerate().find_map(|(tidx, tok)| {
+                        tok.as_ref().and_then(|(_, token_name)| {
+                            if token_name == sym_name {
+                                Some(Symbol::Token(TIdx(tidx.as_())))
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                }
+            })
+            .collect();
         assert!(!token_names.is_empty());
         assert!(!rule_names.is_empty());
         Ok(YaccGrammar {
@@ -353,6 +385,7 @@ where
             actiontypes,
             expect: ast.expect.map(|(n, _)| n),
             expectrr: ast.expectrr.map(|(n, _)| n),
+            allow_unused,
         })
     }
 
@@ -635,6 +668,46 @@ where
     /// Return a `YaccFirsts` struct for this grammar.
     pub fn follows(&self) -> YaccFollows<StorageT> {
         YaccFollows::new(self)
+    }
+
+    /// Return an iterator over all the `YaccGrammarWarning` produced by this grammar.
+    pub fn warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> + '_ {
+        self.unused_symbol_warnings()
+    }
+
+    fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> + '_ {
+        let mut used_symbols = std::collections::BTreeSet::new();
+        self.iter_pidxs()
+            .for_each(|pidx| used_symbols.extend(self.prod(pidx).iter().copied()));
+        self.iter_rules()
+            .filter_map(|ridx| {
+                if ridx == self.start_rule_idx() || self.allow_unused.contains(&Symbol::Rule(ridx))
+                {
+                    None
+                } else {
+                    Some((Symbol::Rule(ridx), self.rule_name_span(ridx)))
+                }
+            })
+            .chain(self.iter_tidxs().filter_map(|tidx| {
+                if self.allow_unused.contains(&Symbol::Token(tidx)) {
+                    None
+                } else {
+                    // Ignore anonymous rules with out a span.
+                    self.token_span(tidx)
+                        .map(|span| (Symbol::Token(tidx), span))
+                }
+            }))
+            .filter_map(move |(sym, span)| {
+                let used_rule = used_symbols.get(&sym);
+                if used_rule.is_none() {
+                    Some(YaccGrammarWarning {
+                        kind: YaccGrammarWarningKind::UnusedSymbol,
+                        spans: vec![span],
+                    })
+                } else {
+                    None
+                }
+            })
     }
 }
 
@@ -1030,6 +1103,7 @@ where
 #[cfg(test)]
 mod test {
     use super::{
+        super::parser::{YaccGrammarWarning, YaccGrammarWarningKind},
         super::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind},
         rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE,
     };
@@ -1497,5 +1571,42 @@ mod test {
         assert_eq!(grm.token_name(*c_tidx), Some("c"));
         let c_span = grm.token_span(*c_tidx).unwrap();
         assert_eq!(&src[c_span.start()..c_span.end()], "c");
+    }
+
+    #[test]
+    fn test_unused_symbols() {
+        let grm = YaccGrammar::new(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %allow-unused UnusedAllowed 'b'
+        %token a b
+        %start Start
+        %%
+        Unused: ;
+        Start: ;
+        UnusedAllowed: ;
+        ",
+        )
+        .unwrap();
+
+        let _ = crate::Symbol::Token(grm.token_idx("a").unwrap());
+        let _ = crate::Symbol::Token(grm.token_idx("b").unwrap());
+        let _ = crate::Symbol::Rule(grm.rule_idx("Unused").unwrap());
+        let _ = crate::Symbol::Rule(grm.rule_idx("UnusedAllowed").unwrap());
+        assert_eq!(
+            grm.warnings()
+                .collect::<Vec<YaccGrammarWarning>>()
+                .as_slice(),
+            &[
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    spans: vec![Span::new(100, 106)]
+                },
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    spans: vec![Span::new(56, 57)]
+                },
+            ]
+        )
     }
 }

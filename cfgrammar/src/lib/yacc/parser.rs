@@ -47,6 +47,7 @@ pub enum YaccGrammarErrorKind {
     ReachedEOL,
     InvalidString,
     NoStartRule,
+    Warning(YaccGrammarWarningKind),
     InvalidStartRule(String),
     UnknownRuleRef(String),
     UnknownToken(String),
@@ -131,8 +132,75 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::UnknownEPP(name) => {
                 return write!(f, "Unknown token '{}' in %epp declaration", name)
             }
+            // For when treating warnings as errors.
+            YaccGrammarErrorKind::Warning(warning) => return write!(f, "{}", warning),
         };
         write!(f, "{}", s)
+    }
+}
+
+/// The various different possible Yacc parser errors.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum YaccGrammarWarningKind {
+    UnusedSymbol,
+}
+
+/// Any Warning from the Yacc parser returns an instance of this struct.
+#[derive(Debug, PartialEq, Eq)]
+pub struct YaccGrammarWarning {
+    /// Uniquely identifies each Warning.
+    pub(crate) kind: YaccGrammarWarningKind,
+    /// Always contains at least 1 span.
+    ///
+    /// Refer to [SpansKind] via [spanskind](Self::spanskind)
+    /// For meaning and interpretation of spans and their ordering.
+    pub(crate) spans: Vec<Span>,
+}
+
+impl fmt::Display for YaccGrammarWarning {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+impl fmt::Display for YaccGrammarWarningKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            YaccGrammarWarningKind::UnusedSymbol => "Unused symbol",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl YaccGrammarWarning {
+    /// Returns the spans associated with the error, always containing at least 1 span.
+    ///
+    /// Refer to [SpansKind] via [spanskind](Self::spanskind)
+    /// for the meaning and interpretation of spans and their ordering.
+    pub fn spans(&self) -> impl Iterator<Item = Span> + '_ {
+        self.spans.iter().copied()
+    }
+
+    /// Returns the [SpansKind] associated with this error.
+    pub fn spanskind(&self) -> SpansKind {
+        self.kind.spanskind()
+    }
+}
+
+impl YaccGrammarWarningKind {
+    pub fn spanskind(&self) -> SpansKind {
+        match self {
+            YaccGrammarWarningKind::UnusedSymbol => SpansKind::Error,
+        }
+    }
+}
+
+impl From<YaccGrammarWarning> for YaccGrammarError {
+    fn from(warning: YaccGrammarWarning) -> YaccGrammarError {
+        YaccGrammarError {
+            kind: YaccGrammarErrorKind::Warning(warning.kind),
+            spans: warning.spans,
+        }
     }
 }
 
@@ -155,7 +223,7 @@ impl YaccGrammarError {
 
     /// Returns the [SpansKind] associated with this error.
     pub fn spanskind(&self) -> SpansKind {
-        match self.kind {
+        match &self.kind {
             YaccGrammarErrorKind::IllegalInteger
             | YaccGrammarErrorKind::IllegalName
             | YaccGrammarErrorKind::IllegalString
@@ -186,6 +254,7 @@ impl YaccGrammarError {
             | YaccGrammarErrorKind::DuplicateStartDeclaration
             | YaccGrammarErrorKind::DuplicateActiontypeDeclaration
             | YaccGrammarErrorKind::DuplicateEPP => SpansKind::DuplicationError,
+            YaccGrammarErrorKind::Warning(warning) => warning.spanskind(),
         }
     }
 }
@@ -435,6 +504,22 @@ impl YaccParser {
                 let (j, ty) = self.parse_to_eol(i)?;
                 self.ast.parse_param = Some((name, ty));
                 i = self.parse_ws(j, true)?;
+                continue;
+            }
+            if let Some(j) = self.lookahead_is("%allow-unused", i) {
+                i = self.parse_ws(j, false)?;
+                while i < self.src.len() {
+                    if self.lookahead_is("%", i).is_some() {
+                        break;
+                    }
+                    let (j, n, span) = self.parse_token(i)?;
+                    let sym = match &self.src[i..j].chars().next().unwrap() {
+                        '\'' | '"' => Symbol::Token(n, span),
+                        _ => Symbol::Rule(n, span),
+                    };
+                    self.ast.allow_unused.push(sym);
+                    i = self.parse_ws(j, true)?;
+                }
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
