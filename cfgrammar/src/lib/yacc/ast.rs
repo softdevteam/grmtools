@@ -231,11 +231,11 @@ impl GrammarAST {
     }
 
     /// Return an iterator over all the `YaccGrammarWarning` produced by this grammar.
-    pub fn warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> + '_ {
+    pub fn warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
         self.unused_symbol_warnings()
     }
 
-    fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> + '_ {
+    fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
         #[derive(Ord, PartialOrd, PartialEq, Eq, Debug)]
         enum SymbolKind {
             Rule,
