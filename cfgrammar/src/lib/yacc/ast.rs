@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use indexmap::{IndexMap, IndexSet};
 
@@ -236,7 +239,7 @@ impl GrammarAST {
     }
 
     fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
-        #[derive(Ord, PartialOrd, PartialEq, Eq, Debug)]
+        #[derive(Hash, PartialEq, Eq, Debug)]
         enum SymbolKind {
             Rule,
             Token,
@@ -262,7 +265,7 @@ impl GrammarAST {
                 }
             })
             .collect::<Vec<(&String, SymbolKind)>>();
-        let mut used_symbols = std::collections::BTreeSet::new();
+        let mut used_symbols = HashSet::new();
         self.prods.iter().for_each(|prod: &Production| {
             used_symbols.extend(prod.symbols.iter().map(|sym| match sym {
                 Symbol::Rule(sym_name, _) => (sym_name, SymbolKind::Rule),
