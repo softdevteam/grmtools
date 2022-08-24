@@ -29,8 +29,8 @@ pub struct GrammarAST {
     pub expectrr: Option<(usize, Span)>,
     pub parse_param: Option<(String, String)>,
     pub programs: Option<String>,
-    // Unchecked `Symbol` names, with spans pointing into the `%allow-unused` declaration.
-    pub allow_unused: Vec<Symbol>,
+    // Unchecked `Symbol` names, with spans pointing into the `%expect-unused` declaration.
+    pub expect_unused: Vec<Symbol>,
 }
 
 #[derive(Debug)]
@@ -81,7 +81,7 @@ impl GrammarAST {
             expectrr: None,
             parse_param: None,
             programs: None,
-            allow_unused: Vec::new(),
+            expect_unused: Vec::new(),
         }
     }
 
@@ -207,7 +207,7 @@ impl GrammarAST {
             });
         }
 
-        for sym in &self.allow_unused {
+        for sym in &self.expect_unused {
             match sym {
                 crate::yacc::ast::Symbol::Rule(sym_name, sym_span) => {
                     if self.get_rule(sym_name).is_none() {
@@ -241,8 +241,8 @@ impl GrammarAST {
             Rule,
             Token,
         }
-        let allow_unused = self
-            .allow_unused
+        let expect_unused = self
+            .expect_unused
             .iter()
             .filter_map(|sym| match &sym {
                 Symbol::Rule(sym_name, _) => {
@@ -274,7 +274,7 @@ impl GrammarAST {
             .iter()
             .filter_map(|(rule_name, rule)| {
                 if start_rule_name.as_ref() == Some(rule_name)
-                    || allow_unused.contains(&(rule_name, SymbolKind::Rule))
+                    || expect_unused.contains(&(rule_name, SymbolKind::Rule))
                 {
                     None
                 } else {
@@ -282,7 +282,7 @@ impl GrammarAST {
                 }
             })
             .chain(self.tokens.iter().enumerate().filter_map(|(tok_idx, tok)| {
-                if allow_unused.contains(&(tok, SymbolKind::Token)) {
+                if expect_unused.contains(&(tok, SymbolKind::Token)) {
                     None
                 } else {
                     Some((tok, SymbolKind::Token, self.spans[tok_idx]))

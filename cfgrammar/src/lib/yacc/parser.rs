@@ -446,6 +446,22 @@ impl YaccParser {
                 i = self.parse_ws(j, true)?;
                 continue;
             }
+            if let Some(j) = self.lookahead_is("%expect-unused", i) {
+                i = self.parse_ws(j, false)?;
+                while i < self.src.len() {
+                    if self.lookahead_is("%", i).is_some() {
+                        break;
+                    }
+                    let (j, n, span) = self.parse_token(i)?;
+                    let sym = match &self.src[i..j].chars().next().unwrap() {
+                        '\'' | '"' => Symbol::Token(n, span),
+                        _ => Symbol::Rule(n, span),
+                    };
+                    self.ast.expect_unused.push(sym);
+                    i = self.parse_ws(j, true)?;
+                }
+                continue;
+            }
             if let Some(j) = self.lookahead_is("%expect", i) {
                 i = self.parse_ws(j, false)?;
                 let (j, n) = self.parse_int(i)?;
@@ -504,22 +520,6 @@ impl YaccParser {
                 let (j, ty) = self.parse_to_eol(i)?;
                 self.ast.parse_param = Some((name, ty));
                 i = self.parse_ws(j, true)?;
-                continue;
-            }
-            if let Some(j) = self.lookahead_is("%allow-unused", i) {
-                i = self.parse_ws(j, false)?;
-                while i < self.src.len() {
-                    if self.lookahead_is("%", i).is_some() {
-                        break;
-                    }
-                    let (j, n, span) = self.parse_token(i)?;
-                    let sym = match &self.src[i..j].chars().next().unwrap() {
-                        '\'' | '"' => Symbol::Token(n, span),
-                        _ => Symbol::Rule(n, span),
-                    };
-                    self.ast.allow_unused.push(sym);
-                    i = self.parse_ws(j, true)?;
-                }
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
@@ -2486,7 +2486,7 @@ x"
         let ast = parse(
             YaccKind::Original(YaccOriginalActionKind::NoAction),
             "
-        %allow-unused UnusedAllowed 'b'
+        %expect-unused UnusedAllowed 'b'
         %token a b
         %start Start
         %%
@@ -2504,11 +2504,11 @@ x"
             &[
                 YaccGrammarWarning {
                     kind: YaccGrammarWarningKind::UnusedSymbol,
-                    spans: vec![Span::new(100, 106)]
+                    spans: vec![Span::new(101, 107)]
                 },
                 YaccGrammarWarning {
                     kind: YaccGrammarWarningKind::UnusedSymbol,
-                    spans: vec![Span::new(56, 57)]
+                    spans: vec![Span::new(57, 58)]
                 },
             ]
         )
