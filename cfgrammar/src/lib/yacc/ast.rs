@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use indexmap::{IndexMap, IndexSet};
 
+use super::parser::{YaccGrammarWarning, YaccGrammarWarningKind};
 use super::{Precedence, YaccGrammarError, YaccGrammarErrorKind};
 
 use crate::Span;
@@ -227,6 +228,79 @@ impl GrammarAST {
             }
         }
         Ok(())
+    }
+
+    /// Return an iterator over all the `YaccGrammarWarning` produced by this grammar.
+    pub fn warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> + '_ {
+        self.unused_symbol_warnings()
+    }
+
+    fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> + '_ {
+        #[derive(Ord, PartialOrd, PartialEq, Eq, Debug)]
+        enum SymbolKind {
+            Rule,
+            Token,
+        }
+        let allow_unused = self
+            .allow_unused
+            .iter()
+            .filter_map(|sym| match &sym {
+                Symbol::Rule(sym_name, _) => {
+                    if self.rules.contains_key(sym_name) {
+                        Some((sym_name, SymbolKind::Rule))
+                    } else {
+                        None
+                    }
+                }
+
+                Symbol::Token(sym_name, _) => {
+                    if self.tokens.contains(sym_name) {
+                        Some((sym_name, SymbolKind::Token))
+                    } else {
+                        None
+                    }
+                }
+            })
+            .collect::<Vec<(&String, SymbolKind)>>();
+        let mut used_symbols = std::collections::BTreeSet::new();
+        self.prods.iter().for_each(|prod: &Production| {
+            used_symbols.extend(prod.symbols.iter().map(|sym| match sym {
+                Symbol::Rule(sym_name, _) => (sym_name, SymbolKind::Rule),
+                Symbol::Token(sym_name, _) => (sym_name, SymbolKind::Token),
+            }))
+        });
+        let start_rule_name = self.start.as_ref().map(|(name, _)| name.clone());
+        self.rules
+            .iter()
+            .filter_map(|(rule_name, rule)| {
+                if start_rule_name.as_ref() == Some(rule_name)
+                    || allow_unused.contains(&(rule_name, SymbolKind::Rule))
+                {
+                    None
+                } else {
+                    Some((rule_name, SymbolKind::Rule, rule.name.1))
+                }
+            })
+            .chain(self.tokens.iter().enumerate().filter_map(|(tok_idx, tok)| {
+                if allow_unused.contains(&(tok, SymbolKind::Token)) {
+                    None
+                } else {
+                    Some((tok, SymbolKind::Token, self.spans[tok_idx]))
+                }
+            }))
+            .filter_map(|(sym_name, kind, span)| {
+                let used_sym = used_symbols.get(&(sym_name, kind));
+                if used_sym.is_none() {
+                    Some(YaccGrammarWarning {
+                        kind: YaccGrammarWarningKind::UnusedSymbol,
+                        spans: vec![span],
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
 

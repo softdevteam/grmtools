@@ -1001,7 +1001,8 @@ mod test {
             ast::{GrammarAST, Production, Symbol},
             AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
-        Span, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
+        Span, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
+        YaccParser,
     };
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
@@ -2478,5 +2479,38 @@ x"
         expected_errs.push((YaccGrammarErrorKind::IncompleteComment, vec![(9, 17)]));
         parse(YaccKind::Grmtools, &src)
             .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
+    }
+
+    #[test]
+    fn test_unused_symbols() {
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %allow-unused UnusedAllowed 'b'
+        %token a b
+        %start Start
+        %%
+        Unused: ;
+        Start: ;
+        UnusedAllowed: ;
+        ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            ast.warnings()
+                .collect::<Vec<YaccGrammarWarning>>()
+                .as_slice(),
+            &[
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    spans: vec![Span::new(100, 106)]
+                },
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    spans: vec![Span::new(56, 57)]
+                },
+            ]
+        )
     }
 }
