@@ -233,18 +233,13 @@ impl GrammarAST {
         Ok(())
     }
 
-    /// Return an iterator over all the `YaccGrammarWarning` produced by this grammar.
-    pub fn warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
-        self.unused_symbol_warnings()
-    }
-
-    fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
+    pub(crate) fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
         #[derive(Hash, PartialEq, Eq, Debug)]
         enum SymbolKind {
             Rule,
             Token,
         }
-        let expect_unused = self
+        let mut expect_unused = self
             .expect_unused
             .iter()
             .filter_map(|sym| match &sym {
@@ -265,6 +260,11 @@ impl GrammarAST {
                 }
             })
             .collect::<Vec<(&String, SymbolKind)>>();
+
+        if let Some(implicit_tokens) = self.implicit_tokens.as_ref() {
+            expect_unused.extend(implicit_tokens.keys().map(|key| (key, SymbolKind::Token)))
+        }
+
         let mut used_symbols = HashSet::new();
         self.prods.iter().for_each(|prod: &Production| {
             used_symbols.extend(prod.symbols.iter().map(|sym| match sym {

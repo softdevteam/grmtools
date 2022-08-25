@@ -2,6 +2,7 @@ pub mod ast;
 pub mod firsts;
 pub mod follows;
 pub mod grammar;
+pub mod info;
 pub mod parser;
 
 pub use self::{

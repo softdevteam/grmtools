@@ -2498,7 +2498,7 @@ x"
         .unwrap();
 
         assert_eq!(
-            ast.warnings()
+            ast.unused_symbol_warnings()
                 .collect::<Vec<YaccGrammarWarning>>()
                 .as_slice(),
             &[

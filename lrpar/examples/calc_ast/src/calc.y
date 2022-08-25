@@ -1,3 +1,4 @@
+%expect-unused Unmatched
 %start Expr
 %avoid_insert "INT"
 %%

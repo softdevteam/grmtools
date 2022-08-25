@@ -9,6 +9,7 @@ use super::{
     ast,
     firsts::YaccFirsts,
     follows::YaccFollows,
+    info::YaccGrammarInfo,
     parser::{YaccGrammarResult, YaccParser},
     YaccKind,
 };
@@ -103,22 +104,42 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT>
 where
     usize: AsPrimitive<StorageT>,
 {
-    /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
-    /// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
+    /// Calls new_collect_info() with warnings treated as errors by default.
+    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
+        let mut info = YaccGrammarInfo::new(true);
+        YaccGrammar::new_collect_info(yacc_kind, s, &mut info)
+    }
+
+    /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s`,
+    /// and an `YaccGrammarInfo` structure for the control and collection of grammar information.
+    /// Returns a [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
     /// ([`YaccGrammarError`](grammar/enum.YaccGrammarError.html) on error).
     ///
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
+    pub fn new_collect_info(
+        yacc_kind: YaccKind,
+        s: &str,
+        info: &mut YaccGrammarInfo,
+    ) -> YaccGrammarResult<Self> {
         let ast = match yacc_kind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
                 yp.parse()?;
                 let mut ast = yp.ast();
-                let r = ast.complete_and_validate();
-                if r.is_err() {
-                    return Err(vec![r.unwrap_err()]);
+
+                let mut errs = match ast.complete_and_validate() {
+                    Err(e) => vec![e],
+                    Ok(()) => vec![],
+                };
+                // May convert warnings into errors.
+                errs.extend(
+                    ast.unused_symbol_warnings()
+                        .flat_map(|w| info.add_warning(w)),
+                );
+                if !errs.is_empty() {
+                    return Err(errs);
                 }
 
                 ast
