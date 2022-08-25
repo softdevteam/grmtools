@@ -442,6 +442,7 @@ mod test {
         YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
+          %expect-unused 'd'
           %start S
           %token a b c d
           %%
