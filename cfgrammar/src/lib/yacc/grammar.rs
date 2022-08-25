@@ -129,10 +129,10 @@ where
                 yp.parse()?;
                 let mut ast = yp.ast();
 
-                let mut errs = match ast.complete_and_validate() {
-                    Err(e) => vec![e],
-                    Ok(()) => vec![],
-                };
+                let mut errs = Vec::new();
+                if let Err(e) = ast.complete_and_validate() {
+                    errs.push(e);
+                }
                 // May convert warnings into errors.
                 errs.extend(
                     ast.unused_symbol_warnings()
