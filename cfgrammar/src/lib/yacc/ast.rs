@@ -253,19 +253,6 @@ impl GrammarAST {
                 }
             }
         }
-        // If a rule is specified in `%expect-unused`, also add the tokens associated with it.
-        // This perhaps should add rules as well, but i'm not quite certain.
-        for unused_rule in expected_unused_rules.iter() {
-            if let Some(rule) = self.rules.get(*unused_rule) {
-                for pidx in &rule.pidxs {
-                    for symbol in &self.prods[*pidx].symbols {
-                        if let Symbol::Token(tok, _) = symbol {
-                            expected_unused_tokens.insert(tok);
-                        }
-                    }
-                }
-            }
-        }
         if let Some(implicit_tokens) = self.implicit_tokens.as_ref() {
             expected_unused_tokens.extend(implicit_tokens.keys())
         }
