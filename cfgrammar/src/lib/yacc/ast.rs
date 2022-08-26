@@ -5,8 +5,9 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 
-use super::parser::{YaccGrammarWarning, YaccGrammarWarningKind};
-use super::{Precedence, YaccGrammarError, YaccGrammarErrorKind};
+use super::{
+    Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
+};
 
 use crate::Span;
 

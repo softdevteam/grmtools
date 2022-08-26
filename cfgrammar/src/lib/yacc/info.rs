@@ -1,5 +1,4 @@
-use crate::yacc::parser::YaccGrammarWarning;
-use crate::yacc::YaccGrammarError;
+use crate::yacc::{YaccGrammarError, YaccGrammarWarning};
 
 /// Controls the collection of and collects information about warnings and other information
 /// that result during the construction of a `YaccGrammar`.  If `warnings_as_errors` is `true`
