@@ -212,7 +212,7 @@ impl GrammarAST {
 
         for sym in &self.expect_unused {
             match sym {
-                crate::yacc::ast::Symbol::Rule(sym_name, sym_span) => {
+                Symbol::Rule(sym_name, sym_span) => {
                     if self.get_rule(sym_name).is_none() {
                         return Err(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownRuleRef(sym_name.clone()),
@@ -220,7 +220,7 @@ impl GrammarAST {
                         });
                     }
                 }
-                crate::yacc::ast::Symbol::Token(sym_name, sym_span) => {
+                Symbol::Token(sym_name, sym_span) => {
                     if !self.has_token(sym_name) {
                         return Err(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownToken(sym_name.clone()),
