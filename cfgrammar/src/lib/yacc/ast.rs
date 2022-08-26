@@ -234,109 +234,83 @@ impl GrammarAST {
     }
 
     pub(crate) fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
-        #[derive(Hash, PartialEq, Eq, Debug, Copy, Clone)]
-        enum SymbolKind {
-            Rule,
-            Token,
-        }
         let start_rule_name = self.start.as_ref().map(|(name, _)| name.clone());
         let start_rule = self
             .rules
             .iter()
             .find(|(rule_name, _)| start_rule_name.as_ref() == Some(rule_name));
-        let mut used_symbols = HashSet::new();
-        let mut expect_unused = self
-            .expect_unused
-            .iter()
-            .filter_map(|sym| match &sym {
+        let mut seen_rules = HashSet::new();
+        let mut seen_tokens = HashSet::new();
+        let mut expected_unused_tokens = HashSet::new();
+        let mut expected_unused_rules = HashSet::new();
+        for sym in &self.expect_unused {
+            match sym {
                 Symbol::Rule(sym_name, _) => {
-                    if self.rules.contains_key(sym_name) {
-                        Some((sym_name, SymbolKind::Rule))
-                    } else {
-                        None
-                    }
+                    expected_unused_rules.insert(sym_name);
                 }
                 Symbol::Token(sym_name, _) => {
-                    if self.tokens.contains(sym_name) {
-                        Some((sym_name, SymbolKind::Token))
-                    } else {
-                        None
-                    }
+                    expected_unused_tokens.insert(sym_name);
                 }
-            })
-            .collect::<Vec<(&String, SymbolKind)>>();
+            }
+        }
         // If a rule is specified in `%expect-unused`, also add the tokens associated with it.
         // This perhaps should add rules as well, but i'm not quite certain.
-        let mut extra_unused = Vec::new();
-        for (unused_sym, _) in expect_unused.iter() {
-            if let Some(rule) = self.rules.get(*unused_sym) {
+        for unused_rule in expected_unused_rules.iter() {
+            if let Some(rule) = self.rules.get(*unused_rule) {
                 for pidx in &rule.pidxs {
                     for symbol in &self.prods[*pidx].symbols {
                         if let Symbol::Token(tok, _) = symbol {
-                            extra_unused.push((tok, SymbolKind::Token));
+                            expected_unused_tokens.insert(tok);
                         }
                     }
                 }
             }
         }
-        expect_unused.extend(extra_unused);
-
         if let Some(implicit_tokens) = self.implicit_tokens.as_ref() {
-            expect_unused.extend(
-                implicit_tokens
-                    .iter()
-                    .map(|(key, _)| (key, SymbolKind::Token)),
-            )
+            expected_unused_tokens.extend(implicit_tokens.keys())
         }
-
         if let Some((start_name, start_rule)) = start_rule {
-            let mut queue = Vec::new();
-            let start_sym = (start_name, SymbolKind::Rule);
-            queue.extend(start_rule.pidxs.iter().copied());
-            used_symbols.insert(start_sym);
+            let mut todo = Vec::new();
+            todo.extend(start_rule.pidxs.iter().copied());
+            seen_rules.insert(start_name);
 
-            while let Some(pidx) = queue.pop() {
+            while let Some(pidx) = todo.pop() {
                 let prod = &self.prods[pidx];
                 for sym in &prod.symbols {
-                    let (sym_name, sym_kind) = match sym {
-                        Symbol::Rule(name, _) => (name, SymbolKind::Rule),
-                        Symbol::Token(name, _) => (name, SymbolKind::Token),
-                    };
-
-                    if used_symbols.insert((sym_name, sym_kind)) && sym_kind == SymbolKind::Rule {
-                        if let Some(rule) = self.rules.get(sym_name) {
-                            queue.extend(&rule.pidxs);
+                    match sym {
+                        Symbol::Rule(name, _) => {
+                            if seen_rules.insert(name) {
+                                if let Some(rule) = self.rules.get(name) {
+                                    todo.extend(&rule.pidxs);
+                                }
+                            }
                         }
-                    }
+                        Symbol::Token(name, _) => {
+                            seen_tokens.insert(name);
+                        }
+                    };
                 }
             }
         }
         self.rules
             .iter()
             .filter_map(|(rule_name, rule)| {
-                if expect_unused.contains(&(rule_name, SymbolKind::Rule)) {
+                if expected_unused_rules.contains(rule_name) || seen_rules.contains(rule_name) {
                     None
                 } else {
-                    Some((rule_name, SymbolKind::Rule, rule.name.1))
+                    Some(rule.name.1)
                 }
             })
             .chain(self.tokens.iter().enumerate().filter_map(|(tok_idx, tok)| {
-                if expect_unused.contains(&(tok, SymbolKind::Token)) {
+                if expected_unused_tokens.contains(tok) || seen_tokens.contains(tok) {
                     None
                 } else {
-                    Some((tok, SymbolKind::Token, self.spans[tok_idx]))
+                    Some(self.spans[tok_idx])
                 }
             }))
-            .filter_map(|(sym_name, kind, span)| {
-                let used_sym = used_symbols.get(&(sym_name, kind));
-                if used_sym.is_none() {
-                    Some(YaccGrammarWarning {
-                        kind: YaccGrammarWarningKind::UnusedSymbol,
-                        spans: vec![span],
-                    })
-                } else {
-                    None
-                }
+            .map(|span| YaccGrammarWarning {
+                kind: YaccGrammarWarningKind::UnusedSymbol,
+                spans: vec![span],
             })
             .collect::<Vec<_>>()
             .into_iter()
