@@ -285,20 +285,22 @@ impl GrammarAST {
                 if expected_unused_rules.contains(rule_name) || seen_rules.contains(rule_name) {
                     None
                 } else {
-                    Some(rule.name.1)
+                    Some(YaccGrammarWarning {
+                        kind: YaccGrammarWarningKind::UnusedRule,
+                        spans: vec![rule.name.1],
+                    })
                 }
             })
             .chain(self.tokens.iter().enumerate().filter_map(|(tok_idx, tok)| {
                 if expected_unused_tokens.contains(tok) || seen_tokens.contains(tok) {
                     None
                 } else {
-                    Some(self.spans[tok_idx])
+                    Some(YaccGrammarWarning {
+                        kind: YaccGrammarWarningKind::UnusedToken,
+                        spans: vec![self.spans[tok_idx]],
+                    })
                 }
             }))
-            .map(|span| YaccGrammarWarning {
-                kind: YaccGrammarWarningKind::UnusedSymbol,
-                spans: vec![span],
-            })
             .collect::<Vec<_>>()
             .into_iter()
     }

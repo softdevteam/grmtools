@@ -144,7 +144,8 @@ impl fmt::Display for YaccGrammarErrorKind {
 /// The various different possible Yacc parser errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum YaccGrammarWarningKind {
-    UnusedSymbol,
+    UnusedRule,
+    UnusedToken,
 }
 
 /// Any Warning from the Yacc parser returns an instance of this struct.
@@ -168,7 +169,8 @@ impl fmt::Display for YaccGrammarWarning {
 impl fmt::Display for YaccGrammarWarningKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
-            YaccGrammarWarningKind::UnusedSymbol => "Unused symbol",
+            YaccGrammarWarningKind::UnusedRule => "Unused rule",
+            YaccGrammarWarningKind::UnusedToken => "Unused token",
         };
         write!(f, "{}", s)
     }
@@ -192,7 +194,9 @@ impl YaccGrammarWarning {
 impl YaccGrammarWarningKind {
     pub fn spanskind(&self) -> SpansKind {
         match self {
-            YaccGrammarWarningKind::UnusedSymbol => SpansKind::Error,
+            YaccGrammarWarningKind::UnusedRule | YaccGrammarWarningKind::UnusedToken => {
+                SpansKind::Error
+            }
         }
     }
 }
@@ -2517,11 +2521,11 @@ x"
                 .as_slice(),
             &[
                 YaccGrammarWarning {
-                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    kind: YaccGrammarWarningKind::UnusedRule,
                     spans: vec![Span::new(101, 107)]
                 },
                 YaccGrammarWarning {
-                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    kind: YaccGrammarWarningKind::UnusedToken,
                     spans: vec![Span::new(57, 58)]
                 },
             ]
@@ -2542,7 +2546,7 @@ x"
                 .collect::<Vec<YaccGrammarWarning>>()
                 .as_slice(),
             &[YaccGrammarWarning {
-                kind: YaccGrammarWarningKind::UnusedSymbol,
+                kind: YaccGrammarWarningKind::UnusedRule,
                 spans: vec![Span::new(50, 53)]
             },]
         );
@@ -2563,11 +2567,11 @@ x"
                 .as_slice(),
             &[
                 YaccGrammarWarning {
-                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    kind: YaccGrammarWarningKind::UnusedRule,
                     spans: vec![Span::new(43, 44)]
                 },
                 YaccGrammarWarning {
-                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    kind: YaccGrammarWarningKind::UnusedToken,
                     spans: vec![Span::new(53, 54)]
                 },
             ]
