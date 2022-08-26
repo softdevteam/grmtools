@@ -2511,6 +2511,26 @@ x"
                     spans: vec![Span::new(57, 58)]
                 },
             ]
+        );
+
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %start A
+        %%
+        A: ;
+        Rec: Rec | ;
+        ",
         )
+        .unwrap();
+        assert_eq!(
+            ast.unused_symbol_warnings()
+                .collect::<Vec<YaccGrammarWarning>>()
+                .as_slice(),
+            &[YaccGrammarWarning {
+                kind: YaccGrammarWarningKind::UnusedSymbol,
+                spans: vec![Span::new(50, 53)]
+            },]
+        );
     }
 }

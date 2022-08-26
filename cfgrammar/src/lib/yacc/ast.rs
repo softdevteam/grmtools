@@ -39,7 +39,7 @@ pub struct GrammarAST {
 #[derive(Debug)]
 pub struct Rule {
     pub name: (String, Span),
-    pub pidxs: Vec<usize>, // index into GrammarAST.prod
+    pub pidxs: Vec<usize>, // index into GrammarAST.prods
     pub actiont: Option<String>,
 }
 
@@ -234,11 +234,17 @@ impl GrammarAST {
     }
 
     pub(crate) fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
-        #[derive(Hash, PartialEq, Eq, Debug)]
+        #[derive(Hash, PartialEq, Eq, Debug, Copy, Clone)]
         enum SymbolKind {
             Rule,
             Token,
         }
+        let start_rule_name = self.start.as_ref().map(|(name, _)| name.clone());
+        let start_rule = self
+            .rules
+            .iter()
+            .find(|(rule_name, _)| start_rule_name.as_ref() == Some(rule_name));
+        let mut used_symbols = HashSet::new();
         let mut expect_unused = self
             .expect_unused
             .iter()
@@ -250,7 +256,6 @@ impl GrammarAST {
                         None
                     }
                 }
-
                 Symbol::Token(sym_name, _) => {
                     if self.tokens.contains(sym_name) {
                         Some((sym_name, SymbolKind::Token))
@@ -260,25 +265,56 @@ impl GrammarAST {
                 }
             })
             .collect::<Vec<(&String, SymbolKind)>>();
+        // If a rule is specified in `%expect-unused`, also add the tokens associated with it.
+        // This perhaps should add rules as well, but i'm not quite certain.
+        let mut extra_unused = Vec::new();
+        for (unused_sym, _) in expect_unused.iter() {
+            if let Some(rule) = self.rules.get(*unused_sym) {
+                for pidx in &rule.pidxs {
+                    for symbol in &self.prods[*pidx].symbols {
+                        if let Symbol::Token(tok, _) = symbol {
+                            extra_unused.push((tok, SymbolKind::Token));
+                        }
+                    }
+                }
+            }
+        }
+        expect_unused.extend(extra_unused);
 
         if let Some(implicit_tokens) = self.implicit_tokens.as_ref() {
-            expect_unused.extend(implicit_tokens.keys().map(|key| (key, SymbolKind::Token)))
+            expect_unused.extend(
+                implicit_tokens
+                    .iter()
+                    .map(|(key, _)| (key, SymbolKind::Token)),
+            )
         }
 
-        let mut used_symbols = HashSet::new();
-        self.prods.iter().for_each(|prod: &Production| {
-            used_symbols.extend(prod.symbols.iter().map(|sym| match sym {
-                Symbol::Rule(sym_name, _) => (sym_name, SymbolKind::Rule),
-                Symbol::Token(sym_name, _) => (sym_name, SymbolKind::Token),
-            }))
-        });
-        let start_rule_name = self.start.as_ref().map(|(name, _)| name.clone());
+        if let Some((start_name, start_rule)) = start_rule {
+            let mut queue = Vec::new();
+            let start_sym = (start_name, SymbolKind::Rule);
+            queue.extend(start_rule.pidxs.iter().copied());
+            used_symbols.insert(start_sym);
+
+            while let Some(pidx) = queue.pop() {
+                let prod = &self.prods[pidx];
+                for sym in &prod.symbols {
+                    let (sym_name, sym_kind) = match sym {
+                        Symbol::Rule(name, _) => (name, SymbolKind::Rule),
+                        Symbol::Token(name, _) => (name, SymbolKind::Token),
+                    };
+
+                    if used_symbols.insert((sym_name, sym_kind)) && sym_kind == SymbolKind::Rule {
+                        if let Some(rule) = self.rules.get(sym_name) {
+                            queue.extend(&rule.pidxs);
+                        }
+                    }
+                }
+            }
+        }
         self.rules
             .iter()
             .filter_map(|(rule_name, rule)| {
-                if start_rule_name.as_ref() == Some(rule_name)
-                    || expect_unused.contains(&(rule_name, SymbolKind::Rule))
-                {
+                if expect_unused.contains(&(rule_name, SymbolKind::Rule)) {
                     None
                 } else {
                     Some((rule_name, SymbolKind::Rule, rule.name.1))

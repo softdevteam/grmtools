@@ -182,7 +182,7 @@ mod test {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
-          %expect-unused E F
+          %expect-unused E F D 'd'
           %start C
           %token c d
           %%
@@ -205,7 +205,7 @@ mod test {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
-          %expect-unused E
+          %expect-unused E D
           %start C
           %token c d
           %%
@@ -224,7 +224,7 @@ mod test {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
-          %expect-unused D
+          %expect-unused D C
           %start A
           %token a b c
           %%
@@ -283,7 +283,7 @@ mod test {
         YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
-          %expect-unused F B
+          %expect-unused F B C D
           %start S
           %token a b c d f
           %%
@@ -315,7 +315,7 @@ mod test {
         let grm = YaccGrammar::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
-          %expect-unused G
+          %expect-unused G F D C
           %start E
           %token a b c d e f
           %%

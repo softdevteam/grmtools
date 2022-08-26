@@ -368,6 +368,12 @@ Unmatched -> ():
   ;
 ```
 
+Since this rule is not reachable from the start state, to avoid any warnings
+caused by that, we should add a `%expect-unused` declaration for it at the top.
+```
+%expect-unused Unmatched
+```
+
 With this done, all possible input will be lexed, and what were previously
 lexing errors are now parsing errors. This means that [error recovery
 section](errorrecovery.html) kicks in, giving us more detailed and informative
