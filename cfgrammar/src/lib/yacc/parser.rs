@@ -47,6 +47,7 @@ pub enum YaccGrammarErrorKind {
     ReachedEOL,
     InvalidString,
     NoStartRule,
+    UnknownSymbol,
     Warning(YaccGrammarWarningKind),
     InvalidStartRule(String),
     UnknownRuleRef(String),
@@ -113,6 +114,7 @@ impl fmt::Display for YaccGrammarErrorKind {
             }
             YaccGrammarErrorKind::InvalidString => "Invalid string",
             YaccGrammarErrorKind::NoStartRule => "No start rule specified",
+            YaccGrammarErrorKind::UnknownSymbol => "Unknown symbol, expected a rule or token",
             YaccGrammarErrorKind::InvalidStartRule(name) => {
                 return write!(f, "Start rule '{}' does not appear in grammar", name)
             }
@@ -240,6 +242,7 @@ impl YaccGrammarError {
             | YaccGrammarErrorKind::ReachedEOL
             | YaccGrammarErrorKind::InvalidString
             | YaccGrammarErrorKind::NoStartRule
+            | YaccGrammarErrorKind::UnknownSymbol
             | YaccGrammarErrorKind::InvalidStartRule(_)
             | YaccGrammarErrorKind::UnknownRuleRef(_)
             | YaccGrammarErrorKind::UnknownToken(_)
@@ -452,12 +455,23 @@ impl YaccParser {
                     if self.lookahead_is("%", i).is_some() {
                         break;
                     }
-                    let (j, n, span) = self.parse_token(i)?;
-                    let sym = match &self.src[i..j].chars().next().unwrap() {
-                        '\'' | '"' => Symbol::Token(n, span),
-                        _ => Symbol::Rule(n, span),
+                    let j = match self.parse_name(i) {
+                        Ok((j, n)) => {
+                            self.ast
+                                .expect_unused
+                                .push(Symbol::Rule(n, Span::new(i, j)));
+                            j
+                        }
+                        Err(_) => match self.parse_token(i) {
+                            Ok((j, n, span)) => {
+                                self.ast.expect_unused.push(Symbol::Token(n, span));
+                                j
+                            }
+                            Err(_) => {
+                                return Err(self.mk_error(YaccGrammarErrorKind::UnknownSymbol, i))
+                            }
+                        },
                     };
-                    self.ast.expect_unused.push(sym);
                     i = self.parse_ws(j, true)?;
                 }
                 continue;
