@@ -2532,5 +2532,31 @@ x"
                 spans: vec![Span::new(50, 53)]
             },]
         );
+
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %%
+        A: 'a' | 'z' ;
+        B: 'a' | 'c' ;
+        ",
+        )
+        .unwrap();
+        // Check that we warn on B and 'c' but not 'a'
+        assert_eq!(
+            ast.unused_symbol_warnings()
+                .collect::<Vec<YaccGrammarWarning>>()
+                .as_slice(),
+            &[
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    spans: vec![Span::new(43, 44)]
+                },
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedSymbol,
+                    spans: vec![Span::new(53, 54)]
+                },
+            ]
+        );
     }
 }
