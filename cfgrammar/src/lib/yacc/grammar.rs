@@ -104,9 +104,9 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT>
 where
     usize: AsPrimitive<StorageT>,
 {
-    /// Calls new_collect_info() with warnings treated as errors by default.
+    /// Calls new_collect_info() with a `cautious()` YaccGrammarInfo.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
-        let mut info = YaccGrammarInfo::new(true);
+        let mut info = YaccGrammarInfo::cautious();
         YaccGrammar::new_collect_info(yacc_kind, s, &mut info)
     }
 

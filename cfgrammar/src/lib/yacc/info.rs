@@ -8,12 +8,37 @@ pub struct YaccGrammarInfo {
     warnings: Vec<YaccGrammarWarning>,
 }
 
-impl YaccGrammarInfo {
-    pub fn new(warnings_as_errors: bool) -> Self {
+#[derive(Default)]
+pub struct YaccGrammarInfoBuilder {
+    warnings_as_errors: bool,
+}
+
+impl YaccGrammarInfoBuilder {
+    pub fn warnings_as_errors(mut self) -> Self {
+        self.warnings_as_errors = true;
+        self
+    }
+
+    pub fn build(self) -> YaccGrammarInfo {
         YaccGrammarInfo {
-            warnings_as_errors,
+            warnings_as_errors: self.warnings_as_errors,
             warnings: Vec::new(),
         }
+    }
+}
+
+impl YaccGrammarInfo {
+    /// Returns a `YaccGrammarInfoBuilder` for configuring the behavior of a `YaccGrammarInfo`
+    pub fn builder() -> YaccGrammarInfoBuilder {
+        Default::default()
+    }
+
+    /// Returns a `YaccGrammarInfo` settings that are enabled are selected with a disposition
+    /// towards caution. For example, the treatment of warnings as errors would be enabled.
+    ///
+    /// The exact set of flags enabled by this function are not specified and subject to change.
+    pub fn cautious() -> Self {
+        Self::builder().warnings_as_errors().build()
     }
 
     /// If `warnings_as_errors` is `true` converts the warning to an error and returns `Some`.
