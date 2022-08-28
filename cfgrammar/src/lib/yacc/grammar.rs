@@ -142,8 +142,7 @@ where
                 let mut errs = Vec::new();
                 if let Err(e) = ast.complete_and_validate() {
                     errs.push(e);
-                }
-                // May convert warnings into errors.
+                }                
                 info.warnings.extend(ast.unused_symbol_warnings());
                 if !errs.is_empty() {
                     return Err(errs);
