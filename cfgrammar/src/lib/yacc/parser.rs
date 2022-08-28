@@ -2577,4 +2577,18 @@ x"
             ]
         );
     }
+    #[test]
+    fn test_bad_expect_unused() {
+        let src = "
+        %expect-unused %
+        %%
+        A: ;
+        ";
+        parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::UnknownDeclaration,
+            2,
+            24,
+        );
+    }
 }
