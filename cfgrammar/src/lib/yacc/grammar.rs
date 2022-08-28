@@ -104,7 +104,7 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT>
 where
     usize: AsPrimitive<StorageT>,
 {
-    /// Calls new_collect_info() with a `cautious()` YaccGrammarInfo.
+    /// Calls `new_collect_info()` converting any warnings that occur into errors.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
         let mut info = YaccGrammarInfo::new();
         let grm = YaccGrammar::new_collect_info(yacc_kind, s, &mut info)?;
@@ -1058,8 +1058,11 @@ where
 #[cfg(test)]
 mod test {
     use super::{
-        super::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind},
-        rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE,
+        super::{
+            AssocKind, Precedence, YaccGrammar, YaccGrammarWarning, YaccGrammarWarningKind,
+            YaccKind, YaccOriginalActionKind,
+        },
+        rule_max_costs, rule_min_costs, YaccGrammarInfo, IMPLICIT_RULE, IMPLICIT_START_RULE,
     };
     use crate::{PIdx, RIdx, Span, Symbol, TIdx};
     use std::collections::HashMap;
@@ -1525,5 +1528,38 @@ mod test {
         assert_eq!(grm.token_name(*c_tidx), Some("c"));
         let c_span = grm.token_span(*c_tidx).unwrap();
         assert_eq!(&src[c_span.start()..c_span.end()], "c");
+    }
+
+    #[test]
+    fn test_info_collection() {
+        let mut info = YaccGrammarInfo::new();
+        let _grm: YaccGrammar<u32> = YaccGrammar::new_collect_info(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %expect-unused UnusedAllowed 'b'
+        %token a b
+        %start Start
+        %%
+        Unused: ;
+        Start: ;
+        UnusedAllowed: ;
+        ",
+            &mut info,
+        )
+        .unwrap();
+
+        assert_eq!(
+            info.warnings(),
+            &[
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedRule,
+                    spans: vec![Span::new(101, 107)]
+                },
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedToken,
+                    spans: vec![Span::new(57, 58)]
+                },
+            ]
+        );
     }
 }
