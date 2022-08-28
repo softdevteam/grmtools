@@ -149,7 +149,7 @@ pub enum YaccGrammarWarningKind {
 }
 
 /// Any Warning from the Yacc parser returns an instance of this struct.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct YaccGrammarWarning {
     /// The specific kind of warning.
     pub(crate) kind: YaccGrammarWarningKind,

@@ -10,7 +10,7 @@ use super::{
     firsts::YaccFirsts,
     follows::YaccFollows,
     info::YaccGrammarInfo,
-    parser::{YaccGrammarResult, YaccParser},
+    parser::{YaccGrammarError, YaccGrammarResult, YaccParser},
     YaccKind,
 };
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
@@ -106,8 +106,18 @@ where
 {
     /// Calls new_collect_info() with a `cautious()` YaccGrammarInfo.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
-        let mut info = YaccGrammarInfo::cautious();
-        YaccGrammar::new_collect_info(yacc_kind, s, &mut info)
+        let mut info = YaccGrammarInfo::new();
+        let grm = YaccGrammar::new_collect_info(yacc_kind, s, &mut info)?;
+        let warnings = info
+            .warnings()
+            .iter()
+            .cloned()
+            .map(YaccGrammarError::from)
+            .collect::<Vec<_>>();
+        if !warnings.is_empty() {
+            return Err(warnings);
+        }
+        Ok(grm)
     }
 
     /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s`,
@@ -134,10 +144,7 @@ where
                     errs.push(e);
                 }
                 // May convert warnings into errors.
-                errs.extend(
-                    ast.unused_symbol_warnings()
-                        .flat_map(|w| info.add_warning(w)),
-                );
+                info.warnings.extend(ast.unused_symbol_warnings());
                 if !errs.is_empty() {
                     return Err(errs);
                 }
