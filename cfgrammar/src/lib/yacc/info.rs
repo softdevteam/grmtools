@@ -12,9 +12,7 @@ impl YaccGrammarInfo {
             warnings: Vec::new(),
         }
     }
-    /// If `self.warnings_as_errors` is `true` returns an empty slice.
-    /// Otherwise return the list of warnings collected during grammar
-    /// construction.
+    /// Returns all the warnings collected during grammar construction.
     pub fn warnings(&self) -> &[YaccGrammarWarning] {
         self.warnings.as_slice()
     }
