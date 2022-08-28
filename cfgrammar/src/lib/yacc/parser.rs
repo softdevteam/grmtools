@@ -59,7 +59,7 @@ pub enum YaccGrammarErrorKind {
 /// Any error from the Yacc parser returns an instance of this struct.
 #[derive(Debug, PartialEq, Eq)]
 pub struct YaccGrammarError {
-    /// Uniquely identifies each error.
+    /// The specific kind of error.
     pub(crate) kind: YaccGrammarErrorKind,
     /// Always contains at least 1 span.
     ///
@@ -151,7 +151,7 @@ pub enum YaccGrammarWarningKind {
 /// Any Warning from the Yacc parser returns an instance of this struct.
 #[derive(Debug, PartialEq, Eq)]
 pub struct YaccGrammarWarning {
-    /// Uniquely identifies each Warning.
+    /// The specific kind of warning.
     pub(crate) kind: YaccGrammarWarningKind,
     /// Always contains at least 1 span.
     ///
