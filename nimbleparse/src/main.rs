@@ -132,7 +132,7 @@ fn main() {
         Ok(x) => x,
         Err(errs) => {
             let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
-            for e in errs {
+            for e in errs.iter() {
                 if let Some((line, column)) = nlcache
                     .byte_to_line_num_and_col_num(&yacc_src, e.spans().next().unwrap().start())
                 {

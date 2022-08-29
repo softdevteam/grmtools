@@ -118,7 +118,7 @@ where
                 let mut ast = yp.ast();
                 let r = ast.complete_and_validate();
                 if r.is_err() {
-                    return Err(vec![r.unwrap_err()]);
+                    return Err(vec![r.unwrap_err()].into_boxed_slice());
                 }
 
                 ast

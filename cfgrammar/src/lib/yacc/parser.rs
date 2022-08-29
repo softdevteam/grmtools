@@ -10,7 +10,7 @@ use std::{
     str::FromStr,
 };
 
-pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
+pub type YaccGrammarResult<T> = Result<T, Box<[YaccGrammarError]>>;
 
 use crate::Span;
 
@@ -248,7 +248,7 @@ impl YaccParser {
                 Ok(i) => i,
                 Err(e) => {
                     errs.push(e);
-                    return Err(errs);
+                    return Err(errs.into_boxed_slice());
                 }
             },
             &mut errs,
@@ -258,7 +258,7 @@ impl YaccParser {
                 Ok(i) => i,
                 Err(e) => {
                     errs.push(e);
-                    return Err(errs);
+                    return Err(errs.into_boxed_slice());
                 }
             },
             &mut errs,
@@ -268,9 +268,9 @@ impl YaccParser {
             Ok(i) if errs.is_empty() => Ok(i),
             Err(e) => {
                 errs.push(e);
-                Err(errs)
+                Err(errs.into_boxed_slice())
             }
-            _ => Err(errs),
+            _ => Err(errs.into_boxed_slice()),
         }
     }
 
@@ -919,7 +919,7 @@ mod test {
         Span, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
 
-    fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
+    fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Box<[YaccGrammarError]>> {
         let mut yp = YaccParser::new(yacc_kind, s.to_string());
         yp.parse()?;
         Ok(yp.ast())
@@ -948,7 +948,7 @@ mod test {
         ($src:ident, $es:expr) => {{
             let mut line_cache = crate::newlinecache::NewlineCache::new();
             line_cache.feed(&$src);
-            for e in $es {
+            for e in $es.iter() {
                 if let Some((line, column)) =
                     line_cache.byte_to_line_num_and_col_num(&$src, e.spans.first().unwrap().start())
                 {
@@ -996,9 +996,9 @@ mod test {
         );
     }
 
-    impl ErrorsHelper for Result<GrammarAST, Vec<YaccGrammarError>> {
+    impl ErrorsHelper for Result<GrammarAST, Box<[YaccGrammarError]>> {
         fn expect_error_at_line(self, src: &str, kind: YaccGrammarErrorKind, line: usize) {
-            match self.as_ref().map_err(Vec::as_slice) {
+            match self.as_ref().map_err(|es| es.as_ref()) {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
@@ -1024,7 +1024,7 @@ mod test {
             kind: YaccGrammarErrorKind,
             lines_cols: &mut dyn Iterator<Item = (usize, usize)>,
         ) {
-            match self.as_ref().map_err(Vec::as_slice) {
+            match self.as_ref().map_err(|es| es.as_ref()) {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
@@ -2336,6 +2336,7 @@ x"
                 kind: YaccGrammarErrorKind::DuplicateRule,
                 spans: vec![Span::new(38, 39), Span::new(94, 95), Span::new(150, 151)],
             }]
+            .into_boxed_slice()
         );
     }
 
