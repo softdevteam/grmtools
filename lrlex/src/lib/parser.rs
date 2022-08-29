@@ -117,7 +117,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             Ok(i) => i,
             Err(e) => {
                 errs.push(e);
-                return Err(errs);
+                return Err(errs.into_boxed_slice());
             }
         };
         // We don't currently support the subroutines part of a specification. One day we might...
@@ -125,7 +125,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             Ok(i) => i,
             Err(e) => {
                 errs.push(e);
-                return Err(errs);
+                return Err(errs.into_boxed_slice());
             }
         };
 
@@ -135,18 +135,18 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                     Ok(k) => k,
                     Err(e) => {
                         errs.push(e);
-                        return Err(errs);
+                        return Err(errs.into_boxed_slice());
                     }
                 };
                 if k == self.src.len() {
                     if errs.is_empty() {
                         Ok(i)
                     } else {
-                        Err(errs)
+                        Err(errs.into_boxed_slice())
                     }
                 } else {
                     errs.push(self.mk_error(LexErrorKind::RoutinesNotSupported, i));
-                    Err(errs)
+                    Err(errs.into_boxed_slice())
                 }
             }
             None => {
@@ -154,7 +154,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                 if errs.is_empty() {
                     Ok(i)
                 } else {
-                    Err(errs)
+                    Err(errs.into_boxed_slice())
                 }
             }
         }
@@ -582,15 +582,15 @@ mod test {
         );
     }
 
-    impl ErrorsHelper for Result<LRNonStreamingLexerDef<DefaultLexeme<u8>, u8>, Vec<LexBuildError>> {
+    impl ErrorsHelper for Result<LRNonStreamingLexerDef<DefaultLexeme<u8>, u8>, Box<[LexBuildError]>> {
         fn expect_error_at_line(self, src: &str, kind: LexErrorKind, line: usize) {
-            match self.as_ref().map_err(Vec::as_slice) {
+            match self.as_ref().map_err(|es| es.as_ref()) {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
                         && line_of_offset(src, e.spans().next().unwrap().start()) == line
                         && e.spans.len() == 1 => {}
-                Err(e) => incorrect_errs!(src, e),
+                Err(e) => incorrect_errs!(src, e.iter()),
             }
         }
 
@@ -604,7 +604,7 @@ mod test {
             kind: LexErrorKind,
             lines_cols: &mut dyn Iterator<Item = (usize, usize)>,
         ) {
-            match self.as_ref().map_err(Vec::as_slice) {
+            match self.as_ref().map_err(|es| es.as_ref()) {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
@@ -650,7 +650,7 @@ mod test {
                             )
                         })
                         .eq(expected) => {}
-                Err(errs) => incorrect_errs!(src, errs),
+                Err(errs) => incorrect_errs!(src, errs.iter()),
             }
         }
     }
