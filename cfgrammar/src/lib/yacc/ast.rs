@@ -28,6 +28,8 @@ pub struct GrammarAST {
     pub expectrr: Option<(usize, Span)>,
     pub parse_param: Option<(String, String)>,
     pub programs: Option<String>,
+    // Unchecked `Symbol` names, with spans pointing into the `%expect-unused` declaration.
+    pub expect_unused: Vec<Symbol>,
 }
 
 #[derive(Debug)]
@@ -78,6 +80,7 @@ impl GrammarAST {
             expectrr: None,
             parse_param: None,
             programs: None,
+            expect_unused: Vec::new(),
         }
     }
 
