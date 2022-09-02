@@ -47,6 +47,7 @@ pub enum YaccGrammarErrorKind {
     ReachedEOL,
     InvalidString,
     NoStartRule,
+    UnknownSymbol,
     InvalidStartRule(String),
     UnknownRuleRef(String),
     UnknownToken(String),
@@ -112,6 +113,7 @@ impl fmt::Display for YaccGrammarErrorKind {
             }
             YaccGrammarErrorKind::InvalidString => "Invalid string",
             YaccGrammarErrorKind::NoStartRule => return write!(f, "No start rule specified"),
+            YaccGrammarErrorKind::UnknownSymbol => "Unknown symbol, expected a rule or token",
             YaccGrammarErrorKind::InvalidStartRule(name) => {
                 return write!(f, "Start rule '{}' does not appear in grammar", name)
             }
@@ -172,6 +174,7 @@ impl YaccGrammarError {
             | YaccGrammarErrorKind::ReachedEOL
             | YaccGrammarErrorKind::InvalidString
             | YaccGrammarErrorKind::NoStartRule
+            | YaccGrammarErrorKind::UnknownSymbol
             | YaccGrammarErrorKind::InvalidStartRule(_)
             | YaccGrammarErrorKind::UnknownRuleRef(_)
             | YaccGrammarErrorKind::UnknownToken(_)
@@ -375,6 +378,33 @@ impl YaccParser {
                     self.ast.expectrr = Some((n, span));
                 }
                 i = self.parse_ws(j, true)?;
+                continue;
+            }
+            if let Some(j) = self.lookahead_is("%expect-unused", i) {
+                i = self.parse_ws(j, false)?;
+                while i < self.src.len() {
+                    if self.lookahead_is("%", i).is_some() {
+                        break;
+                    }
+                    let j = match self.parse_name(i) {
+                        Ok((j, n)) => {
+                            self.ast
+                                .expect_unused
+                                .push(Symbol::Rule(n, Span::new(i, j)));
+                            j
+                        }
+                        Err(_) => match self.parse_token(i) {
+                            Ok((j, n, span)) => {
+                                self.ast.expect_unused.push(Symbol::Token(n, span));
+                                j
+                            }
+                            Err(_) => {
+                                return Err(self.mk_error(YaccGrammarErrorKind::UnknownSymbol, i))
+                            }
+                        },
+                    };
+                    i = self.parse_ws(j, true)?;
+                }
                 continue;
             }
             if let Some(j) = self.lookahead_is("%expect", i) {
@@ -2393,5 +2423,40 @@ x"
         expected_errs.push((YaccGrammarErrorKind::IncompleteComment, vec![(9, 17)]));
         parse(YaccKind::Grmtools, &src)
             .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
+    }
+
+    #[test]
+    fn test_expect_unused() {
+        let src = r#"
+        %expect-unused A 'b' "c"
+        %%
+        A: ;
+        "#;
+        let grm = parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
+        eprintln!("{:?}", grm.expect_unused);
+        assert!(grm
+            .expect_unused
+            .contains(&Symbol::Rule("A".to_string(), Span::new(24, 25))));
+        assert!(grm
+            .expect_unused
+            .contains(&Symbol::Token("b".to_string(), Span::new(27, 28))));
+        assert!(grm
+            .expect_unused
+            .contains(&Symbol::Token("c".to_string(), Span::new(31, 32))));
+    }
+
+    #[test]
+    fn test_bad_expect_unused() {
+        let src = "
+        %expect-unused %
+        %%
+        A: ;
+        ";
+        parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::UnknownDeclaration,
+            2,
+            24,
+        );
     }
 }

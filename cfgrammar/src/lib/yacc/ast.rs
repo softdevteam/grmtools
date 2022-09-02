@@ -28,6 +28,9 @@ pub struct GrammarAST {
     pub expectrr: Option<(usize, Span)>,
     pub parse_param: Option<(String, String)>,
     pub programs: Option<String>,
+    // The set of symbol names that, if unused in a
+    // grammar, will not cause a warning or error.
+    pub expect_unused: Vec<Symbol>,
 }
 
 #[derive(Debug)]
@@ -78,6 +81,7 @@ impl GrammarAST {
             expectrr: None,
             parse_param: None,
             programs: None,
+            expect_unused: Vec::new(),
         }
     }
 
