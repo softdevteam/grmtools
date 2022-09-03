@@ -10,7 +10,7 @@ use std::{
     fmt::{self, Debug, Write as fmtWrite},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
-    io::{self, Write},
+    io::{self, Read, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -137,6 +137,7 @@ where
     error_on_conflicts: bool,
     warnings_are_errors: bool,
     visibility: Visibility,
+    src_buf: Option<&'a mut String>,
     phantom: PhantomData<(LexemeT, StorageT)>,
 }
 
@@ -176,6 +177,7 @@ where
             error_on_conflicts: true,
             warnings_are_errors: true,
             visibility: Visibility::Private,
+            src_buf: None,
             phantom: PhantomData,
         }
     }
@@ -292,6 +294,15 @@ where
         self
     }
 
+    /// If set, [CTParserBuilder::build] will use buffer for reading the source text, any
+    /// contents will be overwritten. the user can specify this if they require access to
+    /// the sources after build returns, any spans returned from build will be relative
+    /// to the contents at exit.
+    pub fn set_source_buffer(mut self, src_buf: &'a mut String) -> Self {
+        self.src_buf = Some(src_buf);
+        self
+    }
+
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
     /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
     /// additional files will be created with the same name as specified in [self.output_path] but
@@ -344,7 +355,7 @@ where
     /// # Panics
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
-    pub fn build(self) -> Result<CTParser<StorageT>, CTParserError> {
+    pub fn build(mut self) -> Result<CTParser<StorageT>, CTParserError> {
         let grmp = self
             .grammar_path
             .as_ref()
@@ -368,8 +379,18 @@ where
             lk.insert(outp.clone());
         }
 
-        let inc = read_to_string(grmp).unwrap();
-        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc);
+        let mut f = File::open(grmp).unwrap();
+        let mut buf = String::new();
+
+        let inc = if let Some(src_buf) = self.src_buf.as_deref_mut() {
+            src_buf.clear();
+            f.read_to_string(src_buf).unwrap();
+            src_buf
+        } else {
+            f.read_to_string(&mut buf).unwrap();
+            &buf
+        };
+        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, inc);
 
         let mut build_err = BuildErrorData {
             src: inc.clone(),
@@ -409,7 +430,6 @@ where
                         if outc.contains(&cache) {
                             return Ok(CTParser {
                                 grm,
-                                src: inc,
                                 regenerated: false,
                                 rule_ids,
                                 conflicts: None,
@@ -488,7 +508,6 @@ where
         } else {
             Ok(CTParser {
                 grm,
-                src: inc,
                 regenerated: true,
                 rule_ids,
                 conflicts,
@@ -589,6 +608,7 @@ where
             error_on_conflicts: self.error_on_conflicts,
             warnings_are_errors: self.warnings_are_errors,
             visibility: self.visibility.clone(),
+            src_buf: None,
             phantom: PhantomData,
         };
         Ok(cl.build()?.rule_ids)
@@ -1214,7 +1234,6 @@ pub struct CTParser<StorageT = u32>
 where
     StorageT: Eq + Hash,
 {
-    src: String,
     regenerated: bool,
     rule_ids: HashMap<String, StorageT>,
     grm: YaccGrammar<StorageT>,
@@ -1245,7 +1264,7 @@ impl CTParserError {
 
     /// Returns spanned warnings for all the warnings that occurred during `build()`.
     /// This may return multiple warning types from different crates. All the spans
-    /// will be relative to the sources returned by the `yacc_src()` method.
+    /// will be relative to the contents of `yacc_src()` and `CTParserBuilder::set_src_buf`.
     pub fn spanned_warnings<'a>(&'a self) -> Box<dyn Iterator<Item = &dyn SpannedWarning> + 'a> {
         match self {
             Self::PreBuild(_) => Box::new(std::iter::empty()),
@@ -1257,7 +1276,7 @@ impl CTParserError {
 
     /// Returns spanned errors for all the errors that occurred during `build()`.
     /// This may return multiple errors from different crates. All the spans
-    /// will be relative to the sources returned by the `yacc_src()` method.
+    /// will be relative to the contents of `yacc_src()` and `CTParserBuilder::set_src_buf`.
     pub fn spanned_errors<'a>(&'a self) -> Box<dyn Iterator<Item = &dyn SpannedError> + 'a> {
         match self {
             Self::PreBuild(_) => Box::new(std::iter::empty()),
@@ -1354,14 +1373,9 @@ where
         None
     }
 
-    /// Returns the yacc source used to generate this parser.
-    pub fn yacc_src(&self) -> &str {
-        &self.src
-    }
-
     /// Returns spanned warnings for all the warnings that occurred during `build()`.
     /// This may return multiple warning types from different crates. All the spans
-    /// will be relative to the sources returned by the `yacc_src()` method.
+    /// will be relative to the contents of `CTParserBuilder::set_src_buf`.
     pub fn spanned_warnings(&self) -> impl Iterator<Item = &dyn SpannedWarning> {
         self.grm.warnings().iter().map(|w| w as &dyn SpannedWarning)
     }
