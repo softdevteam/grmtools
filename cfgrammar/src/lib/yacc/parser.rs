@@ -2459,4 +2459,71 @@ x"
             24,
         );
     }
+
+    #[test]
+    fn test_unused_symbols() {
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %expect-unused UnusedAllowed 'b'
+        %token a b
+        %start Start
+        %%
+        Unused: ;
+        Start: ;
+        UnusedAllowed: ;
+        ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            ast.unused_symbols()
+                .map(|sym_idx| { sym_idx.symbol(&ast) })
+                .collect::<Vec<Symbol>>()
+                .as_slice(),
+            &[
+                Symbol::Rule("Unused".to_string(), Span::new(101, 107)),
+                Symbol::Token("a".to_string(), Span::new(57, 58))
+            ]
+        );
+
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %start A
+        %%
+        A: ;
+        Rec: Rec | ;
+        ",
+        )
+        .unwrap();
+        assert_eq!(
+            ast.unused_symbols()
+                .map(|sym_idx| sym_idx.symbol(&ast))
+                .collect::<Vec<Symbol>>()
+                .as_slice(),
+            &[Symbol::Rule("Rec".to_string(), Span::new(50, 53))]
+        );
+
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %%
+        A: 'a' | 'z' ;
+        B: 'a' | 'c' ;
+        ",
+        )
+        .unwrap();
+        // Check that we warn on B and 'c' but not 'a'
+        assert_eq!(
+            ast.unused_symbols()
+                .map(|sym_idx| sym_idx.symbol(&ast))
+                .collect::<Vec<Symbol>>()
+                .as_slice(),
+            &[
+                Symbol::Rule("B".to_string(), Span::new(43, 44)),
+                Symbol::Token("c".to_string(), Span::new(53, 54))
+            ]
+        );
+    }
 }

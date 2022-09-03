@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use indexmap::{IndexMap, IndexSet};
 
@@ -55,6 +58,28 @@ pub enum Symbol {
     Token(String, Span),
 }
 
+/// Specifies an index into a `GrammarAst.tokens` or a `GrammarAST.rules`.
+/// Unlike `cfgrammar::Symbol` it is not parameterized by a `StorageT`.
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+pub(crate) enum SymbolIdx {
+    Rule(usize),
+    Token(usize),
+}
+
+impl SymbolIdx {
+    pub(crate) fn symbol(self, ast: &GrammarAST) -> Symbol {
+        match self {
+            SymbolIdx::Rule(idx) => {
+                let rule = &ast.rules[idx];
+                Symbol::Rule(rule.name.0.clone(), rule.name.1)
+            }
+            SymbolIdx::Token(idx) => {
+                let tok = &ast.tokens[idx];
+                Symbol::Token(tok.clone(), ast.spans[idx])
+            }
+        }
+    }
+}
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -206,7 +231,100 @@ impl GrammarAST {
                 spans: vec![Span::new(0, 0)],
             });
         }
+
+        for sym in &self.expect_unused {
+            match sym {
+                Symbol::Rule(sym_name, sym_span) => {
+                    if self.get_rule(sym_name).is_none() {
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::UnknownRuleRef(sym_name.clone()),
+                            spans: vec![*sym_span],
+                        });
+                    }
+                }
+                Symbol::Token(sym_name, sym_span) => {
+                    if !self.has_token(sym_name) {
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::UnknownToken(sym_name.clone()),
+                            spans: vec![*sym_span],
+                        });
+                    }
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// Return the indices of unexpectedly unused rules (relative to ast.rules)
+    /// and tokens (relative to ast.tokens) as `SymbolIdx`s.
+    pub(crate) fn unused_symbols(&self) -> impl Iterator<Item = SymbolIdx> + '_ {
+        let start_rule_name = self.start.as_ref().map(|(name, _)| name.clone());
+        let start_rule = self
+            .rules
+            .iter()
+            .find(|(rule_name, _)| start_rule_name.as_ref() == Some(rule_name));
+        let mut seen_rules = HashSet::new();
+        let mut seen_tokens = HashSet::new();
+        let mut expected_unused_tokens = HashSet::new();
+        let mut expected_unused_rules = HashSet::new();
+        for sym in &self.expect_unused {
+            match sym {
+                Symbol::Rule(sym_name, _) => {
+                    expected_unused_rules.insert(sym_name);
+                }
+                Symbol::Token(sym_name, _) => {
+                    expected_unused_tokens.insert(sym_name);
+                }
+            }
+        }
+        if let Some(implicit_tokens) = self.implicit_tokens.as_ref() {
+            expected_unused_tokens.extend(implicit_tokens.keys())
+        }
+        if let Some((start_name, start_rule)) = start_rule {
+            let mut todo = Vec::new();
+            todo.extend(start_rule.pidxs.iter().copied());
+            seen_rules.insert(start_name);
+
+            while let Some(pidx) = todo.pop() {
+                let prod = &self.prods[pidx];
+                for sym in &prod.symbols {
+                    match sym {
+                        Symbol::Rule(name, _) => {
+                            if seen_rules.insert(name) {
+                                if let Some(rule) = self.rules.get(name) {
+                                    todo.extend(&rule.pidxs);
+                                }
+                            }
+                        }
+                        Symbol::Token(name, _) => {
+                            seen_tokens.insert(name);
+                        }
+                    };
+                }
+            }
+        }
+        self.rules
+            .iter()
+            .enumerate()
+            .filter_map(move |(rule_id, (rule_name, _))| {
+                if expected_unused_rules.contains(rule_name) || seen_rules.contains(rule_name) {
+                    None
+                } else {
+                    Some(SymbolIdx::Rule(rule_id))
+                }
+            })
+            .chain(
+                self.tokens
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(tok_idx, tok)| {
+                        if expected_unused_tokens.contains(tok) || seen_tokens.contains(tok) {
+                            None
+                        } else {
+                            Some(SymbolIdx::Token(tok_idx))
+                        }
+                    }),
+            )
     }
 }
 
@@ -418,5 +536,29 @@ mod test {
             }) => (),
             _ => panic!("Validation error"),
         }
+    }
+
+    #[test]
+    fn test_ast_unused_symbols() {
+        let mut grm = GrammarAST::new();
+        let empty_span = Span::new(0, 0);
+        grm.start = Some(("A".to_string(), empty_span));
+        grm.add_rule(("A".to_string(), empty_span), None);
+        grm.add_prod("A".to_string(), vec![], None, None);
+        grm.tokens.insert("b".to_string());
+        grm.spans.push(Span::new(4, 5));
+        grm.add_rule(("B".to_string(), Span::new(1, 2)), None);
+        grm.add_prod("B".to_string(), vec![token("b")], None, None);
+
+        assert_eq!(
+            grm.unused_symbols()
+                .map(|sym_idx| sym_idx.symbol(&grm))
+                .collect::<Vec<Symbol>>()
+                .as_slice(),
+            &[
+                Symbol::Rule("B".to_string(), Span::new(1, 2)),
+                Symbol::Token("b".to_string(), Span::new(4, 5))
+            ]
+        )
     }
 }

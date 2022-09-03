@@ -117,6 +117,8 @@ where
                 yp.parse()?;
                 let mut ast = yp.ast();
                 let r = ast.complete_and_validate();
+                // TODO emit warnings.
+                let _ = ast.unused_symbols().map(|sym_idx| sym_idx.symbol(&ast));
                 if r.is_err() {
                     return Err(vec![r.unwrap_err()]);
                 }
