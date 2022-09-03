@@ -19,8 +19,8 @@ use std::{
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-    RIdx, Spanned, SpannedWarning, Symbol,
+    yacc::{YaccGrammar, YaccGrammarError, YaccGrammarWarning, YaccKind, YaccOriginalActionKind},
+    RIdx, Spanned, SpannedError, SpannedWarning, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -135,6 +135,7 @@ where
     recoverer: RecoveryKind,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
+    warnings_are_errors: bool,
     visibility: Visibility,
     phantom: PhantomData<(LexemeT, StorageT)>,
 }
@@ -173,6 +174,7 @@ where
             recoverer: RecoveryKind::CPCTPlus,
             yacckind: None,
             error_on_conflicts: true,
+            warnings_are_errors: true,
             visibility: Visibility::Private,
             phantom: PhantomData,
         }
@@ -283,6 +285,13 @@ where
         self
     }
 
+    /// If set to true, [CTParserBuilder::build] will return an error if the given grammar contains
+    /// any warnings.
+    pub fn warnings_are_errors(mut self, b: bool) -> Self {
+        self.warnings_are_errors = b;
+        self
+    }
+
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
     /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
     /// additional files will be created with the same name as specified in [self.output_path] but
@@ -335,7 +344,7 @@ where
     /// # Panics
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
-    pub fn build(self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
+    pub fn build(self) -> Result<CTParser<StorageT>, CTParserError> {
         let grmp = self
             .grammar_path
             .as_ref()
@@ -354,39 +363,29 @@ where
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
             if lk.contains(outp.as_path()) {
-                return Err(format!("Generating two parsers to the same path ('{}') is not allowed: use CTParserBuilder::output_path (and, optionally, CTParserBuilder::mod_name) to differentiate them.", &outp.to_str().unwrap()).into());
+                return Err(CTParserError::PreBuild(format!("Generating two parsers to the same path ('{}') is not allowed: use CTParserBuilder::output_path (and, optionally, CTParserBuilder::mod_name) to differentiate them.", &outp.to_str().unwrap()).into()));
             }
             lk.insert(outp.clone());
         }
 
         let inc = read_to_string(grmp).unwrap();
+        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc);
 
-        let grm =
-            YaccGrammar::<StorageT>::new_with_storaget(yk, &inc).map_err(|(warnings, errs)| {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                errs.iter()
-                    .map(|e| {
-                        if let Some((line, column)) =
-                            line_cache.byte_to_line_num_and_col_num(&inc, e.spans()[0].start())
-                        {
-                            format!("{} at line {line} column {column}", e)
-                        } else {
-                            format!("{}", e)
-                        }
-                    })
-                    .chain(warnings.iter().map(|w| {
-                        if let Some((line, column)) =
-                            line_cache.byte_to_line_num_and_col_num(&inc, w.spans()[0].start())
-                        {
-                            format!("{} at line {line} column {column}", w)
-                        } else {
-                            format!("{}", w)
-                        }
-                    }))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })?;
+        let mut build_err = BuildErrorData {
+            src: inc.clone(),
+            yacc_warnings: Vec::new(),
+            yacc_errors: Vec::new(),
+            box_error: None,
+        };
+
+        if let Err((yacc_warnings, yacc_errors)) = grm {
+            build_err.yacc_warnings.extend(yacc_warnings);
+            build_err.yacc_errors.extend(yacc_errors);
+            return Err(CTParserError::Build(build_err));
+        }
+
+        let grm = grm.unwrap();
+
         let rule_ids = grm
             .tokens_map()
             .iter()
@@ -429,7 +428,13 @@ where
         // confusing than the alternatives).
         fs::remove_file(outp).ok();
 
-        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
+        let stable_result = from_yacc(&grm, Minimiser::Pager);
+        if let Err(e) = stable_result {
+            build_err.box_error = Some(e.into());
+            return Err(CTParserError::Build(build_err));
+        }
+
+        let (sgraph, stable) = stable_result.unwrap();
         if self.error_on_conflicts {
             if let Some(c) = stable.conflicts() {
                 match (grm.expect(), grm.expectrr()) {
@@ -437,7 +442,10 @@ where
                     (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
                     (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
                     (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
-                    _ => return Err(Box::new(CTConflictsError { stable })),
+                    _ => {
+                        build_err.box_error = Some(CTConflictsError { stable }.into());
+                        return Err(CTParserError::Build(build_err));
+                    }
                 }
             }
         }
@@ -461,19 +469,31 @@ where
             }
         };
 
-        self.output_file(&grm, &stable, &mod_name, outp, &cache)?;
+        if let Err(e) = self.output_file(&grm, &stable, &mod_name, outp, &cache) {
+            build_err.box_error = Some(e);
+            return Err(CTParserError::Build(build_err));
+        };
+
         let conflicts = if stable.conflicts().is_some() {
             Some((sgraph, stable))
         } else {
             None
         };
-        Ok(CTParser {
-            grm,
-            src: inc,
-            regenerated: true,
-            rule_ids,
-            conflicts,
-        })
+
+        if self.warnings_are_errors && !grm.warnings.is_empty() {
+            // There may be conflicts but they were either expected or they are not being treated as errors.
+            // We are currently not treating them as warnings so in this case they will be dropped.
+            build_err.box_error = Some("Warnings are being treated as errors".into());
+            Err(CTParserError::Build(build_err))
+        } else {
+            Ok(CTParser {
+                grm,
+                src: inc,
+                regenerated: true,
+                rule_ids,
+                conflicts,
+            })
+        }
     }
 
     /// Given the filename `a/b.y` as input, statically compile the grammar `src/a/b.y` into a Rust
@@ -567,6 +587,7 @@ where
             recoverer: self.recoverer,
             yacckind: self.yacckind,
             error_on_conflicts: self.error_on_conflicts,
+            warnings_are_errors: self.warnings_are_errors,
             visibility: self.visibility.clone(),
             phantom: PhantomData,
         };
@@ -1200,6 +1221,104 @@ where
     conflicts: Option<(StateGraph<StorageT>, StateTable<StorageT>)>,
 }
 
+pub enum CTParserError {
+    PreBuild(Box<dyn Error>),
+    Build(BuildErrorData),
+}
+
+pub struct BuildErrorData {
+    src: String,
+    yacc_warnings: Vec<YaccGrammarWarning>,
+    yacc_errors: Vec<YaccGrammarError>,
+    box_error: Option<Box<dyn Error>>,
+}
+
+impl CTParserError {
+    /// If the yacc grammar source was read before the error
+    /// occurred returns it. Otherwise returns `None`.
+    pub fn yacc_src(&self) -> Option<&str> {
+        match self {
+            Self::PreBuild(_) => None,
+            Self::Build(BuildErrorData { src, .. }) => Some(src),
+        }
+    }
+
+    /// Returns spanned warnings for all the warnings that occurred during `build()`.
+    /// This may return multiple warning types from different crates. All the spans
+    /// will be relative to the sources returned by the `yacc_src()` method.
+    pub fn spanned_warnings<'a>(&'a self) -> Box<dyn Iterator<Item = &dyn SpannedWarning> + 'a> {
+        match self {
+            Self::PreBuild(_) => Box::new(std::iter::empty()),
+            Self::Build(BuildErrorData { yacc_warnings, .. }) => {
+                Box::new(yacc_warnings.iter().map(|w| w as &dyn SpannedWarning))
+            }
+        }
+    }
+
+    /// Returns spanned errors for all the errors that occurred during `build()`.
+    /// This may return multiple errors from different crates. All the spans
+    /// will be relative to the sources returned by the `yacc_src()` method.
+    pub fn spanned_errors<'a>(&'a self) -> Box<dyn Iterator<Item = &dyn SpannedError> + 'a> {
+        match self {
+            Self::PreBuild(_) => Box::new(std::iter::empty()),
+            Self::Build(BuildErrorData { yacc_errors, .. }) => {
+                Box::new(yacc_errors.iter().map(|w| w as &dyn SpannedError))
+            }
+        }
+    }
+}
+
+impl std::error::Error for CTParserError {}
+
+impl fmt::Debug for CTParserError {
+    // Since these will get printed by build scripts on error,
+    // we want them to look nice. Use {} for Display.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl std::fmt::Display for CTParserError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Self::PreBuild(error) => writeln!(f, "{}", error)?,
+            Self::Build(BuildErrorData {
+                src,
+                yacc_errors,
+                yacc_warnings,
+                box_error,
+            }) => {
+                let mut nlcache = NewlineCache::new();
+                nlcache.feed(src);
+                if let Some(box_error) = box_error {
+                    write!(f, "{}", box_error)?;
+                }
+                for e in yacc_errors {
+                    if let Some((line, col)) =
+                        nlcache.byte_to_line_num_and_col_num(src, e.spans()[0].start())
+                    {
+                        writeln!(f, "{} at line {line} column {col}", e)?
+                    } else {
+                        writeln!(f, "{}", e)?
+                    }
+                }
+
+                for w in yacc_warnings.iter() {
+                    if let Some((line, col)) =
+                        nlcache.byte_to_line_num_and_col_num(src, w.spans()[0].start())
+                    {
+                        writeln!(f, "{} at line {line} column {col}", w)?
+                    } else {
+                        writeln!(f, "{}", w)?
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl<StorageT> CTParser<StorageT>
 where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
@@ -1252,7 +1371,7 @@ where
 mod test {
     use std::{fs::File, io::Write, path::PathBuf};
 
-    use super::{CTConflictsError, CTParserBuilder};
+    use super::{BuildErrorData, CTConflictsError, CTParserBuilder, CTParserError};
     use crate::test_utils::TestLexeme;
     use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
     use tempfile::TempDir;
@@ -1311,11 +1430,15 @@ C : 'a';"
             .build()
         {
             Ok(_) => panic!("Expected error"),
-            Err(e) => {
-                let cs = e.downcast_ref::<CTConflictsError<u16>>();
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
+            Err(CTParserError::Build(BuildErrorData { box_error, .. })) => {
+                let cs = box_error
+                    .as_deref()
+                    .unwrap()
+                    .downcast_ref::<CTConflictsError<u16>>();
+                assert_eq!(cs.as_ref().unwrap().stable.conflicts().unwrap().rr_len(), 1);
+                assert_eq!(cs.as_ref().unwrap().stable.conflicts().unwrap().sr_len(), 1);
             }
+            Err(e) => panic!("Unexpected error {:?}", e),
         }
     }
 
@@ -1341,11 +1464,15 @@ B: 'a';"
             .build()
         {
             Ok(_) => panic!("Expected error"),
-            Err(e) => {
-                let cs = e.downcast_ref::<CTConflictsError<u16>>();
+            Err(CTParserError::Build(BuildErrorData { box_error, .. })) => {
+                let cs = box_error
+                    .as_deref()
+                    .unwrap()
+                    .downcast_ref::<CTConflictsError<u16>>();
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 0);
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
             }
+            Err(e) => panic!("Unexpected error {:?}", e),
         }
     }
 
@@ -1373,11 +1500,15 @@ C : 'a';"
             .build()
         {
             Ok(_) => panic!("Expected error"),
-            Err(e) => {
-                let cs = e.downcast_ref::<CTConflictsError<u16>>();
+            Err(CTParserError::Build(BuildErrorData { box_error, .. })) => {
+                let cs = box_error
+                    .as_deref()
+                    .unwrap()
+                    .downcast_ref::<CTConflictsError<u16>>();
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
             }
+            Err(e) => panic!("Unexpected error {:?}", e),
         }
     }
 }
