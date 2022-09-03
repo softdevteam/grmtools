@@ -20,7 +20,7 @@ use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-    RIdx, Symbol,
+    RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -367,8 +367,8 @@ where
                 line_cache.feed(&inc);
                 errs.iter()
                     .map(|e| {
-                        if let Some((line, column)) = line_cache
-                            .byte_to_line_num_and_col_num(&inc, e.spans().next().unwrap().start())
+                        if let Some((line, column)) =
+                            line_cache.byte_to_line_num_and_col_num(&inc, e.spans()[0].start())
                         {
                             format!("{} at line {line} column {column}", e)
                         } else {
@@ -376,8 +376,8 @@ where
                         }
                     })
                     .chain(warnings.iter().map(|w| {
-                        if let Some((line, column)) = line_cache
-                            .byte_to_line_num_and_col_num(&inc, w.spans().next().unwrap().start())
+                        if let Some((line, column)) =
+                            line_cache.byte_to_line_num_and_col_num(&inc, w.spans()[0].start())
                         {
                             format!("{} at line {line} column {column}", w)
                         } else {

@@ -10,6 +10,7 @@ use std::{
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+    Spanned,
 };
 use getopts::Options;
 use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
@@ -133,8 +134,8 @@ fn main() {
         Err((warnings, errs)) => {
             let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
             for e in errs {
-                if let Some((line, column)) = nlcache
-                    .byte_to_line_num_and_col_num(&yacc_src, e.spans().next().unwrap().start())
+                if let Some((line, column)) =
+                    nlcache.byte_to_line_num_and_col_num(&yacc_src, e.spans()[0].start())
                 {
                     writeln!(
                         stderr(),
@@ -149,8 +150,8 @@ fn main() {
             }
 
             for w in warnings {
-                if let Some((line, column)) = nlcache
-                    .byte_to_line_num_and_col_num(&yacc_src, w.spans().next().unwrap().start())
+                if let Some((line, column)) =
+                    nlcache.byte_to_line_num_and_col_num(&yacc_src, w.spans()[0].start())
                 {
                     writeln!(
                         stderr(),

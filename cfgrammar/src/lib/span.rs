@@ -43,3 +43,20 @@ impl Span {
         self.len() == 0
     }
 }
+
+/// Implemented for errors and warnings to provide access to their spans.
+pub trait Spanned {
+    /// Returns the spans associated with the error, always containing at least 1 span.
+    ///
+    /// Refer to [SpansKind] via [spanskind](Self::spanskind)
+    /// for the meaning and interpretation of spans and their ordering.
+    fn spans(&self) -> &[Span];
+    /// Returns the [SpansKind] associated with this error.
+    fn spanskind(&self) -> crate::yacc::parser::SpansKind;
+}
+
+/// Marker trait for a warning with the `Spanned` and `Display` traits.
+pub trait SpannedWarning: Spanned + std::fmt::Display {}
+/// Marker trait for any automatically derived for any type that implements both `Error` and `Spanned`.
+pub trait SpannedError: Spanned + std::error::Error {}
+impl<T> SpannedError for T where T: Spanned + std::error::Error {}

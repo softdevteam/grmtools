@@ -14,7 +14,7 @@ use std::{
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
 
-use crate::Span;
+use crate::{Span, Spanned, SpannedWarning};
 
 use super::{
     ast::{GrammarAST, Symbol},
@@ -177,30 +177,26 @@ impl fmt::Display for YaccGrammarWarningKind {
     }
 }
 
-impl YaccGrammarWarning {
+impl Spanned for YaccGrammarWarning {
     /// Returns the spans associated with the error, always containing at least 1 span.
     ///
     /// Refer to [SpansKind] via [spanskind](Self::spanskind)
     /// for the meaning and interpretation of spans and their ordering.
-    pub fn spans(&self) -> impl Iterator<Item = Span> + '_ {
-        self.spans.iter().copied()
+    fn spans(&self) -> &[Span] {
+        self.spans.as_slice()
     }
 
     /// Returns the [SpansKind] associated with this error.
-    pub fn spanskind(&self) -> SpansKind {
-        self.kind.spanskind()
-    }
-}
-
-impl YaccGrammarWarningKind {
-    pub fn spanskind(&self) -> SpansKind {
-        match self {
+    fn spanskind(&self) -> SpansKind {
+        match self.kind {
             YaccGrammarWarningKind::UnusedRule | YaccGrammarWarningKind::UnusedToken => {
                 SpansKind::Error
             }
         }
     }
 }
+
+impl SpannedWarning for YaccGrammarWarning {}
 
 /// Indicates how to interpret the spans of an error.
 pub enum SpansKind {
@@ -210,17 +206,17 @@ pub enum SpansKind {
     Error,
 }
 
-impl YaccGrammarError {
+impl Spanned for YaccGrammarError {
     /// Returns the spans associated with the error, always containing at least 1 span.
     ///
     /// Refer to [SpansKind] via [spanskind](Self::spanskind)
     /// for the meaning and interpretation of spans and their ordering.
-    pub fn spans(&self) -> impl Iterator<Item = Span> + '_ {
-        self.spans.iter().copied()
+    fn spans(&self) -> &[Span] {
+        self.spans.as_slice()
     }
 
     /// Returns the [SpansKind] associated with this error.
-    pub fn spanskind(&self) -> SpansKind {
+    fn spanskind(&self) -> SpansKind {
         match self.kind {
             YaccGrammarErrorKind::IllegalInteger
             | YaccGrammarErrorKind::IllegalName
@@ -1010,8 +1006,8 @@ mod test {
             ast::{GrammarAST, Production, Symbol},
             AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
-        Span, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
-        YaccParser,
+        Span, Spanned, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
+        YaccGrammarWarningKind, YaccParser,
     };
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
@@ -1097,7 +1093,7 @@ mod test {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
-                        && line_of_offset(src, e.spans().next().unwrap().start()) == line
+                        && line_of_offset(src, e.spans()[0].start()) == line
                         && e.spans.len() == 1 => {}
                 Err(e) => incorrect_errs!(src, e),
             }
@@ -1123,12 +1119,11 @@ mod test {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
-                        && line_col!(src, e.spans().next().unwrap())
-                            == lines_cols.next().unwrap() =>
+                        && line_col!(src, e.spans()[0]) == lines_cols.next().unwrap() =>
                 {
                     assert_eq!(
-                        e.spans()
-                            .skip(1)
+                        e.spans()[1..]
+                            .iter()
                             .map(|span| line_col!(src, span))
                             .collect::<Vec<(usize, usize)>>(),
                         lines_cols.collect::<Vec<(usize, usize)>>()
@@ -1160,6 +1155,7 @@ mod test {
                             (
                                 e.kind.clone(),
                                 e.spans()
+                                    .iter()
                                     .map(|span| line_col!(src, span))
                                     .collect::<Vec<_>>(),
                             )
