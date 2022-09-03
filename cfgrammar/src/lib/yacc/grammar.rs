@@ -9,7 +9,7 @@ use super::{
     ast,
     firsts::YaccFirsts,
     follows::YaccFollows,
-    parser::{YaccGrammarResult, YaccParser},
+    parser::{YaccGrammarError, YaccGrammarWarning, YaccParser},
     YaccKind,
 };
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
@@ -88,14 +88,20 @@ pub struct YaccGrammar<StorageT = u32> {
     expect: Option<usize>,
     /// How many reduce/reduce conflicts the grammar author expected (if any).
     expectrr: Option<usize>,
+    /// All the warnings present in the grammar.
+    /// This is public so that other crates may take ownership of it.
+    pub warnings: Vec<YaccGrammarWarning>,
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
 impl YaccGrammar<u32> {
-    pub fn new(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
-        YaccGrammar::new_with_storaget(yacc_kind, s)
+    pub fn new(
+        yacc_kind: YaccKind,
+        s: &str,
+    ) -> Result<Self, (Vec<YaccGrammarWarning>, Vec<YaccGrammarError>)> {
+        Self::new_with_storaget(yacc_kind, s)
     }
 }
 
@@ -103,22 +109,36 @@ impl<StorageT: 'static + PrimInt + Unsigned> YaccGrammar<StorageT>
 where
     usize: AsPrimitive<StorageT>,
 {
-    /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s` and returns a
-    /// [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
+    /// Takes as input a Yacc grammar of [`YaccKind`](enum.YaccKind.html) as a `String` `s`,
+    /// and an `YaccGrammarInfo` structure for the control and collection of grammar information.
+    /// Returns a [`YaccGrammar`](grammar/struct.YaccGrammar.html) (or
     /// ([`YaccGrammarError`](grammar/enum.YaccGrammarError.html) on error).
     ///
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
+    pub fn new_with_storaget(
+        yacc_kind: YaccKind,
+        s: &str,
+    ) -> Result<Self, (Vec<YaccGrammarWarning>, Vec<YaccGrammarError>)> {
+        let mut warnings = Vec::new();
+        let mut errs = Vec::new();
         let ast = match yacc_kind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
-                yp.parse()?;
+                if let Err(es) = yp.parse() {
+                    // TODO we have the `yp.ast()`. It would should figure out if we can
+                    // `errs.extend()` and continue instead of returning here.
+                    warnings.extend(yp.ast().unused_symbol_warnings());
+                    return Err((warnings, es));
+                }
                 let mut ast = yp.ast();
-                let r = ast.complete_and_validate();
-                if r.is_err() {
-                    return Err(vec![r.unwrap_err()]);
+                if let Err(e) = ast.complete_and_validate() {
+                    errs.push(e);
+                }
+                warnings.extend(ast.unused_symbol_warnings());
+                if !errs.is_empty() {
+                    return Err((warnings, errs));
                 }
 
                 ast
@@ -331,7 +351,8 @@ where
 
         assert!(!token_names.is_empty());
         assert!(!rule_names.is_empty());
-        Ok(YaccGrammar {
+        Ok(YaccGrammar::<StorageT> {
+            warnings,
             rules_len: RIdx(rule_names.len().as_()),
             rule_names,
             tokens_len: TIdx(token_names.len().as_()),
@@ -635,6 +656,10 @@ where
     /// Return a `YaccFirsts` struct for this grammar.
     pub fn follows(&self) -> YaccFollows<StorageT> {
         YaccFollows::new(self)
+    }
+
+    pub fn warnings(&self) -> &[YaccGrammarWarning] {
+        self.warnings.as_slice()
     }
 }
 
@@ -1030,7 +1055,10 @@ where
 #[cfg(test)]
 mod test {
     use super::{
-        super::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind},
+        super::{
+            AssocKind, Precedence, YaccGrammar, YaccGrammarWarning, YaccGrammarWarningKind,
+            YaccKind, YaccOriginalActionKind,
+        },
         rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE,
     };
     use crate::{PIdx, RIdx, Span, Symbol, TIdx};
@@ -1497,5 +1525,36 @@ mod test {
         assert_eq!(grm.token_name(*c_tidx), Some("c"));
         let c_span = grm.token_span(*c_tidx).unwrap();
         assert_eq!(&src[c_span.start()..c_span.end()], "c");
+    }
+
+    #[test]
+    fn test_warnings() {
+        let grm = YaccGrammar::new(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %expect-unused UnusedAllowed 'b'
+        %token a b
+        %start Start
+        %%
+        Unused: ;
+        Start: ;
+        UnusedAllowed: ;
+        ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            grm.warnings(),
+            &[
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedRule,
+                    spans: vec![Span::new(101, 107)]
+                },
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedToken,
+                    spans: vec![Span::new(57, 58)]
+                },
+            ]
+        );
     }
 }

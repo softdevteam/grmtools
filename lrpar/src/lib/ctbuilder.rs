@@ -361,22 +361,32 @@ where
 
         let inc = read_to_string(grmp).unwrap();
 
-        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc).map_err(|errs| {
-            errs.iter()
-                .map(|e| {
-                    let mut line_cache = NewlineCache::new();
-                    line_cache.feed(&inc);
-                    if let Some((line, column)) = line_cache
-                        .byte_to_line_num_and_col_num(&inc, e.spans().next().unwrap().start())
-                    {
-                        format!("{} at line {line} column {column}", e)
-                    } else {
-                        format!("{}", e)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        })?;
+        let grm =
+            YaccGrammar::<StorageT>::new_with_storaget(yk, &inc).map_err(|(warnings, errs)| {
+                let mut line_cache = NewlineCache::new();
+                line_cache.feed(&inc);
+                errs.iter()
+                    .map(|e| {
+                        if let Some((line, column)) = line_cache
+                            .byte_to_line_num_and_col_num(&inc, e.spans().next().unwrap().start())
+                        {
+                            format!("{} at line {line} column {column}", e)
+                        } else {
+                            format!("{}", e)
+                        }
+                    })
+                    .chain(warnings.iter().map(|w| {
+                        if let Some((line, column)) = line_cache
+                            .byte_to_line_num_and_col_num(&inc, w.spans().next().unwrap().start())
+                        {
+                            format!("{} at line {line} column {column}", w)
+                        } else {
+                            format!("{}", w)
+                        }
+                    }))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })?;
         let rule_ids = grm
             .tokens_map()
             .iter()
