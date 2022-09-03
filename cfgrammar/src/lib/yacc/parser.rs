@@ -1010,7 +1010,8 @@ mod test {
             ast::{GrammarAST, Production, Symbol},
             AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
-        Span, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
+        Span, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
+        YaccParser,
     };
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
@@ -2521,6 +2522,85 @@ x"
             YaccGrammarErrorKind::UnknownDeclaration,
             2,
             24,
+        );
+    }
+
+    #[test]
+    fn test_unused_symbols() {
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %expect-unused UnusedAllowed 'b'
+        %token a b
+        %start Start
+        %%
+        Unused: ;
+        Start: ;
+        UnusedAllowed: ;
+        ",
+        )
+        .unwrap();
+
+        assert_eq!(
+            ast.unused_symbol_warnings()
+                .collect::<Vec<YaccGrammarWarning>>()
+                .as_slice(),
+            &[
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedRule,
+                    spans: vec![Span::new(101, 107)]
+                },
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedToken,
+                    spans: vec![Span::new(57, 58)]
+                },
+            ]
+        );
+
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %start A
+        %%
+        A: ;
+        Rec: Rec | ;
+        ",
+        )
+        .unwrap();
+        assert_eq!(
+            ast.unused_symbol_warnings()
+                .collect::<Vec<YaccGrammarWarning>>()
+                .as_slice(),
+            &[YaccGrammarWarning {
+                kind: YaccGrammarWarningKind::UnusedRule,
+                spans: vec![Span::new(50, 53)]
+            },]
+        );
+
+        let ast = parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            "
+        %%
+        A: 'a' | 'z' ;
+        B: 'a' | 'c' ;
+        ",
+        )
+        .unwrap();
+        // Check that we warn on B and 'c' but not 'a'
+        assert_eq!(
+            ast.unused_symbol_warnings()
+                .collect::<Vec<YaccGrammarWarning>>()
+                .as_slice(),
+            &[
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedRule,
+                    spans: vec![Span::new(43, 44)]
+                },
+                YaccGrammarWarning {
+                    kind: YaccGrammarWarningKind::UnusedToken,
+                    spans: vec![Span::new(53, 54)]
+                },
+            ]
         );
     }
 }

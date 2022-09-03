@@ -1,8 +1,13 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use indexmap::{IndexMap, IndexSet};
 
-use super::{Precedence, YaccGrammarError, YaccGrammarErrorKind};
+use super::{
+    Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
+};
 
 use crate::Span;
 
@@ -205,7 +210,100 @@ impl GrammarAST {
                 spans: vec![Span::new(0, 0)],
             });
         }
+
+        for sym in &self.expect_unused {
+            match sym {
+                Symbol::Rule(sym_name, sym_span) => {
+                    if self.get_rule(sym_name).is_none() {
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::UnknownRuleRef(sym_name.clone()),
+                            spans: vec![*sym_span],
+                        });
+                    }
+                }
+                Symbol::Token(sym_name, sym_span) => {
+                    if !self.has_token(sym_name) {
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::UnknownToken(sym_name.clone()),
+                            spans: vec![*sym_span],
+                        });
+                    }
+                }
+            }
+        }
         Ok(())
+    }
+
+    pub(crate) fn unused_symbol_warnings(&self) -> impl Iterator<Item = YaccGrammarWarning> {
+        let start_rule_name = self.start.as_ref().map(|(name, _)| name.clone());
+        let start_rule = self
+            .rules
+            .iter()
+            .find(|(rule_name, _)| start_rule_name.as_ref() == Some(rule_name));
+        let mut seen_rules = HashSet::new();
+        let mut seen_tokens = HashSet::new();
+        let mut expected_unused_tokens = HashSet::new();
+        let mut expected_unused_rules = HashSet::new();
+        for sym in &self.expect_unused {
+            match sym {
+                Symbol::Rule(sym_name, _) => {
+                    expected_unused_rules.insert(sym_name);
+                }
+                Symbol::Token(sym_name, _) => {
+                    expected_unused_tokens.insert(sym_name);
+                }
+            }
+        }
+        if let Some(implicit_tokens) = self.implicit_tokens.as_ref() {
+            expected_unused_tokens.extend(implicit_tokens.keys())
+        }
+        if let Some((start_name, start_rule)) = start_rule {
+            let mut todo = Vec::new();
+            todo.extend(start_rule.pidxs.iter().copied());
+            seen_rules.insert(start_name);
+
+            while let Some(pidx) = todo.pop() {
+                let prod = &self.prods[pidx];
+                for sym in &prod.symbols {
+                    match sym {
+                        Symbol::Rule(name, _) => {
+                            if seen_rules.insert(name) {
+                                if let Some(rule) = self.rules.get(name) {
+                                    todo.extend(&rule.pidxs);
+                                }
+                            }
+                        }
+                        Symbol::Token(name, _) => {
+                            seen_tokens.insert(name);
+                        }
+                    };
+                }
+            }
+        }
+        self.rules
+            .iter()
+            .filter_map(|(rule_name, rule)| {
+                if expected_unused_rules.contains(rule_name) || seen_rules.contains(rule_name) {
+                    None
+                } else {
+                    Some(YaccGrammarWarning {
+                        kind: YaccGrammarWarningKind::UnusedRule,
+                        spans: vec![rule.name.1],
+                    })
+                }
+            })
+            .chain(self.tokens.iter().enumerate().filter_map(|(tok_idx, tok)| {
+                if expected_unused_tokens.contains(tok) || seen_tokens.contains(tok) {
+                    None
+                } else {
+                    Some(YaccGrammarWarning {
+                        kind: YaccGrammarWarningKind::UnusedToken,
+                        spans: vec![self.spans[tok_idx]],
+                    })
+                }
+            }))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
 
