@@ -20,7 +20,7 @@ use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-    RIdx, Spanned, Symbol,
+    RIdx, Spanned, SpannedWarning, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -409,6 +409,8 @@ where
                     if let Ok(outc) = read_to_string(outp) {
                         if outc.contains(&cache) {
                             return Ok(CTParser {
+                                grm,
+                                src: inc,
                                 regenerated: false,
                                 rule_ids,
                                 conflicts: None,
@@ -461,11 +463,13 @@ where
 
         self.output_file(&grm, &stable, &mod_name, outp, &cache)?;
         let conflicts = if stable.conflicts().is_some() {
-            Some((grm, sgraph, stable))
+            Some((sgraph, stable))
         } else {
             None
         };
         Ok(CTParser {
+            grm,
+            src: inc,
             regenerated: true,
             rule_ids,
             conflicts,
@@ -1189,13 +1193,11 @@ pub struct CTParser<StorageT = u32>
 where
     StorageT: Eq + Hash,
 {
+    src: String,
     regenerated: bool,
     rule_ids: HashMap<String, StorageT>,
-    conflicts: Option<(
-        YaccGrammar<StorageT>,
-        StateGraph<StorageT>,
-        StateTable<StorageT>,
-    )>,
+    grm: YaccGrammar<StorageT>,
+    conflicts: Option<(StateGraph<StorageT>, StateTable<StorageT>)>,
 }
 
 impl<StorageT> CTParser<StorageT>
@@ -1227,10 +1229,22 @@ where
         &StateTable<StorageT>,
         &Conflicts<StorageT>,
     )> {
-        if let Some((grm, sgraph, stable)) = &self.conflicts {
-            return Some((grm, sgraph, stable, stable.conflicts().unwrap()));
+        if let Some((sgraph, stable)) = &self.conflicts {
+            return Some((&self.grm, sgraph, stable, stable.conflicts().unwrap()));
         }
         None
+    }
+
+    /// Returns the yacc source used to generate this parser.
+    pub fn yacc_src(&self) -> &str {
+        &self.src
+    }
+
+    /// Returns spanned warnings for all the warnings that occurred during `build()`.
+    /// This may return multiple warning types from different crates. All the spans
+    /// will be relative to the sources returned by the `yacc_src()` method.
+    pub fn spanned_warnings(&self) -> impl Iterator<Item = &dyn SpannedWarning> {
+        self.grm.warnings().iter().map(|w| w as &dyn SpannedWarning)
     }
 }
 
