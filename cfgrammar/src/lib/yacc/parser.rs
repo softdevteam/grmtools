@@ -151,8 +151,8 @@ impl YaccGrammarError {
     ///
     /// Refer to [SpansKind] via [spanskind](Self::spanskind)
     /// for the meaning and interpretation of spans and their ordering.
-    pub fn spans(&self) -> impl Iterator<Item = Span> + '_ {
-        self.spans.iter().copied()
+    pub fn spans(&self) -> &[Span] {
+        self.spans.as_slice()
     }
 
     /// Returns the [SpansKind] associated with this error.
@@ -1032,7 +1032,7 @@ mod test {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
-                        && line_of_offset(src, e.spans().next().unwrap().start()) == line
+                        && line_of_offset(src, e.spans()[0].start()) == line
                         && e.spans.len() == 1 => {}
                 Err(e) => incorrect_errs!(src, e),
             }
@@ -1058,12 +1058,11 @@ mod test {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
-                        && line_col!(src, e.spans().next().unwrap())
-                            == lines_cols.next().unwrap() =>
+                        && line_col!(src, e.spans()[0]) == lines_cols.next().unwrap() =>
                 {
                     assert_eq!(
-                        e.spans()
-                            .skip(1)
+                        e.spans()[1..]
+                            .iter()
                             .map(|span| line_col!(src, span))
                             .collect::<Vec<(usize, usize)>>(),
                         lines_cols.collect::<Vec<(usize, usize)>>()
@@ -1095,6 +1094,7 @@ mod test {
                             (
                                 e.kind.clone(),
                                 e.spans()
+                                    .iter()
                                     .map(|span| line_col!(src, span))
                                     .collect::<Vec<_>>(),
                             )
