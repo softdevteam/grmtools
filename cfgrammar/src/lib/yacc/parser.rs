@@ -3,6 +3,8 @@
 use lazy_static::lazy_static;
 use num_traits::PrimInt;
 use regex::Regex;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map::Entry, HashMap},
     error::Error,
@@ -135,6 +137,62 @@ impl fmt::Display for YaccGrammarErrorKind {
             }
         };
         write!(f, "{}", s)
+    }
+}
+
+/// The various different possible Yacc parser errors.
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum YaccGrammarWarningKind {
+    UnusedRule,
+    UnusedToken,
+}
+
+/// Any Warning from the Yacc parser returns an instance of this struct.
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct YaccGrammarWarning {
+    /// The specific kind of warning.
+    pub(crate) kind: YaccGrammarWarningKind,
+    /// Always contains at least 1 span.
+    ///
+    /// Refer to [SpansKind] via [spanskind](Self::spanskind)
+    /// For meaning and interpretation of spans and their ordering.
+    pub(crate) spans: Vec<Span>,
+}
+
+impl fmt::Display for YaccGrammarWarning {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+impl fmt::Display for YaccGrammarWarningKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            YaccGrammarWarningKind::UnusedRule => "Unused rule",
+            YaccGrammarWarningKind::UnusedToken => "Unused token",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl Spanned for YaccGrammarWarning {
+    /// Returns the spans associated with the error, always containing at least 1 span.
+    ///
+    /// Refer to [SpansKind] via [spanskind](Self::spanskind)
+    /// for the meaning and interpretation of spans and their ordering.
+    fn spans(&self) -> &[Span] {
+        self.spans.as_slice()
+    }
+
+    /// Returns the [SpansKind] associated with this error.
+    fn spanskind(&self) -> SpansKind {
+        match self.kind {
+            YaccGrammarWarningKind::UnusedRule | YaccGrammarWarningKind::UnusedToken => {
+                SpansKind::Error
+            }
+        }
     }
 }
 
