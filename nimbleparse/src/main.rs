@@ -10,6 +10,7 @@ use std::{
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+    Spanned,
 };
 use getopts::Options;
 use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};

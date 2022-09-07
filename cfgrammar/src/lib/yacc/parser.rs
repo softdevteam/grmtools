@@ -12,7 +12,7 @@ use std::{
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
 
-use crate::Span;
+use crate::{Span, Spanned};
 
 use super::{
     ast::{GrammarAST, Symbol},
@@ -146,17 +146,17 @@ pub enum SpansKind {
     Error,
 }
 
-impl YaccGrammarError {
+impl Spanned for YaccGrammarError {
     /// Returns the spans associated with the error, always containing at least 1 span.
     ///
     /// Refer to [SpansKind] via [spanskind](Self::spanskind)
     /// for the meaning and interpretation of spans and their ordering.
-    pub fn spans(&self) -> &[Span] {
+    fn spans(&self) -> &[Span] {
         self.spans.as_slice()
     }
 
     /// Returns the [SpansKind] associated with this error.
-    pub fn spanskind(&self) -> SpansKind {
+    fn spanskind(&self) -> SpansKind {
         match self.kind {
             YaccGrammarErrorKind::IllegalInteger
             | YaccGrammarErrorKind::IllegalName
@@ -946,7 +946,7 @@ mod test {
             ast::{GrammarAST, Production, Symbol},
             AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
-        Span, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
+        Span, Spanned, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {

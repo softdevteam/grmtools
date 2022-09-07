@@ -20,7 +20,7 @@ use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-    RIdx, Symbol,
+    RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
