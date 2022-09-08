@@ -41,18 +41,18 @@ pub struct YaccGrammar<StorageT = u32> {
     /// How many rules does this grammar have?
     rules_len: RIdx<StorageT>,
     /// A mapping from `RIdx` -> `(Span, String)`.
-    rule_names: Vec<(String, Span)>,
+    rule_names: Box<[(String, Span)]>,
     /// A mapping from `TIdx` -> `Option<(Span, String)>`. Every user-specified token will have a name,
     /// but tokens inserted by cfgrammar (e.g. the EOF token) won't.
-    token_names: Vec<Option<(Span, String)>>,
+    token_names: Box<[Option<(Span, String)>]>,
     /// A mapping from `TIdx` -> `Option<Precedence>`
-    token_precs: Vec<Option<Precedence>>,
+    token_precs: Box<[Option<Precedence>]>,
     /// A mapping from `TIdx` -> `Option<String>` for the %epp declaration, giving pretty-printed
     /// versions of token names that can be presented to the user in case of an error. Every
     /// user-specified token will have a name that can be presented to the user (if a token doesn't
     /// have an %epp entry, the token name will be used in lieu), but tokens inserted by cfgrammar
     /// (e.g. the EOF token) won't.
-    token_epp: Vec<Option<String>>,
+    token_epp: Box<[Option<String>]>,
     /// How many tokens does this grammar have?
     tokens_len: TIdx<StorageT>,
     /// The offset of the EOF token.
@@ -62,26 +62,26 @@ pub struct YaccGrammar<StorageT = u32> {
     /// Which production is the sole production of the start rule?
     start_prod: PIdx<StorageT>,
     /// A list of all productions.
-    prods: Vec<Vec<Symbol<StorageT>>>,
+    prods: Box<[Box<[Symbol<StorageT>]>]>,
     /// A mapping from rules to their productions. Note that 1) the order of rules is identical to
     /// that of `rule_names` 2) every rule will have at least 1 production 3) productions
     /// are not necessarily stored sequentially.
-    rules_prods: Vec<Vec<PIdx<StorageT>>>,
+    rules_prods: Box<[Box<[PIdx<StorageT>]>]>,
     /// A mapping from productions to their corresponding rule indexes.
-    prods_rules: Vec<RIdx<StorageT>>,
+    prods_rules: Box<[RIdx<StorageT>]>,
     /// The precedence of each production.
-    prod_precs: Vec<Option<Precedence>>,
+    prod_precs: Box<[Option<Precedence>]>,
     /// The index of the rule added for implicit tokens, if they were specified; otherwise
     /// `None`.
     implicit_rule: Option<RIdx<StorageT>>,
     /// User defined Rust programs which can be called within actions
-    actions: Vec<Option<String>>,
+    actions: Box<[Option<String>]>,
     /// A `(name, type)` pair defining an extra parameter to pass to action functions.
     parse_param: Option<(String, String)>,
     /// Lifetimes for `param_args`
     programs: Option<String>,
     /// The actiontypes of rules (one per rule).
-    actiontypes: Vec<Option<String>>,
+    actiontypes: Box<[Option<String>]>,
     /// Tokens marked as %avoid_insert (if any).
     avoid_insert: Option<Vob>,
     /// How many shift/reduce conflicts the grammar author expected (if any).
@@ -335,24 +335,30 @@ where
         assert!(!rule_names.is_empty());
         Ok(YaccGrammar {
             rules_len: RIdx(rule_names.len().as_()),
-            rule_names,
+            rule_names: rule_names.into_boxed_slice(),
             tokens_len: TIdx(token_names.len().as_()),
             eof_token_idx,
-            token_names,
-            token_precs,
-            token_epp,
+            token_names: token_names.into_boxed_slice(),
+            token_precs: token_precs.into_boxed_slice(),
+            token_epp: token_epp.into_boxed_slice(),
             prods_len: PIdx(prods.len().as_()),
             start_prod: rules_prods[usize::from(rule_map[&start_rule])][0],
-            rules_prods,
+            rules_prods: rules_prods
+                .iter()
+                .map(|x| x.iter().copied().collect())
+                .collect(),
             prods_rules: prods_rules.into_iter().map(Option::unwrap).collect(),
-            prods: prods.into_iter().map(Option::unwrap).collect(),
+            prods: prods
+                .into_iter()
+                .map(|x| x.unwrap().into_boxed_slice())
+                .collect(),
             prod_precs: prod_precs.into_iter().map(Option::unwrap).collect(),
             implicit_rule: implicit_rule.map(|x| rule_map[&x]),
-            actions,
+            actions: actions.into_boxed_slice(),
             parse_param: ast.parse_param,
             programs: ast.programs,
             avoid_insert,
-            actiontypes,
+            actiontypes: actiontypes.into_boxed_slice(),
             expect: ast.expect.map(|(n, _)| n),
             expectrr: ast.expectrr.map(|(n, _)| n),
         })
@@ -1038,6 +1044,20 @@ mod test {
     use crate::{PIdx, RIdx, Span, Symbol, TIdx};
     use std::collections::HashMap;
 
+    macro_rules! bslice {
+        () => (
+            ::Vec::new().into_boxed_slice()
+        );
+        ($elem:expr; $n:expr) => (
+            ::vec::from_elem($elem, $n).into_boxed_slice()
+        );
+        ($($x:expr),+ $(,)?) => (
+            <[_]>::into_vec(
+                Box::new([$($x),+])
+            ).into_boxed_slice()
+        );
+    }
+
     #[test]
     fn test_minimal() {
         let grm = YaccGrammar::new(
@@ -1052,12 +1072,12 @@ mod test {
         grm.rule_idx("R").unwrap();
         grm.token_idx("T").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(1)], vec![PIdx(0)]]);
+        assert_eq!(&*grm.rules_prods, &[bslice![PIdx(1)], bslice![PIdx(0)]]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Rule(grm.rule_idx("R").unwrap())]);
         let r_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("R").unwrap())][0]);
         assert_eq!(*r_prod, [Symbol::Token(grm.token_idx("T").unwrap())]);
-        assert_eq!(grm.prods_rules, vec![RIdx(1), RIdx(0)]);
+        assert_eq!(&*grm.prods_rules, &[RIdx(1), RIdx(0)]);
 
         assert_eq!(
             grm.tokens_map(),
@@ -1084,8 +1104,8 @@ mod test {
         assert!(grm.token_name(grm.eof_token_idx()).is_none());
 
         assert_eq!(
-            grm.rules_prods,
-            vec![vec![PIdx(2)], vec![PIdx(0)], vec![PIdx(1)]]
+            &*grm.rules_prods,
+            &[bslice![PIdx(2)], bslice![PIdx(0)], bslice![PIdx(1)]]
         );
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
         assert_eq!(*start_prod, [Symbol::Rule(grm.rule_idx("R").unwrap())]);
@@ -1111,10 +1131,10 @@ mod test {
         grm.token_idx("T1").unwrap();
         grm.token_idx("T2").unwrap();
 
-        assert_eq!(grm.rules_prods, vec![vec![PIdx(2)],
-                                         vec![PIdx(0)],
-                                         vec![PIdx(1)]]);
-        assert_eq!(grm.prods_rules, vec![RIdx(1),
+        assert_eq!(&*grm.rules_prods, &[bslice![PIdx(2)],
+                                         bslice![PIdx(0)],
+                                         bslice![PIdx(1)]]);
+        assert_eq!(&*grm.prods_rules, &[RIdx(1),
                                          RIdx(2),
                                          RIdx(0)]);
         let start_prod = grm.prod(grm.rules_prods[usize::from(grm.rule_idx("^").unwrap())][0]);
@@ -1146,8 +1166,8 @@ mod test {
         .unwrap();
 
         assert_eq!(
-            grm.prods_rules,
-            vec![RIdx(1), RIdx(1), RIdx(2), RIdx(3), RIdx(3), RIdx(0)]
+            &*grm.prods_rules,
+            &[RIdx(1), RIdx(1), RIdx(2), RIdx(3), RIdx(3), RIdx(0)]
         );
     }
 
@@ -1275,11 +1295,11 @@ mod test {
         assert_eq!(i_prod2.len(), 2);
         // We don't know what order the implicit rule will contain our tokens in,
         // hence the awkward dance below.
-        let cnd1 = vec![
+        let cnd1 = bslice![
             Symbol::Token(grm.token_idx("ws1").unwrap()),
             Symbol::Rule(grm.implicit_rule().unwrap()),
         ];
-        let cnd2 = vec![
+        let cnd2 = bslice![
             Symbol::Token(grm.token_idx("ws2").unwrap()),
             Symbol::Rule(grm.implicit_rule().unwrap()),
         ];
@@ -1451,8 +1471,8 @@ mod test {
         .unwrap();
 
         assert_eq!(
-            grm.prods_rules,
-            vec![
+            &*grm.prods_rules,
+            &[
                 RIdx(1),
                 RIdx(1),
                 RIdx(2),
