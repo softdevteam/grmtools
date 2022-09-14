@@ -10,7 +10,7 @@ use std::{
     fmt::{self, Debug, Write as fmtWrite},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
-    io::{self, Write, Read},
+    io::{self, Read, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -18,8 +18,9 @@ use std::{
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
+    analysis::Analysis,
     newlinecache::NewlineCache,
-    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{ast::ASTValidation, YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
     RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -354,8 +355,11 @@ where
         // At this point we move `self` into `builder`, which itself will be moved around.
         // access to self will then be available through a fields of `builder` throughout this.
         let builder = self.build_for_analysis();
-        let builder = builder.read_grammar(&mut inc)?;
-        let grm = YaccGrammar::<StorageT>::new_with_storaget(builder.fmeta.yk, &inc)
+        let builder = builder
+            .read_grammar(&mut inc)?
+            .build_ast(&inc)
+            .build_grammar();
+        let builder = builder
             .map_err(|errs| {
                 errs.iter()
                     .map(|e| {
@@ -373,12 +377,13 @@ where
                     .join("\n")
             })
             .map_err(ErrorString)?;
-        let rule_ids = grm
+        let rule_ids = builder
+            .grm
             .tokens_map()
             .iter()
             .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
             .collect::<HashMap<_, _>>();
-        let cache = builder.pb.rebuild_cache(&grm);
+        let cache = builder.pb.rebuild_cache(&builder.grm);
 
         // We don't need to go through the full rigmarole of generating an output file if all of
         // the following are true: the output file exists; it is newer than the input file; and the
@@ -413,10 +418,10 @@ where
         // confusing than the alternatives).
         fs::remove_file(&builder.fmeta.outp).ok();
 
-        let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
+        let (sgraph, stable) = from_yacc(&builder.grm, Minimiser::Pager)?;
         if builder.pb.error_on_conflicts {
             if let Some(c) = stable.conflicts() {
-                match (grm.expect(), grm.expectrr()) {
+                match (builder.grm.expect(), builder.grm.expectrr()) {
                     (Some(i), Some(j)) if i == c.sr_len() && j == c.rr_len() => (),
                     (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
                     (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
@@ -444,9 +449,11 @@ where
             }
         };
 
-        builder.pb.output_file(&grm, &stable, &mod_name, builder.fmeta.outp, &cache)?;
+        builder
+            .pb
+            .output_file(&builder.grm, &stable, &mod_name, builder.fmeta.outp, &cache)?;
         let conflicts = if stable.conflicts().is_some() {
-            Some((grm, sgraph, stable))
+            Some((builder.grm, sgraph, stable))
         } else {
             None
         };
@@ -1176,6 +1183,65 @@ where
     StorageT: Eq + Hash,
 {
     fmeta: FileMeta,
+    pb: CTParserBuilder<'a, LexemeT, StorageT>,
+}
+
+impl<'a, LexemeT, StorageT> CTGrammarASTAnalyzerBuilder<'a, LexemeT, StorageT>
+where
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    usize: AsPrimitive<StorageT>,
+{
+    pub fn build_ast(self, inc: &str) -> CTGrammarASTAnalyzer<'a, LexemeT, StorageT> {
+        let ast_validation = ASTValidation::new(self.fmeta.yk, inc);
+        CTGrammarASTAnalyzer {
+            fmeta: self.fmeta,
+            ast_validation,
+            pb: self.pb,
+        }
+    }
+}
+
+pub struct CTGrammarASTAnalyzer<'a, LexemeT, StorageT>
+where
+    StorageT: Eq + Hash,
+{
+    fmeta: FileMeta,
+    ast_validation: ASTValidation,
+    pb: CTParserBuilder<'a, LexemeT, StorageT>,
+}
+
+impl<'a, LexemeT, StorageT> CTGrammarASTAnalyzer<'a, LexemeT, StorageT>
+where
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    usize: AsPrimitive<StorageT>,
+{
+    pub fn analyze_ast<A: Analysis<cfgrammar::yacc::ast::GrammarAST>>(
+        self,
+        analysis: &mut A,
+    ) -> Self {
+        analysis.analyze(self.ast_validation.ast());
+        self
+    }
+
+    pub fn build_grammar(
+        self,
+    ) -> Result<CTTableBuilder<'a, LexemeT, StorageT>, Vec<YaccGrammarError>> {
+        Ok(CTTableBuilder {
+            grm: YaccGrammar::<StorageT>::new_with_validation(self.fmeta.yk, self.ast_validation)?,
+            fmeta: self.fmeta,
+            pb: self.pb,
+        })
+    }
+}
+
+pub struct CTTableBuilder<'a, LexemeT, StorageT>
+where
+    StorageT: Eq + Hash,
+{
+    fmeta: FileMeta,
+    grm: cfgrammar::yacc::YaccGrammar<StorageT>,
     pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
