@@ -10,7 +10,7 @@ use std::{
     fmt::{self, Debug, Write as fmtWrite},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
-    io::{self, Write},
+    io::{self, Write, Read},
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -350,31 +350,12 @@ where
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
     pub fn build(self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
-        let grmp = self
-            .grammar_path
-            .as_ref()
-            .expect("grammar_path must be specified before processing.");
-        let outp = self
-            .output_path
-            .as_ref()
-            .expect("output_path must be specified before processing.");
-        let yk = match self.yacckind {
-            None => panic!("yacckind must be specified before processing."),
-            Some(YaccKind::Original(x)) => YaccKind::Original(x),
-            Some(YaccKind::Grmtools) => YaccKind::Grmtools,
-            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
-        };
-
-        {
-            let mut lk = GENERATED_PATHS.lock().unwrap();
-            if lk.contains(outp.as_path()) {
-                return Err(format!("Generating two parsers to the same path ('{}') is not allowed: use CTParserBuilder::output_path (and, optionally, CTParserBuilder::mod_name) to differentiate them.", &outp.to_str().unwrap()).into());
-            }
-            lk.insert(outp.clone());
-        }
-
-        let inc = read_to_string(grmp).unwrap();
-        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc)
+        let mut inc = String::new();
+        // At this point we move `self` into `builder`, which itself will be moved around.
+        // access to self will then be available through a fields of `builder` throughout this.
+        let builder = self.build_for_analysis();
+        let builder = builder.read_grammar(&mut inc)?;
+        let grm = YaccGrammar::<StorageT>::new_with_storaget(builder.fmeta.yk, &inc)
             .map_err(|errs| {
                 errs.iter()
                     .map(|e| {
@@ -397,7 +378,7 @@ where
             .iter()
             .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
             .collect::<HashMap<_, _>>();
-        let cache = self.rebuild_cache(&grm);
+        let cache = builder.pb.rebuild_cache(&grm);
 
         // We don't need to go through the full rigmarole of generating an output file if all of
         // the following are true: the output file exists; it is newer than the input file; and the
@@ -406,12 +387,12 @@ where
         // change for reasons beyond lrpar's control. If it does change, that means that the lexer
         // and lrpar would get out of sync, so we have to play it safe and regenerate in such
         // cases.
-        if let Ok(ref inmd) = fs::metadata(grmp) {
-            if let Ok(ref out_rs_md) = fs::metadata(outp) {
+        if let Ok(ref inmd) = fs::metadata(&builder.fmeta.grmp) {
+            if let Ok(ref out_rs_md) = fs::metadata(&builder.fmeta.outp) {
                 if FileTime::from_last_modification_time(out_rs_md)
                     > FileTime::from_last_modification_time(inmd)
                 {
-                    if let Ok(outc) = read_to_string(outp) {
+                    if let Ok(outc) = read_to_string(&builder.fmeta.outp) {
                         if outc.contains(&cache) {
                             return Ok(CTParser {
                                 regenerated: false,
@@ -430,10 +411,10 @@ where
         // compilation, leading to weird errors. We therefore delete /out/blah.rs at this point,
         // which means, at worse, the user gets a "file not found" error from rustc (which is less
         // confusing than the alternatives).
-        fs::remove_file(outp).ok();
+        fs::remove_file(&builder.fmeta.outp).ok();
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
-        if self.error_on_conflicts {
+        if builder.pb.error_on_conflicts {
             if let Some(c) = stable.conflicts() {
                 match (grm.expect(), grm.expectrr()) {
                     (Some(i), Some(j)) if i == c.sr_len() && j == c.rr_len() => (),
@@ -444,15 +425,14 @@ where
                 }
             }
         }
-
-        let mod_name = match self.mod_name {
+        let mod_name = match builder.pb.mod_name {
             Some(s) => s.to_owned(),
             None => {
                 // The user hasn't specified a module name, so we create one automatically: what we
                 // do is strip off all the filename extensions (note that it's likely that inp ends
                 // with `y.rs`, so we potentially have to strip off more than one extension) and
                 // then add `_y` to the end.
-                let mut stem = grmp.to_str().unwrap();
+                let mut stem = builder.fmeta.grmp.to_str().unwrap();
                 loop {
                     let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
                     if stem == new_stem {
@@ -464,7 +444,7 @@ where
             }
         };
 
-        self.output_file(&grm, &stable, &mod_name, outp, &cache)?;
+        builder.pb.output_file(&grm, &stable, &mod_name, builder.fmeta.outp, &cache)?;
         let conflicts = if stable.conflicts().is_some() {
             Some((grm, sgraph, stable))
         } else {
@@ -475,6 +455,10 @@ where
             rule_ids,
             conflicts,
         })
+    }
+
+    pub fn build_for_analysis(self) -> CTAnalysisBuilder<'a, LexemeT, StorageT> {
+        CTAnalysisBuilder { pb: self }
     }
 
     /// Given the filename `a/b.y` as input, statically compile the grammar `src/a/b.y` into a Rust
@@ -1123,6 +1107,76 @@ where
             _ => unreachable!(),
         }
     }
+}
+
+pub struct CTAnalysisBuilder<'a, LexemeT, StorageT = u32>
+where
+    StorageT: Eq + Hash,
+{
+    pb: CTParserBuilder<'a, LexemeT, StorageT>,
+}
+
+impl<'a, LexemeT, StorageT> CTAnalysisBuilder<'a, LexemeT, StorageT>
+where
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    usize: AsPrimitive<StorageT>,
+{
+    pub fn read_grammar(
+        self,
+        inc: &mut String,
+    ) -> Result<CTGrammarASTAnalyzerBuilder<'a, LexemeT, StorageT>, Box<dyn Error>> {
+        inc.clear();
+        let grmp = self
+            .pb
+            .grammar_path
+            .as_ref()
+            .expect("grammar_path must be specified before processing.");
+        let outp = self
+            .pb
+            .output_path
+            .as_ref()
+            .expect("output_path must be specified before processing.");
+        let yk = match self.pb.yacckind {
+            None => panic!("yacckind must be specified before processing."),
+            Some(YaccKind::Original(x)) => YaccKind::Original(x),
+            Some(YaccKind::Grmtools) => YaccKind::Grmtools,
+            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
+        };
+
+        {
+            let mut lk = GENERATED_PATHS.lock().unwrap();
+            if lk.contains(outp.as_path()) {
+                return Err(format!("Generating two parsers to the same path ('{}') is not allowed: use CTParserBuilder::output_path (and, optionally, CTParserBuilder::mod_name) to differentiate them.", &outp.to_str().unwrap()).into());
+            }
+            lk.insert(outp.clone());
+        }
+
+        let mut file = File::open(&grmp)?;
+        file.read_to_string(inc)?;
+        Ok(CTGrammarASTAnalyzerBuilder {
+            fmeta: FileMeta {
+                grmp: grmp.to_owned(),
+                outp: outp.to_owned(),
+                yk,
+            },
+            pb: self.pb,
+        })
+    }
+}
+
+struct FileMeta {
+    grmp: PathBuf,
+    outp: PathBuf,
+    yk: YaccKind,
+}
+
+pub struct CTGrammarASTAnalyzerBuilder<'a, LexemeT, StorageT>
+where
+    StorageT: Eq + Hash,
+{
+    fmeta: FileMeta,
+    pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
 /// Return a version of the string `s` which is safe to embed in source code as a string.
