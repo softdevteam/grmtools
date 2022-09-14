@@ -19,7 +19,7 @@ use std::{
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
-    analysis::Analysis,
+    analysis::{Analysis, YaccGrammarWarningAnalysis},
     newlinecache::NewlineCache,
     yacc::{ast::ASTValidation, YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind},
     RIdx, Spanned, Symbol,
@@ -146,6 +146,7 @@ where
     recoverer: RecoveryKind,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
+    warnings_are_errors: bool,
     visibility: Visibility,
     phantom: PhantomData<(LexemeT, StorageT)>,
 }
@@ -184,6 +185,7 @@ where
             recoverer: RecoveryKind::CPCTPlus,
             yacckind: None,
             error_on_conflicts: true,
+            warnings_are_errors: true,
             visibility: Visibility::Private,
             phantom: PhantomData,
         }
@@ -294,6 +296,12 @@ where
         self
     }
 
+    /// If set to true, [CTParserBuilder::build] will return an error if the grammar contains warnings.
+    pub fn warnings_are_errors(mut self, b: bool) -> Self {
+        self.warnings_are_errors = b;
+        self
+    }
+
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
     /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
     /// additional files will be created with the same name as specified in [self.output_path] but
@@ -351,9 +359,11 @@ where
         // At this point we move `self` into `builder`, which itself will be moved around.
         // access to self will then be available through a fields of `builder` throughout this.
         let builder = self.build_for_analysis();
+        let mut warning_analysis = YaccGrammarWarningAnalysis::new(&inc);
         let builder = builder
             .read_grammar(&mut inc)?
             .build_ast(&inc)
+            .analyze_ast(&mut warning_analysis)
             .build_grammar();
         fn fmt_spanned<T: Spanned>(x: &T, line_cache: &NewlineCache, src: &str) -> String {
             if let Some((line, column)) =
@@ -369,10 +379,17 @@ where
             .map_err(|errs| {
                 errs.iter()
                     .map(|e| fmt_spanned(e, &nlcache, &inc))
+                    .chain(warning_analysis.iter().map(|w| fmt_spanned(w, &nlcache, &inc)))
                     .collect::<Vec<_>>()
                     .join("\n")
             })
             .map_err(ErrorString)?;
+        if builder.pb.warnings_are_errors && !warning_analysis.is_empty() {
+            Err(ErrorString(warning_analysis.iter()
+                .map(|w| fmt_spanned(w, &nlcache, &inc))
+                .collect::<Vec<_>>()
+                .join("\n")))?
+        }
         let mut ca = CTConflictAnalysis::new();
         // `analyzed` has moved into `conflict_analyzed`.
         let builder = builder.build_table()?.analyze_table(&mut ca);
@@ -480,6 +497,7 @@ where
             recoverer: self.recoverer,
             yacckind: self.yacckind,
             error_on_conflicts: self.error_on_conflicts,
+            warnings_are_errors: self.warnings_are_errors,
             visibility: self.visibility.clone(),
             phantom: PhantomData,
         };
