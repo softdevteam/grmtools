@@ -5,9 +5,54 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 
-use super::{Precedence, YaccGrammarError, YaccGrammarErrorKind};
+use super::{parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccKind};
 
 use crate::Span;
+/// Contains a `GrammarAST` structure produced from a grammar source file.
+/// As well as any errors which occurred during the construction of the AST.
+pub struct ASTWithValidityInfo {
+    pub(crate) ast: GrammarAST,
+    pub(crate) errs: Vec<YaccGrammarError>,
+}
+
+impl ASTWithValidityInfo {
+    /// Parses a source file into an AST, returning an ast and any errors that were
+    /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
+    /// then unused to construct a `YaccGrammar`, which will either produce an
+    /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
+    pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
+        let mut errs = Vec::new();
+        let ast = match yacc_kind {
+            YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
+                let mut yp = YaccParser::new(yacc_kind, s.to_string());
+                yp.parse().map_err(|e| errs.extend(e)).ok();
+                let mut ast = yp.ast();
+                ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+                ast
+            }
+        };
+        ASTWithValidityInfo { ast, errs }
+    }
+
+    /// Returns a `GrammarAST` constructed as the result of parsing a source file.
+    /// When errors have occurred and `is_valid` returns false, this AST is the
+    /// subset of the source file which parsed correctly while not encountering
+    /// any errors. As such even when an AST is not valid, it will return an AST.
+    pub fn ast(&self) -> &GrammarAST {
+        &self.ast
+    }
+
+    /// Returns whether any errors where encountered during the
+    /// parsing and validation of the AST during it's construction.
+    pub fn is_valid(&self) -> bool {
+        self.errs.is_empty()
+    }
+
+    /// Returns all errors which were encountered during AST construction.
+    pub fn errors(&self) -> &[YaccGrammarError] {
+        self.errs.as_slice()
+    }
+}
 
 /// An AST representing a grammar. This is built up gradually: when it is finished, the
 /// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
