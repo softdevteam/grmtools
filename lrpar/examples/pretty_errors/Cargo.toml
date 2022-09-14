@@ -1,0 +1,17 @@
+[package]
+description = "Produce pretty grmtools errors using ariadne."
+name = "pretty_errors"
+version = "0.1.0"
+authors = ["matt rice <ratmice@gmail.com>"]
+edition = "2021"
+license = "Apache-2.0/MIT"
+
+[[bin]]
+doc = false
+name = "pretty_errors"
+
+[dependencies]
+ariadne = "0.1.5"
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }
