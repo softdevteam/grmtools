@@ -14,6 +14,7 @@ use std::{
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Mutex,
+    str::FromStr,
 };
 
 use bincode::{deserialize, serialize_into};
@@ -49,7 +50,9 @@ lazy_static! {
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
-    stable: StateTable<StorageT>,
+    analysis: CTConflictAnalysis,
+    // This is not here for any purpose other than type compatibility.
+    phantom_storage: PhantomData<StorageT>,
 }
 
 impl<StorageT> fmt::Display for CTConflictsError<StorageT>
@@ -58,12 +61,11 @@ where
     usize: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let conflicts = self.stable.conflicts().unwrap();
         write!(
             f,
             "CTConflictsError{{{} Reduce/Reduce, {} Shift/Reduce}}",
-            conflicts.rr_len(),
-            conflicts.sr_len()
+            self.analysis.rr_len().unwrap(),
+            self.analysis.sr_len().unwrap()
         )
     }
 }
@@ -74,13 +76,7 @@ where
     usize: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let conflicts = self.stable.conflicts().unwrap();
-        write!(
-            f,
-            "CTConflictsError{{{} Reduce/Reduce, {} Shift/Reduce}}",
-            conflicts.rr_len(),
-            conflicts.sr_len()
-        )
+        write!(f, "{}", self)
     }
 }
 
@@ -359,20 +355,20 @@ where
             .read_grammar(&mut inc)?
             .build_ast(&inc)
             .build_grammar();
+        fn fmt_spanned<T: Spanned>(x: &T, line_cache: &NewlineCache, src: &str) -> String {
+            if let Some((line, column)) =
+                line_cache.byte_to_line_num_and_col_num(src, x.spans()[0].start())
+            {
+                format!("{} at line {line} column {column}", x)
+            } else {
+                format!("{}", x)
+            }
+        }
+        let nlcache = NewlineCache::from_str(&inc).unwrap();
         let builder = builder
             .map_err(|errs| {
                 errs.iter()
-                    .map(|e| {
-                        let mut line_cache = NewlineCache::new();
-                        line_cache.feed(&inc);
-                        if let Some((line, column)) =
-                            line_cache.byte_to_line_num_and_col_num(&inc, e.spans()[0].start())
-                        {
-                            format!("{} at line {line} column {column}", e)
-                        } else {
-                            format!("{}", e)
-                        }
-                    })
+                    .map(|e| fmt_spanned(e, &nlcache, &inc))
                     .collect::<Vec<_>>()
                     .join("\n")
             })
@@ -417,18 +413,14 @@ where
         // which means, at worse, the user gets a "file not found" error from rustc (which is less
         // confusing than the alternatives).
         fs::remove_file(&builder.fmeta.outp).ok();
-
-        let (sgraph, stable) = from_yacc(&builder.grm, Minimiser::Pager)?;
-        if builder.pb.error_on_conflicts {
-            if let Some(c) = stable.conflicts() {
-                match (builder.grm.expect(), builder.grm.expectrr()) {
-                    (Some(i), Some(j)) if i == c.sr_len() && j == c.rr_len() => (),
-                    (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
-                    (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
-                    (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
-                    _ => return Err(Box::new(CTConflictsError { stable })),
-                }
-            }
+        let mut ca = CTConflictAnalysis::new();
+        // `analyzed` has moved into `conflict_analyzed`.
+        let builder = builder.build_table()?.analyze_table(&mut ca);
+        if builder.pb.error_on_conflicts && ca.unexpected_conflicts() {
+            Err(CTConflictsError {
+                analysis: ca,
+                phantom_storage: PhantomData,
+            })?
         }
         let mod_name = match builder.pb.mod_name {
             Some(s) => s.to_owned(),
@@ -451,9 +443,9 @@ where
 
         builder
             .pb
-            .output_file(&builder.grm, &stable, &mod_name, builder.fmeta.outp, &cache)?;
-        let conflicts = if stable.conflicts().is_some() {
-            Some((builder.grm, sgraph, stable))
+            .output_file(&builder.tdata.0, &builder.tdata.2, &mod_name, builder.fmeta.outp, &cache)?;
+        let conflicts = if builder.tdata.2.conflicts().is_some() {
+            Some((builder.tdata.0, builder.tdata.1, builder.tdata.2))
         } else {
             None
         };
@@ -1245,6 +1237,99 @@ where
     pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
+impl<'a, LexemeT, StorageT> CTTableBuilder<'a, LexemeT, StorageT>
+where
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    usize: AsPrimitive<StorageT>,
+{
+    pub fn analyze_grammar<A: Analysis<YaccGrammar<StorageT>>>(self, analysis: &mut A) -> Self {
+        analysis.analyze(&self.grm);
+        self
+    }
+
+    pub fn build_table(self) -> Result<CTTableAnalyzer<'a, LexemeT, StorageT>, Box<dyn Error>> {
+        let (sgraph, stable) = from_yacc(&self.grm, Minimiser::Pager)?;
+        Ok(CTTableAnalyzer {
+            fmeta: self.fmeta,
+            pb: self.pb,
+            tdata: (self.grm, sgraph, stable),
+        })
+    }
+}
+
+type TableData<StorageT> = (
+    cfgrammar::yacc::YaccGrammar<StorageT>,
+    StateGraph<StorageT>,
+    StateTable<StorageT>,
+);
+
+pub struct CTTableAnalyzer<'a, LexemeT, StorageT>
+where
+    StorageT: Eq + Hash,
+{
+    pb: CTParserBuilder<'a, LexemeT, StorageT>,
+    fmeta: FileMeta,
+    tdata: TableData<StorageT>,
+}
+
+impl<'a, LexemeT, StorageT> CTTableAnalyzer<'a, LexemeT, StorageT>
+where
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    usize: AsPrimitive<StorageT>,
+{
+    pub fn analyze_table<A: Analysis<TableData<StorageT>>>(self, analysis: &mut A) -> Self {
+        analysis.analyze(&self.tdata);
+        self
+    }
+}
+
+pub struct CTConflictAnalysis {
+    num_sr_rr: Option<(usize, usize)>,
+}
+
+impl CTConflictAnalysis {
+    pub fn new() -> Self {
+        Self { num_sr_rr: None }
+    }
+
+    pub fn sr_len(&self) -> Option<usize> {
+        self.num_sr_rr.map(|x| x.0)
+    }
+
+    pub fn rr_len(&self) -> Option<usize> {
+        self.num_sr_rr.map(|x| x.1)
+    }
+
+    // Returns true if this analysis has not run or unexpected conflicts occurred.
+    pub fn unexpected_conflicts(&self) -> bool {
+        if let Some((sr, rr)) = self.num_sr_rr {
+            sr > 0 || rr > 0
+        } else {
+            false
+        }
+    }
+}
+
+impl<StorageT> Analysis<TableData<StorageT>> for CTConflictAnalysis
+where
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    usize: AsPrimitive<StorageT>,
+{
+    fn analyze(&mut self, (grm, _sgraph, stable): &TableData<StorageT>) {
+        if let Some(c) = stable.conflicts() {
+            match (grm.expect(), grm.expectrr()) {
+                (Some(i), Some(j)) if i == c.sr_len() && j == c.rr_len() => (),
+                (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
+                (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
+                (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
+                _ => self.num_sr_rr = Some((c.sr_len(), c.rr_len())),
+            }
+        }
+    }
+}
+
 /// Return a version of the string `s` which is safe to embed in source code as a string.
 fn str_escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
@@ -1363,6 +1448,7 @@ where
 mod test {
     use std::{fs::File, io::Write, path::PathBuf};
 
+    use super::CTConflictAnalysis;
     use super::{CTConflictsError, CTParserBuilder};
     use crate::test_utils::TestLexeme;
     use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
@@ -1424,8 +1510,8 @@ C : 'a';"
             Ok(_) => panic!("Expected error"),
             Err(e) => {
                 let cs = e.downcast_ref::<CTConflictsError<u16>>();
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
+                assert_eq!(cs.unwrap().analysis.rr_len(), Some(1));
+                assert_eq!(cs.unwrap().analysis.sr_len(), Some(1));
             }
         }
     }
@@ -1454,8 +1540,8 @@ B: 'a';"
             Ok(_) => panic!("Expected error"),
             Err(e) => {
                 let cs = e.downcast_ref::<CTConflictsError<u16>>();
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 0);
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
+                assert_eq!(cs.unwrap().analysis.rr_len(), Some(0));
+                assert_eq!(cs.unwrap().analysis.sr_len(), Some(1));
             }
         }
     }
@@ -1486,8 +1572,8 @@ C : 'a';"
             Ok(_) => panic!("Expected error"),
             Err(e) => {
                 let cs = e.downcast_ref::<CTConflictsError<u16>>();
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
-                assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
+                assert_eq!(cs.unwrap().analysis.rr_len(), Some(1));
+                assert_eq!(cs.unwrap().analysis.sr_len(), Some(1));
             }
         }
     }
