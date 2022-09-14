@@ -373,46 +373,6 @@ where
                     .join("\n")
             })
             .map_err(ErrorString)?;
-        let rule_ids = builder
-            .grm
-            .tokens_map()
-            .iter()
-            .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
-            .collect::<HashMap<_, _>>();
-        let cache = builder.pb.rebuild_cache(&builder.grm);
-
-        // We don't need to go through the full rigmarole of generating an output file if all of
-        // the following are true: the output file exists; it is newer than the input file; and the
-        // cache hasn't changed. The last of these might be surprising, but it's vital: we don't
-        // know, for example, what the IDs map might be from one run to the next, and it might
-        // change for reasons beyond lrpar's control. If it does change, that means that the lexer
-        // and lrpar would get out of sync, so we have to play it safe and regenerate in such
-        // cases.
-        if let Ok(ref inmd) = fs::metadata(&builder.fmeta.grmp) {
-            if let Ok(ref out_rs_md) = fs::metadata(&builder.fmeta.outp) {
-                if FileTime::from_last_modification_time(out_rs_md)
-                    > FileTime::from_last_modification_time(inmd)
-                {
-                    if let Ok(outc) = read_to_string(&builder.fmeta.outp) {
-                        if outc.contains(&cache) {
-                            return Ok(CTParser {
-                                regenerated: false,
-                                rule_ids,
-                                conflicts: None,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        // At this point, we know we're going to generate fresh output; however, if something goes
-        // wrong in the process between now and us writing /out/blah.rs, rustc thinks that
-        // everything's gone swimmingly (even if build.rs errored!), and tries to carry on
-        // compilation, leading to weird errors. We therefore delete /out/blah.rs at this point,
-        // which means, at worse, the user gets a "file not found" error from rustc (which is less
-        // confusing than the alternatives).
-        fs::remove_file(&builder.fmeta.outp).ok();
         let mut ca = CTConflictAnalysis::new();
         // `analyzed` has moved into `conflict_analyzed`.
         let builder = builder.build_table()?.analyze_table(&mut ca);
@@ -422,38 +382,7 @@ where
                 phantom_storage: PhantomData,
             })?
         }
-        let mod_name = match builder.pb.mod_name {
-            Some(s) => s.to_owned(),
-            None => {
-                // The user hasn't specified a module name, so we create one automatically: what we
-                // do is strip off all the filename extensions (note that it's likely that inp ends
-                // with `y.rs`, so we potentially have to strip off more than one extension) and
-                // then add `_y` to the end.
-                let mut stem = builder.fmeta.grmp.to_str().unwrap();
-                loop {
-                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
-                    if stem == new_stem {
-                        break;
-                    }
-                    stem = new_stem;
-                }
-                format!("{}_y", stem)
-            }
-        };
-
-        builder
-            .pb
-            .output_file(&builder.tdata.0, &builder.tdata.2, &mod_name, builder.fmeta.outp, &cache)?;
-        let conflicts = if builder.tdata.2.conflicts().is_some() {
-            Some((builder.tdata.0, builder.tdata.1, builder.tdata.2))
-        } else {
-            None
-        };
-        Ok(CTParser {
-            regenerated: true,
-            rule_ids,
-            conflicts,
-        })
+        builder.source_generator().write_parser()
     }
 
     pub fn build_for_analysis(self) -> CTAnalysisBuilder<'a, LexemeT, StorageT> {
@@ -1283,6 +1212,22 @@ where
         analysis.analyze(&self.tdata);
         self
     }
+    pub fn source_generator(self) -> CTParserSourceGenerator<'a, LexemeT, StorageT> {
+        CTParserSourceGenerator {
+            pb: self.pb,
+            fmeta: self.fmeta,
+            tdata: self.tdata,
+        }
+    }
+}
+
+pub struct CTParserSourceGenerator<'a, LexemeT, StorageT>
+where
+    StorageT: Eq + Hash,
+{
+    fmeta: FileMeta,
+    tdata: TableData<StorageT>,
+    pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
 pub struct CTConflictAnalysis {
@@ -1327,6 +1272,104 @@ where
                 _ => self.num_sr_rr = Some((c.sr_len(), c.rr_len())),
             }
         }
+    }
+}
+
+impl<'a, LexemeT, StorageT> CTParserSourceGenerator<'a, LexemeT, StorageT>
+where
+    LexemeT: Lexeme<StorageT>,
+    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    usize: AsPrimitive<StorageT>,
+{
+    pub fn write_parser(self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
+        let grmp = &self.fmeta.grmp;
+        let rule_ids = self
+            .tdata
+            .0
+            .tokens_map()
+            .iter()
+            .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
+            .collect::<HashMap<_, _>>();
+        let cache = self.pb.rebuild_cache(&self.tdata.0);
+
+        // We don't need to go through the full rigmarole of generating an output file if all of
+        // the following are true: the output file exists; it is newer than the input file; and the
+        // cache hasn't changed. The last of these might be surprising, but it's vital: we don't
+        // know, for example, what the IDs map might be from one run to the next, and it might
+        // change for reasons beyond lrpar's control. If it does change, that means that the lexer
+        // and lrpar would get out of sync, so we have to play it safe and regenerate in such
+        // cases.
+        if let Ok(ref inmd) = fs::metadata(grmp) {
+            if let Ok(ref out_rs_md) = fs::metadata(&self.fmeta.outp) {
+                if FileTime::from_last_modification_time(out_rs_md)
+                    > FileTime::from_last_modification_time(inmd)
+                {
+                    if let Ok(outc) = read_to_string(grmp) {
+                        if outc.contains(&cache) {
+                            return Ok(CTParser {
+                                regenerated: false,
+                                rule_ids,
+                                conflicts: None,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // At this point, we know we're going to generate fresh output; however, if something goes
+        // wrong in the process between now and us writing /out/blah.rs, rustc thinks that
+        // everything's gone swimmingly (even if build.rs errored!), and tries to carry on
+        // compilation, leading to weird errors. We therefore delete /out/blah.rs at this point,
+        // which means, at worse, the user gets a "file not found" error from rustc (which is less
+        // confusing than the alternatives).
+        //
+        // A note about the above comment:
+        //     I believe the situation that the above comment describes may have been fixed with
+        //     https://github.com/rust-lang/cargo/issues/6770
+        //
+        // The movement to analysis has removed errors below this point to above it, however
+        // there already were errors above this point which could occur before the `remove_file()`
+        fs::remove_file(&self.fmeta.outp).ok();
+        let mod_name = match self.pb.mod_name {
+            Some(s) => s.to_owned(),
+            None => {
+                // The user hasn't specified a module name, so we create one automatically: what we
+                // do is strip off all the filename extensions (note that it's likely that inp ends
+                // with `y.rs`, so we potentially have to strip off more than one extension) and
+                // then add `_y` to the end.
+
+                let mut stem = grmp.to_str().unwrap();
+                loop {
+                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
+                    if stem == new_stem {
+                        break;
+                    }
+                    stem = new_stem;
+                }
+                format!("{}_y", stem)
+            }
+        };
+
+        self.pb.output_file(
+            &self.tdata.0,
+            &self.tdata.2,
+            &mod_name,
+            &self.fmeta.outp,
+            &cache,
+        )?;
+
+        let conflicts = if self.tdata.2.conflicts().is_some() {
+            let tdata = (self.tdata.0, self.tdata.1, self.tdata.2);
+            Some(tdata)
+        } else {
+            None
+        };
+        Ok(CTParser {
+            regenerated: true,
+            rule_ids,
+            conflicts,
+        })
     }
 }
 
@@ -1576,5 +1619,43 @@ C : 'a';"
                 assert_eq!(cs.unwrap().analysis.sr_len(), Some(1));
             }
         }
+    }
+
+    #[test]
+    fn test_expectrr_analysis() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new().unwrap();
+        let mut file_path = PathBuf::from(temp.as_ref());
+        file_path.push("grm.y");
+        let mut f = File::create(&file_path).unwrap();
+        let _ = f.write_all(
+            "%start A
+%expect 1
+%expect-rr 2
+%%
+A : 'a' 'b' | B 'b';
+B : 'a' | C;
+C : 'a';"
+                .as_bytes(),
+        );
+        let mut ga = cfgrammar::analysis::YaccGrammarWarningAnalysis::new(&file_path);
+        let mut ca = CTConflictAnalysis::new();
+        let mut src_buf = String::new();
+        CTParserBuilder::<TestLexeme, _>::new()
+            .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
+            .grammar_path(file_path.to_str().unwrap())
+            .output_path(file_path.with_extension("ignored"))
+            .build_for_analysis()
+            .read_grammar(&mut src_buf)?
+            .build_ast(&src_buf)
+            .analyze_ast(&mut ga)
+            .build_grammar()
+            .unwrap()
+            .build_table()?
+            .analyze_table(&mut ca)
+            .source_generator()
+            .write_parser()?;
+        assert_eq!(ca.rr_len(), Some(1));
+        assert_eq!(ca.sr_len(), Some(1));
+        Ok(())
     }
 }
