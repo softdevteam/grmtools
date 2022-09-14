@@ -52,6 +52,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+pub mod analysis;
 mod idxnewtype;
 pub mod newlinecache;
 pub mod span;
