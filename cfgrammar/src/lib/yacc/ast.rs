@@ -5,7 +5,10 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 
-use super::{parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccKind};
+use super::{
+    parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
+    YaccGrammarWarningKind, YaccKind,
+};
 
 use crate::Span;
 /// Contains a `GrammarAST` structure produced from a grammar source file.
@@ -298,6 +301,21 @@ impl GrammarAST {
             }
         }
         Ok(())
+    }
+
+    pub fn warnings(&self) -> Vec<YaccGrammarWarning> {
+        self.unused_symbols()
+            .map(|symidx| {
+                let (kind, span) = match symidx.symbol(self) {
+                    Symbol::Rule(_, span) => (YaccGrammarWarningKind::UnusedRule, span),
+                    Symbol::Token(_, span) => (YaccGrammarWarningKind::UnusedToken, span),
+                };
+                YaccGrammarWarning {
+                    kind,
+                    spans: vec![span],
+                }
+            })
+            .collect()
     }
 
     /// Return the indices of unexpectedly unused rules (relative to ast.rules)

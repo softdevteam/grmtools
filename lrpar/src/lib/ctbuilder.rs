@@ -19,7 +19,7 @@ use std::{
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -149,6 +149,7 @@ where
     recoverer: RecoveryKind,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
+    warnings_are_errors: bool,
     visibility: Visibility,
     phantom: PhantomData<(LexemeT, StorageT)>,
 }
@@ -187,6 +188,7 @@ where
             recoverer: RecoveryKind::CPCTPlus,
             yacckind: None,
             error_on_conflicts: true,
+            warnings_are_errors: true,
             visibility: Visibility::Private,
             phantom: PhantomData,
         }
@@ -297,6 +299,13 @@ where
         self
     }
 
+    /// If set to true, [CTParserBuilder::build] will return an error if the given grammar contains
+    /// any warnings. Defaults to `true`.
+    pub fn warnings_are_errors(mut self, b: bool) -> Self {
+        self.warnings_are_errors = b;
+        self
+    }
+
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
     /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
     /// additional files will be created with the same name as specified in [self.output_path] but
@@ -374,24 +383,59 @@ where
         }
 
         let inc = read_to_string(grmp).unwrap();
-        let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc)
-            .map_err(|errs| {
-                errs.iter()
-                    .map(|e| {
-                        let mut line_cache = NewlineCache::new();
-                        line_cache.feed(&inc);
-                        if let Some((line, column)) =
-                            line_cache.byte_to_line_num_and_col_num(&inc, e.spans()[0].start())
-                        {
-                            format!("{} at line {line} column {column}", e)
+        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        let warnings = ast_validation.ast().warnings();
+        let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
+            if let Some((line, column)) =
+                line_cache.byte_to_line_num_and_col_num(inc, x.spans()[0].start())
+            {
+                format!("{} at line {line} column {column}", x)
+            } else {
+                format!("{}", x)
+            }
+        };
+
+        let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(yk, ast_validation);
+        let grm = match res {
+            Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
+                let mut line_cache = NewlineCache::new();
+                line_cache.feed(&inc);
+                return Err(ErrorString(
+                    warnings
+                        .iter()
+                        .map(|w| spanned_fmt(w, &inc, &line_cache))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ))?;
+            }
+            Ok(grm) => {
+                if !warnings.is_empty() {
+                    let mut line_cache = NewlineCache::new();
+                    line_cache.feed(&inc);
+                    for w in warnings {
+                        // Assume if this variable is set we are running under cargo.
+                        if std::env::var("OUT_DIR").is_ok() {
+                            println!("cargo:warning={}", spanned_fmt(&w, &inc, &line_cache));
                         } else {
-                            format!("{}", e)
+                            eprintln!("{}", spanned_fmt(&w, &inc, &line_cache));
                         }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
-            .map_err(ErrorString)?;
+                    }
+                }
+                grm
+            }
+            Err(errs) => {
+                let mut line_cache = NewlineCache::new();
+                line_cache.feed(&inc);
+                return Err(ErrorString(
+                    errs.iter()
+                        .map(|e| spanned_fmt(e, &inc, &line_cache))
+                        .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ))?;
+            }
+        };
+
         let rule_ids = grm
             .tokens_map()
             .iter()
@@ -568,6 +612,7 @@ where
             recoverer: self.recoverer,
             yacckind: self.yacckind,
             error_on_conflicts: self.error_on_conflicts,
+            warnings_are_errors: self.warnings_are_errors,
             visibility: self.visibility.clone(),
             phantom: PhantomData,
         };
