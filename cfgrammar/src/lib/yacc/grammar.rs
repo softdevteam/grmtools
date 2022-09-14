@@ -5,13 +5,7 @@ use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 use serde::{Deserialize, Serialize};
 use vob::Vob;
 
-use super::{
-    ast,
-    firsts::YaccFirsts,
-    follows::YaccFollows,
-    parser::{YaccGrammarResult, YaccParser},
-    YaccKind,
-};
+use super::{ast, firsts::YaccFirsts, follows::YaccFollows, parser::YaccGrammarResult, YaccKind};
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
 const START_RULE: &str = "^";
@@ -111,22 +105,18 @@ where
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
-        let ast = match yacc_kind {
-            YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
-                let mut yp = YaccParser::new(yacc_kind, s.to_string());
-                yp.parse()?;
-                let mut ast = yp.ast();
-                let r = ast.complete_and_validate();
-                // TODO emit warnings.
-                let _ = ast.unused_symbols().map(|sym_idx| sym_idx.symbol(&ast));
-                if r.is_err() {
-                    return Err(vec![r.unwrap_err()]);
-                }
+        let ast_validation = ast::ASTValidation::new(yacc_kind, s);
+        Self::new_with_validation(yacc_kind, ast_validation)
+    }
 
-                ast
-            }
-        };
-
+    pub fn new_with_validation(
+        yacc_kind: YaccKind,
+        ast_validation: ast::ASTValidation,
+    ) -> YaccGrammarResult<Self> {
+        if !ast_validation.is_valid() {
+            return Err(ast_validation.errs);
+        }
+        let ast = ast_validation.ast;
         // Check that StorageT is big enough to hold RIdx/PIdx/SIdx/TIdx values; after these
         // checks we can guarantee that things like RIdx(ast.rules.len().as_()) are safe.
         if ast.rules.len() > num_traits::cast(StorageT::max_value()).unwrap() {
@@ -321,7 +311,7 @@ where
             }
         }
 
-        let avoid_insert = if let Some(ai) = ast.avoid_insert {
+        let avoid_insert = if let Some(ai) = &ast.avoid_insert {
             let mut aiv = Vob::from_elem(false, token_names.len());
             for n in ai.keys() {
                 aiv.set(usize::from(token_map[n]), true);

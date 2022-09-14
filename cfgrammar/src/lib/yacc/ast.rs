@@ -5,9 +5,55 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 
-use super::{Precedence, YaccGrammarError, YaccGrammarErrorKind};
+use super::{parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccKind};
 
 use crate::Span;
+
+pub struct ASTValidation {
+    pub ast: GrammarAST,
+    pub errs: Vec<YaccGrammarError>,
+}
+
+/// Provides access to an ast which may or may not be valid,
+/// An AST which is invalid is provided for further analysis.
+impl ASTValidation {
+    /// The AST will be invalid if errors were encountered during
+    /// construction in which case `errors()` will be non-empty.
+    pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
+        let mut errs = Vec::new();
+        let ast = match yacc_kind {
+            YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
+                let mut yp = YaccParser::new(yacc_kind, s.to_string());
+                let _ = yp.parse().map_err(|e| errs.extend(e));
+                let mut ast = yp.ast();
+                let _ = ast.complete_and_validate().map_err(|e| errs.push(e));
+                ast
+            }
+        };
+        ASTValidation { ast, errs }
+    }
+
+    /// Returns a `GrammarAST` which may contain errors and should be validated.
+    ///
+    /// You may use an ast with errors to perform further analysis.
+    /// Consumers of `ASTValidation` such as [YaccGrammar::new_with_storaget](crate::yacc::YaccGrammar::new_with_storaget]
+    /// should propagate any errors within it along with any additional errors that they produce.
+    ///
+    /// User specified consumers should not drop the errors without propagating them upwards.
+    pub fn ast(&self) -> &GrammarAST {
+        &self.ast
+    }
+
+    /// Whether this `GrammarAST` is valid or not.
+    pub fn is_valid(&self) -> bool {
+        self.errs.is_empty()
+    }
+
+    /// All errors encountered during AST construction.
+    pub fn errors(&self) -> &[YaccGrammarError] {
+        self.errs.as_slice()
+    }
+}
 
 /// An AST representing a grammar. This is built up gradually: when it is finished, the
 /// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
