@@ -20,7 +20,7 @@ use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-    RIdx, Symbol,
+    RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -374,15 +374,14 @@ where
         }
 
         let inc = read_to_string(grmp).unwrap();
-
         let grm = YaccGrammar::<StorageT>::new_with_storaget(yk, &inc)
             .map_err(|errs| {
                 errs.iter()
                     .map(|e| {
                         let mut line_cache = NewlineCache::new();
                         line_cache.feed(&inc);
-                        if let Some((line, column)) = line_cache
-                            .byte_to_line_num_and_col_num(&inc, e.spans().next().unwrap().start())
+                        if let Some((line, column)) =
+                            line_cache.byte_to_line_num_and_col_num(&inc, e.spans()[0].start())
                         {
                             format!("{} at line {line} column {column}", e)
                         } else {

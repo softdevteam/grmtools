@@ -43,3 +43,14 @@ impl Span {
         self.len() == 0
     }
 }
+
+/// Implemented for errors and warnings to provide access to their spans.
+pub trait Spanned: std::fmt::Display {
+    /// Returns the spans associated with the error, always containing at least 1 span.
+    ///
+    /// Refer to [SpansKind](crate::yacc::parser::SpansKind) via [spanskind](Self::spanskind)
+    /// for the meaning and interpretation of spans and their ordering.
+    fn spans(&self) -> &[Span];
+    /// Returns the `SpansKind` associated with this error.
+    fn spanskind(&self) -> crate::yacc::parser::SpansKind;
+}
