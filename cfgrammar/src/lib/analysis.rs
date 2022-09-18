@@ -1,6 +1,5 @@
 use crate::yacc::ast::{GrammarAST, Symbol};
 use crate::yacc::{YaccGrammarWarning, YaccGrammarWarningKind};
-use lazy_static::lazy_static;
 use std::ops::Deref;
 
 /// Performs an analysis on a given `Subject`, the given
@@ -17,7 +16,7 @@ where
     SourceId: PartialEq + ToOwned + ?Sized,
 {
     src_id: SourceId::Owned,
-    warnings: Option<Box<[YaccGrammarWarning]>>,
+    warnings: Vec<YaccGrammarWarning>,
 }
 
 impl<SourceId: PartialEq + ToOwned + ?Sized> YaccGrammarWarningAnalysis<SourceId> {
@@ -26,7 +25,7 @@ impl<SourceId: PartialEq + ToOwned + ?Sized> YaccGrammarWarningAnalysis<SourceId
     pub fn new(src_id: &SourceId) -> Self {
         Self {
             src_id: src_id.to_owned(),
-            warnings: None,
+            warnings: Vec::new(),
         }
     }
     pub fn source_id(&self) -> &SourceId::Owned {
@@ -35,17 +34,10 @@ impl<SourceId: PartialEq + ToOwned + ?Sized> YaccGrammarWarningAnalysis<SourceId
 }
 
 impl<SourceId: PartialEq + ToOwned + ?Sized> Deref for YaccGrammarWarningAnalysis<SourceId> {
-    type Target = Box<[YaccGrammarWarning]>;
+    type Target = Vec<YaccGrammarWarning>;
 
     fn deref(&self) -> &Self::Target {
-        if let Some(warnings) = self.warnings.as_ref() {
-            warnings
-        } else {
-            lazy_static! {
-                static ref EMPTY_WARNINGS: Box<[YaccGrammarWarning]> = vec![].into_boxed_slice();
-            }
-            &*EMPTY_WARNINGS
-        }
+        &self.warnings
     }
 }
 
@@ -54,20 +46,16 @@ impl<SourceId: PartialEq + ToOwned + ?Sized> Analysis<GrammarAST>
     for YaccGrammarWarningAnalysis<SourceId>
 {
     fn analyse(&mut self, ast: &GrammarAST) {
-        self.warnings = Some(
-            ast.unused_symbols()
-                .map(|sym_idx| {
-                    let symbol = sym_idx.symbol(ast);
-                    let (kind, span) = match symbol {
-                        Symbol::Token(_, span) => (YaccGrammarWarningKind::UnusedToken, span),
-                        Symbol::Rule(_, span) => (YaccGrammarWarningKind::UnusedRule, span),
-                    };
-                    YaccGrammarWarning {
-                        kind,
-                        spans: vec![span],
-                    }
-                })
-                .collect::<Box<[YaccGrammarWarning]>>(),
-        );
+        self.warnings.extend(ast.unused_symbols().map(|sym_idx| {
+            let symbol = sym_idx.symbol(ast);
+            let (kind, span) = match symbol {
+                Symbol::Token(_, span) => (YaccGrammarWarningKind::UnusedToken, span),
+                Symbol::Rule(_, span) => (YaccGrammarWarningKind::UnusedRule, span),
+            };
+            YaccGrammarWarning {
+                kind,
+                spans: vec![span],
+            }
+        }));
     }
 }
