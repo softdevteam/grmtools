@@ -408,8 +408,8 @@ where
         builder.source_generator().write_parser()
     }
 
-    pub fn build_for_analysis(self) -> CTAnalysisBuilder<'a, LexemeT, StorageT> {
-        CTAnalysisBuilder { pb: self }
+    pub fn build_for_analysis(self) -> CTAnalyserBuilder<'a, LexemeT, StorageT> {
+        CTAnalyserBuilder { pb: self }
     }
 
     /// Given the filename `a/b.y` as input, statically compile the grammar `src/a/b.y` into a Rust
@@ -1061,14 +1061,14 @@ where
     }
 }
 
-pub struct CTAnalysisBuilder<'a, LexemeT, StorageT = u32>
+pub struct CTAnalyserBuilder<'a, LexemeT, StorageT = u32>
 where
     StorageT: Eq + Hash,
 {
     pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
-impl<'a, LexemeT, StorageT> CTAnalysisBuilder<'a, LexemeT, StorageT>
+impl<'a, LexemeT, StorageT> CTAnalyserBuilder<'a, LexemeT, StorageT>
 where
     LexemeT: Lexeme<StorageT>,
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
@@ -1077,7 +1077,7 @@ where
     pub fn read_grammar(
         self,
         inc: &mut String,
-    ) -> Result<CTGrammarASTanalyserBuilder<'a, LexemeT, StorageT>, Box<dyn Error>> {
+    ) -> Result<CTGrammarASTAnalyserBuilder<'a, LexemeT, StorageT>, Box<dyn Error>> {
         inc.clear();
         let grmp = self
             .pb
@@ -1106,7 +1106,7 @@ where
 
         let mut file = File::open(&grmp)?;
         file.read_to_string(inc)?;
-        Ok(CTGrammarASTanalyserBuilder {
+        Ok(CTGrammarASTAnalyserBuilder {
             fmeta: FileMeta {
                 grmp: grmp.to_owned(),
                 outp: outp.to_owned(),
@@ -1123,7 +1123,7 @@ struct FileMeta {
     yk: YaccKind,
 }
 
-pub struct CTGrammarASTanalyserBuilder<'a, LexemeT, StorageT>
+pub struct CTGrammarASTAnalyserBuilder<'a, LexemeT, StorageT>
 where
     StorageT: Eq + Hash,
 {
@@ -1131,15 +1131,15 @@ where
     pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
-impl<'a, LexemeT, StorageT> CTGrammarASTanalyserBuilder<'a, LexemeT, StorageT>
+impl<'a, LexemeT, StorageT> CTGrammarASTAnalyserBuilder<'a, LexemeT, StorageT>
 where
     LexemeT: Lexeme<StorageT>,
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
-    pub fn build_ast(self, inc: &str) -> CTGrammarASTanalyser<'a, LexemeT, StorageT> {
+    pub fn build_ast(self, inc: &str) -> CTGrammarASTAnalyser<'a, LexemeT, StorageT> {
         let ast_validation = ASTValidation::new(self.fmeta.yk, inc);
-        CTGrammarASTanalyser {
+        CTGrammarASTAnalyser {
             fmeta: self.fmeta,
             ast_validation,
             pb: self.pb,
@@ -1147,7 +1147,7 @@ where
     }
 }
 
-pub struct CTGrammarASTanalyser<'a, LexemeT, StorageT>
+pub struct CTGrammarASTAnalyser<'a, LexemeT, StorageT>
 where
     StorageT: Eq + Hash,
 {
@@ -1156,7 +1156,7 @@ where
     pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
-impl<'a, LexemeT, StorageT> CTGrammarASTanalyser<'a, LexemeT, StorageT>
+impl<'a, LexemeT, StorageT> CTGrammarASTAnalyser<'a, LexemeT, StorageT>
 where
     LexemeT: Lexeme<StorageT>,
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
