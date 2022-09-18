@@ -13,8 +13,8 @@ use std::{
     io::{self, Read, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
-    sync::Mutex,
     str::FromStr,
+    sync::Mutex,
 };
 
 use bincode::{deserialize, serialize_into};
@@ -379,16 +379,23 @@ where
             .map_err(|errs| {
                 errs.iter()
                     .map(|e| fmt_spanned(e, &nlcache, &inc))
-                    .chain(warning_analysis.iter().map(|w| fmt_spanned(w, &nlcache, &inc)))
+                    .chain(
+                        warning_analysis
+                            .iter()
+                            .map(|w| fmt_spanned(w, &nlcache, &inc)),
+                    )
                     .collect::<Vec<_>>()
                     .join("\n")
             })
             .map_err(ErrorString)?;
         if builder.pb.warnings_are_errors && !warning_analysis.is_empty() {
-            Err(ErrorString(warning_analysis.iter()
-                .map(|w| fmt_spanned(w, &nlcache, &inc))
-                .collect::<Vec<_>>()
-                .join("\n")))?
+            Err(ErrorString(
+                warning_analysis
+                    .iter()
+                    .map(|w| fmt_spanned(w, &nlcache, &inc))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ))?
         }
         let mut ca = CTConflictAnalysis::new();
         let builder = builder.build_table()?.analyse_table(&mut ca);
