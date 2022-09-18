@@ -36,7 +36,7 @@ impl ASTValidation {
     /// Returns a `GrammarAST` which may contain errors and should be validated.
     ///
     /// You may use an ast with errors to perform further analysis.
-    /// Consumers of `ASTValidation` such as [YaccGrammar::new_with_storaget](crate::yacc::YaccGrammar::new_with_storaget]
+    /// Consumers of `ASTValidation` such as [`YaccGrammar::new_with_storaget`](crate::yacc::YaccGrammar::new_with_storaget)
     /// should propagate any errors within it along with any additional errors that they produce.
     ///
     /// User specified consumers should not drop the errors without propagating them upwards.

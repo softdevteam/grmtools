@@ -408,6 +408,7 @@ where
         builder.source_generator().write_parser()
     }
 
+    /// Build a parser while performing an analysis on it.
     pub fn build_for_analysis(self) -> CTAnalyserBuilder<'a, LexemeT, StorageT> {
         CTAnalyserBuilder { pb: self }
     }
@@ -1061,6 +1062,12 @@ where
     }
 }
 
+/// Allows building a parser in steps providing `Spanned` errors when available.
+/// At each step of building the parser an analysis can be performed. In some
+/// cases this analysis can be performed in when errors have already occurred.
+///
+/// An error might occur upon calling `build_ast`, after which you can call
+/// `analyse_ast`, but the error is delayed until the call to `build_grammar()`.
 pub struct CTAnalyserBuilder<'a, LexemeT, StorageT = u32>
 where
     StorageT: Eq + Hash,
@@ -1074,11 +1081,13 @@ where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
+    /// Reads a grammar from the builders `grammar_path` placing the grammar file contents
+    /// into `contents_buf`.
     pub fn read_grammar(
         self,
-        inc: &mut String,
+        contents_buf: &mut String,
     ) -> Result<CTGrammarASTAnalyserBuilder<'a, LexemeT, StorageT>, Box<dyn Error>> {
-        inc.clear();
+        contents_buf.clear();
         let grmp = self
             .pb
             .grammar_path
@@ -1105,7 +1114,7 @@ where
         }
 
         let mut file = File::open(&grmp)?;
-        file.read_to_string(inc)?;
+        file.read_to_string(contents_buf)?;
         Ok(CTGrammarASTAnalyserBuilder {
             fmeta: FileMeta {
                 grmp: grmp.to_owned(),
@@ -1137,6 +1146,7 @@ where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
+    /// Build an AST so you may analyze and validate it later
     pub fn build_ast(self, inc: &str) -> CTGrammarASTAnalyser<'a, LexemeT, StorageT> {
         let ast_validation = ASTValidation::new(self.fmeta.yk, inc);
         CTGrammarASTAnalyser {
@@ -1162,6 +1172,7 @@ where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
+    /// Perform an analysis on the AST contained within `self`.
     pub fn analyse_ast<A: Analysis<cfgrammar::yacc::ast::GrammarAST>>(
         self,
         analysis: &mut A,
@@ -1170,6 +1181,8 @@ where
         self
     }
 
+    /// Validate the AST contained within self. If it validates build a
+    /// grammar from it which may be analysed further, otherwise return error.
     pub fn build_grammar(
         self,
     ) -> Result<CTTableBuilder<'a, LexemeT, StorageT>, Vec<YaccGrammarError>> {
@@ -1196,11 +1209,13 @@ where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
+    /// Analyse the grammar contained in `self`.
     pub fn analyse_grammar<A: Analysis<YaccGrammar<StorageT>>>(self, analysis: &mut A) -> Self {
         analysis.analyse(&self.grm);
         self
     }
 
+    /// Build a state table and state graph from the grammar in self, so they may be analyzed.
     pub fn build_table(self) -> Result<CTTableanalyser<'a, LexemeT, StorageT>, Box<dyn Error>> {
         let (sgraph, stable) = from_yacc(&self.grm, Minimiser::Pager)?;
         Ok(CTTableanalyser {
@@ -1232,10 +1247,14 @@ where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
+    /// Peform an analysis on the state table, and stategraph within self.
     pub fn analyse_table<A: Analysis<TableData<StorageT>>>(self, analysis: &mut A) -> Self {
         analysis.analyse(&self.tdata);
         self
     }
+
+    /// Given the grammar, state table and graph produced in previous build steps
+    /// Build a source generator to generate the source files for a parser.
     pub fn source_generator(self) -> CTParserSourceGenerator<'a, LexemeT, StorageT> {
         CTParserSourceGenerator {
             pb: self.pb,
@@ -1305,6 +1324,7 @@ where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
+    /// Write generated parser sources to the filesystem at the `output_path`
     pub fn write_parser(self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
         let grmp = &self.fmeta.grmp;
         let rule_ids = self
