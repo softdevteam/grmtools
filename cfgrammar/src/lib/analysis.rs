@@ -9,7 +9,7 @@ pub trait Analysis<Subject> {
     /// Perform an analysis on a given subject The mechanisms by which you retrieve the
     /// results of an analysis are not specified by the trait, and particular to the types
     /// that implement the trait.
-    fn analyze(&mut self, subject: &Subject);
+    fn analyse(&mut self, subject: &Subject);
 }
 
 pub struct YaccGrammarWarningAnalysis<SourceId>
@@ -53,7 +53,7 @@ impl<SourceId: PartialEq + ToOwned + ?Sized> Deref for YaccGrammarWarningAnalysi
 impl<SourceId: PartialEq + ToOwned + ?Sized> Analysis<GrammarAST>
     for YaccGrammarWarningAnalysis<SourceId>
 {
-    fn analyze(&mut self, ast: &GrammarAST) {
+    fn analyse(&mut self, ast: &GrammarAST) {
         self.warnings = Some(
             ast.unused_symbols()
                 .map(|sym_idx| {

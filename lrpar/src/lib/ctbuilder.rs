@@ -363,7 +363,7 @@ where
         let builder = builder
             .read_grammar(&mut inc)?
             .build_ast(&inc)
-            .analyze_ast(&mut warning_analysis)
+            .analyse_ast(&mut warning_analysis)
             .build_grammar();
         fn fmt_spanned<T: Spanned>(x: &T, line_cache: &NewlineCache, src: &str) -> String {
             if let Some((line, column)) =
@@ -391,8 +391,7 @@ where
                 .join("\n")))?
         }
         let mut ca = CTConflictAnalysis::new();
-        // `analyzed` has moved into `conflict_analyzed`.
-        let builder = builder.build_table()?.analyze_table(&mut ca);
+        let builder = builder.build_table()?.analyse_table(&mut ca);
         if builder.pb.error_on_conflicts && ca.unexpected_conflicts() {
             Err(CTConflictsError {
                 analysis: ca,
@@ -1071,7 +1070,7 @@ where
     pub fn read_grammar(
         self,
         inc: &mut String,
-    ) -> Result<CTGrammarASTAnalyzerBuilder<'a, LexemeT, StorageT>, Box<dyn Error>> {
+    ) -> Result<CTGrammarASTanalyserBuilder<'a, LexemeT, StorageT>, Box<dyn Error>> {
         inc.clear();
         let grmp = self
             .pb
@@ -1100,7 +1099,7 @@ where
 
         let mut file = File::open(&grmp)?;
         file.read_to_string(inc)?;
-        Ok(CTGrammarASTAnalyzerBuilder {
+        Ok(CTGrammarASTanalyserBuilder {
             fmeta: FileMeta {
                 grmp: grmp.to_owned(),
                 outp: outp.to_owned(),
@@ -1117,7 +1116,7 @@ struct FileMeta {
     yk: YaccKind,
 }
 
-pub struct CTGrammarASTAnalyzerBuilder<'a, LexemeT, StorageT>
+pub struct CTGrammarASTanalyserBuilder<'a, LexemeT, StorageT>
 where
     StorageT: Eq + Hash,
 {
@@ -1125,15 +1124,15 @@ where
     pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
-impl<'a, LexemeT, StorageT> CTGrammarASTAnalyzerBuilder<'a, LexemeT, StorageT>
+impl<'a, LexemeT, StorageT> CTGrammarASTanalyserBuilder<'a, LexemeT, StorageT>
 where
     LexemeT: Lexeme<StorageT>,
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
-    pub fn build_ast(self, inc: &str) -> CTGrammarASTAnalyzer<'a, LexemeT, StorageT> {
+    pub fn build_ast(self, inc: &str) -> CTGrammarASTanalyser<'a, LexemeT, StorageT> {
         let ast_validation = ASTValidation::new(self.fmeta.yk, inc);
-        CTGrammarASTAnalyzer {
+        CTGrammarASTanalyser {
             fmeta: self.fmeta,
             ast_validation,
             pb: self.pb,
@@ -1141,7 +1140,7 @@ where
     }
 }
 
-pub struct CTGrammarASTAnalyzer<'a, LexemeT, StorageT>
+pub struct CTGrammarASTanalyser<'a, LexemeT, StorageT>
 where
     StorageT: Eq + Hash,
 {
@@ -1150,17 +1149,17 @@ where
     pb: CTParserBuilder<'a, LexemeT, StorageT>,
 }
 
-impl<'a, LexemeT, StorageT> CTGrammarASTAnalyzer<'a, LexemeT, StorageT>
+impl<'a, LexemeT, StorageT> CTGrammarASTanalyser<'a, LexemeT, StorageT>
 where
     LexemeT: Lexeme<StorageT>,
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
-    pub fn analyze_ast<A: Analysis<cfgrammar::yacc::ast::GrammarAST>>(
+    pub fn analyse_ast<A: Analysis<cfgrammar::yacc::ast::GrammarAST>>(
         self,
         analysis: &mut A,
     ) -> Self {
-        analysis.analyze(self.ast_validation.ast());
+        analysis.analyse(self.ast_validation.ast());
         self
     }
 
@@ -1190,14 +1189,14 @@ where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
-    pub fn analyze_grammar<A: Analysis<YaccGrammar<StorageT>>>(self, analysis: &mut A) -> Self {
-        analysis.analyze(&self.grm);
+    pub fn analyse_grammar<A: Analysis<YaccGrammar<StorageT>>>(self, analysis: &mut A) -> Self {
+        analysis.analyse(&self.grm);
         self
     }
 
-    pub fn build_table(self) -> Result<CTTableAnalyzer<'a, LexemeT, StorageT>, Box<dyn Error>> {
+    pub fn build_table(self) -> Result<CTTableanalyser<'a, LexemeT, StorageT>, Box<dyn Error>> {
         let (sgraph, stable) = from_yacc(&self.grm, Minimiser::Pager)?;
-        Ok(CTTableAnalyzer {
+        Ok(CTTableanalyser {
             fmeta: self.fmeta,
             pb: self.pb,
             tdata: (self.grm, sgraph, stable),
@@ -1211,7 +1210,7 @@ type TableData<StorageT> = (
     StateTable<StorageT>,
 );
 
-pub struct CTTableAnalyzer<'a, LexemeT, StorageT>
+pub struct CTTableanalyser<'a, LexemeT, StorageT>
 where
     StorageT: Eq + Hash,
 {
@@ -1220,14 +1219,14 @@ where
     tdata: TableData<StorageT>,
 }
 
-impl<'a, LexemeT, StorageT> CTTableAnalyzer<'a, LexemeT, StorageT>
+impl<'a, LexemeT, StorageT> CTTableanalyser<'a, LexemeT, StorageT>
 where
     LexemeT: Lexeme<StorageT>,
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
-    pub fn analyze_table<A: Analysis<TableData<StorageT>>>(self, analysis: &mut A) -> Self {
-        analysis.analyze(&self.tdata);
+    pub fn analyse_table<A: Analysis<TableData<StorageT>>>(self, analysis: &mut A) -> Self {
+        analysis.analyse(&self.tdata);
         self
     }
     pub fn source_generator(self) -> CTParserSourceGenerator<'a, LexemeT, StorageT> {
@@ -1280,7 +1279,7 @@ where
     StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
-    fn analyze(&mut self, (grm, _sgraph, stable): &TableData<StorageT>) {
+    fn analyse(&mut self, (grm, _sgraph, stable): &TableData<StorageT>) {
         if let Some(c) = stable.conflicts() {
             match (grm.expect(), grm.expectrr()) {
                 (Some(i), Some(j)) if i == c.sr_len() && j == c.rr_len() => (),
@@ -1665,11 +1664,11 @@ C : 'a';"
             .build_for_analysis()
             .read_grammar(&mut src_buf)?
             .build_ast(&src_buf)
-            .analyze_ast(&mut ga)
+            .analyse_ast(&mut ga)
             .build_grammar()
             .unwrap()
             .build_table()?
-            .analyze_table(&mut ca)
+            .analyse_table(&mut ca)
             .source_generator()
             .write_parser()?;
         assert_eq!(ca.rr_len(), Some(1));

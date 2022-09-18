@@ -15,7 +15,7 @@ pub struct EmptyAnalysis;
 
 // We don't currently support anything for conflicts because they aren't spanned.
 impl<T> Analysis<T> for EmptyAnalysis {
-    fn analyze(&mut self, _: &T) {}
+    fn analyse(&mut self, _: &T) {}
 }
 
 fn spanned_report<'a, T: Spanned>(
@@ -98,8 +98,8 @@ impl AriadneYaccWarningAnalysis<String> {
 }
 
 impl Analysis<GrammarAST> for AriadneYaccWarningAnalysis<String> {
-    fn analyze(&mut self, ast: &GrammarAST) {
-        self.warning_analysis.analyze(ast)
+    fn analyse(&mut self, ast: &GrammarAST) {
+        self.warning_analysis.analyse(ast)
     }
 }
 
@@ -126,20 +126,20 @@ fn main() -> ExitCode {
         .read_grammar(&mut yacc_src_buf)
         .unwrap()
         .build_ast(&yacc_src_buf)
-        .analyze_ast(&mut analysis)
-        .analyze_ast(&mut EmptyAnalysis)
+        .analyse_ast(&mut analysis)
+        .analyse_ast(&mut EmptyAnalysis)
         .build_grammar();
 
     match result {
-        Ok(analyzer) => {
+        Ok(analyser) => {
             if analysis.warning_analysis.is_empty() {
-                analyzer
-                    .analyze_grammar(&mut EmptyAnalysis)
-                    .analyze_grammar(&mut EmptyAnalysis)
+                analyser
+                    .analyse_grammar(&mut EmptyAnalysis)
+                    .analyse_grammar(&mut EmptyAnalysis)
                     .build_table()
                     .unwrap()
-                    .analyze_table(&mut EmptyAnalysis)
-                    .analyze_table(&mut EmptyAnalysis)
+                    .analyse_table(&mut EmptyAnalysis)
+                    .analyse_table(&mut EmptyAnalysis)
                     .source_generator()
                     .write_parser()
                     .unwrap();
