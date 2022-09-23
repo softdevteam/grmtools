@@ -8,6 +8,7 @@ use lrpar::CTParserBuilder;
 use std::ops::Range;
 use std::process::ExitCode;
 
+use cfgrammar::yacc::YaccGrammar;
 const LEX_FILENAME: &str = "erroneous.l";
 const YACC_FILENAME: &str = "erroneous.y";
 
@@ -103,6 +104,99 @@ impl Analysis<GrammarAST> for AriadneYaccWarningAnalysis<String> {
     }
 }
 
+struct RailroadDiagramAnalysis {
+    svg: String,
+}
+
+impl RailroadDiagramAnalysis {
+    fn new() -> Self {
+        Self {
+            svg: String::new(),
+        }
+    }
+}
+
+impl Analysis<YaccGrammar> for RailroadDiagramAnalysis {
+    /// The diagram this produces was a quick effort and could use some improvement.
+    fn analyse(&mut self, grm: &YaccGrammar) {
+        let mut node_idxs = std::collections::HashMap::new();
+        let mut sequences: Vec<railroad::Sequence> = Vec::new();
+        for (i, ridx) in grm.iter_rules().enumerate() {
+            let name = grm.rule_name_str(ridx);
+            let symbol = cfgrammar::Symbol::Rule(ridx);
+            node_idxs.insert(symbol, i);
+            sequences.push(railroad::Sequence::new(vec![Box::new(
+                railroad::Comment::new(name.to_string()),
+            )]));
+        }
+
+        for (i, tidx) in grm.iter_tidxs().enumerate() {
+            let symbol = cfgrammar::Symbol::Token(tidx);
+            node_idxs.insert(symbol, i);
+        }
+
+        for ridx in grm.iter_rules() {
+            let prods = grm.rule_to_prods(ridx);
+            let prod_syms = prods.iter().map(|pidx| grm.prod(*pidx)).collect::<Vec<_>>();
+            let seq = sequences
+                .get_mut(*node_idxs.get(&cfgrammar::Symbol::Rule(ridx)).unwrap())
+                .unwrap();
+
+            let mut choice = railroad::Choice::new(vec![]);
+            for symbols in prod_syms {
+                let mut a_seq = railroad::Sequence::new(vec![]);
+                if !symbols.is_empty() {
+                    for symbol in symbols {
+                        match symbol {
+                            cfgrammar::Symbol::Rule(prod_ridx) if prod_ridx == &ridx => {
+                                let epsilon = grm.firsts().is_epsilon_set(ridx);
+                                if epsilon {
+                                    a_seq.push(Box::new(railroad::Repeat::new(
+                                        Box::new(railroad::Empty),
+                                        Box::new(railroad::NonTerminal::new(
+                                            grm.rule_name_str(*prod_ridx).to_string(),
+                                        )),
+                                    )));
+                                } else {
+                                    a_seq.push(Box::new(railroad::Repeat::new(
+                                        Box::new(railroad::NonTerminal::new(
+                                            grm.rule_name_str(*prod_ridx).to_string(),
+                                        )),
+                                        Box::new(railroad::Empty),
+                                    )));
+                                }
+                            }
+                            cfgrammar::Symbol::Rule(prod_ridx) => {
+                                a_seq.push(Box::new(railroad::NonTerminal::new(
+                                    grm.rule_name_str(*prod_ridx).to_string(),
+                                )));
+                            }
+                            cfgrammar::Symbol::Token(tidx) => {
+                                a_seq.push(Box::new(railroad::Terminal::new(
+                                    grm.token_name(*tidx).unwrap_or("anonymous").to_string(),
+                                )));
+                            }
+                        }
+                    }
+                }
+                choice.push(a_seq);
+            }
+            seq.push(Box::new(choice));
+        }
+        let mut vert = railroad::VerticalGrid::new(vec![]);
+        for i in sequences {
+            vert.push(Box::new(i));
+        }
+        let mut dia = railroad::Diagram::new(vert);
+        dia.add_element(
+            railroad::svg::Element::new("style")
+                .set("type", "text/css")
+                .raw_text(railroad::DEFAULT_CSS),
+        );
+        self.svg = format!("<html>{dia}</html>");
+    }
+}
+
 fn main() -> ExitCode {
     eprintln!("{}", std::env::current_dir().unwrap().display());
     // We don't currently do anything fancy with `lex` errors.
@@ -116,6 +210,7 @@ fn main() -> ExitCode {
 
     let mut yacc_src_buf = String::new();
     let mut analysis = AriadneYaccWarningAnalysis::<String>::new(YACC_FILENAME.to_string());
+    let mut railroad_analysis = RailroadDiagramAnalysis::new();
     let result = CTParserBuilder::<DefaultLexeme, u32>::new()
         .yacckind(YaccKind::Grmtools)
         // This is a workaround for not running within in build.rs
@@ -134,7 +229,7 @@ fn main() -> ExitCode {
         Ok(analyser) => {
             if analysis.warning_analysis.is_empty() {
                 analyser
-                    .analyse_grammar(&mut EmptyAnalysis)
+                    .analyse_grammar(&mut railroad_analysis)
                     .analyse_grammar(&mut EmptyAnalysis)
                     .build_table()
                     .unwrap()
@@ -154,6 +249,7 @@ fn main() -> ExitCode {
                     })
                     .collect::<()>();
             }
+            println!("{}", railroad_analysis.svg);
             ExitCode::SUCCESS
         }
         Err(es) => {

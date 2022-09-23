@@ -12,6 +12,7 @@ name = "pretty_errors"
 
 [dependencies]
 ariadne = "0.1.5"
+railroad = "0.1.1"
 cfgrammar = { path="../../../cfgrammar" }
 lrlex = { path="../../../lrlex" }
 lrpar = { path="../.." }
