@@ -239,6 +239,9 @@ fn main() -> ExitCode {
                     .write_parser()
                     .unwrap();
             } else {
+                // Here if running under build.rs/cargo you should use `write` instead of `eprint`
+                // then emit a [cargo:warning](https://doc.rust-lang.org/cargo/reference/build-scripts.html#cargo-warning).
+                // Otherwise cargo won't actually display the warning, lacking any error.
                 let _ = analysis
                     .reports(&yacc_src_buf)
                     .unwrap()
