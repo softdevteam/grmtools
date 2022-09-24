@@ -110,9 +110,7 @@ struct RailroadDiagramAnalysis {
 
 impl RailroadDiagramAnalysis {
     fn new() -> Self {
-        Self {
-            svg: String::new(),
-        }
+        Self { svg: String::new() }
     }
 }
 
