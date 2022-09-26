@@ -531,6 +531,7 @@ mod test {
         lexer::{LRNonStreamingLexerDef, LexerDef},
         DefaultLexeme,
     };
+    use cfgrammar::Spanned as _;
     use std::fmt::Write as _;
 
     macro_rules! incorrect_errs {
@@ -539,7 +540,7 @@ mod test {
                 let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
                 line_cache.feed(&$src);
                 if let Some((line, column)) = line_cache
-                    .byte_to_line_num_and_col_num(&$src, e.spans().next().unwrap().start())
+                    .byte_to_line_num_and_col_num(&$src, e.spans().first().unwrap().start())
                 {
                     panic!(
                         "Incorrect error returned {} at line {line} column {column}",
@@ -588,7 +589,7 @@ mod test {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
-                        && line_of_offset(src, e.spans().next().unwrap().start()) == line
+                        && line_of_offset(src, e.spans().first().unwrap().start()) == line
                         && e.spans.len() == 1 => {}
                 Err(e) => incorrect_errs!(src, e),
             }
@@ -608,11 +609,12 @@ mod test {
                 Ok(_) => panic!("Parsed ok while expecting error"),
                 Err([e])
                     if e.kind == kind
-                        && line_col!(src, e.spans().next().unwrap())
+                        && line_col!(src, e.spans().first().unwrap())
                             == lines_cols.next().unwrap() =>
                 {
                     assert_eq!(
                         e.spans()
+                            .iter()
                             .skip(1)
                             .map(|span| line_col!(src, span))
                             .collect::<Vec<(usize, usize)>>(),
@@ -645,6 +647,7 @@ mod test {
                             (
                                 e.kind.clone(),
                                 e.spans()
+                                    .iter()
                                     .map(|span| line_col!(src, span))
                                     .collect::<Vec<_>>(),
                             )

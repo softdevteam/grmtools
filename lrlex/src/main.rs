@@ -8,7 +8,7 @@ use std::{
     str::FromStr,
 };
 
-use cfgrammar::newlinecache::NewlineCache;
+use cfgrammar::{newlinecache::NewlineCache, Spanned};
 use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{Lexeme, Lexer};
 
@@ -60,7 +60,7 @@ fn main() {
             let nlcache = NewlineCache::from_str(&lex_src).unwrap();
             for e in errs {
                 if let Some((line, column)) = nlcache
-                    .byte_to_line_num_and_col_num(&lex_src, e.spans().next().unwrap().start())
+                    .byte_to_line_num_and_col_num(&lex_src, e.spans().first().unwrap().start())
                 {
                     writeln!(
                         stderr(),

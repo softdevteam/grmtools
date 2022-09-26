@@ -16,7 +16,7 @@ use std::{
     sync::Mutex,
 };
 
-use cfgrammar::newlinecache::NewlineCache;
+use cfgrammar::{newlinecache::NewlineCache, Spanned};
 use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, Lexeme};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -315,7 +315,7 @@ where
                                 if let Some((line, column)) = line_cache
                                     .byte_to_line_num_and_col_num(
                                         &lex_src,
-                                        e.spans().next().unwrap().start(),
+                                        e.spans().first().unwrap().start(),
                                     )
                                 {
                                     format!("{} at line {line} column {column}", e)

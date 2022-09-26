@@ -28,7 +28,7 @@ pub use crate::{
 };
 
 use cfgrammar::yacc::parser::SpansKind;
-use cfgrammar::Span;
+use cfgrammar::{Span, Spanned};
 
 pub type LexBuildResult<T> = Result<T, Vec<LexBuildError>>;
 
@@ -57,12 +57,12 @@ pub enum LexErrorKind {
     RegexError,
 }
 
-impl LexBuildError {
-    pub fn spans(&self) -> impl Iterator<Item = Span> + '_ {
-        self.spans.iter().copied()
+impl Spanned for LexBuildError {
+    fn spans(&self) -> &[Span] {
+        self.spans.as_slice()
     }
 
-    pub fn spanskind(&self) -> SpansKind {
+    fn spanskind(&self) -> SpansKind {
         match self.kind {
             LexErrorKind::PrematureEnd
             | LexErrorKind::RoutinesNotSupported
