@@ -9,7 +9,7 @@ use std::{
 
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     Spanned,
 };
 use getopts::Options;
@@ -17,6 +17,9 @@ use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
 use lrpar::parser::{RTParserBuilder, RecoveryKind};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
+
+const WARNING: &str = "[Warning]";
+const ERROR: &str = "[Error]";
 
 fn usage(prog: &str, msg: &str) -> ! {
     let path = Path::new(prog);
@@ -104,24 +107,27 @@ fn main() {
 
     let lex_l_path = &matches.free[0];
     let lex_src = read_file(lex_l_path);
+    let spanned_fmt = |spanned: &dyn Spanned, nlcache: &NewlineCache, src, src_path, prefix| {
+        if let Some((line, column)) =
+            nlcache.byte_to_line_num_and_col_num(src, spanned.spans()[0].start())
+        {
+            writeln!(
+                stderr(),
+                "{}: {prefix} {} at line {line} column {column}",
+                src_path,
+                &spanned
+            )
+            .ok();
+        } else {
+            writeln!(stderr(), "{}: {}", &src_path, &spanned).ok();
+        }
+    };
     let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexeme<u32>, u32>::from_str(&lex_src) {
         Ok(ast) => ast,
         Err(errs) => {
             let nlcache = NewlineCache::from_str(&lex_src).unwrap();
             for e in errs {
-                if let Some((line, column)) = nlcache
-                    .byte_to_line_num_and_col_num(&lex_src, e.spans().first().unwrap().start())
-                {
-                    writeln!(
-                        stderr(),
-                        "{}: {} at line {line} column: {column}",
-                        &lex_l_path,
-                        &e
-                    )
-                    .ok();
-                } else {
-                    writeln!(stderr(), "{}: {}", &lex_l_path, &e).ok();
-                }
+                spanned_fmt(&e, &nlcache, &lex_src, lex_l_path, ERROR);
             }
             process::exit(1);
         }
@@ -129,24 +135,26 @@ fn main() {
 
     let yacc_y_path = &matches.free[1];
     let yacc_src = read_file(yacc_y_path);
-    let grm = match YaccGrammar::new(yacckind, &yacc_src) {
-        Ok(x) => x,
+    let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
+    let warnings = ast_validation.ast().warnings();
+    let res = YaccGrammar::new_from_ast_with_validity_info(yacckind, ast_validation);
+    let grm = match res {
+        Ok(x) => {
+            if !warnings.is_empty() {
+                let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
+                for w in warnings {
+                    spanned_fmt(&w, &nlcache, &yacc_src, yacc_y_path, WARNING);
+                }
+            }
+            x
+        }
         Err(errs) => {
             let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
             for e in errs {
-                if let Some((line, column)) =
-                    nlcache.byte_to_line_num_and_col_num(&yacc_src, e.spans()[0].start())
-                {
-                    writeln!(
-                        stderr(),
-                        "{}: {} at line {line} column {column}",
-                        &yacc_y_path,
-                        &e
-                    )
-                    .ok();
-                } else {
-                    writeln!(stderr(), "{}: {}", &yacc_y_path, &e).ok();
-                }
+                spanned_fmt(&e, &nlcache, &yacc_src, yacc_y_path, ERROR);
+            }
+            for w in warnings {
+                spanned_fmt(&w, &nlcache, &yacc_src, yacc_y_path, WARNING);
             }
             process::exit(1);
         }
