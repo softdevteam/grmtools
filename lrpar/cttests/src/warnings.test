@@ -1,0 +1,13 @@
+name: Test disabling warnings are errors.
+yacckind: Original(YaccOriginalActionKind::GenericParseTree)
+yacc_flags: [ '!warnings_are_errors', '!show_warnings' ]
+grammar: |
+    %start A
+    %token b
+    %%
+    A : 'a';
+    B : 'b';
+lexer: |
+    %%
+    a 'a'
+    b 'b'
