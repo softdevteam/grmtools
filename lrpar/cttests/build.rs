@@ -15,6 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for entry in glob("src/*.test")? {
         let path = entry.unwrap();
         if path.is_file() {
+            println!("cargo:rerun-if-changed={}", path.display());
             // Parse test file
             let s = fs::read_to_string(&path).unwrap();
             let docs = YamlLoader::load_from_str(&s).unwrap();
