@@ -34,6 +34,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 s => panic!("YaccKind '{}' not supported", s),
             };
+            let (negative_yacc_flags, positive_yacc_flags) = &docs[0]["yacc_flags"]
+                .as_vec()
+                .map(|flags_vec| {
+                    flags_vec
+                        .iter()
+                        .partition(|flag| flag.as_str().unwrap().starts_with('!'))
+                })
+                .unwrap_or_else(|| (Vec::new(), Vec::new()));
+            let positive_yacc_flags = positive_yacc_flags
+                .iter()
+                .map(|flag| flag.as_str().unwrap())
+                .collect::<Vec<_>>();
+            let negative_yacc_flags = negative_yacc_flags
+                .iter()
+                .map(|flag| {
+                    let flag = flag.as_str().unwrap();
+                    flag.strip_prefix('!').unwrap()
+                })
+                .collect::<Vec<_>>();
+            let yacc_flags = (&positive_yacc_flags, &negative_yacc_flags);
+            let (negative_lex_flags, positive_lex_flags) = &docs[0]["lex_flags"]
+                .as_vec()
+                .map(|flags_vec| {
+                    flags_vec
+                        .iter()
+                        .partition(|flag| !flag.as_str().unwrap().starts_with('!'))
+                })
+                .unwrap_or_else(|| (Vec::new(), Vec::new()));
+            let negative_lex_flags = negative_lex_flags
+                .iter()
+                .map(|flag| {
+                    let flag = flag.as_str().unwrap();
+                    flag.strip_prefix('!').unwrap()
+                })
+                .collect::<Vec<_>>();
+            let positive_lex_flags = positive_lex_flags
+                .iter()
+                .map(|flag| flag.as_str().unwrap())
+                .collect::<Vec<_>>();
+            let negative_lex_flags = negative_lex_flags
+                .iter()
+                .map(|flag| flag.strip_prefix('!').unwrap())
+                .collect::<Vec<_>>();
+            let lex_flags = (&positive_lex_flags, &negative_lex_flags);
 
             // The code below, in essence, replicates lrlex and lrpar's internal / undocumented
             // filename conventions. If those change, this code will also have to change.
@@ -51,21 +95,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut outp = PathBuf::from(&out_dir);
             outp.push(format!("{}.y.rs", base));
             outp.set_extension("rs");
-            let cp = CTParserBuilder::<DefaultLexeme<u32>, _>::new()
+            let cp_build = CTParserBuilder::<DefaultLexeme<u32>, _>::new()
                 .yacckind(yacckind)
                 .grammar_path(pg.to_str().unwrap())
-                .output_path(&outp)
-                .build()?;
+                .output_path(&outp);
+            let cp_build = if let Some(flag) = check_flag(yacc_flags, "error_on_conflicts") {
+                cp_build.error_on_conflicts(flag)
+            } else {
+                cp_build
+            };
+            let cp_build = if let Some(flag) = check_flag(yacc_flags, "warnings_are_errors") {
+                cp_build.warnings_are_errors(flag)
+            } else {
+                cp_build
+            };
+            let cp_build = if let Some(flag) = check_flag(yacc_flags, "show_warnings") {
+                cp_build.show_warnings(flag)
+            } else {
+                cp_build
+            };
+            let cp = cp_build.build()?;
 
             let mut outl = PathBuf::from(&out_dir);
             outl.push(format!("{}.l.rs", base));
             outl.set_extension("rs");
-            CTLexerBuilder::new()
+            let cl_build = CTLexerBuilder::new()
                 .rule_ids_map(cp.token_map())
                 .lexer_path(pl.to_str().unwrap())
-                .output_path(&outl)
-                .build()?;
+                .output_path(&outl);
+            let cl_build = if let Some(flag) = check_flag(lex_flags, "allow_missing_terms_in_lexer")
+            {
+                cl_build.allow_missing_terms_in_lexer(flag)
+            } else {
+                cl_build
+            };
+            let cl_build =
+                if let Some(flag) = check_flag(lex_flags, "allow_missing_tokens_in_parser") {
+                    cl_build.allow_missing_tokens_in_parser(flag)
+                } else {
+                    cl_build
+                };
+            cl_build.build()?;
         }
     }
     Ok(())
+}
+
+fn check_flag((positive, negative): (&Vec<&str>, &Vec<&str>), flag: &str) -> Option<bool> {
+    assert_eq!(
+        positive.contains(&flag) | negative.contains(&flag),
+        positive.contains(&flag) ^ negative.contains(&flag)
+    );
+    if positive.contains(&flag) {
+        Some(true)
+    } else if negative.contains(&flag) {
+        Some(false)
+    } else {
+        None
+    }
 }
