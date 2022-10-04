@@ -1,5 +1,6 @@
 %start Expr
 %avoid_insert "INT"
+%expect-unused Unmatched "UNMATCHED"
 %%
 Expr -> Result<Expr, ()>:
       Expr '+' Term {
