@@ -150,6 +150,7 @@ where
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     warnings_are_errors: bool,
+    show_warnings: bool,
     visibility: Visibility,
     phantom: PhantomData<(LexemeT, StorageT)>,
 }
@@ -189,6 +190,7 @@ where
             yacckind: None,
             error_on_conflicts: true,
             warnings_are_errors: true,
+            show_warnings: true,
             visibility: Visibility::Private,
             phantom: PhantomData,
         }
@@ -306,6 +308,13 @@ where
         self
     }
 
+    /// If set to true, [CTParserBuilder::build] will print warnings to stderr, or via cargo when
+    /// running under cargo.  Defaults to `true`.
+    pub fn show_warnings(mut self, b: bool) -> Self {
+        self.show_warnings = b;
+        self
+    }
+
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
     /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
     /// additional files will be created with the same name as specified in [self.output_path] but
@@ -414,9 +423,9 @@ where
                     line_cache.feed(&inc);
                     for w in warnings {
                         // Assume if this variable is set we are running under cargo.
-                        if std::env::var("OUT_DIR").is_ok() {
+                        if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
                             println!("cargo:warning={}", spanned_fmt(&w, &inc, &line_cache));
-                        } else {
+                        } else if self.show_warnings {
                             eprintln!("{}", spanned_fmt(&w, &inc, &line_cache));
                         }
                     }
@@ -613,6 +622,7 @@ where
             yacckind: self.yacckind,
             error_on_conflicts: self.error_on_conflicts,
             warnings_are_errors: self.warnings_are_errors,
+            show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
             phantom: PhantomData,
         };
