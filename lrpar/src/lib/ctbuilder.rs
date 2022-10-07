@@ -409,13 +409,19 @@ where
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
                 let mut line_cache = NewlineCache::new();
                 line_cache.feed(&inc);
-                return Err(ErrorString(
-                    warnings
-                        .iter()
-                        .map(|w| spanned_fmt(w, &inc, &line_cache))
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                ))?;
+                return Err(ErrorString(if warnings.len() > 1 {
+                    // Indent under the "Error:" prefix.
+                    format!(
+                        "\n\t{}",
+                        warnings
+                            .iter()
+                            .map(|w| spanned_fmt(w, &inc, &line_cache))
+                            .collect::<Vec<_>>()
+                            .join("\n\t")
+                    )
+                } else {
+                    spanned_fmt(warnings.first().unwrap(), &inc, &line_cache)
+                }))?;
             }
             Ok(grm) => {
                 if !warnings.is_empty() {
@@ -435,13 +441,19 @@ where
             Err(errs) => {
                 let mut line_cache = NewlineCache::new();
                 line_cache.feed(&inc);
-                return Err(ErrorString(
-                    errs.iter()
-                        .map(|e| spanned_fmt(e, &inc, &line_cache))
-                        .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                ))?;
+                return Err(ErrorString(if errs.len() + warnings.len() > 1 {
+                    // Indent under the "Error:" prefix.
+                    format!(
+                        "\n\t{}",
+                        errs.iter()
+                            .map(|e| spanned_fmt(e, &inc, &line_cache))
+                            .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
+                            .collect::<Vec<_>>()
+                            .join("\n\t")
+                    )
+                } else {
+                    spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
+                }))?;
             }
         };
 
