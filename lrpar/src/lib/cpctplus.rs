@@ -798,4 +798,30 @@ U: 'd';
             ],
         );
     }
+
+    #[test]
+    fn test_unmatched() {
+        let lexs = "
+          blah 'BLAH'
+          . 'UNMATCHED'
+          ";
+
+        let grms = "
+%start S
+%%
+S: 'BLAH';
+Unmatched:
+  'UNMATCHED' { }
+  ;
+";
+
+        let us = "long";
+        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
+        let (_, errs) = pr.unwrap_err();
+        check_all_repairs(
+            &grm,
+            &errs[0],
+            &[r#"Insert "BLAH", Delete, Delete, Delete, Delete"#],
+        );
+    }
 }
