@@ -653,21 +653,43 @@ impl<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned>
                             + 1;
                         write!(out, "\n  {}{}: ", " ".repeat(padding), i + 1).ok();
                         let mut rs_out = Vec::new();
-                        for r in rs {
-                            match r {
-                                ParseRepair::Insert(tidx) => {
-                                    rs_out.push(format!("Insert {}", epp(*tidx).unwrap()));
-                                }
-                                ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
-                                    let t = &lexer.span_str(l.span()).replace('\n', "\\n");
-                                    if let ParseRepair::Delete(_) = *r {
-                                        rs_out.push(format!("Delete {}", t));
-                                    } else {
-                                        rs_out.push(format!("Shift {}", t));
+
+                        // Merge together Deletes iff they are consecutive (if they are separated
+                        // by even a single character, they will not be merged).
+                        let mut i = 0;
+                        while i < rs.len() {
+                            match rs[i] {
+                                ParseRepair::Delete(l) => {
+                                    let mut j = i + 1;
+                                    let mut last_end = l.span().end();
+                                    while j < rs.len() {
+                                        if let ParseRepair::Delete(next_l) = rs[j] {
+                                            if next_l.span().start() == last_end {
+                                                last_end = next_l.span().end();
+                                                j += 1;
+                                                continue;
+                                            }
+                                        }
+                                        break;
                                     }
+                                    let t = &lexer
+                                        .span_str(Span::new(l.span().start(), last_end))
+                                        .replace('\n', "\\n");
+                                    rs_out.push(format!("Delete {}", t));
+                                    i = j;
+                                }
+                                ParseRepair::Insert(tidx) => {
+                                    rs_out.push(format!("Insert {}", epp(tidx).unwrap()));
+                                    i += 1;
+                                }
+                                ParseRepair::Shift(l) => {
+                                    let t = &lexer.span_str(l.span()).replace('\n', "\\n");
+                                    rs_out.push(format!("Shift {}", t));
+                                    i += 1;
                                 }
                             }
                         }
+
                         out.push_str(&rs_out.join(", "));
                     }
                 }
@@ -884,13 +906,14 @@ pub(crate) mod test {
     use super::*;
     use crate::{test_utils::TestLexeme, Lexeme, Lexer};
 
-    pub(crate) fn do_parse(
+    pub(crate) fn do_parse<'input>(
         rcvry_kind: RecoveryKind,
         lexs: &str,
         grms: &str,
-        input: &str,
+        input: &'input str,
     ) -> (
         YaccGrammar<u16>,
+        SmallLexer<'input>,
         Result<
             Node<TestLexeme, u16>,
             (
@@ -902,14 +925,15 @@ pub(crate) mod test {
         do_parse_with_costs(rcvry_kind, lexs, grms, input, &HashMap::new())
     }
 
-    fn do_parse_with_costs(
+    fn do_parse_with_costs<'input>(
         rcvry_kind: RecoveryKind,
         lexs: &str,
         grms: &str,
-        input: &str,
+        input: &'input str,
         costs: &HashMap<&str, u8>,
     ) -> (
         YaccGrammar<u16>,
+        SmallLexer<'input>,
         Result<
             Node<TestLexeme, u16>,
             (
@@ -931,7 +955,7 @@ pub(crate) mod test {
             .collect();
         let lexer_rules = small_lexer(lexs, rule_ids);
         let lexemes = small_lex(lexer_rules, input);
-        let lexer = SmallLexer { lexemes };
+        let lexer = SmallLexer { lexemes, s: input };
         let costs_tidx = costs
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
@@ -942,17 +966,17 @@ pub(crate) mod test {
             .parse_generictree(&lexer);
         if let Some(node) = r {
             if errs.is_empty() {
-                (grm, Ok(node))
+                (grm, lexer, Ok(node))
             } else {
-                (grm, Err((Some(node), errs)))
+                (grm, lexer, Err((Some(node), errs)))
             }
         } else {
-            (grm, Err((None, errs)))
+            (grm, lexer, Err((None, errs)))
         }
     }
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
-        let (grm, pt) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, input);
+        let (grm, _, pt) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, input);
         assert_eq!(expected, pt.unwrap().pp(&grm, input));
     }
 
@@ -960,19 +984,20 @@ pub(crate) mod test {
     // lrlex as a dependency of lrpar). The format is the same as lrlex *except*:
     //   * The initial "%%" isn't needed, and only "'" is valid as a rule name delimiter.
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
-    struct SmallLexer {
+    pub struct SmallLexer<'input> {
         lexemes: Vec<TestLexeme>,
+        s: &'input str,
     }
 
-    impl Lexer<TestLexeme, u16> for SmallLexer {
+    impl<'input> Lexer<TestLexeme, u16> for SmallLexer<'input> {
         fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<TestLexeme, LexError>> + 'a> {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
     }
 
-    impl<'input> NonStreamingLexer<'input, TestLexeme, u16> for SmallLexer {
-        fn span_str(&self, _: Span) -> &'input str {
-            unreachable!();
+    impl<'input> NonStreamingLexer<'input, TestLexeme, u16> for SmallLexer<'input> {
+        fn span_str(&self, span: Span) -> &'input str {
+            &self.s[span.start()..span.end()]
         }
 
         fn span_lines_str(&self, _: Span) -> &'input str {
@@ -1143,7 +1168,7 @@ Call: 'ID' '(' ')';";
 ",
         );
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(");
+        let (grm, _, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
@@ -1155,7 +1180,7 @@ Call: 'ID' '(' ')';";
             _ => unreachable!(),
         }
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(f(");
+        let (grm, _, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();
