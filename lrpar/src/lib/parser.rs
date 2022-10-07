@@ -884,13 +884,14 @@ pub(crate) mod test {
     use super::*;
     use crate::{test_utils::TestLexeme, Lexeme, Lexer};
 
-    pub(crate) fn do_parse(
+    pub(crate) fn do_parse<'input>(
         rcvry_kind: RecoveryKind,
         lexs: &str,
         grms: &str,
-        input: &str,
+        input: &'input str,
     ) -> (
         YaccGrammar<u16>,
+        SmallLexer<'input>,
         Result<
             Node<TestLexeme, u16>,
             (
@@ -902,14 +903,15 @@ pub(crate) mod test {
         do_parse_with_costs(rcvry_kind, lexs, grms, input, &HashMap::new())
     }
 
-    fn do_parse_with_costs(
+    fn do_parse_with_costs<'input>(
         rcvry_kind: RecoveryKind,
         lexs: &str,
         grms: &str,
-        input: &str,
+        input: &'input str,
         costs: &HashMap<&str, u8>,
     ) -> (
         YaccGrammar<u16>,
+        SmallLexer<'input>,
         Result<
             Node<TestLexeme, u16>,
             (
@@ -942,17 +944,17 @@ pub(crate) mod test {
             .parse_generictree(&lexer);
         if let Some(node) = r {
             if errs.is_empty() {
-                (grm, Ok(node))
+                (grm, lexer, Ok(node))
             } else {
-                (grm, Err((Some(node), errs)))
+                (grm, lexer, Err((Some(node), errs)))
             }
         } else {
-            (grm, Err((None, errs)))
+            (grm, lexer, Err((None, errs)))
         }
     }
 
     fn check_parse_output(lexs: &str, grms: &str, input: &str, expected: &str) {
-        let (grm, pt) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, input);
+        let (grm, _, pt) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, input);
         assert_eq!(expected, pt.unwrap().pp(&grm, input));
     }
 
@@ -960,7 +962,7 @@ pub(crate) mod test {
     // lrlex as a dependency of lrpar). The format is the same as lrlex *except*:
     //   * The initial "%%" isn't needed, and only "'" is valid as a rule name delimiter.
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
-    struct SmallLexer<'input> {
+    pub struct SmallLexer<'input> {
         lexemes: Vec<TestLexeme>,
         s: &'input str,
     }
@@ -1144,7 +1146,7 @@ Call: 'ID' '(' ')';";
 ",
         );
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(");
+        let (grm, _, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.eof_token_idx()).to_u16().unwrap();
@@ -1156,7 +1158,7 @@ Call: 'ID' '(' ')';";
             _ => unreachable!(),
         }
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(f(");
+        let (grm, _, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "f(f(");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 1);
         let err_tok_id = usize::from(grm.token_idx("ID").unwrap()).to_u16().unwrap();

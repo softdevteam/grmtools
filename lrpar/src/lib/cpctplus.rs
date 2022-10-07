@@ -626,12 +626,16 @@ mod test {
     use num_traits::{AsPrimitive, PrimInt, ToPrimitive, Unsigned};
 
     use crate::{
-        parser::{test::do_parse, ParseRepair, RecoveryKind},
-        LexParseError, Lexeme,
+        parser::{
+            test::{do_parse, SmallLexer},
+            ParseRepair, RecoveryKind,
+        },
+        LexParseError, Lexeme, NonStreamingLexer,
     };
 
     fn pp_repairs<LexemeT: Lexeme<StorageT>, StorageT: 'static + Hash + PrimInt + Unsigned>(
         grm: &YaccGrammar<StorageT>,
+        lex: &SmallLexer<'_>,
         repairs: &[ParseRepair<LexemeT, StorageT>],
     ) -> String
     where
@@ -643,7 +647,9 @@ mod test {
                 ParseRepair::Insert(token_idx) => {
                     out.push(format!("Insert \"{}\"", grm.token_epp(token_idx).unwrap()))
                 }
-                ParseRepair::Delete(_) => out.push("Delete".to_owned()),
+                ParseRepair::Delete(lexeme) => {
+                    out.push(format!(r#"Delete "{}""#, lex.span_str(lexeme.span())))
+                }
                 ParseRepair::Shift(_) => out.push("Shift".to_owned()),
             }
         }
@@ -655,6 +661,7 @@ mod test {
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     >(
         grm: &YaccGrammar<StorageT>,
+        lex: &SmallLexer<'_>,
         err: &LexParseError<LexemeT, StorageT>,
         expected: &[&str],
     ) where
@@ -672,11 +679,11 @@ mod test {
                 for i in 0..e.repairs().len() {
                     if !expected
                         .iter()
-                        .any(|x| *x == pp_repairs(grm, &e.repairs()[i]))
+                        .any(|x| *x == pp_repairs(grm, lex, &e.repairs()[i]))
                     {
                         panic!(
                             "No match found for:\n  {}",
-                            pp_repairs(grm, &e.repairs()[i])
+                            pp_repairs(grm, lex, &e.repairs()[i])
                         );
                     }
                 }
@@ -701,7 +708,7 @@ E : 'N'
 ";
 
         let us = "(nn";
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
+        let (grm, lex, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
         let (pt, errs) = pr.unwrap_err();
         let pp = pt.unwrap().pp(&grm, us);
         // Note that:
@@ -748,25 +755,26 @@ E : 'N'
         }
         check_all_repairs(
             &grm,
+            &lex,
             &errs[0],
             &[
-                "Insert \")\", Insert \"+\"",
-                "Insert \")\", Delete",
-                "Insert \"+\", Shift, Insert \")\"",
+                r#"Insert ")", Insert "+""#,
+                r#"Insert ")", Delete "n""#,
+                r#"Insert "+", Shift, Insert ")""#,
             ],
         );
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "n)+n+n+n)");
+        let (grm, lex, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm, &errs[0], &["Delete"]);
-        check_all_repairs(&grm, &errs[1], &["Delete"]);
+        check_all_repairs(&grm, &lex, &errs[0], &[r#"Delete ")""#]);
+        check_all_repairs(&grm, &lex, &errs[1], &[r#"Delete ")""#]);
 
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "(((+n)+n+n+n)");
+        let (grm, lex, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, "(((+n)+n+n+n)");
         let (_, errs) = pr.unwrap_err();
         assert_eq!(errs.len(), 2);
-        check_all_repairs(&grm, &errs[0], &["Insert \"N\"", "Delete"]);
-        check_all_repairs(&grm, &errs[1], &["Insert \")\""]);
+        check_all_repairs(&grm, &lex, &errs[0], &[r#"Insert "N""#, r#"Delete "+""#]);
+        check_all_repairs(&grm, &lex, &errs[1], &[r#"Insert ")""#]);
     }
 
     #[test]
@@ -786,10 +794,11 @@ U: 'd';
 ";
 
         let us = "";
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
+        let (grm, lex, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,
+            &lex,
             &errs[0],
             &[
                 "Insert \"a\", Insert \"d\"",
@@ -816,12 +825,13 @@ Unmatched:
 ";
 
         let us = "long";
-        let (grm, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
+        let (grm, lex, pr) = do_parse(RecoveryKind::CPCTPlus, lexs, grms, us);
         let (_, errs) = pr.unwrap_err();
         check_all_repairs(
             &grm,
+            &lex,
             &errs[0],
-            &[r#"Insert "BLAH", Delete, Delete, Delete, Delete"#],
+            &[r#"Insert "BLAH", Delete "l", Delete "o", Delete "n", Delete "g""#],
         );
     }
 }
