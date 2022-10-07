@@ -368,6 +368,15 @@ Unmatched -> ():
   ;
 ```
 
+Assuming you have the "warnings are errors" option set to true (its default),
+you will then receive a warning about the unused rule (`Unmatched`) and token
+(`UNMATCHED`). You can inform grmtools that you expect both to be unused by
+adding this declaration in the top part of your `.y` file:
+
+```
+%expect-unused Unmatched "UNMATCHED"
+```
+
 With this done, all possible input will be lexed, and what were previously
 lexing errors are now parsing errors. This means that [error recovery
 section](errorrecovery.html) kicks in, giving us more detailed and informative
