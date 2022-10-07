@@ -931,7 +931,7 @@ pub(crate) mod test {
             .collect();
         let lexer_rules = small_lexer(lexs, rule_ids);
         let lexemes = small_lex(lexer_rules, input);
-        let lexer = SmallLexer { lexemes };
+        let lexer = SmallLexer { lexemes, s: input };
         let costs_tidx = costs
             .iter()
             .map(|(k, v)| (grm.token_idx(k).unwrap(), v))
@@ -960,19 +960,20 @@ pub(crate) mod test {
     // lrlex as a dependency of lrpar). The format is the same as lrlex *except*:
     //   * The initial "%%" isn't needed, and only "'" is valid as a rule name delimiter.
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
-    struct SmallLexer {
+    struct SmallLexer<'input> {
         lexemes: Vec<TestLexeme>,
+        s: &'input str,
     }
 
-    impl Lexer<TestLexeme, u16> for SmallLexer {
+    impl<'input> Lexer<TestLexeme, u16> for SmallLexer<'input> {
         fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<TestLexeme, LexError>> + 'a> {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
     }
 
-    impl<'input> NonStreamingLexer<'input, TestLexeme, u16> for SmallLexer {
-        fn span_str(&self, _: Span) -> &'input str {
-            unreachable!();
+    impl<'input> NonStreamingLexer<'input, TestLexeme, u16> for SmallLexer<'input> {
+        fn span_str(&self, span: Span) -> &'input str {
+            &self.s[span.start()..span.end()]
         }
 
         fn span_lines_str(&self, _: Span) -> &'input str {
