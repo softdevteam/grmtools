@@ -653,21 +653,43 @@ impl<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned>
                             + 1;
                         write!(out, "\n  {}{}: ", " ".repeat(padding), i + 1).ok();
                         let mut rs_out = Vec::new();
-                        for r in rs {
-                            match r {
-                                ParseRepair::Insert(tidx) => {
-                                    rs_out.push(format!("Insert {}", epp(*tidx).unwrap()));
-                                }
-                                ParseRepair::Shift(l) | ParseRepair::Delete(l) => {
-                                    let t = &lexer.span_str(l.span()).replace('\n', "\\n");
-                                    if let ParseRepair::Delete(_) = *r {
-                                        rs_out.push(format!("Delete {}", t));
-                                    } else {
-                                        rs_out.push(format!("Shift {}", t));
+
+                        // Merge together Deletes iff they are consecutive (if they are separated
+                        // by even a single character, they will not be merged).
+                        let mut i = 0;
+                        while i < rs.len() {
+                            match rs[i] {
+                                ParseRepair::Delete(l) => {
+                                    let mut j = i + 1;
+                                    let mut last_end = l.span().end();
+                                    while j < rs.len() {
+                                        if let ParseRepair::Delete(next_l) = rs[j] {
+                                            if next_l.span().start() == last_end {
+                                                last_end = next_l.span().end();
+                                                j += 1;
+                                                continue;
+                                            }
+                                        }
+                                        break;
                                     }
+                                    let t = &lexer
+                                        .span_str(Span::new(l.span().start(), last_end))
+                                        .replace('\n', "\\n");
+                                    rs_out.push(format!("Delete {}", t));
+                                    i = j;
+                                }
+                                ParseRepair::Insert(tidx) => {
+                                    rs_out.push(format!("Insert {}", epp(tidx).unwrap()));
+                                    i += 1;
+                                }
+                                ParseRepair::Shift(l) => {
+                                    let t = &lexer.span_str(l.span()).replace('\n', "\\n");
+                                    rs_out.push(format!("Shift {}", t));
+                                    i += 1;
                                 }
                             }
                         }
+
                         out.push_str(&rs_out.join(", "));
                     }
                 }
