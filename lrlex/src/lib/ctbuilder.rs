@@ -20,6 +20,7 @@ use cfgrammar::{newlinecache::NewlineCache, Spanned};
 use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, Lexeme};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use quote::quote;
 use regex::Regex;
 use serde::Serialize;
 use try_from::TryFrom;
@@ -416,12 +417,13 @@ pub fn lexerdef() -> {lexerdef_type} {{
 
         outs.push_str("    let start_states: Vec<StartState> = vec![");
         for ss in lexerdef.iter_start_states() {
+            let state_name = &ss.name;
             write!(
                 outs,
                 "
-        StartState::new({}, {:?}, {}, ::cfgrammar::Span::new({}, {})),",
+        StartState::new({}, {}, {}, ::cfgrammar::Span::new({}, {})),",
                 ss.id,
-                ss.name,
+                quote!(#state_name),
                 ss.exclusive,
                 ss.name_span.start(),
                 ss.name_span.end()
@@ -438,7 +440,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 None => "None".to_owned(),
             };
             let n = match r.name {
-                Some(ref n) => format!("Some({:?}.to_string())", n),
+                Some(ref n) => format!("Some({}.to_string())", quote!(#n)),
                 None => "None".to_owned(),
             };
             let target_state = match r.target_state {
@@ -450,15 +452,17 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 r.name_span.start(),
                 r.name_span.end()
             );
+            let regex = &r.re_str;
+            let start_states = r.start_states.as_slice();
             write!(
                 outs,
                 "
-        Rule::new({}, {}, {}, \"{}\".to_string(), {:?}.to_vec(), {}).unwrap(),",
+        Rule::new({}, {}, {}, {}.to_string(), {}.to_vec(), {}).unwrap(),",
                 tok_id,
                 n,
                 n_span,
-                r.re_str.replace('\\', "\\\\").replace('"', "\\\""),
-                r.start_states,
+                quote!(#regex),
+                quote!([#(#start_states),*]),
                 target_state,
             )
             .ok();
@@ -652,10 +656,11 @@ pub fn ct_token_map<StorageT: Display>(
     // forces a recompile, this will change this value, causing anything which depends on this
     // build of lrlex to be recompiled too.
     let mut outs = String::new();
+    let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
     write!(
         outs,
-        "// lrlex build time: {:?}\n\nmod {} {{\n",
-        env!("VERGEN_BUILD_TIMESTAMP"),
+        "// lrlex build time: {}\n\nmod {} {{\n",
+        quote!(#timestamp),
         mod_name
     )
     .ok();
