@@ -1,0 +1,15 @@
+name: Test NoAction using the calculator grammar
+yacckind: Original(YaccOriginalActionKind::NoAction)
+grammar: |
+    %start S 
+    %%
+    S: '\' | '"' | '<' | '+' '🦀' ;
+
+lexer: |
+    %%
+    " '"'
+    \< '<'
+    \\ '\'
+    \+ '+'
+    🦀 '🦀'
+    [\t ]+ ;
