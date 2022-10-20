@@ -58,7 +58,7 @@ pub enum YaccGrammarErrorKind {
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct YaccGrammarError {
     /// Uniquely identifies each error.
     pub(crate) kind: YaccGrammarErrorKind,

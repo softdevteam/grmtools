@@ -592,14 +592,16 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        PIdx, Symbol, TIdx,
-    };
-    use std::collections::HashSet;
-
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
     use crate::{pager::pager_stategraph, StIdx};
+    use cfgrammar::{
+        yacc::{
+            ast::{self, ASTWithValidityInfo},
+            YaccGrammar, YaccKind, YaccOriginalActionKind,
+        },
+        PIdx, Span, Symbol, TIdx,
+    };
+    use std::collections::HashSet;
 
     #[test]
     #[rustfmt::skip]
@@ -987,6 +989,75 @@ D : D;
                 kind: StateTableErrorKind::AcceptReduceConflict,
                 pidx,
             }) if pidx == PIdx(1) => (),
+            Err(e) => panic!("Incorrect error returned {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_accept_reduce_conflict_spans1() {
+        let src = "%%
+S: S | ;";
+        let yk = YaccKind::Original(YaccOriginalActionKind::NoAction);
+        let ast_validity = ASTWithValidityInfo::new(yk, src);
+        let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(yk, &ast_validity).unwrap();
+        let sg = pager_stategraph(&grm);
+        match StateTable::new(&grm, &sg) {
+            Ok(_) => panic!("Expected accept reduce conflict"),
+            Err(StateTableError {
+                kind: StateTableErrorKind::AcceptReduceConflict,
+                pidx,
+            }) if pidx == PIdx(2) => {
+                assert!(ast_validity.ast().prods.len() <= usize::from(pidx));
+                // Note that we expect `pidx` to occur at the implicit start symbol `^`
+                // which is not present in the AST but is present in the grammar.
+                //
+                // Can get a span for the rule "S", at the LHS of the rule at "S:" from that.
+                // Which corresponds to the rule for the production within `^`.
+                let symbols = grm.prod(pidx);
+                assert_eq!(symbols.len(), 1);
+                let sym = symbols.first().unwrap();
+                match sym {
+                    Symbol::Rule(r) => {
+                        let span = grm.rule_name_span(*r);
+                        assert_eq!(span, Span::new(3, 4));
+                    }
+                    Symbol::Token(t) => {
+                        let span = grm.token_span(*t);
+                        panic!("Unexpected symbol at {:?}", span);
+                    }
+                }
+            }
+            Err(e) => panic!("Incorrect error returned {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_accept_reduce_conflict_spans2() {
+        let src = "%%
+S: T | ;
+T: S | ;";
+        let yk = YaccKind::Original(YaccOriginalActionKind::NoAction);
+        let ast_validity = ASTWithValidityInfo::new(yk, src);
+        let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(yk, &ast_validity).unwrap();
+        let sg = pager_stategraph(&grm);
+        match StateTable::new(&grm, &sg) {
+            Ok(_) => panic!("Expected accept reduce conflict"),
+            Err(StateTableError {
+                kind: StateTableErrorKind::AcceptReduceConflict,
+                pidx,
+            }) if pidx == PIdx(2) => {
+                assert!(ast_validity.ast().prods.len() > usize::from(pidx));
+                // We expect this one to have a symbol in the ast.
+                // We can get a span for the RHS "S" at "S |" in rule T.
+                let prod = &ast_validity.ast().prods[usize::from(pidx)];
+                let symbols = &prod.symbols;
+                assert_eq!(symbols.len(), 1);
+                let sym = symbols.first().unwrap();
+                match sym {
+                    ast::Symbol::Rule(_, span) => assert_eq!(span, &Span::new(15, 16)),
+                    ast::Symbol::Token(_, _) => panic!("Incorrect symbol"),
+                }
+            }
             Err(e) => panic!("Incorrect error returned {:?}", e),
         }
     }

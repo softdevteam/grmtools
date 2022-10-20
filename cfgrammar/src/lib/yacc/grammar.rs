@@ -106,17 +106,17 @@ where
     /// user defined start rule.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
         let ast_validation = ast::ASTWithValidityInfo::new(yacc_kind, s);
-        Self::new_from_ast_with_validity_info(yacc_kind, ast_validation)
+        Self::new_from_ast_with_validity_info(yacc_kind, &ast_validation)
     }
 
     pub fn new_from_ast_with_validity_info(
         yacc_kind: YaccKind,
-        ast_validation: ast::ASTWithValidityInfo,
+        ast_validation: &ast::ASTWithValidityInfo,
     ) -> YaccGrammarResult<Self> {
         if !ast_validation.is_valid() {
-            return Err(ast_validation.errs);
+            return Err(ast_validation.errs.clone());
         }
-        let ast = ast_validation.ast;
+        let ast = &ast_validation.ast;
         // Check that StorageT is big enough to hold RIdx/PIdx/SIdx/TIdx values; after these
         // checks we can guarantee that things like RIdx(ast.rules.len().as_()) are safe.
         if ast.rules.len() > num_traits::cast(StorageT::max_value()).unwrap() {
@@ -345,8 +345,8 @@ where
             prod_precs: prod_precs.into_iter().map(Option::unwrap).collect(),
             implicit_rule: implicit_rule.map(|x| rule_map[&x]),
             actions: actions.into_boxed_slice(),
-            parse_param: ast.parse_param,
-            programs: ast.programs,
+            parse_param: ast.parse_param.clone(),
+            programs: ast.programs.clone(),
             avoid_insert,
             actiontypes: actiontypes.into_boxed_slice(),
             expect: ast.expect.map(|(n, _)| n),
