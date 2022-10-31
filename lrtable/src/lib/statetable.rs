@@ -104,14 +104,14 @@ where
 
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
-pub enum StateTableErrorKind {
-    AcceptReduceConflict,
+pub enum StateTableErrorKind<StorageT> {
+    AcceptReduceConflict(Option<PIdx<StorageT>>),
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
 #[derive(Debug)]
 pub struct StateTableError<StorageT> {
-    pub kind: StateTableErrorKind,
+    pub kind: StateTableErrorKind<StorageT>,
     pub pidx: PIdx<StorageT>,
 }
 
@@ -120,7 +120,7 @@ impl<StorageT: Debug> Error for StateTableError<StorageT> {}
 impl<StorageT> fmt::Display for StateTableError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self.kind {
-            StateTableErrorKind::AcceptReduceConflict => "Accept/reduce conflict",
+            StateTableErrorKind::AcceptReduceConflict(_) => "Accept/reduce conflict",
         };
         write!(f, "{}", s)
     }
@@ -217,7 +217,7 @@ where
                             if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
                             {
                                 return Err(StateTableError {
-                                    kind: StateTableErrorKind::AcceptReduceConflict,
+                                    kind: StateTableErrorKind::AcceptReduceConflict(Some(r_pidx)),
                                     pidx,
                                 });
                             }
@@ -234,7 +234,7 @@ where
                         }
                         Action::Accept => {
                             return Err(StateTableError {
-                                kind: StateTableErrorKind::AcceptReduceConflict,
+                                kind: StateTableErrorKind::AcceptReduceConflict(None),
                                 pidx,
                             });
                         }
@@ -986,7 +986,7 @@ D : D;
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
             Err(StateTableError {
-                kind: StateTableErrorKind::AcceptReduceConflict,
+                kind: StateTableErrorKind::AcceptReduceConflict(_),
                 pidx,
             }) if pidx == PIdx(1) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e),
@@ -1004,7 +1004,7 @@ S: S | ;";
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Expected accept reduce conflict"),
             Err(StateTableError {
-                kind: StateTableErrorKind::AcceptReduceConflict,
+                kind: StateTableErrorKind::AcceptReduceConflict(r_pidx),
                 pidx,
             }) if pidx == PIdx(2) => {
                 assert!(ast_validity.ast().prods.len() <= usize::from(pidx));
@@ -1026,6 +1026,19 @@ S: S | ;";
                         panic!("Unexpected symbol at {:?}", span);
                     }
                 }
+
+                // A span for a production within S may be obtained from the r_pidx in this case
+                assert!(r_pidx.is_some());
+                let r_pidx = r_pidx.unwrap();
+                assert!(ast_validity.ast().prods.len() >= usize::from(r_pidx));
+                let prod = &ast_validity.ast().prods[usize::from(r_pidx)];
+                let symbols = &prod.symbols;
+                assert_eq!(symbols.len(), 1);
+                let sym = symbols.first().unwrap();
+                match sym {
+                    ast::Symbol::Rule(_, span) => assert_eq!(span, &Span::new(6, 7)),
+                    ast::Symbol::Token(_, _) => panic!("Incorrect symbol"),
+                }
             }
             Err(e) => panic!("Incorrect error returned {:?}", e),
         }
@@ -1043,7 +1056,7 @@ T: S | ;";
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Expected accept reduce conflict"),
             Err(StateTableError {
-                kind: StateTableErrorKind::AcceptReduceConflict,
+                kind: StateTableErrorKind::AcceptReduceConflict(None),
                 pidx,
             }) if pidx == PIdx(2) => {
                 assert!(ast_validity.ast().prods.len() > usize::from(pidx));
