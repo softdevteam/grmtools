@@ -104,14 +104,14 @@ where
 
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
-pub enum StateTableErrorKind {
-    AcceptReduceConflict,
+pub enum StateTableErrorKind<StorageT> {
+    AcceptReduceConflict(Option<PIdx<StorageT>>),
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
 #[derive(Debug)]
 pub struct StateTableError<StorageT> {
-    pub kind: StateTableErrorKind,
+    pub kind: StateTableErrorKind<StorageT>,
     pub pidx: PIdx<StorageT>,
 }
 
@@ -120,7 +120,7 @@ impl<StorageT: Debug> Error for StateTableError<StorageT> {}
 impl<StorageT> fmt::Display for StateTableError<StorageT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self.kind {
-            StateTableErrorKind::AcceptReduceConflict => "Accept/reduce conflict",
+            StateTableErrorKind::AcceptReduceConflict(_) => "Accept/reduce conflict",
         };
         write!(f, "{}", s)
     }
@@ -217,7 +217,7 @@ where
                             if pidx == grm.start_prod() && tidx == usize::from(grm.eof_token_idx())
                             {
                                 return Err(StateTableError {
-                                    kind: StateTableErrorKind::AcceptReduceConflict,
+                                    kind: StateTableErrorKind::AcceptReduceConflict(Some(r_pidx)),
                                     pidx,
                                 });
                             }
@@ -234,7 +234,7 @@ where
                         }
                         Action::Accept => {
                             return Err(StateTableError {
-                                kind: StateTableErrorKind::AcceptReduceConflict,
+                                kind: StateTableErrorKind::AcceptReduceConflict(None),
                                 pidx,
                             });
                         }
@@ -592,14 +592,16 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        PIdx, Symbol, TIdx,
-    };
-    use std::collections::HashSet;
-
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
     use crate::{pager::pager_stategraph, StIdx};
+    use cfgrammar::{
+        yacc::{
+            ast::{self, ASTWithValidityInfo},
+            YaccGrammar, YaccKind, YaccOriginalActionKind,
+        },
+        PIdx, Span, Symbol, TIdx,
+    };
+    use std::collections::HashSet;
 
     #[test]
     #[rustfmt::skip]
@@ -984,9 +986,91 @@ D : D;
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Infinitely recursive rule let through"),
             Err(StateTableError {
-                kind: StateTableErrorKind::AcceptReduceConflict,
+                kind: StateTableErrorKind::AcceptReduceConflict(_),
                 pidx,
             }) if pidx == PIdx(1) => (),
+            Err(e) => panic!("Incorrect error returned {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_accept_reduce_conflict_spans1() {
+        let src = "%%
+S: S | ;";
+        let yk = YaccKind::Original(YaccOriginalActionKind::NoAction);
+        let ast_validity = ASTWithValidityInfo::new(yk, src);
+        let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(yk, &ast_validity).unwrap();
+        let sg = pager_stategraph(&grm);
+        match StateTable::new(&grm, &sg) {
+            Ok(_) => panic!("Expected accept reduce conflict"),
+            Err(StateTableError {
+                kind: StateTableErrorKind::AcceptReduceConflict(r_pidx),
+                pidx,
+            }) if pidx == PIdx(2) => {
+                assert!(ast_validity.ast().prods.len() <= usize::from(pidx));
+                // Note that we expect `pidx` to occur at the implicit start symbol `^`
+                // which is not present in the AST but is present in the grammar.
+                //
+                // Can get a span for the rule "S", at the LHS of the rule at "S:" from that.
+                // Which corresponds to the rule for the production within `^`.
+                let symbols = grm.prod(pidx);
+                assert_eq!(symbols.len(), 1);
+                let sym = symbols.first().unwrap();
+                match sym {
+                    Symbol::Rule(r) => {
+                        let span = grm.rule_name_span(*r);
+                        assert_eq!(span, Span::new(3, 4));
+                    }
+                    Symbol::Token(t) => {
+                        let span = grm.token_span(*t);
+                        panic!("Unexpected symbol at {:?}", span);
+                    }
+                }
+
+                // A span for a production within S may be obtained from the r_pidx in this case
+                assert!(r_pidx.is_some());
+                let r_pidx = r_pidx.unwrap();
+                assert!(ast_validity.ast().prods.len() >= usize::from(r_pidx));
+                let prod = &ast_validity.ast().prods[usize::from(r_pidx)];
+                let symbols = &prod.symbols;
+                assert_eq!(symbols.len(), 1);
+                let sym = symbols.first().unwrap();
+                match sym {
+                    ast::Symbol::Rule(_, span) => assert_eq!(span, &Span::new(6, 7)),
+                    ast::Symbol::Token(_, _) => panic!("Incorrect symbol"),
+                }
+            }
+            Err(e) => panic!("Incorrect error returned {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_accept_reduce_conflict_spans2() {
+        let src = "%%
+S: T | ;
+T: S | ;";
+        let yk = YaccKind::Original(YaccOriginalActionKind::NoAction);
+        let ast_validity = ASTWithValidityInfo::new(yk, src);
+        let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(yk, &ast_validity).unwrap();
+        let sg = pager_stategraph(&grm);
+        match StateTable::new(&grm, &sg) {
+            Ok(_) => panic!("Expected accept reduce conflict"),
+            Err(StateTableError {
+                kind: StateTableErrorKind::AcceptReduceConflict(None),
+                pidx,
+            }) if pidx == PIdx(2) => {
+                assert!(ast_validity.ast().prods.len() > usize::from(pidx));
+                // We expect this one to have a symbol in the ast.
+                // We can get a span for the RHS "S" at "S |" in rule T.
+                let prod = &ast_validity.ast().prods[usize::from(pidx)];
+                let symbols = &prod.symbols;
+                assert_eq!(symbols.len(), 1);
+                let sym = symbols.first().unwrap();
+                match sym {
+                    ast::Symbol::Rule(_, span) => assert_eq!(span, &Span::new(15, 16)),
+                    ast::Symbol::Token(_, _) => panic!("Incorrect symbol"),
+                }
+            }
             Err(e) => panic!("Incorrect error returned {:?}", e),
         }
     }
