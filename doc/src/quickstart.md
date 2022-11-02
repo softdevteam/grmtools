@@ -81,10 +81,10 @@ this case, `lrlex` is powerful enough for us. `calc.l` looks as follows:
 ```lex
 %%
 [0-9]+ "INT"
-\+ "PLUS"
-\* "MUL"
-\( "LBRACK"
-\) "RBRACK"
+\+ "+"
+\* "*"
+\( "("
+\) ")"
 [\t ]+ ;
 ```
 
@@ -105,17 +105,17 @@ Our initial version of calc.y looks as follows:
 %start Expr
 %%
 Expr -> Result<u64, ()>:
-      Expr 'PLUS' Term { Ok($1? + $3?) }
+      Expr '+' Term { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
 Term -> Result<u64, ()>:
-      Term 'MUL' Factor { Ok($1? * $3?) }
+      Term '*' Factor { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
 Factor -> Result<u64, ()>:
-      'LBRACK' Expr 'RBRACK' { $2 }
+      '(' Expr ')' { $2 }
     | 'INT'
       {
           let v = $1.map_err(|_| ())?;
@@ -221,7 +221,7 @@ fn main() {
                     println!("{}", e.pp(&lexer, &calc_y::token_epp));
                 }
                 match res {
-                    Some(r) => println!("Result: {:?}", r),
+                    Some(Ok(r)) => println!("Result: {:?}", r),
                     _ => eprintln!("Unable to evaluate expression.")
                 }
             }
@@ -257,20 +257,20 @@ Result: 5
 >>> 2 + 3 3
 Parsing error at line 1 column 7. Repair sequences found:
    1: Delete 3
-   2: Insert PLUS
-   3: Insert MUL
+   2: Insert +
+   3: Insert *
 Result: 5
 >>> 2 + 3 4 5
 Parsing error at line 1 column 7. Repair sequences found:
-   1: Insert MUL, Delete 4
-   2: Insert PLUS, Delete 4
+   1: Insert *, Delete 4
+   2: Insert +, Delete 4
    3: Delete 4, Delete 5
-   4: Insert MUL, Shift 4, Delete 5
-   5: Insert MUL, Shift 4, Insert PLUS
-   6: Insert MUL, Shift 4, Insert MUL
-   7: Insert PLUS, Shift 4, Delete 5
-   8: Insert PLUS, Shift 4, Insert PLUS
-   9: Insert PLUS, Shift 4, Insert MUL
+   4: Insert *, Shift 4, Delete 5
+   5: Insert *, Shift 4, Insert +
+   6: Insert *, Shift 4, Insert *
+   7: Insert +, Shift 4, Delete 5
+   8: Insert +, Shift 4, Insert +
+   9: Insert +, Shift 4, Insert *
 Result: 17
 ```
 

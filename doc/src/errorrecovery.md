@@ -52,18 +52,18 @@ A simple calculator grammar looks as follows:
 %start Expr
 %%
 Expr -> u64:
-      Expr 'PLUS' Term { $1 + $3 }
+      Expr '+' Term { $1 + $3 }
     | Term { $1 }
     ;
 
 Term -> u64:
-      Term 'MUL' Factor { $1 * $3 }
+      Term '*' Factor { $1 * $3 }
     | Factor { $1 }
     ;
 
 Factor -> u64:
-      'LBRACK' Expr 'RBRACK' { $2 }
-    | 'INT' { parse_int($lexer.span_str($1.unwrap().unwrap())) }
+      '(' Expr ')' { $2 }
+    | 'INT' { parse_int($lexer.span_str($1.unwrap().span())) }
     ;
 %%
 // Any functions here are in scope for all the grammar actions above.
@@ -73,6 +73,24 @@ fn parse_int(s: &str) -> u64 {
         Ok(val) => val,
         Err(_) => panic!("{} cannot be represented as a u64", s)
     }
+}
+```
+
+For this simplification we need to make a small tweak to our `main.rs` changing:
+
+```rust,noplaypen
+match res {
+    Some(Ok(r)) => println!("Result: {}", r),
+    _ => eprintln!("Unable to evaluate expression.")
+}
+```
+
+to:
+
+```rust,noplaypen
+match res {
+    Some(r) => println!("Result: {}", r),
+    _ => eprintln!("Unable to evaluate expression.")
 }
 ```
 
@@ -104,15 +122,15 @@ Repair sequences can, as their name suggests, be of arbitrary length:
 ```
 >>> 2 + 3 4 5
 Parsing error at line 1 column 7. Repair sequences found:
-   1: Insert MUL, Delete 4
-   2: Insert PLUS, Delete 4
+   1: Insert *, Delete 4
+   2: Insert +, Delete 4
    3: Delete 4, Delete 5
-   4: Insert MUL, Shift 4, Delete 5
-   5: Insert MUL, Shift 4, Insert PLUS
-   6: Insert MUL, Shift 4, Insert MUL
-   7: Insert PLUS, Shift 4, Delete 5
-   8: Insert PLUS, Shift 4, Insert PLUS
-   9: Insert PLUS, Shift 4, Insert MUL
+   4: Insert *, Shift 4, Delete 5
+   5: Insert *, Shift 4, Insert +
+   6: Insert *, Shift 4, Insert *
+   7: Insert +, Shift 4, Delete 5
+   8: Insert +, Shift 4, Insert +
+   9: Insert +, Shift 4, Insert *
 Result: 17
 ```
 
@@ -166,17 +184,17 @@ occurring:
 %start Expr
 %%
 Expr -> Result<u64, ()>:
-      Expr 'PLUS' Term { Ok($1? + $3?) }
+      Expr '+' Term { Ok($1? + $3?) }
     | Term { $1 }
     ;
 
 Term -> Result<u64, ()>:
-      Term 'MUL' Factor { Ok($1? * $3?) }
+      Term '*' Factor { Ok($1? * $3?) }
     | Factor { $1 }
     ;
 
 Factor -> Result<u64, ()>:
-      'LBRACK' Expr 'RBRACK' { $2 }
+      '(' Expr ')' { $2 }
     | 'INT' { parse_int($lexer.span_str($1.map_err(|_| ())?.span())) }
     ;
 %%
@@ -197,25 +215,8 @@ encounter an integer lexeme which is the result of error recovery, then the
 `INT` lexeme in the second `Factor` action will be `Err(<lexeme>)`. By writing
 `$1.map_err(|_| ())?` we’re saying “if the integer lexeme was created by error
 recovery, percolate `Err(())` upwards”. We then have to tweak a couple of other
-actions to percolate errors upwards, but this is a trivial change.
-
-We then need to make a small tweak to our `main.rs` changing:
-
-```rust,noplaypen
-match res {
-    Some(r) => println!("Result: {}", r),
-    _ => eprintln!("Unable to evaluate expression.")
-}
-```
-
-to:
-
-```rust,noplaypen
-match res {
-    Some(Ok(r)) => println!("Result: {}", r),
-    _ => eprintln!("Unable to evaluate expression.")
-}
-```
+actions to percolate errors upwards, but this is a trivial change. We'll also need to
+change `main.rs` back to expecting a `Result`.
 
 Now the input which previously caused a panic simply tells the user that it
 could not evaluate the expression:
@@ -253,7 +254,21 @@ few lines of code.
 ## Making use of `%epp` for easier to read repair sequences
 
 By default, pretty-printing lexeme types prints out their identifier in the
-grammar. These rarely match what the user would expect:
+grammar. Up to now, we have used lexeme types when showing output to the user.
+While the lexeme types are sometimes adequate for this purpose, this is not
+always the case. Consider this lex file:
+
+```lex
+%%
+[0-9]+ "INT"
+\+ "PLUS"
+\* "MUL"
+\( "LBRACK"
+\) "RBRACK"
+[\t ]+ ;
+```
+
+The user would see output such as:
 
 ```
 >>> 2 3
