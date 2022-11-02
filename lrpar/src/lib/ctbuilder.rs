@@ -758,7 +758,7 @@ where
                     outs,
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexemet}, {storaget}>)
+    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<'_, {lexemet}, {storaget}>)
           -> (::std::option::Option<::lrpar::Node<{lexemet}, {storaget}>>,
               ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}>>)
     {{",
@@ -772,7 +772,7 @@ where
                     outs,
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexemet}, {storaget}>)
+    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<'_, {lexemet}, {storaget}>)
           -> ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}>>
     {{",
                     lexemet = type_name::<LexemeT>(),
@@ -818,7 +818,7 @@ where
         let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                        ::cfgrammar::Span,
-                       ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
+                       ::std::vec::Drain<'_, ::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
                        {parse_paramty})
                     -> {actionskind}<'input>> = ::std::vec![{wrappers}];\n",
                     actionskind = ACTIONS_KIND,
@@ -934,7 +934,7 @@ where
                 "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                       {prefix}span: ::cfgrammar::Span,
-                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
+                      mut {prefix}args: ::std::vec::Drain<'_, ::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
                       {parse_paramdef})
                    -> {actionskind}<'input> {{",
                 usize::from(pidx),
