@@ -15,17 +15,17 @@ guide](quickstart.md). However the `calc.y` file is change as follows:
 %avoid_insert "INT"
 %%
 Expr -> Result<Expr, ()>:
-      Expr '+' Term { Ok(Expr::Add{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
+      Expr 'PLUS' Term { Ok(Expr::Add{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
     | Term { $1 }
     ;
 
 Term -> Result<Expr, ()>:
-      Term '*' Factor { Ok(Expr::Mul{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
+      Term 'MUL' Factor { Ok(Expr::Mul{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
     | Factor { $1 }
     ;
 
 Factor -> Result<Expr, ()>:
-      '(' Expr ')' { $2 }
+      'LBRACK' Expr 'RBRACK' { $2 }
     | 'INT' { Ok(Expr::Number{ span: $span }) }
     ;
 %%
@@ -113,7 +113,7 @@ fn main() {
     }
 }
 
-fn eval(lexer: &dyn NonStreamingLexer<u32>, e: Expr) -> Result<u64, (Span, &'static str)> {
+fn eval(lexer: &dyn NonStreamingLexer<'_, DefaultLexeme, u32>, e: Expr) -> Result<u64, (Span, &'static str)> {
     match e {
         Expr::Add { span, lhs, rhs } => eval(lexer, *lhs)?
             .checked_add(eval(lexer, *rhs)?)
