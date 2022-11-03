@@ -121,6 +121,16 @@ pub enum Visibility {
     PublicIn(String),
 }
 
+/// Specifies the [Rust Edition] that will be emitted during code generation.
+///
+/// [Rust Edition]: https://doc.rust-lang.org/edition-guide/rust-2021/index.html
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RustEdition {
+    Rust2015,
+    Rust2018,
+    Rust2021,
+}
+
 impl Visibility {
     fn cow_str(&self) -> Cow<'static, str> {
         match self {
@@ -152,6 +162,7 @@ where
     warnings_are_errors: bool,
     show_warnings: bool,
     visibility: Visibility,
+    rust_edition: RustEdition,
     phantom: PhantomData<(LexemeT, StorageT)>,
 }
 
@@ -192,6 +203,7 @@ where
             warnings_are_errors: true,
             show_warnings: true,
             visibility: Visibility::Private,
+            rust_edition: RustEdition::Rust2021,
             phantom: PhantomData,
         }
     }
@@ -309,9 +321,16 @@ where
     }
 
     /// If set to true, [CTParserBuilder::build] will print warnings to stderr, or via cargo when
-    /// running under cargo.  Defaults to `true`.
+    /// running under cargo. Defaults to `true`.
     pub fn show_warnings(mut self, b: bool) -> Self {
         self.show_warnings = b;
+        self
+    }
+
+    /// Sets the rust edition to be used for generated code. Defaults to the latest edition of
+    /// rust supported by grmtools.
+    pub fn rust_edition(mut self, edition: RustEdition) -> Self {
+        self.rust_edition = edition;
         self
     }
 
@@ -636,6 +655,7 @@ where
             warnings_are_errors: self.warnings_are_errors,
             show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
+            rust_edition: self.rust_edition,
             phantom: PhantomData,
         };
         Ok(cl.build()?.rule_ids)
@@ -758,12 +778,17 @@ where
                     outs,
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexemet}, {storaget}>)
+    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{edition_lifetime} {lexemet}, {storaget}>)
           -> (::std::option::Option<::lrpar::Node<{lexemet}, {storaget}>>,
               ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}>>)
     {{",
                     lexemet = type_name::<LexemeT>(),
-                    storaget = type_name::<StorageT>()
+                    storaget = type_name::<StorageT>(),
+                    edition_lifetime = if self.rust_edition != RustEdition::Rust2015 {
+                        "'_, "
+                    } else {
+                        ""
+                    },
                 )
                 .ok();
             }
@@ -772,11 +797,16 @@ where
                     outs,
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexemet}, {storaget}>)
+    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{edition_lifetime} {lexemet}, {storaget}>)
           -> ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}>>
     {{",
                     lexemet = type_name::<LexemeT>(),
-                    storaget = type_name::<StorageT>()
+                    storaget = type_name::<StorageT>(),
+                    edition_lifetime = if self.rust_edition != RustEdition::Rust2015 {
+                        "'_, "
+                    } else {
+                        ""
+                    },
                 )
                 .ok();
             }
@@ -818,14 +848,15 @@ where
         let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
                        &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                        ::cfgrammar::Span,
-                       ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
+                       ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
                        {parse_paramty})
                     -> {actionskind}<'input>> = ::std::vec![{wrappers}];\n",
                     actionskind = ACTIONS_KIND,
                     lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
                     parse_paramty = parse_paramty,
-                    wrappers = wrappers
+                    wrappers = wrappers,
+                    edition_lifetime = if self.rust_edition != RustEdition::Rust2015 { "'_, " } else { "" },
                 ).ok();
                 write!(
                     outs,
@@ -934,7 +965,7 @@ where
                 "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                       {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                       {prefix}span: ::cfgrammar::Span,
-                      mut {prefix}args: ::std::vec::Drain<::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
+                      mut {prefix}args: ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
                       {parse_paramdef})
                    -> {actionskind}<'input> {{",
                 usize::from(pidx),
@@ -943,6 +974,7 @@ where
                 prefix = ACTION_PREFIX,
                 parse_paramdef = parse_paramdef,
                 actionskind = ACTIONS_KIND,
+                edition_lifetime = if self.rust_edition != RustEdition::Rust2015 { "'_, " } else { "" },
             ).ok();
 
             if grm.action(pidx).is_some() {

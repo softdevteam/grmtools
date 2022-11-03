@@ -68,6 +68,16 @@ impl Visibility {
     }
 }
 
+/// Specifies the [Rust Edition] that will be emitted during code generation.
+///
+/// [Rust Edition]: https://doc.rust-lang.org/edition-guide/rust-2021/index.html
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RustEdition {
+    Rust2015,
+    Rust2018,
+    Rust2021,
+}
+
 /// A `CTLexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
 pub struct CTLexerBuilder<'a, LexemeT: Lexeme<StorageT>, StorageT: Debug + Eq + Hash = u32> {
@@ -79,6 +89,7 @@ pub struct CTLexerBuilder<'a, LexemeT: Lexeme<StorageT>, StorageT: Debug + Eq + 
     lexerkind: LexerKind,
     mod_name: Option<&'a str>,
     visibility: Visibility,
+    rust_edition: RustEdition,
     rule_ids_map: Option<HashMap<String, StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
@@ -124,6 +135,7 @@ where
             lexerkind: LexerKind::LRNonStreamingLexer,
             mod_name: None,
             visibility: Visibility::Private,
+            rust_edition: RustEdition::Rust2021,
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
@@ -246,6 +258,13 @@ where
     /// Set the visibility of the generated module to `vis`. Defaults to `Visibility::Private`.
     pub fn visibility(mut self, vis: Visibility) -> Self {
         self.visibility = vis;
+        self
+    }
+
+    /// Sets the rust edition to be used for generated code. Defaults to the latest edition of
+    /// rust supported by grmtools.
+    pub fn rust_edition(mut self, edition: RustEdition) -> Self {
+        self.rust_edition = edition;
         self
     }
 

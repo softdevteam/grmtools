@@ -11,6 +11,7 @@
   - [grmtools parsing idioms](parsing_idioms.md)
   - [Error recovery](errorrecovery.md)
   - [An AST evaluator](ast_example.md)
+- [Rust Editions](editions.md)
 - [The individual libraries and tools](libsandtools.md)
   - [lrpar](lrpar.md)
   - [lrlex](lrlex.md)
