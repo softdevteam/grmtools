@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use std::{cell::RefCell, collections::HashMap, fmt::Write};
 
 use num_traits::{self, AsPrimitive, PrimInt, Unsigned};

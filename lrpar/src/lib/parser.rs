@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use std::{
     error::Error,
     fmt::{self, Debug, Display, Write as _},
