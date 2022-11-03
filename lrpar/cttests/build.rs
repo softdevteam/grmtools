@@ -86,10 +86,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let base = path.file_stem().unwrap().to_str().unwrap();
             let mut pg = PathBuf::from(&out_dir);
             pg.push(format!("{}.y.rs", base));
-            fs::write(&pg, &grm).unwrap();
+            fs::write(&pg, grm).unwrap();
             let mut pl = PathBuf::from(&out_dir);
             pl.push(format!("{}.l.rs", base));
-            fs::write(&pl, &lex).unwrap();
+            fs::write(&pl, lex).unwrap();
 
             // Build parser and lexer
             let mut outp = PathBuf::from(&out_dir);

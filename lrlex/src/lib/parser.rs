@@ -975,7 +975,7 @@ mod test {
         assert_eq!(".", intrule.re_str);
         assert!(intrule.target_state.is_none());
         assert_eq!(1, intrule.start_states.len());
-        assert_eq!(1, *intrule.start_states.get(0).unwrap());
+        assert_eq!(1, *intrule.start_states.first().unwrap());
     }
 
     #[test]

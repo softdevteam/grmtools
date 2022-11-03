@@ -1,3 +1,4 @@
+#![allow(clippy::derive_partial_eq_without_eq)]
 use std::{
     cmp::Ordering,
     collections::hash_map::HashMap,
@@ -657,7 +658,7 @@ mod test {
         assert_reduce(s8, grm.eof_token_idx(), "Term", 0);
 
         let mut s4_actions = HashSet::new();
-        s4_actions.extend(&[grm.token_idx("-").unwrap(),
+        s4_actions.extend([grm.token_idx("-").unwrap(),
                             grm.token_idx("*").unwrap(),
                             grm.eof_token_idx()]);
         assert_eq!(st.state_actions(s4).collect::<HashSet<_>>(), s4_actions);

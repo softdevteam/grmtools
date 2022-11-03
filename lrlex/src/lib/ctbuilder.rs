@@ -324,7 +324,7 @@ where
             lk.insert(outp.clone());
         }
 
-        let lex_src = read_to_string(&lexerp)?;
+        let lex_src = read_to_string(lexerp)?;
         let line_cache = NewlineCache::from_str(&lex_src).unwrap();
         let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
@@ -371,7 +371,7 @@ where
                 for n in mfl {
                     eprintln!("    {}", n);
                 }
-                fs::remove_file(&outp).ok();
+                fs::remove_file(outp).ok();
                 panic!();
             }
         }
@@ -381,7 +381,7 @@ where
                 for n in mfp {
                     eprintln!("    {}", n);
                 }
-                fs::remove_file(&outp).ok();
+                fs::remove_file(outp).ok();
                 panic!();
             }
         }
@@ -522,7 +522,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the
         // binary etc).
-        if let Ok(curs) = read_to_string(&outp) {
+        if let Ok(curs) = read_to_string(outp) {
             if curs == outs {
                 return Ok(CTLexer {
                     missing_from_lexer,
