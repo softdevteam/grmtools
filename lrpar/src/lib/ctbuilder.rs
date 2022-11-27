@@ -674,7 +674,7 @@ where
         outs.push_str(
             "    #![allow(clippy::type_complexity)]
     #![allow(clippy::unnecessary_wraps)]
-
+    #![deny(unsafe_code)]
     #[allow(unused_imports)]
     use ::lrpar::Lexeme;
 ",
@@ -1148,6 +1148,7 @@ where
             write!(outs,
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
+    #[allow(unsafe_code)] // Allow an action to embed unsafe blocks within it.
     fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}>,
                      {prefix}span: ::cfgrammar::Span,

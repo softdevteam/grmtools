@@ -1,0 +1,39 @@
+name: Test basic user actions using the calculator grammar
+yacckind: Original(YaccOriginalActionKind::UserAction)
+grammar: |
+    %start Expr
+    %actiontype Result<u64, ()>
+    %avoid_insert 'INT'
+    %%
+    Expr: Expr '+' Term { unsafe { Ok(Ok::<u64, ()>($1? + $3?).unwrap_unchecked()) } }
+        | Term { $1 }
+        ;
+
+    Term: Term '*' Factor { unsafe { Ok(Ok::<u64, ()>($1? * $3?).unwrap_unchecked()) } }
+        | Factor { $1 }
+        ;
+
+    Factor: '(' Expr ')' { $2 }
+          | 'INT' {
+                let l = $1.map_err(|_| ())?;
+                match $lexer.span_str(l.span()).parse::<u64>() {
+                    Ok(v) => unsafe { Ok(Ok::<u64, ()>(v).unwrap_unchecked()) },
+                    Err(_) => {
+                        let ((_, col), _) = $lexer.line_col(l.span());
+                        eprintln!("Error at column {}: '{}' cannot be represented as a u64",
+                                  col,
+                                  $lexer.span_str(l.span()));
+                        Err(())
+                    }
+                }
+            }
+          ;
+
+lexer: |
+    %%
+    [0-9]+ "INT"
+    \+ "+"
+    \* "*"
+    \( "("
+    \) ")"
+    [\t ]+ ;

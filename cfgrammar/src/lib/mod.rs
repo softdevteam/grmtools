@@ -3,6 +3,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::unnecessary_wraps)]
 #![allow(clippy::upper_case_acronyms)]
+#![forbid(unsafe_code)]
 
 //! A library for manipulating Context Free Grammars (CFG). It is impractical to fully homogenise
 //! all the types of grammars out there, so the aim is for different grammar types
