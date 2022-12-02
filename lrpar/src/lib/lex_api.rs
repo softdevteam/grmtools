@@ -33,6 +33,10 @@ impl LexError {
     pub fn span(&self) -> Span {
         self.span
     }
+
+    pub fn lexing_state(&self) -> Option<StartStateId> {
+        self.lexing_state
+    }
 }
 
 impl Error for LexError {}
