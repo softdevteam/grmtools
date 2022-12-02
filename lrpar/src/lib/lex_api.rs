@@ -19,7 +19,7 @@ impl TryFrom<usize> for StartStateId {
 }
 
 /// A Lexing error.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct LexError {
     span: Span,
     lexing_state: Option<StartStateId>,
