@@ -5,15 +5,29 @@ use std::{cmp, error::Error, fmt, hash::Hash, marker};
 use cfgrammar::Span;
 use num_traits::{PrimInt, Unsigned};
 
+#[derive(Copy, Clone, Debug)]
+pub struct StartStateId {
+    id: usize,
+}
+
+impl TryFrom<usize> for StartStateId {
+    type Error = std::convert::Infallible;
+
+    fn try_from(id: usize) -> Result<Self, Self::Error> {
+        Ok(Self { id })
+    }
+}
+
 /// A Lexing error.
 #[derive(Copy, Clone, Debug)]
 pub struct LexError {
     span: Span,
+    lexing_state: Option<StartStateId>,
 }
 
 impl LexError {
-    pub fn new(span: Span) -> Self {
-        LexError { span }
+    pub fn new(span: Span, lexing_state: Option<StartStateId>) -> Self {
+        LexError { span, lexing_state }
     }
 
     pub fn span(&self) -> Span {

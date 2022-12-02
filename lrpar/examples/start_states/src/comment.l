@@ -1,7 +1,7 @@
 %x COMMENT
 %%
-.             "TEXT"
-/\*            <COMMENT>;
-<COMMENT>.    ;
-<COMMENT>\n   ;
-<COMMENT>\*/   <INITIAL>;
+.                       "TEXT"
+<COMMENT,INITIAL>/\*    <+COMMENT>;
+<COMMENT>.              ;
+<COMMENT>\n             ;
+<COMMENT>\*/            <-COMMENT>;

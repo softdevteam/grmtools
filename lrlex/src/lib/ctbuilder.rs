@@ -462,8 +462,8 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 Some(ref n) => format!("Some({}.to_string())", quote!(#n)),
                 None => "None".to_owned(),
             };
-            let target_state = match r.target_state {
-                Some(id) => format!("Some({})", id),
+            let target_state = match &r.target_state {
+                Some((id, op)) => format!("Some(({}, ::lrlex::StartStateOperation::{:?}))", id, op),
                 None => "None".to_owned(),
             };
             let n_span = format!(

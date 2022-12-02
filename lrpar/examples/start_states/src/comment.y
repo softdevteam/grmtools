@@ -1,6 +1,5 @@
 %start Expr
 %%
-Expr: Expr Text
-    | Text ;
+Expr: Expr Text | ;
 
 Text: 'TEXT';

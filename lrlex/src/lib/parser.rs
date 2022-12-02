@@ -53,6 +53,22 @@ impl StartState {
             exclusive,
         }
     }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn name_span(&self) -> Span {
+        self.name_span
+    }
+}
+
+#[derive(Debug, PartialEq)]
+#[doc(hidden)]
+pub enum StartStateOperation {
+    ReplaceStack,
+    Push,
+    Pop,
 }
 
 pub(super) struct LexParser<StorageT> {
@@ -317,11 +333,11 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
         let orig_name = if line[rspace + 1..].starts_with('<') {
             match line[rspace + 1..].find('>') {
                 Some(l) => {
-                    let state = self.get_start_state_by_name(
-                        i + rspace + 1,
-                        &line[rspace + 2..rspace + 1 + l],
-                    )?;
-                    target_state = Some(state.id);
+                    // Get operation from state
+                    let (state_name, operation) =
+                        self.parse_start_state_ops(&line[rspace + 2..rspace + 1 + l]);
+                    let state = self.get_start_state_by_name(i + rspace + 1, state_name)?;
+                    target_state = Some((state.id, operation));
                     &line[rspace + 1 + l + 1..]
                 }
                 None => return Err(self.mk_error(LexErrorKind::InvalidStartState, rspace + i)),
@@ -367,8 +383,8 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
                 self.parse_start_states(i, line[..rspace].trim_end_matches(matches_whitespace))?;
             let rules_len = self.rules.len();
             let tok_id = StorageT::try_from(rules_len)
-                           .unwrap_or_else(|_| panic!("StorageT::try_from failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
-
+                           .unwrap_or_else(|_| panic!("StorageT::try_from \
+                           failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
             let rule = Rule::new(
                 Some(tok_id),
                 name,
@@ -381,6 +397,18 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             self.rules.push(rule);
         }
         Ok(i + line_len)
+    }
+
+    fn parse_start_state_ops<'a>(
+        &self,
+        start_state_str: &'a str,
+    ) -> (&'a str, StartStateOperation) {
+        let (left_delta, operation) = match start_state_str.chars().next().unwrap_or_default() {
+            '+' => (1, StartStateOperation::Push),
+            '-' => (1, StartStateOperation::Pop),
+            _ => (0, StartStateOperation::ReplaceStack),
+        };
+        (&start_state_str[left_delta..], operation)
     }
 
     fn parse_start_states<'a>(
@@ -532,6 +560,7 @@ mod test {
         DefaultLexeme,
     };
     use cfgrammar::Spanned as _;
+    use std::collections::HashMap;
     use std::fmt::Write as _;
 
     macro_rules! incorrect_errs {
@@ -1001,7 +1030,10 @@ mod test {
         let intrule = ast.get_rule(0).unwrap();
         assert_eq!("known", intrule.name.as_ref().unwrap());
         assert_eq!(".", intrule.re_str);
-        assert_eq!(1, intrule.target_state.unwrap());
+        assert_eq!(
+            (1, StartStateOperation::ReplaceStack),
+            *intrule.target_state.as_ref().unwrap()
+        );
         assert_eq!(0, intrule.start_states.len());
     }
 
@@ -1317,6 +1349,168 @@ a\[\]a 'aboxa'
             2,
             3,
         )
+    }
+
+    #[test]
+    fn action_push_start_state() {
+        // TODO switch to this definition, once wildcard start state matching is in place
+        let _src_ideal = r"%x bracket brace
+%%
+<*>\{       <+brace>'OPEN_BRACE'
+<brace>\}   <-brace>'CLOSE_BRACE'
+<*>\[       <+bracket>'OPEN_BRACKET'
+<bracket>\] <-bracket>'CLOSE_BRACKET'"
+            .to_string();
+        let src = r"%x bracket brace
+%%
+<brace>\{   <+brace>'OPEN_BRACE'
+<brace>\}   <-brace>'CLOSE_BRACE'
+<bracket>\[ <+bracket>'OPEN_BRACKET'
+<bracket>\] <-bracket>'CLOSE_BRACKET'
+\{ <brace>'OPEN_FIRST_BRACE'
+\[ <bracket>'OPEN_FIRST_BRACKET'"
+            .to_string();
+        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        for rule in ast.iter_rules() {
+            println!("rule: {rule:?}");
+        }
+
+        for start_state in ast.iter_start_states() {
+            println!("start_state: {start_state:?}");
+        }
+
+        let states = ast
+            .iter_start_states()
+            .map(|ss| (ss.id, ss.name.to_owned()))
+            .collect::<HashMap<_, _>>();
+        let mut rule = ast.get_rule_by_name("OPEN_BRACE").unwrap();
+        assert_eq!("OPEN_BRACE", rule.name.as_ref().unwrap());
+        assert_eq!(r"\{", rule.re_str);
+        assert_eq!(1, rule.start_states.len());
+        assert_eq!(
+            "brace",
+            rule.start_states
+                .iter()
+                .map(|s| states.get(s).unwrap())
+                .next()
+                .unwrap()
+        );
+        assert!(rule.target_state.is_some());
+        assert_eq!(
+            "brace",
+            rule.target_state
+                .as_ref()
+                .map(|s| states.get(&s.0).unwrap())
+                .unwrap()
+        );
+        assert_eq!(
+            StartStateOperation::Push,
+            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+        );
+        rule = ast.get_rule_by_name("CLOSE_BRACE").unwrap();
+        assert_eq!("CLOSE_BRACE", rule.name.as_ref().unwrap());
+        assert_eq!(r"\}", rule.re_str);
+        assert_eq!(1, rule.start_states.len());
+        assert_eq!(
+            "brace",
+            rule.start_states
+                .iter()
+                .map(|s| states.get(s).unwrap())
+                .next()
+                .unwrap()
+        );
+        assert!(rule.target_state.is_some());
+        assert_eq!(
+            "brace",
+            rule.target_state
+                .as_ref()
+                .map(|s| states.get(&s.0).unwrap())
+                .unwrap()
+        );
+        assert_eq!(
+            StartStateOperation::Pop,
+            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+        );
+        rule = ast.get_rule_by_name("OPEN_BRACKET").unwrap();
+        assert_eq!("OPEN_BRACKET", rule.name.as_ref().unwrap());
+        assert_eq!(r"\[", rule.re_str);
+        assert_eq!(1, rule.start_states.len());
+        assert_eq!(
+            "bracket",
+            rule.start_states
+                .iter()
+                .map(|s| states.get(s).unwrap())
+                .next()
+                .unwrap()
+        );
+        assert!(rule.target_state.is_some());
+        assert_eq!(
+            "bracket",
+            rule.target_state
+                .as_ref()
+                .map(|s| states.get(&s.0).unwrap())
+                .unwrap()
+        );
+        assert_eq!(
+            StartStateOperation::Push,
+            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+        );
+        rule = ast.get_rule_by_name("CLOSE_BRACKET").unwrap();
+        assert_eq!("CLOSE_BRACKET", rule.name.as_ref().unwrap());
+        assert_eq!(r"\]", rule.re_str);
+        assert_eq!(1, rule.start_states.len());
+        assert_eq!(
+            "bracket",
+            rule.start_states
+                .iter()
+                .map(|s| states.get(s).unwrap())
+                .next()
+                .unwrap()
+        );
+        assert!(rule.target_state.is_some());
+        assert_eq!(
+            "bracket",
+            rule.target_state
+                .as_ref()
+                .map(|s| states.get(&s.0).unwrap())
+                .unwrap()
+        );
+        assert_eq!(
+            StartStateOperation::Pop,
+            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+        );
+        rule = ast.get_rule_by_name("OPEN_FIRST_BRACE").unwrap();
+        assert_eq!("OPEN_FIRST_BRACE", rule.name.as_ref().unwrap());
+        assert_eq!(r"\{", rule.re_str);
+        assert_eq!(0, rule.start_states.len());
+        assert!(rule.target_state.is_some());
+        assert_eq!(
+            "brace",
+            rule.target_state
+                .as_ref()
+                .map(|s| states.get(&s.0).unwrap())
+                .unwrap()
+        );
+        assert_eq!(
+            StartStateOperation::ReplaceStack,
+            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+        );
+        rule = ast.get_rule_by_name("OPEN_FIRST_BRACKET").unwrap();
+        assert_eq!("OPEN_FIRST_BRACKET", rule.name.as_ref().unwrap());
+        assert_eq!(r"\[", rule.re_str);
+        assert_eq!(0, rule.start_states.len());
+        assert!(rule.target_state.is_some());
+        assert_eq!(
+            "bracket",
+            rule.target_state
+                .as_ref()
+                .map(|s| states.get(&s.0).unwrap())
+                .unwrap()
+        );
+        assert_eq!(
+            StartStateOperation::ReplaceStack,
+            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+        );
     }
 
     #[test]
