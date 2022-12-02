@@ -107,8 +107,9 @@ struct CPCTPlus<
     StorageT: 'static + Eq + Hash,
     ActionT: 'a,
     ParamT: Copy,
+    LexerT,
 > {
-    parser: &'a Parser<'a, 'b, 'input, LexemeT, StorageT, ActionT, ParamT>,
+    parser: &'a Parser<'a, 'b, 'input, LexemeT, StorageT, ActionT, ParamT, LexerT>,
 }
 
 pub(super) fn recoverer<
@@ -117,9 +118,10 @@ pub(super) fn recoverer<
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     ActionT: 'a,
     ParamT: Copy,
+    LexErrorT,
 >(
-    parser: &'a Parser<LexemeT, StorageT, ActionT, ParamT>,
-) -> Box<dyn Recoverer<LexemeT, StorageT, ActionT, ParamT> + 'a>
+    parser: &'a Parser<LexemeT, StorageT, ActionT, ParamT, LexErrorT>,
+) -> Box<dyn Recoverer<LexemeT, StorageT, ActionT, ParamT, LexErrorT> + 'a>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -134,15 +136,16 @@ impl<
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
         ParamT: Copy,
-    > Recoverer<LexemeT, StorageT, ActionT, ParamT>
-    for CPCTPlus<'a, 'b, 'input, LexemeT, StorageT, ActionT, ParamT>
+        LexErrorT,
+    > Recoverer<LexemeT, StorageT, ActionT, ParamT, LexErrorT>
+    for CPCTPlus<'a, 'b, 'input, LexemeT, StorageT, ActionT, ParamT, LexErrorT>
 where
     usize: AsPrimitive<StorageT>,
 {
     fn recover(
         &self,
         finish_by: Instant,
-        parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
+        parser: &Parser<LexemeT, StorageT, ActionT, ParamT, LexErrorT>,
         in_laidx: usize,
         in_pstack: &mut Vec<StIdx<StorageT>>,
         astack: &mut Vec<AStackType<LexemeT, ActionT>>,
@@ -269,7 +272,8 @@ impl<
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
         ActionT: 'a,
         ParamT: Copy,
-    > CPCTPlus<'a, 'b, 'input, LexemeT, StorageT, ActionT, ParamT>
+        LexErrorT,
+    > CPCTPlus<'a, 'b, 'input, LexemeT, StorageT, ActionT, ParamT, LexErrorT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -456,8 +460,9 @@ fn apply_repairs<
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     ActionT: 'a,
     ParamT: Copy,
+    LexErrorT,
 >(
-    parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
+    parser: &Parser<LexemeT, StorageT, ActionT, ParamT, LexErrorT>,
     mut laidx: usize,
     pstack: &mut Vec<StIdx<StorageT>>,
     astack: &mut Option<&mut Vec<AStackType<LexemeT, ActionT>>>,
@@ -495,8 +500,9 @@ fn simplify_repairs<
     StorageT: 'static + Hash + PrimInt + Unsigned,
     ActionT,
     ParamT: Copy,
+    LexErrorT,
 >(
-    parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
+    parser: &Parser<LexemeT, StorageT, ActionT, ParamT, LexErrorT>,
     all_rprs: &mut Vec<Vec<ParseRepair<LexemeT, StorageT>>>,
 ) where
     usize: AsPrimitive<StorageT>,
@@ -555,8 +561,9 @@ fn rank_cnds<
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     ActionT: 'a,
     ParamT: Copy,
+    LexErrorT,
 >(
-    parser: &Parser<LexemeT, StorageT, ActionT, ParamT>,
+    parser: &Parser<LexemeT, StorageT, ActionT, ParamT, LexErrorT>,
     finish_by: Instant,
     in_laidx: usize,
     in_pstack: &[StIdx<StorageT>],
@@ -659,10 +666,11 @@ mod test {
     fn check_all_repairs<
         LexemeT: Lexeme<StorageT>,
         StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+        LexErrorT,
     >(
         grm: &YaccGrammar<StorageT>,
         lex: &SmallLexer<'_>,
-        err: &LexParseError<LexemeT, StorageT>,
+        err: &LexParseError<LexemeT, StorageT, LexErrorT>,
         expected: &[&str],
     ) where
         usize: AsPrimitive<StorageT>,

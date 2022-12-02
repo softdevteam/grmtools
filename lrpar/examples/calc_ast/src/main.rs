@@ -3,7 +3,7 @@
 use std::io::{self, BufRead, Write};
 
 use cfgrammar::Span;
-use lrlex::{lrlex_mod, DefaultLexeme};
+use lrlex::{lrlex_mod, DefaultLexeme, LRLexError};
 use lrpar::{lrpar_mod, NonStreamingLexer};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
@@ -56,7 +56,7 @@ fn main() {
 }
 
 fn eval(
-    lexer: &dyn NonStreamingLexer<DefaultLexeme<u32>, u32>,
+    lexer: &dyn NonStreamingLexer<DefaultLexeme<u32>, u32, LRLexError>,
     e: Expr,
 ) -> Result<u64, (Span, &'static str)> {
     match e {

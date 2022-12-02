@@ -12,11 +12,11 @@ use num_traits::{PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
 use try_from::TryFrom;
 
-use lrpar::{lex_api::StartStateId, LexError, Lexeme, Lexer, NonStreamingLexer};
+use lrpar::{Lexeme, Lexer, NonStreamingLexer};
 
 use crate::{
     parser::{LexParser, StartState, StartStateOperation},
-    LexBuildResult,
+    LRLexError, LexBuildResult, StartStateId,
 };
 
 #[derive(Debug)]
@@ -249,7 +249,7 @@ impl<
         let mut state_stack: Vec<(usize, &StartState)> = Vec::new();
         let initial_state = match self.get_start_state_by_id(0) {
             None => {
-                lexemes.push(Err(LexError::new(Span::new(i, i), None)));
+                lexemes.push(Err(LRLexError::new(Span::new(i, i))));
                 return LRNonStreamingLexer::new(s, lexemes, NewlineCache::from_str(s).unwrap());
             }
             Some(state) => state,
@@ -262,7 +262,7 @@ impl<
             let mut longest_ridx = 0; // This is only valid iff longest != 0
             let current_state = match state_stack.last() {
                 None => {
-                    lexemes.push(Err(LexError::new(Span::new(i, i), None)));
+                    lexemes.push(Err(LRLexError::new(Span::new(i, i))));
                     return LRNonStreamingLexer::new(
                         s,
                         lexemes,
@@ -293,7 +293,7 @@ impl<
                             lexemes.push(Ok(Lexeme::new(tok_id, old_i, longest)));
                         }
                         None => {
-                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i), None)));
+                            lexemes.push(Err(LRLexError::new(Span::new(old_i, old_i))));
                             break;
                         }
                     }
@@ -302,7 +302,7 @@ impl<
                     let state = match self.get_start_state_by_id(*target_state_id) {
                         None => {
                             // TODO: I can see an argument for lexing state to be either `None` or `Some(target_state_id)` here
-                            lexemes.push(Err(LexError::new(Span::new(old_i, old_i), None)));
+                            lexemes.push(Err(LRLexError::new(Span::new(old_i, old_i))));
                             break;
                         }
                         Some(state) => state,
@@ -328,7 +328,7 @@ impl<
                                 }
                             }
                             None => {
-                                lexemes.push(Err(LexError::new(Span::new(old_i, old_i), None)));
+                                lexemes.push(Err(LRLexError::new(Span::new(old_i, old_i))));
                                 break;
                             }
                         },
@@ -336,11 +336,9 @@ impl<
                 }
                 i += longest;
             } else {
-                let current_state_id: Option<StartStateId> =
-                    StartStateId::try_from(current_state.id).ok();
-                lexemes.push(Err(LexError::new(
+                lexemes.push(Err(LRLexError::new_with_lexing_state(
                     Span::new(old_i, old_i),
-                    current_state_id,
+                    StartStateId::new(current_state.id),
                 )));
                 break;
             }
@@ -366,7 +364,7 @@ impl<
 /// lexemes are cached or not.
 pub struct LRNonStreamingLexer<'lexer, 'input: 'lexer, LexemeT, StorageT: fmt::Debug> {
     s: &'input str,
-    lexemes: Vec<Result<LexemeT, LexError>>,
+    lexemes: Vec<Result<LexemeT, LRLexError>>,
     newlines: NewlineCache,
     phantom: PhantomData<(&'lexer (), StorageT)>,
 }
@@ -385,7 +383,7 @@ impl<
     /// the `LRNonStreamingLexer` may cause `panic`s.
     pub fn new(
         s: &'input str,
-        lexemes: Vec<Result<LexemeT, LexError>>,
+        lexemes: Vec<Result<LexemeT, LRLexError>>,
         newlines: NewlineCache,
     ) -> LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT> {
         LRNonStreamingLexer {
@@ -402,9 +400,10 @@ impl<
         'input: 'lexer,
         LexemeT: Lexeme<StorageT>,
         StorageT: Copy + fmt::Debug + Eq + Hash + PrimInt + Unsigned,
-    > Lexer<LexemeT, StorageT> for LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT>
+    > Lexer<LexemeT, StorageT, LRLexError>
+    for LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT>
 {
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<LexemeT, LexError>> + 'a> {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<LexemeT, LRLexError>> + 'a> {
         Box::new(self.lexemes.iter().cloned())
     }
 }
@@ -414,7 +413,7 @@ impl<
         'input: 'lexer,
         LexemeT: Lexeme<StorageT>,
         StorageT: Copy + Eq + fmt::Debug + Hash + PrimInt + Unsigned,
-    > NonStreamingLexer<'input, LexemeT, StorageT>
+    > NonStreamingLexer<'input, LexemeT, StorageT, LRLexError>
     for LRNonStreamingLexer<'lexer, 'input, LexemeT, StorageT>
 {
     fn span_str(&self, span: Span) -> &'input str {
@@ -467,6 +466,7 @@ impl<
 mod test {
     use super::*;
     use crate::DefaultLexeme;
+    use lrpar::LexError;
     use std::collections::HashMap;
 
     #[test]

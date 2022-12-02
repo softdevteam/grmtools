@@ -537,11 +537,15 @@ the first parsing error, with the `recoverer` method in `CTParserBuilder` or
 `RTParserBuilder`. For example, we can change `calc`'s `build.rs` file to:
 
 ```rust,noplaypen
-    let lex_rule_ids_map = CTParserBuilder::new()
-        .yacckind(YaccKind::Grmtools)
-        .recoverer(lrpar::RecoveryKind::None)
-        .grammar_path_in_src("calc.y")?
-        .process()?;
+CTLexerBuilder::new()
+    .lrpar_config(|ctp| {
+        ctp.yacckind(YaccKind::Grmtools)
+            .recoverer(lrpar::RecoveryKind::None)
+            .grammar_in_src_dir("calc.y")
+            .unwrap()
+    })
+    .lexer_in_src_dir("calc.l")?
+    .build()?;
 ```
 
 and then no matter how many syntax errors we make, only one is reported:
