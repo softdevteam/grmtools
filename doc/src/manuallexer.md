@@ -39,11 +39,11 @@ hand-written lexer will look roughly as follows:
 
 ```rust
 use cfgrammar::yacc::YaccKind;
-use lrlex::{ct_token_map, DefaultLexeme};
+use lrlex::{ct_token_map, DefaultLexeme, LRLexError};
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let ctp = CTParserBuilder::<DefaultLexeme<u8>, u8>::new()
+    let ctp = CTParserBuilder::<DefaultLexeme<u8>, u8, LRLexError>::new()
         .yacckind(YaccKind::Grmtools)
         .grammar_in_src_dir("grammar.y")?
         .build()?;

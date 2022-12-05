@@ -67,7 +67,7 @@ Our `main.rs` file then looks as follows:
 ```rust,noplaypen
 use std::io::{self, BufRead, Write};
 
-use lrlex::{lrlex_mod, DefaultLexeme};
+use lrlex::{lrlex_mod, DefaultLexeme, LRLexError};
 use lrpar::{lrpar_mod, NonStreamingLexer, Span};
 
 lrlex_mod!("calc.l");
@@ -113,7 +113,11 @@ fn main() {
     }
 }
 
-fn eval(lexer: &dyn NonStreamingLexer<DefaultLexeme, u32>, e: Expr) -> Result<u64, (Span, &'static str)> {
+fn eval(
+    lexer: &dyn NonStreamingLexer<DefaultLexeme, u32>,
+    e: Expr,
+    LRLexError)
+-> Result<u64, (Span, &'static str)> {
     match e {
         Expr::Add { span, lhs, rhs } => eval(lexer, *lhs)?
             .checked_add(eval(lexer, *rhs)?)

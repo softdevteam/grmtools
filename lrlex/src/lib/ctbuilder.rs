@@ -25,7 +25,7 @@ use regex::Regex;
 use serde::Serialize;
 use try_from::TryFrom;
 
-use crate::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
+use crate::{DefaultLexeme, LRLexError, LRNonStreamingLexerDef, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -82,7 +82,11 @@ pub enum RustEdition {
 /// lexer.
 pub struct CTLexerBuilder<'a, LexemeT: Lexeme<StorageT>, StorageT: Debug + Eq + Hash = u32> {
     lrpar_config: Option<
-        Box<dyn Fn(CTParserBuilder<LexemeT, StorageT>) -> CTParserBuilder<LexemeT, StorageT>>,
+        Box<
+            dyn Fn(
+                CTParserBuilder<LexemeT, StorageT, LRLexError>,
+            ) -> CTParserBuilder<LexemeT, StorageT, LRLexError>,
+        >,
     >,
     lexer_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
@@ -94,9 +98,6 @@ pub struct CTLexerBuilder<'a, LexemeT: Lexeme<StorageT>, StorageT: Debug + Eq + 
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
 }
-
-#[deprecated(since = "0.11.0", note = "Please refer to this as `CTLexerBuilder`")]
-pub type LexerBuilder<'a, StorageT> = CTLexerBuilder<'a, StorageT>;
 
 impl<'a> CTLexerBuilder<'a, DefaultLexeme<u32>, u32> {
     /// Create a new [CTLexerBuilder].
@@ -162,7 +163,10 @@ where
     /// ```
     pub fn lrpar_config<F>(mut self, config_func: F) -> Self
     where
-        F: 'static + Fn(CTParserBuilder<LexemeT, StorageT>) -> CTParserBuilder<LexemeT, StorageT>,
+        F: 'static
+            + Fn(
+                CTParserBuilder<LexemeT, StorageT, LRLexError>,
+            ) -> CTParserBuilder<LexemeT, StorageT, LRLexError>,
     {
         self.lrpar_config = Some(Box::new(config_func));
         self
@@ -301,7 +305,7 @@ where
     ///      `_l`).
     pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
         if let Some(ref lrcfg) = self.lrpar_config {
-            let mut ctp = CTParserBuilder::<LexemeT, StorageT>::new();
+            let mut ctp = CTParserBuilder::<LexemeT, StorageT, LRLexError>::new();
             ctp = lrcfg(ctp);
             let map = ctp.build()?;
             self.rule_ids_map = Some(map.token_map().to_owned());

@@ -5,61 +5,24 @@ use std::{cmp, error::Error, fmt, hash::Hash, marker};
 use cfgrammar::Span;
 use num_traits::{PrimInt, Unsigned};
 
-#[derive(Copy, Clone, Debug)]
-pub struct StartStateId {
-    id: usize,
-}
-
-impl TryFrom<usize> for StartStateId {
-    type Error = std::convert::Infallible;
-
-    fn try_from(id: usize) -> Result<Self, Self::Error> {
-        Ok(Self { id })
-    }
-}
-
-/// A Lexing error.
-#[derive(Copy, Clone, Debug)]
-pub struct LexError {
-    span: Span,
-    lexing_state: Option<StartStateId>,
-}
-
-impl LexError {
-    pub fn new(span: Span, lexing_state: Option<StartStateId>) -> Self {
-        LexError { span, lexing_state }
-    }
-
-    pub fn span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Error for LexError {}
-
-impl fmt::Display for LexError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Couldn't lex input starting at byte {}",
-            self.span.start()
-        )
-    }
-}
-
 /// The base trait which all lexers which want to interact with `lrpar` must implement.
-pub trait Lexer<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned> {
+pub trait Lexer<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned, LexErrorT: LexError>
+{
     /// Iterate over all the lexemes in this lexer. Note that:
     ///   * The lexer may or may not stop after the first [LexError] is encountered.
     ///   * There are no guarantees about what happens if this function is called more than once.
     ///     For example, a streaming lexer may only produce [Lexeme]s on the first call.
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<LexemeT, LexError>> + 'a>;
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<LexemeT, LexErrorT>> + 'a>;
 }
 
 /// A `NonStreamingLexer` is one that takes input in one go, and is then able to hand out
 /// substrings to that input and calculate line and column numbers from a [Span].
-pub trait NonStreamingLexer<'input, LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned>:
-    Lexer<LexemeT, StorageT>
+pub trait NonStreamingLexer<
+    'input,
+    LexemeT: Lexeme<StorageT>,
+    StorageT: Hash + PrimInt + Unsigned,
+    LexErrorT: LexError,
+>: Lexer<LexemeT, StorageT, LexErrorT>
 {
     /// Return the user input associated with a [Span].
     ///
@@ -128,4 +91,10 @@ pub trait Lexeme<StorageT>: fmt::Debug + fmt::Display + cmp::Eq + Hash + marker:
     /// If `true`, note that the lexeme's span may be greater or less than you may expect from the
     /// lexeme's definition.
     fn faulty(&self) -> bool;
+}
+
+/// A lexing error.
+pub trait LexError: Error {
+    /// Return the span associated with this error.
+    fn span(&self) -> Span;
 }

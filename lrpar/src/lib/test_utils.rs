@@ -1,9 +1,10 @@
 #![allow(clippy::len_without_is_empty)]
 
-use cfgrammar::Span;
 use std::{error::Error, fmt, hash::Hash};
 
-use crate::Lexeme;
+use cfgrammar::Span;
+
+use crate::{LexError, Lexeme};
 
 type StorageT = u16;
 
@@ -59,3 +60,20 @@ impl fmt::Display for TestLexeme {
 }
 
 impl Error for TestLexeme {}
+
+#[derive(Debug)]
+pub struct TestLexError {}
+
+impl LexError for TestLexError {
+    fn span(&self) -> Span {
+        unreachable!()
+    }
+}
+
+impl Error for TestLexError {}
+
+impl fmt::Display for TestLexError {
+    fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
+        unreachable!();
+    }
+}

@@ -3,7 +3,7 @@
 use std::io::{self, BufRead, Write};
 
 use cfgrammar::{NewlineCache, Span};
-use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
+use lrlex::{lrlex_mod, DefaultLexeme, LRLexError, LRNonStreamingLexer};
 use lrpar::{lrpar_mod, Lexeme, NonStreamingLexer};
 
 lrlex_mod!("token_map");
@@ -102,7 +102,7 @@ fn lex(s: &str) -> LRNonStreamingLexer<DefaultLexeme<u8>, u8> {
 }
 
 fn eval(
-    lexer: &dyn NonStreamingLexer<DefaultLexeme<u8>, u8>,
+    lexer: &dyn NonStreamingLexer<DefaultLexeme<u8>, u8, LRLexError>,
     e: Expr,
 ) -> Result<u64, (Span, &'static str)> {
     match e {

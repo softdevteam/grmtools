@@ -19,8 +19,6 @@ pub mod lexemes;
 mod lexer;
 mod parser;
 
-#[allow(deprecated)]
-pub use crate::ctbuilder::LexerBuilder;
 pub use crate::{
     ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility},
     lexemes::DefaultLexeme,
@@ -98,6 +96,65 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::RegexError => "Invalid regular expression",
         };
         write!(f, "{s}")
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct StartStateId {
+    _id: usize,
+}
+
+impl StartStateId {
+    fn new(id: usize) -> Self {
+        Self { _id: id }
+    }
+}
+
+/// A Lexing error.
+#[derive(Clone, Debug)]
+pub struct LRLexError {
+    span: Span,
+    lexing_state: Option<StartStateId>,
+}
+
+impl lrpar::LexError for LRLexError {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl LRLexError {
+    /// Construct a new LRLex error covering `span`.
+    pub fn new(span: Span) -> Self {
+        LRLexError {
+            span,
+            lexing_state: None,
+        }
+    }
+
+    /// Construct a new LRLex error covering `span` for `lexing_state`.
+    pub fn new_with_lexing_state(span: Span, lexing_state: StartStateId) -> Self {
+        LRLexError {
+            span,
+            lexing_state: Some(lexing_state),
+        }
+    }
+
+    /// Returns the state, if there was one, that the lexer was in when the error was detected.
+    pub fn lexing_state(&self) -> Option<StartStateId> {
+        self.lexing_state
+    }
+}
+
+impl Error for LRLexError {}
+
+impl fmt::Display for LRLexError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Couldn't lex input starting at byte {}",
+            self.span.start()
+        )
     }
 }
 
