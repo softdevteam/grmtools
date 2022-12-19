@@ -15,13 +15,13 @@ use std::{error::Error, fmt};
 
 mod ctbuilder;
 #[doc(hidden)]
-pub mod lexemes;
+pub mod defaults;
 mod lexer;
 mod parser;
 
 pub use crate::{
     ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility},
-    lexemes::DefaultLexeme,
+    defaults::DefaultLexeme,
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
     parser::StartState,
     parser::StartStateOperation,

@@ -2,8 +2,8 @@
 
 This release contains a number of new features and breaking changes -- most of
 the latter are in advanced/niche parts of the API which don't affect most users
-(with the exception of the `StorageT` change, the first noted in "breaking
-changes" below, which may affect a minority of users).
+with the exception of the `StorageT` change (the first noted in "breaking
+changes" below), which may affect a minority of users.
 
 
 ## New features
@@ -53,6 +53,9 @@ changes" below, which may affect a minority of users).
 
 * `LexBuildresult` returns on failure `Err(Vec<LexBuildError>)` rather than
   `Err(LexBuildError)`.
+
+* The `lrlex::lexemes` module has been renamed to `lrlex::defaults` to better
+  describe what it is providing.
 
 
 ## Deprecations
