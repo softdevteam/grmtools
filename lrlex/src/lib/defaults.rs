@@ -5,7 +5,7 @@ use lrpar::Lexeme;
 
 /// lrlex's standard lexeme struct: all lexemes are instances of this struct.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct DefaultLexeme<StorageT: fmt::Debug = u32> {
+pub struct DefaultLexeme<StorageT = u32> {
     start: usize,
     len: usize,
     faulty: bool,
