@@ -382,7 +382,7 @@ where
     ///      the return type of the `%start` rule;
     ///    * or, if the `yacckind` was set to
     ///      `YaccKind::Original(YaccOriginalActionKind::GenericParseTree)`, it
-    ///      is [crate::Node<StorageT>].
+    ///      is [`crate::Node<StorageT>`].
     ///
     /// # Panics
     ///
