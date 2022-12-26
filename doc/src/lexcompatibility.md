@@ -5,7 +5,7 @@ sequence of tokens. All Lex files require at least some porting to grmtools,
 though in many cases this is fairly trivial. Nevertheless, aspects such as
 the longest match rule are identical to Lex, and we assume familiarity with Lex
 syntax and its major features: the [Lex
-manual](http://dinosaur.compilertools.net/lex/index.html) is recommended
+manual](https://web.archive.org/web/20220402195947/dinosaur.compilertools.net/lex/index.html) is recommended
 reading.
 
 
