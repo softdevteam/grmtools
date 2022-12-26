@@ -2,7 +2,7 @@
 
 `lrlex` ([crate](https://crates.io/crates/lrlex);
 [source](https://github.com/softdevteam/grmtools/tree/master/lrlex)) is a
-partial replacement for [`lex`](http://dinosaur.compilertools.net/lex/index.html) /
+partial replacement for [`lex`](https://web.archive.org/web/20220402195947/dinosaur.compilertools.net/lex/index.html) /
 [`flex`](https://westes.github.io/flex/manual/). It takes an input string and
 splits it into *lexemes* based on a `.l` file. Unfortunately, many real-world
 languages have corner cases which exceed the power that `lrlex` can provide.

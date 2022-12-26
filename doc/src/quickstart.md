@@ -142,7 +142,7 @@ The first part specifies general settings for the grammar, at a minimum the
 start rule (`%start Expr`).
 
 The second part is the [Yacc
-grammar](http://dinosaur.compilertools.net/yacc/index.html). It consists of 3
+grammar](https://web.archive.org/web/20220830093827/dinosaur.compilertools.net/yacc/index.html). It consists of 3
 rules (`Expr`, `Term`, and `Factor`) and 6 productions (2 for each rule,
 separated by `|` characters). Because we are using the `Grmtools` Yacc variant,
 each rule has a Rust type associated with it (after `->`) which specifies the

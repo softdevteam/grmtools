@@ -3,7 +3,7 @@
 grmtools supports most major Yacc features, to the extent that many Yacc
 grammars can be used unchanged with grmtools. In this book we assume
 familiarity with Yacc syntax and its major features: the
-[Yacc manual](http://dinosaur.compilertools.net/yacc/index.html) is recommended
+[Yacc manual](https://web.archive.org/web/20220830093827/dinosaur.compilertools.net/yacc/index.html) is recommended
 reading.
 
 
