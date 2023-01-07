@@ -53,7 +53,7 @@ struct CTConflictsError<StorageT: Eq + Hash> {
 
 impl<StorageT> fmt::Display for CTConflictsError<StorageT>
 where
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -69,7 +69,7 @@ where
 
 impl<StorageT> fmt::Debug for CTConflictsError<StorageT>
 where
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -85,7 +85,7 @@ where
 
 impl<StorageT> Error for CTConflictsError<StorageT>
 where
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
 }
@@ -1312,7 +1312,7 @@ where
 
 impl<StorageT> CTParser<StorageT>
 where
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     usize: AsPrimitive<StorageT>,
 {
     /// Returns `true` if this compile-time parser was regenerated or `false` if it was not.
