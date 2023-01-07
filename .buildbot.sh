@@ -17,6 +17,9 @@ rustup default stable
 cargo test
 cargo test --release
 
+cargo test --lib cfgrammar --features serde
+cargo test --lib lrpar --features serde
+
 root=`pwd`
 cd $root/lrlex/examples/calc_manual_lex
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
