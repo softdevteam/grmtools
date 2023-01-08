@@ -15,6 +15,9 @@ keywords = ["parser", "LR", "yacc", "grammar"]
 name = "lrpar"
 path = "src/lib/mod.rs"
 
+[features]
+serde = []
+
 [build-dependencies]
 vergen = { version = "7", default-features = false, features = ["build"] }
 
