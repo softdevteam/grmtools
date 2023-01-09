@@ -203,7 +203,7 @@ mod test_utils;
 
 pub use crate::{
     ctbuilder::{CTParser, CTParserBuilder, RustEdition, Visibility},
-    lex_api::{LexError, Lexeme, Lexer, NonStreamingLexer},
+    lex_api::{LexError, Lexeme, Lexer, LexerTypes, NonStreamingLexer},
     parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
 

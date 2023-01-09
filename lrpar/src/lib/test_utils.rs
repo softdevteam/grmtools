@@ -4,9 +4,18 @@ use std::{error::Error, fmt, hash::Hash};
 
 use cfgrammar::Span;
 
-use crate::{LexError, Lexeme};
+use crate::{LexError, Lexeme, LexerTypes};
 
 type StorageT = u16;
+
+#[derive(Debug)]
+pub(crate) struct TestLexerTypes();
+
+impl LexerTypes for TestLexerTypes {
+    type LexemeT = TestLexeme;
+    type StorageT = u16;
+    type LexErrorT = TestLexError;
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct TestLexeme {

@@ -9,7 +9,7 @@ use std::{
 };
 
 use cfgrammar::{newlinecache::NewlineCache, Spanned};
-use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
+use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{Lexeme, Lexer};
 
 fn usage(prog: &str, msg: &str) {
@@ -55,8 +55,8 @@ fn main() {
 
     let lex_l_path = &matches.free[0];
     let lex_src = read_file(lex_l_path);
-    let lexerdef =
-        LRNonStreamingLexerDef::<DefaultLexeme, _>::from_str(&lex_src).unwrap_or_else(|errs| {
+    let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u32>>::from_str(&lex_src)
+        .unwrap_or_else(|errs| {
             let nlcache = NewlineCache::from_str(&lex_src).unwrap();
             for e in errs {
                 if let Some((line, column)) = nlcache

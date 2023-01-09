@@ -1,11 +1,34 @@
 use std::{cmp, error::Error, fmt, hash::Hash, marker};
 
 use cfgrammar::Span;
-use lrpar::Lexeme;
+use lrpar::{Lexeme, LexerTypes};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-/// lrlex's standard lexeme struct: all lexemes are instances of this struct.
+use crate::LRLexError;
+
+/// lrlex's standard [LexerTypes] `struct`, provided as a convenience.
+#[derive(Debug)]
+pub struct DefaultLexerTypes<T = u32>
+where
+    T: 'static + fmt::Debug + Hash + PrimInt + Unsigned,
+    usize: AsPrimitive<T>,
+{
+    phantom: std::marker::PhantomData<T>,
+}
+
+impl<T> LexerTypes for DefaultLexerTypes<T>
+where
+    usize: AsPrimitive<T>,
+    T: 'static + fmt::Debug + Hash + PrimInt + Unsigned,
+{
+    type LexemeT = DefaultLexeme<T>;
+    type StorageT = T;
+    type LexErrorT = LRLexError;
+}
+
+/// lrlex's standard lexeme struct, provided as a convenience.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct DefaultLexeme<StorageT = u32> {
+pub struct DefaultLexeme<StorageT: fmt::Debug = u32> {
     start: usize,
     len: usize,
     faulty: bool,

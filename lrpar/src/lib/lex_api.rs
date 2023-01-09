@@ -3,26 +3,36 @@
 use std::{cmp, error::Error, fmt, hash::Hash, marker};
 
 use cfgrammar::Span;
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
+
+pub trait LexerTypes: fmt::Debug
+where
+    usize: AsPrimitive<Self::StorageT>,
+{
+    type LexemeT: Lexeme<Self::StorageT>;
+    type StorageT: 'static + fmt::Debug + Hash + PrimInt + Unsigned;
+    type LexErrorT: LexError;
+}
 
 /// The base trait which all lexers which want to interact with `lrpar` must implement.
-pub trait Lexer<LexemeT: Lexeme<StorageT>, StorageT: Hash + PrimInt + Unsigned, LexErrorT: LexError>
+pub trait Lexer<LexerTypesT: LexerTypes>
+where
+    usize: AsPrimitive<LexerTypesT::StorageT>,
 {
     /// Iterate over all the lexemes in this lexer. Note that:
     ///   * The lexer may or may not stop after the first [LexError] is encountered.
     ///   * There are no guarantees about what happens if this function is called more than once.
     ///     For example, a streaming lexer may only produce [Lexeme]s on the first call.
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<LexemeT, LexErrorT>> + 'a>;
+    fn iter<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = Result<LexerTypesT::LexemeT, LexerTypesT::LexErrorT>> + 'a>;
 }
 
 /// A `NonStreamingLexer` is one that takes input in one go, and is then able to hand out
 /// substrings to that input and calculate line and column numbers from a [Span].
-pub trait NonStreamingLexer<
-    'input,
-    LexemeT: Lexeme<StorageT>,
-    StorageT: Hash + PrimInt + Unsigned,
-    LexErrorT: LexError,
->: Lexer<LexemeT, StorageT, LexErrorT>
+pub trait NonStreamingLexer<'input, LexerTypesT: LexerTypes>: Lexer<LexerTypesT>
+where
+    usize: AsPrimitive<LexerTypesT::StorageT>,
 {
     /// Return the user input associated with a [Span].
     ///

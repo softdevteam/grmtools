@@ -13,7 +13,7 @@ use cfgrammar::{
     Spanned,
 };
 use getopts::Options;
-use lrlex::{DefaultLexeme, LRNonStreamingLexerDef, LexerDef};
+use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
 use lrpar::parser::{RTParserBuilder, RecoveryKind};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
@@ -122,7 +122,7 @@ fn main() {
             writeln!(stderr(), "{}: {}", &src_path, &spanned).ok();
         }
     };
-    let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexeme<u32>, u32>::from_str(&lex_src) {
+    let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexerTypes<u32>>::from_str(&lex_src) {
         Ok(ast) => ast,
         Err(errs) => {
             let nlcache = NewlineCache::from_str(&lex_src).unwrap();

@@ -21,7 +21,7 @@ mod parser;
 
 pub use crate::{
     ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility},
-    defaults::DefaultLexeme,
+    defaults::{DefaultLexeme, DefaultLexerTypes},
     lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
     parser::StartState,
     parser::StartStateOperation,
@@ -162,7 +162,7 @@ impl fmt::Display for LRLexError {
     since = "0.8.0",
     note = "This struct has been renamed to LRNonStreamingLexerDef"
 )]
-pub type NonStreamingLexerDef<LexemeT, StorageT> = LRNonStreamingLexerDef<LexemeT, StorageT>;
+pub type NonStreamingLexerDef<StorageT> = LRNonStreamingLexerDef<StorageT>;
 
 /// A convenience macro for including statically compiled `.l` files. A file `src/a/b/c.l`
 /// processed by [CTLexerBuilder::lexer_in_src_dir] can then be used in a crate with

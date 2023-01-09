@@ -39,11 +39,11 @@ hand-written lexer will look roughly as follows:
 
 ```rust
 use cfgrammar::yacc::YaccKind;
-use lrlex::{ct_token_map, DefaultLexeme, LRLexError};
+use lrlex::{ct_token_map, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let ctp = CTParserBuilder::<DefaultLexeme<u8>, u8, LRLexError>::new()
+    let ctp = CTParserBuilder::<DefaultLexerTypes<u8>>::new()
         .yacckind(YaccKind::Grmtools)
         .grammar_in_src_dir("grammar.y")?
         .build()?;
@@ -84,13 +84,13 @@ and returns an `LRNonStreamingLexer` as follows:
 
 ```rust
 use cfgrammar::NewlineCache;
-use lrlex::{lrlex_mod, DefaultLexeme, LRNonStreamingLexer};
+use lrlex::{lrlex_mod, DefaultLexeme, DefaultLexerTypes, LRNonStreamingLexer};
 use lrpar::{lrpar_mod, Lexeme, NonStreamingLexer, Span};
 
 lrlex_mod!("token_map");
 use token_map::*;
 
-fn lex(s: &str) -> LRNonStreamingLexer<DefaultLexeme<u8>, u8> {
+fn lex(s: &str) -> LRNonStreamingLexer<DefaultLexerTypes<u8>> {
   let mut lexemes = Vec::new();
   let mut newlines = NewlineCache::new();
   let mut i = 0;

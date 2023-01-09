@@ -18,14 +18,14 @@ use std::{
 
 use cfgrammar::{newlinecache::NewlineCache, Spanned};
 use lazy_static::lazy_static;
-use lrpar::{CTParserBuilder, Lexeme};
+use lrpar::{CTParserBuilder, LexerTypes};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use quote::quote;
 use regex::Regex;
 use serde::Serialize;
 use try_from::TryFrom;
 
-use crate::{DefaultLexeme, LRLexError, LRNonStreamingLexerDef, LexerDef};
+use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -80,42 +80,40 @@ pub enum RustEdition {
 
 /// A `CTLexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
-pub struct CTLexerBuilder<'a, LexemeT: Lexeme<StorageT>, StorageT: Debug + Eq + Hash = u32> {
-    lrpar_config: Option<
-        Box<
-            dyn Fn(
-                CTParserBuilder<LexemeT, StorageT, LRLexError>,
-            ) -> CTParserBuilder<LexemeT, StorageT, LRLexError>,
-        >,
-    >,
+pub struct CTLexerBuilder<'a, LexerTypesT: LexerTypes = DefaultLexerTypes<u32>>
+where
+    LexerTypesT::StorageT: Debug + Eq + Hash,
+    usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+{
+    lrpar_config: Option<Box<dyn Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT>>>,
     lexer_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     lexerkind: LexerKind,
     mod_name: Option<&'a str>,
     visibility: Visibility,
     rust_edition: RustEdition,
-    rule_ids_map: Option<HashMap<String, StorageT>>,
+    rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
 }
 
-impl<'a> CTLexerBuilder<'a, DefaultLexeme<u32>, u32> {
+impl<'a> CTLexerBuilder<'a, DefaultLexerTypes<u32>> {
     /// Create a new [CTLexerBuilder].
     pub fn new() -> Self {
-        CTLexerBuilder::<DefaultLexeme<u32>, u32>::new_with_lexemet()
+        CTLexerBuilder::<DefaultLexerTypes<u32>>::new_with_lexemet()
     }
 }
 
-impl<'a, LexemeT, StorageT> CTLexerBuilder<'a, LexemeT, StorageT>
+impl<'a, LexerTypesT: LexerTypes> CTLexerBuilder<'a, LexerTypesT>
 where
-    LexemeT: Lexeme<StorageT>,
-    StorageT: 'static + Copy + Debug + Eq + Hash + PrimInt + Serialize + TryFrom<usize> + Unsigned,
-    usize: AsPrimitive<StorageT>,
+    LexerTypesT::StorageT:
+        'static + Debug + Eq + Hash + PrimInt + Serialize + TryFrom<usize> + Unsigned,
+    usize: AsPrimitive<LexerTypesT::StorageT>,
 {
     /// Create a new [CTLexerBuilder].
     ///
-    /// `StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough to index
-    /// all the tokens, rules, and productions in the lexer and less than or equal in size
+    /// `LexerTypesT::StorageT` must be an unsigned integer type (e.g. `u8`, `u16`) which is big enough
+    /// to index all the tokens, rules, and productions in the lexer and less than or equal in size
     /// to `usize` (e.g. on a 64-bit machine `u128` would be too big). If you are lexing large
     /// files, the additional storage requirements of larger integer types can be noticeable, and
     /// in such cases it can be worth specifying a smaller type. `StorageT` defaults to `u32` if
@@ -124,7 +122,7 @@ where
     /// # Examples
     ///
     /// ```text
-    /// CTLexerBuilder::<DefaultLexeme<u8>, u8>::new_with_lexemet()
+    /// CTLexerBuilder::<DefaultLexerTypes<u8>>::new_with_lexemet()
     ///     .lexer_in_src_dir("grm.l", None)?
     ///     .build()?;
     /// ```
@@ -163,10 +161,7 @@ where
     /// ```
     pub fn lrpar_config<F>(mut self, config_func: F) -> Self
     where
-        F: 'static
-            + Fn(
-                CTParserBuilder<LexemeT, StorageT, LRLexError>,
-            ) -> CTParserBuilder<LexemeT, StorageT, LRLexError>,
+        F: 'static + Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT>,
     {
         self.lrpar_config = Some(Box::new(config_func));
         self
@@ -276,7 +271,7 @@ where
     /// arbitrary, but distinct, IDs. Setting the map of rule IDs (from rule names to `StorageT`)
     /// allows users to synchronise a lexer and parser and to check that all rules are used by both
     /// parts).
-    pub fn rule_ids_map<T: std::borrow::Borrow<HashMap<String, StorageT>> + Clone>(
+    pub fn rule_ids_map<T: std::borrow::Borrow<HashMap<String, LexerTypesT::StorageT>> + Clone>(
         mut self,
         rule_ids_map: T,
     ) -> Self {
@@ -291,7 +286,7 @@ where
     ///
     /// ```text
     ///    mod modname {
-    ///      pub fn lexerdef() -> LexerDef<StorageT> { ... }
+    ///      pub fn lexerdef() -> LexerDef<LexerTypesT::StorageT> { ... }
     ///
     ///      ...
     ///    }
@@ -305,7 +300,7 @@ where
     ///      `_l`).
     pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
         if let Some(ref lrcfg) = self.lrpar_config {
-            let mut ctp = CTParserBuilder::<LexemeT, StorageT, LRLexError>::new();
+            let mut ctp = CTParserBuilder::<LexerTypesT>::new();
             ctp = lrcfg(ctp);
             let map = ctp.build()?;
             self.rule_ids_map = Some(map.token_map().to_owned());
@@ -330,27 +325,23 @@ where
 
         let lex_src = read_to_string(lexerp)?;
         let line_cache = NewlineCache::from_str(&lex_src).unwrap();
-        let mut lexerdef: Box<dyn LexerDef<StorageT>> = match self.lexerkind {
+        let mut lexerdef: Box<dyn LexerDef<LexerTypesT::StorageT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
-                LRNonStreamingLexerDef::<LexemeT, StorageT>::from_str(&lex_src).map_err(
-                    |errs| {
-                        errs.iter()
-                            .map(|e| {
-                                if let Some((line, column)) = line_cache
-                                    .byte_to_line_num_and_col_num(
-                                        &lex_src,
-                                        e.spans().first().unwrap().start(),
-                                    )
-                                {
-                                    format!("{} at line {line} column {column}", e)
-                                } else {
-                                    format!("{}", e)
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    },
-                )?,
+                LRNonStreamingLexerDef::<LexerTypesT>::from_str(&lex_src).map_err(|errs| {
+                    errs.iter()
+                        .map(|e| {
+                            if let Some((line, column)) = line_cache.byte_to_line_num_and_col_num(
+                                &lex_src,
+                                e.spans().first().unwrap().start(),
+                            ) {
+                                format!("{} at line {line} column {column}", e)
+                            } else {
+                                format!("{}", e)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })?,
             ),
         };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
@@ -417,9 +408,8 @@ where
             LexerKind::LRNonStreamingLexer => (
                 "LRNonStreamingLexerDef",
                 format!(
-                    "LRNonStreamingLexerDef<{}, {}>",
-                    type_name::<LexemeT>(),
-                    type_name::<StorageT>()
+                    "LRNonStreamingLexerDef<{lexertypest}>",
+                    lexertypest = type_name::<LexerTypesT>()
                 ),
             ),
         };
@@ -512,7 +502,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
                         outs,
                         "#[allow(dead_code)]\npub const T_{}: {} = {:?};\n",
                         n.to_ascii_uppercase(),
-                        type_name::<StorageT>(),
+                        type_name::<LexerTypesT::StorageT>(),
                         *id
                     )
                     .ok();
@@ -580,7 +570,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
     ///
     /// ```text
     ///    mod modname {
-    ///      pub fn lexerdef() -> LexerDef<StorageT> { ... }
+    ///      pub fn lexerdef() -> LexerDef<LexerTypesT::StorageT> { ... }
     ///
     ///      ...
     ///    }

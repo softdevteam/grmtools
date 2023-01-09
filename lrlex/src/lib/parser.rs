@@ -557,7 +557,7 @@ mod test {
     use super::*;
     use crate::{
         lexer::{LRNonStreamingLexerDef, LexerDef},
-        DefaultLexeme,
+        DefaultLexerTypes,
     };
     use cfgrammar::Spanned as _;
     use std::collections::HashMap;
@@ -612,7 +612,7 @@ mod test {
         );
     }
 
-    impl ErrorsHelper for Result<LRNonStreamingLexerDef<DefaultLexeme<u8>, u8>, Vec<LexBuildError>> {
+    impl ErrorsHelper for Result<LRNonStreamingLexerDef<DefaultLexerTypes<u8>>, Vec<LexBuildError>> {
         fn expect_error_at_line(self, src: &str, kind: LexErrorKind, line: usize) {
             match self.as_ref().map_err(Vec::as_slice) {
                 Ok(_) => panic!("Parsed ok while expecting error"),
@@ -693,18 +693,18 @@ mod test {
 %option nounput
         "
         .to_string();
-        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).is_err());
     }
 
     #[test]
     fn test_minimum() {
         let src = "%%".to_string();
-        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_ok());
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).is_ok());
     }
 
     #[test]
     fn test_empty() {
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str("").expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str("").expect_error_at_line_col(
             "",
             LexErrorKind::PrematureEnd,
             1,
@@ -716,7 +716,7 @@ mod test {
     fn test_premature_end_multibyte() {
         // Ends in LineSeparator multibyte whitespace.
         let src = "%S X ".to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::PrematureEnd,
             1,
@@ -732,7 +732,7 @@ mod test {
 \\+ '+'
 "
         .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let intrule = ast.get_rule_by_name("int").unwrap();
         assert_eq!("int", intrule.name.as_ref().unwrap());
         assert_eq!("[0-9]+", intrule.re_str);
@@ -750,7 +750,7 @@ mod test {
 [0-9]+ ;
 "
         .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
         assert!(intrule.name.is_none());
         assert_eq!("[0-9]+", intrule.re_str);
@@ -762,8 +762,8 @@ mod test {
 [0-9]
 'int'"
             .to_string();
-        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).is_err());
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::MissingSpace,
             2,
@@ -776,8 +776,8 @@ mod test {
         let src = "%%
 [0-9] "
             .to_string();
-        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).is_err());
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::MissingSpace,
             2,
@@ -790,8 +790,8 @@ mod test {
         let src = "%%
 [0-9] int"
             .to_string();
-        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).is_err());
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::InvalidName,
             2,
@@ -804,8 +804,8 @@ mod test {
         let src = "%%
 [0-9] 'int"
             .to_string();
-        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_err());
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).is_err());
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::InvalidName,
             2,
@@ -818,7 +818,7 @@ mod test {
         let srcs = [r#"a ""#, "a '", r#"a '""#, r#"a "'"#];
         for line_two in srcs {
             let src = format!("%%\n{line_two}");
-            LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src)
                 .expect_error_at_line_col(&src, LexErrorKind::InvalidName, 2, 3);
         }
 
@@ -835,7 +835,7 @@ mod test {
 
         for line_two in srcs {
             let src = format!("%%\n{line_two}");
-            LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src)
                 .expect_error_at_line_col(&src, LexErrorKind::InvalidName, 2, 5);
         }
     }
@@ -858,7 +858,7 @@ mod test {
         ];
         for line_two in srcs {
             let src = format!("%%\n{line_two}");
-            assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).is_ok());
+            assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).is_ok());
         }
     }
 
@@ -869,7 +869,7 @@ mod test {
 [0-9] 'int'
 [0-9] 'int'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_lines_cols(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_lines_cols(
             &src,
             LexErrorKind::DuplicateName,
             &mut [(2, 8), (3, 8), (4, 8)].into_iter(),
@@ -886,7 +886,7 @@ mod test {
 [0-9] 'int'
 [A-Z] 'ALPHA'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_multiple_errors(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_multiple_errors(
             &src,
             &mut [
                 (LexErrorKind::DuplicateName, vec![(2, 8), (4, 8), (6, 8)]),
@@ -902,7 +902,7 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownDeclaration,
             1,
@@ -916,7 +916,7 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownDeclaration,
             1,
@@ -930,7 +930,7 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownDeclaration,
             1,
@@ -944,7 +944,7 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::InvalidStartStateName,
             1,
@@ -958,7 +958,7 @@ mod test {
 %%
 <123>. 'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::InvalidStartStateName,
             1,
@@ -971,7 +971,7 @@ mod test {
         let src = "%%
 <1>. 'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownStartState,
             2,
@@ -984,7 +984,7 @@ mod test {
         let src = "%%
 . <1>'known'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownStartState,
             2,
@@ -998,7 +998,7 @@ mod test {
 %%
 <KNOWN>. 'known'"
             .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
         assert_eq!("known", intrule.name.as_ref().unwrap());
         assert_eq!(".", intrule.re_str);
@@ -1012,7 +1012,7 @@ mod test {
         let src = "%%
 <UNKNOWN>. 'unknown'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownStartState,
             2,
@@ -1026,7 +1026,7 @@ mod test {
 %%
 . <KNOWN>'known'"
             .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
         assert_eq!("known", intrule.name.as_ref().unwrap());
         assert_eq!(".", intrule.re_str);
@@ -1042,7 +1042,7 @@ mod test {
         let src = "%%
 . <UNKNOWN>'unknown'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownStartState,
             2,
@@ -1055,7 +1055,7 @@ mod test {
         let src = "%%
 <test. 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::InvalidStartState,
             2,
@@ -1068,7 +1068,7 @@ mod test {
         let src = "%%
 . <test'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::InvalidStartState,
             2,
@@ -1082,7 +1082,7 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::InvalidStartStateName,
             1,
@@ -1096,7 +1096,7 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         // Expect two start states - INITIAL + test
         assert_eq!(2, ast.iter_start_states().count());
         assert!(ast
@@ -1113,7 +1113,7 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         // Expect two start states - INITIAL + test
         assert_eq!(2, ast.iter_start_states().count());
         assert!(ast
@@ -1130,7 +1130,7 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         // Expect two start states - INITIAL + test
         assert_eq!(2, ast.iter_start_states().count());
         assert!(ast
@@ -1148,7 +1148,7 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_lines_cols(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_lines_cols(
             &src,
             LexErrorKind::DuplicateStartState,
             &mut [(1, 4), (2, 4)].into_iter(),
@@ -1161,7 +1161,7 @@ mod test {
         %%
         . 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_lines_cols(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_lines_cols(
             &src,
             LexErrorKind::DuplicateStartState,
             &mut [(1, 4), (1, 15)].into_iter(),
@@ -1175,7 +1175,7 @@ mod test {
 %%
 . 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_multiple_errors(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_multiple_errors(
             &src,
             &mut [
                 (LexErrorKind::DuplicateStartState, vec![(1, 4), (2, 4)]),
@@ -1224,7 +1224,7 @@ a\[\]a 'aboxa'
 [\<abcdefg\t] 'bookend5'
 "#
         .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let mut rule = ast.get_rule_by_name("gt").unwrap();
         assert_eq!("gt", rule.name.as_ref().unwrap());
         assert_eq!(">", rule.re_str);
@@ -1318,7 +1318,7 @@ a\[\]a 'aboxa'
 %%
 . 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_lines_cols(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_lines_cols(
             &src,
             LexErrorKind::DuplicateStartState,
             &mut [(1, 4), (2, 4)].into_iter(),
@@ -1330,7 +1330,7 @@ a\[\]a 'aboxa'
         let src = "%%
 <1test>. 'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownStartState,
             2,
@@ -1343,7 +1343,7 @@ a\[\]a 'aboxa'
         let src = "%%
 . <1test>'TEST'"
             .to_string();
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).expect_error_at_line_col(
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
             &src,
             LexErrorKind::UnknownStartState,
             2,
@@ -1370,7 +1370,7 @@ a\[\]a 'aboxa'
 \{ <brace>'OPEN_FIRST_BRACE'
 \[ <bracket>'OPEN_FIRST_BRACKET'"
             .to_string();
-        let ast = LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).unwrap();
+        let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         for rule in ast.iter_rules() {
             println!("rule: {rule:?}");
         }
@@ -1522,7 +1522,7 @@ a\[\]a 'aboxa'
         for i in 0..257 {
             writeln!(src, "x 'x{}'\n", i).ok();
         }
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src).ok();
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).ok();
     }
 
     /// Test that we accept various [Pattern_White_Space](https://unicode.org/reports/tr31/)
@@ -1535,11 +1535,11 @@ a\[\]a 'aboxa'
         %%
         A	;
         B 'b' C 'c' D	'A'";
-        assert!(LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(src).is_ok());
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).is_ok());
         // En Space isn't part of Pattern_White_Space.
         let srcs = ["%S X Y", "%S X "];
         for src in srcs {
-            LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(src)
+            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src)
                 .expect_error_at_line_col(src, LexErrorKind::InvalidStartStateName, 1, 4);
         }
     }
@@ -1561,7 +1561,7 @@ a\[\]a 'aboxa'
             (LexErrorKind::DuplicateStartState, vec![(2, 12), (3, 12)]),
             (LexErrorKind::DuplicateName, vec![(5, 12), (6, 12)]),
         ];
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src)
             .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
 
         src.push_str(
@@ -1571,7 +1571,7 @@ a\[\]a 'aboxa'
         ",
         );
         expected_errs.push((LexErrorKind::RoutinesNotSupported, vec![(7, 9)]));
-        LRNonStreamingLexerDef::<DefaultLexeme<u8>, u8>::from_str(&src)
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src)
             .expect_multiple_errors(&src, &mut expected_errs.into_iter());
     }
 }
