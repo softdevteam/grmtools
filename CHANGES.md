@@ -1,9 +1,10 @@
 # grmtools 0.13.0 (XXXX-XX-XX)
 
-This release contains a number of new features and breaking changes -- most of
-the latter are in advanced/niche parts of the API which don't affect most users
-with the exception of the `StorageT` change (the first noted in "breaking
-changes" below), which may affect a minority of users.
+This release contains a number of new features and breaking changes. Most of
+the breaking changes are in advanced/niche parts of the API, which few users
+will notice. However, two breaking changes might affect a more substantial
+subset of users: those are highlighted in the "breaking changes (major)"
+section below.
 
 
 ## New features
@@ -22,12 +23,20 @@ changes" below), which may affect a minority of users.
 * lrlex now supports start states.
 
 
-## Breaking changes
+## Breaking changes (major)
+
+* Start states mean that lrlex now interprets `<` in the regular expression
+  differently than before: to restore the previous behaviour, escape `<` with
+  `\`. For example, the lrlex rule `< "<"` now appears to lrlex as an
+  incomplete start state: replacing it with `\< "<"` fixes the problem.
 
 * `StorageT` is now used to represent parser states (whereas before it was
   hard-coded to a `u16`). If you used a custom `StorageT`, it may no longer be
   big enough, and you may need to increase it (e.g. you might need to change
   `StorageT` from `u8` to `u16`).
+
+
+## Breaking changes (minor)
 
 * `cfgrammar::yacc::grammar::YaccGrammar::token_span` now returns
   `Option<Span>` rather than `Option<&Span>`.
