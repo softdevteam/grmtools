@@ -51,7 +51,7 @@ changes" below), which may affect a minority of users.
   The new `YaccGrammarError` has a private enum, so will mean fewer
   semver-breaking changes.
 
-* `LexBuildresult` returns on failure `Err(Vec<LexBuildError>)` rather than
+* `LexBuildResult` returns on failure `Err(Vec<LexBuildError>)` rather than
   `Err(LexBuildError)`.
 
 * The `lrlex::lexemes` module has been renamed to `lrlex::defaults` to better
