@@ -1,5 +1,5 @@
 use cfgrammar::yacc::YaccKind;
-use lrlex::{ct_token_map, DefaultLexeme, LRLexError};
+use lrlex::{ct_token_map, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
 // Some of the token names in the parser do not lead to valid Rust identifiers, so we map them to
@@ -12,7 +12,7 @@ const TOKENS_MAP: &[(&str, &str)] = &[
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let ctp = CTParserBuilder::<DefaultLexeme<u8>, u8, LRLexError>::new()
+    let ctp = CTParserBuilder::<DefaultLexerTypes<u8>>::new()
         .yacckind(YaccKind::Grmtools)
         .grammar_in_src_dir("calc.y")?
         .build()?;

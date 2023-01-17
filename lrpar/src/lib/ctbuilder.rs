@@ -29,7 +29,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::Regex;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{LexError, Lexeme, RecoveryKind};
+use crate::{LexerTypes, RecoveryKind};
 
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
@@ -146,9 +146,10 @@ impl Visibility {
 
 /// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
-pub struct CTParserBuilder<'a, LexemeT, StorageT, LexErrorT>
+pub struct CTParserBuilder<'a, LexerTypesT: LexerTypes>
 where
-    StorageT: Eq + Hash,
+    LexerTypesT::StorageT: Eq + Hash,
+    usize: AsPrimitive<LexerTypesT::StorageT>,
 {
     // Anything stored in here (except `output_path`, `conflicts`, and `error_on_conflict`) almost
     // certainly needs to be included as part of the rebuild_cache function below so that, if it's
@@ -163,14 +164,15 @@ where
     show_warnings: bool,
     visibility: Visibility,
     rust_edition: RustEdition,
-    phantom: PhantomData<(LexemeT, StorageT, LexErrorT)>,
+    phantom: PhantomData<LexerTypesT>,
 }
 
-impl<'a, LexemeT, StorageT, LexErrorT> CTParserBuilder<'a, LexemeT, StorageT, LexErrorT>
+impl<
+        'a,
+        StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+        LexerTypesT: LexerTypes<StorageT = StorageT>,
+    > CTParserBuilder<'a, LexerTypesT>
 where
-    LexemeT: Lexeme<StorageT>,
-    StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
-    LexErrorT: LexError,
     usize: AsPrimitive<StorageT>,
 {
     /// Create a new `CTParserBuilder`.
@@ -189,7 +191,7 @@ where
     /// # Examples
     ///
     /// ```text
-    /// CTParserBuilder::<DefaultLexeme<u8>, u8>::new()
+    /// CTParserBuilder::<DefaultLexerTypes<u8>>::new()
     ///     .grammar_in_src_dir("grm.y")?
     ///     .build()?;
     /// ```
@@ -646,7 +648,7 @@ where
     {
         self.grammar_path = Some(inp.as_ref().to_owned());
         self.output_path = Some(outp.as_ref().to_owned());
-        let cl: CTParserBuilder<LexemeT, StorageT, LexErrorT> = CTParserBuilder {
+        let cl: CTParserBuilder<LexerTypesT> = CTParserBuilder {
             grammar_path: self.grammar_path.clone(),
             output_path: self.output_path.clone(),
             mod_name: self.mod_name,
@@ -765,12 +767,11 @@ where
                     "
     #[allow(dead_code)]
     pub fn parse<'lexer, 'input: 'lexer>(
-        lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}, {lexerrort}>{parse_param})
-          -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}, {lexerrort}>>)
+        lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>{parse_param})
+          -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}, {lexertypest}>>)
     {{",
-                    lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
-                    lexerrort = type_name::<LexErrorT>(),
+                    lexertypest = type_name::<LexerTypesT>(),
                     parse_param = parse_param,
                     actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap(),
                 ).ok();
@@ -780,18 +781,12 @@ where
                     outs,
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{edition_lifetime} {lexemet}, {storaget}, {lexerrort}>)
-          -> (::std::option::Option<::lrpar::Node<{lexemet}, {storaget}>>,
-              ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}, {lexerrort}>>)
+    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexertypest}>)
+          -> (::std::option::Option<::lrpar::Node<<{lexertypest} as ::lrpar::LexerTypes>::LexemeT, {storaget}>>,
+              ::std::vec::Vec<::lrpar::LexParseError<{storaget}, {lexertypest}>>)
     {{",
-                    lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
-                    lexerrort = type_name::<LexErrorT>(),
-                    edition_lifetime = if self.rust_edition != RustEdition::Rust2015 {
-                        "'_, "
-                    } else {
-                        ""
-                    },
+                    lexertypest = type_name::<LexerTypesT>(),
                 )
                 .ok();
             }
@@ -800,17 +795,11 @@ where
                     outs,
                     "
     #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{edition_lifetime} {lexemet}, {storaget}, {lexerrort}>)
-          -> ::std::vec::Vec<::lrpar::LexParseError<{lexemet}, {storaget}, {lexerrort}>>
+    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexertypest}>)
+          -> ::std::vec::Vec<::lrpar::LexParseError<{storaget}, {lexertypest}>>
     {{",
-                    lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
-                    lexerrort = type_name::<LexErrorT>(),
-                    edition_lifetime = if self.rust_edition != RustEdition::Rust2015 {
-                        "'_, "
-                    } else {
-                        ""
-                    },
+                    lexertypest = type_name::<LexerTypesT>(),
                 )
                 .ok();
             }
@@ -850,15 +839,14 @@ where
                 write!(outs,
                     "\n        #[allow(clippy::type_complexity)]
         let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
-                       &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}, {lexerrort}>,
+                       &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>,
                        ::cfgrammar::Span,
-                       ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
+                       ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<<{lexertypest} as ::lrpar::LexerTypes>::LexemeT, {actionskind}<'input>>>,
                        {parse_paramty})
                     -> {actionskind}<'input>> = ::std::vec![{wrappers}];\n",
                     actionskind = ACTIONS_KIND,
-                    lexemet = type_name::<LexemeT>(),
                     storaget = type_name::<StorageT>(),
-                    lexerrort = type_name::<LexErrorT>(),
+                    lexertypest = type_name::<LexerTypesT>(),
                     parse_paramty = parse_paramty,
                     wrappers = wrappers,
                     edition_lifetime = if self.rust_edition != RustEdition::Rust2015 { "'_, " } else { "" },
@@ -968,15 +956,14 @@ where
             // the same time extract &str from tokens and actiontype from nonterminals.
             write!(outs,
                 "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}, {lexerrort}>,
+                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>,
                       {prefix}span: ::cfgrammar::Span,
-                      mut {prefix}args: ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<{lexemet}, {actionskind}<'input>>>,
+                      mut {prefix}args: ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<<{lexertypest} as ::lrpar::LexerTypes>::LexemeT, {actionskind}<'input>>>,
                       {parse_paramdef})
                    -> {actionskind}<'input> {{",
                 usize::from(pidx),
-                lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
-                lexerrort = type_name::<LexErrorT>(),
+                lexertypest = type_name::<LexerTypesT>(),
                 prefix = ACTION_PREFIX,
                 parse_paramdef = parse_paramdef,
                 actionskind = ACTIONS_KIND,
@@ -1134,7 +1121,7 @@ where
                     Symbol::Rule(ref_ridx) => grm.actiontype(ref_ridx).as_ref().unwrap().clone(),
                     Symbol::Token(_) => format!(
                         "::std::result::Result<{lexemet}, {lexemet}>",
-                        lexemet = type_name::<LexemeT>(),
+                        lexemet = type_name::<LexerTypesT::LexemeT>(),
                     ),
                 };
                 args.push(format!("mut {}arg_{}: {}", ACTION_PREFIX, i + 1, argt));
@@ -1151,25 +1138,26 @@ where
                     format!("\n                 -> {}", actiont)
                 }
             };
-            write!(outs,
+            write!(
+                outs,
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
     #[allow(unsafe_code)] // Allow an action to embed unsafe blocks within it.
     fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                     {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexemet}, {storaget}, {lexerrort}>,
+                     {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>,
                      {prefix}span: ::cfgrammar::Span,
                      {parse_paramdef},
                      {args}){returnt} {{\n",
                 usize::from(pidx),
                 rulename = grm.rule_name_str(grm.prod_to_rule(pidx)),
-                lexemet = type_name::<LexemeT>(),
                 storaget = type_name::<StorageT>(),
-                lexerrort = type_name::<LexErrorT>(),
+                lexertypest = type_name::<LexerTypesT>(),
                 prefix = ACTION_PREFIX,
                 returnt = returnt,
                 parse_paramdef = parse_paramdef,
                 args = args.join(",\n                     ")
-            ).ok();
+            )
+            .ok();
 
             if parse_paramname != "()" {
                 // If the parse parameter is the unit type, `let _ = ();` leads to Clippy
@@ -1351,7 +1339,7 @@ mod test {
     use std::{fs::File, io::Write, path::PathBuf};
 
     use super::{CTConflictsError, CTParserBuilder};
-    use crate::test_utils::{TestLexError, TestLexeme};
+    use crate::test_utils::TestLexerTypes;
     use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
     use tempfile::TempDir;
 
@@ -1370,7 +1358,7 @@ C : 'a';"
                 .as_bytes(),
         );
 
-        match CTParserBuilder::<TestLexeme, _, TestLexError>::new()
+        match CTParserBuilder::<TestLexerTypes>::new()
             .error_on_conflicts(false)
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
@@ -1402,7 +1390,7 @@ C : 'a';"
                 .as_bytes(),
         );
 
-        match CTParserBuilder::<TestLexeme, _, TestLexError>::new()
+        match CTParserBuilder::<TestLexerTypes>::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))
@@ -1432,7 +1420,7 @@ B: 'a';"
                 .as_bytes(),
         );
 
-        match CTParserBuilder::<TestLexeme, _, TestLexError>::new()
+        match CTParserBuilder::<TestLexerTypes>::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))
@@ -1464,7 +1452,7 @@ C : 'a';"
                 .as_bytes(),
         );
 
-        match CTParserBuilder::<TestLexeme, _, TestLexError>::new()
+        match CTParserBuilder::<TestLexerTypes>::new()
             .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             .grammar_path(file_path.to_str().unwrap())
             .output_path(file_path.with_extension("ignored"))

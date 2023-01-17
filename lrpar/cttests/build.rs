@@ -1,6 +1,6 @@
 use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 use glob::glob;
-use lrlex::{CTLexerBuilder, DefaultLexeme, LRLexError};
+use lrlex::{CTLexerBuilder, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 use std::{env, fs, path::PathBuf};
 use yaml_rust::YamlLoader;
@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut outp = PathBuf::from(&out_dir);
             outp.push(format!("{}.y.rs", base));
             outp.set_extension("rs");
-            let cp_build = CTParserBuilder::<DefaultLexeme<u32>, _, LRLexError>::new()
+            let cp_build = CTParserBuilder::<DefaultLexerTypes<u32>>::new()
                 .yacckind(yacckind)
                 .grammar_path(pg.to_str().unwrap())
                 .output_path(&outp);
