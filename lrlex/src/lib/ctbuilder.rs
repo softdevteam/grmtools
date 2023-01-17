@@ -285,7 +285,7 @@ where
     ///
     /// ```text
     ///    mod modname {
-    ///      pub fn lexerdef() -> LexerDef<LexerTypesT::StorageT> { ... }
+    ///      pub fn lexerdef() -> LexerDef<LexerTypesT> { ... }
     ///
     ///      ...
     ///    }
