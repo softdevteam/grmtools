@@ -324,7 +324,7 @@ where
 
         let lex_src = read_to_string(lexerp)?;
         let line_cache = NewlineCache::from_str(&lex_src).unwrap();
-        let mut lexerdef: Box<dyn LexerDef<LexerTypesT::StorageT>> = match self.lexerkind {
+        let mut lexerdef: Box<dyn LexerDef<LexerTypesT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
                 LRNonStreamingLexerDef::<LexerTypesT>::from_str(&lex_src).map_err(|errs| {
                     errs.iter()

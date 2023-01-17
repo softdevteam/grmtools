@@ -1,5 +1,7 @@
 use cfgrammar::Span;
 use lazy_static::lazy_static;
+use lrpar::LexerTypes;
+use num_traits::AsPrimitive;
 use regex::Regex;
 use std::borrow::{Borrow as _, Cow};
 use std::ops::Not;
@@ -70,9 +72,12 @@ pub enum StartStateOperation {
     Pop,
 }
 
-pub(super) struct LexParser<StorageT> {
+pub(super) struct LexParser<LexerTypesT: LexerTypes>
+where
+    usize: AsPrimitive<LexerTypesT::StorageT>,
+{
     src: String,
-    pub(super) rules: Vec<Rule<StorageT>>,
+    pub(super) rules: Vec<Rule<LexerTypesT::StorageT>>,
     pub(super) start_states: Vec<StartState>,
 }
 
@@ -102,8 +107,12 @@ fn matches_whitespace(ch: char) -> bool {
     RE_WS.is_match(ch.encode_utf8(&mut cbuf))
 }
 
-impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
-    pub(super) fn new(src: String) -> LexBuildResult<LexParser<StorageT>> {
+impl<LexerTypesT: LexerTypes> LexParser<LexerTypesT>
+where
+    usize: AsPrimitive<LexerTypesT::StorageT>,
+    LexerTypesT::StorageT: TryFrom<usize>,
+{
+    pub(super) fn new(src: String) -> LexBuildResult<LexParser<LexerTypesT>> {
         let mut p = LexParser {
             src,
             rules: Vec::new(),
@@ -381,7 +390,7 @@ impl<StorageT: TryFrom<usize>> LexParser<StorageT> {
             let (start_states, re_str) =
                 self.parse_start_states(i, line[..rspace].trim_end_matches(matches_whitespace))?;
             let rules_len = self.rules.len();
-            let tok_id = StorageT::try_from(rules_len)
+            let tok_id = LexerTypesT::StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from \
                            failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
             let rule = Rule::new(

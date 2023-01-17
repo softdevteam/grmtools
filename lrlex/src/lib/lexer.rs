@@ -71,11 +71,14 @@ impl<StorageT> Rule<StorageT> {
 }
 
 /// Methods which all lexer definitions must implement.
-pub trait LexerDef<StorageT> {
+pub trait LexerDef<LexerTypesT: LexerTypes>
+where
+    usize: AsPrimitive<LexerTypesT::StorageT>,
+{
     #[doc(hidden)]
     /// Instantiate a lexer from a set of `Rule`s. This is only intended to be used by compiled
     /// lexers (see `ctbuilder.rs`).
-    fn from_rules(start_states: Vec<StartState>, rules: Vec<Rule<StorageT>>) -> Self
+    fn from_rules(start_states: Vec<StartState>, rules: Vec<Rule<LexerTypesT::StorageT>>) -> Self
     where
         Self: Sized;
 
@@ -85,14 +88,14 @@ pub trait LexerDef<StorageT> {
         Self: Sized;
 
     /// Get the `Rule` at index `idx`.
-    fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>>;
+    fn get_rule(&self, idx: usize) -> Option<&Rule<LexerTypesT::StorageT>>;
 
     /// Get the `Rule` instance associated with a particular lexeme ID. Panics if no such rule
     /// exists.
-    fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT>;
+    fn get_rule_by_id(&self, tok_id: LexerTypesT::StorageT) -> &Rule<LexerTypesT::StorageT>;
 
     /// Get the `Rule` instance associated with a particular name.
-    fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>>;
+    fn get_rule_by_name(&self, n: &str) -> Option<&Rule<LexerTypesT::StorageT>>;
 
     /// Set the id attribute on rules to the corresponding value in `map`. This is typically used
     /// to synchronise a parser's notion of lexeme IDs with the lexers. While doing this, it keeps
@@ -111,11 +114,11 @@ pub trait LexerDef<StorageT> {
     /// grammar where nothing the user can input will be parseable.
     fn set_rule_ids<'a>(
         &'a mut self,
-        rule_ids_map: &HashMap<&'a str, StorageT>,
+        rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>);
 
     /// Returns an iterator over all rules in this AST.
-    fn iter_rules(&self) -> Iter<Rule<StorageT>>;
+    fn iter_rules(&self) -> Iter<Rule<LexerTypesT::StorageT>>;
 
     /// Returns an iterator over all start states in this AST.
     fn iter_start_states(&self) -> Iter<StartState>;
@@ -132,17 +135,14 @@ where
     phantom: PhantomData<LexerTypesT>,
 }
 
-impl<
-        StorageT: 'static + Eq + Hash + PrimInt + TryFrom<usize> + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > LexerDef<StorageT> for LRNonStreamingLexerDef<LexerTypesT>
+impl<LexerTypesT: LexerTypes> LexerDef<LexerTypesT> for LRNonStreamingLexerDef<LexerTypesT>
 where
-    usize: AsPrimitive<StorageT>,
-    StorageT: TryFrom<usize>,
+    usize: AsPrimitive<LexerTypesT::StorageT>,
+    LexerTypesT::StorageT: TryFrom<usize>,
 {
     fn from_rules(
         start_states: Vec<StartState>,
-        rules: Vec<Rule<StorageT>>,
+        rules: Vec<Rule<LexerTypesT::StorageT>>,
     ) -> LRNonStreamingLexerDef<LexerTypesT> {
         LRNonStreamingLexerDef {
             rules,
@@ -152,31 +152,31 @@ where
     }
 
     fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<LexerTypesT>> {
-        LexParser::new(s.to_string()).map(|p| LRNonStreamingLexerDef {
+        LexParser::<LexerTypesT>::new(s.to_string()).map(|p| LRNonStreamingLexerDef {
             rules: p.rules,
             start_states: p.start_states,
             phantom: PhantomData,
         })
     }
 
-    fn get_rule(&self, idx: usize) -> Option<&Rule<StorageT>> {
+    fn get_rule(&self, idx: usize) -> Option<&Rule<LexerTypesT::StorageT>> {
         self.rules.get(idx)
     }
 
-    fn get_rule_by_id(&self, tok_id: StorageT) -> &Rule<StorageT> {
+    fn get_rule_by_id(&self, tok_id: LexerTypesT::StorageT) -> &Rule<LexerTypesT::StorageT> {
         self.rules
             .iter()
             .find(|r| r.tok_id == Some(tok_id))
             .unwrap()
     }
 
-    fn get_rule_by_name(&self, n: &str) -> Option<&Rule<StorageT>> {
+    fn get_rule_by_name(&self, n: &str) -> Option<&Rule<LexerTypesT::StorageT>> {
         self.rules.iter().find(|r| r.name.as_deref() == Some(n))
     }
 
     fn set_rule_ids<'a>(
         &'a mut self,
-        rule_ids_map: &HashMap<&'a str, StorageT>,
+        rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
@@ -231,7 +231,7 @@ where
         (missing_from_lexer, missing_from_parser)
     }
 
-    fn iter_rules(&self) -> Iter<Rule<StorageT>> {
+    fn iter_rules(&self) -> Iter<Rule<LexerTypesT::StorageT>> {
         self.rules.iter()
     }
 
@@ -246,7 +246,7 @@ impl<
     > LRNonStreamingLexerDef<LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
-    StorageT: TryFrom<usize>,
+    LexerTypesT::StorageT: TryFrom<usize>,
 {
     /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
     /// [LRNonStreamingLexerDef].
