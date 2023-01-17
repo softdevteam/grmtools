@@ -10,7 +10,6 @@ use std::{
 use cfgrammar::{NewlineCache, Span};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::{self, Regex, RegexBuilder};
-use try_from::TryFrom;
 
 use lrpar::{Lexeme, Lexer, LexerTypes, NonStreamingLexer};
 

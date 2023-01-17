@@ -23,7 +23,6 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use quote::quote;
 use regex::Regex;
 use serde::Serialize;
-use try_from::TryFrom;
 
 use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
 

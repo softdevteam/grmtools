@@ -3,7 +3,6 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::borrow::{Borrow as _, Cow};
 use std::ops::Not;
-use try_from::TryFrom;
 
 use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 
