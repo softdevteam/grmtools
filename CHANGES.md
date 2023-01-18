@@ -68,8 +68,9 @@ section below.
   being built. You will then need to increase the size of your `StoargeT` (e.g.
   you might need to change `StorageT` from `u8` to `u16`).
 
-
 ## Breaking changes (minor)
+
+* Serde support for lrpar now requires enabling the `serde` feature.
 
 * `cfgrammar::yacc::grammar::YaccGrammar::token_span` now returns
   `Option<Span>` rather than `Option<&Span>`.
