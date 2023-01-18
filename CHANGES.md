@@ -2,7 +2,7 @@
 
 This release contains a number of new features and breaking changes. Most of
 the breaking changes are in advanced/niche parts of the API, which few users
-will notice. However, two breaking changes might affect a more substantial
+will notice. However, four breaking changes might affect a more substantial
 subset of users: those are highlighted in the "breaking changes (major)"
 section below.
 
@@ -22,6 +22,10 @@ section below.
 
 * lrlex now supports start states.
 
+* Unused tokens / rules in a grammar are now detected and, by default, reported
+  as errors. The `%expect-unused` can suppress such warnings on a
+  per-token/rule basis.
+
 
 ## Breaking changes (major)
 
@@ -30,10 +34,39 @@ section below.
   `\`. For example, the lrlex rule `< "<"` now appears to lrlex as an
   incomplete start state: replacing it with `\< "<"` fixes the problem.
 
+* grmtools now bundles many of its type parameters into a `LexexTypes` trait,
+  to avoid forcing users to endlessly repeat multiple arguments. If you
+  specified a custom `StorageT` with lrlex/lrpar then you will need to
+  change idioms such as `DefaultLexeme<StorageT>, StorageT>` to
+  `DefaultLexerTypes<StorageT>`. For example, you might need to change:
+  ```
+  lexer: &LRNonStreamingLexer<DefaultLexeme<StorageT>, StorageT>,
+  ```
+  to:
+  ```
+  lexer: &LRNonStreamingLexer<DefaultLexerTypes<StorageT>>,
+  ```
+
+* Unused tokens / rules in a grammar are now detected and, by default, reported
+  as errors. For example, the common "trick" to turn lexing errors into parsing
+  errors [suggests adding the following to a grammar](https://softdevteam.github.io/grmtools/latest_release/book/errorrecovery.html#turning-lexing-errors-into-parsing-errors):
+  ```
+  Unmatched -> ():
+    "UNMATCHED" { } 
+  ;
+  ```
+  Both the `Unmatched` rule and the `UNMATCHED` token will be reported as unused.
+  You can tell grmtools that you expect this to happen with the `%expect-unused`
+  directive:
+  ```
+  %expect-unused Unmatched "UNMATCHED"
+  ```
+
 * `StorageT` is now used to represent parser states (whereas before it was
   hard-coded to a `u16`). If you used a custom `StorageT`, it may no longer be
-  big enough, and you may need to increase it (e.g. you might need to change
-  `StorageT` from `u8` to `u16`).
+  big enough: if this happens, an error will be reported while the grammar is
+  being built. You will then need to increase the size of your `StoargeT` (e.g.
+  you might need to change `StorageT` from `u8` to `u16`).
 
 
 ## Breaking changes (minor)
