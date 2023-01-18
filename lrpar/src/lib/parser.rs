@@ -140,7 +140,7 @@ where
                 (),
             >,
         > = Vec::new();
-        actions.resize(usize::from(grm.prods_len()), &Parser::generic_ptree);
+        actions.resize(usize::from(grm.prods_len()), &action_generictree);
         let psr = Parser {
             rcvry_kind,
             grm,
@@ -158,23 +158,30 @@ where
         let accpt = psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut spans);
         (accpt, errors)
     }
+}
 
-    fn generic_ptree(
-        ridx: RIdx<StorageT>,
-        _lexer: &dyn NonStreamingLexer<LexerTypesT>,
-        _span: Span,
-        astack: vec::Drain<AStackType<LexerTypesT::LexemeT, Node<LexerTypesT::LexemeT, StorageT>>>,
-        _param: (),
-    ) -> Node<LexerTypesT::LexemeT, StorageT> {
-        let mut nodes = Vec::with_capacity(astack.len());
-        for a in astack {
-            nodes.push(match a {
-                AStackType::ActionType(n) => n,
-                AStackType::Lexeme(lexeme) => Node::Term { lexeme },
-            });
-        }
-        Node::Nonterm { ridx, nodes }
+/// The action which implements [`cfgrammar::yacc::YaccOriginalActionKind::GenericParseTree`].
+/// Usually you should just use the action kind directly. But you can also call this from
+/// within a custom action to return a generic parse tree with custom behavior.
+pub fn action_generictree<StorageT, LexerTypesT: LexerTypes>(
+    ridx: RIdx<StorageT>,
+    _lexer: &dyn NonStreamingLexer<LexerTypesT>,
+    _span: Span,
+    astack: vec::Drain<AStackType<LexerTypesT::LexemeT, Node<LexerTypesT::LexemeT, StorageT>>>,
+    _param: (),
+) -> Node<LexerTypesT::LexemeT, StorageT>
+where
+    usize: AsPrimitive<LexerTypesT::StorageT>,
+    LexerTypesT::LexemeT: Lexeme<StorageT>,
+{
+    let mut nodes = Vec::with_capacity(astack.len());
+    for a in astack {
+        nodes.push(match a {
+            AStackType::ActionType(n) => n,
+            AStackType::Lexeme(lexeme) => Node::Term { lexeme },
+        });
     }
+    Node::Nonterm { ridx, nodes }
 }
 
 impl<

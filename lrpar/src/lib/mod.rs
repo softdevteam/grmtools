@@ -207,6 +207,7 @@ pub use crate::{
     parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
 
+pub use crate::parser::action_generictree;
 /// A convenience macro for including statically compiled `.y` files. A file `src/a/b/c.y`
 /// processed by [CTParserBuilder::grammar_in_src_dir] can then be used in a crate with
 /// `lrpar_mod!("a/b/c.y")`.
