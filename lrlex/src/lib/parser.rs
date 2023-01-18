@@ -64,7 +64,7 @@ impl StartState {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 #[doc(hidden)]
 pub enum StartStateOperation {
     ReplaceStack,
