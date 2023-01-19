@@ -1,4 +1,4 @@
-# grmtools 0.13.0 (XXXX-XX-XX)
+# grmtools 0.13.0 (2023-01-19)
 
 This release contains a number of new features and breaking changes. Most of
 the breaking changes are in advanced/niche parts of the API, which few users
@@ -40,10 +40,14 @@ section below.
   change idioms such as `DefaultLexeme<StorageT>, StorageT>` to
   `DefaultLexerTypes<StorageT>`. For example, you might need to change:
   ```
+  use lrlex::{DefaultLexeme, LRNonStreamingLexer};
+  ...
   lexer: &LRNonStreamingLexer<DefaultLexeme<StorageT>, StorageT>,
   ```
   to:
   ```
+  use lrlex::{DefaultLexerTypes, LRNonStreamingLexer};
+  ...
   lexer: &LRNonStreamingLexer<DefaultLexerTypes<StorageT>>,
   ```
 
@@ -67,6 +71,7 @@ section below.
   big enough: if this happens, an error will be reported while the grammar is
   being built. You will then need to increase the size of your `StoargeT` (e.g.
   you might need to change `StorageT` from `u8` to `u16`).
+
 
 ## Breaking changes (minor)
 
