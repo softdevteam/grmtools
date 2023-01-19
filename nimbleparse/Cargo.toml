@@ -2,7 +2,7 @@
 name = "nimbleparse"
 description = "Simple Yacc grammar debugging tool"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2021"
 readme = "README.md"
@@ -14,9 +14,9 @@ doc = false
 name = "nimbleparse"
 
 [dependencies]
-cfgrammar = { path="../cfgrammar", version="0.12" }
+cfgrammar = { path="../cfgrammar", version="0.13" }
 getopts = "0.2"
-lrlex = { path="../lrlex", version="0.12" }
-lrpar = { path="../lrpar", version="0.12" }
-lrtable = { path="../lrtable", version="0.12" }
+lrlex = { path="../lrlex", version="0.13" }
+lrpar = { path="../lrpar", version="0.13" }
+lrtable = { path="../lrtable", version="0.13" }
 num-traits = "0.2"

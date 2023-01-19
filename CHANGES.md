@@ -1,4 +1,4 @@
-# grmtools 0.13.0 (XXXX-XX-XX)
+# grmtools 0.13.0 (2023-01-19)
 
 This release contains a number of new features and breaking changes. Most of
 the breaking changes are in advanced/niche parts of the API, which few users
