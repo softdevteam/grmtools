@@ -40,10 +40,14 @@ section below.
   change idioms such as `DefaultLexeme<StorageT>, StorageT>` to
   `DefaultLexerTypes<StorageT>`. For example, you might need to change:
   ```
+  use lrlex::{DefaultLexeme, LRNonStreamingLexer};
+  ...
   lexer: &LRNonStreamingLexer<DefaultLexeme<StorageT>, StorageT>,
   ```
   to:
   ```
+  use lrlex::{DefaultLexerTypes, LRNonStreamingLexer};
+  ...
   lexer: &LRNonStreamingLexer<DefaultLexerTypes<StorageT>>,
   ```
 
@@ -67,6 +71,7 @@ section below.
   big enough: if this happens, an error will be reported while the grammar is
   being built. You will then need to increase the size of your `StoargeT` (e.g.
   you might need to change `StorageT` from `u8` to `u16`).
+
 
 ## Breaking changes (minor)
 
