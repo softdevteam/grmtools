@@ -34,6 +34,7 @@ pub enum YaccGrammarErrorKind {
     MissingColon,
     MissingRightArrow,
     MismatchedBrace,
+    NonEmptyProduction,
     PrematureEnd,
     ProgramsNotSupported,
     UnknownDeclaration,
@@ -90,6 +91,7 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::MissingColon => "Missing ':'",
             YaccGrammarErrorKind::MissingRightArrow => "Missing '->'",
             YaccGrammarErrorKind::MismatchedBrace => "Mismatched brace",
+            YaccGrammarErrorKind::NonEmptyProduction => "%empty used in non-empty production",
             YaccGrammarErrorKind::PrematureEnd => "File ends prematurely",
             YaccGrammarErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccGrammarErrorKind::UnknownDeclaration => "Unknown declaration",
@@ -225,6 +227,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::MissingColon
             | YaccGrammarErrorKind::MissingRightArrow
             | YaccGrammarErrorKind::MismatchedBrace
+            | YaccGrammarErrorKind::NonEmptyProduction
             | YaccGrammarErrorKind::PrematureEnd
             | YaccGrammarErrorKind::PrecNotFollowedByToken
             | YaccGrammarErrorKind::ProgramsNotSupported
@@ -707,6 +710,19 @@ impl YaccParser {
                 let (j, a) = self.parse_action(i)?;
                 i = j;
                 action = Some(a);
+            } else if let Some(mut j) = self.lookahead_is("%empty", i) {
+                j = self.parse_ws(j, true)?;
+                // %empty could be followed by all sorts of weird syntax errors: all we try and do
+                // is say "does this production look like it's finished" and trust that the other
+                // errors will be caught by other parts of the parser.
+                if !syms.is_empty()
+                    | !(self.lookahead_is("|", j).is_some()
+                        || self.lookahead_is(";", j).is_some()
+                        || self.lookahead_is("{", j).is_some())
+                {
+                    return Err(self.mk_error(YaccGrammarErrorKind::NonEmptyProduction, i));
+                }
+                i = j;
             } else {
                 let (j, sym, span) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
@@ -2581,6 +2597,55 @@ x"
                 Symbol::Rule("B".to_string(), Span::new(43, 44)),
                 Symbol::Token("c".to_string(), Span::new(53, 54))
             ]
+        );
+    }
+
+    #[test]
+    fn test_percent_empty() {
+        parse(
+            YaccKind::Original(YaccOriginalActionKind::NoAction),
+            r#"
+        %token a
+        %start A
+        %%
+        A: %empty | "a";
+        "#,
+        )
+        .unwrap();
+
+        let src = r#"
+        %token a b
+        %start A
+        %%
+        A: "a" | %empty | "b";
+        B: %empty | "b";
+        "#;
+        parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
+
+        let src = r#"
+        %token a
+        %start A
+        %%
+        A: %empty "a";
+        "#;
+        parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).expect_error_at_line_col(
+            &src,
+            YaccGrammarErrorKind::NonEmptyProduction,
+            5,
+            12,
+        );
+
+        let src = r#"
+        %token a
+        %start A
+        %%
+        A: "a" %empty;
+        "#;
+        parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).expect_error_at_line_col(
+            &src,
+            YaccGrammarErrorKind::NonEmptyProduction,
+            5,
+            16,
         );
     }
 }
