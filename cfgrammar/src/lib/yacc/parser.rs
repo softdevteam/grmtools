@@ -2491,7 +2491,6 @@ x"
         A: ;
         "#;
         let grm = parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
-        eprintln!("{:?}", grm.expect_unused);
         assert!(grm
             .expect_unused
             .contains(&Symbol::Rule("A".to_string(), Span::new(24, 25))));
