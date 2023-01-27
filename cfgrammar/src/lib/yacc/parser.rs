@@ -28,7 +28,6 @@ pub enum YaccGrammarErrorKind {
     IllegalName,
     IllegalString,
     IncompleteRule,
-    DuplicateRule,
     IncompleteComment,
     IncompleteAction,
     MissingColon,
@@ -85,7 +84,6 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::IllegalName => "Illegal name",
             YaccGrammarErrorKind::IllegalString => "Illegal string",
             YaccGrammarErrorKind::IncompleteRule => "Incomplete rule",
-            YaccGrammarErrorKind::DuplicateRule => "Duplicated rule",
             YaccGrammarErrorKind::IncompleteComment => "Incomplete comment",
             YaccGrammarErrorKind::IncompleteAction => "Incomplete action",
             YaccGrammarErrorKind::MissingColon => "Missing ':'",
@@ -241,8 +239,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::UnknownToken(_)
             | YaccGrammarErrorKind::NoPrecForToken(_)
             | YaccGrammarErrorKind::UnknownEPP(_) => SpansKind::Error,
-            YaccGrammarErrorKind::DuplicateRule
-            | YaccGrammarErrorKind::DuplicatePrecedence
+            YaccGrammarErrorKind::DuplicatePrecedence
             | YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration
             | YaccGrammarErrorKind::DuplicateExpectDeclaration
             | YaccGrammarErrorKind::DuplicateExpectRRDeclaration
@@ -307,16 +304,13 @@ impl YaccParser {
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
         let mut result = self.parse_declarations(0, &mut errs);
-        result = self.parse_rules(
-            match result {
-                Ok(i) => i,
-                Err(e) => {
-                    errs.push(e);
-                    return Err(errs);
-                }
-            },
-            &mut errs,
-        );
+        result = self.parse_rules(match result {
+            Ok(i) => i,
+            Err(e) => {
+                errs.push(e);
+                return Err(errs);
+            }
+        });
         result = self.parse_programs(
             match result {
                 Ok(i) => i,
@@ -607,11 +601,7 @@ impl YaccParser {
         Err(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i))
     }
 
-    fn parse_rules(
-        &mut self,
-        mut i: usize,
-        errs: &mut Vec<YaccGrammarError>,
-    ) -> Result<usize, YaccGrammarError> {
+    fn parse_rules(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         // self.parse_declarations should have left the input at '%%'
         i = self.lookahead_is("%%", i).unwrap();
         i = self.parse_ws(i, true)?;
@@ -619,17 +609,13 @@ impl YaccParser {
             if self.lookahead_is("%%", i).is_some() {
                 break;
             }
-            i = self.parse_rule(i, errs)?;
+            i = self.parse_rule(i)?;
             i = self.parse_ws(i, true)?;
         }
         Ok(i)
     }
 
-    fn parse_rule(
-        &mut self,
-        mut i: usize,
-        errs: &mut Vec<YaccGrammarError>,
-    ) -> Result<usize, YaccGrammarError> {
+    fn parse_rule(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         let (j, rn) = self.parse_name(i)?;
         let span = Span::new(i, j);
         if self.ast.start.is_none() {
@@ -654,14 +640,8 @@ impl YaccParser {
                 }
                 i = self.parse_ws(i, true)?;
                 let (j, actiont) = self.parse_to_single_colon(i)?;
-                match self.ast.get_rule(&rn) {
-                    None => self.ast.add_rule((rn.clone(), span), Some(actiont)),
-                    Some(orig) => add_duplicate_occurrence(
-                        errs,
-                        YaccGrammarErrorKind::DuplicateRule,
-                        orig.name.1,
-                        span,
-                    ),
+                if self.ast.get_rule(&rn).is_none() {
+                    self.ast.add_rule((rn.clone(), span), Some(actiont));
                 }
                 i = j;
             }
@@ -1022,6 +1002,7 @@ mod test {
         },
         Span, Spanned, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
+    use std::collections::HashSet;
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
         let mut yp = YaccParser::new(yacc_kind, s.to_string());
@@ -2421,47 +2402,50 @@ x"
     }
 
     #[test]
-    fn test_multi_span_error_kinds() {
-        let e = parse(
+    fn test_duplicate_rule() {
+        let ast = parse(
             YaccKind::Grmtools,
-            "%start A
-             %%
-             A -> (): 'a1';
-             B -> (): 'bb';
-             A -> (): 'a2';
-             C -> (): 'cc';
-             A -> (): 'a3';
-            ",
+            "%token A B D
+%%
+Expr -> () : %empty | A;
+Expr -> () : B | 'C';
+Expr -> () : D;
+",
         )
-        .expect_err("parse successful while expecting error");
+        .unwrap();
+        let expr_rule = ast.get_rule("Expr").unwrap();
+        let mut prod_names = HashSet::new();
+        for pidx in &expr_rule.pidxs {
+            for sym in &ast.prods[*pidx].symbols {
+                let name = match sym {
+                    Symbol::Token(name, _) | Symbol::Rule(name, _) => name.clone(),
+                };
+                prod_names.insert(name);
+            }
+        }
+        assert_eq!(ast.prods.len(), 5);
         assert_eq!(
-            e,
-            vec![YaccGrammarError {
-                kind: YaccGrammarErrorKind::DuplicateRule,
-                spans: vec![Span::new(38, 39), Span::new(94, 95), Span::new(150, 151)],
-            }]
+            prod_names,
+            HashSet::from_iter(["A", "B", "C", "D"].map(|s| s.to_owned()))
         );
     }
 
     #[test]
-    fn test_duplicate_rules_and_missing_arrow() {
-        let src = "
-        %%
-        A -> () : 'a1';
-        A -> () : 'a2';
-        B -> () : 'b1';
-        A -> () : 'a3';
-        B -> () : 'b2';
-        B";
+    fn test_duplicate_start_and_missing_arrow() {
+        let src = "%start A
+%start A
+%start A
+%%
+A -> () : 'a1';
+B";
         parse(YaccKind::Grmtools, src).expect_multiple_errors(
             src,
             &mut [
                 (
-                    YaccGrammarErrorKind::DuplicateRule,
-                    vec![(3, 9), (4, 9), (6, 9)],
+                    YaccGrammarErrorKind::DuplicateStartDeclaration,
+                    vec![(1, 8), (2, 8), (3, 8)],
                 ),
-                (YaccGrammarErrorKind::DuplicateRule, vec![(5, 9), (7, 9)]),
-                (YaccGrammarErrorKind::MissingRightArrow, vec![(8, 10)]),
+                (YaccGrammarErrorKind::MissingRightArrow, vec![(6, 2)]),
             ]
             .into_iter(),
         )
@@ -2473,8 +2457,9 @@ x"
             "
         %start A
         %start B
+        %expect 1
+        %expect 2
         %%
-        A -> () : 'a';
         A -> () : 'a';
         %%
         ",
@@ -2484,7 +2469,10 @@ x"
                 YaccGrammarErrorKind::DuplicateStartDeclaration,
                 vec![(2, 16), (3, 16)],
             ),
-            (YaccGrammarErrorKind::DuplicateRule, vec![(5, 9), (6, 9)]),
+            (
+                YaccGrammarErrorKind::DuplicateExpectDeclaration,
+                vec![(4, 17), (5, 17)],
+            ),
         ];
         parse(YaccKind::Grmtools, &src)
             .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
@@ -2494,7 +2482,7 @@ x"
                 /* Incomplete comment
         ",
         );
-        expected_errs.push((YaccGrammarErrorKind::IncompleteComment, vec![(9, 17)]));
+        expected_errs.push((YaccGrammarErrorKind::IncompleteComment, vec![(10, 17)]));
         parse(YaccKind::Grmtools, &src)
             .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
     }
@@ -2629,7 +2617,7 @@ x"
         A: %empty "a";
         "#;
         parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).expect_error_at_line_col(
-            &src,
+            src,
             YaccGrammarErrorKind::NonEmptyProduction,
             5,
             12,
@@ -2642,7 +2630,7 @@ x"
         A: "a" %empty;
         "#;
         parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).expect_error_at_line_col(
-            &src,
+            src,
             YaccGrammarErrorKind::NonEmptyProduction,
             5,
             16,
