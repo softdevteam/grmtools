@@ -1,3 +1,23 @@
+# grmtools 0.13.1 (2023-01-27)
+
+* Support `%empty` in productions. This Bison-ism can be used as a signal to
+  readers that a production really is meant to be empty.
+
+* Allow rules to be repeated, with each being treated as a separate
+  production(s). In other words this grammar:
+
+  ```
+  A: 'x';
+  A: 'y';
+  ```
+
+  is now equivalent to:
+
+  ```
+  A: 'x' | 'y';
+  ```
+
+
 # grmtools 0.13.0 (2023-01-19)
 
 This release contains a number of new features and breaking changes. Most of
