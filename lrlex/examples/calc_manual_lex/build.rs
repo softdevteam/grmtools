@@ -11,14 +11,17 @@ const TOKENS_MAP: &[(&str, &str)] = &[
     (")", "RBRACK"),
 ];
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let ctp = CTParserBuilder::<DefaultLexerTypes<u8>>::new()
         .yacckind(YaccKind::Grmtools)
-        .grammar_in_src_dir("calc.y")?
-        .build()?;
+        .grammar_in_src_dir("calc.y")
+        .unwrap()
+        .build()
+        .unwrap();
     ct_token_map::<u8>(
         "token_map",
         ctp.token_map(),
         Some(&TOKENS_MAP.iter().cloned().collect()),
     )
+    .unwrap();
 }

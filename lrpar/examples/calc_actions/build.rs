@@ -2,7 +2,7 @@
 use cfgrammar::yacc::YaccKind;
 use lrlex::{self, CTLexerBuilder};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     // Since we're using both lrlex and lrpar, we use lrlex's `lrpar_config` convenience function
     // that makes it easy to a) create a lexer and parser and b) link them together.
     CTLexerBuilder::new()
@@ -13,7 +13,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .grammar_in_src_dir("calc.y")
                 .unwrap()
         })
-        .lexer_in_src_dir("calc.l")?
-        .build()?;
-    Ok(())
+        .lexer_in_src_dir("calc.l")
+        .unwrap()
+        .build()
+        .unwrap();
 }
