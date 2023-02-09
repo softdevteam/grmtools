@@ -42,12 +42,14 @@ use cfgrammar::yacc::YaccKind;
 use lrlex::{ct_token_map, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let ctp = CTParserBuilder::<DefaultLexerTypes<u8>>::new()
         .yacckind(YaccKind::Grmtools)
-        .grammar_in_src_dir("grammar.y")?
-        .build()?;
-    ct_token_map::<u8>("token_map", ctp.token_map(), None)
+        .grammar_in_src_dir("grammar.y")
+        .unwrap()
+        .build()
+        .unwrap();
+    ct_token_map::<u8>("token_map", ctp.token_map(), None).unwrap()
 }
 ```
 

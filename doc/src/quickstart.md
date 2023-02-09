@@ -51,7 +51,7 @@ Our `build.rs` file thus looks as follows:
 use cfgrammar::yacc::YaccKind;
 use lrlex::CTLexerBuilder;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     CTLexerBuilder::new()
         .lrpar_config(|ctp| {
             ctp.yacckind(YaccKind::Grmtools)
@@ -59,8 +59,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap()
         })
         .lexer_in_src_dir("calc.l")?
-        .build()?;
-    Ok(())
+        .build()
+        .unwrap();
 }
 ```
 
