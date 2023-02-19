@@ -1,3 +1,5 @@
+#![deny(unreachable_pub)]
+
 pub mod ast;
 pub mod firsts;
 pub mod follows;

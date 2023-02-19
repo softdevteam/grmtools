@@ -113,7 +113,7 @@ fn vob_intersect(v1: &Vob, v2: &Vob) -> bool {
 }
 
 /// Create a `StateGraph` from 'grm'.
-pub fn pager_stategraph<StorageT: 'static + Hash + PrimInt + Unsigned>(
+pub(crate) fn pager_stategraph<StorageT: 'static + Hash + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
 ) -> StateGraph<StorageT>
 where

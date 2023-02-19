@@ -1046,7 +1046,7 @@ pub(crate) mod test {
     // lrlex as a dependency of lrpar). The format is the same as lrlex *except*:
     //   * The initial "%%" isn't needed, and only "'" is valid as a rule name delimiter.
     //   * "Unnamed" rules aren't allowed (e.g. you can't have a rule which discards whitespaces).
-    pub struct SmallLexer<'input> {
+    pub(crate) struct SmallLexer<'input> {
         lexemes: Vec<TestLexeme>,
         s: &'input str,
     }
