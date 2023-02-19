@@ -14,7 +14,7 @@ use vob::Vob;
 use cfgrammar::yacc::firsts::YaccFirsts;
 
 /// The type of "context" (also known as "lookaheads")
-pub type Ctx = Vob;
+pub(crate) type Ctx = Vob;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

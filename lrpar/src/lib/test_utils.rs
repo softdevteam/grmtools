@@ -71,7 +71,7 @@ impl fmt::Display for TestLexeme {
 impl Error for TestLexeme {}
 
 #[derive(Debug)]
-pub struct TestLexError {}
+pub(crate) struct TestLexError {}
 
 impl LexError for TestLexError {
     fn span(&self) -> Span {

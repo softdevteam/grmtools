@@ -10,6 +10,7 @@
 #![allow(clippy::unnecessary_wraps)]
 #![allow(clippy::upper_case_acronyms)]
 #![forbid(unsafe_code)]
+#![deny(unreachable_pub)]
 
 use std::{error::Error, fmt};
 

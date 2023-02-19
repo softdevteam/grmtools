@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 #![forbid(unsafe_code)]
+#![deny(unreachable_pub)]
 
 use std::{hash::Hash, mem::size_of};
 

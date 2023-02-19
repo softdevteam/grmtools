@@ -200,7 +200,7 @@ where
 use cfgrammar::SIdx;
 
 #[cfg(test)]
-pub fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
+pub(crate) fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
     is: &Itemset<StorageT>,
     nt: &str,
