@@ -1,12 +1,12 @@
+use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 use cfgrammar::Span;
 use lazy_static::lazy_static;
 use lrpar::LexerTypes;
 use num_traits::AsPrimitive;
 use regex::Regex;
 use std::borrow::{Borrow as _, Cow};
+use std::collections::HashMap;
 use std::ops::Not;
-
-use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
 
 type LexInternalBuildResult<T> = Result<T, LexBuildError>;
 
@@ -393,6 +393,7 @@ where
             let tok_id = LexerTypesT::StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from \
                            failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
+            let regex_options = HashMap::new();
             let rule = Rule::new(
                 Some(tok_id),
                 name,
@@ -400,6 +401,7 @@ where
                 re_str.to_string(),
                 start_states,
                 target_state,
+                &regex_options,
             )
             .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
             self.rules.push(rule);

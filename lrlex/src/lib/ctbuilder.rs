@@ -24,7 +24,7 @@ use quote::quote;
 use regex::Regex;
 use serde::Serialize;
 
-use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
+use crate::{lexer::RegexOptions, DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -94,6 +94,7 @@ where
     rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
+    regex_options: HashMap<std::mem::Discriminant<RegexOptions>, RegexOptions>,
 }
 
 impl<'a> CTLexerBuilder<'a, DefaultLexerTypes<u32>> {
@@ -137,6 +138,7 @@ where
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
+            regex_options: HashMap::new(),
         }
     }
 
@@ -263,6 +265,12 @@ where
     /// rust supported by grmtools.
     pub fn rust_edition(mut self, edition: RustEdition) -> Self {
         self.rust_edition = edition;
+        self
+    }
+
+    pub fn add_regex_option(mut self, option: RegexOptions) -> Self {
+        self.regex_options
+            .insert(std::mem::discriminant(&option), option);
         self
     }
 
@@ -443,6 +451,14 @@ pub fn lexerdef() -> {lexerdef_type} {{
             .ok();
         }
         outs.push_str("\n    ];\n");
+        outs.push_str("    let regex_options = ::std::collections::HashMap::from_iter([");
+        for opt in self.regex_options.values() {
+            outs.push_str(&format!(
+                "(::std::mem::discriminant(&::lrlex::RegexOptions::{:?}), ::lrlex::RegexOptions::{:?}),\n",
+                opt, opt
+            ));
+        }
+        outs.push_str("]);\n");
         outs.push_str("    let rules = vec![");
 
         // Individual rules
@@ -469,7 +485,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             write!(
                 outs,
                 "
-        Rule::new({}, {}, {}, {}.to_string(), {}.to_vec(), {}).unwrap(),",
+        Rule::new({}, {}, {}, {}.to_string(), {}.to_vec(), {}, &regex_options).unwrap(),",
                 tok_id,
                 n,
                 n_span,

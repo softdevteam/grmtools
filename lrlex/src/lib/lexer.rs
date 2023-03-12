@@ -3,6 +3,7 @@ use std::{
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
+    mem,
     slice::Iter,
     str::FromStr,
 };
@@ -17,6 +18,20 @@ use crate::{
     parser::{LexParser, StartState, StartStateOperation},
     LRLexError, LexBuildResult, StartStateId,
 };
+
+#[derive(Debug)]
+pub enum RegexOptions {
+    CaseInsensitive(bool),
+    DotMatchesNewline(bool),
+    SwapGreed(bool),
+    IgnoreWhitespace(bool),
+    Unicode(bool),
+    Octal(bool),
+    MultiLine(bool),
+    SizeLimit(usize),
+    DFASizeLimit(usize),
+    NestLimit(u32),
+}
 
 #[derive(Debug)]
 #[doc(hidden)]
@@ -52,12 +67,99 @@ impl<StorageT> Rule<StorageT> {
         re_str: String,
         start_states: Vec<usize>,
         target_state: Option<(usize, StartStateOperation)>,
+        regex_options: &HashMap<mem::Discriminant<RegexOptions>, RegexOptions>,
     ) -> Result<Rule<StorageT>, regex::Error> {
-        let re = RegexBuilder::new(&format!("\\A(?:{})", re_str))
-            .octal(true)
-            .multi_line(true)
-            .dot_matches_new_line(true)
-            .build()?;
+        let mut re = RegexBuilder::new(&format!("\\A(?:{})", re_str));
+        // We have had default values for the following.
+        let re = re
+            .octal(
+                regex_options
+                    .get(&mem::discriminant(&RegexOptions::Octal(true)))
+                    .map(|opt| {
+                        if let RegexOptions::Octal(flag) = opt {
+                            *flag
+                        } else {
+                            unreachable!("Discriminant mismatch")
+                        }
+                    })
+                    .unwrap_or(true),
+            )
+            .multi_line(
+                regex_options
+                    .get(&mem::discriminant(&RegexOptions::MultiLine(true)))
+                    .map(|opt| {
+                        if let RegexOptions::MultiLine(flag) = opt {
+                            *flag
+                        } else {
+                            unreachable!("Discriminant mismatch")
+                        }
+                    })
+                    .unwrap_or(true),
+            )
+            .dot_matches_new_line(
+                regex_options
+                    .get(&mem::discriminant(&RegexOptions::DotMatchesNewline(true)))
+                    .map(|opt| {
+                        if let RegexOptions::DotMatchesNewline(flag) = opt {
+                            *flag
+                        } else {
+                            unreachable!("Discriminant mismatch")
+                        }
+                    })
+                    .unwrap_or(true),
+            );
+
+        // The following have defaulted to "Whatever regex does".
+        let re = if let Some(RegexOptions::CaseInsensitive(flag)) =
+            regex_options.get(&mem::discriminant(&RegexOptions::CaseInsensitive(true)))
+        {
+            re.case_insensitive(*flag)
+        } else {
+            re
+        };
+        let re = if let Some(RegexOptions::SwapGreed(flag)) =
+            regex_options.get(&mem::discriminant(&RegexOptions::SwapGreed(true)))
+        {
+            re.swap_greed(*flag)
+        } else {
+            re
+        };
+        let re = if let Some(RegexOptions::IgnoreWhitespace(flag)) =
+            regex_options.get(&mem::discriminant(&RegexOptions::IgnoreWhitespace(true)))
+        {
+            re.ignore_whitespace(*flag)
+        } else {
+            re
+        };
+        let re = if let Some(RegexOptions::Unicode(flag)) =
+            regex_options.get(&mem::discriminant(&RegexOptions::Unicode(true)))
+        {
+            re.unicode(*flag)
+        } else {
+            re
+        };
+        let re = if let Some(RegexOptions::SizeLimit(sz)) =
+            regex_options.get(&mem::discriminant(&RegexOptions::SizeLimit(0)))
+        {
+            re.size_limit(*sz)
+        } else {
+            re
+        };
+        let re = if let Some(RegexOptions::DFASizeLimit(sz)) =
+            regex_options.get(&mem::discriminant(&RegexOptions::DFASizeLimit(0)))
+        {
+            re.dfa_size_limit(*sz)
+        } else {
+            re
+        };
+        let re = if let Some(RegexOptions::NestLimit(sz)) =
+            regex_options.get(&mem::discriminant(&RegexOptions::NestLimit(0)))
+        {
+            re.nest_limit(*sz)
+        } else {
+            re
+        };
+        let re = re.build()?;
         Ok(Rule {
             tok_id,
             name,

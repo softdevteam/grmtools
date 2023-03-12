@@ -23,7 +23,7 @@ mod parser;
 pub use crate::{
     ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility},
     defaults::{DefaultLexeme, DefaultLexerTypes},
-    lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, Rule},
+    lexer::{LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, RegexOptions, Rule},
     parser::StartState,
     parser::StartStateOperation,
 };
