@@ -24,7 +24,9 @@ use quote::quote;
 use regex::Regex;
 use serde::Serialize;
 
-use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
+use crate::{
+    DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef, RegexOptions, DEFAULT_REGEX_OPTIONS,
+};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -94,6 +96,7 @@ where
     rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
+    regex_options: RegexOptions,
 }
 
 impl<'a> CTLexerBuilder<'a, DefaultLexerTypes<u32>> {
@@ -137,6 +140,7 @@ where
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
+            regex_options: DEFAULT_REGEX_OPTIONS,
         }
     }
 
@@ -326,7 +330,11 @@ where
         let line_cache = NewlineCache::from_str(&lex_src).unwrap();
         let mut lexerdef: Box<dyn LexerDef<LexerTypesT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
-                LRNonStreamingLexerDef::<LexerTypesT>::from_str(&lex_src).map_err(|errs| {
+                LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
+                    &lex_src,
+                    self.regex_options.clone(),
+                )
+                .map_err(|errs| {
                     errs.iter()
                         .map(|e| {
                             if let Some((line, column)) = line_cache.byte_to_line_num_and_col_num(
@@ -427,6 +435,31 @@ pub fn lexerdef() -> {lexerdef_type} {{
         )
         .ok();
 
+        outs.push_str(&format!(
+            "let regex_options = ::lrlex::RegexOptions {{
+            dot_matches_new_line: {dot_matches_new_line:?},
+            multi_line: {multi_line:?},
+            octal: {octal:?},
+            case_insensitive: {case_insensitive:?},
+            unicode: {unicode:?},
+            swap_greed: {swap_greed:?},
+            ignore_whitespace: {ignore_whitespace:?},
+            size_limit: {size_limit:?},
+            dfa_size_limit: {dfa_size_limit:?},
+            nest_limit: {nest_limit:?},
+        }};",
+            dot_matches_new_line = self.regex_options.dot_matches_new_line,
+            multi_line = self.regex_options.multi_line,
+            octal = self.regex_options.octal,
+            case_insensitive = self.regex_options.case_insensitive,
+            unicode = self.regex_options.unicode,
+            swap_greed = self.regex_options.swap_greed,
+            ignore_whitespace = self.regex_options.ignore_whitespace,
+            size_limit = self.regex_options.size_limit,
+            dfa_size_limit = self.regex_options.dfa_size_limit,
+            nest_limit = self.regex_options.nest_limit,
+        ));
+
         outs.push_str("    let start_states: Vec<StartState> = vec![");
         for ss in lexerdef.iter_start_states() {
             let state_name = &ss.name;
@@ -469,7 +502,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             write!(
                 outs,
                 "
-        Rule::new({}, {}, {}, {}.to_string(), {}.to_vec(), {}).unwrap(),",
+        Rule::new({}, {}, {}, {}.to_string(), {}.to_vec(), {}, &regex_options).unwrap(),",
                 tok_id,
                 n,
                 n_span,
@@ -615,6 +648,76 @@ pub fn lexerdef() -> {lexerdef_type} {{
     /// as reserved words, which are intentionally not in the grammar).
     pub fn allow_missing_tokens_in_parser(mut self, allow: bool) -> Self {
         self.allow_missing_tokens_in_parser = allow;
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// The default value is `true`.
+    pub fn dot_matches_new_line(mut self, flag: bool) -> Self {
+        self.regex_options.dot_matches_new_line = flag;
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// The default value is `true`.
+    pub fn multi_line(mut self, flag: bool) -> Self {
+        self.regex_options.multi_line = flag;
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// The default value is `true`.
+    pub fn octal(mut self, flag: bool) -> Self {
+        self.regex_options.octal = flag;
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// Default value is specified by regex.
+    pub fn swap_greed(mut self, flag: bool) -> Self {
+        self.regex_options.swap_greed = Some(flag);
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// Default value is specified by regex.
+    pub fn ignore_whitespace(mut self, flag: bool) -> Self {
+        self.regex_options.ignore_whitespace = Some(flag);
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// Default value is specified by regex.
+    pub fn unicode(mut self, flag: bool) -> Self {
+        self.regex_options.unicode = Some(flag);
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// Default value is specified by regex.
+    pub fn case_insensitive(mut self, flag: bool) -> Self {
+        self.regex_options.case_insensitive = Some(flag);
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// Default value is specified by regex.
+    pub fn size_limit(mut self, sz: usize) -> Self {
+        self.regex_options.size_limit = Some(sz);
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// Default value is specified by regex.
+    pub fn dfa_size_limit(mut self, sz: usize) -> Self {
+        self.regex_options.dfa_size_limit = Some(sz);
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// Default value is specified by regex.
+    pub fn nest_limit(mut self, lim: u32) -> Self {
+        self.regex_options.nest_limit = Some(lim);
         self
     }
 }
