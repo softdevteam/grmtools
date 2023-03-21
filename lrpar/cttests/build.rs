@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|flags_vec| {
                     flags_vec
                         .iter()
-                        .partition(|flag| !flag.as_str().unwrap().starts_with('!'))
+                        .partition(|flag| flag.as_str().unwrap().starts_with('!'))
                 })
                 .unwrap_or_else(|| (Vec::new(), Vec::new()));
             let negative_lex_flags = negative_lex_flags
@@ -72,10 +72,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let positive_lex_flags = positive_lex_flags
                 .iter()
                 .map(|flag| flag.as_str().unwrap())
-                .collect::<Vec<_>>();
-            let negative_lex_flags = negative_lex_flags
-                .iter()
-                .map(|flag| flag.strip_prefix('!').unwrap())
                 .collect::<Vec<_>>();
             let lex_flags = (&positive_lex_flags, &negative_lex_flags);
 
@@ -95,46 +91,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut outp = PathBuf::from(&out_dir);
             outp.push(format!("{}.y.rs", base));
             outp.set_extension("rs");
-            let cp_build = CTParserBuilder::<DefaultLexerTypes<u32>>::new()
+            let mut cp_build = CTParserBuilder::<DefaultLexerTypes<u32>>::new()
                 .yacckind(yacckind)
                 .grammar_path(pg.to_str().unwrap())
                 .output_path(&outp);
-            let cp_build = if let Some(flag) = check_flag(yacc_flags, "error_on_conflicts") {
-                cp_build.error_on_conflicts(flag)
-            } else {
-                cp_build
-            };
-            let cp_build = if let Some(flag) = check_flag(yacc_flags, "warnings_are_errors") {
-                cp_build.warnings_are_errors(flag)
-            } else {
-                cp_build
-            };
-            let cp_build = if let Some(flag) = check_flag(yacc_flags, "show_warnings") {
-                cp_build.show_warnings(flag)
-            } else {
-                cp_build
+            if let Some(flag) = check_flag(yacc_flags, "error_on_conflicts") {
+                cp_build = cp_build.error_on_conflicts(flag)
+            }
+            if let Some(flag) = check_flag(yacc_flags, "warnings_are_errors") {
+                cp_build = cp_build.warnings_are_errors(flag)
+            }
+            if let Some(flag) = check_flag(yacc_flags, "show_warnings") {
+                cp_build = cp_build.show_warnings(flag)
             };
             let cp = cp_build.build()?;
 
             let mut outl = PathBuf::from(&out_dir);
             outl.push(format!("{}.l.rs", base));
             outl.set_extension("rs");
-            let cl_build = CTLexerBuilder::new()
+            let mut cl_build = CTLexerBuilder::new()
                 .rule_ids_map(cp.token_map())
                 .lexer_path(pl.to_str().unwrap())
                 .output_path(&outl);
-            let cl_build = if let Some(flag) = check_flag(lex_flags, "allow_missing_terms_in_lexer")
-            {
-                cl_build.allow_missing_terms_in_lexer(flag)
-            } else {
-                cl_build
-            };
-            let cl_build =
-                if let Some(flag) = check_flag(lex_flags, "allow_missing_tokens_in_parser") {
-                    cl_build.allow_missing_tokens_in_parser(flag)
-                } else {
-                    cl_build
-                };
+            if let Some(flag) = check_flag(lex_flags, "allow_missing_terms_in_lexer") {
+                cl_build = cl_build.allow_missing_terms_in_lexer(flag)
+            }
+            if let Some(flag) = check_flag(lex_flags, "allow_missing_tokens_in_parser") {
+                cl_build = cl_build.allow_missing_tokens_in_parser(flag)
+            }
+            if let Some(flag) = check_flag(lex_flags, "dot_matches_new_line") {
+                cl_build = cl_build.dot_matches_new_line(flag)
+            }
+            if let Some(flag) = check_flag(lex_flags, "case_insensitive") {
+                cl_build = cl_build.case_insensitive(flag)
+            }
+            if let Some(flag) = check_flag(lex_flags, "multi_line") {
+                cl_build = cl_build.multi_line(flag)
+            }
+            if let Some(flag) = check_flag(lex_flags, "swap_greed") {
+                cl_build = cl_build.swap_greed(flag)
+            }
+            if let Some(flag) = check_flag(lex_flags, "ignore_whitespace") {
+                cl_build = cl_build.ignore_whitespace(flag)
+            }
+            if let Some(flag) = check_flag(lex_flags, "unicode") {
+                cl_build = cl_build.unicode(flag)
+            }
+            if let Some(flag) = check_flag(lex_flags, "octal") {
+                cl_build = cl_build.octal(flag)
+            }
             cl_build.build()?;
         }
     }
