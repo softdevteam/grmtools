@@ -6,7 +6,10 @@ use regex::Regex;
 use std::borrow::{Borrow as _, Cow};
 use std::ops::Not;
 
-use crate::{lexer::Rule, LexBuildError, LexBuildResult, LexErrorKind};
+use crate::{
+    lexer::{RegexOptions, Rule, DEFAULT_REGEX_OPTIONS},
+    LexBuildError, LexBuildResult, LexErrorKind,
+};
 
 type LexInternalBuildResult<T> = Result<T, LexBuildError>;
 
@@ -79,6 +82,7 @@ where
     src: String,
     pub(super) rules: Vec<Rule<LexerTypesT::StorageT>>,
     pub(super) start_states: Vec<StartState>,
+    pub(super) regex_options: RegexOptions,
 }
 
 fn add_duplicate_occurrence(
@@ -122,6 +126,26 @@ where
                 false,
                 Span::new(0, 0),
             )],
+            regex_options: DEFAULT_REGEX_OPTIONS,
+        };
+        p.parse()?;
+        Ok(p)
+    }
+
+    pub(super) fn new_with_regex_options(
+        src: String,
+        re_opt: RegexOptions,
+    ) -> LexBuildResult<LexParser<LexerTypesT>> {
+        let mut p = LexParser {
+            src,
+            rules: Vec::new(),
+            start_states: vec![StartState::new(
+                0,
+                INITIAL_START_STATE_NAME,
+                false,
+                Span::new(0, 0),
+            )],
+            regex_options: re_opt,
         };
         p.parse()?;
         Ok(p)
@@ -400,6 +424,7 @@ where
                 re_str.to_string(),
                 start_states,
                 target_state,
+                &self.regex_options,
             )
             .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
             self.rules.push(rule);

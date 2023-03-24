@@ -1,0 +1,13 @@
+name: Test NoAction using the calculator grammar
+yacckind: Original(YaccOriginalActionKind::NoAction)
+lex_flags: ['!dot_matches_new_line', 'octal']
+grammar: |
+    %start Start 
+    %%
+    Start: 'ANY' | 'a' | 'NL';
+
+lexer: |
+    %%
+    \141 'a'
+    . 'ANY'
+    [\n] 'NL'

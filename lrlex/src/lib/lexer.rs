@@ -18,6 +18,35 @@ use crate::{
     LRLexError, LexBuildResult, StartStateId,
 };
 
+#[doc(hidden)]
+/// Corresponds to the options for `regex::RegexBuilder`.
+#[derive(Clone)]
+pub struct RegexOptions {
+    pub dot_matches_new_line: bool,
+    pub multi_line: bool,
+    pub octal: bool,
+    pub case_insensitive: Option<bool>,
+    pub swap_greed: Option<bool>,
+    pub ignore_whitespace: Option<bool>,
+    pub unicode: Option<bool>,
+    pub size_limit: Option<usize>,
+    pub dfa_size_limit: Option<usize>,
+    pub nest_limit: Option<u32>,
+}
+
+pub const DEFAULT_REGEX_OPTIONS: RegexOptions = RegexOptions {
+    dot_matches_new_line: true,
+    multi_line: true,
+    octal: true,
+    case_insensitive: None,
+    ignore_whitespace: None,
+    swap_greed: None,
+    unicode: None,
+    size_limit: None,
+    dfa_size_limit: None,
+    nest_limit: None,
+};
+
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct Rule<StorageT> {
@@ -52,12 +81,37 @@ impl<StorageT> Rule<StorageT> {
         re_str: String,
         start_states: Vec<usize>,
         target_state: Option<(usize, StartStateOperation)>,
+        re_opt: &RegexOptions,
     ) -> Result<Rule<StorageT>, regex::Error> {
-        let re = RegexBuilder::new(&format!("\\A(?:{})", re_str))
-            .octal(true)
-            .multi_line(true)
-            .dot_matches_new_line(true)
-            .build()?;
+        let mut re = RegexBuilder::new(&format!("\\A(?:{})", re_str));
+        let mut re = re
+            .octal(re_opt.octal)
+            .multi_line(re_opt.multi_line)
+            .dot_matches_new_line(re_opt.dot_matches_new_line);
+
+        if let Some(flag) = re_opt.ignore_whitespace {
+            re = re.ignore_whitespace(flag)
+        }
+        if let Some(flag) = re_opt.unicode {
+            re = re.unicode(flag)
+        }
+        if let Some(flag) = re_opt.case_insensitive {
+            re = re.case_insensitive(flag)
+        }
+        if let Some(flag) = re_opt.swap_greed {
+            re = re.swap_greed(flag)
+        }
+        if let Some(sz) = re_opt.size_limit {
+            re = re.size_limit(sz)
+        }
+        if let Some(sz) = re_opt.dfa_size_limit {
+            re = re.dfa_size_limit(sz)
+        }
+        if let Some(lim) = re_opt.nest_limit {
+            re = re.nest_limit(lim)
+        }
+
+        let re = re.build()?;
         Ok(Rule {
             tok_id,
             name,
@@ -248,6 +302,19 @@ where
     usize: AsPrimitive<StorageT>,
     LexerTypesT::StorageT: TryFrom<usize>,
 {
+    pub fn new_with_options(
+        s: &str,
+        re_opts: RegexOptions,
+    ) -> LexBuildResult<LRNonStreamingLexerDef<LexerTypesT>> {
+        LexParser::<LexerTypesT>::new_with_regex_options(s.to_string(), re_opts).map(|p| {
+            LRNonStreamingLexerDef {
+                rules: p.rules,
+                start_states: p.start_states,
+                phantom: PhantomData,
+            }
+        })
+    }
+
     /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
     /// [LRNonStreamingLexerDef].
     pub fn lexer<'lexer, 'input: 'lexer>(
