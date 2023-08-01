@@ -1,3 +1,8 @@
+# grmtools 0.13.2 (2023-08-01)
+
+* Add CTLexerBuilder options for configuring regex behavior.
+
+
 # grmtools 0.13.1 (2023-01-27)
 
 * Support `%empty` in productions. This Bison-ism can be used as a signal to
