@@ -19,7 +19,7 @@ path = "src/lib/mod.rs"
 serde = []
 
 [build-dependencies]
-vergen = { version = "7", default-features = false, features = ["build"] }
+vergen = { version = "8", default-features = false, features = ["build"] }
 
 [dependencies]
 bincode = "1.2"
