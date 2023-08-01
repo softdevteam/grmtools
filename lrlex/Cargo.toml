@@ -18,7 +18,7 @@ name = "lrlex"
 path = "src/lib/mod.rs"
 
 [build-dependencies]
-vergen = { version = "7", default-features = false, features = ["build"] }
+vergen = { version = "8", default-features = false, features = ["build"] }
 
 [dependencies]
 cfgrammar = { path = "../cfgrammar", version = "0.13" }
