@@ -26,7 +26,7 @@ bincode = "1.2"
 cactus = "1.0"
 cfgrammar = { path="../cfgrammar", version = "0.13", features=["serde"] }
 filetime = "0.2"
-indexmap = "1.3"
+indexmap = "2"
 lazy_static = "1.4"
 lrtable = { path="../lrtable", version = "0.13", features=["serde"] }
 num-traits = "0.2"
