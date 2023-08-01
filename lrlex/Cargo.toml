@@ -26,7 +26,7 @@ getopts = "0.2" # only needed for src/main.rs
 lazy_static = "1.4"
 lrpar = { path = "../lrpar", version = "0.13" }
 regex = "1"
-regex-syntax = "0.6.27"
+regex-syntax = "0.7"
 num-traits = "0.2"
 quote = "1.0"
 serde = "1.0"
