@@ -732,8 +732,7 @@ where
 
         let mut s = vec![];
         let mut st = vec![(cheapest_prod(ridx), 0)];
-        while !st.is_empty() {
-            let (pidx, sym_idx) = st.pop().unwrap();
+        while let Some((pidx, sym_idx)) = st.pop() {
             let prod = self.grm.prod(pidx);
             for (sidx, sym) in prod.iter().enumerate().skip(sym_idx) {
                 match sym {

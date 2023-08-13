@@ -42,8 +42,7 @@ where
     pub fn pp(&self, grm: &YaccGrammar<StorageT>, input: &str) -> String {
         let mut st = vec![(0, self)]; // Stack of (indent level, node) pairs
         let mut s = String::new();
-        while !st.is_empty() {
-            let (indent, e) = st.pop().unwrap();
+        while let Some((indent, e)) = st.pop() {
             for _ in 0..indent {
                 s.push(' ');
             }

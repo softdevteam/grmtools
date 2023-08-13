@@ -120,7 +120,7 @@ where
         }
 
         let mut o = String::new();
-        for (stidx, &(ref core_st, ref closed_st)) in self.iter_stidxs().zip(self.states.iter()) {
+        for (stidx, (core_st, closed_st)) in self.iter_stidxs().zip(self.states.iter()) {
             if stidx != self.start_state {
                 o.push('\n');
             }

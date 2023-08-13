@@ -299,10 +299,10 @@ where
     /// in the future.
     ///
     /// An `Err()` value returned will *not* be added to `errs`.
-    fn validate_start_state<'a>(
+    fn validate_start_state(
         &self,
         span: Span,
-        name: &'a str,
+        name: &str,
         errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<bool> {
         self.validate_start_state_name(span, name)?;
