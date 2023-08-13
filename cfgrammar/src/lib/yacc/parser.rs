@@ -405,12 +405,15 @@ impl YaccParser {
                 let (j, v) = self.parse_string(i)?;
                 let vspan = Span::new(i, j);
                 match self.ast.epp.entry(n) {
-                    Entry::Occupied(orig) => add_duplicate_occurrence(
-                        errs,
-                        YaccGrammarErrorKind::DuplicateEPP,
-                        orig.get().0,
-                        span,
-                    ),
+                    Entry::Occupied(orig) => {
+                        let (orig_span, _) = orig.get();
+                        add_duplicate_occurrence(
+                            errs,
+                            YaccGrammarErrorKind::DuplicateEPP,
+                            *orig_span,
+                            span,
+                        )
+                    }
                     Entry::Vacant(epp) => {
                         epp.insert((span, (v, vspan)));
                     }

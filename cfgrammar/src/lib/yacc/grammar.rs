@@ -175,8 +175,15 @@ where
             }
         };
 
-        for (k, rule) in &ast.rules {
-            rule_names.push((k.clone(), rule.name.1));
+        for (
+            k,
+            ast::Rule {
+                name: (_, name_span),
+                ..
+            },
+        ) in &ast.rules
+        {
+            rule_names.push((k.clone(), *name_span));
         }
         let mut rules_prods: Vec<Vec<PIdx<StorageT>>> = Vec::with_capacity(rule_names.len());
         let mut rule_map = HashMap::<String, RIdx<StorageT>>::new();
@@ -214,6 +221,7 @@ where
         let mut prods_rules = vec![None; ast.prods.len()];
         let mut actions = vec![None; ast.prods.len()];
         let mut actiontypes = vec![None; rule_names.len()];
+        let (start_name, _) = ast.start.as_ref().unwrap();
         for (astrulename, _) in &rule_names {
             let ridx = rule_map[astrulename];
             if astrulename == &start_rule {
@@ -223,7 +231,7 @@ where
                 let start_prod = match implicit_start_rule {
                     None => {
                         // Add ^: S;
-                        vec![Symbol::Rule(rule_map[&ast.start.as_ref().unwrap().0])]
+                        vec![Symbol::Rule(rule_map[start_name])]
                     }
                     Some(ref s) => {
                         // An implicit rule has been specified, so the special start rule
@@ -247,7 +255,7 @@ where
                 rules_prods[usize::from(rule_map[astrulename])].push(PIdx(prods.len().as_()));
                 prods.push(Some(vec![
                     Symbol::Rule(rule_map[implicit_rule.as_ref().unwrap()]),
-                    Symbol::Rule(rule_map[&ast.start.as_ref().unwrap().0]),
+                    Symbol::Rule(rule_map[start_name]),
                 ]));
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(ridx));
@@ -425,12 +433,14 @@ where
 
     /// Return the name of rule `ridx`. Panics if `ridx` doesn't exist.
     pub fn rule_name_str(&self, ridx: RIdx<StorageT>) -> &str {
-        self.rule_names[usize::from(ridx)].0.as_str()
+        let (name, _) = &self.rule_names[usize::from(ridx)];
+        name.as_str()
     }
 
     /// Return the span of rule `ridx`. Panics if `ridx` doesn't exist.
     pub fn rule_name_span(&self, ridx: RIdx<StorageT>) -> Span {
-        self.rule_names[usize::from(ridx)].1
+        let (_, span) = self.rule_names[usize::from(ridx)];
+        span
     }
 
     /// Return the `RIdx` of the implict rule if it exists, or `None` otherwise.
@@ -478,7 +488,7 @@ where
     pub fn token_name(&self, tidx: TIdx<StorageT>) -> Option<&str> {
         self.token_names[usize::from(tidx)]
             .as_ref()
-            .map(|x| x.1.as_str())
+            .map(|(_, x)| x.as_str())
     }
 
     /// Return the precedence of token `tidx` (where `None` indicates "no precedence specified").

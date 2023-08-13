@@ -1473,12 +1473,12 @@ a\[\]a 'aboxa'
             "brace",
             rule.target_state
                 .as_ref()
-                .map(|s| states.get(&s.0).unwrap())
+                .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::Push,
-            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("CLOSE_BRACE").unwrap();
         assert_eq!("CLOSE_BRACE", rule.name.as_ref().unwrap());
@@ -1497,12 +1497,12 @@ a\[\]a 'aboxa'
             "brace",
             rule.target_state
                 .as_ref()
-                .map(|s| states.get(&s.0).unwrap())
+                .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::Pop,
-            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_BRACKET").unwrap();
         assert_eq!("OPEN_BRACKET", rule.name.as_ref().unwrap());
@@ -1521,12 +1521,12 @@ a\[\]a 'aboxa'
             "bracket",
             rule.target_state
                 .as_ref()
-                .map(|s| states.get(&s.0).unwrap())
+                .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::Push,
-            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("CLOSE_BRACKET").unwrap();
         assert_eq!("CLOSE_BRACKET", rule.name.as_ref().unwrap());
@@ -1545,12 +1545,12 @@ a\[\]a 'aboxa'
             "bracket",
             rule.target_state
                 .as_ref()
-                .map(|s| states.get(&s.0).unwrap())
+                .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::Pop,
-            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_FIRST_BRACE").unwrap();
         assert_eq!("OPEN_FIRST_BRACE", rule.name.as_ref().unwrap());
@@ -1561,12 +1561,12 @@ a\[\]a 'aboxa'
             "brace",
             rule.target_state
                 .as_ref()
-                .map(|s| states.get(&s.0).unwrap())
+                .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::ReplaceStack,
-            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_FIRST_BRACKET").unwrap();
         assert_eq!("OPEN_FIRST_BRACKET", rule.name.as_ref().unwrap());
@@ -1577,12 +1577,12 @@ a\[\]a 'aboxa'
             "bracket",
             rule.target_state
                 .as_ref()
-                .map(|s| states.get(&s.0).unwrap())
+                .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::ReplaceStack,
-            *rule.target_state.as_ref().map(|s| &s.1).unwrap()
+            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
     }
 
