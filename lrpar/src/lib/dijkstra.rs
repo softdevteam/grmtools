@@ -66,8 +66,7 @@ where
         .drain(usize::from(c)..usize::from(c) + 1)
         .next()
         .unwrap();
-    while !scs_todo.is_empty() {
-        let n = scs_todo.pop().unwrap().1;
+    while let Some((_, n)) = scs_todo.pop() {
         if success(&n) {
             scs_nodes.push(n);
             continue;
