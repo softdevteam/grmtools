@@ -558,9 +558,8 @@ mod test {
 %%
 [0-9]+ 'int'
 [a-zA-Z]+ 'id'
-[ \t] ;
-        "
-        .to_string();
+[ \t] ;"
+            .to_string();
         let mut lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let mut map = HashMap::new();
         map.insert("int", 0);
@@ -587,9 +586,8 @@ mod test {
     fn test_basic_error() {
         let src = "
 %%
-[0-9]+ 'int'
-        "
-        .to_string();
+[0-9]+ 'int'"
+            .to_string();
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         match lexerdef.lexer("abc").iter().next().unwrap() {
             Ok(_) => panic!("Invalid input lexed"),
