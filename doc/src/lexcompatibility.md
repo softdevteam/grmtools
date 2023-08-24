@@ -57,3 +57,6 @@ There are several major differences between Lex and grmtools:
 
    But the characters to which this behavior applies is impacted by the escape sequence
    differences listed above.
+
+* Lex treats lines in the rules section beginning with whitespace as code to be copied verbatim
+  into the generated lexer source.  Grmtools lex does not support these and produces an error. 
