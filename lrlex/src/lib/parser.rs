@@ -24,6 +24,7 @@ lazy_static! {
         Regex::new(r"^(([xuU][[:xdigit:]])|[[:digit:]]|[afnrtv\\]|[pP]|[dDsSwW]|[AbBz])").unwrap();
     // Vertical line separators.
     static ref RE_LINE_SEP: Regex = Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]").unwrap();
+    static ref RE_LEADING_LINE_SEPS: Regex = Regex::new(r"^[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]*").unwrap();
     // Horizontal space separators
     static ref RE_SPACE_SEP: Regex = Regex::new(r#"[\p{Pattern_White_Space}&&[\p{Zs}\t]]"#).unwrap();
     static ref RE_LEADING_WS: Regex = Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap();
@@ -332,7 +333,37 @@ where
         errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<usize> {
         loop {
-            i = self.parse_ws(i)?;
+            // We should be at newline of the previous section separator '%%<here>\n upon entry,
+            // otherwise after iterating before the newline of the previous iterations rule or at eof.
+            i = self.parse_nl(i)?;
+            // According to posix lex:
+            //
+            // > Any such input (beginning with a <blank> or within "%{" and "%}" delimiter lines)
+            // > appearing at the beginning of the Rules section before any rules are specified
+            // > shall be written to lex.yy.c
+            //
+            // > The reason for the undefined condition associated with text beginning with a <blank> or
+            // > within "%{" and "%}" delimiter lines appearing in the Rules section is historical practice.
+            //
+            // > Both the BSD and System V lex copy the indented (or enclosed) input in the Rules section (except at the beginning)
+            // > to unreachable areas of the yylex() function (the code is written directly after a break statement).
+            // > In some cases, the System V lex generates an error message or a syntax error, depending on the form of indented input.
+            //
+            // Previously we allowed these, and trimmed leading spaces, parsing any rules after them. Currently we will emit an error.
+            let j = self.parse_ws(i)?;
+            if j != i {
+                let line_len = RE_LINE_SEP
+                    .find(&self.src[j..])
+                    .map(|m| m.start())
+                    .unwrap_or(self.src.len() - j);
+                let err = LexBuildError {
+                    kind: LexErrorKind::VerbatimNotSupported,
+                    spans: vec![Span::new(i, i + line_len)],
+                };
+                errs.push(err);
+                i = j + line_len;
+                continue;
+            }
             if i == self.src.len() {
                 break;
             }
@@ -576,6 +607,13 @@ where
             .unwrap_or(i))
     }
 
+    fn parse_nl(&mut self, i: usize) -> LexInternalBuildResult<usize> {
+        Ok(RE_LEADING_LINE_SEPS
+            .find(&self.src[i..])
+            .map(|m| m.end() + i)
+            .unwrap_or(i))
+    }
+
     fn lookahead_is(&self, s: &'static str, i: usize) -> Option<usize> {
         if self.src[i..].starts_with(s) {
             Some(i + s.len())
@@ -698,8 +736,8 @@ mod test {
         ) {
             match self {
                 Ok(_) => panic!("Parsed ok while expecting error"),
-                Err(errs)
-                    if errs
+                Err(errs) => {
+                    let linecol_errs = errs
                         .iter()
                         .map(|e| {
                             // Check that it is valid to slice the source with the spans.
@@ -714,8 +752,10 @@ mod test {
                                     .collect::<Vec<_>>(),
                             )
                         })
-                        .eq(expected) => {}
-                Err(errs) => incorrect_errs!(src, errs),
+                        .collect::<Vec<_>>();
+
+                    assert_eq!(expected.collect::<Vec<_>>(), linecol_errs);
+                }
             }
         }
     }
@@ -1191,8 +1231,8 @@ mod test {
     #[test]
     fn duplicate_start_state_definition_one_line() {
         let src = "%s test test1 test
-        %%
-        . 'TEST'"
+%%
+. 'TEST'"
             .to_string();
         LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_lines_cols(
             &src,
@@ -1563,11 +1603,11 @@ a\[\]a 'aboxa'
     #[test]
     fn test_various_whitespace() {
         let src = "
-        %x X1 X2
-        %S S1	S2
-        %%
-        A	;
-        B 'b' C 'c' D	'A'";
+%x X1 X2
+%S S1	S2
+%%
+A	;
+B 'b' C 'c' D	'A'";
         assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).is_ok());
         // En Space isn't part of Pattern_White_Space.
         let srcs = ["%S X Y", "%S X "];
@@ -1581,18 +1621,18 @@ a\[\]a 'aboxa'
     fn test_routines_multiple_errors() {
         let mut src = String::from(
             r#"
-        %s A
-        %s A
-        %%
-        a "A"
-        b "A"
-        %%
-        "#,
+%s A
+%s A
+%%
+a "A"
+b "A"
+%%
+"#,
         );
 
         let mut expected_errs = vec![
-            (LexErrorKind::DuplicateStartState, vec![(2, 12), (3, 12)]),
-            (LexErrorKind::DuplicateName, vec![(5, 12), (6, 12)]),
+            (LexErrorKind::DuplicateStartState, vec![(2, 4), (3, 4)]),
+            (LexErrorKind::DuplicateName, vec![(5, 4), (6, 4)]),
         ];
         LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src)
             .expect_multiple_errors(&src, &mut expected_errs.clone().into_iter());
@@ -1603,8 +1643,29 @@ a\[\]a 'aboxa'
             }
         ",
         );
-        expected_errs.push((LexErrorKind::RoutinesNotSupported, vec![(7, 9)]));
+        expected_errs.push((LexErrorKind::RoutinesNotSupported, vec![(7, 1)]));
         LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src)
             .expect_multiple_errors(&src, &mut expected_errs.into_iter());
+    }
+
+    #[test]
+    fn test_verbatim_whitespace() {
+        let src = r#"
+%%
+
+. "BlankLinesDontError"
+"#;
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
+        let src = r#"
+%%
+ // Historical practice is that in the rules section entries starting with whitespace are copied verbatim into generated code. This is not supported.
+. "InitialWhitespaceDoError"
+"#;
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
+            &src,
+            LexErrorKind::VerbatimNotSupported,
+            3,
+            1,
+        );
     }
 }

@@ -59,6 +59,7 @@ pub enum LexErrorKind {
     InvalidStartStateName,
     DuplicateName,
     RegexError,
+    VerbatimNotSupported,
 }
 
 impl Spanned for LexBuildError {
@@ -76,6 +77,7 @@ impl Spanned for LexBuildError {
             | LexErrorKind::UnknownStartState
             | LexErrorKind::InvalidStartState
             | LexErrorKind::InvalidStartStateName
+            | LexErrorKind::VerbatimNotSupported
             | LexErrorKind::RegexError => SpansKind::Error,
             LexErrorKind::DuplicateName | LexErrorKind::DuplicateStartState => {
                 SpansKind::DuplicationError
@@ -87,6 +89,7 @@ impl Spanned for LexBuildError {
 impl fmt::Display for LexBuildError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self.kind {
+            LexErrorKind::VerbatimNotSupported => "Verbatim code not supported",
             LexErrorKind::PrematureEnd => "File ends prematurely",
             LexErrorKind::RoutinesNotSupported => "Routines not currently supported",
             LexErrorKind::UnknownDeclaration => "Unknown declaration",
