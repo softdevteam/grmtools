@@ -118,8 +118,8 @@ impl SymbolIdx {
     pub(crate) fn symbol(self, ast: &GrammarAST) -> Symbol {
         match self {
             SymbolIdx::Rule(idx) => {
-                let rule = &ast.rules[idx];
-                Symbol::Rule(rule.name.0.clone(), rule.name.1)
+                let (rule_name, rule_span) = &ast.rules[idx].name;
+                Symbol::Rule(rule_name.clone(), *rule_span)
             }
             SymbolIdx::Token(idx) => {
                 let tok = &ast.tokens[idx];

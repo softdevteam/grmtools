@@ -46,24 +46,26 @@ where
 
     /// Return the itemset for closed state `stidx`. Panics if `stidx` doesn't exist.
     pub fn closed_state(&self, stidx: StIdx<StorageT>) -> &Itemset<StorageT> {
-        &self.states[usize::from(stidx)].1
+        let (_, closed_state) = &self.states[usize::from(stidx)];
+        closed_state
     }
 
     /// Return an iterator over all closed states in this `StateGraph`.
     pub fn iter_closed_states<'a>(
         &'a self,
     ) -> Box<dyn Iterator<Item = &'a Itemset<StorageT>> + 'a> {
-        Box::new(self.states.iter().map(|x| &x.1))
+        Box::new(self.states.iter().map(|(_, x)| x))
     }
 
     /// Return the itemset for core state `stidx` or `None` if it doesn't exist.
     pub fn core_state(&self, stidx: StIdx<StorageT>) -> &Itemset<StorageT> {
-        &self.states[usize::from(stidx)].0
+        let (core_states, _) = &self.states[usize::from(stidx)];
+        core_states
     }
 
     /// Return an iterator over all core states in this `StateGraph`.
     pub fn iter_core_states<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Itemset<StorageT>> + 'a> {
-        Box::new(self.states.iter().map(|x| &x.0))
+        Box::new(self.states.iter().map(|(x, _)| x))
     }
 
     /// How many states does this `StateGraph` contain? NB: By definition the `StateGraph` contains
@@ -266,7 +268,7 @@ mod test {
         ).unwrap();
         let sg = pager_stategraph(&grm);
         assert_eq!(sg.all_states_len(), StIdx(7));
-        assert_eq!(sg.states.iter().fold(0, |a, x| a + x.0.items.len()), 7);
+        assert_eq!(sg.states.iter().fold(0, |a, (x, _)| a + x.items.len()), 7);
         assert_eq!(sg.all_edges_len(), 9);
 
         // This follows the (not particularly logical) ordering of state numbers in the paper.

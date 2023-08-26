@@ -15,22 +15,23 @@ macro_rules! IdxNewtype {
         pub struct $n<T>(pub T);
 
         impl<T: PrimInt + Unsigned> From<$n<T>> for usize {
-            fn from(st: $n<T>) -> Self {
+            fn from($n(st): $n<T>) -> Self {
                 debug_assert!(size_of::<usize>() >= size_of::<T>());
-                num_traits::cast(st.0).unwrap()
+                num_traits::cast(st).unwrap()
             }
         }
 
         impl<T: PrimInt + Unsigned> From<$n<T>> for u32 {
-            fn from(st: $n<T>) -> Self {
+            fn from($n(st): $n<T>) -> Self {
                 debug_assert!(size_of::<u32>() >= size_of::<T>());
-                num_traits::cast(st.0).unwrap()
+                num_traits::cast(st).unwrap()
             }
         }
 
         impl<T: PrimInt + Unsigned> $n<T> {
             pub fn as_storaget(&self) -> T {
-                self.0
+                let $n(st) = self;
+                *st
             }
         }
     }

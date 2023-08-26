@@ -39,7 +39,7 @@ where
             continue;
         }
 
-        let n = todo[usize::from(c)].pop().unwrap().1;
+        let (_, n) = todo[usize::from(c)].pop().unwrap();
         if success(&n) {
             scs_nodes.push(n);
             break;

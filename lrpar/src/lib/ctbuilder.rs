@@ -94,12 +94,14 @@ where
 struct ErrorString(String);
 impl fmt::Display for ErrorString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        let ErrorString(s) = self;
+        write!(f, "{}", s)
     }
 }
 impl fmt::Debug for ErrorString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        let ErrorString(s) = self;
+        write!(f, "{}", s)
     }
 }
 impl Error for ErrorString {}

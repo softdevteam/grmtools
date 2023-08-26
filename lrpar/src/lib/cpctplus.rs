@@ -600,10 +600,10 @@ where
     // Remove any elements except those which parsed as far as possible.
     cnds = cnds
         .into_iter()
-        .filter(|x| x.1 == furthest)
+        .filter(|(_, x, _)| *x == furthest)
         .collect::<Vec<_>>();
 
-    cnds.into_iter().flat_map(|x| x.2).collect::<Vec<_>>()
+    cnds.into_iter().flat_map(|(_, _, x)| x).collect::<Vec<_>>()
 }
 
 /// Do `repairs` end with enough Shift repairs to be considered a success node?
