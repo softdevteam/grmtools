@@ -716,7 +716,7 @@ E : 'N'
         //    )
         // is also the result of a valid minimal-cost repair, but, since the repair involves a
         // Shift, rank_cnds will always put this too low down the list for us to ever see it.
-        if !vec![
+        if ![
             "E
  ( (
  E

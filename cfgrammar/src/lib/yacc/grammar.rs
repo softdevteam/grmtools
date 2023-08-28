@@ -840,7 +840,7 @@ where
                 for i in 0..todo.len() {
                     cur.extend(&ms[i][todo[i]]);
                 }
-                sts.push(cur.drain(..).collect::<Vec<TIdx<StorageT>>>());
+                sts.push(std::mem::take(&mut cur));
 
                 let mut j = todo.len() - 1;
                 loop {
