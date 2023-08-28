@@ -349,10 +349,7 @@ impl YaccParser {
             }
             if let Some(j) = self.lookahead_is("%token", i) {
                 i = self.parse_ws(j, false)?;
-                while i < self.src.len() {
-                    if self.lookahead_is("%", i).is_some() {
-                        break;
-                    }
+                while i < self.src.len() && self.lookahead_is("%", i).is_none() {
                     let (j, n, span) = self.parse_token(i)?;
                     if self.ast.tokens.insert(n) {
                         self.ast.spans.push(span);
@@ -440,10 +437,7 @@ impl YaccParser {
             }
             if let Some(j) = self.lookahead_is("%expect-unused", i) {
                 i = self.parse_ws(j, false)?;
-                while i < self.src.len() {
-                    if self.lookahead_is("%", i).is_some() {
-                        break;
-                    }
+                while i < self.src.len() && self.lookahead_is("%", i).is_none() {
                     let j = match self.parse_name(i) {
                         Ok((j, n)) => {
                             self.ast
@@ -608,10 +602,7 @@ impl YaccParser {
         // self.parse_declarations should have left the input at '%%'
         i = self.lookahead_is("%%", i).unwrap();
         i = self.parse_ws(i, true)?;
-        while i < self.src.len() {
-            if self.lookahead_is("%%", i).is_some() {
-                break;
-            }
+        while i < self.src.len() && self.lookahead_is("%%", i).is_none() {
             i = self.parse_rule(i)?;
             i = self.parse_ws(i, true)?;
         }
