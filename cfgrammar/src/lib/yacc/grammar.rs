@@ -291,8 +291,8 @@ where
                         }
                         ast::Symbol::Token(ref n, _) => {
                             prod.push(Symbol::Token(token_map[n]));
-                            if implicit_rule.is_some() {
-                                prod.push(Symbol::Rule(rule_map[&implicit_rule.clone().unwrap()]));
+                            if let Some(implicit_rule) = &implicit_rule {
+                                prod.push(Symbol::Rule(rule_map[implicit_rule]));
                             }
                         }
                     };
@@ -732,7 +732,7 @@ where
                         Symbol::Token(i) => u16::from(self.token_costs[usize::from(i)]),
                     };
                 }
-                if low_sc.is_none() || sc < low_sc.unwrap() {
+                if low_sc.is_none() || Some(sc) < low_sc {
                     low_sc = Some(sc);
                     low_idx = Some(pidx);
                 }
@@ -772,8 +772,8 @@ where
                         Symbol::Token(s_tidx) => u16::from(self.token_costs[usize::from(s_tidx)]),
                     };
                 }
-                if low_sc.is_none() || sc <= low_sc.unwrap() {
-                    if low_sc.is_some() && sc < low_sc.unwrap() {
+                if low_sc.is_none() || Some(sc) <= low_sc {
+                    if Some(sc) < low_sc {
                         low_idxs.clear();
                     }
                     low_sc = Some(sc);
@@ -926,9 +926,9 @@ where
                         .checked_add(sc)
                         .expect("Overflow occurred when calculating rule costs");
                 }
-                if cmplt && (ls_cmplt.is_none() || c < ls_cmplt.unwrap()) {
+                if cmplt && (ls_cmplt.is_none() || Some(c) < ls_cmplt) {
                     ls_cmplt = Some(c);
-                } else if !cmplt && (ls_noncmplt.is_none() || c < ls_noncmplt.unwrap()) {
+                } else if !cmplt && (ls_noncmplt.is_none() || Some(c) < ls_noncmplt) {
                     ls_noncmplt = Some(c);
                 }
             }
@@ -936,9 +936,9 @@ where
                 debug_assert!(ls_cmplt.unwrap() >= costs[i]);
                 costs[i] = ls_cmplt.unwrap();
                 done[i] = true;
-            } else if ls_noncmplt.is_some() {
-                debug_assert!(ls_noncmplt.unwrap() >= costs[i]);
-                costs[i] = ls_noncmplt.unwrap();
+            } else if let Some(ls_noncmplt) = ls_noncmplt {
+                debug_assert!(ls_noncmplt >= costs[i]);
+                costs[i] = ls_noncmplt;
             }
         }
         if all_done {
@@ -1012,9 +1012,9 @@ where
                         panic!("Unable to represent cost in 64 bits.");
                     }
                 }
-                if cmplt && (hs_cmplt.is_none() || c > hs_cmplt.unwrap()) {
+                if cmplt && (hs_cmplt.is_none() || Some(c) > hs_cmplt) {
                     hs_cmplt = Some(c);
-                } else if !cmplt && (hs_noncmplt.is_none() || c > hs_noncmplt.unwrap()) {
+                } else if !cmplt && (hs_noncmplt.is_none() || Some(c) > hs_noncmplt) {
                     hs_noncmplt = Some(c);
                 }
             }
@@ -1022,9 +1022,9 @@ where
                 debug_assert!(hs_cmplt.unwrap() >= costs[i]);
                 costs[i] = hs_cmplt.unwrap();
                 done[i] = true;
-            } else if hs_noncmplt.is_some() {
-                debug_assert!(hs_noncmplt.unwrap() >= costs[i]);
-                costs[i] = hs_noncmplt.unwrap();
+            } else if let Some(hs_noncmplt) = hs_noncmplt {
+                debug_assert!(hs_noncmplt >= costs[i]);
+                costs[i] = hs_noncmplt;
             }
         }
         if all_done {
