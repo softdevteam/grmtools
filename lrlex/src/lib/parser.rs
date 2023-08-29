@@ -26,7 +26,7 @@ lazy_static! {
     static ref RE_LINE_SEP: Regex = Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]").unwrap();
     static ref RE_LEADING_LINE_SEPS: Regex = Regex::new(r"^[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]*").unwrap();
     // Horizontal space separators
-    static ref RE_SPACE_SEP: Regex = Regex::new(r#"[\p{Pattern_White_Space}&&[\p{Zs}\t]]"#).unwrap();
+    static ref RE_SPACE_SEP: Regex = Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zs}\t]]").unwrap();
     static ref RE_LEADING_WS: Regex = Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap();
     static ref RE_WS: Regex = Regex::new(r"\p{Pattern_White_Space}").unwrap();
 }
@@ -1264,7 +1264,7 @@ mod test {
         // This is guaranteed not to change without a semver bump by regex_syntax.
         assert!(regex_syntax::is_meta_character('<').not());
         // Test escaping '<' and '>' start state operators, as the initial characters of a regex.
-        let src = r#"
+        let src = r"
 %%
 \> 'gt'
 \< 'lt'
@@ -1295,7 +1295,7 @@ a\[\]a 'aboxa'
 [\nabc\<defg\t] 'bookend3'
 [\tabcdefg\<] 'bookend4'
 [\<abcdefg\t] 'bookend5'
-"#
+"
         .to_string();
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let mut rule = ast.get_rule_by_name("gt").unwrap();
@@ -1655,14 +1655,14 @@ b "A"
 
 . "BlankLinesDontError"
 "#;
-        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).unwrap();
         let src = r#"
 %%
  // Historical practice is that in the rules section entries starting with whitespace are copied verbatim into generated code. This is not supported.
 . "InitialWhitespaceDoError"
 "#;
-        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).expect_error_at_line_col(
-            &src,
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_line_col(
+            src,
             LexErrorKind::VerbatimNotSupported,
             3,
             1,
