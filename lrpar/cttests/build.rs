@@ -2,11 +2,15 @@ use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 use glob::glob;
 use lrlex::{CTLexerBuilder, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 use yaml_rust::YamlLoader;
 
-fn run_test_path(path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = env::var("OUT_DIR").unwrap();
+    let path = path.as_ref();
     if path.is_file() {
         println!("cargo:rerun-if-changed={}", path.display());
         // Parse test file
@@ -146,6 +150,18 @@ fn run_test_path(path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     for entry in glob("src/*.test")? {
         run_test_path(entry.unwrap())?;
+    }
+    for entry in glob("src/ctfails/*.test")? {
+        let path = entry.unwrap();
+        let result =
+            std::panic::catch_unwind(|| std::panic::AssertUnwindSafe(run_test_path(&path).is_ok()));
+        if !result.is_err() {
+            panic!(
+                "ctfails/{}: succeded unexpectedly with result {:?}",
+                path.display(),
+                result
+            );
+        }
     }
     Ok(())
 }
