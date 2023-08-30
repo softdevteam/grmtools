@@ -367,14 +367,14 @@ where
             None => (None, None),
         };
 
+        let mut has_unallowed_missing = false;
         if !self.allow_missing_terms_in_lexer {
             if let Some(ref mfl) = missing_from_lexer {
                 eprintln!("Error: the following tokens are used in the grammar but are not defined in the lexer:");
                 for n in mfl {
                     eprintln!("    {}", n);
                 }
-                fs::remove_file(outp).ok();
-                panic!();
+                has_unallowed_missing = true;
             }
         }
         if !self.allow_missing_tokens_in_parser {
@@ -383,9 +383,12 @@ where
                 for n in mfp {
                     eprintln!("    {}", n);
                 }
-                fs::remove_file(outp).ok();
-                panic!();
+                has_unallowed_missing = true;
             }
+        }
+        if has_unallowed_missing {
+            fs::remove_file(outp).ok();
+            panic!();
         }
 
         let mod_name = match self.mod_name {
