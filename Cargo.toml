@@ -6,6 +6,7 @@ members=[
     "lrlex/examples/calc_manual_lex",
     "lrpar",
     "lrpar/cttests",
+    "lrpar/cttests_macro",
     "lrpar/examples/calc_actions",
     "lrpar/examples/calc_ast",
     "lrpar/examples/calc_parsetree",
