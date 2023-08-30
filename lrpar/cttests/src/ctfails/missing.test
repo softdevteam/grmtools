@@ -1,0 +1,10 @@
+name: Test missing terms in lexer and parser 
+yacckind: Original(YaccOriginalActionKind::NoAction)
+lex_flags: [ '!allow_missing_terms_in_lexer', '!allow_missing_tokens_in_parser' ]
+grammar: |
+    %%
+    S: 'B';
+
+lexer: |
+    %%
+    A "A"
