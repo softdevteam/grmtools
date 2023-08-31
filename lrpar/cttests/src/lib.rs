@@ -1,5 +1,10 @@
 #[cfg(test)]
 use cfgrammar::Span;
+mod cgen_helper;
+#[allow(unused)]
+use cgen_helper::run_test_path;
+#[cfg(test)]
+use cttests_macro::generate_codegen_fail_tests;
 use lrlex::lrlex_mod;
 use lrpar::lrpar_mod;
 #[cfg(test)]
@@ -256,3 +261,7 @@ fn test_passthrough() {
 fn test_expect() {
     // This test merely needs to compile in order to be successful.
 }
+
+// Codegen failure tests
+#[cfg(test)]
+generate_codegen_fail_tests!("src/ctfails/*.test");

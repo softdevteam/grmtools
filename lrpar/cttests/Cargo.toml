@@ -17,3 +17,8 @@ yaml-rust = "0.4"
 cfgrammar = { path = "../../cfgrammar" }
 lrlex = { path = "../../lrlex" }
 lrpar = { path = "../" }
+yaml-rust = "0.4"
+glob = "0.3"
+
+[dev-dependencies]
+cttests_macro = { path = "../cttests_macro" }
