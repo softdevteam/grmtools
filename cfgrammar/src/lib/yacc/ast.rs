@@ -265,7 +265,8 @@ impl GrammarAST {
                 }
             }
         }
-        for k in self.epp.keys() {
+
+        for (k, (sp, _)) in self.epp.iter() {
             if self.tokens.contains(k) {
                 continue;
             }
@@ -276,7 +277,7 @@ impl GrammarAST {
             }
             return Err(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownEPP(k.clone()),
-                spans: vec![Span::new(0, 0)],
+                spans: vec![*sp],
             });
         }
 
@@ -531,7 +532,7 @@ mod test {
     #[test]
     fn test_invalid_epp() {
         let mut grm = GrammarAST::new();
-        let empty_span = Span::new(0, 0);
+        let empty_span = Span::new(2, 3);
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![], None, None);
@@ -540,8 +541,8 @@ mod test {
         match grm.complete_and_validate() {
             Err(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownEPP(_),
-                ..
-            }) => (),
+                spans,
+            }) if spans.len() == 1 && spans[0] == Span::new(2, 3) => (),
             _ => panic!("Validation error"),
         }
     }
