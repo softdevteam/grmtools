@@ -133,7 +133,11 @@ impl fmt::Display for YaccGrammarErrorKind {
                 )
             }
             YaccGrammarErrorKind::UnknownEPP(name) => {
-                return write!(f, "Unknown token '{}' in %epp declaration", name)
+                return write!(
+                    f,
+                    "Token '{}' in %epp declaration is not referenced in the grammar",
+                    name
+                )
             }
         };
         write!(f, "{}", s)
