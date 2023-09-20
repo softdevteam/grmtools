@@ -1,3 +1,17 @@
+# grmtools 0.13.3 (2023-09-21)
+
+* lrlex now explicitly raises an error when a rule in an input file
+  has leading space. There is a small chance of this breaking existing input
+  files, but it brings lrlex into line with POSIX lex where leading
+  space indicates verbatim code (a concept for which lrlex currently has no
+  support), making porting errors less likely.
+
+* Report errors on `%epp` declarations in terms of the input file (rather than
+  pretending they're all at line 1, column 1).
+
+* Reorganise internal testing framework.
+
+
 # grmtools 0.13.2 (2023-08-01)
 
 * Add CTLexerBuilder options for configuring regex behavior.
