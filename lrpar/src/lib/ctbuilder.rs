@@ -19,7 +19,9 @@ use std::{
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{
+        ast::ASTWithValidityInfo, YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind,
+    },
     RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -166,6 +168,15 @@ where
     show_warnings: bool,
     visibility: Visibility,
     rust_edition: RustEdition,
+    on_grammar_error_fn: Option<&'a dyn Fn(Vec<YaccGrammarError>) -> Box<dyn Error>>,
+    on_unexpected_conflicts_fn: Option<
+        &'a dyn Fn(
+            &YaccGrammar<LexerTypesT::StorageT>,
+            &StateGraph<LexerTypesT::StorageT>,
+            &StateTable<LexerTypesT::StorageT>,
+            &Conflicts<LexerTypesT::StorageT>,
+        ) -> Box<dyn Error>,
+    >,
     phantom: PhantomData<LexerTypesT>,
 }
 
@@ -209,6 +220,8 @@ where
             show_warnings: true,
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
+            on_grammar_error_fn: None,
+            on_unexpected_conflicts_fn: None,
             phantom: PhantomData,
         }
     }
@@ -339,6 +352,26 @@ where
         self
     }
 
+    pub fn on_grammar_error(
+        mut self,
+        f: &'a dyn Fn(Vec<YaccGrammarError>) -> Box<dyn Error>,
+    ) -> Self {
+        self.on_grammar_error_fn = Some(f);
+        self
+    }
+
+    pub fn on_unexpected_conflicts(
+        mut self,
+        f: &'a dyn Fn(
+            &YaccGrammar<LexerTypesT::StorageT>,
+            &StateGraph<LexerTypesT::StorageT>,
+            &StateTable<LexerTypesT::StorageT>,
+            &Conflicts<LexerTypesT::StorageT>,
+        ) -> Box<dyn Error>,
+    ) -> Self {
+        self.on_unexpected_conflicts_fn = Some(f);
+        self
+    }
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
     /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
     /// additional files will be created with the same name as specified in [self.output_path] but
@@ -463,21 +496,25 @@ where
                 grm
             }
             Err(errs) => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                return Err(ErrorString(if errs.len() + warnings.len() > 1 {
-                    // Indent under the "Error:" prefix.
-                    format!(
-                        "\n\t{}",
-                        errs.iter()
-                            .map(|e| spanned_fmt(e, &inc, &line_cache))
-                            .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
-                            .collect::<Vec<_>>()
-                            .join("\n\t")
-                    )
+                if let Some(on_err_fn) = self.on_grammar_error_fn {
+                    return Err(on_err_fn(errs));
                 } else {
-                    spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
-                }))?;
+                    let mut line_cache = NewlineCache::new();
+                    line_cache.feed(&inc);
+                    return Err(ErrorString(if errs.len() + warnings.len() > 1 {
+                        // Indent under the "Error:" prefix.
+                        format!(
+                            "\n\t{}",
+                            errs.iter()
+                                .map(|e| spanned_fmt(e, &inc, &line_cache))
+                                .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
+                                .collect::<Vec<_>>()
+                                .join("\n\t")
+                        )
+                    } else {
+                        spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
+                    }))?;
+                }
             }
         };
 
@@ -529,7 +566,13 @@ where
                     (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
                     (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
                     (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
-                    _ => return Err(Box::new(CTConflictsError { stable })),
+                    _ => {
+                        if let Some(on_conflicts) = self.on_unexpected_conflicts_fn {
+                            return Err(on_conflicts(&grm, &sgraph, &stable, c));
+                        } else {
+                            return Err(Box::new(CTConflictsError { stable }));
+                        }
+                    }
                 }
             }
         }
@@ -661,6 +704,8 @@ where
             show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
+            on_grammar_error_fn: None,
+            on_unexpected_conflicts_fn: None,
             phantom: PhantomData,
         };
         Ok(cl.build()?.rule_ids)

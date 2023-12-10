@@ -25,7 +25,8 @@ use regex::Regex;
 use serde::Serialize;
 
 use crate::{
-    DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef, RegexOptions, DEFAULT_REGEX_OPTIONS,
+    DefaultLexerTypes, LRNonStreamingLexerDef, LexBuildError, LexerDef, RegexOptions,
+    DEFAULT_REGEX_OPTIONS,
 };
 
 const RUST_FILE_EXT: &str = "rs";
@@ -97,6 +98,7 @@ where
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
     regex_options: RegexOptions,
+    on_lex_build_errors_fn: Option<&'a dyn Fn(Vec<LexBuildError>) -> Box<dyn Error>>,
 }
 
 impl<'a> CTLexerBuilder<'a, DefaultLexerTypes<u32>> {
@@ -141,6 +143,7 @@ where
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
             regex_options: DEFAULT_REGEX_OPTIONS,
+            on_lex_build_errors_fn: None,
         }
     }
 
@@ -329,27 +332,33 @@ where
         let lex_src = read_to_string(lexerp)?;
         let line_cache = NewlineCache::from_str(&lex_src).unwrap();
         let mut lexerdef: Box<dyn LexerDef<LexerTypesT>> = match self.lexerkind {
-            LexerKind::LRNonStreamingLexer => Box::new(
-                LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
+            LexerKind::LRNonStreamingLexer => {
+                let lexerdef = LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
                     &lex_src,
                     self.regex_options.clone(),
-                )
-                .map_err(|errs| {
-                    errs.iter()
-                        .map(|e| {
-                            if let Some((line, column)) = line_cache.byte_to_line_num_and_col_num(
-                                &lex_src,
-                                e.spans().first().unwrap().start(),
-                            ) {
-                                format!("{} at line {line} column {column}", e)
-                            } else {
-                                format!("{}", e)
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                })?,
-            ),
+                );
+                Box::new(if let Some(on_err_fn) = self.on_lex_build_errors_fn {
+                    lexerdef.map_err(on_err_fn)?
+                } else {
+                    lexerdef.map_err(|errs| {
+                        errs.iter()
+                            .map(|e| {
+                                if let Some((line, column)) = line_cache
+                                    .byte_to_line_num_and_col_num(
+                                        &lex_src,
+                                        e.spans().first().unwrap().start(),
+                                    )
+                                {
+                                    format!("{} at line {line} column {column}", e)
+                                } else {
+                                    format!("{}", e)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })?
+                })
+            }
         };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
@@ -721,6 +730,14 @@ pub fn lexerdef() -> {lexerdef_type} {{
     /// Default value is specified by regex.
     pub fn nest_limit(mut self, lim: u32) -> Self {
         self.regex_options.nest_limit = Some(lim);
+        self
+    }
+
+    pub fn on_lex_build_error(
+        mut self,
+        f: &'a dyn Fn(Vec<LexBuildError>) -> Box<dyn Error>,
+    ) -> Self {
+        self.on_lex_build_errors_fn = Some(f);
         self
     }
 }
