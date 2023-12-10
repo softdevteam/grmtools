@@ -20,7 +20,8 @@ use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{
-        ast::ASTWithValidityInfo, YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind,
+        ast::{ASTWithValidityInfo, GrammarAST},
+        YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind,
     },
     RIdx, Spanned, Symbol,
 };
@@ -171,6 +172,7 @@ where
     on_grammar_error_fn: Option<&'a dyn Fn(Vec<YaccGrammarError>) -> Box<dyn Error>>,
     on_unexpected_conflicts_fn: Option<
         &'a dyn Fn(
+            &GrammarAST,
             &YaccGrammar<LexerTypesT::StorageT>,
             &StateGraph<LexerTypesT::StorageT>,
             &StateTable<LexerTypesT::StorageT>,
@@ -363,6 +365,7 @@ where
     pub fn on_unexpected_conflicts(
         mut self,
         f: &'a dyn Fn(
+            &GrammarAST,
             &YaccGrammar<LexerTypesT::StorageT>,
             &StateGraph<LexerTypesT::StorageT>,
             &StateTable<LexerTypesT::StorageT>,
@@ -568,7 +571,13 @@ where
                     (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
                     _ => {
                         if let Some(on_conflicts) = self.on_unexpected_conflicts_fn {
-                            return Err(on_conflicts(&grm, &sgraph, &stable, c));
+                            return Err(on_conflicts(
+                                ast_validation.ast(),
+                                &grm,
+                                &sgraph,
+                                &stable,
+                                c,
+                            ));
                         } else {
                             return Err(Box::new(CTConflictsError { stable }));
                         }
