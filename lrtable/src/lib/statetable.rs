@@ -988,8 +988,8 @@ D : D;
             Ok(_) => panic!("Infinitely recursive rule let through"),
             Err(StateTableError {
                 kind: StateTableErrorKind::AcceptReduceConflict(_),
-                pidx,
-            }) if pidx == PIdx(1) => (),
+                pidx: PIdx(1),
+            }) => (),
             Err(e) => panic!("Incorrect error returned {:?}", e),
         }
     }

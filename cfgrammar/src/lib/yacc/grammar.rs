@@ -833,8 +833,7 @@ where
             // needed). If the first column spills, then we're done. This is basically normal
             // arithmetic but with each digit having an arbitrary base.
 
-            let mut todo = Vec::new();
-            todo.resize(prod.len(), 0);
+            let mut todo = vec![0; prod.len()];
             let mut cur = Vec::new();
             'b: loop {
                 for i in 0..todo.len() {
@@ -893,10 +892,8 @@ where
     // means that we can iteratively improve our knowledge of a token's minimum cost:
     // eventually we will reach a point where we can determine it definitively.
 
-    let mut costs = vec![];
-    costs.resize(usize::from(grm.rules_len()), 0);
-    let mut done = vec![];
-    done.resize(usize::from(grm.rules_len()), false);
+    let mut costs = vec![0; usize::from(grm.rules_len())];
+    let mut done = vec![false; usize::from(grm.rules_len())];
     loop {
         let mut all_done = true;
         for i in 0..done.len() {
@@ -960,10 +957,8 @@ fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>(
 where
     usize: AsPrimitive<StorageT>,
 {
-    let mut done = vec![];
-    done.resize(usize::from(grm.rules_len()), false);
-    let mut costs = vec![];
-    costs.resize(usize::from(grm.rules_len()), 0);
+    let mut done = vec![false; usize::from(grm.rules_len())];
+    let mut costs = vec![0; usize::from(grm.rules_len())];
 
     // First mark all recursive rules.
     for ridx in grm.iter_rules() {

@@ -17,7 +17,7 @@ pub fn generate_codegen_fail_tests(item: TokenStream) -> TokenStream {
     let manifest_dir = std::path::Path::new(&manifest_dir)
         .strip_prefix(cwd)
         .unwrap();
-    let test_glob_path = manifest_dir.join(&test_glob_str.value());
+    let test_glob_path = manifest_dir.join(test_glob_str.value());
     let test_glob_str = test_glob_path.into_os_string().into_string().unwrap();
     let test_files = glob(&test_glob_str).unwrap();
     for file in test_files {

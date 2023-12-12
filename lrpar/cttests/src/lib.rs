@@ -242,7 +242,7 @@ fn test_parseparam() {
     let lexerdef = parseparam_l::lexerdef();
     let lexer = lexerdef.lexer("101");
     match parseparam_y::parse(&lexer, &3) {
-        (Some(i), _) if i == 104 => (),
+        (Some(104), _) => (),
         _ => unreachable!(),
     }
 }
