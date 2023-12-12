@@ -5,11 +5,11 @@ grammar: |
     %actiontype Result<u64, ()>
     %avoid_insert 'INT'
     %%
-    Expr: Expr '+' Term { unsafe { Ok(Ok::<u64, ()>($1? + $3?).unwrap_unchecked()) } }
+    Expr: Expr '+' Term { unsafe { unsafe_ok($1? + $3?) } }
         | Term { $1 }
         ;
 
-    Term: Term '*' Factor { unsafe { Ok(Ok::<u64, ()>($1? * $3?).unwrap_unchecked()) } }
+    Term: Term '*' Factor { unsafe { unsafe_ok($1? * $3?) } }
         | Factor { $1 }
         ;
 
@@ -17,7 +17,7 @@ grammar: |
           | 'INT' {
                 let l = $1.map_err(|_| ())?;
                 match $lexer.span_str(l.span()).parse::<u64>() {
-                    Ok(v) => unsafe { Ok(Ok::<u64, ()>(v).unwrap_unchecked()) },
+                    Ok(v) => unsafe { unsafe_ok(v) },
                     Err(_) => {
                         let ((_, col), _) = $lexer.line_col(l.span());
                         eprintln!("Error at column {}: '{}' cannot be represented as a u64",
@@ -28,6 +28,11 @@ grammar: |
                 }
             }
           ;
+    %%
+    // Just check that unsafe blocks work in actions.
+    unsafe fn unsafe_ok<T, E>(x:T) -> Result<T, E> {
+      Ok(x)
+    }
 
 lexer: |
     %%
