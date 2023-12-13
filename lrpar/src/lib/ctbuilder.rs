@@ -676,12 +676,19 @@ where
     ) -> Result<(), Box<dyn Error>> {
         let mut outs = String::new();
         writeln!(outs, "{} mod {} {{", self.visibility.cow_str(), mod_name).ok();
+        // Emit user program section, and actions at the top so they may specify inner attributes.
+        if let Some(YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools) =
+            self.yacckind
+        {
+            outs.push_str(&self.gen_user_actions(grm));
+        }
+        outs.push_str("    mod _parser_ {\n");
         outs.push_str(
-            "    #![allow(clippy::type_complexity)]
-    #![allow(clippy::unnecessary_wraps)]
-    #![deny(unsafe_code)]
-    #[allow(unused_imports)]
-    use ::lrpar::Lexeme;
+            "        #![allow(clippy::type_complexity)]
+        #![allow(clippy::unnecessary_wraps)]
+        #![deny(unsafe_code)]
+        #[allow(unused_imports)]
+        use super::*;
 ",
         );
 
@@ -691,13 +698,17 @@ where
         match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 outs.push_str(&self.gen_wrappers(grm));
-                outs.push_str(&self.gen_user_actions(grm));
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction)
             | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => (),
             _ => unreachable!(),
         }
-        outs.push_str("}\n\n");
+        outs.push_str("    } // End of `mod _parser_`\n\n");
+        outs.push_str("    #[allow(unused_imports)]\n");
+        outs.push_str("    pub use _parser_::*;\n");
+        outs.push_str("    #[allow(unused_imports)]\n");
+        outs.push_str("    use ::lrpar::Lexeme;\n");
+        outs.push_str("} // End of `mod {mod_name}` \n\n");
 
         // Output the cache so that we can check whether the IDs map is stable.
         outs.push_str(cache);
@@ -1103,6 +1114,7 @@ where
         if let Some(s) = grm.programs() {
             outs.push_str("\n// User code from the program section\n\n");
             outs.push_str(s);
+            outs.push_str("\n// End of user code from the program section\n\n");
         }
 
         // Convert actions to functions
@@ -1144,7 +1156,6 @@ where
                 outs,
                 "    // {rulename}
     #[allow(clippy::too_many_arguments)]
-    #[allow(unsafe_code)] // Allow an action to embed unsafe blocks within it.
     fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>,
                      {prefix}span: ::cfgrammar::Span,
