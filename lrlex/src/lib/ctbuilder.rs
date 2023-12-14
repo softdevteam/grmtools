@@ -417,25 +417,39 @@ where
         let mut has_unallowed_missing = false;
         if !self.allow_missing_terms_in_lexer {
             if let Some(ref mfl) = missing_from_lexer {
-                eprintln!("Error: the following tokens are used in the grammar but are not defined in the lexer:");
-                for n in mfl {
-                    eprintln!("    {}", n);
+                if let Some(error_handler) = self.error_handler.as_deref_mut() {
+                    error_handler.missing_in_lexer(mfl);
+                } else {
+                    eprintln!("Error: the following tokens are used in the grammar but are not defined in the lexer:");
+                    for n in mfl {
+                        eprintln!("    {}", n);
+                    }
                 }
                 has_unallowed_missing = true;
             }
         }
         if !self.allow_missing_tokens_in_parser {
             if let Some(ref mfp) = missing_from_parser {
-                eprintln!("Error: the following tokens are defined in the lexer but not used in the grammar:");
-                for n in mfp {
-                    eprintln!("    {}", n);
+                if let Some(error_handler) = self.error_handler.as_deref_mut() {
+                    error_handler.missing_in_parser(mfp);
+                } else {
+                    eprintln!("Error: the following tokens are defined in the lexer but not used in the grammar:");
+                    for n in mfp {
+                        eprintln!("    {}", n);
+                    }
                 }
                 has_unallowed_missing = true;
             }
         }
         if has_unallowed_missing {
             fs::remove_file(outp).ok();
-            panic!();
+            if let Some(error_handler) = self.error_handler.as_deref_mut() {
+                return Err(error_handler
+                    .results()
+                    .expect_err("Expected missing tokens in lexer or parser"));
+            } else {
+                panic!();
+            }
         }
 
         let mod_name = match self.mod_name {
