@@ -363,28 +363,40 @@ where
             error_handler.lexer_src(lex_src.as_str());
         }
         let mut lexerdef: Box<dyn LexerDef<LexerTypesT>> = match self.lexerkind {
-            LexerKind::LRNonStreamingLexer => Box::new(
-                LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
+            LexerKind::LRNonStreamingLexer => {
+                let lexerdef = LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
                     &lex_src,
                     self.regex_options.clone(),
-                )
-                .map_err(|errs| {
+                );
+
+                Box::new(if let Some(error_handler) = self.error_handler.as_mut() {
+                    lexerdef.map_err(|errs| {
+                        error_handler.on_lex_build_error(errs.into_boxed_slice());
+                        error_handler
+                            .results()
+                            .expect_err("Expected an error from error_handler.")
+                    })?
+                } else {
                     let line_cache = NewlineCache::from_str(&lex_src).unwrap();
-                    errs.iter()
-                        .map(|e| {
-                            if let Some((line, column)) = line_cache.byte_to_line_num_and_col_num(
-                                &lex_src,
-                                e.spans().first().unwrap().start(),
-                            ) {
-                                format!("{} at line {line} column {column}", e)
-                            } else {
-                                format!("{}", e)
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                })?,
-            ),
+                    lexerdef.map_err(|errs| {
+                        errs.iter()
+                            .map(|e| {
+                                if let Some((line, column)) = line_cache
+                                    .byte_to_line_num_and_col_num(
+                                        &lex_src,
+                                        e.spans().first().unwrap().start(),
+                                    )
+                                {
+                                    format!("{} at line {line} column {column}", e)
+                                } else {
+                                    format!("{}", e)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })?
+                })
+            }
         };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
