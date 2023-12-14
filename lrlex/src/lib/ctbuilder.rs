@@ -25,7 +25,8 @@ use regex::Regex;
 use serde::Serialize;
 
 use crate::{
-    DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef, RegexOptions, DEFAULT_REGEX_OPTIONS,
+    DefaultLexerTypes, LRNonStreamingLexerDef, LexBuildError, LexerDef, RegexOptions,
+    DEFAULT_REGEX_OPTIONS,
 };
 
 const RUST_FILE_EXT: &str = "rs";
@@ -79,6 +80,26 @@ pub enum RustEdition {
     Rust2021,
 }
 
+pub trait LexErrorHandler<LexerTypesT>
+where
+    LexerTypesT: LexerTypes,
+    usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+{
+    /// Called with the lexers filename
+    fn lexer_path(&mut self, filename: &Path);
+    /// Called with the lexers source contents.
+    fn lexer_src(&mut self, src: &str);
+    fn on_lex_build_error(&mut self, errors: Box<[LexBuildError]>);
+    fn missing_in_lexer(&mut self, missing: &HashSet<String>);
+    fn missing_in_parser(&mut self, missing: &HashSet<String>);
+    /// This function must return an `Err` variant if any of the following are true:
+    ///
+    /// - missing_in_lexer is called.
+    /// - missing_in_parser is called.
+    /// - on_lex_build_error is called.
+    fn results(&self) -> Result<(), Box<dyn Error>>;
+}
+
 /// A `CTLexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
 pub struct CTLexerBuilder<'a, LexerTypesT: LexerTypes = DefaultLexerTypes<u32>>
@@ -97,6 +118,7 @@ where
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
     regex_options: RegexOptions,
+    error_handler: Option<&'a mut dyn LexErrorHandler<LexerTypesT>>,
 }
 
 impl<'a> CTLexerBuilder<'a, DefaultLexerTypes<u32>> {
@@ -141,7 +163,16 @@ where
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
             regex_options: DEFAULT_REGEX_OPTIONS,
+            error_handler: None,
         }
+    }
+
+    pub fn error_handler(
+        mut self,
+        error_handler: &'a mut dyn LexErrorHandler<LexerTypesT>,
+    ) -> Self {
+        self.error_handler = Some(error_handler);
+        self
     }
 
     /// An optional convenience function to make it easier to create an (lrlex) lexer and (lrpar)
@@ -327,7 +358,10 @@ where
         }
 
         let lex_src = read_to_string(lexerp)?;
-        let line_cache = NewlineCache::from_str(&lex_src).unwrap();
+        if let Some(error_handler) = self.error_handler.as_mut() {
+            error_handler.lexer_path(lexerp.as_path());
+            error_handler.lexer_src(lex_src.as_str());
+        }
         let mut lexerdef: Box<dyn LexerDef<LexerTypesT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
                 LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
@@ -335,6 +369,7 @@ where
                     self.regex_options.clone(),
                 )
                 .map_err(|errs| {
+                    let line_cache = NewlineCache::from_str(&lex_src).unwrap();
                     errs.iter()
                         .map(|e| {
                             if let Some((line, column)) = line_cache.byte_to_line_num_and_col_num(

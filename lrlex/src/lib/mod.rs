@@ -21,7 +21,9 @@ mod lexer;
 mod parser;
 
 pub use crate::{
-    ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility},
+    ctbuilder::{
+        ct_token_map, CTLexer, CTLexerBuilder, LexErrorHandler, LexerKind, RustEdition, Visibility,
+    },
     defaults::{DefaultLexeme, DefaultLexerTypes},
     lexer::{
         LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, RegexOptions, Rule,
