@@ -3,6 +3,7 @@
 use std::{
     any::type_name,
     borrow::Cow,
+    cell::RefCell,
     collections::{HashMap, HashSet},
     convert::AsRef,
     env::{current_dir, var},
@@ -13,13 +14,17 @@ use std::{
     io::{self, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Mutex,
 };
 
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{
+        ast::{ASTWithValidityInfo, GrammarAST},
+        YaccGrammar, YaccGrammarError, YaccGrammarWarning, YaccKind, YaccOriginalActionKind,
+    },
     RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -146,6 +151,32 @@ impl Visibility {
     }
 }
 
+pub trait GrammarErrorHandler<LexerTypesT>
+where
+    LexerTypesT: LexerTypes,
+    usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+{
+    fn grammar_src(&mut self, src: &str);
+    fn grammar_path(&mut self, path: &Path);
+    fn warnings_are_errors(&mut self, flag: bool);
+    fn on_grammar_warning(&mut self, ws: Box<[YaccGrammarWarning]>);
+    fn on_grammar_error(&mut self, errs: Box<[YaccGrammarError]>);
+    fn on_unexpected_conflicts(
+        &mut self,
+        ast: &GrammarAST,
+        grm: &YaccGrammar<LexerTypesT::StorageT>,
+        sgraph: &StateGraph<LexerTypesT::StorageT>,
+        stable: &StateTable<LexerTypesT::StorageT>,
+        conflicts: &Conflicts<LexerTypesT::StorageT>,
+    );
+    /// This function must return an `Err` if any of the following are true:
+    ///
+    /// - `on_grammar_error` has been called.
+    /// - `on_unexpected_conflicts` has been called,
+    /// - `on_grammar_warning` was called and `warnings_are_errors` is true.
+    fn results(&self) -> Result<(), Box<dyn Error>>;
+}
+
 /// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
 pub struct CTParserBuilder<'a, LexerTypesT: LexerTypes>
@@ -166,6 +197,7 @@ where
     show_warnings: bool,
     visibility: Visibility,
     rust_edition: RustEdition,
+    error_handler: Option<Rc<RefCell<dyn GrammarErrorHandler<LexerTypesT>>>>,
     phantom: PhantomData<LexerTypesT>,
 }
 
@@ -209,6 +241,7 @@ where
             show_warnings: true,
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
+            error_handler: None,
             phantom: PhantomData,
         }
     }
@@ -260,6 +293,14 @@ where
         write!(leaf, ".{}", RUST_FILE_EXT).ok();
         outp.push(leaf);
         Ok(self.output_path(outp))
+    }
+
+    pub fn error_handler(
+        mut self,
+        error_handler: Rc<RefCell<dyn GrammarErrorHandler<LexerTypesT>>>,
+    ) -> Self {
+        self.error_handler = Some(error_handler);
+        self
     }
 
     /// Set the input grammar path to `inp`. If specified, you must also call
@@ -429,6 +470,12 @@ where
         };
 
         let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(yk, &ast_validation);
+        if let Some(error_handler) = self.error_handler.as_ref() {
+            let mut error_handler = error_handler.borrow_mut();
+            error_handler.grammar_path(grmp);
+            error_handler.grammar_src(inc.as_str());
+            error_handler.warnings_are_errors(self.warnings_are_errors);
+        }
         let grm = match res {
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
                 let mut line_cache = NewlineCache::new();
@@ -661,6 +708,7 @@ where
             show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
+            error_handler: None,
             phantom: PhantomData,
         };
         Ok(cl.build()?.rule_ids)
