@@ -600,7 +600,23 @@ where
                     (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
                     (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
                     (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
-                    _ => return Err(Box::new(CTConflictsError { stable })),
+                    _ => {
+                        if let Some(error_handler) = self.error_handler.as_ref() {
+                            let mut error_handler = error_handler.borrow_mut();
+                            error_handler.on_unexpected_conflicts(
+                                ast_validation.ast(),
+                                &grm,
+                                &sgraph,
+                                &stable,
+                                c,
+                            );
+                            return Err(error_handler
+                                .results()
+                                .expect_err("Expected conflict error from error handler"));
+                        } else {
+                            return Err(Box::new(CTConflictsError { stable }));
+                        }
+                    }
                 }
             }
         }
