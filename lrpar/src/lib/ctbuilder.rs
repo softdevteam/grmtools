@@ -159,8 +159,8 @@ where
     fn grammar_src(&mut self, src: &str);
     fn grammar_path(&mut self, path: &Path);
     fn warnings_are_errors(&mut self, flag: bool);
-    fn on_grammar_warning(&mut self, ws: Box<[YaccGrammarWarning]>);
-    fn on_grammar_error(&mut self, errs: Box<[YaccGrammarError]>);
+    fn on_grammar_warning(&mut self, ws: &[YaccGrammarWarning]);
+    fn on_grammar_error(&mut self, errs: &[YaccGrammarError]);
     fn on_unexpected_conflicts(
         &mut self,
         ast: &GrammarAST,
@@ -480,7 +480,7 @@ where
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
                 if let Some(error_handler) = self.error_handler {
                     let mut error_handler = error_handler.borrow_mut();
-                    error_handler.on_grammar_warning(warnings.into_boxed_slice());
+                    error_handler.on_grammar_warning(warnings.as_slice());
                     return Err(error_handler
                         .results()
                         .expect_err("Expected error from error handler"));
@@ -506,7 +506,7 @@ where
                 if !warnings.is_empty() {
                     if let Some(error_handler) = self.error_handler.as_ref() {
                         let mut error_handler = error_handler.borrow_mut();
-                        error_handler.on_grammar_warning(warnings.into_boxed_slice());
+                        error_handler.on_grammar_warning(warnings.as_slice());
                     } else {
                         let mut line_cache = NewlineCache::new();
                         line_cache.feed(&inc);
@@ -526,9 +526,9 @@ where
                 if let Some(error_handler) = self.error_handler.as_ref() {
                     let mut error_handler = error_handler.borrow_mut();
                     if !warnings.is_empty() {
-                        error_handler.on_grammar_warning(warnings.into_boxed_slice())
+                        error_handler.on_grammar_warning(warnings.as_slice())
                     }
-                    error_handler.on_grammar_error(errs.into_boxed_slice());
+                    error_handler.on_grammar_error(errs.as_slice());
                     return Err(error_handler
                         .results()
                         .expect_err("Expected an error from error_handler."));

@@ -89,7 +89,7 @@ where
     fn lexer_path(&mut self, filename: &Path);
     /// Called with the lexers source contents.
     fn lexer_src(&mut self, src: &str);
-    fn on_lex_build_error(&mut self, errors: Box<[LexBuildError]>);
+    fn on_lex_build_error(&mut self, errors: &[LexBuildError]);
     fn missing_in_lexer(&mut self, missing: &HashSet<String>);
     fn missing_in_parser(&mut self, missing: &HashSet<String>);
     /// This function must return an `Err` variant if any of the following are true:
@@ -371,7 +371,7 @@ where
 
                 Box::new(if let Some(error_handler) = self.error_handler.as_mut() {
                     lexerdef.map_err(|errs| {
-                        error_handler.on_lex_build_error(errs.into_boxed_slice());
+                        error_handler.on_lex_build_error(errs.as_slice());
                         error_handler
                             .results()
                             .expect_err("Expected an error from error_handler.")
