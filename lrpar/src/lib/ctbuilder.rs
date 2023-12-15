@@ -478,53 +478,77 @@ where
         }
         let grm = match res {
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                return Err(ErrorString(if warnings.len() > 1 {
-                    // Indent under the "Error:" prefix.
-                    format!(
-                        "\n\t{}",
-                        warnings
-                            .iter()
-                            .map(|w| spanned_fmt(w, &inc, &line_cache))
-                            .collect::<Vec<_>>()
-                            .join("\n\t")
-                    )
+                if let Some(error_handler) = self.error_handler {
+                    let mut error_handler = error_handler.borrow_mut();
+                    error_handler.on_grammar_warning(warnings.into_boxed_slice());
+                    return Err(error_handler
+                        .results()
+                        .expect_err("Expected error from error handler"));
                 } else {
-                    spanned_fmt(warnings.first().unwrap(), &inc, &line_cache)
-                }))?;
+                    let mut line_cache = NewlineCache::new();
+                    line_cache.feed(&inc);
+                    return Err(ErrorString(if warnings.len() > 1 {
+                        // Indent under the "Error:" prefix.
+                        format!(
+                            "\n\t{}",
+                            warnings
+                                .iter()
+                                .map(|w| spanned_fmt(w, &inc, &line_cache))
+                                .collect::<Vec<_>>()
+                                .join("\n\t")
+                        )
+                    } else {
+                        spanned_fmt(warnings.first().unwrap(), &inc, &line_cache)
+                    }))?;
+                }
             }
             Ok(grm) => {
                 if !warnings.is_empty() {
-                    let mut line_cache = NewlineCache::new();
-                    line_cache.feed(&inc);
-                    for w in warnings {
-                        // Assume if this variable is set we are running under cargo.
-                        if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
-                            println!("cargo:warning={}", spanned_fmt(&w, &inc, &line_cache));
-                        } else if self.show_warnings {
-                            eprintln!("{}", spanned_fmt(&w, &inc, &line_cache));
+                    if let Some(error_handler) = self.error_handler.as_ref() {
+                        let mut error_handler = error_handler.borrow_mut();
+                        error_handler.on_grammar_warning(warnings.into_boxed_slice());
+                    } else {
+                        let mut line_cache = NewlineCache::new();
+                        line_cache.feed(&inc);
+                        for w in warnings {
+                            // Assume if this variable is set we are running under cargo.
+                            if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
+                                println!("cargo:warning={}", spanned_fmt(&w, &inc, &line_cache));
+                            } else if self.show_warnings {
+                                eprintln!("{}", spanned_fmt(&w, &inc, &line_cache));
+                            }
                         }
                     }
                 }
                 grm
             }
             Err(errs) => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                return Err(ErrorString(if errs.len() + warnings.len() > 1 {
-                    // Indent under the "Error:" prefix.
-                    format!(
-                        "\n\t{}",
-                        errs.iter()
-                            .map(|e| spanned_fmt(e, &inc, &line_cache))
-                            .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
-                            .collect::<Vec<_>>()
-                            .join("\n\t")
-                    )
+                if let Some(error_handler) = self.error_handler.as_ref() {
+                    let mut error_handler = error_handler.borrow_mut();
+                    if !warnings.is_empty() {
+                        error_handler.on_grammar_warning(warnings.into_boxed_slice())
+                    }
+                    error_handler.on_grammar_error(errs.into_boxed_slice());
+                    return Err(error_handler
+                        .results()
+                        .expect_err("Expected an error from error_handler."));
                 } else {
-                    spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
-                }))?;
+                    let mut line_cache = NewlineCache::new();
+                    line_cache.feed(&inc);
+                    return Err(ErrorString(if errs.len() + warnings.len() > 1 {
+                        // Indent under the "Error:" prefix.
+                        format!(
+                            "\n\t{}",
+                            errs.iter()
+                                .map(|e| spanned_fmt(e, &inc, &line_cache))
+                                .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
+                                .collect::<Vec<_>>()
+                                .join("\n\t")
+                        )
+                    } else {
+                        spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
+                    }))?;
+                }
             }
         };
 
