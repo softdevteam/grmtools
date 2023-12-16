@@ -85,12 +85,19 @@ where
     LexerTypesT: LexerTypes,
     usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
 {
-    /// Called with the lexers filename
+    /// Will be called with the path to the `.l` file
+    /// before `fn on_*` or `fn missing_*`.
     fn lexer_path(&mut self, filename: &Path);
-    /// Called with the lexers source contents.
+    /// Will be called with the `.y` file sources as `src`
+    /// before any call to `fn on_*`.
     fn lexer_src(&mut self, src: &str);
+    /// Lends `self` a slice containing `LexBuildError`s
     fn on_lex_build_error(&mut self, errors: &[LexBuildError]);
+    /// Lends `self` a set of `String`s denoting tokens
+    /// present in the parser, but missing from the lexer.
     fn missing_in_lexer(&mut self, missing: &HashSet<String>);
+    /// Lends `self` a set of `String`s denoting tokens
+    /// present in the lexer, but missing from the parser.
     fn missing_in_parser(&mut self, missing: &HashSet<String>);
     /// This function must return an `Err` variant if any of the following are true:
     ///

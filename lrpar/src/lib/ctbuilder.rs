@@ -156,11 +156,20 @@ where
     LexerTypesT: LexerTypes,
     usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
 {
+    /// Will be called with the `.y` file sources
+    /// as `src`, before any any call to `fn on_*`.
     fn grammar_src(&mut self, src: &str);
+    /// Will be called with the path to the `.y`
+    /// file, before any any call to `fn on_*`.
     fn grammar_path(&mut self, path: &Path);
+    /// Will be called with a flag denoting whether warnings
+    /// should be treated as errors before any call to `fn on_*`.
     fn warnings_are_errors(&mut self, flag: bool);
+    /// Lends `Self` a slice containing warnings.
     fn on_grammar_warning(&mut self, ws: &[YaccGrammarWarning]);
+    /// Lends `Self` a slice containing errors.
     fn on_grammar_error(&mut self, errs: &[YaccGrammarError]);
+    /// Lends `Self` conflicts, and values necessary to obtain spans.
     fn on_unexpected_conflicts(
         &mut self,
         ast: &GrammarAST,
