@@ -505,7 +505,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             write!(
                 outs,
                 "
-        Rule::new({}, {}, {}, {}.to_string(), {}.to_vec(), {}, &regex_options).unwrap(),",
+        Rule::new(::lrlex::unstable_api::InternalPublicApi, {}, {}, {}, {}.to_string(), {}.to_vec(), {}, &regex_options).unwrap(),",
                 tok_id,
                 n,
                 n_span,

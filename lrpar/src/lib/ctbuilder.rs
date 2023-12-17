@@ -1332,8 +1332,10 @@ where
     /// always return `None`, even if the grammar actually has conflicts.
     ///
     /// **Note: The conflicts feature is currently unstable and may change in the future.**
+    #[allow(private_interfaces)]
     pub fn conflicts(
         &self,
+        _: crate::unstable::UnstableApi,
     ) -> Option<(
         &YaccGrammar<StorageT>,
         &StateGraph<StorageT>,
@@ -1378,7 +1380,7 @@ C : 'a';"
             .output_path(file_path.with_extension("ignored"))
             .build()
             .unwrap()
-            .conflicts()
+            .conflicts(crate::unstable::UnstableApi)
         {
             Some((_, _, _, conflicts)) => {
                 assert_eq!(conflicts.sr_len(), 1);

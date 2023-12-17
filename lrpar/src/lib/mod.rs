@@ -228,3 +228,70 @@ macro_rules! lrpar_mod {
     note = "Please import this as `cfgrammar::Span` instead"
 )]
 pub use cfgrammar::Span;
+
+/// This private module with pub items which is directly related to
+/// the "Sealed trait" pattern. These items are used within the current
+/// crate. See `unstable_api` module for enabling usage outside the crate.
+mod unstable {
+    #![allow(unused)]
+    #![allow(unreachable_pub)]
+    pub struct UnstableApi;
+    pub trait UnstableTrait {}
+}
+
+/// A module for lifting restrictions on visibility by enabling unstable features.
+///
+/// See the sources for a complete list of features, and members.
+pub mod unstable_api {
+    /// Unstable functions that take a value `UnstableApi` require
+    /// the "_unstable_api" feature. This feature controls
+    /// whether the value has `pub` visibility outside the crate.
+    #[cfg(feature = "_unstable_api")]
+    pub use unstable::UnstableApi;
+
+    /// This is a a supertrait for traits that are considered to be Unstable.
+    /// Unstable traits do not provide any semver guarantees.
+    ///
+    /// Enabling the `_unsealed_unstable traits` makes this supertrait publicly
+    /// Visible.
+    ///
+    ///
+    /// Declaring an unstable Api within the crate:
+    /// ```
+    /// // Within the crate use `crate::unstable::` .
+    /// pub trait Foo: crate::unstable::UnstableTrait {
+    ///     fn foo(key: crate::unstable::UnstableApi);
+    /// }
+    /// ```
+    ///
+    /// Deriving the trait outside the crate (requires feature `_unsealed_unstable_traits`)
+    /// ```
+    /// struct Bar;
+    /// impl unstable_api::UnstableTrait for Bar{}
+    /// impl Foo for Bar {
+    ///   fn foo(key: unstable_api::UnstableApi) {
+    ///     ...
+    ///   }
+    /// }
+    /// ```
+    ///
+    ///
+    /// Calling an implementation of the trait outside the crate (requires feature `_unstable_api`:
+    /// ```
+    ///   let x: &dyn Foo = ...;
+    ///   x.foo(unstable_api::UnstableApi);
+    /// ```
+    #[cfg(feature = "_unsealed_unstable_traits")]
+    pub use unstable::UnstableTrait;
+
+    /// An value that acts as a key to inform callers that they are
+    /// calling an unstable internal api. This value is public by default.
+    /// Access to it does not require any features to be enabled.
+    ///
+    /// Q. When this should be used?
+    ///
+    /// A. When generated code needs to call internal api within it,
+    /// where you do not want the caller to have to enable any features
+    /// to use the generated code.
+    pub struct InternalPublicApi;
+}
