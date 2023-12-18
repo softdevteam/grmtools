@@ -449,6 +449,7 @@ where
                            .unwrap_or_else(|_| panic!("StorageT::try_from \
                            failed on {} (if StorageT is an unsigned integer type, this probably means that {} exceeds the type's maximum value)", rules_len, rules_len));
             let rule = Rule::new(
+                crate::unstable_api::InternalPublicApi,
                 Some(tok_id),
                 name,
                 name_span,

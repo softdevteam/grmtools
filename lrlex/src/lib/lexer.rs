@@ -74,7 +74,10 @@ impl<StorageT> Rule<StorageT> {
     /// Create a new `Rule`. This interface is unstable and should only be used by code generated
     /// by lrlex itself.
     #[doc(hidden)]
+    #[allow(private_interfaces)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        _: crate::unstable_api::InternalPublicApi,
         tok_id: Option<StorageT>,
         name: Option<String>,
         name_span: Span,

@@ -17,6 +17,10 @@ name = "lrlex"
 name = "lrlex"
 path = "src/lib/mod.rs"
 
+[features]
+_unstable_api = []
+_unsealed_unstable_traits = ["_unstable_api"]
+
 [build-dependencies]
 vergen = { version = "8", default-features = false, features = ["build"] }
 
