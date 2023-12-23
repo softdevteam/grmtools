@@ -353,7 +353,12 @@ impl YaccParser {
             if let Some(j) = self.lookahead_is("%token", i) {
                 i = self.parse_ws(j, false, errs)?;
                 while i < self.src.len() && self.lookahead_is("%", i).is_none() {
-                    let (j, n, span) = self.parse_token(i, errs)?;
+                    let result = self.parse_token(i);
+                    if let Err(e) = result {
+                        errs.send(e)?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                    }
+                    let (j, n, span) = result.unwrap();
                     if self.ast.tokens.insert(n) {
                         self.ast.spans.push(span);
                     }
@@ -400,7 +405,12 @@ impl YaccParser {
             }
             if let Some(j) = self.lookahead_is("%epp", i) {
                 i = self.parse_ws(j, false, errs)?;
-                let (j, n, _) = self.parse_token(i, errs)?;
+                let result = self.parse_token(i);
+                if let Err(e) = result {
+                    errs.send(e)?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                }
+                let (j, n, _) = result.unwrap();
                 let span = Span::new(i, j);
                 i = self.parse_ws(j, false, errs)?;
                 let (j, v) = self.parse_string(i, errs)?;
@@ -446,7 +456,7 @@ impl YaccParser {
                                 .push(Symbol::Rule(n, Span::new(i, j)));
                             j
                         }
-                        Err(_) => match self.parse_token(i, errs) {
+                        Err(_) => match self.parse_token(i) {
                             Ok((j, n, span)) => {
                                 self.ast.expect_unused.push(Symbol::Token(n, span));
                                 j
@@ -483,7 +493,12 @@ impl YaccParser {
                     self.ast.avoid_insert = Some(HashMap::new());
                 }
                 while j < self.src.len() && self.num_newlines == num_newlines {
-                    let (j, n, span) = self.parse_token(i, errs)?;
+                    let result = self.parse_token(i);
+                    if let Err(e) = result {
+                        errs.send(e)?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                    }
+                    let (j, n, span) = result.unwrap();
                     if self.ast.tokens.insert(n.clone()) {
                         self.ast.spans.push(span);
                     }
@@ -526,7 +541,12 @@ impl YaccParser {
                         self.ast.implicit_tokens = Some(HashMap::new());
                     }
                     while j < self.src.len() && self.num_newlines == num_newlines {
-                        let (j, n, span) = self.parse_token(i, errs)?;
+                        let result = self.parse_token(i);
+                        if let Err(e) = result {
+                            errs.send(e)?;
+                            return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                        }
+                        let (j, n, span) = result.unwrap();
                         if self.ast.tokens.insert(n.clone()) {
                             self.ast.spans.push(span);
                         }
@@ -567,7 +587,12 @@ impl YaccParser {
                 i = self.parse_ws(k, false, errs)?;
                 let num_newlines = self.num_newlines;
                 while i < self.src.len() && num_newlines == self.num_newlines {
-                    let (j, n, span) = self.parse_token(i, errs)?;
+                    let result = self.parse_token(i);
+                    if let Err(e) = result {
+                        errs.send(e)?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                    }
+                    let (j, n, span) = result.unwrap();
                     match self.ast.precs.entry(n) {
                         Entry::Occupied(orig) => {
                             let (_, orig_span) = orig.get();
@@ -677,7 +702,12 @@ impl YaccParser {
             }
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
-                let (j, sym, span) = self.parse_token(i, errs)?;
+                let result = self.parse_token(i);
+                if let Err(e) = result {
+                    errs.send(e)?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                }
+                let (j, sym, span) = result.unwrap();
                 i = self.parse_ws(j, true, errs)?;
                 if self.ast.tokens.insert(sym.clone()) {
                     self.ast.spans.push(span);
@@ -685,7 +715,12 @@ impl YaccParser {
                 syms.push(Symbol::Token(sym, span));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = self.parse_ws(j, true, errs)?;
-                let (k, sym, _) = self.parse_token(i, errs)?;
+                let result = self.parse_token(i);
+                if let Err(e) = result {
+                    errs.send(e)?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                }
+                let (k, sym, _) = result.unwrap();
                 if self.ast.tokens.contains(&sym) {
                     prec = Some(sym);
                 } else {
@@ -712,7 +747,12 @@ impl YaccParser {
                 }
                 i = j;
             } else {
-                let (j, sym, span) = self.parse_token(i, errs)?;
+                let result = self.parse_token(i);
+                if let Err(e) = result {
+                    errs.send(e)?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                }
+                let (j, sym, span) = result.unwrap();
                 if self.ast.tokens.contains(&sym) {
                     syms.push(Symbol::Token(sym, span));
                 } else {
@@ -736,11 +776,7 @@ impl YaccParser {
         }
     }
 
-    fn parse_token(
-        &self,
-        i: usize,
-        errs: &mut ErrorSender,
-    ) -> Result<(usize, String, Span), YaccGrammarConstructionFailure> {
+    fn parse_token(&self, i: usize) -> Result<(usize, String, Span), YaccGrammarError> {
         match RE_TOKEN.find(&self.src[i..]) {
             Some(m) => {
                 assert!(m.start() == 0 && m.end() > 0);
@@ -762,10 +798,7 @@ impl YaccParser {
                     )),
                 }
             }
-            None => {
-                errs.send(self.mk_error(YaccGrammarErrorKind::IllegalString, i))?;
-                Err(YaccGrammarConstructionFailure::ConstructionFailure)
-            }
+            None => Err(self.mk_error(YaccGrammarErrorKind::IllegalString, i)),
         }
     }
 
