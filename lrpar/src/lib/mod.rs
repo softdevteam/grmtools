@@ -247,7 +247,7 @@ pub mod unstable_api {
     /// the "_unstable_api" feature. This feature controls
     /// whether the value has `pub` visibility outside the crate.
     #[cfg(feature = "_unstable_api")]
-    pub use unstable::UnstableApi;
+    pub use crate::unstable::UnstableApi;
 
     /// This is a a supertrait for traits that are considered to be Unstable.
     /// Unstable traits do not provide any semver guarantees.
@@ -257,7 +257,7 @@ pub mod unstable_api {
     ///
     ///
     /// Declaring an unstable Api within the crate:
-    /// ```
+    /// ```ignore_rust
     /// // Within the crate use `crate::unstable::` .
     /// pub trait Foo: crate::unstable::UnstableTrait {
     ///     fn foo(key: crate::unstable::UnstableApi);
@@ -265,7 +265,7 @@ pub mod unstable_api {
     /// ```
     ///
     /// Deriving the trait outside the crate (requires feature `_unsealed_unstable_traits`)
-    /// ```
+    /// ```ignore_rust
     /// struct Bar;
     /// impl unstable_api::UnstableTrait for Bar{}
     /// impl Foo for Bar {
@@ -277,12 +277,12 @@ pub mod unstable_api {
     ///
     ///
     /// Calling an implementation of the trait outside the crate (requires feature `_unstable_api`:
-    /// ```
+    /// ```ignore_rust
     ///   let x: &dyn Foo = ...;
     ///   x.foo(unstable_api::UnstableApi);
     /// ```
     #[cfg(feature = "_unsealed_unstable_traits")]
-    pub use unstable::UnstableTrait;
+    pub use crate::unstable::UnstableTrait;
 
     /// An value that acts as a key to inform callers that they are
     /// calling an unstable internal api. This value is public by default.
