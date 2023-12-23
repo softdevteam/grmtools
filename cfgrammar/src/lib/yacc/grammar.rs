@@ -115,7 +115,7 @@ where
         ast_validation: &ast::ASTWithValidityInfo,
     ) -> YaccGrammarResult<Self> {
         if !ast_validation.is_valid() {
-            return Err(ast_validation.errs.clone());
+            return Err(ast_validation.errors());
         }
         let ast = &ast_validation.ast;
         // Check that StorageT is big enough to hold RIdx/PIdx/SIdx/TIdx values; after these

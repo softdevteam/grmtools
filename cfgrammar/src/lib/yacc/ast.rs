@@ -6,35 +6,160 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 
 use super::{
-    parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
-    YaccGrammarWarningKind, YaccKind,
+    parser::YaccGrammarConstructionFailure, parser::YaccParser, Precedence, YaccGrammarError,
+    YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind, YaccKind,
 };
-
 use crate::Span;
+use std::path;
+use std::sync::mpsc;
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
     pub(crate) ast: GrammarAST,
-    pub(crate) errs: Vec<YaccGrammarError>,
+    pub(crate) error_receiver: Option<mpsc::Receiver<YaccGrammarError>>,
+    pub(crate) error_sender: ErrorSender,
 }
 
-impl ASTWithValidityInfo {
+#[allow(dead_code)]
+pub struct AstBuilder<'a> {
+    kind: YaccKind,
+    grammar_src: Option<&'a str>,
+    grammar_path: Option<path::PathBuf>,
+    error_receiver: Option<mpsc::Receiver<YaccGrammarError>>,
+    error_sender: ErrorSender,
+}
+
+pub struct ErrorSender {
+    error_occurred: bool,
+    sender: Option<mpsc::Sender<YaccGrammarError>>,
+}
+
+#[allow(dead_code)]
+impl ErrorSender {
+    pub(crate) fn new(sender: mpsc::Sender<YaccGrammarError>) -> Self {
+        Self {
+            error_occurred: false,
+            sender: Some(sender),
+        }
+    }
+    pub(crate) fn close(&mut self) {
+        drop(self.sender.take())
+    }
+
+    pub(crate) fn send(
+        &mut self,
+        e: YaccGrammarError,
+    ) -> Result<(), mpsc::SendError<YaccGrammarError>> {
+        self.error_occurred = true;
+        if let Some(sender) = &self.sender {
+            sender.send(e)
+        } else {
+            Err(mpsc::SendError(e))
+        }
+    }
+    pub(crate) fn error_occurred(&self) -> bool {
+        self.error_occurred
+    }
+}
+
+#[allow(dead_code)]
+impl<'a> AstBuilder<'a> {
+    fn path(mut self, path: &path::Path) -> Self {
+        self.grammar_path = Some(path.to_owned());
+        self
+    }
+    fn yacc_kind(mut self, kind: YaccKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    fn error_receiver(&mut self) -> mpsc::Receiver<YaccGrammarError> {
+        self.error_receiver.take().unwrap()
+    }
+
+    fn build(self) -> ASTWithValidityInfo {
+        ASTWithValidityInfo::new_with_error_channel(
+            self.kind,
+            self.grammar_src.unwrap(),
+            self.error_sender,
+            self.error_receiver,
+        )
+    }
+}
+
+impl<'a> ASTWithValidityInfo {
+    pub fn builder() -> AstBuilder<'a> {
+        let (error_sender, error_receiver) = std::sync::mpsc::channel();
+        AstBuilder {
+            kind: YaccKind::Grmtools,
+            grammar_src: None,
+            grammar_path: None,
+            error_receiver: Some(error_receiver),
+            error_sender: ErrorSender::new(error_sender),
+        }
+    }
+
+    pub fn new_with_error_channel(
+        yacc_kind: YaccKind,
+        s: &str,
+        mut error_sender: ErrorSender,
+        error_receiver: Option<mpsc::Receiver<YaccGrammarError>>,
+    ) -> Self {
+        let ast = match yacc_kind {
+            YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
+                let mut yp = YaccParser::new(yacc_kind, s.to_string());
+                yp.parse_with_error_channel(&mut error_sender).unwrap();
+                let mut ast = yp.ast();
+                ast.complete_and_validate_with_error_channel(&mut error_sender)
+                    .ok();
+                ast
+            }
+        };
+        error_sender.close();
+        ASTWithValidityInfo {
+            ast,
+            error_receiver,
+            error_sender,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn validate_ast(mut ast: GrammarAST) -> Self {
+        let (error_sender, error_receiver) = mpsc::channel();
+        let mut error_sender = ErrorSender::new(error_sender);
+        ast.complete_and_validate_with_error_channel(&mut error_sender)
+            .ok();
+        error_sender.close();
+        ASTWithValidityInfo {
+            ast,
+            error_receiver: Some(error_receiver),
+            error_sender,
+        }
+    }
+
     /// Parses a source file into an AST, returning an ast and any errors that were
     /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
     /// then unused to construct a `YaccGrammar`, which will either produce an
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
     pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
-        let mut errs = Vec::new();
+        let (error_sender, error_receiver) = mpsc::channel();
+        let mut error_sender = ErrorSender::new(error_sender);
         let ast = match yacc_kind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
-                yp.parse().map_err(|e| errs.extend(e)).ok();
+                let _ = yp.parse_with_error_channel(&mut error_sender).ok();
                 let mut ast = yp.ast();
-                ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+                ast.complete_and_validate_with_error_channel(&mut error_sender)
+                    .ok();
+                error_sender.close();
                 ast
             }
         };
-        ASTWithValidityInfo { ast, errs }
+        ASTWithValidityInfo {
+            ast,
+            error_receiver: Some(error_receiver),
+            error_sender,
+        }
     }
 
     /// Returns a `GrammarAST` constructed as the result of parsing a source file.
@@ -48,12 +173,16 @@ impl ASTWithValidityInfo {
     /// Returns whether any errors where encountered during the
     /// parsing and validation of the AST during it's construction.
     pub fn is_valid(&self) -> bool {
-        self.errs.is_empty()
+        !self.error_sender.error_occurred()
     }
 
     /// Returns all errors which were encountered during AST construction.
-    pub fn errors(&self) -> &[YaccGrammarError] {
-        self.errs.as_slice()
+    pub fn errors(&self) -> Vec<YaccGrammarError> {
+        let errs = self
+            .error_receiver
+            .as_ref()
+            .map_or(vec![], |errs| errs.iter().collect::<Vec<_>>());
+        errs
     }
 }
 
@@ -209,20 +338,25 @@ impl GrammarAST {
     ///   4) If a production has a precedence token, then it references a declared token
     ///   5) Every token declared with %epp matches a known token
     /// If the validation succeeds, None is returned.
-    pub(crate) fn complete_and_validate(&mut self) -> Result<(), YaccGrammarError> {
+    pub(crate) fn complete_and_validate_with_error_channel(
+        &mut self,
+        errs: &mut ErrorSender,
+    ) -> Result<(), YaccGrammarConstructionFailure> {
         match self.start {
             None => {
-                return Err(YaccGrammarError {
+                errs.send(YaccGrammarError {
                     kind: YaccGrammarErrorKind::NoStartRule,
                     spans: vec![Span::new(0, 0)],
-                });
+                })?;
+                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
             }
             Some((ref s, span)) => {
                 if !self.rules.contains_key(s) {
-                    return Err(YaccGrammarError {
+                    errs.send(YaccGrammarError {
                         kind: YaccGrammarErrorKind::InvalidStartRule(s.clone()),
                         spans: vec![span],
-                    });
+                    })?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                 }
             }
         }
@@ -231,34 +365,38 @@ impl GrammarAST {
                 let prod = &self.prods[pidx];
                 if let Some(ref n) = prod.precedence {
                     if !self.tokens.contains(n) {
-                        return Err(YaccGrammarError {
+                        errs.send(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownToken(n.clone()),
                             spans: vec![Span::new(0, 0)],
-                        });
+                        })?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                     }
                     if !self.precs.contains_key(n) {
-                        return Err(YaccGrammarError {
+                        errs.send(YaccGrammarError {
                             kind: YaccGrammarErrorKind::NoPrecForToken(n.clone()),
                             spans: vec![Span::new(0, 0)],
-                        });
+                        })?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                     }
                 }
                 for sym in &prod.symbols {
                     match *sym {
                         Symbol::Rule(ref name, span) => {
                             if !self.rules.contains_key(name) {
-                                return Err(YaccGrammarError {
+                                errs.send(YaccGrammarError {
                                     kind: YaccGrammarErrorKind::UnknownRuleRef(name.clone()),
                                     spans: vec![span],
-                                });
+                                })?;
+                                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                             }
                         }
                         Symbol::Token(ref name, span) => {
                             if !self.tokens.contains(name) {
-                                return Err(YaccGrammarError {
+                                errs.send(YaccGrammarError {
                                     kind: YaccGrammarErrorKind::UnknownToken(name.clone()),
                                     spans: vec![span],
-                                });
+                                })?;
+                                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                             }
                         }
                     }
@@ -275,28 +413,31 @@ impl GrammarAST {
                     continue;
                 }
             }
-            return Err(YaccGrammarError {
+            errs.send(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownEPP(k.clone()),
                 spans: vec![*sp],
-            });
+            })?;
+            return Err(YaccGrammarConstructionFailure::ConstructionFailure);
         }
 
         for sym in &self.expect_unused {
             match sym {
                 Symbol::Rule(sym_name, sym_span) => {
                     if self.get_rule(sym_name).is_none() {
-                        return Err(YaccGrammarError {
+                        errs.send(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownRuleRef(sym_name.clone()),
                             spans: vec![*sym_span],
-                        });
+                        })?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                     }
                 }
                 Symbol::Token(sym_name, sym_span) => {
                     if !self.has_token(sym_name) {
-                        return Err(YaccGrammarError {
+                        errs.send(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownToken(sym_name.clone()),
                             spans: vec![*sym_span],
-                        });
+                        })?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                     }
                 }
             }
@@ -396,7 +537,7 @@ impl GrammarAST {
 mod test {
     use super::{
         super::{AssocKind, Precedence},
-        GrammarAST, Span, Symbol, YaccGrammarError, YaccGrammarErrorKind,
+        ASTWithValidityInfo, GrammarAST, Span, Symbol, YaccGrammarError, YaccGrammarErrorKind,
     };
 
     fn rule(n: &str) -> Symbol {
@@ -409,12 +550,12 @@ mod test {
 
     #[test]
     fn test_empty_grammar() {
-        let mut grm = GrammarAST::new();
-        match grm.complete_and_validate() {
-            Err(YaccGrammarError {
+        let grm = GrammarAST::new();
+        match ASTWithValidityInfo::validate_ast(grm).errors().as_slice() {
+            [YaccGrammarError {
                 kind: YaccGrammarErrorKind::NoStartRule,
                 ..
-            }) => (),
+            }] => (),
             _ => panic!("Validation error"),
         }
     }
@@ -426,11 +567,12 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("B".to_string(), empty_span), None);
         grm.add_prod("B".to_string(), vec![], None, None);
-        match grm.complete_and_validate() {
-            Err(YaccGrammarError {
+
+        match ASTWithValidityInfo::validate_ast(grm).errors().as_slice() {
+            [YaccGrammarError {
                 kind: YaccGrammarErrorKind::InvalidStartRule(_),
                 ..
-            }) => (),
+            }] => (),
             _ => panic!("Validation error"),
         }
     }
@@ -442,7 +584,7 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![], None, None);
-        assert!(grm.complete_and_validate().is_ok());
+        assert!(ASTWithValidityInfo::validate_ast(grm).is_valid());
     }
 
     #[test]
@@ -454,7 +596,7 @@ mod test {
         grm.add_rule(("B".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("B")], None, None);
         grm.add_prod("B".to_string(), vec![], None, None);
-        assert!(grm.complete_and_validate().is_ok());
+        assert!(ASTWithValidityInfo::validate_ast(grm).is_valid());
     }
 
     #[test]
@@ -464,11 +606,11 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("B")], None, None);
-        match grm.complete_and_validate() {
-            Err(YaccGrammarError {
+        match ASTWithValidityInfo::validate_ast(grm).errors().as_slice() {
+            [YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownRuleRef(_),
                 ..
-            }) => (),
+            }] => (),
             _ => panic!("Validation error"),
         }
     }
@@ -481,7 +623,7 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![token("b")], None, None);
-        assert!(grm.complete_and_validate().is_ok());
+        assert!(ASTWithValidityInfo::validate_ast(grm).is_valid());
     }
 
     #[test]
@@ -494,7 +636,7 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("b")], None, None);
-        assert!(grm.complete_and_validate().is_err());
+        assert!(!ASTWithValidityInfo::validate_ast(grm).is_valid());
     }
 
     #[test]
@@ -504,11 +646,11 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![token("b")], None, None);
-        match grm.complete_and_validate() {
-            Err(YaccGrammarError {
+        match ASTWithValidityInfo::validate_ast(grm).errors().as_slice() {
+            [YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownToken(_),
                 ..
-            }) => (),
+            }] => (),
             _ => panic!("Validation error"),
         }
     }
@@ -520,11 +662,11 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_prod("A".to_string(), vec![rule("b"), token("b")], None, None);
-        match grm.complete_and_validate() {
-            Err(YaccGrammarError {
+        match ASTWithValidityInfo::validate_ast(grm).errors().as_slice() {
+            [YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownRuleRef(_),
                 ..
-            }) => (),
+            }] => (),
             _ => panic!("Validation error"),
         }
     }
@@ -538,11 +680,11 @@ mod test {
         grm.add_prod("A".to_string(), vec![], None, None);
         grm.epp
             .insert("k".to_owned(), (empty_span, ("v".to_owned(), empty_span)));
-        match grm.complete_and_validate() {
-            Err(YaccGrammarError {
+        match ASTWithValidityInfo::validate_ast(grm).errors().as_slice() {
+            [YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownEPP(_),
                 spans,
-            }) if spans.len() == 1 && spans[0] == Span::new(2, 3) => (),
+            }] if spans.len() == 1 && spans[0] == Span::new(2, 3) => (),
             _ => panic!("Validation error"),
         }
     }
@@ -570,7 +712,7 @@ mod test {
             Some("b".to_string()),
             None,
         );
-        assert!(grm.complete_and_validate().is_ok());
+        assert!(ASTWithValidityInfo::validate_ast(grm).is_valid());
     }
 
     #[test]
@@ -585,19 +727,28 @@ mod test {
             Some("b".to_string()),
             None,
         );
-        match grm.complete_and_validate() {
-            Err(YaccGrammarError {
+        match ASTWithValidityInfo::validate_ast(grm).errors().as_slice() {
+            [YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownToken(_),
                 ..
-            }) => (),
+            }] => (),
             _ => panic!("Validation error"),
         }
+        let mut grm = GrammarAST::new();
+        grm.start = Some(("A".to_string(), empty_span));
+        grm.add_rule(("A".to_string(), empty_span), None);
+        grm.add_prod(
+            "A".to_string(),
+            vec![token("b")],
+            Some("b".to_string()),
+            None,
+        );
         grm.tokens.insert("b".to_string());
-        match grm.complete_and_validate() {
-            Err(YaccGrammarError {
+        match ASTWithValidityInfo::validate_ast(grm).errors().as_slice() {
+            [YaccGrammarError {
                 kind: YaccGrammarErrorKind::NoPrecForToken(_),
                 ..
-            }) => (),
+            }] => (),
             _ => panic!("Validation error"),
         }
     }

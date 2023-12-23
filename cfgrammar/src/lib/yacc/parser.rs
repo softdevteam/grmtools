@@ -10,6 +10,7 @@ use std::{
     error::Error,
     fmt,
     str::FromStr,
+    sync::mpsc,
 };
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
@@ -17,9 +18,30 @@ pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
 use crate::{Span, Spanned};
 
 use super::{
-    ast::{GrammarAST, Symbol},
+    ast::{ErrorSender, GrammarAST, Symbol},
     AssocKind, Precedence, YaccKind,
 };
+
+#[derive(Debug)]
+pub enum YaccGrammarConstructionFailure {
+    ConstructionFailure,
+    ErrorChannel(mpsc::SendError<YaccGrammarError>),
+}
+
+impl From<mpsc::SendError<YaccGrammarError>> for YaccGrammarConstructionFailure {
+    fn from(it: mpsc::SendError<YaccGrammarError>) -> Self {
+        Self::ErrorChannel(it)
+    }
+}
+
+impl fmt::Display for YaccGrammarConstructionFailure {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::ConstructionFailure => write!(f, "Failure to send an error over a channel."),
+            Self::ErrorChannel(e) => write!(f, "Error constructing YaccGrammar: {}", e),
+        }
+    }
+}
 
 /// The various different possible Yacc parser errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -269,27 +291,6 @@ lazy_static! {
         Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap();
 }
 
-fn add_duplicate_occurrence(
-    errs: &mut Vec<YaccGrammarError>,
-    kind: YaccGrammarErrorKind,
-    orig_span: Span,
-    dup_span: Span,
-) {
-    if !errs.iter_mut().any(|e| {
-        if e.kind == kind && e.spans[0] == orig_span {
-            e.spans.push(dup_span);
-            true
-        } else {
-            false
-        }
-    }) {
-        errs.push(YaccGrammarError {
-            kind,
-            spans: vec![orig_span, dup_span],
-        });
-    }
-}
-
 /// The actual parser is intended to be entirely opaque from outside users.
 impl YaccParser {
     pub(crate) fn new(yacc_kind: YaccKind, src: String) -> YaccParser {
@@ -302,37 +303,35 @@ impl YaccParser {
         }
     }
 
-    pub(crate) fn parse(&mut self) -> YaccGrammarResult<usize> {
-        let mut errs: Vec<YaccGrammarError> = Vec::new();
+    pub(crate) fn parse_with_error_channel(
+        &mut self,
+        errs: &mut ErrorSender,
+    ) -> Result<usize, YaccGrammarConstructionFailure> {
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let mut result = self.parse_declarations(0, &mut errs);
-        result = self.parse_rules(match result {
-            Ok(i) => i,
-            Err(e) => {
-                errs.push(e);
-                return Err(errs);
-            }
-        });
-        result = self.parse_programs(
-            match result {
-                Ok(i) => i,
-                Err(e) => {
-                    errs.push(e);
-                    return Err(errs);
-                }
-            },
-            &mut errs,
-        );
+        let mut i = self.parse_declarations(0, errs)?;
+        i = self.parse_rules(i, errs)?;
+        i = self.parse_programs(i, errs)?;
 
+        if errs.error_occurred() {
+            Err(YaccGrammarConstructionFailure::ConstructionFailure)
+        } else {
+            Ok(i)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn parse(&mut self) -> Result<usize, Vec<YaccGrammarError>> {
+        let (error_sender, error_receiver) = mpsc::channel();
+        let mut error_sender = ErrorSender::new(error_sender);
+        let result = self.parse_with_error_channel(&mut error_sender);
         match result {
-            Ok(i) if errs.is_empty() => Ok(i),
-            Err(e) => {
-                errs.push(e);
-                Err(errs)
+            Ok(x) => Ok(x),
+            Err(_) => {
+                drop(error_sender);
+                Err(error_receiver.iter().collect())
             }
-            _ => Err(errs),
         }
     }
 
@@ -343,213 +342,207 @@ impl YaccParser {
     fn parse_declarations(
         &mut self,
         mut i: usize,
-        errs: &mut Vec<YaccGrammarError>,
-    ) -> Result<usize, YaccGrammarError> {
-        i = self.parse_ws(i, true)?;
+        errs: &mut ErrorSender,
+    ) -> Result<usize, YaccGrammarConstructionFailure> {
+        i = self.parse_ws(i, true, errs)?;
         let mut prec_level = 0;
         while i < self.src.len() {
             if self.lookahead_is("%%", i).is_some() {
                 return Ok(i);
             }
             if let Some(j) = self.lookahead_is("%token", i) {
-                i = self.parse_ws(j, false)?;
+                i = self.parse_ws(j, false, errs)?;
                 while i < self.src.len() && self.lookahead_is("%", i).is_none() {
-                    let (j, n, span) = self.parse_token(i)?;
+                    let (j, n, span) = self.parse_token(i, errs)?;
                     if self.ast.tokens.insert(n) {
                         self.ast.spans.push(span);
                     }
-                    i = self.parse_ws(j, true)?;
+                    i = self.parse_ws(j, true, errs)?;
                 }
                 continue;
             }
             if let YaccKind::Original(_) = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%actiontype", i) {
-                    i = self.parse_ws(j, false)?;
-                    let (j, n) = self.parse_to_eol(i)?;
+                    i = self.parse_ws(j, false, errs)?;
+                    let (j, n) = self.parse_to_eol(i, errs)?;
                     let span = Span::new(i, j);
                     if let Some((_, orig_span)) = self.global_actiontype {
-                        add_duplicate_occurrence(
-                            errs,
-                            YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
-                            orig_span,
-                            span,
-                        );
+                        errs.send(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
+                            spans: vec![orig_span, span],
+                        })?
                     } else {
                         self.global_actiontype = Some((n, span));
                     }
-                    i = self.parse_ws(j, true)?;
+                    i = self.parse_ws(j, true, errs)?;
                     continue;
                 }
             }
             if let Some(j) = self.lookahead_is("%start", i) {
-                i = self.parse_ws(j, false)?;
-                let (j, n) = self.parse_name(i)?;
+                i = self.parse_ws(j, false, errs)?;
+                let result = self.try_parse_name(i);
+                if let Err(e) = result {
+                    errs.send(e)?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                }
+                let (j, n) = result.unwrap();
                 let span = Span::new(i, j);
                 if let Some((_, orig_span)) = self.ast.start {
-                    add_duplicate_occurrence(
-                        errs,
-                        YaccGrammarErrorKind::DuplicateStartDeclaration,
-                        orig_span,
-                        span,
-                    );
+                    errs.send(YaccGrammarError {
+                        kind: YaccGrammarErrorKind::DuplicateStartDeclaration,
+                        spans: vec![orig_span, span],
+                    })?
                 } else {
                     self.ast.start = Some((n, span));
                 }
-                i = self.parse_ws(j, true)?;
+                i = self.parse_ws(j, true, errs)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%epp", i) {
-                i = self.parse_ws(j, false)?;
-                let (j, n, _) = self.parse_token(i)?;
+                i = self.parse_ws(j, false, errs)?;
+                let (j, n, _) = self.parse_token(i, errs)?;
                 let span = Span::new(i, j);
-                i = self.parse_ws(j, false)?;
-                let (j, v) = self.parse_string(i)?;
+                i = self.parse_ws(j, false, errs)?;
+                let (j, v) = self.parse_string(i, errs)?;
                 let vspan = Span::new(i, j);
                 match self.ast.epp.entry(n) {
                     Entry::Occupied(orig) => {
                         let (orig_span, _) = orig.get();
-                        add_duplicate_occurrence(
-                            errs,
-                            YaccGrammarErrorKind::DuplicateEPP,
-                            *orig_span,
-                            span,
-                        )
+                        errs.send(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::DuplicateEPP,
+                            spans: vec![*orig_span, span],
+                        })?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                     }
                     Entry::Vacant(epp) => {
                         epp.insert((span, (v, vspan)));
                     }
                 }
-                i = self.parse_ws(j, true)?;
+                i = self.parse_ws(j, true, errs)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%expect-rr", i) {
-                i = self.parse_ws(j, false)?;
-                let (j, n) = self.parse_int(i)?;
+                i = self.parse_ws(j, false, errs)?;
+                let (j, n) = self.parse_int(i, errs)?;
                 let span = Span::new(i, j);
                 if let Some((_, orig_span)) = self.ast.expectrr {
-                    add_duplicate_occurrence(
-                        errs,
-                        YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
-                        orig_span,
-                        span,
-                    );
+                    errs.send(YaccGrammarError {
+                        kind: YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
+                        spans: vec![orig_span, span],
+                    })?;
                 } else {
                     self.ast.expectrr = Some((n, span));
                 }
-                i = self.parse_ws(j, true)?;
+                i = self.parse_ws(j, true, errs)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%expect-unused", i) {
-                i = self.parse_ws(j, false)?;
+                i = self.parse_ws(j, false, errs)?;
                 while i < self.src.len() && self.lookahead_is("%", i).is_none() {
-                    let j = match self.parse_name(i) {
+                    let j = match self.try_parse_name(i) {
                         Ok((j, n)) => {
                             self.ast
                                 .expect_unused
                                 .push(Symbol::Rule(n, Span::new(i, j)));
                             j
                         }
-                        Err(_) => match self.parse_token(i) {
+                        Err(_) => match self.parse_token(i, errs) {
                             Ok((j, n, span)) => {
                                 self.ast.expect_unused.push(Symbol::Token(n, span));
                                 j
                             }
                             Err(_) => {
-                                return Err(self.mk_error(YaccGrammarErrorKind::UnknownSymbol, i))
+                                errs.send(self.mk_error(YaccGrammarErrorKind::UnknownSymbol, i))?;
+                                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                             }
                         },
                     };
-                    i = self.parse_ws(j, true)?;
+                    i = self.parse_ws(j, true, errs)?;
                 }
                 continue;
             }
             if let Some(j) = self.lookahead_is("%expect", i) {
-                i = self.parse_ws(j, false)?;
-                let (j, n) = self.parse_int(i)?;
+                i = self.parse_ws(j, false, errs)?;
+                let (j, n) = self.parse_int(i, errs)?;
                 let span = Span::new(i, j);
                 if let Some((_, orig_span)) = self.ast.expect {
-                    add_duplicate_occurrence(
-                        errs,
-                        YaccGrammarErrorKind::DuplicateExpectDeclaration,
-                        orig_span,
-                        span,
-                    );
+                    errs.send(YaccGrammarError {
+                        kind: YaccGrammarErrorKind::DuplicateExpectDeclaration,
+                        spans: vec![orig_span, span],
+                    })?;
                 } else {
                     self.ast.expect = Some((n, span));
                 }
-                i = self.parse_ws(j, true)?;
+                i = self.parse_ws(j, true, errs)?;
                 continue;
             }
             if let Some(j) = self.lookahead_is("%avoid_insert", i) {
-                i = self.parse_ws(j, false)?;
+                i = self.parse_ws(j, false, errs)?;
                 let num_newlines = self.num_newlines;
                 if self.ast.avoid_insert.is_none() {
                     self.ast.avoid_insert = Some(HashMap::new());
                 }
                 while j < self.src.len() && self.num_newlines == num_newlines {
-                    let (j, n, span) = self.parse_token(i)?;
+                    let (j, n, span) = self.parse_token(i, errs)?;
                     if self.ast.tokens.insert(n.clone()) {
                         self.ast.spans.push(span);
                     }
 
                     match self.ast.avoid_insert.as_mut().unwrap().entry(n) {
                         Entry::Occupied(occupied) => {
-                            add_duplicate_occurrence(
-                                errs,
-                                YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration,
-                                *occupied.get(),
-                                span,
-                            );
+                            errs.send(YaccGrammarError {
+                                kind: YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration,
+                                spans: vec![*occupied.get(), span],
+                            })?;
                         }
                         Entry::Vacant(vacant) => {
                             vacant.insert(span);
                         }
                     }
-                    i = self.parse_ws(j, true)?;
+                    i = self.parse_ws(j, true, errs)?;
                 }
                 continue;
             }
             if let Some(j) = self.lookahead_is("%parse-param", i) {
-                i = self.parse_ws(j, false)?;
-                let (j, name) = self.parse_to_single_colon(i)?;
+                i = self.parse_ws(j, false, errs)?;
+                let (j, name) = self.parse_to_single_colon(i, errs)?;
                 match self.lookahead_is(":", j) {
-                    Some(j) => i = self.parse_ws(j, false)?,
+                    Some(j) => i = self.parse_ws(j, false, errs)?,
                     None => {
-                        return Err(self.mk_error(YaccGrammarErrorKind::MissingColon, j));
+                        errs.send(self.mk_error(YaccGrammarErrorKind::MissingColon, j))?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                     }
                 }
-                let (j, ty) = self.parse_to_eol(i)?;
+                let (j, ty) = self.parse_to_eol(i, errs)?;
                 self.ast.parse_param = Some((name, ty));
-                i = self.parse_ws(j, true)?;
+                i = self.parse_ws(j, true, errs)?;
                 continue;
             }
             if let YaccKind::Eco = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
-                    i = self.parse_ws(j, false)?;
+                    i = self.parse_ws(j, false, errs)?;
                     let num_newlines = self.num_newlines;
                     if self.ast.implicit_tokens.is_none() {
                         self.ast.implicit_tokens = Some(HashMap::new());
                     }
                     while j < self.src.len() && self.num_newlines == num_newlines {
-                        let (j, n, span) = self.parse_token(i)?;
+                        let (j, n, span) = self.parse_token(i, errs)?;
                         if self.ast.tokens.insert(n.clone()) {
                             self.ast.spans.push(span);
                         }
                         match self.ast.implicit_tokens.as_mut().unwrap().entry(n) {
                             Entry::Occupied(entry) => {
                                 let orig_span = *entry.get();
-                                add_duplicate_occurrence(
-                                    errs,
-                                    YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
-                                    orig_span,
-                                    span,
-                                );
+                                errs.send(YaccGrammarError {
+                                    kind: YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
+                                    spans: vec![orig_span, span],
+                                })?;
                             }
                             Entry::Vacant(entry) => {
                                 entry.insert(span);
                             }
                         }
-                        i = self.parse_ws(j, true)?;
+                        i = self.parse_ws(j, true, errs)?;
                     }
                     continue;
                 }
@@ -567,22 +560,21 @@ impl YaccParser {
                     kind = AssocKind::Nonassoc;
                     k = j;
                 } else {
-                    return Err(self.mk_error(YaccGrammarErrorKind::UnknownDeclaration, i));
+                    errs.send(self.mk_error(YaccGrammarErrorKind::UnknownDeclaration, i))?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                 }
 
-                i = self.parse_ws(k, false)?;
+                i = self.parse_ws(k, false, errs)?;
                 let num_newlines = self.num_newlines;
                 while i < self.src.len() && num_newlines == self.num_newlines {
-                    let (j, n, span) = self.parse_token(i)?;
+                    let (j, n, span) = self.parse_token(i, errs)?;
                     match self.ast.precs.entry(n) {
                         Entry::Occupied(orig) => {
                             let (_, orig_span) = orig.get();
-                            add_duplicate_occurrence(
-                                errs,
-                                YaccGrammarErrorKind::DuplicatePrecedence,
-                                *orig_span,
-                                span,
-                            );
+                            errs.send(YaccGrammarError {
+                                kind: YaccGrammarErrorKind::DuplicatePrecedence,
+                                spans: vec![*orig_span, span],
+                            })?;
                         }
                         Entry::Vacant(entry) => {
                             let prec = Precedence {
@@ -593,28 +585,42 @@ impl YaccParser {
                         }
                     }
 
-                    i = self.parse_ws(j, true)?;
+                    i = self.parse_ws(j, true, errs)?;
                 }
                 prec_level += 1;
             }
         }
         debug_assert!(i == self.src.len());
-        Err(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i))
+        errs.send(self.mk_error(YaccGrammarErrorKind::PrematureEnd, i))?;
+        Err(YaccGrammarConstructionFailure::ConstructionFailure)
     }
 
-    fn parse_rules(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
+    fn parse_rules(
+        &mut self,
+        mut i: usize,
+        errs: &mut ErrorSender,
+    ) -> Result<usize, YaccGrammarConstructionFailure> {
         // self.parse_declarations should have left the input at '%%'
         i = self.lookahead_is("%%", i).unwrap();
-        i = self.parse_ws(i, true)?;
+        i = self.parse_ws(i, true, errs)?;
         while i < self.src.len() && self.lookahead_is("%%", i).is_none() {
-            i = self.parse_rule(i)?;
-            i = self.parse_ws(i, true)?;
+            i = self.parse_rule(i, errs)?;
+            i = self.parse_ws(i, true, errs)?;
         }
         Ok(i)
     }
 
-    fn parse_rule(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
-        let (j, rn) = self.parse_name(i)?;
+    fn parse_rule(
+        &mut self,
+        mut i: usize,
+        errs: &mut ErrorSender,
+    ) -> Result<usize, YaccGrammarConstructionFailure> {
+        let result = self.try_parse_name(i);
+        if let Err(e) = result {
+            errs.send(e)?;
+            return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+        }
+        let (j, rn) = result.unwrap();
         let span = Span::new(i, j);
         if self.ast.start.is_none() {
             self.ast.start = Some((rn.clone(), span));
@@ -630,38 +636,40 @@ impl YaccParser {
                 i = j;
             }
             YaccKind::Grmtools => {
-                i = self.parse_ws(j, true)?;
+                i = self.parse_ws(j, true, errs)?;
                 if let Some(j) = self.lookahead_is("->", i) {
                     i = j;
                 } else {
-                    return Err(self.mk_error(YaccGrammarErrorKind::MissingRightArrow, i));
+                    errs.send(self.mk_error(YaccGrammarErrorKind::MissingRightArrow, i))?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                 }
-                i = self.parse_ws(i, true)?;
-                let (j, actiont) = self.parse_to_single_colon(i)?;
+                i = self.parse_ws(i, true, errs)?;
+                let (j, actiont) = self.parse_to_single_colon(i, errs)?;
                 if self.ast.get_rule(&rn).is_none() {
                     self.ast.add_rule((rn.clone(), span), Some(actiont));
                 }
                 i = j;
             }
         }
-        i = self.parse_ws(i, true)?;
+        i = self.parse_ws(i, true, errs)?;
         match self.lookahead_is(":", i) {
             Some(j) => i = j,
             None => {
-                return Err(self.mk_error(YaccGrammarErrorKind::MissingColon, i));
+                errs.send(self.mk_error(YaccGrammarErrorKind::MissingColon, i))?;
+                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
             }
         }
         let mut syms = Vec::new();
         let mut prec = None;
         let mut action = None;
-        i = self.parse_ws(i, true)?;
+        i = self.parse_ws(i, true, errs)?;
         while i < self.src.len() {
             if let Some(j) = self.lookahead_is("|", i) {
                 self.ast.add_prod(rn.clone(), syms, prec, action);
                 syms = Vec::new();
                 prec = None;
                 action = None;
-                i = self.parse_ws(j, true)?;
+                i = self.parse_ws(j, true, errs)?;
                 continue;
             } else if let Some(j) = self.lookahead_is(";", i) {
                 self.ast.add_prod(rn, syms, prec, action);
@@ -669,27 +677,28 @@ impl YaccParser {
             }
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
-                let (j, sym, span) = self.parse_token(i)?;
-                i = self.parse_ws(j, true)?;
+                let (j, sym, span) = self.parse_token(i, errs)?;
+                i = self.parse_ws(j, true, errs)?;
                 if self.ast.tokens.insert(sym.clone()) {
                     self.ast.spans.push(span);
                 }
                 syms.push(Symbol::Token(sym, span));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
-                i = self.parse_ws(j, true)?;
-                let (k, sym, _) = self.parse_token(i)?;
+                i = self.parse_ws(j, true, errs)?;
+                let (k, sym, _) = self.parse_token(i, errs)?;
                 if self.ast.tokens.contains(&sym) {
                     prec = Some(sym);
                 } else {
-                    return Err(self.mk_error(YaccGrammarErrorKind::PrecNotFollowedByToken, i));
+                    errs.send(self.mk_error(YaccGrammarErrorKind::PrecNotFollowedByToken, i))?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                 }
                 i = k;
             } else if self.lookahead_is("{", i).is_some() {
-                let (j, a) = self.parse_action(i)?;
+                let (j, a) = self.parse_action(i, errs)?;
                 i = j;
                 action = Some(a);
             } else if let Some(mut j) = self.lookahead_is("%empty", i) {
-                j = self.parse_ws(j, true)?;
+                j = self.parse_ws(j, true, errs)?;
                 // %empty could be followed by all sorts of weird syntax errors: all we try and do
                 // is say "does this production look like it's finished" and trust that the other
                 // errors will be caught by other parts of the parser.
@@ -698,11 +707,12 @@ impl YaccParser {
                         || self.lookahead_is(";", j).is_some()
                         || self.lookahead_is("{", j).is_some())
                 {
-                    return Err(self.mk_error(YaccGrammarErrorKind::NonEmptyProduction, i));
+                    errs.send(self.mk_error(YaccGrammarErrorKind::NonEmptyProduction, i))?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                 }
                 i = j;
             } else {
-                let (j, sym, span) = self.parse_token(i)?;
+                let (j, sym, span) = self.parse_token(i, errs)?;
                 if self.ast.tokens.contains(&sym) {
                     syms.push(Symbol::Token(sym, span));
                 } else {
@@ -710,12 +720,13 @@ impl YaccParser {
                 }
                 i = j;
             }
-            i = self.parse_ws(i, true)?;
+            i = self.parse_ws(i, true, errs)?;
         }
-        Err(self.mk_error(YaccGrammarErrorKind::IncompleteRule, i))
+        errs.send(self.mk_error(YaccGrammarErrorKind::IncompleteRule, i))?;
+        Err(YaccGrammarConstructionFailure::ConstructionFailure)
     }
 
-    fn parse_name(&self, i: usize) -> Result<(usize, String), YaccGrammarError> {
+    fn try_parse_name(&self, i: usize) -> Result<(usize, String), YaccGrammarError> {
         match RE_NAME.find(&self.src[i..]) {
             Some(m) => {
                 assert_eq!(m.start(), 0);
@@ -725,7 +736,11 @@ impl YaccParser {
         }
     }
 
-    fn parse_token(&self, i: usize) -> Result<(usize, String, Span), YaccGrammarError> {
+    fn parse_token(
+        &self,
+        i: usize,
+        errs: &mut ErrorSender,
+    ) -> Result<(usize, String, Span), YaccGrammarConstructionFailure> {
         match RE_TOKEN.find(&self.src[i..]) {
             Some(m) => {
                 assert!(m.start() == 0 && m.end() > 0);
@@ -747,11 +762,18 @@ impl YaccParser {
                     )),
                 }
             }
-            None => Err(self.mk_error(YaccGrammarErrorKind::IllegalString, i)),
+            None => {
+                errs.send(self.mk_error(YaccGrammarErrorKind::IllegalString, i))?;
+                Err(YaccGrammarConstructionFailure::ConstructionFailure)
+            }
         }
     }
 
-    fn parse_action(&mut self, i: usize) -> Result<(usize, String), YaccGrammarError> {
+    fn parse_action(
+        &mut self,
+        i: usize,
+        errs: &mut ErrorSender,
+    ) -> Result<(usize, String), YaccGrammarConstructionFailure> {
         debug_assert!(self.lookahead_is("{", i).is_some());
         let mut j = i;
         let mut c = 0; // Count braces
@@ -772,7 +794,8 @@ impl YaccParser {
             j += ch.len_utf8();
         }
         if c > 0 {
-            Err(self.mk_error(YaccGrammarErrorKind::IncompleteAction, j))
+            errs.send(self.mk_error(YaccGrammarErrorKind::IncompleteAction, j))?;
+            Err(YaccGrammarConstructionFailure::ConstructionFailure)
         } else {
             debug_assert!(self.lookahead_is("}", j).is_some());
             let s = self.src[i + '{'.len_utf8()..j].trim().to_string();
@@ -783,10 +806,10 @@ impl YaccParser {
     fn parse_programs(
         &mut self,
         mut i: usize,
-        _: &mut Vec<YaccGrammarError>,
-    ) -> Result<usize, YaccGrammarError> {
+        errs: &mut ErrorSender,
+    ) -> Result<usize, YaccGrammarConstructionFailure> {
         if let Some(j) = self.lookahead_is("%%", i) {
-            i = self.parse_ws(j, true)?;
+            i = self.parse_ws(j, true, errs)?;
             let prog = self.src[i..].to_string();
             i += prog.len();
             self.ast.set_programs(prog);
@@ -795,7 +818,11 @@ impl YaccParser {
     }
 
     /// Parse up to (but do not include) the end of line (or, if it comes sooner, the end of file).
-    fn parse_to_eol(&mut self, i: usize) -> Result<(usize, String), YaccGrammarError> {
+    fn parse_to_eol(
+        &mut self,
+        i: usize,
+        _: &mut ErrorSender,
+    ) -> Result<(usize, String), YaccGrammarConstructionFailure> {
         let mut j = i;
         while j < self.src.len() {
             let c = self.src[j..].chars().next().unwrap();
@@ -809,7 +836,11 @@ impl YaccParser {
 
     /// Parse up to (but do not include) a single colon (double colons are allowed so that strings
     /// like `a::b::c:` treat `a::b::c` as a single name. Errors if EOL encountered.
-    fn parse_to_single_colon(&mut self, i: usize) -> Result<(usize, String), YaccGrammarError> {
+    fn parse_to_single_colon(
+        &mut self,
+        i: usize,
+        errs: &mut ErrorSender,
+    ) -> Result<(usize, String), YaccGrammarConstructionFailure> {
         let mut j = i;
         while j < self.src.len() {
             let c = self.src[j..].chars().next().unwrap();
@@ -828,14 +859,16 @@ impl YaccParser {
                 _ => j += c.len_utf8(),
             }
         }
-        Err(self.mk_error(YaccGrammarErrorKind::ReachedEOL, j))
+        errs.send(self.mk_error(YaccGrammarErrorKind::ReachedEOL, j))?;
+        Err(YaccGrammarConstructionFailure::ConstructionFailure)
     }
 
     /// Parse a quoted string, allowing escape characters.
     fn parse_int<T: FromStr + PrimInt>(
         &mut self,
         i: usize,
-    ) -> Result<(usize, T), YaccGrammarError> {
+        errs: &mut ErrorSender,
+    ) -> Result<(usize, T), YaccGrammarConstructionFailure> {
         let mut j = i;
         while j < self.src.len() {
             let c = self.src[j..].chars().next().unwrap();
@@ -846,18 +879,26 @@ impl YaccParser {
         }
         match self.src[i..j].parse::<T>() {
             Ok(x) => Ok((j, x)),
-            Err(_) => Err(self.mk_error(YaccGrammarErrorKind::IllegalInteger, i)),
+            Err(_) => {
+                errs.send(self.mk_error(YaccGrammarErrorKind::IllegalInteger, i))?;
+                Err(YaccGrammarConstructionFailure::ConstructionFailure)
+            }
         }
     }
 
     /// Parse a quoted string, allowing escape characters.
-    fn parse_string(&mut self, mut i: usize) -> Result<(usize, String), YaccGrammarError> {
+    fn parse_string(
+        &mut self,
+        mut i: usize,
+        errs: &mut ErrorSender,
+    ) -> Result<(usize, String), YaccGrammarConstructionFailure> {
         let qc = if self.lookahead_is("'", i).is_some() {
             '\''
         } else if self.lookahead_is("\"", i).is_some() {
             '"'
         } else {
-            return Err(self.mk_error(YaccGrammarErrorKind::InvalidString, i));
+            errs.send(self.mk_error(YaccGrammarErrorKind::InvalidString, i))?;
+            return Err(YaccGrammarConstructionFailure::ConstructionFailure);
         };
 
         debug_assert!('"'.len_utf8() == 1 && '\''.len_utf8() == 1);
@@ -872,7 +913,8 @@ impl YaccParser {
             let c = self.src[j..].chars().next().unwrap();
             match c {
                 '\n' | '\r' => {
-                    return Err(self.mk_error(YaccGrammarErrorKind::InvalidString, j));
+                    errs.send(self.mk_error(YaccGrammarErrorKind::InvalidString, j))?;
+                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                 }
                 x if x == qc => {
                     s.push_str(&self.src[i..j]);
@@ -887,26 +929,34 @@ impl YaccParser {
                             j += 2;
                         }
                         _ => {
-                            return Err(self.mk_error(YaccGrammarErrorKind::InvalidString, j));
+                            errs.send(self.mk_error(YaccGrammarErrorKind::InvalidString, j))?;
+                            return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                         }
                     }
                 }
                 _ => j += c.len_utf8(),
             }
         }
-        Err(self.mk_error(YaccGrammarErrorKind::InvalidString, j))
+        errs.send(self.mk_error(YaccGrammarErrorKind::InvalidString, j))?;
+        Err(YaccGrammarConstructionFailure::ConstructionFailure)
     }
 
     /// Skip whitespace from `i` onwards. If `inc_newlines` is `false`, will return `Err` if a
     /// newline is encountered; otherwise newlines are consumed and skipped.
-    fn parse_ws(&mut self, mut i: usize, inc_newlines: bool) -> Result<usize, YaccGrammarError> {
+    fn parse_ws(
+        &mut self,
+        mut i: usize,
+        inc_newlines: bool,
+        errs: &mut ErrorSender,
+    ) -> Result<usize, YaccGrammarConstructionFailure> {
         while i < self.src.len() {
             let c = self.src[i..].chars().next().unwrap();
             match c {
                 ' ' | '\t' => i += c.len_utf8(),
                 '\n' | '\r' => {
                     if !inc_newlines {
-                        return Err(self.mk_error(YaccGrammarErrorKind::ReachedEOL, i));
+                        errs.send(self.mk_error(YaccGrammarErrorKind::ReachedEOL, i))?;
+                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                     }
                     self.num_newlines += 1;
                     i += c.len_utf8();
@@ -939,10 +989,11 @@ impl YaccParser {
                                     match c {
                                         '\n' | '\r' => {
                                             if !inc_newlines {
-                                                return Err(self.mk_error(
+                                                errs.send(self.mk_error(
                                                     YaccGrammarErrorKind::ReachedEOL,
                                                     i,
-                                                ));
+                                                ))?;
+                                                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                                             }
                                             self.num_newlines += 1;
                                         }
@@ -959,8 +1010,11 @@ impl YaccParser {
                                     }
                                 }
                                 if !found {
+                                    errs.send(
+                                        self.mk_error(YaccGrammarErrorKind::IncompleteComment, i),
+                                    )?;
                                     return Err(
-                                        self.mk_error(YaccGrammarErrorKind::IncompleteComment, i)
+                                        YaccGrammarConstructionFailure::ConstructionFailure,
                                     );
                                 }
                             }
@@ -2343,7 +2397,7 @@ x"
     }
 
     #[test]
-    fn test_only_one_type() {
+    fn test_duplicate_actiontype() {
         let src = "
          %actiontype T1
          %actiontype T2
