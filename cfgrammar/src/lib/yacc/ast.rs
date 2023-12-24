@@ -53,7 +53,7 @@ impl ErrorSender {
             sender.send(e)?;
             Ok(YaccGrammarConstructionFailure::ConstructionFailure)
         } else {
-            Err(mpsc::SendError(e).into())
+            Err(YaccGrammarConstructionFailure::ErrorChannelClosed(e))
         }
     }
     pub(crate) fn error_occurred(&self) -> bool {

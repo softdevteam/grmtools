@@ -25,6 +25,7 @@ use super::{
 #[derive(Debug)]
 pub enum YaccGrammarConstructionFailure {
     ConstructionFailure,
+    ErrorChannelClosed(YaccGrammarError),
     ErrorChannel(mpsc::SendError<YaccGrammarError>),
 }
 
@@ -37,8 +38,9 @@ impl From<mpsc::SendError<YaccGrammarError>> for YaccGrammarConstructionFailure 
 impl fmt::Display for YaccGrammarConstructionFailure {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::ConstructionFailure => write!(f, "Failure to send an error over a channel."),
-            Self::ErrorChannel(e) => write!(f, "Error constructing YaccGrammar: {}", e),
+            Self::ErrorChannelClosed(e) => write!(f, "Attempt to send error {} over closed channel", e),
+            Self::ConstructionFailure => write!(f, "Error constructing YaccGrammar: "),
+            Self::ErrorChannel(e) => write!(f, "Failure to send an error {} over a channel.", e),
         }
     }
 }
