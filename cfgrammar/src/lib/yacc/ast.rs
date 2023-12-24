@@ -92,7 +92,7 @@ impl<'a> ASTWithValidityInfo {
         }
     }
 
-    pub fn new_with_error_channel(
+    pub(crate) fn new_with_error_channel(
         yacc_kind: YaccKind,
         s: &str,
         mut error_sender: ErrorSender,
