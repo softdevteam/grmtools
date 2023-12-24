@@ -10,7 +10,6 @@ use super::{
     YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind, YaccKind,
 };
 use crate::Span;
-use std::path;
 use std::sync::mpsc;
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
@@ -24,7 +23,6 @@ pub struct ASTWithValidityInfo {
 pub struct AstBuilder<'a> {
     kind: YaccKind,
     grammar_src: Option<&'a str>,
-    grammar_path: Option<path::PathBuf>,
     error_receiver: Option<mpsc::Receiver<YaccGrammarError>>,
     error_sender: ErrorSender,
 }
@@ -64,10 +62,6 @@ impl ErrorSender {
 
 #[allow(dead_code)]
 impl<'a> AstBuilder<'a> {
-    fn path(mut self, path: &path::Path) -> Self {
-        self.grammar_path = Some(path.to_owned());
-        self
-    }
     fn yacc_kind(mut self, kind: YaccKind) -> Self {
         self.kind = kind;
         self
@@ -93,7 +87,6 @@ impl<'a> ASTWithValidityInfo {
         AstBuilder {
             kind: YaccKind::Grmtools,
             grammar_src: None,
-            grammar_path: None,
             error_receiver: Some(error_receiver),
             error_sender: ErrorSender::new(error_sender),
         }
