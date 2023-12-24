@@ -47,12 +47,13 @@ impl ErrorSender {
     pub(crate) fn send(
         &mut self,
         e: YaccGrammarError,
-    ) -> Result<(), mpsc::SendError<YaccGrammarError>> {
+    ) -> Result<YaccGrammarConstructionFailure, YaccGrammarConstructionFailure> {
         self.error_occurred = true;
         if let Some(sender) = &self.sender {
-            sender.send(e)
+            sender.send(e)?;
+            Ok(YaccGrammarConstructionFailure::ConstructionFailure)
         } else {
-            Err(mpsc::SendError(e))
+            Err(mpsc::SendError(e).into())
         }
     }
     pub(crate) fn error_occurred(&self) -> bool {
@@ -337,19 +338,17 @@ impl GrammarAST {
     ) -> Result<(), YaccGrammarConstructionFailure> {
         match self.start {
             None => {
-                errs.send(YaccGrammarError {
+                return Err(errs.send(YaccGrammarError {
                     kind: YaccGrammarErrorKind::NoStartRule,
                     spans: vec![Span::new(0, 0)],
-                })?;
-                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                })?);
             }
             Some((ref s, span)) => {
                 if !self.rules.contains_key(s) {
-                    errs.send(YaccGrammarError {
+                    return Err(errs.send(YaccGrammarError {
                         kind: YaccGrammarErrorKind::InvalidStartRule(s.clone()),
                         spans: vec![span],
-                    })?;
-                    return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                    })?);
                 }
             }
         }
@@ -358,38 +357,34 @@ impl GrammarAST {
                 let prod = &self.prods[pidx];
                 if let Some(ref n) = prod.precedence {
                     if !self.tokens.contains(n) {
-                        errs.send(YaccGrammarError {
+                        return Err(errs.send(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownToken(n.clone()),
                             spans: vec![Span::new(0, 0)],
-                        })?;
-                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                        })?);
                     }
                     if !self.precs.contains_key(n) {
-                        errs.send(YaccGrammarError {
+                        return Err(errs.send(YaccGrammarError {
                             kind: YaccGrammarErrorKind::NoPrecForToken(n.clone()),
                             spans: vec![Span::new(0, 0)],
-                        })?;
-                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                        })?);
                     }
                 }
                 for sym in &prod.symbols {
                     match *sym {
                         Symbol::Rule(ref name, span) => {
                             if !self.rules.contains_key(name) {
-                                errs.send(YaccGrammarError {
+                                return Err(errs.send(YaccGrammarError {
                                     kind: YaccGrammarErrorKind::UnknownRuleRef(name.clone()),
                                     spans: vec![span],
-                                })?;
-                                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                                })?);
                             }
                         }
                         Symbol::Token(ref name, span) => {
                             if !self.tokens.contains(name) {
-                                errs.send(YaccGrammarError {
+                                return Err(errs.send(YaccGrammarError {
                                     kind: YaccGrammarErrorKind::UnknownToken(name.clone()),
                                     spans: vec![span],
-                                })?;
-                                return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                                })?);
                             }
                         }
                     }
@@ -406,31 +401,28 @@ impl GrammarAST {
                     continue;
                 }
             }
-            errs.send(YaccGrammarError {
+            return Err(errs.send(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownEPP(k.clone()),
                 spans: vec![*sp],
-            })?;
-            return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+            })?);
         }
 
         for sym in &self.expect_unused {
             match sym {
                 Symbol::Rule(sym_name, sym_span) => {
                     if self.get_rule(sym_name).is_none() {
-                        errs.send(YaccGrammarError {
+                        return Err(errs.send(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownRuleRef(sym_name.clone()),
                             spans: vec![*sym_span],
-                        })?;
-                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                        })?);
                     }
                 }
                 Symbol::Token(sym_name, sym_span) => {
                     if !self.has_token(sym_name) {
-                        errs.send(YaccGrammarError {
+                        return Err(errs.send(YaccGrammarError {
                             kind: YaccGrammarErrorKind::UnknownToken(sym_name.clone()),
                             spans: vec![*sym_span],
-                        })?;
-                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
+                        })?);
                     }
                 }
             }
