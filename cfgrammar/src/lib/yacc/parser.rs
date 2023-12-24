@@ -422,7 +422,6 @@ impl YaccParser {
                             kind: YaccGrammarErrorKind::DuplicateEPP,
                             spans: vec![*orig_span, span],
                         })?;
-                        return Err(YaccGrammarConstructionFailure::ConstructionFailure);
                     }
                     Entry::Vacant(epp) => {
                         epp.insert((span, (v, vspan)));
@@ -1221,27 +1220,26 @@ mod test {
             src: &str,
             expected: &mut dyn Iterator<Item = (YaccGrammarErrorKind, Vec<(usize, usize)>)>,
         ) {
-            match self {
-                Ok(_) => panic!("Parsed ok while expecting error"),
-                Err(errs)
-                    if errs
-                        .iter()
-                        .map(|e| {
-                            // Check that it is valid to slice the source with the spans.
-                            for span in e.spans() {
-                                let _ = &src[span.start()..span.end()];
-                            }
-                            (
-                                e.kind.clone(),
-                                e.spans()
-                                    .iter()
-                                    .map(|span| line_col!(src, span))
-                                    .collect::<Vec<_>>(),
-                            )
-                        })
-                        .eq(expected) => {}
-                Err(errs) => incorrect_errs!(src, errs),
-            }
+            let errs = self.expect_err("Parsed ok while expecting error");
+            let kinds_lines_cols = &errs
+                .iter()
+                .map(|e| {
+                    (
+                        e.kind.clone(),
+                        e.spans()
+                            .iter()
+                            .map(|span| line_col!(src, span))
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            errs.iter().for_each(|e| {
+                for span in e.spans() {
+                    let _ = &src[span.start()..span.end()];
+                }
+            });
+            let expected = expected.collect::<Vec<_>>();
+            assert_eq!(kinds_lines_cols, &expected);
         }
     }
 
@@ -1774,7 +1772,7 @@ x"
     }
 
     #[test]
-    fn test_multiple_dup_precs() {
+    fn test_multiple_duplicate_precs() {
         let src = "
           %left 'x'
           %left 'x'
@@ -1794,11 +1792,23 @@ x"
             &mut [
                 (
                     YaccGrammarErrorKind::DuplicatePrecedence,
-                    vec![(2, 18), (3, 18), (4, 19), (5, 22)],
+                    vec![(2, 18), (3, 18)],
                 ),
                 (
                     YaccGrammarErrorKind::DuplicatePrecedence,
-                    vec![(6, 18), (7, 22), (8, 19)],
+                    vec![(2, 18), (4, 19)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicatePrecedence,
+                    vec![(2, 18), (5, 22)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicatePrecedence,
+                    vec![(6, 18), (7, 22)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicatePrecedence,
+                    vec![(6, 18), (8, 19)],
                 ),
             ]
             .into_iter(),
@@ -2111,10 +2121,13 @@ x"
         %epp A \"a\"
         %%
         ";
-        parse(YaccKind::Eco, src).expect_error_at_lines_cols(
+        parse(YaccKind::Eco, src).expect_multiple_errors(
             src,
-            YaccGrammarErrorKind::DuplicateEPP,
-            &mut [(2, 14), (3, 14), (4, 14)].into_iter(),
+            &mut [
+                (YaccGrammarErrorKind::DuplicateEPP, vec![(2, 14), (3, 14)]),
+                (YaccGrammarErrorKind::DuplicateEPP, vec![(2, 14), (4, 14)]),
+            ]
+            .into_iter(),
         );
     }
 
@@ -2132,14 +2145,10 @@ x"
         parse(YaccKind::Eco, src).expect_multiple_errors(
             src,
             &mut [
-                (
-                    YaccGrammarErrorKind::DuplicateEPP,
-                    vec![(2, 14), (3, 14), (4, 14)],
-                ),
-                (
-                    YaccGrammarErrorKind::DuplicateEPP,
-                    vec![(5, 14), (6, 14), (7, 14)],
-                ),
+                (YaccGrammarErrorKind::DuplicateEPP, vec![(2, 14), (3, 14)]),
+                (YaccGrammarErrorKind::DuplicateEPP, vec![(2, 14), (4, 14)]),
+                (YaccGrammarErrorKind::DuplicateEPP, vec![(5, 14), (6, 14)]),
+                (YaccGrammarErrorKind::DuplicateEPP, vec![(5, 14), (7, 14)]),
             ]
             .into_iter(),
         );
@@ -2202,11 +2211,20 @@ x"
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             src,
         )
-        .expect_error_at_lines_cols(
+        .expect_multiple_errors(
             src,
-            YaccGrammarErrorKind::DuplicateExpectDeclaration,
-            &mut [(2, 19), (3, 19), (4, 19)].into_iter(),
-        )
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateExpectDeclaration,
+                    vec![(2, 19), (3, 19)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateExpectDeclaration,
+                    vec![(2, 19), (4, 19)],
+                ),
+            ]
+            .into_iter(),
+        );
     }
 
     #[test]
@@ -2226,7 +2244,11 @@ x"
             &mut [
                 (
                     YaccGrammarErrorKind::DuplicateExpectDeclaration,
-                    vec![(2, 19), (3, 19), (4, 19)],
+                    vec![(2, 19), (3, 19)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateExpectDeclaration,
+                    vec![(2, 19), (4, 19)],
                 ),
                 (YaccGrammarErrorKind::MissingColon, vec![(6, 13)]),
             ]
@@ -2246,10 +2268,19 @@ x"
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             src,
         )
-        .expect_error_at_lines_cols(
+        .expect_multiple_errors(
             src,
-            YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
-            &mut [(2, 22), (3, 22), (4, 22)].into_iter(),
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
+                    vec![(2, 22), (3, 22)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
+                    vec![(2, 22), (4, 22)],
+                ),
+            ]
+            .into_iter(),
         );
     }
 
@@ -2270,7 +2301,11 @@ x"
             &mut [
                 (
                     YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
-                    vec![(2, 22), (3, 22), (4, 22)],
+                    vec![(2, 22), (3, 22)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateExpectRRDeclaration,
+                    vec![(2, 22), (4, 22)],
                 ),
                 (YaccGrammarErrorKind::IllegalName, vec![(6, 11)]),
             ]
@@ -2441,11 +2476,20 @@ x"
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             src,
         )
-        .expect_error_at_lines_cols(
+        .expect_multiple_errors(
             src,
-            YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
-            &mut [(2, 22), (3, 22), (4, 22)].into_iter(),
-        );
+            &mut [
+                (
+                    YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
+                    vec![(2, 22), (3, 22)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
+                    vec![(2, 22), (4, 22)],
+                ),
+            ]
+            .into_iter(),
+        )
     }
 
     #[test]
@@ -2463,7 +2507,11 @@ x"
             &mut [
                 (
                     YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
-                    vec![(2, 22), (3, 22), (4, 22)],
+                    vec![(2, 22), (3, 22)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
+                    vec![(2, 22), (4, 22)],
                 ),
                 (YaccGrammarErrorKind::PrematureEnd, vec![(4, 24)]),
             ]
@@ -2528,7 +2576,11 @@ B";
             &mut [
                 (
                     YaccGrammarErrorKind::DuplicateStartDeclaration,
-                    vec![(1, 8), (2, 8), (3, 8)],
+                    vec![(1, 8), (2, 8)],
+                ),
+                (
+                    YaccGrammarErrorKind::DuplicateStartDeclaration,
+                    vec![(1, 8), (3, 8)],
                 ),
                 (YaccGrammarErrorKind::MissingRightArrow, vec![(6, 2)]),
             ]
