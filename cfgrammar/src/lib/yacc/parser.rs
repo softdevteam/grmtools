@@ -1027,26 +1027,6 @@ mod test {
         s[..off].lines().count()
     }
 
-    macro_rules! incorrect_errs {
-        ($src:ident, $es:expr) => {{
-            let mut line_cache = crate::newlinecache::NewlineCache::new();
-            line_cache.feed(&$src);
-            for e in $es {
-                if let Some((line, column)) =
-                    line_cache.byte_to_line_num_and_col_num(&$src, e.spans.first().unwrap().start())
-                {
-                    eprintln!(
-                        "Incorrect error returned {} at line {line} column {column}",
-                        e
-                    )
-                } else {
-                    eprintln!("Incorrect error returned {} with unknown span", e)
-                }
-            }
-            panic!()
-        }};
-    }
-
     macro_rules! line_col {
         ($src:ident, $span: expr) => {{
             let mut line_cache = crate::newlinecache::NewlineCache::new();
@@ -1081,14 +1061,15 @@ mod test {
 
     impl ErrorsHelper for Result<GrammarAST, Vec<YaccGrammarError>> {
         fn expect_error_at_line(self, src: &str, kind: YaccGrammarErrorKind, line: usize) {
-            match self.as_ref().map_err(Vec::as_slice) {
-                Ok(_) => panic!("Parsed ok while expecting error"),
-                Err([e])
-                    if e.kind == kind
-                        && line_of_offset(src, e.spans()[0].start()) == line
-                        && e.spans.len() == 1 => {}
-                Err(e) => incorrect_errs!(src, e),
-            }
+            let errs = self
+                .as_ref()
+                .map_err(Vec::as_slice)
+                .expect_err("Parsed ok while expecting error");
+            assert_eq!(errs.len(), 1);
+            let e = &errs[0];
+            assert_eq!(e.kind, kind);
+            assert_eq!(line_of_offset(src, e.spans()[0].start()), line);
+            assert_eq!(e.spans.len(), 1);
         }
 
         fn expect_error_at_line_col(
@@ -1107,25 +1088,23 @@ mod test {
             kind: YaccGrammarErrorKind,
             lines_cols: &mut dyn Iterator<Item = (usize, usize)>,
         ) {
-            match self.as_ref().map_err(Vec::as_slice) {
-                Ok(_) => panic!("Parsed ok while expecting error"),
-                Err([e])
-                    if e.kind == kind
-                        && line_col!(src, e.spans()[0]) == lines_cols.next().unwrap() =>
-                {
-                    assert_eq!(
-                        e.spans()[1..]
-                            .iter()
-                            .map(|span| line_col!(src, span))
-                            .collect::<Vec<(usize, usize)>>(),
-                        lines_cols.collect::<Vec<(usize, usize)>>()
-                    );
-                    // Check that it is valid to slice.
-                    for span in e.spans() {
-                        let _ = &src[span.start()..span.end()];
-                    }
-                }
-                Err(e) => incorrect_errs!(src, e),
+            let errs = self
+                .as_ref()
+                .map_err(Vec::as_slice)
+                .expect_err("Parsed ok while expecting error");
+            assert_eq!(errs.len(), 1);
+            let e = &errs[0];
+            assert_eq!(e.kind, kind);
+            assert_eq!(
+                e.spans()[..]
+                    .iter()
+                    .map(|span| line_col!(src, span))
+                    .collect::<Vec<(usize, usize)>>(),
+                lines_cols.collect::<Vec<(usize, usize)>>()
+            );
+            // Check that it is valid to slice.
+            for span in e.spans() {
+                let _ = &src[span.start()..span.end()];
             }
         }
 
@@ -1134,27 +1113,28 @@ mod test {
             src: &str,
             expected: &mut dyn Iterator<Item = (YaccGrammarErrorKind, Vec<(usize, usize)>)>,
         ) {
-            match self {
-                Ok(_) => panic!("Parsed ok while expecting error"),
-                Err(errs)
-                    if errs
-                        .iter()
-                        .map(|e| {
-                            // Check that it is valid to slice the source with the spans.
-                            for span in e.spans() {
-                                let _ = &src[span.start()..span.end()];
-                            }
-                            (
-                                e.kind.clone(),
-                                e.spans()
-                                    .iter()
-                                    .map(|span| line_col!(src, span))
-                                    .collect::<Vec<_>>(),
-                            )
-                        })
-                        .eq(expected) => {}
-                Err(errs) => incorrect_errs!(src, errs),
+            let errs = self.expect_err("Parsed ok while expecting error");
+            for e in &errs {
+                // Check that it is valid to slice the source with the spans.
+                for span in e.spans() {
+                    let _ = &src[span.start()..span.end()];
+                }
             }
+
+            assert_eq!(
+                errs.iter()
+                    .map(|e| {
+                        (
+                            e.kind.clone(),
+                            e.spans()
+                                .iter()
+                                .map(|span| line_col!(src, span))
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                expected.collect::<Vec<_>>()
+            );
         }
     }
 
