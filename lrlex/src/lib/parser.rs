@@ -696,7 +696,7 @@ mod test {
             let e = &errs[0];
             assert_eq!(e.kind, kind);
             assert_eq!(
-                e.spans()[..]
+                e.spans()
                     .iter()
                     .map(|span| line_col!(src, span))
                     .collect::<Vec<(usize, usize)>>(),
