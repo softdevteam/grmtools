@@ -635,25 +635,6 @@ mod test {
     use std::collections::HashMap;
     use std::fmt::Write as _;
 
-    macro_rules! incorrect_errs {
-        ($src:ident, $errs:expr) => {{
-            for e in $errs {
-                let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
-                line_cache.feed(&$src);
-                if let Some((line, column)) = line_cache
-                    .byte_to_line_num_and_col_num(&$src, e.spans().first().unwrap().start())
-                {
-                    panic!(
-                        "Incorrect error returned {} at line {line} column {column}",
-                        e
-                    )
-                } else {
-                    panic!("{}", e)
-                }
-            }
-        }};
-    }
-
     macro_rules! line_col {
         ($src:ident, $span: expr) => {{
             let mut line_cache = ::cfgrammar::newlinecache::NewlineCache::new();
@@ -685,79 +666,79 @@ mod test {
     }
 
     impl ErrorsHelper for Result<LRNonStreamingLexerDef<DefaultLexerTypes<u8>>, Vec<LexBuildError>> {
+        #[track_caller]
         fn expect_error_at_line(self, src: &str, kind: LexErrorKind, line: usize) {
-            match self.as_ref().map_err(Vec::as_slice) {
-                Ok(_) => panic!("Parsed ok while expecting error"),
-                Err([e])
-                    if e.kind == kind
-                        && line_of_offset(src, e.spans().first().unwrap().start()) == line
-                        && e.spans.len() == 1 => {}
-                Err(e) => incorrect_errs!(src, e),
-            }
+            let errs = self
+                .as_ref()
+                .map_err(Vec::as_slice)
+                .expect_err("Parsed ok while expecting error");
+            assert_eq!(errs.len(), 1);
+            let e = &errs[0];
+            assert_eq!(e.kind, kind);
+            assert_eq!(line_of_offset(src, e.spans()[0].start()), line);
+            assert_eq!(e.spans.len(), 1);
         }
 
+        #[track_caller]
         fn expect_error_at_line_col(self, src: &str, kind: LexErrorKind, line: usize, col: usize) {
             self.expect_error_at_lines_cols(src, kind, &mut std::iter::once((line, col)))
         }
 
+        #[track_caller]
         fn expect_error_at_lines_cols(
             self,
             src: &str,
             kind: LexErrorKind,
             lines_cols: &mut dyn Iterator<Item = (usize, usize)>,
         ) {
-            match self.as_ref().map_err(Vec::as_slice) {
-                Ok(_) => panic!("Parsed ok while expecting error"),
-                Err([e])
-                    if e.kind == kind
-                        && line_col!(src, e.spans().first().unwrap())
-                            == lines_cols.next().unwrap() =>
-                {
-                    assert_eq!(
-                        e.spans()
-                            .iter()
-                            .skip(1)
-                            .map(|span| line_col!(src, span))
-                            .collect::<Vec<(usize, usize)>>(),
-                        lines_cols.collect::<Vec<(usize, usize)>>()
-                    );
-                    // Check that it is valid to slice the source with the spans.
-                    for span in e.spans() {
-                        let _ = &src[span.start()..span.end()];
-                    }
-                }
-                Err(e) => incorrect_errs!(src, e),
+            let errs = self
+                .as_ref()
+                .map_err(Vec::as_slice)
+                .expect_err("Parsed ok while expecting error");
+            assert_eq!(errs.len(), 1);
+            let e = &errs[0];
+            assert_eq!(e.kind, kind);
+            assert_eq!(
+                e.spans()
+                    .iter()
+                    .map(|span| line_col!(src, span))
+                    .collect::<Vec<(usize, usize)>>(),
+                lines_cols.collect::<Vec<(usize, usize)>>()
+            );
+            // Check that it is valid to slice.
+            for span in e.spans() {
+                let _ = &src[span.start()..span.end()];
             }
         }
 
+        #[track_caller]
         fn expect_multiple_errors(
             self,
             src: &str,
             expected: &mut dyn Iterator<Item = (LexErrorKind, Vec<(usize, usize)>)>,
         ) {
-            match self {
-                Ok(_) => panic!("Parsed ok while expecting error"),
-                Err(errs) => {
-                    let linecol_errs = errs
-                        .iter()
-                        .map(|e| {
-                            // Check that it is valid to slice the source with the spans.
-                            for span in e.spans() {
-                                let _ = &src[span.start()..span.end()];
-                            }
-                            (
-                                e.kind.clone(),
-                                e.spans()
-                                    .iter()
-                                    .map(|span| line_col!(src, span))
-                                    .collect::<Vec<_>>(),
-                            )
-                        })
-                        .collect::<Vec<_>>();
-
-                    assert_eq!(expected.collect::<Vec<_>>(), linecol_errs);
+            let errs = self.expect_err("Parsed ok while expecting error");
+            for e in &errs {
+                // Check that it is valid to slice the source with the spans.
+                for span in e.spans() {
+                    let _ = &src[span.start()..span.end()];
                 }
             }
+
+            assert_eq!(
+                errs.iter()
+                    .map(|e| {
+                        (
+                            e.kind.clone(),
+                            e.spans()
+                                .iter()
+                                .map(|span| line_col!(src, span))
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                expected.collect::<Vec<_>>()
+            );
         }
     }
 

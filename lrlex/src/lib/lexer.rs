@@ -183,6 +183,7 @@ where
 
 /// This struct represents, in essence, a .l file in memory. From it one can produce an
 /// [LRNonStreamingLexer] which actually lexes inputs.
+#[derive(Debug)]
 pub struct LRNonStreamingLexerDef<LexerTypesT: LexerTypes>
 where
     usize: AsPrimitive<LexerTypesT::StorageT>,
