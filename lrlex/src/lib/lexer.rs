@@ -889,7 +889,7 @@ b 'B'
             StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![];
-        let current_state = all_states.get(0).unwrap();
+        let current_state = &all_states[0];
         let m = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::state_matches(
             current_state,
             &rule_states,
@@ -904,7 +904,7 @@ b 'B'
             StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![];
-        let current_state = all_states.get(1).unwrap();
+        let current_state = &all_states[1];
         let m = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::state_matches(
             current_state,
             &rule_states,
@@ -919,7 +919,7 @@ b 'B'
             StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![0];
-        let current_state = all_states.get(0).unwrap();
+        let current_state = &all_states[0];
         let m = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::state_matches(
             current_state,
             &rule_states,
@@ -934,7 +934,7 @@ b 'B'
             StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![1];
-        let current_state = all_states.get(1).unwrap();
+        let current_state = &all_states[1];
         let m = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::state_matches(
             current_state,
             &rule_states,
@@ -949,7 +949,7 @@ b 'B'
             StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![1];
-        let current_state = all_states.get(0).unwrap();
+        let current_state = &all_states[0];
         let m = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::state_matches(
             current_state,
             &rule_states,
@@ -964,7 +964,7 @@ b 'B'
             StartState::new(1, "EXCLUSIVE", true, Span::new(0, 0)),
         ];
         let rule_states = vec![0];
-        let current_state = all_states.get(1).unwrap();
+        let current_state = &all_states[1];
         let m = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::state_matches(
             current_state,
             &rule_states,
