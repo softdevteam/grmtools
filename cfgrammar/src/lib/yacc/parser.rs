@@ -1060,6 +1060,7 @@ mod test {
     }
 
     impl ErrorsHelper for Result<GrammarAST, Vec<YaccGrammarError>> {
+        #[track_caller]
         fn expect_error_at_line(self, src: &str, kind: YaccGrammarErrorKind, line: usize) {
             let errs = self
                 .as_ref()
@@ -1072,6 +1073,7 @@ mod test {
             assert_eq!(e.spans.len(), 1);
         }
 
+        #[track_caller]
         fn expect_error_at_line_col(
             self,
             src: &str,
@@ -1082,6 +1084,7 @@ mod test {
             self.expect_error_at_lines_cols(src, kind, &mut std::iter::once((line, col)))
         }
 
+        #[track_caller]
         fn expect_error_at_lines_cols(
             self,
             src: &str,
@@ -1108,6 +1111,7 @@ mod test {
             }
         }
 
+        #[track_caller]
         fn expect_multiple_errors(
             self,
             src: &str,
