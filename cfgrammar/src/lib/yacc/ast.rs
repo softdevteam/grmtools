@@ -14,8 +14,8 @@ use crate::Span;
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
-    pub(crate) ast: GrammarAST,
-    pub(crate) errs: Vec<YaccGrammarError>,
+    ast: GrammarAST,
+    errs: Vec<YaccGrammarError>,
 }
 
 impl ASTWithValidityInfo {
@@ -48,7 +48,7 @@ impl ASTWithValidityInfo {
     /// Returns whether any errors where encountered during the
     /// parsing and validation of the AST during it's construction.
     pub fn is_valid(&self) -> bool {
-        self.errs.is_empty()
+        self.errors().is_empty()
     }
 
     /// Returns all errors which were encountered during AST construction.
