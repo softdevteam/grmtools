@@ -115,9 +115,9 @@ where
         ast_validation: &ast::ASTWithValidityInfo,
     ) -> YaccGrammarResult<Self> {
         if !ast_validation.is_valid() {
-            return Err(ast_validation.errs.clone());
+            return Err(ast_validation.errors().to_owned());
         }
-        let ast = &ast_validation.ast;
+        let ast = ast_validation.ast();
         // Check that StorageT is big enough to hold RIdx/PIdx/SIdx/TIdx values; after these
         // checks we can guarantee that things like RIdx(ast.rules.len().as_()) are safe.
         if ast.rules.len() > num_traits::cast(StorageT::max_value()).unwrap() {
