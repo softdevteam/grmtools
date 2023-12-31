@@ -6,8 +6,10 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 
 use super::{
-    parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
-    YaccGrammarWarningKind, YaccKind,
+    parser::YaccParser,
+    reporting::{ErrorReport, SimpleReport},
+    Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
+    YaccKind,
 };
 
 use crate::Span;
@@ -15,7 +17,7 @@ use crate::Span;
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
     ast: GrammarAST,
-    errs: Vec<YaccGrammarError>,
+    report: SimpleReport,
 }
 
 impl ASTWithValidityInfo {
@@ -24,17 +26,36 @@ impl ASTWithValidityInfo {
     /// then unused to construct a `YaccGrammar`, which will either produce an
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
     pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
-        let mut errs = Vec::new();
+        let mut report = SimpleReport::new();
         let ast = match yacc_kind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
                 let mut yp = YaccParser::new(yacc_kind, s.to_string());
-                yp.parse().map_err(|e| errs.extend(e)).ok();
+                yp.parse()
+                    .map_err(|es| {
+                        // Interim change until `ReportHandler`.
+                        for e in es {
+                            report.grammar_error(e)
+                        }
+                    })
+                    .ok();
                 let mut ast = yp.ast();
-                ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+                ast.complete_and_validate()
+                    .map_err(|e| report.grammar_error(e))
+                    .ok();
                 ast
             }
         };
-        ASTWithValidityInfo { ast, errs }
+        ast.unused_symbols().for_each(|symidx| {
+            let (kind, span) = match symidx.symbol(&ast) {
+                Symbol::Rule(_, span) => (YaccGrammarWarningKind::UnusedRule, span),
+                Symbol::Token(_, span) => (YaccGrammarWarningKind::UnusedToken, span),
+            };
+            report.grammar_warning(YaccGrammarWarning {
+                kind,
+                spans: vec![span],
+            })
+        });
+        ASTWithValidityInfo { ast, report }
     }
 
     /// Returns a `GrammarAST` constructed as the result of parsing a source file.
@@ -53,7 +74,12 @@ impl ASTWithValidityInfo {
 
     /// Returns all errors which were encountered during AST construction.
     pub fn errors(&self) -> &[YaccGrammarError] {
-        self.errs.as_slice()
+        self.report.errors()
+    }
+
+    /// Returns all errors which were encountered during AST construction.
+    pub fn warnings(&self) -> &[YaccGrammarWarning] {
+        self.report.warnings()
     }
 }
 
