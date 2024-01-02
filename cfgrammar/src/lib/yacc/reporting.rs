@@ -3,7 +3,8 @@ use crate::{
     yacc::{parser::SpansKind, YaccGrammarErrorKind},
     Span, Spanned,
 };
-use std::fmt;
+use std::{error::Error, fmt, path};
+
 /// Caller gives ownership of errors and warnings to the impl.
 pub trait ErrorReport {
     /// Gives ownership of an error to self.
@@ -44,6 +45,11 @@ pub trait ErrorReport {
     fn finish(&mut self) {}
 }
 
+pub trait ErrorFormatter {
+    fn format_error(&self, e: &YaccGrammarError) -> Box<dyn Error>;
+    fn format_warning(&self, e: &YaccGrammarWarning) -> String;
+}
+
 /// A basic Report that stores errors and warnings in a `Vec`.
 pub struct SimpleReport {
     errors: Vec<YaccGrammarError>,
@@ -73,7 +79,6 @@ impl SimpleReport {
         &self.errors
     }
 }
-
 pub struct DedupReport<R: ErrorReport> {
     errors: Vec<YaccGrammarError>,
     child_report: R,
@@ -136,6 +141,7 @@ impl<R: ErrorReport> ErrorReport for DedupReport<R> {
         self.child_report.finish();
     }
 }
+
 pub(crate) struct ReportHandler<'a, T> {
     any_errors_found: bool,
     report: &'a mut T,
