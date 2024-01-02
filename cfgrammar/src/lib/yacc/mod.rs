@@ -5,10 +5,12 @@ pub mod firsts;
 pub mod follows;
 pub mod grammar;
 pub mod parser;
+pub mod reporting;
 
 pub use self::{
     grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar},
     parser::{YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind},
+    reporting::ErrorReport,
 };
 
 #[cfg(feature = "serde")]
