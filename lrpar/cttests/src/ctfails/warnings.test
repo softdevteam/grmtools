@@ -1,0 +1,12 @@
+name: Test warnings are treated as errors by default.
+yacckind: Original(YaccOriginalActionKind::GenericParseTree)
+grammar: |
+    %start A
+    %token b
+    %%
+    A : 'a';
+    B : 'b';
+lexer: |
+    %%
+    a 'a'
+    b 'b'
