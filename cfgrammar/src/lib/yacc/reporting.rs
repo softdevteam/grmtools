@@ -4,7 +4,6 @@ use crate::{
     Span, Spanned,
 };
 use std::fmt;
-
 /// Caller gives ownership of errors and warnings to the impl.
 pub trait ErrorReport {
     /// Gives ownership of an error to self.
@@ -135,6 +134,55 @@ impl<R: ErrorReport> ErrorReport for DedupReport<R> {
             self.child_report.grammar_error(e);
         }
         self.child_report.finish();
+    }
+}
+pub(crate) struct ReportHandler<'a, T> {
+    any_errors_found: bool,
+    report: &'a mut T,
+}
+
+impl<'a, R: ErrorReport> ReportHandler<'a, R> {
+    pub(crate) fn new(report: &'a mut R) -> Self {
+        ReportHandler {
+            report,
+            any_errors_found: false,
+        }
+    }
+
+    pub(crate) fn finish(&mut self) {
+        self.report.finish()
+    }
+
+    /// `From<YaccGrammarError> for ASTBuilderError` is
+    /// intentionally not derived. This will submit the error to an `ErrorReport`
+    /// and note that errors were found then return a `ConstructionFailure`.
+    pub(crate) fn error<T>(
+        &mut self,
+        result: Result<T, YaccGrammarError>,
+    ) -> Result<T, ASTBuilderError> {
+        match result {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                self.any_errors_found = true;
+                self.report.grammar_error(e);
+                Err(ASTBuilderError::ConstructionFailure)
+            }
+        }
+    }
+
+    /// For errors which are non-fatal where the parsing process can continue.
+    /// This will submit the error to a report, and note that errors were found.
+    pub(crate) fn non_fatal_error(&mut self, e: YaccGrammarError) {
+        self.any_errors_found = true;
+        self.report.grammar_error(e)
+    }
+
+    pub(crate) fn warning(&mut self, e: YaccGrammarWarning) {
+        self.report.grammar_warning(e)
+    }
+    /// Return whether any errors were found including non-fatal errors.
+    pub(crate) fn any_errors_found(&self) -> bool {
+        self.any_errors_found
     }
 }
 
