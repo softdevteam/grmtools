@@ -1,9 +1,9 @@
 use super::{YaccGrammarError, YaccGrammarWarning};
 use crate::{
     yacc::{parser::SpansKind, YaccGrammarErrorKind},
-    Span, Spanned,
+    NewlineCache, Span, Spanned,
 };
-use std::{error::Error, fmt, path};
+use std::{error::Error, fmt, path, str::FromStr as _};
 
 /// Caller gives ownership of errors and warnings to the impl.
 pub trait ErrorReport {
@@ -187,6 +187,104 @@ impl<R: ErrorReport + ErrorMap> ErrorMap for DedupReport<R> {
         f: &'a F,
     ) -> impl Iterator<Item = String> + '_ {
         self.child_report.format_warnings(f)
+    }
+}
+
+pub struct SimpleErrorFormatter<'a> {
+    src: &'a str,
+    path: &'a path::Path,
+    nlc: NewlineCache,
+}
+
+impl<'a> SimpleErrorFormatter<'a> {
+    #[allow(clippy::result_unit_err)]
+    pub fn new(src: &'a str, path: &'a path::Path) -> Result<Self, ()> {
+        Ok(Self {
+            src,
+            path,
+            nlc: NewlineCache::from_str(src)?,
+        })
+    }
+
+    fn ordinal(v: usize) -> String {
+        // I didn't feel like thinking about these special cases,
+        // so I just borrowed this from rusts diagnostics code.
+        let suffix = match ((11..=13).contains(&(v % 100)), v % 10) {
+            (false, 1) => "st",
+            (false, 2) => "nd",
+            (false, 3) => "rd",
+            _ => "th",
+        };
+        format!("{v}{suffix}")
+    }
+
+    fn format_spanned(&self, e: &impl Spanned) -> String {
+        let mut out = String::new();
+        let path = self.path.display().to_string();
+        let spans = e.spans();
+        let span = spans.first().unwrap();
+        let (line, col) = self
+            .nlc
+            .byte_to_line_num_and_col_num(self.src, span.start())
+            .unwrap_or((0, 0));
+        let span_src = &self.src[span.start()..span.end()];
+        out.push_str(&format!("in {}:{line}:{col}: {} {}\n", path, e, span_src));
+        let mut spans = e.spans().iter().enumerate().peekable();
+        while let Some((span_num, span)) = spans.next() {
+            let (line_start, line_end) = self.nlc.span_line_bytes(*span);
+            let (line, col) = self
+                .nlc
+                .byte_to_line_num_and_col_num(self.src, span.start())
+                .unwrap_or((0, 0));
+            let (end_line, end_col) = self
+                .nlc
+                .byte_to_line_num_and_col_num(self.src, span.end())
+                .unwrap_or((0, 0));
+            out.push_str(&format!("{}| {}\n", line, &self.src[line_start..line_end]));
+            if line == end_line {
+                let next_line = spans
+                    .peek()
+                    .map(|(_, span)| span)
+                    .map(|s| self.nlc.byte_to_line_num(s.start()).unwrap_or(line))
+                    .unwrap_or(line);
+                let dots = if next_line - line > 1 { "..." } else { "" };
+                out.push_str(dots);
+
+                // Because col is 1 indexed, subtract 1.
+                out.push_str(
+                    &" ".repeat(col + (line.to_string().len() + "| ".len() - dots.len()) - 1),
+                );
+                if span_num == 0 {
+                    out.push_str(&"^".repeat(end_col - col));
+                    out.push(' ');
+                    out.push_str(&e.to_string());
+                } else {
+                    out.push_str(&"-".repeat(end_col - col));
+                    out.push(' ');
+                    match e.spanskind() {
+                        SpansKind::DuplicationError => {
+                            out.push_str(&Self::ordinal(span_num + 1));
+                            out.push_str(" occurrence.");
+                        }
+                        SpansKind::Error => {
+                            unreachable!("Should contain a single span at the site of the error")
+                        }
+                    }
+                }
+                out.push('\n');
+            }
+        }
+        out
+    }
+}
+
+impl ErrorFormatter for SimpleErrorFormatter<'_> {
+    fn format_error(&self, e: &YaccGrammarError) -> Box<dyn Error> {
+        self.format_spanned(e).into()
+    }
+
+    fn format_warning(&self, w: &YaccGrammarWarning) -> String {
+        self.format_spanned(w)
     }
 }
 
