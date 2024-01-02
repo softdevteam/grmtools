@@ -50,6 +50,23 @@ pub trait ErrorFormatter {
     fn format_warning(&self, e: &YaccGrammarWarning) -> String;
 }
 
+/// Applies a `map` operation with the function `f` over
+/// the error values owned by self.
+pub trait ErrorMap {
+    /// Applies `f` to all errors owned by self where `f` is a function
+    /// returning a type that implements `Error`.
+    fn format_errors<'a, F: ErrorFormatter + ?Sized>(
+        &'a self,
+        f: &'a F,
+    ) -> impl Iterator<Item = Box<dyn Error>> + '_;
+    /// Applies `f` to all warnings owned by self where `f` is a function
+    /// returning a type that implements `Display`.
+    fn format_warnings<'a, F: ErrorFormatter + ?Sized>(
+        &'a self,
+        f: &'a F,
+    ) -> impl Iterator<Item = String> + '_;
+}
+
 /// A basic Report that stores errors and warnings in a `Vec`.
 pub struct SimpleReport {
     errors: Vec<YaccGrammarError>,
