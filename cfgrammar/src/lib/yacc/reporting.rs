@@ -193,12 +193,18 @@ pub enum ASTBuilderError {
     /// For that you will need to look at a `YaccGrammarError`
     /// in an `ErrorReport`.
     ConstructionFailure,
+    MissingSource,
+    MissingErrorReport,
+    MissingYaccKind,
 }
 
 impl fmt::Display for ASTBuilderError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             Self::ConstructionFailure => write!(f, "Grammar construction failure"),
+            Self::MissingSource => write!(f, "Sources for a grammar was not given"),
+            Self::MissingYaccKind => write!(f, "`YaccKind` for a grammar was not specified"),
+            Self::MissingErrorReport => write!(f, "`ErrorReport` for grammar was not given"),
         }
     }
 }
