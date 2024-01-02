@@ -82,6 +82,21 @@ impl ErrorReport for SimpleReport {
     }
 }
 
+impl ErrorMap for SimpleReport {
+    fn format_errors<'a, F: ErrorFormatter + ?Sized>(
+        &'a self,
+        f: &'a F,
+    ) -> impl Iterator<Item = Box<dyn Error>> + '_ {
+        self.errors.iter().map(move |e| f.format_error(e))
+    }
+    fn format_warnings<'a, F: ErrorFormatter + ?Sized>(
+        &'a self,
+        f: &'a F,
+    ) -> impl Iterator<Item = String> + '_ {
+        self.warnings.iter().map(move |w| f.format_warning(w))
+    }
+}
+
 impl SimpleReport {
     pub fn new() -> Self {
         SimpleReport {
@@ -156,6 +171,22 @@ impl<R: ErrorReport> ErrorReport for DedupReport<R> {
             self.child_report.grammar_error(e);
         }
         self.child_report.finish();
+    }
+}
+
+impl<R: ErrorReport + ErrorMap> ErrorMap for DedupReport<R> {
+    fn format_errors<'a, F: ErrorFormatter + ?Sized>(
+        &'a self,
+        f: &'a F,
+    ) -> impl Iterator<Item = Box<dyn Error>> + '_ {
+        self.child_report.format_errors(f)
+    }
+
+    fn format_warnings<'a, F: ErrorFormatter + ?Sized>(
+        &'a self,
+        f: &'a F,
+    ) -> impl Iterator<Item = String> + '_ {
+        self.child_report.format_warnings(f)
     }
 }
 
