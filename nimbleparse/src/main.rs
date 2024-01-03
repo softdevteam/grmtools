@@ -9,7 +9,11 @@ use std::{
 
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{
+        ast::ASTBuilder,
+        reporting::{DedupReport, ErrorMap, SimpleErrorFormatter, SimpleReport},
+        YaccKind, YaccOriginalActionKind,
+    },
     Spanned,
 };
 use getopts::Options;
@@ -135,26 +139,29 @@ fn main() {
 
     let yacc_y_path = &matches.free[1];
     let yacc_src = read_file(yacc_y_path);
-    let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
-    let warnings = ast_validation.ast().warnings();
-    let res = YaccGrammar::new_from_ast_with_validity_info(yacckind, &ast_validation);
+    let yacc_y_path = Path::new(yacc_y_path);
+    let mut report = DedupReport::new(SimpleReport::new());
+    let gb = ASTBuilder::with_source(&yacc_src)
+        .yacckind(yacckind)
+        .error_report(&mut report)
+        .grammar_builder()
+        .expect("Builder requirements met");
+    let res = gb.build();
+    let formatter = SimpleErrorFormatter::new(&yacc_src, yacc_y_path).unwrap();
+    let warnings = report.format_warnings(&formatter);
     let grm = match res {
         Ok(x) => {
-            if !warnings.is_empty() {
-                let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
-                for w in warnings {
-                    spanned_fmt(&w, &nlcache, &yacc_src, yacc_y_path, WARNING);
-                }
+            for w in warnings {
+                writeln!(stderr(), "{WARNING} {w}").ok();
             }
             x
         }
-        Err(errs) => {
-            let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
-            for e in errs {
-                spanned_fmt(&e, &nlcache, &yacc_src, yacc_y_path, ERROR);
+        Err(_) => {
+            for e in report.format_errors(&formatter) {
+                writeln!(stderr(), "{ERROR} {}", e).ok();
             }
             for w in warnings {
-                spanned_fmt(&w, &nlcache, &yacc_src, yacc_y_path, WARNING);
+                writeln!(stderr(), "{WARNING} {w}").ok();
             }
             process::exit(1);
         }
@@ -162,7 +169,7 @@ fn main() {
     let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
-            writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
+            writeln!(stderr(), "{}: {}", &yacc_y_path.display(), &s).ok();
             process::exit(1);
         }
     };
