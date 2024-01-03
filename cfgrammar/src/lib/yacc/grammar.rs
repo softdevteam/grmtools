@@ -6,7 +6,10 @@ use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
 use serde::{Deserialize, Serialize};
 use vob::Vob;
 
-use super::{ast, firsts::YaccFirsts, follows::YaccFollows, parser::YaccGrammarResult, YaccKind};
+use super::{
+    ast, firsts::YaccFirsts, follows::YaccFollows, parser::YaccGrammarResult,
+    reporting::ASTBuilderError, YaccKind,
+};
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
 const START_RULE: &str = "^";
@@ -118,6 +121,20 @@ where
             return Err(ast_validation.errors().to_owned());
         }
         let ast = ast_validation.ast();
+        Ok(Self::new_from_valid_ast_unchecked(yacc_kind, ast))
+    }
+    pub(crate) fn new_from_grammar_builder(
+        yacc_kind: YaccKind,
+        grammar_builder: &ast::GrammarBuilder,
+    ) -> Result<Self, ASTBuilderError> {
+        if grammar_builder.any_errors_found() {
+            return Err(ASTBuilderError::ConstructionFailure);
+        }
+        let ast = grammar_builder.ast();
+        Ok(Self::new_from_valid_ast_unchecked(yacc_kind, ast))
+    }
+
+    fn new_from_valid_ast_unchecked(yacc_kind: YaccKind, ast: &ast::GrammarAST) -> Self {
         // Check that StorageT is big enough to hold RIdx/PIdx/SIdx/TIdx values; after these
         // checks we can guarantee that things like RIdx(ast.rules.len().as_()) are safe.
         if ast.rules.len() > num_traits::cast(StorageT::max_value()).unwrap() {
@@ -332,7 +349,7 @@ where
 
         assert!(!token_names.is_empty());
         assert!(!rule_names.is_empty());
-        Ok(YaccGrammar {
+        YaccGrammar {
             rules_len: RIdx(rule_names.len().as_()),
             rule_names: rule_names.into_boxed_slice(),
             tokens_len: TIdx(token_names.len().as_()),
@@ -360,7 +377,7 @@ where
             actiontypes: actiontypes.into_boxed_slice(),
             expect: ast.expect.map(|(n, _)| n),
             expectrr: ast.expectrr.map(|(n, _)| n),
-        })
+        }
     }
 
     /// How many productions does this grammar have?

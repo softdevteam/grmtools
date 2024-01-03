@@ -7,40 +7,70 @@ use indexmap::{IndexMap, IndexSet};
 
 use super::{
     parser::YaccParser,
-    reporting::{ErrorReport, SimpleReport},
-    Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
-    YaccKind,
+    reporting::{ASTBuilderError, DedupReport, ErrorReport, ReportHandler, SimpleReport},
+    Precedence, YaccGrammar, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
+    YaccGrammarWarningKind, YaccKind,
 };
 
 use crate::Span;
+
+pub struct ASTBuilder<'a, R> {
+    source: &'a str,
+    yacckind: Option<YaccKind>,
+    report_handler: Option<ReportHandler<'a, R>>,
+}
+
+pub struct GrammarBuilder {
+    yacckind: YaccKind,
+    ast: GrammarAST,
+    any_errors_found: bool,
+}
+
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
     ast: GrammarAST,
-    report: SimpleReport,
+    report: DedupReport<SimpleReport>,
 }
 
-impl ASTWithValidityInfo {
-    /// Parses a source file into an AST, returning an ast and any errors that were
-    /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
-    /// then unused to construct a `YaccGrammar`, which will either produce an
-    /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
-    pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
-        let mut report = SimpleReport::new();
-        let ast = match yacc_kind {
+impl<'a, R> ASTBuilder<'a, R>
+where
+    R: ErrorReport,
+{
+    /// Returns a new `ASTBuilder` with `source`, and an optional `path`
+    /// The path may be used for error reporting, but is not otherwise used for any
+    /// filesystem operations or checked to be a valid path.
+    pub fn with_source(source: &'a str) -> Self {
+        Self {
+            source,
+            yacckind: None,
+            report_handler: None,
+        }
+    }
+    pub fn yacckind(mut self, yk: YaccKind) -> Self {
+        self.yacckind = Some(yk);
+        self
+    }
+    pub fn error_report(mut self, report: &'a mut R) -> Self {
+        self.report_handler = Some(ReportHandler::new(report));
+        self
+    }
+
+    /// Builds an `ast`, and returns a `GrammarBuilder`
+    pub fn grammar_builder(mut self) -> Result<GrammarBuilder, ASTBuilderError> {
+        let report_handler = self
+            .report_handler
+            .as_mut()
+            .ok_or(ASTBuilderError::MissingErrorReport)?;
+        let yacckind = self.yacckind.ok_or(ASTBuilderError::MissingYaccKind)?;
+
+        let ast = match yacckind {
             YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
-                let mut yp = YaccParser::new(yacc_kind, s.to_string());
-                yp.parse()
-                    .map_err(|es| {
-                        // Interim change until `ReportHandler`.
-                        for e in es {
-                            report.grammar_error(e)
-                        }
-                    })
-                    .ok();
+                let mut yp = YaccParser::new(yacckind, self.source.to_string());
+                yp.parse_with_report(report_handler).ok();
                 let mut ast = yp.ast();
                 ast.complete_and_validate()
-                    .map_err(|e| report.grammar_error(e))
+                    .map_err(|e| report_handler.non_fatal_error(e))
                     .ok();
                 ast
             }
@@ -50,12 +80,53 @@ impl ASTWithValidityInfo {
                 Symbol::Rule(_, span) => (YaccGrammarWarningKind::UnusedRule, span),
                 Symbol::Token(_, span) => (YaccGrammarWarningKind::UnusedToken, span),
             };
-            report.grammar_warning(YaccGrammarWarning {
+            report_handler.warning(YaccGrammarWarning {
                 kind,
                 spans: vec![span],
             })
         });
-        ASTWithValidityInfo { ast, report }
+        report_handler.finish();
+        let any_errors_found = report_handler.any_errors_found();
+        Ok(GrammarBuilder {
+            yacckind,
+            ast,
+            any_errors_found,
+        })
+    }
+}
+
+impl GrammarBuilder {
+    pub fn build<StorageT>(&self) -> Result<YaccGrammar<StorageT>, ASTBuilderError>
+    where
+        StorageT: num_traits::PrimInt + num_traits::Unsigned + 'static,
+        usize: num_traits::AsPrimitive<StorageT>,
+    {
+        YaccGrammar::new_from_grammar_builder(self.yacckind, self)
+    }
+    pub fn any_errors_found(&self) -> bool {
+        self.any_errors_found
+    }
+    pub fn ast(&self) -> &GrammarAST {
+        &self.ast
+    }
+}
+
+impl ASTWithValidityInfo {
+    /// Parses a source file into an AST, returning an ast and any errors that were
+    /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
+    /// then unused to construct a `YaccGrammar`, which will either produce an
+    /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
+    pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
+        let mut report = DedupReport::new(SimpleReport::new());
+        ASTWithValidityInfo {
+            ast: ASTBuilder::with_source(s)
+                .yacckind(yacc_kind)
+                .error_report(&mut report)
+                .grammar_builder()
+                .unwrap()
+                .ast,
+            report,
+        }
     }
 
     /// Returns a `GrammarAST` constructed as the result of parsing a source file.
@@ -74,12 +145,12 @@ impl ASTWithValidityInfo {
 
     /// Returns all errors which were encountered during AST construction.
     pub fn errors(&self) -> &[YaccGrammarError] {
-        self.report.errors()
+        self.report.child().errors()
     }
 
     /// Returns all errors which were encountered during AST construction.
     pub fn warnings(&self) -> &[YaccGrammarWarning] {
-        self.report.warnings()
+        self.report.child().warnings()
     }
 }
 
