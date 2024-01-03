@@ -19,8 +19,12 @@ use std::{
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
-    RIdx, Spanned, Symbol,
+    yacc::{
+        ast::ASTBuilder,
+        reporting::{DedupReport, ErrorFormatter, ErrorMap, SimpleErrorFormatter, SimpleReport},
+        YaccGrammar, YaccKind, YaccOriginalActionKind,
+    },
+    RIdx, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -166,6 +170,7 @@ where
     show_warnings: bool,
     visibility: Visibility,
     rust_edition: RustEdition,
+    formatter: Option<Box<dyn Fn(&str, &Path) -> Box<dyn ErrorFormatter>>>,
     phantom: PhantomData<LexerTypesT>,
 }
 
@@ -209,6 +214,7 @@ where
             show_warnings: true,
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
+            formatter: None,
             phantom: PhantomData,
         }
     }
@@ -339,6 +345,14 @@ where
         self
     }
 
+    pub fn error_formatter(
+        mut self,
+        formatter: Box<dyn Fn(&str, &Path) -> Box<dyn ErrorFormatter>>,
+    ) -> Self {
+        self.formatter = Some(formatter);
+        self
+    }
+
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
     /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
     /// additional files will be created with the same name as specified in [self.output_path] but
@@ -416,35 +430,33 @@ where
         }
 
         let inc = read_to_string(grmp).unwrap();
-        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
-        let warnings = ast_validation.ast().warnings();
-        let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
-            if let Some((line, column)) =
-                line_cache.byte_to_line_num_and_col_num(inc, x.spans()[0].start())
-            {
-                format!("{} at line {line} column {column}", x)
-            } else {
-                format!("{}", x)
-            }
+        let mut report = DedupReport::new(SimpleReport::new());
+        let res = ASTBuilder::with_source(&inc)
+            .yacckind(yk)
+            .error_report(&mut report)
+            .grammar_builder()
+            .expect("Builder requirements met")
+            .build::<StorageT>();
+        let (errors, warnings) = if let Some(formatter) = &self.formatter {
+            let f = (*formatter)(&inc, outp);
+            let warnings = report.format_warnings(f.as_ref()).collect::<Vec<_>>();
+            let errors = report.format_errors(f.as_ref()).collect::<Vec<_>>();
+            (errors, warnings)
+        } else {
+            let f = SimpleErrorFormatter::new(&inc, outp).unwrap();
+            let warnings = report.format_warnings(&f).collect::<Vec<_>>();
+            let errors = report.format_errors(&f).collect::<Vec<_>>();
+            (errors, warnings)
         };
-
-        let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(yk, &ast_validation);
         let grm = match res {
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
                 let mut line_cache = NewlineCache::new();
                 line_cache.feed(&inc);
                 return Err(ErrorString(if warnings.len() > 1 {
                     // Indent under the "Error:" prefix.
-                    format!(
-                        "\n\t{}",
-                        warnings
-                            .iter()
-                            .map(|w| spanned_fmt(w, &inc, &line_cache))
-                            .collect::<Vec<_>>()
-                            .join("\n\t")
-                    )
+                    format!("\n\t{}", warnings.join("\n\t"))
                 } else {
-                    spanned_fmt(warnings.first().unwrap(), &inc, &line_cache)
+                    warnings.first().unwrap().to_string()
                 }))?;
             }
             Ok(grm) => {
@@ -454,29 +466,28 @@ where
                     for w in warnings {
                         // Assume if this variable is set we are running under cargo.
                         if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
-                            println!("cargo:warning={}", spanned_fmt(&w, &inc, &line_cache));
+                            println!("cargo:warning={}", w);
                         } else if self.show_warnings {
-                            eprintln!("{}", spanned_fmt(&w, &inc, &line_cache));
+                            eprintln!("{}", w);
                         }
                     }
                 }
                 grm
             }
-            Err(errs) => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                return Err(ErrorString(if errs.len() + warnings.len() > 1 {
+            Err(_) => {
+                return Err(ErrorString(if errors.len() + warnings.len() > 1 {
                     // Indent under the "Error:" prefix.
                     format!(
                         "\n\t{}",
-                        errs.iter()
-                            .map(|e| spanned_fmt(e, &inc, &line_cache))
-                            .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
+                        errors
+                            .iter()
+                            .map(|e| e.to_string())
+                            .chain(warnings.iter().cloned())
                             .collect::<Vec<_>>()
                             .join("\n\t")
                     )
                 } else {
-                    spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
+                    errors.first().unwrap().to_string()
                 }))?;
             }
         };
@@ -661,6 +672,7 @@ where
             show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
+            formatter: self.formatter.take(),
             phantom: PhantomData,
         };
         Ok(cl.build()?.rule_ids)
