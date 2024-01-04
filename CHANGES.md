@@ -1,3 +1,12 @@
+# grmtools 0.13.3 (2024-01-04)
+
+* Change generated code to avoid errors about `unsafe` action code in input
+  grammars.
+
+* Hide unstable parts of the API behind an `_unstable_api` feature that is off
+  by default.
+
+
 # grmtools 0.13.3 (2023-09-21)
 
 * lrlex now explicitly raises an error when a rule in an input file
