@@ -198,6 +198,9 @@ pub struct SimpleErrorFormatter<'a> {
 
 impl<'a> SimpleErrorFormatter<'a> {
     #[allow(clippy::result_unit_err)]
+    // We could be more efficient by calling `feed(src[0..max_span_offset])`
+    // but we don't have the max span offset here, it may be worth considering
+    // now though because this is pub.
     pub fn new(src: &'a str, path: &'a path::Path) -> Result<Self, ()> {
         Ok(Self {
             src,
@@ -249,7 +252,11 @@ impl<'a> SimpleErrorFormatter<'a> {
                     .unwrap_or(line);
                 let dots = if next_line - line > 1 { "..." } else { "" };
                 out.push_str(dots);
-
+                // TODO:
+                // This may produce incorrect underlining for unicode characters.
+                // We could do better using the unicode_width crate. Should we
+                // feature gate fancy errors to make that an optional dependency?
+                //
                 // Because col is 1 indexed, subtract 1.
                 out.push_str(
                     &" ".repeat(col + (line.to_string().len() + "| ".len() - dots.len()) - 1),
