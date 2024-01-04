@@ -2,7 +2,7 @@
 name = "nimbleparse"
 description = "Simple Yacc grammar debugging tool"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.13.3"
+version = "0.13.4"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2021"
 readme = "README.md"
