@@ -27,11 +27,11 @@ fn usage(prog: &str, msg: &str) -> ! {
     process::exit(1);
 }
 
-fn read_file(path: &str) -> String {
-    let mut f = match File::open(path) {
+fn read_file<P: AsRef<Path>>(path: P) -> String {
+    let mut f = match File::open(&path) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("Can't open file {}: {}", path, e);
+            eprintln!("Can't open file {}: {}", path.as_ref().display(), e);
             process::exit(1);
         }
     };
