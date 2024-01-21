@@ -1,15 +1,18 @@
-use std::{env, fs::File, io::Read, path::Path, process, str::FromStr};
-
-use cfgrammar::{
-    newlinecache::NewlineCache,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
-    Spanned,
-};
+mod diagnostics;
+use crate::diagnostics::*;
+use cfgrammar::yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind};
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
 use lrpar::parser::{RTParserBuilder, RecoveryKind};
 use lrtable::{from_yacc, Minimiser};
 use num_traits::ToPrimitive;
+use std::{
+    env,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+    process,
+};
 
 const WARNING: &str = "[Warning]";
 const ERROR: &str = "[Error]";
@@ -38,6 +41,10 @@ fn read_file<P: AsRef<Path>>(path: P) -> String {
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
     s
+}
+
+fn indent(s: &str, indent: &str) -> String {
+    format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }
 
 fn main() {
@@ -93,53 +100,45 @@ fn main() {
         usage(prog, "Too few arguments given.");
     }
 
-    let lex_l_path = &matches.free[0];
-    let lex_src = read_file(lex_l_path);
-    let spanned_fmt = |spanned: &dyn Spanned, nlcache: &NewlineCache, src, src_path, prefix| {
-        if let Some((line, column)) =
-            nlcache.byte_to_line_num_and_col_num(src, spanned.spans()[0].start())
-        {
-            eprintln!(
-                "{}: {prefix} {} at line {line} column {column}",
-                src_path, &spanned
-            );
-        } else {
-            eprintln!("{}: {}", &src_path, &spanned);
-        }
-    };
+    let lex_l_path = PathBuf::from(&matches.free[0]);
+    let lex_src = read_file(&lex_l_path);
     let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexerTypes<u32>>::from_str(&lex_src) {
         Ok(ast) => ast,
         Err(errs) => {
-            let nlcache = NewlineCache::from_str(&lex_src).unwrap();
+            let formatter = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path).unwrap();
+            eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                spanned_fmt(&e, &nlcache, &lex_src, lex_l_path, ERROR);
+                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
             }
             process::exit(1);
         }
     };
 
-    let yacc_y_path = &matches.free[1];
-    let yacc_src = read_file(yacc_y_path);
+    let yacc_y_path = PathBuf::from(&matches.free[1]);
+    let yacc_src = read_file(&yacc_y_path);
     let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(yacckind, &ast_validation);
     let grm = match res {
         Ok(x) => {
             if !warnings.is_empty() {
-                let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
+                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+                eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
                 for w in warnings {
-                    spanned_fmt(&w, &nlcache, &yacc_src, yacc_y_path, WARNING);
+                    eprintln!("{}", indent(&formatter.format_warning(w), "    "));
                 }
             }
             x
         }
         Err(errs) => {
-            let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
+            let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+            eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                spanned_fmt(&e, &nlcache, &yacc_src, yacc_y_path, ERROR);
+                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
             }
+            eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
             for w in warnings {
-                spanned_fmt(&w, &nlcache, &yacc_src, yacc_y_path, WARNING);
+                eprintln!("{}", indent(&formatter.format_warning(w), "    "));
             }
             process::exit(1);
         }
@@ -147,7 +146,7 @@ fn main() {
     let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
-            eprintln!("{}: {}", &yacc_y_path, &s);
+            eprintln!("{}: {}", &yacc_y_path.display(), &s);
             process::exit(1);
         }
     };
