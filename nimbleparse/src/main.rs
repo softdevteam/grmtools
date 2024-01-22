@@ -1,22 +1,24 @@
-use std::{
-    env,
-    fs::File,
-    io::{stderr, Read, Write},
-    path::Path,
-    process,
-    str::FromStr,
-};
-
+mod diagnostics;
+use crate::diagnostics::*;
 use cfgrammar::{
-    newlinecache::NewlineCache,
     yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
-    Spanned,
+    Span,
 };
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
-use lrpar::parser::{RTParserBuilder, RecoveryKind};
+use lrpar::{
+    parser::{RTParserBuilder, RecoveryKind},
+    LexerTypes,
+};
 use lrtable::{from_yacc, Minimiser};
-use num_traits::ToPrimitive;
+use num_traits::ToPrimitive as _;
+use std::{
+    env,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+    process,
+};
 
 const WARNING: &str = "[Warning]";
 const ERROR: &str = "[Error]";
@@ -28,28 +30,55 @@ fn usage(prog: &str, msg: &str) -> ! {
         None => "lrpar",
     };
     if !msg.is_empty() {
-        writeln!(stderr(), "{}", msg).ok();
+        eprintln!("{}", msg);
     }
-    writeln!(
-        stderr(),
-        "Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-q] <lexer.l> <parser.y> <input file>",
-        leaf
-    )
-    .ok();
+    eprintln!("Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-q] <lexer.l> <parser.y> <input file>", leaf);
     process::exit(1);
 }
 
-fn read_file(path: &str) -> String {
-    let mut f = match File::open(path) {
+fn read_file<P: AsRef<Path>>(path: P) -> String {
+    let mut f = match File::open(&path) {
         Ok(r) => r,
         Err(e) => {
-            writeln!(stderr(), "Can't open file {}: {}", path, e).ok();
+            eprintln!("Can't open file {}: {}", path.as_ref().display(), e);
             process::exit(1);
         }
     };
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
     s
+}
+
+fn indent(s: &str, indent: &str) -> String {
+    format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
+}
+
+pub fn set_rule_ids<LexerTypesT: LexerTypes<StorageT = u32>, LT: LexerDef<LexerTypesT>>(
+    lexerdef: &mut LT,
+    grm: &YaccGrammar,
+) -> (Option<Vec<Span>>, Option<Vec<Span>>)
+where
+    usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+{
+    let rule_ids = grm
+        .tokens_map()
+        .iter()
+        .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
+        .collect::<std::collections::HashMap<&str, u32>>();
+    let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids_spanned(&rule_ids);
+    let missing_from_lexer = missing_from_lexer.map(|tokens| {
+        tokens
+            .iter()
+            .map(|name| {
+                grm.token_span(*grm.tokens_map().get(name).unwrap())
+                    .expect("Given token should have a span")
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let missing_from_parser =
+        missing_from_parser.map(|tokens| tokens.iter().map(|(_, span)| *span).collect::<Vec<_>>());
+    (missing_from_lexer, missing_from_parser)
 }
 
 fn main() {
@@ -105,56 +134,47 @@ fn main() {
         usage(prog, "Too few arguments given.");
     }
 
-    let lex_l_path = &matches.free[0];
-    let lex_src = read_file(lex_l_path);
-    let spanned_fmt = |spanned: &dyn Spanned, nlcache: &NewlineCache, src, src_path, prefix| {
-        if let Some((line, column)) =
-            nlcache.byte_to_line_num_and_col_num(src, spanned.spans()[0].start())
-        {
-            writeln!(
-                stderr(),
-                "{}: {prefix} {} at line {line} column {column}",
-                src_path,
-                &spanned
-            )
-            .ok();
-        } else {
-            writeln!(stderr(), "{}: {}", &src_path, &spanned).ok();
-        }
-    };
+    let lex_l_path = PathBuf::from(&matches.free[0]);
+    let lex_src = read_file(&lex_l_path);
     let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexerTypes<u32>>::from_str(&lex_src) {
         Ok(ast) => ast,
         Err(errs) => {
-            let nlcache = NewlineCache::from_str(&lex_src).unwrap();
+            let formatter = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path).unwrap();
+            eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                spanned_fmt(&e, &nlcache, &lex_src, lex_l_path, ERROR);
+                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
             }
             process::exit(1);
         }
     };
 
-    let yacc_y_path = &matches.free[1];
-    let yacc_src = read_file(yacc_y_path);
+    let yacc_y_path = PathBuf::from(&matches.free[1]);
+    let yacc_src = read_file(&yacc_y_path);
     let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(yacckind, &ast_validation);
+    let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;
     let grm = match res {
         Ok(x) => {
             if !warnings.is_empty() {
-                let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
+                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+                eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
                 for w in warnings {
-                    spanned_fmt(&w, &nlcache, &yacc_src, yacc_y_path, WARNING);
+                    eprintln!("{}", indent(&formatter.format_warning(w), "    "));
                 }
+                yacc_diagnostic_formatter = Some(formatter);
             }
             x
         }
         Err(errs) => {
-            let nlcache = NewlineCache::from_str(&yacc_src).unwrap();
+            let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+            eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                spanned_fmt(&e, &nlcache, &yacc_src, yacc_y_path, ERROR);
+                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
             }
+            eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
             for w in warnings {
-                spanned_fmt(&w, &nlcache, &yacc_src, yacc_y_path, WARNING);
+                eprintln!("{}", indent(&formatter.format_warning(w), "    "));
             }
             process::exit(1);
         }
@@ -162,13 +182,21 @@ fn main() {
     let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
-            writeln!(stderr(), "{}: {}", &yacc_y_path, &s).ok();
+            eprintln!("{}: {}", &yacc_y_path.display(), &s);
             process::exit(1);
         }
     };
 
     if !quiet {
         if let Some(c) = stable.conflicts() {
+            let formatter = if let Some(yacc_diagnostic_formatter) = &yacc_diagnostic_formatter {
+                yacc_diagnostic_formatter
+            } else {
+                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+                yacc_diagnostic_formatter = Some(formatter);
+                yacc_diagnostic_formatter.as_ref().unwrap()
+            };
+
             let pp_rr = if let Some(i) = grm.expectrr() {
                 i != c.rr_len()
             } else {
@@ -188,35 +216,60 @@ fn main() {
             if pp_rr || pp_sr {
                 println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
             }
+            formatter.handle_conflicts::<DefaultLexerTypes<u32>>(
+                &grm,
+                ast_validation.ast(),
+                c,
+                &sgraph,
+                &stable,
+            );
         }
     }
 
+    let (missing_from_lexer, missing_from_parser) = set_rule_ids(&mut lexerdef, &grm);
     {
-        let rule_ids = grm
-            .tokens_map()
-            .iter()
-            .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
-            .collect();
-        let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
         if !quiet {
-            if let Some(tokens) = missing_from_parser {
-                writeln!(stderr(), "Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:").ok();
-                let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
-                sorted.sort_unstable();
-                for n in sorted {
-                    writeln!(stderr(), "  {}", n).ok();
+            if let Some(token_spans) = missing_from_lexer {
+                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+                let warn_indent = " ".repeat(WARNING.len());
+                eprintln!(
+                    "{WARNING} these tokens are not referenced in the lexer but defined as follows"
+                );
+                eprintln!(
+                    "{warn_indent} {}",
+                    formatter.file_location_msg("in the grammar", None)
+                );
+                for span in token_spans {
+                    eprintln!(
+                        "{}",
+                        formatter.underline_span_with_text(
+                            span,
+                            "Missing from lexer".to_string(),
+                            '^'
+                        )
+                    );
                 }
             }
-            if let Some(tokens) = missing_from_lexer {
-                writeln!(
-                    stderr(),
-                    "Error: these tokens are referenced in the grammar but not defined in the lexer:"
-                )
-                .ok();
-                let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
-                sorted.sort_unstable();
-                for n in sorted {
-                    writeln!(stderr(), "  {}", n).ok();
+            eprintln!();
+            if let Some(token_spans) = missing_from_parser {
+                let formatter = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path).unwrap();
+                let err_indent = " ".repeat(ERROR.len());
+                eprintln!(
+                    "{ERROR} these tokens are not referenced in the grammar but defined as follows"
+                );
+                eprintln!(
+                    "{err_indent} {}",
+                    formatter.file_location_msg("in the lexer", None)
+                );
+                for span in token_spans {
+                    eprintln!(
+                        "{}",
+                        formatter.underline_span_with_text(
+                            span,
+                            "Missing from parser".to_string(),
+                            '^'
+                        )
+                    );
                 }
                 process::exit(1);
             }

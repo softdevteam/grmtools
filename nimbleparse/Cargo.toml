@@ -20,3 +20,4 @@ lrlex = { path="../lrlex", version="0.13" }
 lrpar = { path="../lrpar", version="0.13" }
 lrtable = { path="../lrtable", version="0.13" }
 num-traits = "0.2"
+unicode-width = "0.1.11"
