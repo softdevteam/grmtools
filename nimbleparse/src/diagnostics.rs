@@ -155,6 +155,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                 let s = e.to_string();
                 out.push_str(&self.prefixed_underline_span_with_text(dots, *span, s, '^'));
             } else {
+                out.push('\n');
                 let s = match e.spanskind() {
                     SpansKind::DuplicationError => {
                         format!("{} occurrence", Self::ordinal(span_num + 1))
