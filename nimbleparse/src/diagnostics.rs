@@ -1,12 +1,41 @@
 use std::{error::Error, fmt::Display, path::Path, str::FromStr};
 
-use cfgrammar::{newlinecache::NewlineCache, yacc::parser::SpansKind, Span, Spanned};
+use cfgrammar::{
+    newlinecache::NewlineCache,
+    yacc::{
+        ast::{GrammarAST, Symbol},
+        parser::SpansKind,
+        YaccGrammar,
+    },
+    PIdx, Span, Spanned,
+};
+use lrpar::LexerTypes;
+use lrtable::statetable::Conflicts;
 use unicode_width::UnicodeWidthStr;
 
 pub struct SpannedDiagnosticFormatter<'a> {
     src: &'a str,
     path: &'a Path,
     nlc: NewlineCache,
+}
+
+fn pidx_prods_data<StorageT>(ast: &GrammarAST, pidx: PIdx<StorageT>) -> (Vec<String>, Vec<Span>)
+where
+    usize: num_traits::AsPrimitive<StorageT>,
+    StorageT: 'static + num_traits::PrimInt + num_traits::Unsigned,
+{
+    if usize::from(pidx) < ast.prods.len() {
+        let prod = &ast.prods[usize::from(pidx)];
+        prod.symbols
+            .iter()
+            .map(|sym| match sym {
+                Symbol::Rule(name, span) => (format!("'{}'", name), span),
+                Symbol::Token(name, span) => (format!("'{}'", name), span),
+            })
+            .unzip()
+    } else {
+        (vec![], vec![])
+    }
 }
 
 impl<'a> SpannedDiagnosticFormatter<'a> {
@@ -139,6 +168,174 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             }
         }
         out
+    }
+
+    /// This function panics if the items in the `spans` iterator span more than a single line.
+    ///
+    /// This function only produces if all the following are true:
+    /// 1. Spans are sorted in left-to-right order.
+    /// 2. Spans are non-overlapping.
+    fn underline_spans_on_line_with_text(
+        &self,
+        spans: impl Iterator<Item = Span> + Clone,
+        msg: String,
+        underline_c: char,
+    ) -> String {
+        let mut lines = spans
+            .clone()
+            .map(|span| self.nlc.span_line_bytes(span))
+            .collect::<Vec<_>>();
+        lines.dedup();
+        assert!(lines.len() == 1);
+        let mut spans = spans.peekable();
+        let first_span = spans.peek().unwrap();
+        let mut out = String::new();
+        // For instance we want to underline the b's in
+        // aaaaa bbbb cccc bbb
+        //       ____      ___
+        // indent    indent
+        let (line_at_start, _) = self
+            .nlc
+            .byte_to_line_num_and_col_num(self.src, first_span.start())
+            .expect("Span should correlate to a line in source");
+        let (line_start_byte, end_byte) = self.nlc.span_line_bytes(*first_span);
+        // Print the line_num/source text for the line.
+        out.push_str(&format!(
+            "{}| {}\n",
+            line_at_start,
+            &self.src[line_start_byte..end_byte]
+        ));
+        // Indent from the beginning of the line up to span.start() of the first span.
+        let line_num_digits = line_at_start.to_string().len();
+        out.push_str(&" ".repeat(
+            UnicodeWidthStr::width(&self.src[line_start_byte..first_span.start()])
+                + (line_num_digits + "| ".len()),
+        ));
+        // Draw underlines between start()..end() and indent up to the the start of the next span.
+        while let Some(span) = spans.next() {
+            out.push_str(
+                &underline_c
+                    .to_string()
+                    .repeat(UnicodeWidthStr::width(&self.src[span.start()..span.end()])),
+            );
+            if let Some(next_span) = spans.peek() {
+                out.push_str(&" ".repeat(UnicodeWidthStr::width(
+                    &self.src[span.end()..next_span.start()],
+                )));
+            }
+        }
+        // With all the underlines drawn append the message.
+        out.push_str(&format!(" {msg}"));
+        out
+    }
+
+    pub fn handle_conflicts<LexerTypesT: LexerTypes<StorageT = u32>>(
+        &self,
+        grm: &YaccGrammar,
+        ast: &GrammarAST,
+        c: &Conflicts<LexerTypesT::StorageT>,
+        _sgraph: &lrtable::StateGraph<LexerTypesT::StorageT>,
+        _stable: &lrtable::StateTable<LexerTypesT::StorageT>,
+    ) where
+        usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+    {
+        for (r1_prod_idx, r2_prod_idx, _st_idx) in c.rr_conflicts() {
+            let (_r1_prod_names, _r1_prod_spans) = pidx_prods_data(ast, *r1_prod_idx);
+            let (_r2_prod_names, _r2_prod_spans) = pidx_prods_data(ast, *r2_prod_idx);
+
+            let r1_rule_idx = grm.prod_to_rule(*r1_prod_idx);
+            let r2_rule_idx = grm.prod_to_rule(*r2_prod_idx);
+            let r1_span = grm.rule_name_span(r1_rule_idx);
+            let r2_span = grm.rule_name_span(r2_rule_idx);
+            let r1_name = grm.rule_name_str(r1_rule_idx);
+            let r2_name = grm.rule_name_str(r2_rule_idx);
+
+            eprintln!(
+                "{}",
+                self.file_location_msg(
+                    format!(
+                        "Reduce/Reduce conflict, can reduce '{}' or '{}'",
+                        r1_name, r2_name
+                    )
+                    .as_str(),
+                    Some(r1_span)
+                )
+            );
+            eprintln!(
+                "{}",
+                self.underline_span_with_text(r1_span, "First reduce".to_string(), '^')
+            );
+            eprintln!(
+                "{}",
+                self.underline_span_with_text(r2_span, "Second reduce".to_string(), '-')
+            );
+            eprintln!();
+        }
+        for (s_tok_idx, r_prod_idx, _st_idx) in c.sr_conflicts() {
+            let r_rule_idx = grm.prod_to_rule(*r_prod_idx);
+            let s_tok_span = grm.token_span(*s_tok_idx).unwrap();
+            let shift_name = grm.token_name(*s_tok_idx).unwrap();
+            let reduce_name = grm.rule_name_str(r_rule_idx);
+            let (_r_prod_names, r_prod_spans) = pidx_prods_data(ast, *r_prod_idx);
+            let rule_idx = grm.prod_to_rule(*r_prod_idx);
+            let rule_span = grm.rule_name_span(rule_idx);
+            eprintln!(
+                "{}",
+                self.file_location_msg(
+                    format!(
+                        "Shift/Reduce conflict, can shift '{}' or reduce '{}'",
+                        shift_name, reduce_name
+                    )
+                    .as_str(),
+                    Some(rule_span)
+                )
+            );
+
+            eprintln!(
+                "{}",
+                self.underline_span_with_text(s_tok_span, "Shift".to_string(), '^')
+            );
+            eprintln!(
+                "{}",
+                self.underline_span_with_text(rule_span, "Reduced rule".to_string(), '+')
+            );
+            let mut prod_lines = r_prod_spans
+                .iter()
+                .map(|span| self.nlc.span_line_bytes(*span))
+                .collect::<Vec<_>>();
+            prod_lines.sort();
+            prod_lines.dedup();
+            assert!(!r_prod_spans.is_empty());
+
+            for lines in &prod_lines {
+                let mut spans_on_line = Vec::new();
+                for span in &r_prod_spans {
+                    if lines == &self.nlc.span_line_bytes(*span) {
+                        spans_on_line.push(*span)
+                    }
+                }
+
+                let msg = if Some(lines) == prod_lines.last() {
+                    "Reduced productions"
+                } else {
+                    ""
+                };
+                // We don't actually enforce left-to-right or non-overlapping,
+                // It appears that the spans always have these properties.
+                // but we lack an `Ord` impl to easily ensure it.
+                //
+                // We could convert to tuples, then back to spans or add the impl
+                eprintln!(
+                    "{}",
+                    self.underline_spans_on_line_with_text(
+                        spans_on_line.iter().copied(),
+                        msg.to_string(),
+                        '-'
+                    )
+                );
+            }
+            eprintln!()
+        }
     }
 }
 
@@ -354,6 +551,93 @@ mod test {
 ...  ^^ Not a crab
 4| 🦀🦞
      -- Not a crab either"
+        );
+    }
+
+    #[test]
+    fn underline_single_line_spans_test() {
+        let s = "\naaaaaabbb bbb bbbb\n";
+        let test_path = PathBuf::from("test");
+        let formatter = SpannedDiagnosticFormatter::new(s, &test_path).unwrap();
+        let spans = [(7, 10), (11, 14), (15, 19)]
+            .iter()
+            .map(|(i, j): &(usize, usize)| Span::new(*i, *j));
+        let out = format!(
+            "\n{}",
+            formatter.underline_spans_on_line_with_text(
+                spans.clone(),
+                "Multiple spans on one line.".into(),
+                '-'
+            )
+        );
+        assert_eq!(
+            out,
+            r"
+2| aaaaaabbb bbb bbbb
+         --- --- ---- Multiple spans on one line."
+        );
+        let out = format!(
+            "\n{}",
+            formatter.underline_spans_on_line_with_text(
+                spans,
+                "Multiple spans on one line 2.".into(),
+                '^'
+            )
+        );
+        assert_eq!(
+            out,
+            r"
+2| aaaaaabbb bbb bbbb
+         ^^^ ^^^ ^^^^ Multiple spans on one line 2."
+        );
+        let spans = [(7usize, 10usize), (10, 14), (14, 19)]
+            .iter()
+            .map(|(i, j): &(usize, usize)| Span::new(*i, *j));
+        let out = format!(
+            "\n{}",
+            formatter.underline_spans_on_line_with_text(
+                spans,
+                "Contiguous but non-overlapping".into(),
+                '+'
+            )
+        );
+        assert_eq!(
+            out,
+            r"
+2| aaaaaabbb bbb bbbb
+         ++++++++++++ Contiguous but non-overlapping"
+        );
+    }
+
+    #[test]
+    fn underline_single_line_spans_unicode() {
+        let crab = "🦀";
+        let lobster = "🦞";
+        let crustaceans = format!("{crab}{lobster}{crab}{lobster}");
+        let test_path = PathBuf::from("test");
+        let formatter = SpannedDiagnosticFormatter::new(&crustaceans, &test_path).unwrap();
+        // For raw string alignment.
+        let mut out = String::from("\n");
+        let spans = [
+            (crab.len(), crab.len() + lobster.len()),
+            (
+                crab.len() * 2 + lobster.len(),
+                crab.len() * 2 + lobster.len() * 2,
+            ),
+        ];
+        let spans = spans
+            .iter()
+            .map(|(start, end): &(usize, usize)| Span::new(*start, *end));
+        out.push_str(&formatter.underline_spans_on_line_with_text(
+            spans.clone(),
+            "Not crabs".to_string(),
+            '^',
+        ));
+        assert_eq!(
+            out,
+            r"
+1| 🦀🦞🦀🦞
+     ^^  ^^ Not crabs"
         );
     }
 }

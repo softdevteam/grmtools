@@ -119,6 +119,7 @@ fn main() {
     let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(yacckind, &ast_validation);
+    let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;
     let grm = match res {
         Ok(x) => {
             if !warnings.is_empty() {
@@ -127,6 +128,7 @@ fn main() {
                 for w in warnings {
                     eprintln!("{}", indent(&formatter.format_warning(w), "    "));
                 }
+                yacc_diagnostic_formatter = Some(formatter);
             }
             x
         }
@@ -153,6 +155,14 @@ fn main() {
 
     if !quiet {
         if let Some(c) = stable.conflicts() {
+            let formatter = if let Some(yacc_diagnostic_formatter) = &yacc_diagnostic_formatter {
+                yacc_diagnostic_formatter
+            } else {
+                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+                yacc_diagnostic_formatter = Some(formatter);
+                yacc_diagnostic_formatter.as_ref().unwrap()
+            };
+
             let pp_rr = if let Some(i) = grm.expectrr() {
                 i != c.rr_len()
             } else {
@@ -172,6 +182,13 @@ fn main() {
             if pp_rr || pp_sr {
                 println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
             }
+            formatter.handle_conflicts::<DefaultLexerTypes<u32>>(
+                &grm,
+                ast_validation.ast(),
+                c,
+                &sgraph,
+                &stable,
+            );
         }
     }
 
