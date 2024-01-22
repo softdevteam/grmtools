@@ -174,6 +174,11 @@ where
         rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>);
 
+    fn set_rule_ids_spanned<'a>(
+        &'a mut self,
+        rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
+    ) -> (Option<HashSet<&'a str>>, Option<HashSet<(&'a str, Span)>>);
+
     /// Returns an iterator over all rules in this AST.
     fn iter_rules(&self) -> Iter<Rule<LexerTypesT::StorageT>>;
 
@@ -236,9 +241,22 @@ where
         &'a mut self,
         rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>) {
+        let (missing_from_parser, missing_from_lexer) = self.set_rule_ids_spanned(rule_ids_map);
+        let missing_from_lexer =
+            missing_from_lexer.map(|missing| missing.iter().map(|(name, _)| *name).collect());
+        (missing_from_parser, missing_from_lexer)
+    }
+
+    fn set_rule_ids_spanned<'a>(
+        &'a mut self,
+        rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
+    ) -> (Option<HashSet<&'a str>>, Option<HashSet<(&'a str, Span)>>) {
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
-        // recover the names later.
+        // recover the names later. This has the unfortunate consequence of extended the mutable
+        // borrow for the rest of the 'a lifetime. To avoid that we could return idx's here.
+        // But the original `set_rule_ids` invalidates indexes.  In the spirit of keeping that
+        // behavior consistent, this also returns the span.
         let mut missing_from_parser_idxs = Vec::new();
         let mut rules_with_names = 0;
         for (i, r) in self.rules.iter_mut().enumerate() {
@@ -259,7 +277,10 @@ where
         } else {
             let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
             for i in &missing_from_parser_idxs {
-                mfp.insert(self.rules[*i].name.as_ref().unwrap().as_str());
+                mfp.insert((
+                    self.rules[*i].name.as_ref().unwrap().as_str(),
+                    self.rules[*i].name_span,
+                ));
             }
             Some(mfp)
         };

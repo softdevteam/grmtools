@@ -75,7 +75,6 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
 
     /// Print the line/column information and source text for all lines intersecting the span.
     /// Underline the portion covered by the span with the `underline_c` character.
-    #[allow(unused)]
     pub fn underline_span_with_text(&self, span: Span, s: String, underline_c: char) -> String {
         self.prefixed_underline_span_with_text("", span, s, underline_c)
     }

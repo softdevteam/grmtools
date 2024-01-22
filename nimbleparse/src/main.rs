@@ -1,11 +1,17 @@
 mod diagnostics;
 use crate::diagnostics::*;
-use cfgrammar::yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind};
+use cfgrammar::{
+    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    Span,
+};
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
-use lrpar::parser::{RTParserBuilder, RecoveryKind};
+use lrpar::{
+    parser::{RTParserBuilder, RecoveryKind},
+    LexerTypes,
+};
 use lrtable::{from_yacc, Minimiser};
-use num_traits::ToPrimitive;
+use num_traits::ToPrimitive as _;
 use std::{
     env,
     fs::File,
@@ -45,6 +51,34 @@ fn read_file<P: AsRef<Path>>(path: P) -> String {
 
 fn indent(s: &str, indent: &str) -> String {
     format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
+}
+
+pub fn set_rule_ids<LexerTypesT: LexerTypes<StorageT = u32>, LT: LexerDef<LexerTypesT>>(
+    lexerdef: &mut LT,
+    grm: &YaccGrammar,
+) -> (Option<Vec<Span>>, Option<Vec<Span>>)
+where
+    usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+{
+    let rule_ids = grm
+        .tokens_map()
+        .iter()
+        .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
+        .collect::<std::collections::HashMap<&str, u32>>();
+    let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids_spanned(&rule_ids);
+    let missing_from_lexer = missing_from_lexer.map(|tokens| {
+        tokens
+            .iter()
+            .map(|name| {
+                grm.token_span(*grm.tokens_map().get(name).unwrap())
+                    .expect("Given token should have a span")
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let missing_from_parser =
+        missing_from_parser.map(|tokens| tokens.iter().map(|(_, span)| *span).collect::<Vec<_>>());
+    (missing_from_lexer, missing_from_parser)
 }
 
 fn main() {
@@ -192,30 +226,50 @@ fn main() {
         }
     }
 
+    let (missing_from_lexer, missing_from_parser) = set_rule_ids(&mut lexerdef, &grm);
     {
-        let rule_ids = grm
-            .tokens_map()
-            .iter()
-            .map(|(&n, &i)| (n, usize::from(i).to_u32().unwrap()))
-            .collect();
-        let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids(&rule_ids);
         if !quiet {
-            if let Some(tokens) = missing_from_parser {
-                eprintln!("Warning: these tokens are defined in the lexer but not referenced in the\ngrammar:");
-                let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
-                sorted.sort_unstable();
-                for n in sorted {
-                    eprintln!("  {}", n);
+            if let Some(token_spans) = missing_from_lexer {
+                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+                let warn_indent = " ".repeat(WARNING.len());
+                eprintln!(
+                    "{WARNING} these tokens are not referenced in the lexer but defined as follows"
+                );
+                eprintln!(
+                    "{warn_indent} {}",
+                    formatter.file_location_msg("in the grammar", None)
+                );
+                for span in token_spans {
+                    eprintln!(
+                        "{}",
+                        formatter.underline_span_with_text(
+                            span,
+                            "Missing from lexer".to_string(),
+                            '^'
+                        )
+                    );
                 }
             }
-            if let Some(tokens) = missing_from_lexer {
+            eprintln!();
+            if let Some(token_spans) = missing_from_parser {
+                let formatter = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path).unwrap();
+                let err_indent = " ".repeat(ERROR.len());
                 eprintln!(
-                    "Error: these tokens are referenced in the grammar but not defined in the lexer:"
+                    "{ERROR} these tokens are not referenced in the grammar but defined as follows"
                 );
-                let mut sorted = tokens.iter().cloned().collect::<Vec<&str>>();
-                sorted.sort_unstable();
-                for n in sorted {
-                    eprintln!("  {}", n);
+                eprintln!(
+                    "{err_indent} {}",
+                    formatter.file_location_msg("in the lexer", None)
+                );
+                for span in token_spans {
+                    eprintln!(
+                        "{}",
+                        formatter.underline_span_with_text(
+                            span,
+                            "Missing from parser".to_string(),
+                            '^'
+                        )
+                    );
                 }
                 process::exit(1);
             }
