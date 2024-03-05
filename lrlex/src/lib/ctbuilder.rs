@@ -4,7 +4,6 @@ use std::{
     any::type_name,
     borrow::Cow,
     collections::{HashMap, HashSet},
-    convert::AsRef,
     env::{current_dir, var},
     error::Error,
     fmt::{Debug, Display, Write as _},

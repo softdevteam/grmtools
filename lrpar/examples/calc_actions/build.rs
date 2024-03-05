@@ -1,6 +1,6 @@
 #![deny(rust_2018_idioms)]
 use cfgrammar::yacc::YaccKind;
-use lrlex::{self, CTLexerBuilder};
+use lrlex::CTLexerBuilder;
 
 fn main() {
     // Since we're using both lrlex and lrpar, we use lrlex's `lrpar_config` convenience function
