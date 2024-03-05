@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use std::{cell::RefCell, collections::HashMap, fmt::Write};
 
-use num_traits::{self, AsPrimitive, PrimInt, Unsigned};
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use vob::Vob;

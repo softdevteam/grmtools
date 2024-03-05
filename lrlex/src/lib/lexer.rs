@@ -9,7 +9,7 @@ use std::{
 
 use cfgrammar::{NewlineCache, Span};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use regex::{self, Regex, RegexBuilder};
+use regex::{Regex, RegexBuilder};
 
 use lrpar::{Lexeme, Lexer, LexerTypes, NonStreamingLexer};
 
@@ -448,7 +448,7 @@ where
         LRNonStreamingLexer::new(s, lexemes, NewlineCache::from_str(s).unwrap())
     }
 
-    fn state_matches(state: &StartState, rule_states: &Vec<usize>) -> bool {
+    fn state_matches(state: &StartState, rule_states: &[usize]) -> bool {
         if rule_states.is_empty() {
             !state.exclusive
         } else {

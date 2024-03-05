@@ -3,7 +3,7 @@
 
 use std::mem::size_of;
 
-use num_traits::{self, PrimInt, Unsigned};
+use num_traits::{PrimInt, Unsigned};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
