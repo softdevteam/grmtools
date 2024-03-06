@@ -141,6 +141,7 @@ pub struct StateTable<StorageT> {
     prods_len: PIdx<StorageT>,
     tokens_len: TIdx<StorageT>,
     conflicts: Option<Conflicts<StorageT>>,
+    #[cfg(test)]
     final_state: StIdx<StorageT>,
 }
 
@@ -370,6 +371,7 @@ where
             prods_len: grm.prods_len(),
             tokens_len: grm.tokens_len(),
             conflicts,
+            #[cfg(test)]
             final_state: final_state.unwrap(),
         })
     }
