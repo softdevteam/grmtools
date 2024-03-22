@@ -200,9 +200,9 @@ Factor -> Result<u64, ()>:
 %%
 // Any functions here are in scope for all the grammar actions above.
 
-fn parse_int(s: &str) -> u64 {
+fn parse_int(s: &str) -> Result<u64, ()> {
     match s.parse::<u64>() {
-        Ok(val) => val,
+        Ok(val) => Ok(val),
         Err(_) => panic!("{} cannot be represented as a u64", s)
     }
 }
