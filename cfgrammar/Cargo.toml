@@ -15,9 +15,9 @@ name = "cfgrammar"
 path = "src/lib/mod.rs"
 
 [dependencies]
-lazy_static = "1.0"
-indexmap = "2"
-num-traits = "0.2"
-regex = "1"
-serde = { version="1.0", features=["derive"], optional=true }
-vob = { version="3.0", features=["serde"] }
+lazy_static.workspace = true
+indexmap.workspace = true
+num-traits.workspace = true
+regex.workspace = true
+serde = { workspace = true, features = ["derive"], optional = true }
+vob = { workspace = true, features = ["serde"] }
