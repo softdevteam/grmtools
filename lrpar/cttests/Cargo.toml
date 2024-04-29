@@ -11,13 +11,13 @@ cfgrammar = { path = "../../cfgrammar" }
 lrlex = { path = "../../lrlex" }
 lrpar = { path = "../" }
 glob = "0.3"
-yaml-rust = "0.4"
+yaml-rust2 = "0.8"
 
 [dependencies]
 cfgrammar = { path = "../../cfgrammar" }
 lrlex = { path = "../../lrlex" }
 lrpar = { path = "../" }
-yaml-rust = "0.4"
+yaml-rust2 = "0.8"
 glob = "0.3"
 
 [dev-dependencies]
