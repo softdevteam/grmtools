@@ -5,7 +5,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
-use yaml_rust::YamlLoader;
+use yaml_rust2::YamlLoader;
 
 #[allow(dead_code)]
 pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::error::Error>> {
