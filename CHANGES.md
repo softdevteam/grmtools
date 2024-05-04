@@ -1,4 +1,10 @@
-# grmtools 0.13.3 (2024-01-04)
+# grmtools 0.13.5 (2024-05-04)
+
+* Improve error messages for conflicts and the like, giving the span of input
+  related to the error.
+
+
+# grmtools 0.13.4 (2024-01-04)
 
 * Change generated code to avoid errors about `unsafe` action code in input
   grammars.
