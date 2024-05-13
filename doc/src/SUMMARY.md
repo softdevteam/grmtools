@@ -18,4 +18,5 @@
   - [nimbleparse](nimbleparse.md)
   - [cfgrammar](cfgrammar.md)
   - [lrtable](lrtable.md)
+  - [third party](thirdparty.md)
 - [Other Rust parsing tools](othertools.md)
