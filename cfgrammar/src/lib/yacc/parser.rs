@@ -677,12 +677,11 @@ impl YaccParser {
                 syms.push(Symbol::Token(sym, span));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = self.parse_ws(j, true)?;
-                let (k, sym, _) = self.parse_token(i)?;
-                if self.ast.tokens.contains(&sym) {
-                    prec = Some(sym);
-                } else {
-                    return Err(self.mk_error(YaccGrammarErrorKind::PrecNotFollowedByToken, i));
+                let (k, sym, span) = self.parse_token(i)?;
+                if self.ast.tokens.insert(sym.clone()) {
+                    self.ast.spans.push(span);
                 }
+                prec = Some(sym);
                 i = k;
             } else if self.lookahead_is("{", i).is_some() {
                 let (j, a) = self.parse_action(i)?;
@@ -1736,17 +1735,6 @@ x"
             src,
         )
         .expect_error_at_line(src, YaccGrammarErrorKind::IllegalString, 3);
-
-        let src = "
-        %%
-        S: 'A' %prec B;
-        B: ;
-        ";
-        parse(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            src,
-        )
-        .expect_error_at_line(src, YaccGrammarErrorKind::PrecNotFollowedByToken, 3);
     }
 
     #[test]
