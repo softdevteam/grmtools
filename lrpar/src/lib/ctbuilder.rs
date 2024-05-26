@@ -679,7 +679,7 @@ where
         if let Some(YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools) =
             self.yacckind
         {
-            outs.push_str(&self.gen_user_actions(grm));
+            outs.push_str(&self.gen_user_actions(grm)?);
         }
         outs.push_str("    mod _parser_ {\n");
         outs.push_str(
@@ -1107,7 +1107,7 @@ where
     }
 
     /// Generate the user action functions (if any).
-    fn gen_user_actions(&self, grm: &YaccGrammar<StorageT>) -> String {
+    fn gen_user_actions(&self, grm: &YaccGrammar<StorageT>) -> Result<String, Box<dyn Error>> {
         let mut outs = String::new();
 
         if let Some(s) = grm.programs() {
@@ -1179,7 +1179,12 @@ where
 
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]).
-            let pre_action = grm.action(pidx).as_ref().unwrap();
+            let pre_action = grm.action(pidx).as_ref().ok_or_else(|| {
+                format!(
+                    "Rule {} has a production which is missing action code",
+                    grm.rule_name_str(grm.prod_to_rule(pidx))
+                )
+            })?;
             let mut last = 0;
             loop {
                 match pre_action[last..].find('$') {
@@ -1217,7 +1222,7 @@ where
 
             outs.push_str("\n    }\n\n");
         }
-        outs
+        Ok(outs)
     }
 
     /// Return the `RIdx` of the %start rule in the grammar (which will not be the same as
