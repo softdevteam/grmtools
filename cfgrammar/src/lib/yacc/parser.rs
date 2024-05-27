@@ -771,7 +771,7 @@ impl YaccParser {
             j += ch.len_utf8();
         }
         if c > 0 {
-            Err(self.mk_error(YaccGrammarErrorKind::IncompleteAction, j))
+            Err(self.mk_error(YaccGrammarErrorKind::IncompleteAction, i))
         } else {
             debug_assert!(self.lookahead_is("}", j).is_some());
             let s = self.src[i + '{'.len_utf8()..j].trim().to_string();
