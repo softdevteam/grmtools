@@ -1,3 +1,12 @@
+# grmtools 0.13.6 (2024-05-30)
+
+* Allow `%prec` to define a new token in the grammar. Previously if `%prec 'x'`
+  was the first mention of "x" then an error would be raised.
+
+* Tell the user where an incomplete action in a grammar started, not finished
+  (since it always "finishes" at the end of the file).
+
+
 # grmtools 0.13.5 (2024-05-04)
 
 * Improve error messages for conflicts and the like, giving the span of input
