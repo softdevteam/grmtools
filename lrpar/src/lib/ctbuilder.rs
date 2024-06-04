@@ -414,7 +414,8 @@ where
             lk.insert(outp.clone());
         }
 
-        let inc = read_to_string(grmp).unwrap();
+        let inc =
+            read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
         let ast_validation = ASTWithValidityInfo::new(yk, &inc);
         let warnings = ast_validation.ast().warnings();
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {

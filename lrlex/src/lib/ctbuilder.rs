@@ -325,7 +325,8 @@ where
             lk.insert(outp.clone());
         }
 
-        let lex_src = read_to_string(lexerp)?;
+        let lex_src = read_to_string(lexerp)
+            .map_err(|e| format!("When reading '{}': {e}", lexerp.display()))?;
         let line_cache = NewlineCache::from_str(&lex_src).unwrap();
         let mut lexerdef: Box<dyn LexerDef<LexerTypesT>> = match self.lexerkind {
             LexerKind::LRNonStreamingLexer => Box::new(
