@@ -35,6 +35,7 @@ pub enum YaccGrammarErrorKind {
     MismatchedBrace,
     NonEmptyProduction,
     PrematureEnd,
+    ProductionNotTerminated,
     ProgramsNotSupported,
     UnknownDeclaration,
     PrecNotFollowedByToken,
@@ -91,6 +92,7 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::MismatchedBrace => "Mismatched brace",
             YaccGrammarErrorKind::NonEmptyProduction => "%empty used in non-empty production",
             YaccGrammarErrorKind::PrematureEnd => "File ends prematurely",
+            YaccGrammarErrorKind::ProductionNotTerminated => "Production not terminated correctly",
             YaccGrammarErrorKind::ProgramsNotSupported => "Programs not currently supported",
             YaccGrammarErrorKind::UnknownDeclaration => "Unknown declaration",
             YaccGrammarErrorKind::DuplicatePrecedence => "Token has multiple precedences specified",
@@ -231,6 +233,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::MismatchedBrace
             | YaccGrammarErrorKind::NonEmptyProduction
             | YaccGrammarErrorKind::PrematureEnd
+            | YaccGrammarErrorKind::ProductionNotTerminated
             | YaccGrammarErrorKind::PrecNotFollowedByToken
             | YaccGrammarErrorKind::ProgramsNotSupported
             | YaccGrammarErrorKind::UnknownDeclaration
@@ -685,8 +688,14 @@ impl YaccParser {
                 i = k;
             } else if self.lookahead_is("{", i).is_some() {
                 let (j, a) = self.parse_action(i)?;
-                i = j;
+                i = self.parse_ws(j, true)?;
                 action = Some(a);
+
+                if syms.is_empty()
+                    || !(self.lookahead_is("|", i).is_some() || self.lookahead_is(";", i).is_some())
+                {
+                    return Err(self.mk_error(YaccGrammarErrorKind::ProductionNotTerminated, i));
+                }
             } else if let Some(mut j) = self.lookahead_is("%empty", i) {
                 j = self.parse_ws(j, true)?;
                 // %empty could be followed by all sorts of weird syntax errors: all we try and do
@@ -2604,6 +2613,21 @@ B";
             YaccGrammarErrorKind::NonEmptyProduction,
             5,
             16,
+        );
+    }
+
+    #[test]
+    fn test_action_successor() {
+        let src = "
+        %%
+        A: B {} B;
+        B: ;
+        ";
+        parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::ProductionNotTerminated,
+            3,
+            17,
         );
     }
 }
