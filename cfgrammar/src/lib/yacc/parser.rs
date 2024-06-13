@@ -691,9 +691,7 @@ impl YaccParser {
                 i = self.parse_ws(j, true)?;
                 action = Some(a);
 
-                if syms.is_empty()
-                    || !(self.lookahead_is("|", i).is_some() || self.lookahead_is(";", i).is_some())
-                {
+                if !(self.lookahead_is("|", i).is_some() || self.lookahead_is(";", i).is_some()) {
                     return Err(self.mk_error(YaccGrammarErrorKind::ProductionNotTerminated, i));
                 }
             } else if let Some(mut j) = self.lookahead_is("%empty", i) {
@@ -2629,5 +2627,12 @@ B";
             3,
             17,
         );
+
+        let src = "
+        %%
+        A: B B {};
+        B: {} ;
+        ";
+        parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
     }
 }
