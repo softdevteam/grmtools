@@ -1,3 +1,11 @@
+# grmtools 0.13.7 (2024-06-14)
+
+* Catch incorrectly terminated productions. Previously this led to a confusing
+  situation where productions could be merged together.
+
+* Give better warnings if lexer/grammar can't be read at build time.
+
+
 # grmtools 0.13.6 (2024-05-30)
 
 * Allow `%prec` to define a new token in the grammar. Previously if `%prec 'x'`
