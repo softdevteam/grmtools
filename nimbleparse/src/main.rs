@@ -276,7 +276,13 @@ fn main() {
         }
     }
 
-    let input = read_file(&matches.free[2]);
+    let input = if &matches.free[2] == "-" {
+        let mut s = String::new();
+        std::io::stdin().read_to_string(&mut s).unwrap();
+        s
+    } else {
+        read_file(&matches.free[2])
+    };
     let lexer = lexerdef.lexer(&input);
     let pb = RTParserBuilder::new(&grm, &stable).recoverer(recoverykind);
     let (pt, errs) = pb.parse_generictree(&lexer);
