@@ -2,7 +2,7 @@ use getopts::Options;
 use std::{
     env,
     fs::File,
-    io::{stderr, Read, Write},
+    io::{stderr, stdin, Read, Write},
     path::Path,
     process,
     str::FromStr,
@@ -26,6 +26,11 @@ fn usage(prog: &str, msg: &str) {
 }
 
 fn read_file(path: &str) -> String {
+    let mut s = String::new();
+    if path == "-" {
+        stdin().read_to_string(&mut s).unwrap();
+        return s;
+    }
     let mut f = match File::open(path) {
         Ok(r) => r,
         Err(e) => {
@@ -33,7 +38,6 @@ fn read_file(path: &str) -> String {
             process::exit(1);
         }
     };
-    let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
     s
 }
