@@ -26,8 +26,8 @@ There are several major differences between Lex and grmtools:
  * Both Lex and grmtools lex files support start conditions as an optional prefix
    to regular expressions, listing necessary states for the input expression to 
    be considered for matching against the input. Lex uses a special action
-   expression `BEGIN(state)` to switch to the named `state`. grmtools lex files
-   use a token name prefix.
+   expression `BEGIN(state)` to switch to the named `state`. Start states in grmtools
+   are described in [start_states](start_states.md).
 
  * Character sets, and changes to internal array sizes are not supported by grmtools.
 
