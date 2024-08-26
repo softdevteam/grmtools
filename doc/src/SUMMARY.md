@@ -5,6 +5,7 @@
 - [Lexing](lexing.md)
   - [Lex compatibility](lexcompatibility.md)
   - [Hand-written lexers](manuallexer.md)
+  - [Start States](start_states.md)
 - [Parsing](parsing.md)
   - [Yacc compatibility](yacccompatibility.md)
   - [Return types and action code](actioncode.md)
