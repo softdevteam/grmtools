@@ -645,12 +645,7 @@ mod test {
         }};
     }
 
-    fn line_of_offset(s: &str, off: usize) -> usize {
-        s[..off].lines().count()
-    }
-
     trait ErrorsHelper {
-        fn expect_error_at_line(self, src: &str, kind: LexErrorKind, line: usize);
         fn expect_error_at_line_col(self, src: &str, kind: LexErrorKind, line: usize, col: usize);
         fn expect_error_at_lines_cols(
             self,
@@ -666,19 +661,6 @@ mod test {
     }
 
     impl ErrorsHelper for Result<LRNonStreamingLexerDef<DefaultLexerTypes<u8>>, Vec<LexBuildError>> {
-        #[track_caller]
-        fn expect_error_at_line(self, src: &str, kind: LexErrorKind, line: usize) {
-            let errs = self
-                .as_ref()
-                .map_err(Vec::as_slice)
-                .expect_err("Parsed ok while expecting error");
-            assert_eq!(errs.len(), 1);
-            let e = &errs[0];
-            assert_eq!(e.kind, kind);
-            assert_eq!(line_of_offset(src, e.spans()[0].start()), line);
-            assert_eq!(e.spans.len(), 1);
-        }
-
         #[track_caller]
         fn expect_error_at_line_col(self, src: &str, kind: LexErrorKind, line: usize, col: usize) {
             self.expect_error_at_lines_cols(src, kind, &mut std::iter::once((line, col)))

@@ -182,6 +182,7 @@ where
     ///   * big enough to index (separately) all the tokens, rules, productions in the grammar,
     ///   * big enough to index the state table created from the grammar,
     ///   * less than or equal in size to `u32`.
+    ///
     /// In other words, if you have a grammar with 256 tokens, 256 rules, and 256 productions,
     /// which creates a state table of 256 states you can safely specify `u8` here; but if any of
     /// those counts becomes 257 or greater you will need to specify `u16`. If you are parsing

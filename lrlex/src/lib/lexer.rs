@@ -159,6 +159,7 @@ where
     /// track of which lexemes:
     ///   1) are defined in the lexer but not referenced by the parser
     ///   2) and referenced by the parser but not defined in the lexer
+    ///
     /// and returns them as a tuple `(Option<HashSet<&str>>, Option<HashSet<&str>>)` in the order
     /// (*defined_in_lexer_missing_from_parser*, *referenced_in_parser_missing_from_lexer*). Since
     /// in most cases both sets are expected to be empty, `None` is returned to avoid a `HashSet`

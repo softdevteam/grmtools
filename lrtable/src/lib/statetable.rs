@@ -180,8 +180,8 @@ where
         let maxa = usize::from(grm.tokens_len()) * usize::from(sg.all_states_len());
         let maxg = usize::from(grm.rules_len()) * usize::from(sg.all_states_len());
         // We only have usize-2 bits to store state IDs and rule indexes
-        assert!(usize::from(sg.all_states_len()) < (usize::max_value() - 4));
-        assert!(usize::from(grm.rules_len()) < (usize::max_value() - 4));
+        assert!(usize::from(sg.all_states_len()) < (usize::MAX - 4));
+        assert!(usize::from(grm.rules_len()) < (usize::MAX - 4));
         let mut actions: Vec<usize> = vec![0; maxa];
 
         // Since 0 is reserved for the error type, and states are encoded by adding 1, we can only

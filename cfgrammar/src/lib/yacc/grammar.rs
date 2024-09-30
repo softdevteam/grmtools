@@ -711,7 +711,7 @@ where
             .rule_max_costs
             .borrow_mut()
             .get_or_insert_with(|| rule_max_costs(self.grm, &self.token_costs))[usize::from(ridx)];
-        if v == u16::max_value() {
+        if v == u16::MAX {
             None
         } else {
             Some(v)
@@ -964,7 +964,7 @@ where
     for ridx in grm.iter_rules() {
         // Calling has_path so frequently is not exactly efficient...
         if grm.has_path(ridx, ridx) {
-            costs[usize::from(ridx)] = u16::max_value();
+            costs[usize::from(ridx)] = u16::MAX;
             done[usize::from(ridx)] = true;
         }
     }
@@ -988,10 +988,10 @@ where
                     let sc = match *sym {
                         Symbol::Token(s_tidx) => u16::from(token_costs[usize::from(s_tidx)]),
                         Symbol::Rule(s_ridx) => {
-                            if costs[usize::from(s_ridx)] == u16::max_value() {
+                            if costs[usize::from(s_ridx)] == u16::MAX {
                                 // As soon as we find reference to an infinite rule, we
                                 // can stop looking.
-                                hs_cmplt = Some(u16::max_value());
+                                hs_cmplt = Some(u16::MAX);
                                 break 'a;
                             }
                             if !done[usize::from(s_ridx)] {
@@ -1003,7 +1003,7 @@ where
                     c = c
                         .checked_add(sc)
                         .expect("Overflow occurred when calculating rule costs");
-                    if c == u16::max_value() {
+                    if c == u16::MAX {
                         panic!("Unable to represent cost in 64 bits.");
                     }
                 }
@@ -1418,11 +1418,11 @@ mod test {
         ).unwrap();
 
         let scores = rule_max_costs(&grm, &[1, 1, 1]);
-        assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.rule_idx("D").unwrap())], u16::max_value());
-        assert_eq!(scores[usize::from(grm.rule_idx("E").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::MAX);
+        assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], u16::MAX);
+        assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], u16::MAX);
+        assert_eq!(scores[usize::from(grm.rule_idx("D").unwrap())], u16::MAX);
+        assert_eq!(scores[usize::from(grm.rule_idx("E").unwrap())], u16::MAX);
     }
 
     #[test]
@@ -1441,7 +1441,7 @@ mod test {
         ).unwrap();
 
         let scores = rule_max_costs(&grm, &[1, 1, 1]);
-        assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::max_value());
+        assert_eq!(scores[usize::from(grm.rule_idx("A").unwrap())], u16::MAX);
         assert_eq!(scores[usize::from(grm.rule_idx("B").unwrap())], 3);
         assert_eq!(scores[usize::from(grm.rule_idx("C").unwrap())], 2);
         assert_eq!(scores[usize::from(grm.rule_idx("D").unwrap())], 3);
