@@ -88,7 +88,7 @@ pub(super) struct Parser<
     StorageT: 'static + Eq + Hash + PrimInt + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
     ActionT: 'a,
-    ParamT: Copy,
+    ParamT: Clone,
 > where
     usize: AsPrimitive<StorageT>,
 {
@@ -241,7 +241,7 @@ impl<
         StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
         LexerTypesT: LexerTypes<StorageT = StorageT>,
         ActionT: 'a,
-        ParamT: Copy,
+        ParamT: Clone,
     > Parser<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
@@ -329,7 +329,7 @@ where
                         self.lexer,
                         span,
                         astack.drain(pop_idx - 1..),
-                        self.param,
+                        self.param.clone(),
                     ));
                     astack.push(v);
                 }
@@ -447,7 +447,7 @@ where
                                 self.lexer,
                                 span,
                                 astack_uw.drain(pop_idx - 1..),
-                                self.param,
+                                self.param.clone(),
                             ));
                             astack_uw.push(v);
                         } else {
@@ -595,7 +595,7 @@ pub(super) trait Recoverer<
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
     ActionT,
-    ParamT: Copy,
+    ParamT: Clone,
 > where
     usize: AsPrimitive<StorageT>,
 {
@@ -877,7 +877,7 @@ where
     /// (`None, [...]`), errors and a value (`Some(...), [...]`), as well as a value and no errors
     /// (`Some(...), []`). Errors are sorted by the position they were found in the input and can
     /// be a mix of lexing and parsing errors.
-    pub fn parse_actions<'b: 'a, 'input: 'b, ActionT: 'a, ParamT: Copy>(
+    pub fn parse_actions<'b: 'a, 'input: 'b, ActionT: 'a, ParamT: Clone>(
         &self,
         lexer: &'b dyn NonStreamingLexer<'input, LexerTypesT>,
         actions: &'a [ActionFn<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>],

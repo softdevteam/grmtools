@@ -34,6 +34,9 @@ lrpar_mod!("multitypes.y");
 lrlex_mod!("parseparam.l");
 lrpar_mod!("parseparam.y");
 
+lrlex_mod!("parseparam_copy.l");
+lrpar_mod!("parseparam_copy.y");
+
 lrlex_mod!("passthrough.l");
 lrpar_mod!("passthrough.y");
 
@@ -242,6 +245,16 @@ fn test_parseparam() {
     let lexerdef = parseparam_l::lexerdef();
     let lexer = lexerdef.lexer("101");
     match parseparam_y::parse(&lexer, &3) {
+        (Some(104), _) => (),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_parseparam_copy() {
+    let lexerdef = parseparam_copy_l::lexerdef();
+    let lexer = lexerdef.lexer("101");
+    match parseparam_copy_y::parse(&lexer, 3) {
         (Some(104), _) => (),
         _ => unreachable!(),
     }
