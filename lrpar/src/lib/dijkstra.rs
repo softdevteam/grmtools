@@ -8,7 +8,7 @@ use indexmap::{
 /// Starting at `start_node`, return, in arbitrary order, all least-cost success nodes.
 ///
 /// * `neighbours` takes a node `n` and returns an iterator consisting of all `n`'s neighbouring
-/// nodes.
+///     nodes.
 /// * `success` takes a node `n` and returns `true` if it is a success node or `false` otherwise.
 ///
 /// The name of this function isn't entirely accurate: this isn't Dijkstra's original algorithm or

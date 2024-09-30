@@ -46,7 +46,7 @@ impl<StorageT: Hash + PrimInt + Unsigned> Itemset<StorageT> {
 
         // Check that each itemset has the same core configuration.
         for &(pidx, dot) in self.items.keys() {
-            if other.items.get(&(pidx, dot)).is_none() {
+            if !other.items.contains_key(&(pidx, dot)) {
                 return false;
             }
         }

@@ -208,6 +208,7 @@ impl GrammarAST {
     ///   3) Every token reference references a declared token
     ///   4) If a production has a precedence token, then it references a declared token
     ///   5) Every token declared with %epp matches a known token
+    ///
     /// If the validation succeeds, None is returned.
     pub(crate) fn complete_and_validate(&mut self) -> Result<(), YaccGrammarError> {
         match self.start {
