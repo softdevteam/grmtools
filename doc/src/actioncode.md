@@ -51,9 +51,9 @@ make use of the following:
 
 A single extra parameter can be passed to action functions if the `%parse-param
 <var>: <type>` declaration is used. The variable `<var>` is then visible in all
-action code. `<type>` must implement the [`Copy`
-trait](https://doc.rust-lang.org/std/marker/trait.Copy.html) (note that `&`
-references implement `Copy`).
+action code. `<type>` must implement the [`Clone`
+trait](https://doc.rust-lang.org/stable/std/clone/trait.Clone.html) (note that `Copy`
+bounds imply `Clone`, and `&` references implement `Copy`).
 
 For example if a grammar has a declaration:
 

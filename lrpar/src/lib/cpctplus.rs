@@ -106,7 +106,7 @@ struct CPCTPlus<
     StorageT: 'static + Eq + Hash + PrimInt + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
     ActionT: 'a,
-    ParamT: Copy,
+    ParamT: Clone,
 > where
     usize: AsPrimitive<StorageT>,
 {
@@ -118,7 +118,7 @@ pub(super) fn recoverer<
     StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
     ActionT: 'a,
-    ParamT: Copy,
+    ParamT: Clone,
 >(
     parser: &'a Parser<StorageT, LexerTypesT, ActionT, ParamT>,
 ) -> Box<dyn Recoverer<StorageT, LexerTypesT, ActionT, ParamT> + 'a>
@@ -135,7 +135,7 @@ impl<
         StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
         LexerTypesT: LexerTypes<StorageT = StorageT>,
         ActionT: 'a,
-        ParamT: Copy,
+        ParamT: Clone,
     > Recoverer<StorageT, LexerTypesT, ActionT, ParamT>
     for CPCTPlus<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>
 where
@@ -270,7 +270,7 @@ impl<
         StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
         LexerTypesT: LexerTypes<StorageT = StorageT>,
         ActionT: 'a,
-        ParamT: Copy,
+        ParamT: Clone,
     > CPCTPlus<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
@@ -457,7 +457,7 @@ fn apply_repairs<
     StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
     ActionT: 'a,
-    ParamT: Copy,
+    ParamT: Clone,
 >(
     parser: &Parser<StorageT, LexerTypesT, ActionT, ParamT>,
     mut laidx: usize,
@@ -496,7 +496,7 @@ fn simplify_repairs<
     StorageT: 'static + Eq + Hash + PrimInt + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
     ActionT,
-    ParamT: Copy,
+    ParamT: Clone,
 >(
     parser: &Parser<StorageT, LexerTypesT, ActionT, ParamT>,
     all_rprs: &mut Vec<Vec<ParseRepair<LexerTypesT::LexemeT, StorageT>>>,
@@ -557,7 +557,7 @@ fn rank_cnds<
     StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
     ActionT: 'a,
-    ParamT: Copy,
+    ParamT: Clone,
 >(
     parser: &Parser<StorageT, LexerTypesT, ActionT, ParamT>,
     finish_by: Instant,
