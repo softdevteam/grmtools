@@ -1,3 +1,13 @@
+# grmtools 0.13.8 (2024-11-07)
+
+* `%parse-param` can now use types that implement `Clone` (i.e. relaxing the
+  previous stringent requirement that types were `Copy`).
+
+* Document start states in the grmtools book.
+
+* Allow `lrlex` and `nimbleparse` to read from stdin if the path is `-`.
+
+
 # grmtools 0.13.7 (2024-06-14)
 
 * Catch incorrectly terminated productions. Previously this led to a confusing
