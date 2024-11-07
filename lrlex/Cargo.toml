@@ -2,7 +2,7 @@
 name = "lrlex"
 description = "Simple lexer generator"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.13.7"
+version = "0.13.8"
 authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2021"
 readme = "README.md"
