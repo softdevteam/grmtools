@@ -273,12 +273,11 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
         }
         for (s_tok_idx, r_prod_idx, _st_idx) in c.sr_conflicts() {
             let r_rule_idx = grm.prod_to_rule(*r_prod_idx);
+            let r_rule_span = grm.rule_name_span(r_rule_idx);
             let s_tok_span = grm.token_span(*s_tok_idx).unwrap();
             let shift_name = grm.token_name(*s_tok_idx).unwrap();
             let reduce_name = grm.rule_name_str(r_rule_idx);
             let (_r_prod_names, r_prod_spans) = pidx_prods_data(ast, *r_prod_idx);
-            let rule_idx = grm.prod_to_rule(*r_prod_idx);
-            let rule_span = grm.rule_name_span(rule_idx);
             eprintln!(
                 "{}",
                 self.file_location_msg(
@@ -287,7 +286,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                         shift_name, reduce_name
                     )
                     .as_str(),
-                    Some(rule_span)
+                    Some(r_rule_span)
                 )
             );
 
@@ -297,7 +296,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             );
             eprintln!(
                 "{}",
-                self.underline_span_with_text(rule_span, "Reduced rule".to_string(), '+')
+                self.underline_span_with_text(r_rule_span, "Reduced rule".to_string(), '+')
             );
             let mut prod_lines = r_prod_spans
                 .iter()
