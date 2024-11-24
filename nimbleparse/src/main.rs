@@ -32,7 +32,7 @@ fn usage(prog: &str, msg: &str) -> ! {
     if !msg.is_empty() {
         eprintln!("{}", msg);
     }
-    eprintln!("Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-q] <lexer.l> <parser.y> <input file>", leaf);
+    eprintln!("Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dq] <lexer.l> <parser.y> <input file>", leaf);
     process::exit(1);
 }
 
@@ -87,6 +87,7 @@ fn main() {
     let matches = match Options::new()
         .optflag("h", "help", "")
         .optflag("q", "quiet", "Don't print warnings such as conflicts")
+        .optflag("d", "dump-state-graph", "Print the parser state graph")
         .optopt(
             "r",
             "recoverer",
@@ -109,6 +110,7 @@ fn main() {
         usage(prog, "");
     }
 
+    let dump_state_graph = matches.opt_present("d");
     let quiet = matches.opt_present("q");
 
     let recoverykind = match matches.opt_str("r") {
@@ -187,6 +189,10 @@ fn main() {
         }
     };
 
+    if dump_state_graph {
+        println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
+    }
+
     if !quiet {
         if let Some(c) = stable.conflicts() {
             let formatter = if let Some(yacc_diagnostic_formatter) = &yacc_diagnostic_formatter {
@@ -213,7 +219,7 @@ fn main() {
             if pp_sr {
                 println!("{}", c.pp_sr(&grm));
             }
-            if pp_rr || pp_sr {
+            if (pp_rr || pp_sr) && !dump_state_graph {
                 println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
             }
             formatter.handle_conflicts::<DefaultLexerTypes<u32>>(
