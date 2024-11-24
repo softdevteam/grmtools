@@ -173,7 +173,9 @@ where
                 }
                 o.push_str("}]");
             }
-            for (esym, e_stidx) in self.edges(stidx).iter() {
+            let mut edges = self.edges(stidx).iter().collect::<Vec<_>>();
+            edges.sort_by(|(_, x), (_, y)| x.cmp(y));
+            for (esym, e_stidx) in edges {
                 write!(
                     o,
                     "\n{}{} -> {}",
