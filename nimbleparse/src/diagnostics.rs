@@ -24,18 +24,16 @@ where
     usize: num_traits::AsPrimitive<StorageT>,
     StorageT: 'static + num_traits::PrimInt + num_traits::Unsigned,
 {
-    if usize::from(pidx) < ast.prods.len() {
-        let prod = &ast.prods[usize::from(pidx)];
-        prod.symbols
-            .iter()
-            .map(|sym| match sym {
-                Symbol::Rule(name, span) => (format!("'{}'", name), span),
-                Symbol::Token(name, span) => (format!("'{}'", name), span),
-            })
-            .unzip()
-    } else {
-        (vec![], vec![])
-    }
+    let pidx = usize::from(pidx);
+    assert!(pidx < ast.prods.len());
+    let prod = &ast.prods[pidx];
+    prod.symbols
+        .iter()
+        .map(|sym| match sym {
+            Symbol::Rule(name, span) => (format!("'{}'", name), span),
+            Symbol::Token(name, span) => (format!("'{}'", name), span),
+        })
+        .unzip()
 }
 
 impl<'a> SpannedDiagnosticFormatter<'a> {
