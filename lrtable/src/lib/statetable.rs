@@ -1041,6 +1041,7 @@ S: S | ;";
                 match sym {
                     ast::Symbol::Rule(_, span) => assert_eq!(span, &Span::new(6, 7)),
                     ast::Symbol::Token(_, _) => panic!("Incorrect symbol"),
+                    ast::Symbol::Empty(_) => panic!("Empty symbol"),
                 }
             }
             Err(e) => panic!("Incorrect error returned {:?}", e),
@@ -1072,6 +1073,7 @@ T: S | ;";
                 match sym {
                     ast::Symbol::Rule(_, span) => assert_eq!(span, &Span::new(15, 16)),
                     ast::Symbol::Token(_, _) => panic!("Incorrect symbol"),
+                    ast::Symbol::Empty(_) => panic!("Empty symbol"),
                 }
             }
             Err(e) => panic!("Incorrect error returned {:?}", e),

@@ -32,6 +32,7 @@ where
         .map(|sym| match sym {
             Symbol::Rule(name, span) => (format!("'{}'", name), span),
             Symbol::Token(name, span) => (format!("'{}'", name), span),
+            Symbol::Empty(span) => (format!("%empty"), span),
         })
         .unzip()
 }
