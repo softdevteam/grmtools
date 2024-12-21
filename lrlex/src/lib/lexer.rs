@@ -50,27 +50,32 @@ pub const DEFAULT_REGEX_OPTIONS: RegexOptions = RegexOptions {
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct Rule<StorageT> {
-    /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
-    /// rules a guaranteed unique value, though that value can be overridden by clients who need to
-    /// control the ID). If `None`, then this rule specifies lexemes which should not appear in the
-    /// user's input.
+    /// If `Some`, this specifies the ID that lexemes resulting from this rule will have. Note that
+    /// lrlex gives rules a guaranteed unique value by default, though users can later override
+    /// that, potentially undermining uniqueness if they're not careful.
+    ///
+    /// If `None`, then this rule specifies lexemes which should not appear in the user's input.
     pub(super) tok_id: Option<StorageT>,
     /// This rule's name. If None, then text which matches this rule will be skipped (i.e. will not
     /// create a lexeme).
+    #[deprecated(note = "Use the name() function")]
     pub name: Option<String>,
+    #[deprecated(note = "Use the name_span() function")]
     pub name_span: Span,
     pub(super) re_str: String,
     re: Regex,
     /// Id(s) of permitted start conditions for the lexer to match this rule.
+    #[deprecated(note = "Use the start_states() function")]
     pub start_states: Vec<usize>,
     /// If Some(_), successful matching of this rule will cause the current stack of start
     /// conditions in the lexer to be updated with the enclosed value, using the designated
     /// operation.
     /// If None, successful matching causes no change to the current start condition.
+    #[deprecated(note = "Use the target_state() function")]
     pub target_state: Option<(usize, StartStateOperation)>,
 }
 
-impl<StorageT> Rule<StorageT> {
+impl<StorageT: PrimInt> Rule<StorageT> {
     /// Create a new `Rule`. This interface is unstable and should only be used by code generated
     /// by lrlex itself.
     #[doc(hidden)]
@@ -115,6 +120,7 @@ impl<StorageT> Rule<StorageT> {
         }
 
         let re = re.build()?;
+        #[allow(deprecated)]
         Ok(Rule {
             tok_id,
             name,
@@ -124,6 +130,44 @@ impl<StorageT> Rule<StorageT> {
             start_states,
             target_state,
         })
+    }
+
+    /// Return this rule's token ID, if any.
+    ///
+    /// If `Some`, this specifies the ID that lexemes resulting from this rule will have. If
+    /// `None`, then this rule specifies lexemes which should not appear in the user's input.
+    pub fn tok_id(&self) -> Option<StorageT> {
+        self.tok_id
+    }
+
+    /// Return this rule's name. If `None`, then text which matches this rule will be skipped (i.e.
+    /// it will not result in the creation of a [Lexeme]).
+    pub fn name(&self) -> Option<&str> {
+        #[allow(deprecated)]
+        self.name.as_deref()
+    }
+
+    /// Return the [Span] of this rule's name.
+    pub fn name_span(&self) -> Span {
+        #[allow(deprecated)]
+        self.name_span
+    }
+
+    /// Return the original regular expression specified by the user for this [Rule].
+    pub fn re_str(&self) -> &str {
+        &self.re_str
+    }
+
+    /// Return the IDs of the permitted start conditions for the lexer to match this rule.
+    pub fn start_states(&self) -> &[usize] {
+        #[allow(deprecated)]
+        self.start_states.as_slice()
+    }
+
+    /// Return the IDs of the permitted start conditions for the lexer to match this rule.
+    pub fn target_state(&self) -> Option<(usize, StartStateOperation)> {
+        #[allow(deprecated)]
+        self.target_state.clone()
     }
 }
 
@@ -235,7 +279,7 @@ where
     }
 
     fn get_rule_by_name(&self, n: &str) -> Option<&Rule<LexerTypesT::StorageT>> {
-        self.rules.iter().find(|r| r.name.as_deref() == Some(n))
+        self.rules.iter().find(|r| r.name() == Some(n))
     }
 
     fn set_rule_ids<'a>(
@@ -261,8 +305,8 @@ where
         let mut missing_from_parser_idxs = Vec::new();
         let mut rules_with_names = 0;
         for (i, r) in self.rules.iter_mut().enumerate() {
-            if let Some(ref n) = r.name {
-                match rule_ids_map.get(&**n) {
+            if let Some(n) = r.name() {
+                match rule_ids_map.get(n) {
                     Some(tok_id) => r.tok_id = Some(*tok_id),
                     None => {
                         r.tok_id = None;
@@ -278,10 +322,7 @@ where
         } else {
             let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
             for i in &missing_from_parser_idxs {
-                mfp.insert((
-                    self.rules[*i].name.as_ref().unwrap().as_str(),
-                    self.rules[*i].name_span,
-                ));
+                mfp.insert((self.rules[*i].name().unwrap(), self.rules[*i].name_span()));
             }
             Some(mfp)
         };
@@ -299,8 +340,8 @@ where
                             &self
                                 .rules
                                 .iter()
-                                .filter(|x| x.name.is_some())
-                                .map(|x| &**x.name.as_ref().unwrap())
+                                .filter(|x| x.name().is_some())
+                                .map(|x| x.name().unwrap())
                                 .collect::<HashSet<&str>>(),
                         )
                         .cloned()
@@ -375,7 +416,7 @@ where
                 Some((_, s)) => s,
             };
             for (ridx, r) in self.iter_rules().enumerate() {
-                if !Self::state_matches(current_state, &r.start_states) {
+                if !Self::state_matches(current_state, r.start_states()) {
                     continue;
                 }
                 if let Some(m) = r.re.find(&s[old_i..]) {
@@ -390,7 +431,7 @@ where
             }
             if longest > 0 {
                 let r = self.get_rule(longest_ridx).unwrap();
-                if r.name.is_some() {
+                if r.name().is_some() {
                     match r.tok_id {
                         Some(tok_id) => {
                             lexemes.push(Ok(Lexeme::new(tok_id, old_i, longest)));
@@ -401,7 +442,7 @@ where
                         }
                     }
                 }
-                if let Some((target_state_id, op)) = &r.target_state {
+                if let Some((target_state_id, op)) = &r.target_state() {
                     let state = match self.get_start_state_by_id(*target_state_id) {
                         None => {
                             // TODO: I can see an argument for lexing state to be either `None` or `Some(target_state_id)` here
@@ -851,18 +892,18 @@ b 'B'
             .to_string();
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         assert_eq!(
-            lexerdef.get_rule_by_name("A").unwrap().name_span,
+            lexerdef.get_rule_by_name("A").unwrap().name_span(),
             Span::new(6, 7)
         );
         assert_eq!(
-            lexerdef.get_rule_by_name("B").unwrap().name_span,
+            lexerdef.get_rule_by_name("B").unwrap().name_span(),
             Span::new(12, 13)
         );
         let anonymous_rules = lexerdef
             .iter_rules()
-            .filter(|rule| rule.name.is_none())
+            .filter(|rule| rule.name().is_none())
             .collect::<Vec<_>>();
-        assert_eq!(anonymous_rules[0].name_span, Span::new(21, 21));
+        assert_eq!(anonymous_rules[0].name_span(), Span::new(21, 21));
     }
 
     #[test]
@@ -876,11 +917,11 @@ b 'B'
             .to_string();
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         assert_eq!(
-            lexerdef.get_rule_by_name("A").unwrap().name_span,
+            lexerdef.get_rule_by_name("A").unwrap().name_span(),
             Span::new(44, 45)
         );
         assert_eq!(
-            lexerdef.get_rule_by_name("B").unwrap().name_span,
+            lexerdef.get_rule_by_name("B").unwrap().name_span(),
             Span::new(50, 51)
         );
     }
@@ -896,11 +937,11 @@ b 'B'
             .to_string();
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let a_rule = lexerdef.get_rule_by_name("A").unwrap();
-        assert_eq!(a_rule.name_span, Span::new(61, 62));
+        assert_eq!(a_rule.name_span(), Span::new(61, 62));
         assert_eq!(a_rule.re_str, "a");
 
         let b_rule = lexerdef.get_rule_by_name("B").unwrap();
-        assert_eq!(b_rule.name_span, Span::new(84, 85));
+        assert_eq!(b_rule.name_span(), Span::new(84, 85));
         assert_eq!(b_rule.re_str, "b");
     }
 
