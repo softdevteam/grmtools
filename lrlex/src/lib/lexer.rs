@@ -50,10 +50,11 @@ pub const DEFAULT_REGEX_OPTIONS: RegexOptions = RegexOptions {
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct Rule<StorageT> {
-    /// If `Some`, the ID that lexemes created against this rule will be given (lrlex gives such
-    /// rules a guaranteed unique value, though that value can be overridden by clients who need to
-    /// control the ID). If `None`, then this rule specifies lexemes which should not appear in the
-    /// user's input.
+    /// If `Some`, this specifies the ID that lexemes resulting from this rule will have. Note that
+    /// lrlex gives rules a guaranteed unique value by default, though users can later override
+    /// that, potentially undermining uniqueness if they're not careful.
+    ///
+    /// If `None`, then this rule specifies lexemes which should not appear in the user's input.
     pub(super) tok_id: Option<StorageT>,
     /// This rule's name. If None, then text which matches this rule will be skipped (i.e. will not
     /// create a lexeme).
@@ -70,7 +71,7 @@ pub struct Rule<StorageT> {
     pub target_state: Option<(usize, StartStateOperation)>,
 }
 
-impl<StorageT> Rule<StorageT> {
+impl<StorageT: PrimInt> Rule<StorageT> {
     /// Create a new `Rule`. This interface is unstable and should only be used by code generated
     /// by lrlex itself.
     #[doc(hidden)]
@@ -124,6 +125,19 @@ impl<StorageT> Rule<StorageT> {
             start_states,
             target_state,
         })
+    }
+
+    /// Return this rule's token ID, if any.
+    ///
+    /// If `Some`, this specifies the ID that lexemes resulting from this rule will have. If
+    /// `None`, then this rule specifies lexemes which should not appear in the user's input.
+    pub fn tok_id(&self) -> Option<StorageT> {
+        self.tok_id
+    }
+
+    /// Return the original regular expression specified by the user for this [Rule].
+    pub fn re_str(&self) -> &str {
+        &self.re_str
     }
 }
 
