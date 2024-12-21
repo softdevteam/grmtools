@@ -503,7 +503,7 @@ pub struct StateActionsIterator<'a, StorageT> {
     phantom: PhantomData<StorageT>,
 }
 
-impl<'a, StorageT: 'static + PrimInt + Unsigned> Iterator for StateActionsIterator<'a, StorageT>
+impl<StorageT: 'static + PrimInt + Unsigned> Iterator for StateActionsIterator<'_, StorageT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -522,7 +522,7 @@ pub struct CoreReducesIterator<'a, StorageT> {
     phantom: PhantomData<StorageT>,
 }
 
-impl<'a, StorageT: 'static + PrimInt + Unsigned> Iterator for CoreReducesIterator<'a, StorageT>
+impl<StorageT: 'static + PrimInt + Unsigned> Iterator for CoreReducesIterator<'_, StorageT>
 where
     usize: AsPrimitive<StorageT>,
 {

@@ -1050,7 +1050,7 @@ pub(crate) mod test {
         s: &'input str,
     }
 
-    impl<'input> Lexer<TestLexerTypes> for SmallLexer<'input> {
+    impl Lexer<TestLexerTypes> for SmallLexer<'_> {
         fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Result<TestLexeme, TestLexError>> + 'a> {
             Box::new(self.lexemes.iter().map(|x| Ok(*x)))
         }
