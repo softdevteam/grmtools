@@ -65,11 +65,13 @@ pub struct Rule<StorageT> {
     pub(super) re_str: String,
     re: Regex,
     /// Id(s) of permitted start conditions for the lexer to match this rule.
+    #[deprecated(note = "Use the start_states() function")]
     pub start_states: Vec<usize>,
     /// If Some(_), successful matching of this rule will cause the current stack of start
     /// conditions in the lexer to be updated with the enclosed value, using the designated
     /// operation.
     /// If None, successful matching causes no change to the current start condition.
+    #[deprecated(note = "Use the target_state() function")]
     pub target_state: Option<(usize, StartStateOperation)>,
 }
 
@@ -158,11 +160,13 @@ impl<StorageT: PrimInt> Rule<StorageT> {
 
     /// Return the IDs of the permitted start conditions for the lexer to match this rule.
     pub fn start_states(&self) -> &[usize] {
+        #[allow(deprecated)]
         self.start_states.as_slice()
     }
 
     /// Return the IDs of the permitted start conditions for the lexer to match this rule.
     pub fn target_state(&self) -> Option<(usize, StartStateOperation)> {
+        #[allow(deprecated)]
         self.target_state.clone()
     }
 }
@@ -412,7 +416,7 @@ where
                 Some((_, s)) => s,
             };
             for (ridx, r) in self.iter_rules().enumerate() {
-                if !Self::state_matches(current_state, &r.start_states) {
+                if !Self::state_matches(current_state, r.start_states()) {
                     continue;
                 }
                 if let Some(m) = r.re.find(&s[old_i..]) {
@@ -438,7 +442,7 @@ where
                         }
                     }
                 }
-                if let Some((target_state_id, op)) = &r.target_state {
+                if let Some((target_state_id, op)) = &r.target_state() {
                     let state = match self.get_start_state_by_id(*target_state_id) {
                         None => {
                             // TODO: I can see an argument for lexing state to be either `None` or `Some(target_state_id)` here

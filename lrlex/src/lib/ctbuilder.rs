@@ -491,7 +491,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 Some(ref n) => format!("Some({}.to_string())", quote!(#n)),
                 None => "None".to_owned(),
             };
-            let target_state = match &r.target_state {
+            let target_state = match &r.target_state() {
                 Some((id, op)) => format!("Some(({}, ::lrlex::StartStateOperation::{:?}))", id, op),
                 None => "None".to_owned(),
             };
@@ -501,7 +501,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 r.name_span().end()
             );
             let regex = &r.re_str;
-            let start_states = r.start_states.as_slice();
+            let start_states = r.start_states();
             write!(
                 outs,
                 "

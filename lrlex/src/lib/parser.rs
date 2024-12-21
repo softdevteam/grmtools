@@ -1036,9 +1036,9 @@ mod test {
         let intrule = ast.get_rule(0).unwrap();
         assert_eq!("known", intrule.name().unwrap());
         assert_eq!(".", intrule.re_str);
-        assert!(intrule.target_state.is_none());
-        assert_eq!(1, intrule.start_states.len());
-        assert_eq!(1, *intrule.start_states.first().unwrap());
+        assert!(intrule.target_state().is_none());
+        assert_eq!(1, intrule.start_states().len());
+        assert_eq!(1, *intrule.start_states().first().unwrap());
     }
 
     #[test]
@@ -1066,9 +1066,9 @@ mod test {
         assert_eq!(".", intrule.re_str);
         assert_eq!(
             (1, StartStateOperation::ReplaceStack),
-            *intrule.target_state.as_ref().unwrap()
+            *intrule.target_state().as_ref().unwrap()
         );
-        assert_eq!(0, intrule.start_states.len());
+        assert_eq!(0, intrule.start_states().len());
     }
 
     #[test]
@@ -1420,130 +1420,130 @@ a\[\]a 'aboxa'
         let mut rule = ast.get_rule_by_name("OPEN_BRACE").unwrap();
         assert_eq!("OPEN_BRACE", rule.name().unwrap());
         assert_eq!(r"\{", rule.re_str);
-        assert_eq!(1, rule.start_states.len());
+        assert_eq!(1, rule.start_states().len());
         assert_eq!(
             "brace",
-            rule.start_states
+            rule.start_states()
                 .iter()
                 .map(|s| states.get(s).unwrap())
                 .next()
                 .unwrap()
         );
-        assert!(rule.target_state.is_some());
+        assert!(rule.target_state().is_some());
         assert_eq!(
             "brace",
-            rule.target_state
+            rule.target_state()
                 .as_ref()
                 .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::Push,
-            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
+            *rule.target_state().as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("CLOSE_BRACE").unwrap();
         assert_eq!("CLOSE_BRACE", rule.name().unwrap());
         assert_eq!(r"\}", rule.re_str);
-        assert_eq!(1, rule.start_states.len());
+        assert_eq!(1, rule.start_states().len());
         assert_eq!(
             "brace",
-            rule.start_states
+            rule.start_states()
                 .iter()
                 .map(|s| states.get(s).unwrap())
                 .next()
                 .unwrap()
         );
-        assert!(rule.target_state.is_some());
+        assert!(rule.target_state().is_some());
         assert_eq!(
             "brace",
-            rule.target_state
+            rule.target_state()
                 .as_ref()
                 .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::Pop,
-            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
+            *rule.target_state().as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_BRACKET").unwrap();
         assert_eq!("OPEN_BRACKET", rule.name().unwrap());
         assert_eq!(r"\[", rule.re_str);
-        assert_eq!(1, rule.start_states.len());
+        assert_eq!(1, rule.start_states().len());
         assert_eq!(
             "bracket",
-            rule.start_states
+            rule.start_states()
                 .iter()
                 .map(|s| states.get(s).unwrap())
                 .next()
                 .unwrap()
         );
-        assert!(rule.target_state.is_some());
+        assert!(rule.target_state().is_some());
         assert_eq!(
             "bracket",
-            rule.target_state
+            rule.target_state()
                 .as_ref()
                 .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::Push,
-            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
+            *rule.target_state().as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("CLOSE_BRACKET").unwrap();
         assert_eq!("CLOSE_BRACKET", rule.name().unwrap());
         assert_eq!(r"\]", rule.re_str);
-        assert_eq!(1, rule.start_states.len());
+        assert_eq!(1, rule.start_states().len());
         assert_eq!(
             "bracket",
-            rule.start_states
+            rule.start_states()
                 .iter()
                 .map(|s| states.get(s).unwrap())
                 .next()
                 .unwrap()
         );
-        assert!(rule.target_state.is_some());
+        assert!(rule.target_state().is_some());
         assert_eq!(
             "bracket",
-            rule.target_state
+            rule.target_state()
                 .as_ref()
                 .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::Pop,
-            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
+            *rule.target_state().as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_FIRST_BRACE").unwrap();
         assert_eq!("OPEN_FIRST_BRACE", rule.name().unwrap());
         assert_eq!(r"\{", rule.re_str);
-        assert_eq!(0, rule.start_states.len());
-        assert!(rule.target_state.is_some());
+        assert_eq!(0, rule.start_states().len());
+        assert!(rule.target_state().is_some());
         assert_eq!(
             "brace",
-            rule.target_state
+            rule.target_state()
                 .as_ref()
                 .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::ReplaceStack,
-            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
+            *rule.target_state().as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_FIRST_BRACKET").unwrap();
         assert_eq!("OPEN_FIRST_BRACKET", rule.name().unwrap());
         assert_eq!(r"\[", rule.re_str);
-        assert_eq!(0, rule.start_states.len());
-        assert!(rule.target_state.is_some());
+        assert_eq!(0, rule.start_states().len());
+        assert!(rule.target_state().is_some());
         assert_eq!(
             "bracket",
-            rule.target_state
+            rule.target_state()
                 .as_ref()
                 .map(|(s, _)| states.get(s).unwrap())
                 .unwrap()
         );
         assert_eq!(
             StartStateOperation::ReplaceStack,
-            *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
+            *rule.target_state().as_ref().map(|(_, s)| s).unwrap()
         );
     }
 
