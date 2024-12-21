@@ -84,7 +84,7 @@ fn main() {
         match r {
             Ok(l) => println!(
                 "{} {}",
-                lexerdef.get_rule_by_id(l.tok_id()).name.as_ref().unwrap(),
+                lexerdef.get_rule_by_id(l.tok_id()).name().unwrap(),
                 &input[l.span().start()..l.span().end()]
             ),
             Err(e) => {

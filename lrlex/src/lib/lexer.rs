@@ -58,6 +58,7 @@ pub struct Rule<StorageT> {
     pub(super) tok_id: Option<StorageT>,
     /// This rule's name. If None, then text which matches this rule will be skipped (i.e. will not
     /// create a lexeme).
+    #[deprecated(note = "Use the name() function")]
     pub name: Option<String>,
     pub name_span: Span,
     pub(super) re_str: String,
@@ -116,6 +117,7 @@ impl<StorageT: PrimInt> Rule<StorageT> {
         }
 
         let re = re.build()?;
+        #[allow(deprecated)]
         Ok(Rule {
             tok_id,
             name,
@@ -138,6 +140,7 @@ impl<StorageT: PrimInt> Rule<StorageT> {
     /// Return this rule's name. If `None`, then text which matches this rule will be skipped (i.e.
     /// it will not result in the creation of a [Lexeme]).
     pub fn name(&self) -> Option<&str> {
+        #[allow(deprecated)]
         self.name.as_deref()
     }
 
@@ -270,7 +273,7 @@ where
     }
 
     fn get_rule_by_name(&self, n: &str) -> Option<&Rule<LexerTypesT::StorageT>> {
-        self.rules.iter().find(|r| r.name.as_deref() == Some(n))
+        self.rules.iter().find(|r| r.name() == Some(n))
     }
 
     fn set_rule_ids<'a>(
@@ -296,8 +299,8 @@ where
         let mut missing_from_parser_idxs = Vec::new();
         let mut rules_with_names = 0;
         for (i, r) in self.rules.iter_mut().enumerate() {
-            if let Some(ref n) = r.name {
-                match rule_ids_map.get(&**n) {
+            if let Some(n) = r.name() {
+                match rule_ids_map.get(n) {
                     Some(tok_id) => r.tok_id = Some(*tok_id),
                     None => {
                         r.tok_id = None;
@@ -313,10 +316,7 @@ where
         } else {
             let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
             for i in &missing_from_parser_idxs {
-                mfp.insert((
-                    self.rules[*i].name.as_ref().unwrap().as_str(),
-                    self.rules[*i].name_span,
-                ));
+                mfp.insert((self.rules[*i].name().unwrap(), self.rules[*i].name_span));
             }
             Some(mfp)
         };
@@ -334,8 +334,8 @@ where
                             &self
                                 .rules
                                 .iter()
-                                .filter(|x| x.name.is_some())
-                                .map(|x| &**x.name.as_ref().unwrap())
+                                .filter(|x| x.name().is_some())
+                                .map(|x| x.name().unwrap())
                                 .collect::<HashSet<&str>>(),
                         )
                         .cloned()
@@ -425,7 +425,7 @@ where
             }
             if longest > 0 {
                 let r = self.get_rule(longest_ridx).unwrap();
-                if r.name.is_some() {
+                if r.name().is_some() {
                     match r.tok_id {
                         Some(tok_id) => {
                             lexemes.push(Ok(Lexeme::new(tok_id, old_i, longest)));
@@ -895,7 +895,7 @@ b 'B'
         );
         let anonymous_rules = lexerdef
             .iter_rules()
-            .filter(|rule| rule.name.is_none())
+            .filter(|rule| rule.name().is_none())
             .collect::<Vec<_>>();
         assert_eq!(anonymous_rules[0].name_span, Span::new(21, 21));
     }

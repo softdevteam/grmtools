@@ -425,10 +425,7 @@ where
             name = Some(orig_name[1..orig_name.len() - 1].to_string());
             name_span = Span::new(i + rspace + 2, i + rspace + orig_name.len());
             self.rules.iter().any(|r| {
-                let dupe = r
-                    .name
-                    .as_ref()
-                    .map_or(false, |n| n == name.as_ref().unwrap());
+                let dupe = r.name().map_or(false, |n| n == name.as_ref().unwrap());
                 if dupe {
                     add_duplicate_occurrence(
                         errs,
@@ -771,13 +768,13 @@ mod test {
         .to_string();
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let intrule = ast.get_rule_by_name("int").unwrap();
-        assert_eq!("int", intrule.name.as_ref().unwrap());
+        assert_eq!("int", intrule.name().unwrap());
         assert_eq!("[0-9]+", intrule.re_str);
         let idrule = ast.get_rule_by_name("id").unwrap();
-        assert_eq!("id", idrule.name.as_ref().unwrap());
+        assert_eq!("id", idrule.name().unwrap());
         assert_eq!("[a-zA-Z]+", idrule.re_str);
         let plusrule = ast.get_rule_by_name("+").unwrap();
-        assert_eq!("+", plusrule.name.as_ref().unwrap());
+        assert_eq!("+", plusrule.name().unwrap());
         assert_eq!("\\+", plusrule.re_str);
     }
 
@@ -789,7 +786,7 @@ mod test {
         .to_string();
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
-        assert!(intrule.name.is_none());
+        assert!(intrule.name().is_none());
         assert_eq!("[0-9]+", intrule.re_str);
     }
 
@@ -1037,7 +1034,7 @@ mod test {
             .to_string();
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
-        assert_eq!("known", intrule.name.as_ref().unwrap());
+        assert_eq!("known", intrule.name().unwrap());
         assert_eq!(".", intrule.re_str);
         assert!(intrule.target_state.is_none());
         assert_eq!(1, intrule.start_states.len());
@@ -1065,7 +1062,7 @@ mod test {
             .to_string();
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let intrule = ast.get_rule(0).unwrap();
-        assert_eq!("known", intrule.name.as_ref().unwrap());
+        assert_eq!("known", intrule.name().unwrap());
         assert_eq!(".", intrule.re_str);
         assert_eq!(
             (1, StartStateOperation::ReplaceStack),
@@ -1263,88 +1260,88 @@ a\[\]a 'aboxa'
         .to_string();
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let mut rule = ast.get_rule_by_name("gt").unwrap();
-        assert_eq!("gt", rule.name.as_ref().unwrap());
+        assert_eq!("gt", rule.name().unwrap());
         assert_eq!(">", rule.re_str);
         rule = ast.get_rule_by_name("lt").unwrap();
-        assert_eq!("lt", rule.name.as_ref().unwrap());
+        assert_eq!("lt", rule.name().unwrap());
         assert_eq!("<", rule.re_str);
         rule = ast.get_rule_by_name("alt").unwrap();
-        assert_eq!("alt", rule.name.as_ref().unwrap());
+        assert_eq!("alt", rule.name().unwrap());
         assert_eq!("a<", rule.re_str);
         rule = ast.get_rule_by_name("agt").unwrap();
-        assert_eq!("agt", rule.name.as_ref().unwrap());
+        assert_eq!("agt", rule.name().unwrap());
         assert_eq!("a>", rule.re_str);
         rule = ast.get_rule_by_name("elt").unwrap();
-        assert_eq!("elt", rule.name.as_ref().unwrap());
+        assert_eq!("elt", rule.name().unwrap());
         assert_eq!("e<<", rule.re_str);
         rule = ast.get_rule_by_name("egt").unwrap();
-        assert_eq!("egt", rule.name.as_ref().unwrap());
+        assert_eq!("egt", rule.name().unwrap());
         assert_eq!("e>>", rule.re_str);
         rule = ast.get_rule_by_name("forall").unwrap();
-        assert_eq!("forall", rule.name.as_ref().unwrap());
+        assert_eq!("forall", rule.name().unwrap());
         assert_eq!("∀", rule.re_str);
         rule = ast.get_rule_by_name("forall2").unwrap();
-        assert_eq!("forall2", rule.name.as_ref().unwrap());
+        assert_eq!("forall2", rule.name().unwrap());
         assert_eq!("∀∀", rule.re_str);
         rule = ast.get_rule_by_name("forall3").unwrap();
-        assert_eq!("forall3", rule.name.as_ref().unwrap());
+        assert_eq!("forall3", rule.name().unwrap());
         assert_eq!("∀∀∀∀∀", rule.re_str);
         rule = ast.get_rule_by_name("forall4").unwrap();
-        assert_eq!("forall4", rule.name.as_ref().unwrap());
+        assert_eq!("forall4", rule.name().unwrap());
         assert_eq!("∀∀∀∀∀", rule.re_str);
         rule = ast.get_rule_by_name("box").unwrap();
-        assert_eq!("box", rule.name.as_ref().unwrap());
+        assert_eq!("box", rule.name().unwrap());
         assert_eq!(r"\[\]", rule.re_str);
         rule = ast.get_rule_by_name("abox").unwrap();
-        assert_eq!("abox", rule.name.as_ref().unwrap());
+        assert_eq!("abox", rule.name().unwrap());
         assert_eq!(r"a\[\]", rule.re_str);
         rule = ast.get_rule_by_name("aboxa").unwrap();
-        assert_eq!("aboxa", rule.name.as_ref().unwrap());
+        assert_eq!("aboxa", rule.name().unwrap());
         assert_eq!(r"a\[\]a", rule.re_str);
         rule = ast.get_rule_by_name("hex").unwrap();
-        assert_eq!("hex", rule.name.as_ref().unwrap());
+        assert_eq!("hex", rule.name().unwrap());
         assert_eq!(r"\x2a", rule.re_str);
         rule = ast.get_rule_by_name("octal").unwrap();
-        assert_eq!("octal", rule.name.as_ref().unwrap());
+        assert_eq!("octal", rule.name().unwrap());
         assert_eq!(r"\052", rule.re_str);
         rule = ast.get_rule_by_name("newline").unwrap();
-        assert_eq!("newline", rule.name.as_ref().unwrap());
+        assert_eq!("newline", rule.name().unwrap());
         assert_eq!(r"\n*", rule.re_str);
         rule = ast.get_rule_by_name("alert").unwrap();
-        assert_eq!("alert", rule.name.as_ref().unwrap());
+        assert_eq!("alert", rule.name().unwrap());
         assert_eq!(r"\a*", rule.re_str);
         rule = ast.get_rule_by_name("backslash").unwrap();
-        assert_eq!("backslash", rule.name.as_ref().unwrap());
+        assert_eq!("backslash", rule.name().unwrap());
         assert_eq!(r"\\*", rule.re_str);
         rule = ast.get_rule_by_name("backslash2").unwrap();
-        assert_eq!("backslash2", rule.name.as_ref().unwrap());
+        assert_eq!("backslash2", rule.name().unwrap());
         assert_eq!(r"\\\\*", rule.re_str);
         rule = ast.get_rule_by_name("backslash_newline_a").unwrap();
-        assert_eq!("backslash_newline_a", rule.name.as_ref().unwrap());
+        assert_eq!("backslash_newline_a", rule.name().unwrap());
         assert_eq!(r"[\\\na]*", rule.re_str);
         rule = ast.get_rule_by_name("backslash_angle_a").unwrap();
-        assert_eq!("backslash_angle_a", rule.name.as_ref().unwrap());
+        assert_eq!("backslash_angle_a", rule.name().unwrap());
         assert_eq!(r"[\\<a]*", rule.re_str);
         rule = ast.get_rule_by_name("forall5").unwrap();
-        assert_eq!("forall5", rule.name.as_ref().unwrap());
+        assert_eq!("forall5", rule.name().unwrap());
         assert_eq!(r"\u2200", rule.re_str);
         rule = ast.get_rule_by_name("forall6").unwrap();
-        assert_eq!("forall6", rule.name.as_ref().unwrap());
+        assert_eq!("forall6", rule.name().unwrap());
         assert_eq!(r"\U00002200", rule.re_str);
         rule = ast.get_rule_by_name("bookend").unwrap();
-        assert_eq!("bookend", rule.name.as_ref().unwrap());
+        assert_eq!("bookend", rule.name().unwrap());
         assert_eq!(r"[\nabcdefg\t]", rule.re_str);
         rule = ast.get_rule_by_name("bookend2").unwrap();
-        assert_eq!("bookend2", rule.name.as_ref().unwrap());
+        assert_eq!("bookend2", rule.name().unwrap());
         assert_eq!(r"[\nabc\adefg\t]", rule.re_str);
         rule = ast.get_rule_by_name("bookend3").unwrap();
-        assert_eq!("bookend3", rule.name.as_ref().unwrap());
+        assert_eq!("bookend3", rule.name().unwrap());
         assert_eq!(r"[\nabc<defg\t]", rule.re_str);
         rule = ast.get_rule_by_name("bookend4").unwrap();
-        assert_eq!("bookend4", rule.name.as_ref().unwrap());
+        assert_eq!("bookend4", rule.name().unwrap());
         assert_eq!(r"[\tabcdefg<]", rule.re_str);
         rule = ast.get_rule_by_name("bookend5").unwrap();
-        assert_eq!("bookend5", rule.name.as_ref().unwrap());
+        assert_eq!("bookend5", rule.name().unwrap());
         assert_eq!(r"[<abcdefg\t]", rule.re_str);
     }
 
@@ -1421,7 +1418,7 @@ a\[\]a 'aboxa'
             .map(|ss| (ss.id, ss.name.to_owned()))
             .collect::<HashMap<_, _>>();
         let mut rule = ast.get_rule_by_name("OPEN_BRACE").unwrap();
-        assert_eq!("OPEN_BRACE", rule.name.as_ref().unwrap());
+        assert_eq!("OPEN_BRACE", rule.name().unwrap());
         assert_eq!(r"\{", rule.re_str);
         assert_eq!(1, rule.start_states.len());
         assert_eq!(
@@ -1445,7 +1442,7 @@ a\[\]a 'aboxa'
             *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("CLOSE_BRACE").unwrap();
-        assert_eq!("CLOSE_BRACE", rule.name.as_ref().unwrap());
+        assert_eq!("CLOSE_BRACE", rule.name().unwrap());
         assert_eq!(r"\}", rule.re_str);
         assert_eq!(1, rule.start_states.len());
         assert_eq!(
@@ -1469,7 +1466,7 @@ a\[\]a 'aboxa'
             *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_BRACKET").unwrap();
-        assert_eq!("OPEN_BRACKET", rule.name.as_ref().unwrap());
+        assert_eq!("OPEN_BRACKET", rule.name().unwrap());
         assert_eq!(r"\[", rule.re_str);
         assert_eq!(1, rule.start_states.len());
         assert_eq!(
@@ -1493,7 +1490,7 @@ a\[\]a 'aboxa'
             *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("CLOSE_BRACKET").unwrap();
-        assert_eq!("CLOSE_BRACKET", rule.name.as_ref().unwrap());
+        assert_eq!("CLOSE_BRACKET", rule.name().unwrap());
         assert_eq!(r"\]", rule.re_str);
         assert_eq!(1, rule.start_states.len());
         assert_eq!(
@@ -1517,7 +1514,7 @@ a\[\]a 'aboxa'
             *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_FIRST_BRACE").unwrap();
-        assert_eq!("OPEN_FIRST_BRACE", rule.name.as_ref().unwrap());
+        assert_eq!("OPEN_FIRST_BRACE", rule.name().unwrap());
         assert_eq!(r"\{", rule.re_str);
         assert_eq!(0, rule.start_states.len());
         assert!(rule.target_state.is_some());
@@ -1533,7 +1530,7 @@ a\[\]a 'aboxa'
             *rule.target_state.as_ref().map(|(_, s)| s).unwrap()
         );
         rule = ast.get_rule_by_name("OPEN_FIRST_BRACKET").unwrap();
-        assert_eq!("OPEN_FIRST_BRACKET", rule.name.as_ref().unwrap());
+        assert_eq!("OPEN_FIRST_BRACKET", rule.name().unwrap());
         assert_eq!(r"\[", rule.re_str);
         assert_eq!(0, rule.start_states.len());
         assert!(rule.target_state.is_some());

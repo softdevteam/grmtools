@@ -487,7 +487,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 Some(ref t) => format!("Some({:?})", t),
                 None => "None".to_owned(),
             };
-            let n = match r.name {
+            let n = match r.name() {
                 Some(ref n) => format!("Some({}.to_string())", quote!(#n)),
                 None => "None".to_owned(),
             };
