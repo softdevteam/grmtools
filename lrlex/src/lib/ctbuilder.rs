@@ -98,7 +98,7 @@ where
     regex_options: RegexOptions,
 }
 
-impl<'a> CTLexerBuilder<'a, DefaultLexerTypes<u32>> {
+impl CTLexerBuilder<'_, DefaultLexerTypes<u32>> {
     /// Create a new [CTLexerBuilder].
     pub fn new() -> Self {
         CTLexerBuilder::<DefaultLexerTypes<u32>>::new_with_lexemet()
