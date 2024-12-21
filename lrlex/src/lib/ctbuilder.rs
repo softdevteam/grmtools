@@ -497,8 +497,8 @@ pub fn lexerdef() -> {lexerdef_type} {{
             };
             let n_span = format!(
                 "::cfgrammar::Span::new({}, {})",
-                r.name_span.start(),
-                r.name_span.end()
+                r.name_span().start(),
+                r.name_span().end()
             );
             let regex = &r.re_str;
             let start_states = r.start_states.as_slice();

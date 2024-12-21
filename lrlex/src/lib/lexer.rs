@@ -60,6 +60,7 @@ pub struct Rule<StorageT> {
     /// create a lexeme).
     #[deprecated(note = "Use the name() function")]
     pub name: Option<String>,
+    #[deprecated(note = "Use the name_span() function")]
     pub name_span: Span,
     pub(super) re_str: String,
     re: Regex,
@@ -146,6 +147,7 @@ impl<StorageT: PrimInt> Rule<StorageT> {
 
     /// Return the [Span] of this rule's name.
     pub fn name_span(&self) -> Span {
+        #[allow(deprecated)]
         self.name_span
     }
 
@@ -316,7 +318,7 @@ where
         } else {
             let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
             for i in &missing_from_parser_idxs {
-                mfp.insert((self.rules[*i].name().unwrap(), self.rules[*i].name_span));
+                mfp.insert((self.rules[*i].name().unwrap(), self.rules[*i].name_span()));
             }
             Some(mfp)
         };
@@ -886,18 +888,18 @@ b 'B'
             .to_string();
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         assert_eq!(
-            lexerdef.get_rule_by_name("A").unwrap().name_span,
+            lexerdef.get_rule_by_name("A").unwrap().name_span(),
             Span::new(6, 7)
         );
         assert_eq!(
-            lexerdef.get_rule_by_name("B").unwrap().name_span,
+            lexerdef.get_rule_by_name("B").unwrap().name_span(),
             Span::new(12, 13)
         );
         let anonymous_rules = lexerdef
             .iter_rules()
             .filter(|rule| rule.name().is_none())
             .collect::<Vec<_>>();
-        assert_eq!(anonymous_rules[0].name_span, Span::new(21, 21));
+        assert_eq!(anonymous_rules[0].name_span(), Span::new(21, 21));
     }
 
     #[test]
@@ -911,11 +913,11 @@ b 'B'
             .to_string();
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         assert_eq!(
-            lexerdef.get_rule_by_name("A").unwrap().name_span,
+            lexerdef.get_rule_by_name("A").unwrap().name_span(),
             Span::new(44, 45)
         );
         assert_eq!(
-            lexerdef.get_rule_by_name("B").unwrap().name_span,
+            lexerdef.get_rule_by_name("B").unwrap().name_span(),
             Span::new(50, 51)
         );
     }
@@ -931,11 +933,11 @@ b 'B'
             .to_string();
         let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         let a_rule = lexerdef.get_rule_by_name("A").unwrap();
-        assert_eq!(a_rule.name_span, Span::new(61, 62));
+        assert_eq!(a_rule.name_span(), Span::new(61, 62));
         assert_eq!(a_rule.re_str, "a");
 
         let b_rule = lexerdef.get_rule_by_name("B").unwrap();
-        assert_eq!(b_rule.name_span, Span::new(84, 85));
+        assert_eq!(b_rule.name_span(), Span::new(84, 85));
         assert_eq!(b_rule.re_str, "b");
     }
 

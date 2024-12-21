@@ -430,7 +430,7 @@ where
                     add_duplicate_occurrence(
                         errs,
                         LexErrorKind::DuplicateName,
-                        r.name_span,
+                        r.name_span(),
                         name_span,
                     );
                 }
