@@ -135,9 +135,30 @@ impl<StorageT: PrimInt> Rule<StorageT> {
         self.tok_id
     }
 
+    /// Return this rule's name. If `None`, then text which matches this rule will be skipped (i.e.
+    /// it will not result in the creation of a [Lexeme]).
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Return the [Span] of this rule's name.
+    pub fn name_span(&self) -> Span {
+        self.name_span
+    }
+
     /// Return the original regular expression specified by the user for this [Rule].
     pub fn re_str(&self) -> &str {
         &self.re_str
+    }
+
+    /// Return the IDs of the permitted start conditions for the lexer to match this rule.
+    pub fn start_states(&self) -> &[usize] {
+        self.start_states.as_slice()
+    }
+
+    /// Return the IDs of the permitted start conditions for the lexer to match this rule.
+    pub fn target_state(&self) -> Option<(usize, StartStateOperation)> {
+        self.target_state.clone()
     }
 }
 
