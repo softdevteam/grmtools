@@ -9,7 +9,12 @@ grammar: |
         // Since then we relaxed the bounds to require `Clone`.
         // This tests backwards compatibility of actions that
         // rely on the older copy bounds.
-        'INT' { (move |_| {})(p); check_copy(p); p + $lexer.span_str($1.unwrap().span()).parse::<u64>().unwrap() }
+        'INT' {
+            #[allow(clippy::redundant_closure_call)]
+            (move |_| {})(p);
+            check_copy(p);
+            p + $lexer.span_str($1.unwrap().span()).parse::<u64>().unwrap()
+        }
     ;
     %%
     fn check_copy<T: Copy>(_: T){}
