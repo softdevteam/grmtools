@@ -823,7 +823,7 @@ impl YaccParser {
                 ':' => {
                     let k = j + ':'.len_utf8();
                     if k == self.src.len() || !self.src[k..].starts_with(':') {
-                        return Ok((j, self.src[i..j].to_string()));
+                        return Ok((j, self.src[i..j].trim().to_string()));
                     }
                     j += 2 * ':'.len_utf8();
                 }
