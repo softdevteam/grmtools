@@ -244,7 +244,9 @@ where
             return (in_laidx, vec![]);
         }
 
-        let full_rprs = self.collect_repairs(in_laidx, astar_cnds);
+        let Some(full_rprs) = self.collect_repairs(finish_by, in_laidx, astar_cnds) else {
+            return (in_laidx, vec![]);
+        };
         let mut rnk_rprs = rank_cnds(parser, finish_by, in_laidx, in_pstack, full_rprs);
         if rnk_rprs.is_empty() {
             return (in_laidx, vec![]);
@@ -372,19 +374,25 @@ where
         }
     }
 
-    /// Convert the output from `astar_all` into something more usable.
+    /// Convert the output from `astar_all` into something more usable. Returns `None` if it timed
+    /// out while doing so.
     fn collect_repairs(
         &self,
+        finish_by: Instant,
         in_laidx: usize,
         cnds: Vec<PathFNode<StorageT>>,
-    ) -> Vec<Vec<Vec<ParseRepair<LexerTypesT::LexemeT, StorageT>>>> {
+    ) -> Option<Vec<Vec<Vec<ParseRepair<LexerTypesT::LexemeT, StorageT>>>>> {
         fn traverse<StorageT: PrimInt>(
+            finish_by: Instant,
             rm: &Cactus<RepairMerge<StorageT>>,
-        ) -> Vec<Vec<Repair<StorageT>>> {
+        ) -> Option<Vec<Vec<Repair<StorageT>>>> {
+            if Instant::now() >= finish_by {
+                return None;
+            }
             let mut out = Vec::new();
             match *rm.val().unwrap() {
                 RepairMerge::Repair(r) => {
-                    let parents = traverse(&rm.parent().unwrap());
+                    let parents = traverse(finish_by, &rm.parent().unwrap())?;
                     if parents.is_empty() {
                         out.push(vec![r]);
                     } else {
@@ -395,7 +403,7 @@ where
                     }
                 }
                 RepairMerge::Merge(r, ref vc) => {
-                    let parents = traverse(&rm.parent().unwrap());
+                    let parents = traverse(finish_by, &rm.parent().unwrap())?;
                     if parents.is_empty() {
                         out.push(vec![r]);
                     } else {
@@ -405,26 +413,26 @@ where
                         }
                     }
                     for c in vc.vals() {
-                        for pc in traverse(c) {
+                        for pc in traverse(finish_by, c)? {
                             out.push(pc);
                         }
                     }
                 }
                 RepairMerge::Terminator => (),
             }
-            out
+            Some(out)
         }
 
         let mut all_rprs = Vec::with_capacity(cnds.len());
         for cnd in cnds {
             all_rprs.push(
-                traverse(&cnd.repairs)
+                traverse(finish_by, &cnd.repairs)?
                     .into_iter()
                     .map(|x| self.repair_to_parse_repair(in_laidx, &x))
                     .collect::<Vec<_>>(),
             );
         }
-        all_rprs
+        Some(all_rprs)
     }
 
     fn repair_to_parse_repair(
