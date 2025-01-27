@@ -21,7 +21,7 @@ lazy_static! {
         Regex::new(r"^%[xX][a-zA-Z0-9]*$").unwrap();
     // Documented in `Escape sequences` in lexcompatibility.m
     static ref RE_LEX_ESC_LITERAL: Regex =
-        Regex::new(r"^(([xuU][[:xdigit:]])|[[:digit:]]|[afnrtv\\]|[pP]|[dDsSwW]|[AbBz])").unwrap();
+        Regex::new(r"^(([xuU][[:xdigit:]])|[[:digit:]]|[afnrtv\\]|[pP]|[dDsSwW]|[Az])").unwrap();
     // Vertical line separators.
     static ref RE_LINE_SEP: Regex = Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]").unwrap();
     static ref RE_LEADING_LINE_SEPS: Regex = Regex::new(r"^[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]*").unwrap();
@@ -490,7 +490,7 @@ where
             /// XBD File Format Notation ( '\\', '\a', '\b', '\f' , '\n', '\r', '\t', '\v' ).
             ///
             /// Meaning: The character 'c', unchanged.
-            fn unescape(re: Cow<str>) -> Cow<str> {
+            fn unescape<'b>(re: Cow<'b, str>, regex_options: &'_ RegexOptions) -> Cow<'b, str> {
                 // POSIX lex has two layers of escaping, there are escapes for the regular
                 // expressions themselves and the escapes which get handled by lex directly.
                 // We can find what the `regex` crate needs to be escaped with `is_meta_character`.
@@ -520,7 +520,7 @@ where
                                 if !(regex_syntax::is_meta_character(c2)
                                     || RE_LEX_ESC_LITERAL.is_match(s))
                                 {
-                                    break (Some((i, s, j, c2)));
+                                    break Some((i, s, j, c2));
                                 }
                             }
                         }
@@ -539,7 +539,15 @@ where
                 let mut last_pos = 0;
 
                 'outer: while let Some((i, s, j, c)) = cursor {
-                    if regex_syntax::is_meta_character(c) || RE_LEX_ESC_LITERAL.is_match(s) {
+                    if c == 'b' {
+                        unescaped.push_str(&re_str[last_pos..i]);
+                        unescaped.push_str(if regex_options.posix_escapes {
+                            "\\x08"
+                        } else {
+                            "\\b"
+                        });
+                        last_pos = j + 1;
+                    } else if regex_syntax::is_meta_character(c) || RE_LEX_ESC_LITERAL.is_match(s) {
                         // For both meta characters and literals we want to push the entire substring
                         // up to and including the c match back into the string still escaped.
                         unescaped.push_str(&re_str[last_pos..j + c.len_utf8()]);
@@ -570,7 +578,7 @@ where
                 Cow::from(unescaped)
             }
 
-            Ok((vec![], unescape(Cow::from(re_str))))
+            Ok((vec![], unescape(Cow::from(re_str), &self.regex_options)))
         } else {
             match re_str.find('>') {
                 None => Err(self.mk_error(LexErrorKind::InvalidStartState, off)),

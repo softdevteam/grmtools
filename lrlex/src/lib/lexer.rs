@@ -25,6 +25,7 @@ pub struct RegexOptions {
     pub dot_matches_new_line: bool,
     pub multi_line: bool,
     pub octal: bool,
+    pub posix_escapes: bool,
     pub case_insensitive: Option<bool>,
     pub swap_greed: Option<bool>,
     pub ignore_whitespace: Option<bool>,
@@ -38,6 +39,7 @@ pub const DEFAULT_REGEX_OPTIONS: RegexOptions = RegexOptions {
     dot_matches_new_line: true,
     multi_line: true,
     octal: true,
+    posix_escapes: false,
     case_insensitive: None,
     ignore_whitespace: None,
     swap_greed: None,
@@ -647,6 +649,68 @@ mod test {
         assert_eq!(lex2.tok_id(), 0);
         assert_eq!(lex2.span().start(), 4);
         assert_eq!(lex2.span().len(), 3);
+    }
+
+    #[test]
+    fn test_posix_escapes() {
+        let src = r#"%%
+\\ 'slash'
+\a 'alert'
+\b 'backspace'
+\f 'feed'
+\n 'newline'
+\r 'return'
+\t 'tab'
+\v 'vtab'
+\q 'normal_char'
+"#
+        .to_string();
+        let mut options = DEFAULT_REGEX_OPTIONS;
+        options.posix_escapes = true;
+        let lexerdef =
+            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(&src, options)
+                .unwrap();
+        let lexemes = lexerdef
+            .lexer("\\\x07\x08\x0c\n\r\t\x0bq")
+            .iter()
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(lexemes.len(), 9);
+        for i in 0..9u8 {
+            let lexeme = lexemes[i as usize];
+            assert_eq!(lexeme.tok_id(), i);
+        }
+    }
+
+    #[test]
+    fn test_non_posix_escapes() {
+        let src = r#"%%
+\\ 'slash'
+\a 'alert'
+a\b a 'work_break'
+\f 'feed'
+\n 'newline'
+\r 'return'
+\t 'tab'
+\v 'vtab'
+\q 'normal_char'
+"#
+        .to_string();
+        let mut options = DEFAULT_REGEX_OPTIONS;
+        options.posix_escapes = false;
+        let lexerdef =
+            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(&src, options)
+                .unwrap();
+        let lexemes = lexerdef
+            .lexer("\\\x07a a\x0c\n\r\t\x0bq")
+            .iter()
+            .map(|x| x.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(lexemes.len(), 9);
+        for i in 0..9u8 {
+            let lexeme = lexemes[i as usize];
+            assert_eq!(lexeme.tok_id(), i);
+        }
     }
 
     #[test]
