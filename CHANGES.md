@@ -1,3 +1,15 @@
+# grmtools 0.13.9 (2025-02-04)
+
+* Respect the timeout in all stages of error recovery. Previously the timeout
+  only applied to the first of (several!) stages of error recovery, which could
+  lead to a comically long time spent in the latter stages.
+
+* Add accessor functions for overly `pub` fields in `lrlex::Rule`. Accessing
+  the fields directly now causes a deprecation warning.
+
+* New `-d` option for `nimbleparse` outputs the stategraph.
+
+
 # grmtools 0.13.8 (2024-11-07)
 
 * `%parse-param` can now use types that implement `Clone` (i.e. relaxing the
