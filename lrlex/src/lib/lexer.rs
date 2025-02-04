@@ -340,8 +340,7 @@ where
                             &self
                                 .rules
                                 .iter()
-                                .filter(|x| x.name().is_some())
-                                .map(|x| x.name().unwrap())
+                                .filter_map(|x| x.name())
                                 .collect::<HashSet<&str>>(),
                         )
                         .cloned()
