@@ -991,6 +991,7 @@ where
                         Symbol::Rule(ref_ridx) => {
                             write!(outs,
                             "
+        #[allow(clippy::let_unit_value)]
         let {prefix}arg_{i} = match {prefix}args.next().unwrap() {{
             ::lrpar::parser::AStackType::ActionType({actionskind}::{actionskindprefix}{ref_ridx}(x)) => x,
             _ => unreachable!()
