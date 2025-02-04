@@ -520,7 +520,7 @@ where
                                 if !(regex_syntax::is_meta_character(c2)
                                     || RE_LEX_ESC_LITERAL.is_match(s))
                                 {
-                                    break (Some((i, s, j, c2)));
+                                    break Some((i, s, j, c2));
                                 }
                             }
                         }
