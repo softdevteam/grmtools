@@ -443,6 +443,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             dot_matches_new_line: {dot_matches_new_line:?},
             multi_line: {multi_line:?},
             octal: {octal:?},
+            posix_escapes: {posix_escapes:?},
             case_insensitive: {case_insensitive:?},
             unicode: {unicode:?},
             swap_greed: {swap_greed:?},
@@ -454,6 +455,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             dot_matches_new_line = self.regex_options.dot_matches_new_line,
             multi_line = self.regex_options.multi_line,
             octal = self.regex_options.octal,
+            posix_escapes = self.regex_options.posix_escapes,
             case_insensitive = self.regex_options.case_insensitive,
             unicode = self.regex_options.unicode,
             swap_greed = self.regex_options.swap_greed,
@@ -665,6 +667,13 @@ pub fn lexerdef() -> {lexerdef_type} {{
     /// The default value is `true`.
     pub fn multi_line(mut self, flag: bool) -> Self {
         self.regex_options.multi_line = flag;
+        self
+    }
+
+    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// The default value is `false`.
+    pub fn posix_escapes(mut self, flag: bool) -> Self {
+        self.regex_options.posix_escapes = flag;
         self
     }
 
