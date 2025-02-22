@@ -25,14 +25,12 @@ impl ASTWithValidityInfo {
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
     pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
         let mut errs = Vec::new();
-        let ast = match yacc_kind {
-            YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
-                let mut yp = YaccParser::new(yacc_kind, s.to_string());
-                yp.parse().map_err(|e| errs.extend(e)).ok();
-                let mut ast = yp.ast();
-                ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
-                ast
-            }
+        let ast = {
+            let mut yp = YaccParser::new(yacc_kind, s.to_string());
+            yp.parse().map_err(|e| errs.extend(e)).ok();
+            let mut ast = yp.ast();
+            ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+            ast
         };
         ASTWithValidityInfo { ast, errs }
     }

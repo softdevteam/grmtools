@@ -401,7 +401,9 @@ where
             .as_ref()
             .expect("output_path must be specified before processing.");
         let yk = match self.yacckind {
-            None => panic!("yacckind must be specified before processing."),
+            Some(YaccKind::SelfDescribing) | None => {
+                panic!("yacckind must be specified before processing.")
+            }
             Some(YaccKind::Original(x)) => YaccKind::Original(x),
             Some(YaccKind::Grmtools) => YaccKind::Grmtools,
             Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
@@ -772,6 +774,9 @@ where
         serialize_bin_output(stable, STABLE_CONST_NAME, &mut outs)?;
 
         match self.yacckind.unwrap() {
+            YaccKind::SelfDescribing => {
+                unimplemented!("Concrete YaccKind should be known at this point")
+            }
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 let parse_param = match grm.parse_param() {
                     Some((name, tyname)) => format!(", {}: {}", name, tyname),
@@ -833,6 +838,9 @@ where
             RecoveryKind::None => "None",
         };
         match self.yacckind.unwrap() {
+            YaccKind::SelfDescribing => {
+                unimplemented!("Concrete YaccKind should be known at this point")
+            }
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 // action function references
                 let wrappers = grm

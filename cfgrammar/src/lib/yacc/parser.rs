@@ -14,7 +14,7 @@ use std::{
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
 
-use crate::{Span, Spanned};
+use crate::{yacc::YaccOriginalActionKind, Span, Spanned};
 
 use super::{
     ast::{GrammarAST, Symbol},
@@ -33,6 +33,7 @@ pub enum YaccGrammarErrorKind {
     MissingColon,
     MissingRightArrow,
     MismatchedBrace,
+    MissingGrmtoolsHeader,
     NonEmptyProduction,
     PrematureEnd,
     ProductionNotTerminated,
@@ -44,6 +45,7 @@ pub enum YaccGrammarErrorKind {
     DuplicateImplicitTokensDeclaration,
     DuplicateExpectDeclaration,
     DuplicateExpectRRDeclaration,
+    DuplicateGrmtoolsHeaderKey,
     DuplicateStartDeclaration,
     DuplicateActiontypeDeclaration,
     DuplicateEPP,
@@ -51,6 +53,8 @@ pub enum YaccGrammarErrorKind {
     InvalidString,
     NoStartRule,
     UnknownSymbol,
+    InvalidYaccKind,
+    InvalidGrmtoolsHeaderKey,
     InvalidStartRule(String),
     UnknownRuleRef(String),
     UnknownToken(String),
@@ -88,6 +92,7 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::IncompleteComment => "Incomplete comment",
             YaccGrammarErrorKind::IncompleteAction => "Incomplete action",
             YaccGrammarErrorKind::MissingColon => "Missing ':'",
+            YaccGrammarErrorKind::MissingGrmtoolsHeader => "Missing '%grmtools' header section",
             YaccGrammarErrorKind::MissingRightArrow => "Missing '->'",
             YaccGrammarErrorKind::MismatchedBrace => "Mismatched brace",
             YaccGrammarErrorKind::NonEmptyProduction => "%empty used in non-empty production",
@@ -104,6 +109,9 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::DuplicateExpectRRDeclaration => {
                 "Duplicate %expect-rr declaration"
             }
+            YaccGrammarErrorKind::DuplicateGrmtoolsHeaderKey => {
+                "Duplicate header key in %grmtools section"
+            }
             YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration => {
                 "Duplicated %implicit_tokens declaration"
             }
@@ -118,9 +126,11 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::InvalidString => "Invalid string",
             YaccGrammarErrorKind::NoStartRule => return write!(f, "No start rule specified"),
             YaccGrammarErrorKind::UnknownSymbol => "Unknown symbol, expected a rule or token",
+            YaccGrammarErrorKind::InvalidGrmtoolsHeaderKey => "Invalid key in %grmtools section",
             YaccGrammarErrorKind::InvalidStartRule(name) => {
                 return write!(f, "Start rule '{}' does not appear in grammar", name)
             }
+            YaccGrammarErrorKind::InvalidYaccKind => "Invalid yacc kind",
             YaccGrammarErrorKind::UnknownRuleRef(name) => {
                 return write!(f, "Unknown reference to rule '{}'", name)
             }
@@ -229,6 +239,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::IncompleteComment
             | YaccGrammarErrorKind::IncompleteAction
             | YaccGrammarErrorKind::MissingColon
+            | YaccGrammarErrorKind::MissingGrmtoolsHeader
             | YaccGrammarErrorKind::MissingRightArrow
             | YaccGrammarErrorKind::MismatchedBrace
             | YaccGrammarErrorKind::NonEmptyProduction
@@ -241,7 +252,9 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::InvalidString
             | YaccGrammarErrorKind::NoStartRule
             | YaccGrammarErrorKind::UnknownSymbol
+            | YaccGrammarErrorKind::InvalidGrmtoolsHeaderKey
             | YaccGrammarErrorKind::InvalidStartRule(_)
+            | YaccGrammarErrorKind::InvalidYaccKind
             | YaccGrammarErrorKind::UnknownRuleRef(_)
             | YaccGrammarErrorKind::UnknownToken(_)
             | YaccGrammarErrorKind::NoPrecForToken(_)
@@ -253,6 +266,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration
             | YaccGrammarErrorKind::DuplicateStartDeclaration
             | YaccGrammarErrorKind::DuplicateActiontypeDeclaration
+            | YaccGrammarErrorKind::DuplicateGrmtoolsHeaderKey
             | YaccGrammarErrorKind::DuplicateEPP => SpansKind::DuplicationError,
         }
     }
@@ -307,10 +321,27 @@ impl YaccParser {
 
     pub(crate) fn parse(&mut self) -> YaccGrammarResult<usize> {
         let mut errs: Vec<YaccGrammarError> = Vec::new();
+        let mut result = self.parse_grmtools_header(0);
+
+        if let YaccKind::SelfDescribing = self.yacc_kind {
+            // Validate that YaccKind was specified
+            if result.is_ok() {
+                result = Err(self.mk_error(YaccGrammarErrorKind::InvalidYaccKind, 0));
+            }
+        }
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let mut result = self.parse_declarations(0, &mut errs);
+        result = self.parse_declarations(
+            match result {
+                Ok(i) => i,
+                Err(e) => {
+                    errs.push(e);
+                    return Err(errs);
+                }
+            },
+            &mut errs,
+        );
         result = self.parse_rules(match result {
             Ok(i) => i,
             Err(e) => {
@@ -337,6 +368,100 @@ impl YaccParser {
             }
             _ => Err(errs),
         }
+    }
+
+    fn parse_yacckind(&mut self, i: usize, benign: bool) -> Result<usize, YaccGrammarError> {
+        const YACC_KINDS: [(&str, YaccKind); 5] = [
+            ("Grmtools", YaccKind::Grmtools),
+            (
+                "Original(NoAction)",
+                YaccKind::Original(YaccOriginalActionKind::NoAction),
+            ),
+            (
+                "Original(UserAction)",
+                YaccKind::Original(YaccOriginalActionKind::UserAction),
+            ),
+            (
+                "Original(GenericParseTree)",
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            ),
+            ("Eco", YaccKind::Eco),
+        ];
+        let j = self.parse_ws(i, false)?;
+        let s = &self.src[i..];
+        for (kind_name, kind) in YACC_KINDS {
+            if s.starts_with(kind_name) {
+                if !benign {
+                    self.yacc_kind = kind;
+                }
+                let end_pos = j + kind_name.len();
+                return Ok(end_pos);
+            }
+        }
+        // This strikes me as an interesting case where we know the start pos of the
+        // invalid yacc kind value, but do not know the end, we could `self.parse_to_eol()`.
+        Err(self.mk_error(YaccGrammarErrorKind::InvalidYaccKind, i))
+    }
+    fn parse_grmtools_header(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
+        let mut yacc_kind_key_span = None;
+        let mut _yacc_kind_val_span = None;
+        // Benign changes the behavior such that when false
+        // 1. The `%grmtools` section is required.
+        // 2. The `yacckind` key in the `%grmtools` section will override `self.yacc_kind`.
+        //
+        // The gist is that for all `YaccKind` other than `SelfDescribing` `%grmtools`
+        // optional and yacckinds within it are overridden by the value passed
+        // to the constructor. But it is still a valid directive for all `YaccKind` variants.
+        let benign: bool = if let YaccKind::SelfDescribing = self.yacc_kind {
+            false
+        } else {
+            true
+        };
+
+        i = self.parse_ws(i, true)?;
+        if let Some(j) = self.lookahead_is("%grmtools", i) {
+            i = self.parse_ws(j, false)?;
+            if let Some(j) = self.lookahead_is("{", i) {
+                i = self.parse_ws(j, true)?;
+                while self.lookahead_is("}", i).is_none() {
+                    let key_start_pos = i;
+                    let (key_end_pos, key) = self.parse_name(i)?;
+                    i = self.parse_ws(key_end_pos, false)?;
+                    if key == "yacckind" {
+                        let val_start_pos = i;
+                        let val_end_pos = self.parse_yacckind(i, benign)?;
+                        _yacc_kind_val_span = Some(Span::new(val_start_pos, val_end_pos));
+                        if let Some(orig) = yacc_kind_key_span {
+                            let dupe = Span::new(key_start_pos, key_end_pos);
+                            return Err(YaccGrammarError {
+                                kind: YaccGrammarErrorKind::DuplicateGrmtoolsHeaderKey,
+                                spans: vec![orig, dupe],
+                            });
+                        } else {
+                            yacc_kind_key_span = Some(Span::new(key_start_pos, key_end_pos));
+                            i = self.parse_ws(val_end_pos, true)?;
+                        }
+                    } else {
+                        return Err(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::InvalidGrmtoolsHeaderKey,
+                            spans: vec![Span::new(key_start_pos, key_end_pos)],
+                        });
+                    }
+                }
+                if let Some(i) = self.lookahead_is("}", i) {
+                    return Ok(i);
+                }
+            } else {
+                if !benign {
+                    return Err(self.mk_error(YaccGrammarErrorKind::MissingGrmtoolsHeader, i));
+                }
+            }
+        } else {
+            if !benign {
+                return Err(self.mk_error(YaccGrammarErrorKind::MissingGrmtoolsHeader, i));
+            }
+        }
+        return Ok(i);
     }
 
     pub(crate) fn ast(self) -> GrammarAST {
@@ -623,6 +748,9 @@ impl YaccParser {
             self.ast.start = Some((rn.clone(), span));
         }
         match self.yacc_kind {
+            YaccKind::SelfDescribing => {
+                unimplemented!("Concrete YaccKind should be known at this point")
+            }
             YaccKind::Original(_) | YaccKind::Eco => {
                 if self.ast.get_rule(&rn).is_none() {
                     self.ast.add_rule(
@@ -1008,6 +1136,7 @@ mod test {
     };
     use std::collections::HashSet;
 
+    #[track_caller]
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
         let mut yp = YaccParser::new(yacc_kind, s.to_string());
         yp.parse()?;
@@ -2634,5 +2763,106 @@ B";
         B: {} ;
         ";
         parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
+    }
+
+    #[test]
+    fn test_self_describing_yacckind() {
+        let srcs = [
+            r#"%grmtools {
+  yacckind Original(NoAction)
+}
+%%
+S: "()";"#,
+            r#"
+%grmtools {
+  yacckind Original(UserAction)
+}
+%%
+S: "()";"#,
+            r#"%grmtools {
+  yacckind Grmtools
+}
+%start S
+%%
+S -> (): "()" { () };"#,
+        ];
+        for yacc_src in srcs {
+            parse(YaccKind::SelfDescribing, yacc_src).unwrap();
+        }
+    }
+    #[test]
+    fn test_self_describing_yacckind_errs() {
+        let src = r#"%grmtools {
+invalid value
+}
+%%
+S: "()";"#;
+        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::InvalidGrmtoolsHeaderKey,
+            2,
+            1,
+        );
+
+        let src = r#"%grmtools {
+yacckind Grmtools
+yacckind Grmtools
+}
+%%
+S: "()";"#;
+        parse(YaccKind::SelfDescribing, src).expect_error_at_lines_cols(
+            src,
+            YaccGrammarErrorKind::DuplicateGrmtoolsHeaderKey,
+            &mut [(2, 1), (3, 1)].into_iter(),
+        );
+
+        let src = r#"%grmtools {
+yacckind invalid_yacc_kind
+}
+%%
+S: "()";"#;
+        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::InvalidYaccKind,
+            2,
+            10,
+        );
+        // Invalid brace after %grmtools [
+        let src = r#"%grmtools [
+yacckind Grmtools
+}
+%%
+S: "()";"#;
+        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::MissingGrmtoolsHeader,
+            1,
+            11,
+        );
+
+        // Missing the %grmtools header entirely.
+        let src = r#"%start S
+                     %%
+                     S: "()";"#;
+
+        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::MissingGrmtoolsHeader,
+            1,
+            1,
+        );
+        // Empty %grmtools header with no yacckind.
+        let src = r#"%grmtools {
+                     }
+                     %start S
+                     %%
+                     S: "()";"#;
+
+        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::InvalidYaccKind,
+            1,
+            1,
+        );
     }
 }

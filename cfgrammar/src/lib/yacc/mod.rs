@@ -26,6 +26,16 @@ pub enum YaccKind {
     Grmtools,
     /// The variant used in the [Eco language composition editor](http://soft-dev.org/src/eco/)
     Eco,
+    /// A `SelfDescribing` grammar starts with an initial `%grmtools` directive specifying it's yacckind.
+    ///
+    /// For example:
+    /// ``` yacc
+    /// %grmtools {
+    ///   yacckind Original(NoAction)
+    /// }
+    /// ...
+    /// ```
+    SelfDescribing,
 }
 
 #[derive(Clone, Copy, Debug)]
