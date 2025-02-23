@@ -409,14 +409,9 @@ impl YaccParser {
     fn parse_grmtools_header(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         let mut yacc_kind_key_span = None;
         let mut _yacc_kind_val_span = None;
-        // Benign changes the behavior such that when false
-        // 1. The `%grmtools` section is required.
-        // 2. The `yacckind` key in the `%grmtools` section will override `self.yacc_kind`.
-        //
-        // The gist is that for all `YaccKind` other than `SelfDescribing` `%grmtools`
-        // optional and yacckinds within it are overridden by the value passed
-        // to the constructor. But it is still a valid directive for all `YaccKind` variants.
         let (update_yacc_kind, require_yacc_kind) = if let YaccKind::SelfDescribing(default) = &self.yacc_kind {
+            // 1. Override the self.yacc_kind with one in the header.
+            // 2. Throw an `MissingYaccKind` errors only if default.is_none().
             (true, default.is_none())
         } else {
             (false, false)
