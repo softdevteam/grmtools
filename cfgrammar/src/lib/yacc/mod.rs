@@ -15,7 +15,7 @@ pub use self::{
 use serde::{Deserialize, Serialize};
 
 /// The particular Yacc variant this grammar makes use of.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum YaccKind {
     /// The original Yacc style as documented by
@@ -35,7 +35,7 @@ pub enum YaccKind {
     /// }
     /// ...
     /// ```
-    SelfDescribing,
+    SelfDescribing(Option<Box<YaccKind>>),
 }
 
 #[derive(Clone, Copy, Debug)]

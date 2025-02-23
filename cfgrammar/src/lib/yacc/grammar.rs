@@ -106,7 +106,7 @@ where
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
-        let ast_validation = ast::ASTWithValidityInfo::new(yacc_kind, s);
+        let ast_validation = ast::ASTWithValidityInfo::new(yacc_kind.clone(), s);
         Self::new_from_ast_with_validity_info(yacc_kind, &ast_validation)
     }
 
@@ -150,7 +150,7 @@ where
         let implicit_rule;
         let implicit_start_rule;
         match yacc_kind {
-            YaccKind::SelfDescribing => {
+            YaccKind::SelfDescribing(_) => {
                 unimplemented!("Concrete YaccKind should be known by this point")
             }
             YaccKind::Original(_) | YaccKind::Grmtools => {

@@ -123,7 +123,7 @@ fn main() {
     };
 
     let yacckind = match matches.opt_str("y") {
-        None => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+        None => YaccKind::SelfDescribing(Some(Box::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)))),
         Some(s) => match &*s.to_lowercase() {
             "eco" => YaccKind::Eco,
             "grmtools" => YaccKind::Grmtools,
@@ -152,7 +152,7 @@ fn main() {
 
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
-    let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
+    let ast_validation = ASTWithValidityInfo::new(yacckind.clone(), &yacc_src);
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(yacckind, &ast_validation);
     let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;

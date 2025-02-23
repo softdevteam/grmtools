@@ -323,10 +323,14 @@ impl YaccParser {
         let mut errs: Vec<YaccGrammarError> = Vec::new();
         let mut result = self.parse_grmtools_header(0);
 
-        if let YaccKind::SelfDescribing = self.yacc_kind {
+        if let YaccKind::SelfDescribing(default) = &self.yacc_kind {
             // Validate that YaccKind was specified
             if result.is_ok() {
-                result = Err(self.mk_error(YaccGrammarErrorKind::InvalidYaccKind, 0));
+                if let Some(default) = default {
+                    self.yacc_kind = *default.clone()
+                } else {
+                    result = Err(self.mk_error(YaccGrammarErrorKind::InvalidYaccKind, 0));
+                }
             }
         }
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
@@ -370,7 +374,7 @@ impl YaccParser {
         }
     }
 
-    fn parse_yacckind(&mut self, i: usize, benign: bool) -> Result<usize, YaccGrammarError> {
+    fn parse_yacckind(&mut self, i: usize, update_yacc_kind: bool) -> Result<usize, YaccGrammarError> {
         const YACC_KINDS: [(&str, YaccKind); 5] = [
             ("Grmtools", YaccKind::Grmtools),
             (
@@ -391,7 +395,7 @@ impl YaccParser {
         let s = &self.src[i..];
         for (kind_name, kind) in YACC_KINDS {
             if s.starts_with(kind_name) {
-                if !benign {
+                if update_yacc_kind {
                     self.yacc_kind = kind;
                 }
                 let end_pos = j + kind_name.len();
@@ -412,10 +416,10 @@ impl YaccParser {
         // The gist is that for all `YaccKind` other than `SelfDescribing` `%grmtools`
         // optional and yacckinds within it are overridden by the value passed
         // to the constructor. But it is still a valid directive for all `YaccKind` variants.
-        let benign: bool = if let YaccKind::SelfDescribing = self.yacc_kind {
-            false
+        let (update_yacc_kind, require_yacc_kind) = if let YaccKind::SelfDescribing(default) = &self.yacc_kind {
+            (true, default.is_none())
         } else {
-            true
+            (false, false)
         };
 
         i = self.parse_ws(i, true)?;
@@ -429,7 +433,7 @@ impl YaccParser {
                     i = self.parse_ws(key_end_pos, false)?;
                     if key == "yacckind" {
                         let val_start_pos = i;
-                        let val_end_pos = self.parse_yacckind(i, benign)?;
+                        let val_end_pos = self.parse_yacckind(i, update_yacc_kind)?;
                         _yacc_kind_val_span = Some(Span::new(val_start_pos, val_end_pos));
                         if let Some(orig) = yacc_kind_key_span {
                             let dupe = Span::new(key_start_pos, key_end_pos);
@@ -452,12 +456,12 @@ impl YaccParser {
                     return Ok(i);
                 }
             } else {
-                if !benign {
+                if require_yacc_kind {
                     return Err(self.mk_error(YaccGrammarErrorKind::MissingGrmtoolsHeader, i));
                 }
             }
         } else {
-            if !benign {
+            if require_yacc_kind {
                 return Err(self.mk_error(YaccGrammarErrorKind::MissingGrmtoolsHeader, i));
             }
         }
@@ -748,7 +752,7 @@ impl YaccParser {
             self.ast.start = Some((rn.clone(), span));
         }
         match self.yacc_kind {
-            YaccKind::SelfDescribing => {
+            YaccKind::SelfDescribing(_) => {
                 unimplemented!("Concrete YaccKind should be known at this point")
             }
             YaccKind::Original(_) | YaccKind::Eco => {
@@ -2787,8 +2791,23 @@ S: "()";"#,
 S -> (): "()" { () };"#,
         ];
         for yacc_src in srcs {
-            parse(YaccKind::SelfDescribing, yacc_src).unwrap();
+            parse(YaccKind::SelfDescribing(None), yacc_src).unwrap();
         }
+
+      let fallback_srcs = [
+        r#"%start S
+           %%
+           S: "()";"#,
+        r#"%grmtools {
+           }
+           %start S
+           %%
+           S: "()";"#
+      ];
+      for yacc_src in fallback_srcs {
+            parse(YaccKind::SelfDescribing(Some(Box::new(YaccKind::Original(YaccOriginalActionKind::NoAction)))), yacc_src).unwrap();
+      }
+
     }
     #[test]
     fn test_self_describing_yacckind_errs() {
@@ -2797,7 +2816,7 @@ invalid value
 }
 %%
 S: "()";"#;
-        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+        parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::InvalidGrmtoolsHeaderKey,
             2,
@@ -2810,7 +2829,7 @@ yacckind Grmtools
 }
 %%
 S: "()";"#;
-        parse(YaccKind::SelfDescribing, src).expect_error_at_lines_cols(
+        parse(YaccKind::SelfDescribing(None), src).expect_error_at_lines_cols(
             src,
             YaccGrammarErrorKind::DuplicateGrmtoolsHeaderKey,
             &mut [(2, 1), (3, 1)].into_iter(),
@@ -2821,7 +2840,7 @@ yacckind invalid_yacc_kind
 }
 %%
 S: "()";"#;
-        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+        parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::InvalidYaccKind,
             2,
@@ -2833,7 +2852,7 @@ yacckind Grmtools
 }
 %%
 S: "()";"#;
-        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+        parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::MissingGrmtoolsHeader,
             1,
@@ -2845,7 +2864,7 @@ S: "()";"#;
                      %%
                      S: "()";"#;
 
-        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+        parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::MissingGrmtoolsHeader,
             1,
@@ -2858,7 +2877,7 @@ S: "()";"#;
                      %%
                      S: "()";"#;
 
-        parse(YaccKind::SelfDescribing, src).expect_error_at_line_col(
+        parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::InvalidYaccKind,
             1,

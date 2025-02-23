@@ -400,8 +400,8 @@ where
             .output_path
             .as_ref()
             .expect("output_path must be specified before processing.");
-        let yk = match self.yacckind {
-            Some(YaccKind::SelfDescribing) | None => {
+        let yk = match self.yacckind.clone() {
+            Some(YaccKind::SelfDescribing(_)) | None => {
                 panic!("yacckind must be specified before processing.")
             }
             Some(YaccKind::Original(x)) => YaccKind::Original(x),
@@ -419,7 +419,7 @@ where
 
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
-        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        let ast_validation = ASTWithValidityInfo::new(yk.clone(), &inc);
         let warnings = ast_validation.ast().warnings();
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
             if let Some((line, column)) =
@@ -658,7 +658,7 @@ where
             output_path: self.output_path.clone(),
             mod_name: self.mod_name,
             recoverer: self.recoverer,
-            yacckind: self.yacckind,
+            yacckind: self.yacckind.clone(),
             error_on_conflicts: self.error_on_conflicts,
             warnings_are_errors: self.warnings_are_errors,
             show_warnings: self.show_warnings,
@@ -698,7 +698,7 @@ where
         outs.push_str(&self.gen_parse_function(grm, stable)?);
         outs.push_str(&self.gen_rule_consts(grm));
         outs.push_str(&self.gen_token_epp(grm));
-        match self.yacckind.unwrap() {
+        match self.yacckind.clone().unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 outs.push_str(&self.gen_wrappers(grm));
             }
@@ -773,8 +773,8 @@ where
         serialize_bin_output(grm, GRM_CONST_NAME, &mut outs)?;
         serialize_bin_output(stable, STABLE_CONST_NAME, &mut outs)?;
 
-        match self.yacckind.unwrap() {
-            YaccKind::SelfDescribing => {
+        match self.yacckind.clone().unwrap() {
+            YaccKind::SelfDescribing(_) => {
                 unimplemented!("Concrete YaccKind should be known at this point")
             }
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
@@ -837,8 +837,8 @@ where
             RecoveryKind::CPCTPlus => "CPCTPlus",
             RecoveryKind::None => "None",
         };
-        match self.yacckind.unwrap() {
-            YaccKind::SelfDescribing => {
+        match self.yacckind.clone().unwrap() {
+            YaccKind::SelfDescribing(_) => {
                 unimplemented!("Concrete YaccKind should be known at this point")
             }
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
