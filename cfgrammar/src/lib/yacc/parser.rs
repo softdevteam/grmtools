@@ -375,18 +375,27 @@ impl YaccParser {
     }
 
     fn parse_yacckind(&mut self, i: usize, update_yacc_kind: bool) -> Result<usize, YaccGrammarError> {
+        // Compares haystack converted to lowercase to needle (assumed to be lowercase).
+        fn starts_with_lower(needle: &'static str, haystack: &'_ str) -> bool {
+         if let Some((prefix, _)) = haystack.split_at_checked(needle.len()) {
+             prefix.to_lowercase() == needle
+         } else {
+            false
+         }
+        }
+
         const YACC_KINDS: [(&str, YaccKind); 5] = [
-            ("Grmtools", YaccKind::Grmtools),
+            ("grmtools", YaccKind::Grmtools),
             (
-                "Original(NoAction)",
+                "original(noaction)",
                 YaccKind::Original(YaccOriginalActionKind::NoAction),
             ),
             (
-                "Original(UserAction)",
+                "original(useraction)",
                 YaccKind::Original(YaccOriginalActionKind::UserAction),
             ),
             (
-                "Original(GenericParseTree)",
+                "original(genericparsetree)",
                 YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             ),
             ("Eco", YaccKind::Eco),
@@ -394,7 +403,7 @@ impl YaccParser {
         let j = self.parse_ws(i, false)?;
         let s = &self.src[i..];
         for (kind_name, kind) in YACC_KINDS {
-            if s.starts_with(kind_name) {
+            if starts_with_lower(kind_name, s) {
                 if update_yacc_kind {
                     self.yacc_kind = kind;
                 }
@@ -2777,6 +2786,12 @@ S: "()";"#,
 S: "()";"#,
             r#"%grmtools {
   yacckind Grmtools
+}
+%start S
+%%
+S -> (): "()" { () };"#,
+            r#"%grmtools {
+  yacckind grmtools
 }
 %start S
 %%
