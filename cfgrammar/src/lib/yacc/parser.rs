@@ -433,7 +433,7 @@ impl YaccParser {
 
         i = self.parse_ws(i, true)?;
         if let Some(j) = self.lookahead_is("%grmtools", i) {
-            i = self.parse_ws(j, false)?;
+            i = self.parse_ws(j, true)?;
             if let Some(j) = self.lookahead_is("{", i) {
                 i = self.parse_ws(j, true)?;
                 while self.lookahead_is("}", i).is_none() {
@@ -2787,6 +2787,10 @@ S: "()";"#,
 %%
 S: "()";"#,
             r#"%grmtools {yacckind Original(NoAction)}
+%%
+S: "()";"#,
+            r#"%grmtools
+               {yacckind Original(NoAction)}
 %%
 S: "()";"#,
             r#"
