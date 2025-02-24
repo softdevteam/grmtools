@@ -2779,38 +2779,38 @@ B";
     fn test_self_describing_yacckind() {
         let srcs = [
             r#"%grmtools {
-  yacckind Original(NoAction)
-}
-%%
-S: "()";"#,
+                    yacckind Original(NoAction)
+               }
+               %%
+               S: "()";"#,
             r#"%grmtools { yacckind Original(NoAction) }
-%%
-S: "()";"#,
+               %%
+               S: "()";"#,
             r#"%grmtools {yacckind Original(NoAction)}
-%%
-S: "()";"#,
+               %%
+               S: "()";"#,
             r#"%grmtools
                {yacckind Original(NoAction)}
-%%
-S: "()";"#,
+               %%
+               S: "()";"#,
             r#"
-%grmtools {
-  yacckind Original(UserAction)
-}
-%%
-S: "()";"#,
+                %grmtools {
+                    yacckind Original(UserAction)
+                }
+                %%
+                S: "()";"#,
             r#"%grmtools {
-  yacckind Grmtools
-}
-%start S
-%%
-S -> (): "()" { () };"#,
+                    yacckind Grmtools
+               }
+               %start S
+               %%
+               S -> (): "()" { () };"#,
             r#"%grmtools {
-  yacckind grmtools
-}
-%start S
-%%
-S -> (): "()" { () };"#,
+                    yacckind grmtools
+               }
+               %start S
+               %%
+               S -> (): "()" { () };"#,
         ];
         for yacc_src in srcs {
             parse(YaccKind::SelfDescribing(None), yacc_src).unwrap();
@@ -2840,46 +2840,46 @@ S -> (): "()" { () };"#,
     #[test]
     fn test_self_describing_yacckind_errs() {
         let src = r#"%grmtools {
-invalid value
-}
-%%
-S: "()";"#;
+                                invalid value
+                           }
+                           %%
+                           S: "()";"#;
         parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::InvalidGrmtoolsHeaderKey,
             2,
-            1,
+            33,
         );
 
         let src = r#"%grmtools {
-yacckind Grmtools
-yacckind Grmtools
-}
-%%
-S: "()";"#;
+                                yacckind Grmtools
+                                yacckind Grmtools
+                           }
+                           %%
+                           S: "()";"#;
         parse(YaccKind::SelfDescribing(None), src).expect_error_at_lines_cols(
             src,
             YaccGrammarErrorKind::DuplicateGrmtoolsHeaderKey,
-            &mut [(2, 1), (3, 1)].into_iter(),
+            &mut [(2, 33), (3, 33)].into_iter(),
         );
 
         let src = r#"%grmtools {
-yacckind invalid_yacc_kind
-}
-%%
-S: "()";"#;
+                                yacckind invalid_yacc_kind
+                           }
+                           %%
+                           S: "()";"#;
         parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::InvalidYaccKind,
             2,
-            10,
+            42,
         );
         // Invalid brace after %grmtools [
         let src = r#"%grmtools [
-yacckind Grmtools
-}
-%%
-S: "()";"#;
+                                yacckind Grmtools
+                           }
+                           %%
+                           S: "()";"#;
         parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::MissingGrmtoolsHeader,
@@ -2889,8 +2889,8 @@ S: "()";"#;
 
         // Missing the %grmtools header entirely.
         let src = r#"%start S
-                     %%
-                     S: "()";"#;
+                           %%
+                           S: "()";"#;
 
         parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
@@ -2900,10 +2900,10 @@ S: "()";"#;
         );
         // Empty %grmtools header with no yacckind.
         let src = r#"%grmtools {
-                     }
-                     %start S
-                     %%
-                     S: "()";"#;
+                           }
+                           %start S
+                           %%
+                           S: "()";"#;
 
         parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
             src,
