@@ -2783,6 +2783,12 @@ B";
 }
 %%
 S: "()";"#,
+            r#"%grmtools { yacckind Original(NoAction) }
+%%
+S: "()";"#,
+            r#"%grmtools {yacckind Original(NoAction)}
+%%
+S: "()";"#,
             r#"
 %grmtools {
   yacckind Original(UserAction)
