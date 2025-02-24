@@ -123,7 +123,9 @@ fn main() {
     };
 
     let yacckind = match matches.opt_str("y") {
-        None => YaccKind::SelfDescribing(Some(Box::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)))),
+        None => YaccKind::SelfDescribing(Some(Box::new(YaccKind::Original(
+            YaccOriginalActionKind::GenericParseTree,
+        )))),
         Some(s) => match &*s.to_lowercase() {
             "eco" => YaccKind::Eco,
             "grmtools" => YaccKind::Grmtools,

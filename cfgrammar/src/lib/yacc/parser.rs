@@ -374,14 +374,18 @@ impl YaccParser {
         }
     }
 
-    fn parse_yacckind(&mut self, i: usize, update_yacc_kind: bool) -> Result<usize, YaccGrammarError> {
+    fn parse_yacckind(
+        &mut self,
+        i: usize,
+        update_yacc_kind: bool,
+    ) -> Result<usize, YaccGrammarError> {
         // Compares haystack converted to lowercase to needle (assumed to be lowercase).
         fn starts_with_lower(needle: &'static str, haystack: &'_ str) -> bool {
-         if let Some((prefix, _)) = haystack.split_at_checked(needle.len()) {
-             prefix.to_lowercase() == needle
-         } else {
-            false
-         }
+            if let Some((prefix, _)) = haystack.split_at_checked(needle.len()) {
+                prefix.to_lowercase() == needle
+            } else {
+                false
+            }
         }
 
         const YACC_KINDS: [(&str, YaccKind); 5] = [
@@ -418,13 +422,14 @@ impl YaccParser {
 
     fn parse_grmtools_header(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         let mut yacc_kind_key_span = None;
-        let (update_yacc_kind, require_yacc_kind) = if let YaccKind::SelfDescribing(default) = &self.yacc_kind {
-            // 1. Override the self.yacc_kind with one in the header.
-            // 2. Throw an `MissingYaccKind` errors only if default.is_none().
-            (true, default.is_none())
-        } else {
-            (false, false)
-        };
+        let (update_yacc_kind, require_yacc_kind) =
+            if let YaccKind::SelfDescribing(default) = &self.yacc_kind {
+                // 1. Override the self.yacc_kind with one in the header.
+                // 2. Throw an `MissingYaccKind` errors only if default.is_none().
+                (true, default.is_none())
+            } else {
+                (false, false)
+            };
 
         i = self.parse_ws(i, true)?;
         if let Some(j) = self.lookahead_is("%grmtools", i) {
@@ -2801,20 +2806,25 @@ S -> (): "()" { () };"#,
             parse(YaccKind::SelfDescribing(None), yacc_src).unwrap();
         }
 
-      let fallback_srcs = [
-        r#"%start S
+        let fallback_srcs = [
+            r#"%start S
            %%
            S: "()";"#,
-        r#"%grmtools {
+            r#"%grmtools {
            }
            %start S
            %%
-           S: "()";"#
-      ];
-      for yacc_src in fallback_srcs {
-            parse(YaccKind::SelfDescribing(Some(Box::new(YaccKind::Original(YaccOriginalActionKind::NoAction)))), yacc_src).unwrap();
-      }
-
+           S: "()";"#,
+        ];
+        for yacc_src in fallback_srcs {
+            parse(
+                YaccKind::SelfDescribing(Some(Box::new(YaccKind::Original(
+                    YaccOriginalActionKind::NoAction,
+                )))),
+                yacc_src,
+            )
+            .unwrap();
+        }
     }
 
     #[test]
