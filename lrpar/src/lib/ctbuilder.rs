@@ -775,7 +775,7 @@ where
 
         match self.yacckind.clone().unwrap() {
             YaccKind::SelfDescribing(_) => {
-                unimplemented!("Concrete YaccKind should be known at this point")
+                unimplemented!("Concrete YaccKind must be known at this point")
             }
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 let parse_param = match grm.parse_param() {
@@ -839,7 +839,7 @@ where
         };
         match self.yacckind.clone().unwrap() {
             YaccKind::SelfDescribing(_) => {
-                unimplemented!("Concrete YaccKind should be known at this point")
+                unimplemented!("Concrete YaccKind must be known at this point")
             }
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
                 // action function references

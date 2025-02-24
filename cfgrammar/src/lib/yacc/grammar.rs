@@ -151,7 +151,7 @@ where
         let implicit_start_rule;
         match yacc_kind {
             YaccKind::SelfDescribing(_) => {
-                unimplemented!("Concrete YaccKind should be known by this point")
+                unimplemented!("Concrete YaccKind must be known by this point")
             }
             YaccKind::Original(_) | YaccKind::Grmtools => {
                 implicit_rule = None;

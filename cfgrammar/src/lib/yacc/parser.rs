@@ -406,9 +406,9 @@ impl YaccParser {
         // invalid yacc kind value, but do not know the end, we could `self.parse_to_eol()`.
         Err(self.mk_error(YaccGrammarErrorKind::InvalidYaccKind, i))
     }
+
     fn parse_grmtools_header(&mut self, mut i: usize) -> Result<usize, YaccGrammarError> {
         let mut yacc_kind_key_span = None;
-        let mut _yacc_kind_val_span = None;
         let (update_yacc_kind, require_yacc_kind) = if let YaccKind::SelfDescribing(default) = &self.yacc_kind {
             // 1. Override the self.yacc_kind with one in the header.
             // 2. Throw an `MissingYaccKind` errors only if default.is_none().
@@ -427,9 +427,7 @@ impl YaccParser {
                     let (key_end_pos, key) = self.parse_name(i)?;
                     i = self.parse_ws(key_end_pos, false)?;
                     if key == "yacckind" {
-                        let val_start_pos = i;
                         let val_end_pos = self.parse_yacckind(i, update_yacc_kind)?;
-                        _yacc_kind_val_span = Some(Span::new(val_start_pos, val_end_pos));
                         if let Some(orig) = yacc_kind_key_span {
                             let dupe = Span::new(key_start_pos, key_end_pos);
                             return Err(YaccGrammarError {
@@ -748,7 +746,7 @@ impl YaccParser {
         }
         match self.yacc_kind {
             YaccKind::SelfDescribing(_) => {
-                unimplemented!("Concrete YaccKind should be known at this point")
+                unimplemented!("Concrete YaccKind must be known at this point")
             }
             YaccKind::Original(_) | YaccKind::Eco => {
                 if self.ast.get_rule(&rn).is_none() {
@@ -1135,7 +1133,6 @@ mod test {
     };
     use std::collections::HashSet;
 
-    #[track_caller]
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
         let mut yp = YaccParser::new(yacc_kind, s.to_string());
         yp.parse()?;
@@ -2804,6 +2801,7 @@ S -> (): "()" { () };"#,
       }
 
     }
+
     #[test]
     fn test_self_describing_yacckind_errs() {
         let src = r#"%grmtools {
