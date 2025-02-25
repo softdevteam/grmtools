@@ -14,6 +14,7 @@ use crate::Span;
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
+    yacc_kind: YaccKind,
     ast: GrammarAST,
     errs: Vec<YaccGrammarError>,
 }
@@ -25,14 +26,19 @@ impl ASTWithValidityInfo {
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
     pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
         let mut errs = Vec::new();
-        let ast = {
+        let (ast, yacc_kind) = {
             let mut yp = YaccParser::new(yacc_kind, s.to_string());
             yp.parse().map_err(|e| errs.extend(e)).ok();
+            let yacc_kind = yp.yacc_kind.clone();
             let mut ast = yp.ast();
             ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
-            ast
+            (ast, yacc_kind)
         };
-        ASTWithValidityInfo { ast, errs }
+        ASTWithValidityInfo {
+            ast,
+            errs,
+            yacc_kind,
+        }
     }
 
     /// Returns a `GrammarAST` constructed as the result of parsing a source file.
@@ -52,6 +58,10 @@ impl ASTWithValidityInfo {
     /// Returns all errors which were encountered during AST construction.
     pub fn errors(&self) -> &[YaccGrammarError] {
         self.errs.as_slice()
+    }
+
+    pub fn yacc_kind(&self) -> &YaccKind {
+        &self.yacc_kind
     }
 }
 

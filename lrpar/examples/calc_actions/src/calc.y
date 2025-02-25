@@ -1,3 +1,7 @@
+%grmtools {
+  yacckind Grmtools
+}
+
 %start Expr
 %avoid_insert "INT"
 %%

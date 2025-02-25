@@ -107,11 +107,10 @@ where
     /// user defined start rule.
     pub fn new_with_storaget(yacc_kind: YaccKind, s: &str) -> YaccGrammarResult<Self> {
         let ast_validation = ast::ASTWithValidityInfo::new(yacc_kind.clone(), s);
-        Self::new_from_ast_with_validity_info(yacc_kind, &ast_validation)
+        Self::new_from_ast_with_validity_info(&ast_validation)
     }
 
     pub fn new_from_ast_with_validity_info(
-        yacc_kind: YaccKind,
         ast_validation: &ast::ASTWithValidityInfo,
     ) -> YaccGrammarResult<Self> {
         if !ast_validation.is_valid() {
@@ -149,7 +148,7 @@ where
 
         let implicit_rule;
         let implicit_start_rule;
-        match yacc_kind {
+        match ast_validation.yacc_kind() {
             YaccKind::SelfDescribing(_) => {
                 unimplemented!("Concrete YaccKind must be known by this point")
             }

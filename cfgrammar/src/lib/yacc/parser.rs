@@ -273,7 +273,7 @@ impl Spanned for YaccGrammarError {
 }
 
 pub(crate) struct YaccParser {
-    yacc_kind: YaccKind,
+    pub(crate) yacc_kind: YaccKind,
     src: String,
     num_newlines: usize,
     ast: GrammarAST,
@@ -463,17 +463,13 @@ impl YaccParser {
                 if let Some(i) = self.lookahead_is("}", i) {
                     return Ok(i);
                 }
-            } else {
-                if require_yacc_kind {
-                    return Err(self.mk_error(YaccGrammarErrorKind::MissingGrmtoolsHeader, i));
-                }
-            }
-        } else {
-            if require_yacc_kind {
+            } else if require_yacc_kind {
                 return Err(self.mk_error(YaccGrammarErrorKind::MissingGrmtoolsHeader, i));
             }
+        } else if require_yacc_kind {
+            return Err(self.mk_error(YaccGrammarErrorKind::MissingGrmtoolsHeader, i));
         }
-        return Ok(i);
+        Ok(i)
     }
 
     pub(crate) fn ast(self) -> GrammarAST {

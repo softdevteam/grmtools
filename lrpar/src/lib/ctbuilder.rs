@@ -428,7 +428,7 @@ where
             }
         };
 
-        let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(yk, &ast_validation);
+        let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
         let grm = match res {
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
                 let mut line_cache = NewlineCache::new();

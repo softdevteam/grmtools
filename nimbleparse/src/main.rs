@@ -156,7 +156,7 @@ fn main() {
     let yacc_src = read_file(&yacc_y_path);
     let ast_validation = ASTWithValidityInfo::new(yacckind.clone(), &yacc_src);
     let warnings = ast_validation.ast().warnings();
-    let res = YaccGrammar::new_from_ast_with_validity_info(yacckind, &ast_validation);
+    let res = YaccGrammar::new_from_ast_with_validity_info(&ast_validation);
     let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;
     let grm = match res {
         Ok(x) => {

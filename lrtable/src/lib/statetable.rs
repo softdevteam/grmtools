@@ -1002,7 +1002,7 @@ D : D;
 S: S | ;";
         let yk = YaccKind::Original(YaccOriginalActionKind::NoAction);
         let ast_validity = ASTWithValidityInfo::new(yk.clone(), src);
-        let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(yk, &ast_validity).unwrap();
+        let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(&ast_validity).unwrap();
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Expected accept reduce conflict"),
@@ -1054,7 +1054,7 @@ S: T | ;
 T: S | ;";
         let yk = YaccKind::Original(YaccOriginalActionKind::NoAction);
         let ast_validity = ASTWithValidityInfo::new(yk.clone(), src);
-        let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(yk, &ast_validity).unwrap();
+        let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(&ast_validity).unwrap();
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {
             Ok(_) => panic!("Expected accept reduce conflict"),
