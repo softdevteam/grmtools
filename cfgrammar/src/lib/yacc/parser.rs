@@ -2815,7 +2815,11 @@ B";
         ];
         for yacc_src in srcs {
             parse(YaccKind::SelfDescribing(None), yacc_src).unwrap();
-            parse(YaccKind::SelfDescribing(Some(Box::new(YaccKind::SelfDescribing(None)))), yacc_src).unwrap();
+            parse(
+                YaccKind::SelfDescribing(Some(Box::new(YaccKind::SelfDescribing(None)))),
+                yacc_src,
+            )
+            .unwrap();
         }
 
         let fallback_srcs = [
@@ -2913,11 +2917,10 @@ B";
             1,
             1,
         );
-        parse(YaccKind::SelfDescribing(Some(Box::new(YaccKind::SelfDescribing(None)))), src).expect_error_at_line_col(
+        parse(
+            YaccKind::SelfDescribing(Some(Box::new(YaccKind::SelfDescribing(None)))),
             src,
-            YaccGrammarErrorKind::InvalidYaccKind,
-            1,
-            1,
-        );
+        )
+        .expect_error_at_line_col(src, YaccGrammarErrorKind::InvalidYaccKind, 1, 1);
     }
 }
