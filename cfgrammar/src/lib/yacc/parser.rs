@@ -323,13 +323,14 @@ impl YaccParser {
         let mut errs: Vec<YaccGrammarError> = Vec::new();
         let mut result = self.parse_grmtools_header(0);
 
-        if let YaccKind::SelfDescribing(default) = &self.yacc_kind {
-            // Validate that YaccKind was specified
-            if result.is_ok() {
+        if result.is_ok() {
+            while let YaccKind::SelfDescribing(default) = &self.yacc_kind {
+                // Validate that YaccKind was specified
                 if let Some(default) = default {
                     self.yacc_kind = *default.clone()
                 } else {
                     result = Err(self.mk_error(YaccGrammarErrorKind::InvalidYaccKind, 0));
+                    break;
                 }
             }
         }
@@ -2814,6 +2815,7 @@ B";
         ];
         for yacc_src in srcs {
             parse(YaccKind::SelfDescribing(None), yacc_src).unwrap();
+            parse(YaccKind::SelfDescribing(Some(Box::new(YaccKind::SelfDescribing(None)))), yacc_src).unwrap();
         }
 
         let fallback_srcs = [
@@ -2906,6 +2908,12 @@ B";
                            S: "()";"#;
 
         parse(YaccKind::SelfDescribing(None), src).expect_error_at_line_col(
+            src,
+            YaccGrammarErrorKind::InvalidYaccKind,
+            1,
+            1,
+        );
+        parse(YaccKind::SelfDescribing(Some(Box::new(YaccKind::SelfDescribing(None)))), src).expect_error_at_line_col(
             src,
             YaccGrammarErrorKind::InvalidYaccKind,
             1,
