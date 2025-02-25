@@ -18,18 +18,19 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
         let docs = YamlLoader::load_from_str(&s).unwrap();
         let grm = &docs[0]["grammar"].as_str().unwrap();
         let lex = &docs[0]["lexer"].as_str().unwrap();
-        let yacckind = match docs[0]["yacckind"].as_str().unwrap() {
-            "Original(YaccOriginalActionKind::NoAction)" => {
-                YaccKind::Original(YaccOriginalActionKind::NoAction)
+        let yacckind = match docs[0]["yacckind"].as_str() {
+            Some("Original(YaccOriginalActionKind::NoAction)") => {
+                Some(YaccKind::Original(YaccOriginalActionKind::NoAction))
             }
-            "Original(YaccOriginalActionKind::UserAction)" => {
-                YaccKind::Original(YaccOriginalActionKind::UserAction)
+            Some("Original(YaccOriginalActionKind::UserAction)") => {
+                Some(YaccKind::Original(YaccOriginalActionKind::UserAction))
             }
-            "Grmtools" => YaccKind::Grmtools,
-            "Original(YaccOriginalActionKind::GenericParseTree)" => {
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree)
+            Some("Grmtools") => Some(YaccKind::Grmtools),
+            Some("Original(YaccOriginalActionKind::GenericParseTree)") => {
+                Some(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
             }
-            s => panic!("YaccKind '{}' not supported", s),
+            None => None,
+            s => panic!("YaccKind '{:?}' not supported", s),
         };
         let (negative_yacc_flags, positive_yacc_flags) = &docs[0]["yacc_flags"]
             .as_vec()
@@ -88,8 +89,11 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
         let mut outp = PathBuf::from(&out_dir);
         outp.push(format!("{}.y.rs", base));
         outp.set_extension("rs");
-        let mut cp_build = CTParserBuilder::<DefaultLexerTypes<u32>>::new()
-            .yacckind(yacckind)
+        let mut cp_build = CTParserBuilder::<DefaultLexerTypes<u32>>::new();
+        if let Some(yacckind) = yacckind {
+            cp_build = cp_build.yacckind(yacckind)
+        }
+        cp_build = cp_build
             .grammar_path(pg.to_str().unwrap())
             .output_path(&outp);
         if let Some(flag) = check_flag(yacc_flags, "error_on_conflicts") {

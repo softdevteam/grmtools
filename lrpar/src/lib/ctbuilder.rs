@@ -391,7 +391,7 @@ where
     /// # Panics
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
-    pub fn build(self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
+    pub fn build(mut self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
         let grmp = self
             .grammar_path
             .as_ref()
@@ -417,6 +417,7 @@ where
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
         let ast_validation = ASTWithValidityInfo::new(yk.clone(), &inc);
+        self.yacckind = Some(ast_validation.yacc_kind().clone());
         let warnings = ast_validation.ast().warnings();
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
             if let Some((line, column)) =
