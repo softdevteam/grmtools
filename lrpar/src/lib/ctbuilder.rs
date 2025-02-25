@@ -402,10 +402,8 @@ where
             .expect("output_path must be specified before processing.");
         let yk = match self.yacckind.clone() {
             None => YaccKind::SelfDescribing(None),
-            Some(YaccKind::SelfDescribing(default)) => YaccKind::SelfDescribing(default),
-            Some(YaccKind::Original(x)) => YaccKind::Original(x),
-            Some(YaccKind::Grmtools) => YaccKind::Grmtools,
             Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
+            Some(x) => x,
         };
 
         {
