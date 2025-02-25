@@ -273,7 +273,7 @@ impl Spanned for YaccGrammarError {
 }
 
 pub(crate) struct YaccParser {
-    pub(crate) yacc_kind: YaccKind,
+    yacc_kind: YaccKind,
     src: String,
     num_newlines: usize,
     ast: GrammarAST,
@@ -472,8 +472,8 @@ impl YaccParser {
         Ok(i)
     }
 
-    pub(crate) fn ast(self) -> GrammarAST {
-        self.ast
+    pub(crate) fn finish(self) -> (YaccKind, GrammarAST) {
+        (self.yacc_kind, self.ast)
     }
 
     fn parse_declarations(
@@ -1147,7 +1147,7 @@ mod test {
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
         let mut yp = YaccParser::new(yacc_kind, s.to_string());
         yp.parse()?;
-        Ok(yp.ast())
+        Ok(yp.finish().1)
     }
 
     fn rule(n: &str) -> Symbol {

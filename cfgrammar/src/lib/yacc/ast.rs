@@ -29,8 +29,7 @@ impl ASTWithValidityInfo {
         let (ast, yacc_kind) = {
             let mut yp = YaccParser::new(yacc_kind, s.to_string());
             yp.parse().map_err(|e| errs.extend(e)).ok();
-            let yacc_kind = yp.yacc_kind.clone();
-            let mut ast = yp.ast();
+            let (yacc_kind, mut ast) = yp.finish();
             ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
             (ast, yacc_kind)
         };
