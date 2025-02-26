@@ -7,13 +7,14 @@ use indexmap::{IndexMap, IndexSet};
 
 use super::{
     parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
-    YaccGrammarWarningKind, YaccKind,
+    YaccGrammarWarningKind, YaccKind, YaccKindResolver,
 };
 
 use crate::Span;
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
+    yacc_kind: Option<YaccKind>,
     ast: GrammarAST,
     errs: Vec<YaccGrammarError>,
 }
@@ -23,18 +24,22 @@ impl ASTWithValidityInfo {
     /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
     /// then unused to construct a `YaccGrammar`, which will either produce an
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
-    pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
+    pub fn new(yacc_kind_resolver: YaccKindResolver, s: &str) -> Self {
         let mut errs = Vec::new();
-        let ast = match yacc_kind {
-            YaccKind::Original(_) | YaccKind::Grmtools | YaccKind::Eco => {
-                let mut yp = YaccParser::new(yacc_kind, s.to_string());
-                yp.parse().map_err(|e| errs.extend(e)).ok();
-                let mut ast = yp.ast();
+        let (yacc_kind, ast) = {
+            let mut yp = YaccParser::new(yacc_kind_resolver, s.to_string());
+            yp.parse().map_err(|e| errs.extend(e)).ok();
+            let (yacc_kind, mut ast) = yp.build();
+            if yacc_kind.is_some() {
                 ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
-                ast
             }
+            (yacc_kind, ast)
         };
-        ASTWithValidityInfo { ast, errs }
+        ASTWithValidityInfo {
+            ast,
+            errs,
+            yacc_kind,
+        }
     }
 
     /// Returns a `GrammarAST` constructed as the result of parsing a source file.
@@ -49,6 +54,11 @@ impl ASTWithValidityInfo {
     /// parsing and validation of the AST during it's construction.
     pub fn is_valid(&self) -> bool {
         self.errors().is_empty()
+    }
+
+    /// Returns the `YaccKind` that was used to parse the `GrammarAST`.
+    pub fn yacc_kind(&self) -> Option<YaccKind> {
+        self.yacc_kind
     }
 
     /// Returns all errors which were encountered during AST construction.

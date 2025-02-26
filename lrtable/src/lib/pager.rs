@@ -400,7 +400,7 @@ mod test {
 
     use crate::{pager::pager_stategraph, stategraph::state_exists, StIdx};
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+        yacc::{YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind},
         SIdx, Symbol,
     };
 
@@ -440,7 +440,7 @@ mod test {
     //     aSb
     fn grammar3() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %token a b c d
@@ -519,7 +519,7 @@ mod test {
     // Pager grammar
     fn grammar_pager() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start X
             %%

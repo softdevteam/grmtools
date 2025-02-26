@@ -159,7 +159,7 @@ where
 #[cfg(test)]
 mod test {
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+        yacc::{YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind},
         SIdx, Symbol,
     };
     use vob::Vob;
@@ -172,7 +172,7 @@ mod test {
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %%
@@ -200,7 +200,7 @@ mod test {
 
     fn eco_grammar() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %token a b c d f
@@ -251,7 +251,7 @@ mod test {
     //     aSb
     fn grammar3() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %token a b c d

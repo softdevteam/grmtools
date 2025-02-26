@@ -9,7 +9,7 @@ use crate::{RIdx, Symbol, TIdx};
 /// `Follows` stores all the Follow sets for a given grammar. For example, given this code and
 /// grammar:
 /// ```text
-///   let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
+///   let grm = YaccGrammar::new(YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
 ///       S: A 'b';
 ///       A: 'a' | ;
 ///     ").unwrap();
@@ -115,7 +115,7 @@ where
 #[cfg(test)]
 mod test {
     use super::{
-        super::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+        super::{YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind},
         YaccFollows,
     };
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -149,7 +149,7 @@ mod test {
     fn test_follow() {
         // Adapted from p2 of https://www.cs.uaf.edu/~cs331/notes/FirstFollow.pdf
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
                 %start E
                 %%
@@ -173,7 +173,7 @@ mod test {
     fn test_follow2() {
         // Adapted from https://www.l2f.inesc-id.pt/~david/w/pt/Top-Down_Parsing/Exercise_5:_Test_2010/07/01
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
                 %start A
                 %%
@@ -196,7 +196,7 @@ mod test {
     #[test]
     fn test_follow3() {
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
                 %start S
                 %%
@@ -213,7 +213,7 @@ mod test {
     #[test]
     fn test_follow_corchuelo() {
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
                 %start E
                 %%

@@ -18,7 +18,9 @@ use std::{
 use bincode::{deserialize, serialize_into};
 use cfgrammar::{
     newlinecache::NewlineCache,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{
+        ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
+    },
     RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -391,7 +393,7 @@ where
     /// # Panics
     ///
     /// If `StorageT` is not big enough to index the grammar's tokens, rules, or productions.
-    pub fn build(self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
+    pub fn build(mut self) -> Result<CTParser<StorageT>, Box<dyn Error>> {
         let grmp = self
             .grammar_path
             .as_ref()
@@ -401,10 +403,9 @@ where
             .as_ref()
             .expect("output_path must be specified before processing.");
         let yk = match self.yacckind {
-            None => panic!("yacckind must be specified before processing."),
-            Some(YaccKind::Original(x)) => YaccKind::Original(x),
-            Some(YaccKind::Grmtools) => YaccKind::Grmtools,
+            None => YaccKindResolver::NoDefault,
             Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
+            Some(x) => YaccKindResolver::Force(x),
         };
 
         {
@@ -418,6 +419,7 @@ where
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
         let ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        self.yacckind = ast_validation.yacc_kind();
         let warnings = ast_validation.ast().warnings();
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
             if let Some((line, column)) =
@@ -429,7 +431,7 @@ where
             }
         };
 
-        let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(yk, &ast_validation);
+        let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
         let grm = match res {
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
                 let mut line_cache = NewlineCache::new();
