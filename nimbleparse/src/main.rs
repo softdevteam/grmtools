@@ -1,7 +1,9 @@
 mod diagnostics;
 use crate::diagnostics::*;
 use cfgrammar::{
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{
+        ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
+    },
     Span,
 };
 use getopts::Options;
@@ -123,13 +125,13 @@ fn main() {
     };
 
     let yacckind = match matches.opt_str("y") {
-        None => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-        Some(s) => match &*s.to_lowercase() {
+        None => YaccKindResolver::NoDefault,
+        Some(s) => YaccKindResolver::Force(match &*s.to_lowercase() {
             "eco" => YaccKind::Eco,
             "grmtools" => YaccKind::Grmtools,
             "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s)),
-        },
+        }),
     };
 
     if matches.free.len() != 3 {
@@ -154,7 +156,7 @@ fn main() {
     let yacc_src = read_file(&yacc_y_path);
     let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
     let warnings = ast_validation.ast().warnings();
-    let res = YaccGrammar::new_from_ast_with_validity_info(yacckind, &ast_validation);
+    let res = YaccGrammar::new_from_ast_with_validity_info(&ast_validation);
     let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;
     let grm = match res {
         Ok(x) => {

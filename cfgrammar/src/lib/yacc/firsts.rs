@@ -9,7 +9,7 @@ use crate::{RIdx, Symbol, TIdx};
 /// `Firsts` stores all the first sets for a given grammar. For example, given this code and
 /// grammar:
 /// ```text
-///   let grm = YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::GenericParseTree), "
+///   let grm = YaccGrammar::new(YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
 ///     S: A 'b';
 ///     A: 'a'
 ///      | ;").unwrap();
@@ -143,7 +143,7 @@ where
 #[cfg(test)]
 mod test {
     use super::{
-        super::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+        super::{YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind},
         YaccFirsts,
     };
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -180,7 +180,7 @@ mod test {
     #[test]
     fn test_first() {
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start C
           %token c d
@@ -202,7 +202,7 @@ mod test {
     #[test]
     fn test_first_no_subsequent_rules() {
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start C
           %token c d
@@ -220,7 +220,7 @@ mod test {
     #[test]
     fn test_first_epsilon() {
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start A
           %token a b c
@@ -241,7 +241,7 @@ mod test {
     #[test]
     fn test_last_epsilon() {
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start A
           %token b c
@@ -261,7 +261,7 @@ mod test {
     #[test]
     fn test_first_no_multiples() {
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start A
           %token b c
@@ -277,7 +277,7 @@ mod test {
 
     fn eco_grammar() -> YaccGrammar {
         YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %token a b c d f
@@ -308,7 +308,7 @@ mod test {
     #[test]
     fn test_first_from_eco_bug() {
         let grm = YaccGrammar::new(
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start E
           %token a b c d e f
