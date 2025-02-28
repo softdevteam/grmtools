@@ -1,3 +1,11 @@
+# grmtools 0.13.10 (2025-02-04)
+
+ * Add option for more complete POSIX lex compatible regex escapes. For
+   example, `\b` is the backspace character in POSIX Lex, but a word boundary
+   association in the Rust [regex](https://crates.io/crates/regex) crate that
+   lrlex uses. This defaults to `false` for backwards compatibility.
+
+
 # grmtools 0.13.9 (2025-02-04)
 
 * Respect the timeout in all stages of error recovery. Previously the timeout
