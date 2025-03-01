@@ -1,3 +1,5 @@
+use proc_macro2::TokenStream;
+use quote::{quote, ToTokens, TokenStreamExt};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -53,4 +55,11 @@ pub trait Spanned: std::fmt::Display {
     fn spans(&self) -> &[Span];
     /// Returns the `SpansKind` associated with this error.
     fn spanskind(&self) -> crate::yacc::parser::SpansKind;
+}
+
+impl ToTokens for Span {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let Span { start, end } = self;
+        tokens.append_all(quote! {::cfgrammar::Span::new(#start, #end)});
+    }
 }
