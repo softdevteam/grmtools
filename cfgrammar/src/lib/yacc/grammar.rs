@@ -303,6 +303,7 @@ where
                                 prod.push(Symbol::Rule(rule_map[implicit_rule]));
                             }
                         }
+                        ast::Symbol::Empty(_) => {}
                     };
                 }
                 let mut prec = None;
