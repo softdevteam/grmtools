@@ -76,6 +76,18 @@ pub enum StartStateOperation {
     Pop,
 }
 
+use proc_macro2::TokenStream;
+use quote::quote;
+impl quote::ToTokens for StartStateOperation {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match *self {
+            StartStateOperation::ReplaceStack => quote!(::lrlex::StartStateOperation::ReplaceStack),
+            StartStateOperation::Push => quote!(::lrlex::StartStateOperation::Push),
+            StartStateOperation::Pop => quote!(::lrlex::StartStateOperation::Pop),
+        })
+    }
+}
+
 pub(super) struct LexParser<LexerTypesT: LexerTypes>
 where
     usize: AsPrimitive<LexerTypesT::StorageT>,

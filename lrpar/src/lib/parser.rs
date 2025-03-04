@@ -12,6 +12,8 @@ use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, Span, TIdx};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use proc_macro2::TokenStream;
+use quote::quote;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -619,6 +621,15 @@ pub enum RecoveryKind {
     CPCTPlus,
     /// Don't use error recovery: return as soon as the first syntax error is encountered.
     None,
+}
+
+impl quote::ToTokens for RecoveryKind {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match *self {
+            RecoveryKind::CPCTPlus => quote!(::lrpar::RecoveryKind::CPCTPlus),
+            RecoveryKind::None => quote!(::lrpar::RecoveryKind::None),
+        })
+    }
 }
 
 /// A lexing or parsing error. Although the two are quite distinct in terms of what can be reported

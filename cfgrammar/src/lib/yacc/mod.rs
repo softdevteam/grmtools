@@ -10,6 +10,8 @@ pub use self::{
     grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar},
     parser::{YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind},
 };
+use proc_macro2::TokenStream;
+use quote::quote;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -39,6 +41,18 @@ pub enum YaccKind {
     Eco,
 }
 
+impl quote::ToTokens for YaccKind {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match *self {
+            YaccKind::Grmtools => quote!(::cfgrammar::yacc::YaccKind::Grmtools),
+            YaccKind::Original(action_kind) => {
+                quote!(::cfgrammar::yacc::YaccKind::Original(#action_kind))
+            }
+            YaccKind::Eco => quote!(::cfgrammar::yacc::YaccKind::Eco),
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum YaccOriginalActionKind {
@@ -49,4 +63,20 @@ pub enum YaccOriginalActionKind {
     GenericParseTree,
     /// Do not do execute actions of any sort.
     NoAction,
+}
+
+impl quote::ToTokens for YaccOriginalActionKind {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match *self {
+            YaccOriginalActionKind::UserAction => {
+                quote!(::cfgrammar::yacc::YaccOriginalActionKind::UserAction)
+            }
+            YaccOriginalActionKind::GenericParseTree => {
+                quote!(::cfgrammar::yacc::YaccOriginalActionKind::GenericParseTree)
+            }
+            YaccOriginalActionKind::NoAction => {
+                quote!(::cfgrammar::yacc::YaccOriginalActionKind::NoAction)
+            }
+        })
+    }
 }

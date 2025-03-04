@@ -21,3 +21,5 @@ num-traits.workspace = true
 regex.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
 vob = { workspace = true, features = ["serde"] }
+quote.workspace = true
+proc-macro2.workspace = true

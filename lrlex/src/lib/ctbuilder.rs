@@ -19,7 +19,8 @@ use cfgrammar::{newlinecache::NewlineCache, Spanned};
 use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, LexerTypes};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use quote::quote;
+use proc_macro2::TokenStream;
+use quote::{quote, ToTokens, TokenStreamExt};
 use regex::Regex;
 use serde::Serialize;
 
@@ -78,11 +79,48 @@ pub enum RustEdition {
     Rust2021,
 }
 
+/// The quote impl of `ToTokens` for `Option` prints an empty string for `None`
+/// and the inner value for `Some(inner_value)`.
+///
+/// This wrapper instead emits both `Some` and `None` variants.
+/// See: [quote #20](https://github.com/dtolnay/quote/issues/20)
+struct QuoteOption<T>(Option<T>);
+
+impl<T: ToTokens> ToTokens for QuoteOption<T> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.append_all(match self.0 {
+            Some(ref t) => quote! { ::std::option::Option::Some(#t) },
+            None => quote! { ::std::option::Option::None },
+        });
+    }
+}
+
+/// This wrapper adds a missing impl of `ToTokens` for tuples.
+/// For a tuple `(a, b)` emits `(a.to_tokens(), b.to_tokens())`
+struct QuoteTuple<T>(T);
+
+impl<A: ToTokens, B: ToTokens> ToTokens for QuoteTuple<(A, B)> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let (a, b) = &self.0;
+        tokens.append_all(quote!((#a, #b)));
+    }
+}
+
+/// The wrapped `&str` value will be emitted with a call to `to_string()`
+struct QuoteToString<'a>(&'a str);
+
+impl ToTokens for QuoteToString<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let x = &self.0;
+        tokens.append_all(quote! { #x.to_string() });
+    }
+}
+
 /// A `CTLexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
 pub struct CTLexerBuilder<'a, LexerTypesT: LexerTypes = DefaultLexerTypes<u32>>
 where
-    LexerTypesT::StorageT: Debug + Eq + Hash,
+    LexerTypesT::StorageT: Debug + Eq + Hash + ToTokens,
     usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
 {
     lrpar_config: Option<Box<dyn Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT>>>,
@@ -108,7 +146,7 @@ impl CTLexerBuilder<'_, DefaultLexerTypes<u32>> {
 impl<'a, LexerTypesT: LexerTypes> CTLexerBuilder<'a, LexerTypesT>
 where
     LexerTypesT::StorageT:
-        'static + Debug + Eq + Hash + PrimInt + Serialize + TryFrom<usize> + Unsigned,
+        'static + Debug + Eq + Hash + PrimInt + Serialize + TryFrom<usize> + Unsigned + ToTokens,
     usize: AsPrimitive<LexerTypesT::StorageT>,
 {
     /// Create a new [CTLexerBuilder].
@@ -438,31 +476,52 @@ pub fn lexerdef() -> {lexerdef_type} {{
         )
         .ok();
 
+        let RegexOptions {
+            dot_matches_new_line,
+            multi_line,
+            octal,
+            posix_escapes,
+            case_insensitive,
+            unicode,
+            swap_greed,
+            ignore_whitespace,
+            size_limit,
+            dfa_size_limit,
+            nest_limit,
+        } = self.regex_options;
+        let case_insensitive = QuoteOption(case_insensitive);
+        let unicode = QuoteOption(unicode);
+        let swap_greed = QuoteOption(swap_greed);
+        let ignore_whitespace = QuoteOption(ignore_whitespace);
+        let size_limit = QuoteOption(size_limit);
+        let dfa_size_limit = QuoteOption(dfa_size_limit);
+        let nest_limit = QuoteOption(nest_limit);
+
         outs.push_str(&format!(
             "let regex_options = ::lrlex::RegexOptions {{
-            dot_matches_new_line: {dot_matches_new_line:?},
-            multi_line: {multi_line:?},
-            octal: {octal:?},
-            posix_escapes: {posix_escapes:?},
-            case_insensitive: {case_insensitive:?},
-            unicode: {unicode:?},
-            swap_greed: {swap_greed:?},
-            ignore_whitespace: {ignore_whitespace:?},
-            size_limit: {size_limit:?},
-            dfa_size_limit: {dfa_size_limit:?},
-            nest_limit: {nest_limit:?},
+            dot_matches_new_line: {dot_matches_new_line},
+            multi_line: {multi_line},
+            octal: {octal},
+            posix_escapes: {posix_escapes},
+            case_insensitive: {case_insensitive},
+            unicode: {unicode},
+            swap_greed: {swap_greed},
+            ignore_whitespace: {ignore_whitespace},
+            size_limit: {size_limit},
+            dfa_size_limit: {dfa_size_limit},
+            nest_limit: {nest_limit},
         }};",
-            dot_matches_new_line = self.regex_options.dot_matches_new_line,
-            multi_line = self.regex_options.multi_line,
-            octal = self.regex_options.octal,
-            posix_escapes = self.regex_options.posix_escapes,
-            case_insensitive = self.regex_options.case_insensitive,
-            unicode = self.regex_options.unicode,
-            swap_greed = self.regex_options.swap_greed,
-            ignore_whitespace = self.regex_options.ignore_whitespace,
-            size_limit = self.regex_options.size_limit,
-            dfa_size_limit = self.regex_options.dfa_size_limit,
-            nest_limit = self.regex_options.nest_limit,
+            dot_matches_new_line = quote!(#dot_matches_new_line),
+            multi_line = quote!(#multi_line),
+            octal = quote!(#octal),
+            posix_escapes = quote!(#posix_escapes),
+            case_insensitive = quote!(#case_insensitive),
+            unicode = quote!(#unicode),
+            swap_greed = quote!(#swap_greed),
+            ignore_whitespace = quote!(#ignore_whitespace),
+            size_limit = quote!(#size_limit),
+            dfa_size_limit = quote!(#dfa_size_limit),
+            nest_limit = quote!(#nest_limit),
         ));
 
         outs.push_str("    let start_states: Vec<StartState> = vec![");
@@ -485,35 +544,22 @@ pub fn lexerdef() -> {lexerdef_type} {{
 
         // Individual rules
         for r in lexerdef.iter_rules() {
-            let tok_id = match r.tok_id {
-                Some(ref t) => format!("Some({:?})", t),
-                None => "None".to_owned(),
-            };
-            let n = match r.name() {
-                Some(ref n) => format!("Some({}.to_string())", quote!(#n)),
-                None => "None".to_owned(),
-            };
-            let target_state = match &r.target_state() {
-                Some((id, op)) => format!("Some(({}, ::lrlex::StartStateOperation::{:?}))", id, op),
-                None => "None".to_owned(),
-            };
-            let n_span = format!(
-                "::cfgrammar::Span::new({}, {})",
-                r.name_span().start(),
-                r.name_span().end()
-            );
-            let regex = &r.re_str;
+            let tok_id = QuoteOption(r.tok_id);
+            let n = QuoteOption(r.name().map(QuoteToString));
+            let target_state = QuoteOption(r.target_state().map(|(x, y)| QuoteTuple((x, y))));
+            let n_span = r.name_span();
+            let regex = QuoteToString(&r.re_str);
             let start_states = r.start_states();
             write!(
                 outs,
                 "
         Rule::new(::lrlex::unstable_api::InternalPublicApi, {}, {}, {}, {}.to_string(), {}.to_vec(), {}, &regex_options).unwrap(),",
-                tok_id,
-                n,
-                n_span,
+                quote!(#tok_id),
+                quote!(#n),
+                quote!(#n_span),
                 quote!(#regex),
                 quote!([#(#start_states),*]),
-                target_state,
+                quote!(#target_state),
             )
             .ok();
         }
@@ -537,10 +583,10 @@ pub fn lexerdef() -> {lexerdef_type} {{
                 if RE_TOKEN_ID.is_match(n) {
                     write!(
                         outs,
-                        "#[allow(dead_code)]\npub const T_{}: {} = {:?};\n",
+                        "#[allow(dead_code)]\npub const T_{}: {} = {};\n",
                         n.to_ascii_uppercase(),
                         type_name::<LexerTypesT::StorageT>(),
-                        *id
+                        quote!(#id)
                     )
                     .ok();
                 }
