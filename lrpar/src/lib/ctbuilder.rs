@@ -27,6 +27,8 @@ use filetime::FileTime;
 use lazy_static::lazy_static;
 use lrtable::{from_yacc, statetable::Conflicts, Minimiser, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use proc_macro2::{Literal, TokenStream};
+use quote::{quote, ToTokens, TokenStreamExt};
 use regex::Regex;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -50,6 +52,34 @@ lazy_static! {
 
 struct CTConflictsError<StorageT: Eq + Hash> {
     stable: StateTable<StorageT>,
+}
+
+/// The quote impl of `ToTokens` for `Option` prints an empty string for `None`
+/// and the inner value for `Some(inner_value)`.
+///
+/// This wrapper instead emits both `Some` and `None` variants.
+/// See: [quote #20](https://github.com/dtolnay/quote/issues/20)
+struct QuoteOption<T>(Option<T>);
+
+impl<T: ToTokens> ToTokens for QuoteOption<T> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.append_all(match self.0 {
+            Some(ref t) => quote! { ::std::option::Option::Some(#t) },
+            None => quote! { ::std::option::Option::None },
+        });
+    }
+}
+
+/// The quote impl of `ToTokens` for `usize` prints literal values
+/// including a type suffix for example `0usize`.
+///
+/// This wrapper omits the type suffix emitting `0` instead.
+struct UnsuffixedUsize(usize);
+
+impl ToTokens for UnsuffixedUsize {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.append(Literal::usize_unsuffixed(self.0))
+    }
 }
 
 impl<StorageT> fmt::Display for CTConflictsError<StorageT>
@@ -733,17 +763,23 @@ where
         // Record the time that this version of lrpar was built. If the source code changes and
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
-        writeln!(cache, "   Build time: {:?}", env!("VERGEN_BUILD_TIMESTAMP")).ok();
-
-        writeln!(cache, "   Grammar path: {:?}", self.grammar_path).ok();
-        writeln!(cache, "   Mod name: {:?}", self.mod_name).ok();
-        writeln!(cache, "   Recoverer: {:?}", self.recoverer).ok();
-        writeln!(cache, "   YaccKind: {:?}", self.yacckind).ok();
-        writeln!(cache, "   Visibility: {:?}", self.visibility.cow_str()).ok();
+        let build_time = env!("VERGEN_BUILD_TIMESTAMP");
+        let grammar_path = self.grammar_path.as_ref().unwrap().to_string_lossy();
+        let mod_name = self.mod_name;
+        let recoverer = self.recoverer;
+        let yacckind = self.yacckind;
+        let visibility = self.visibility.cow_str();
+        let error_on_conflicts = self.error_on_conflicts;
+        writeln!(cache, "   Build time: {}", quote!(#build_time)).ok();
+        writeln!(cache, "   Grammar path: {}", quote!(#grammar_path)).ok();
+        writeln!(cache, "   Mod name: {}", quote!(#mod_name)).ok();
+        writeln!(cache, "   Recoverer: {}", quote!(#recoverer)).ok();
+        writeln!(cache, "   YaccKind: {}", quote!(#yacckind)).ok();
+        writeln!(cache, "   Visibility: {}", quote!(#visibility)).ok();
         writeln!(
             cache,
-            "   Error on conflicts: {:?}\n",
-            self.error_on_conflicts
+            "   Error on conflicts: {}\n",
+            quote!(#error_on_conflicts)
         )
         .ok();
 
@@ -840,11 +876,8 @@ where
                 let wrappers = grm
                     .iter_pidxs()
                     .map(|pidx| {
-                        format!(
-                            "&{prefix}wrapper_{}",
-                            usize::from(pidx),
-                            prefix = ACTION_PREFIX
-                        )
+                        let pidx = UnsuffixedUsize(usize::from(pidx));
+                        format!("&{prefix}wrapper_{}", quote!(#pidx), prefix = ACTION_PREFIX)
                     })
                     .collect::<Vec<_>>()
                     .join(",\n                        ");
@@ -867,6 +900,7 @@ where
                     wrappers = wrappers,
                     edition_lifetime = if self.rust_edition != RustEdition::Rust2015 { "'_, " } else { "" },
                 ).ok();
+                let ridx = UnsuffixedUsize(usize::from(self.user_start_ridx(grm)));
                 write!(
                     outs,
                     "
@@ -880,7 +914,7 @@ where
                     parse_param = parse_param,
                     actionskind = ACTIONS_KIND,
                     actionskindprefix = ACTIONS_KIND_PREFIX,
-                    ridx = usize::from(self.user_start_ridx(grm)),
+                    ridx = quote!(#ridx),
                     recoverer = recoverer,
                 )
                 .ok();
@@ -920,7 +954,7 @@ where
             if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
                 write!(
                     outs,
-                    "    #[allow(dead_code)]\n    pub const R_{}: {} = {:?};\n",
+                    "    #[allow(dead_code)]\n    pub const R_{}: {} = {};\n",
                     grm.rule_name_str(ridx).to_ascii_uppercase(),
                     type_name::<StorageT>(),
                     usize::from(ridx)
@@ -934,10 +968,8 @@ where
     fn gen_token_epp(&self, grm: &YaccGrammar<StorageT>) -> String {
         let mut tidxs = Vec::new();
         for tidx in grm.iter_tidxs() {
-            match grm.token_epp(tidx) {
-                Some(n) => tidxs.push(format!("Some(\"{}\")", str_escape(n))),
-                None => tidxs.push("None".to_string()),
-            }
+            let tok_epp = QuoteOption(grm.token_epp(tidx));
+            tidxs.push(format!("{}", quote!(#tok_epp)));
         }
         format!(
             "    const {prefix}EPP: &[::std::option::Option<&str>] = &[{}];
@@ -966,6 +998,7 @@ where
         };
         for pidx in grm.iter_pidxs() {
             let ridx = grm.prod_to_rule(pidx);
+            let pidx_num = UnsuffixedUsize(usize::from(pidx));
 
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]). At
@@ -977,7 +1010,7 @@ where
                       mut {prefix}args: ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<<{lexertypest} as ::lrpar::LexerTypes>::LexemeT, {actionskind}<'input>>>,
                       {parse_paramdef})
                    -> {actionskind}<'input> {{",
-                usize::from(pidx),
+                quote!(#pidx_num),
                 storaget = type_name::<StorageT>(),
                 lexertypest = type_name::<LexerTypesT>(),
                 prefix = ACTION_PREFIX,
@@ -1240,11 +1273,6 @@ where
             _ => unreachable!(),
         }
     }
-}
-
-/// Return a version of the string `s` which is safe to embed in source code as a string.
-fn str_escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// This function is called by generated files; it exists so that generated files don't require a
