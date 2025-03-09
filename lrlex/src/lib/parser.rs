@@ -253,14 +253,16 @@ where
         };
         for opt in OPTIONS {
             if self.src[i..].to_lowercase().starts_with(opt) {
+                i += opt.len();
+                let end_pos = i;
+                if let Some(orig_span) = span_map.get(opt) {
+                    return Err(LexBuildError {
+                        kind: LexErrorKind::DuplicateGrmtoolsSectionValue,
+                        spans: vec![*orig_span, Span::new(start_pos, end_pos)],
+                    });
+                }
                 match opt {
                     "dot_matches_new_line" | "multi_line" | "octal" | "posix_escapes" => {
-                        if let Some(orig_span) = span_map.get(opt) {
-                            return Err(LexBuildError {
-                                kind: LexErrorKind::DuplicateGrmtoolsSectionValue,
-                                spans: vec![*orig_span, Span::new(start_pos, i)],
-                            });
-                        }
                         match opt {
                             "dot_matches_new_line" => {
                                 self.regex_options.dot_matches_new_line = flag
@@ -270,17 +272,9 @@ where
                             "posix_escapes" => self.regex_options.posix_escapes = flag,
                             _ => unreachable!(),
                         }
-                        i += opt.len();
-                        span_map.insert(opt, Span::new(start_pos, i));
+                        span_map.insert(opt, Span::new(start_pos, end_pos));
                     }
                     "case_insensitive" | "swap_greed" | "ignore_whitespace" | "unicode" => {
-                        i += opt.len();
-                        if let Some(orig_span) = span_map.get(opt) {
-                            return Err(LexBuildError {
-                                kind: LexErrorKind::DuplicateGrmtoolsSectionValue,
-                                spans: vec![*orig_span, Span::new(start_pos, i)],
-                            });
-                        }
                         match opt {
                             "case_insensitive" => self.regex_options.case_insensitive = Some(flag),
                             "swap_greed" => self.regex_options.swap_greed = Some(flag),
@@ -290,17 +284,9 @@ where
                             "unicode" => self.regex_options.unicode = Some(flag),
                             _ => unreachable!(),
                         }
-
-                        span_map.insert(opt, Span::new(start_pos, i));
+                        span_map.insert(opt, Span::new(start_pos, end_pos));
                     }
                     "size_limit" | "dfa_size_limit" | "nest_limit" => {
-                        let end_pos = i + opt.len();
-                        if let Some(orig_span) = span_map.get(opt) {
-                            return Err(LexBuildError {
-                                kind: LexErrorKind::DuplicateGrmtoolsSectionValue,
-                                spans: vec![*orig_span, Span::new(start_pos, end_pos)],
-                            });
-                        }
                         if !flag {
                             // We've seen a silly statement like `!size_limit 5``
                             return Err(LexBuildError {
@@ -308,7 +294,7 @@ where
                                 spans: vec![Span::new(start_pos, end_pos)],
                             });
                         }
-                        i = self.parse_spaces(i + opt.len())?;
+                        i = self.parse_spaces(i)?;
                         let j = self.parse_digits(i)?;
                         // This checks that the digits are valid numbers, but currently just returns `None`
                         // when the values are actually out of range for that type. This could be improved.
