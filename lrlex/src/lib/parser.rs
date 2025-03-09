@@ -228,6 +228,7 @@ where
         &mut self,
         mut i: usize,
         span_map: &mut HashMap<&str, Span>,
+        lex_flags: &mut RegexOptions,
     ) -> LexInternalBuildResult<usize> {
         const OPTIONS: [&str; 11] = [
             "dot_matches_new_line",
@@ -264,23 +265,19 @@ where
                 match opt {
                     "dot_matches_new_line" | "multi_line" | "octal" | "posix_escapes" => {
                         match opt {
-                            "dot_matches_new_line" => {
-                                self.regex_options.dot_matches_new_line = flag
-                            }
-                            "multi_line" => self.regex_options.multi_line = flag,
-                            "octal" => self.regex_options.octal = flag,
-                            "posix_escapes" => self.regex_options.posix_escapes = flag,
+                            "dot_matches_new_line" => lex_flags.dot_matches_new_line = flag,
+                            "multi_line" => lex_flags.multi_line = flag,
+                            "octal" => lex_flags.octal = flag,
+                            "posix_escapes" => lex_flags.posix_escapes = flag,
                             _ => unreachable!(),
                         }
                     }
                     "case_insensitive" | "swap_greed" | "ignore_whitespace" | "unicode" => {
                         match opt {
-                            "case_insensitive" => self.regex_options.case_insensitive = Some(flag),
-                            "swap_greed" => self.regex_options.swap_greed = Some(flag),
-                            "ignore_whitespace" => {
-                                self.regex_options.ignore_whitespace = Some(flag)
-                            }
-                            "unicode" => self.regex_options.unicode = Some(flag),
+                            "case_insensitive" => lex_flags.case_insensitive = Some(flag),
+                            "swap_greed" => lex_flags.swap_greed = Some(flag),
+                            "ignore_whitespace" => lex_flags.ignore_whitespace = Some(flag),
+                            "unicode" => lex_flags.unicode = Some(flag),
                             _ => unreachable!(),
                         }
                     }
@@ -298,16 +295,14 @@ where
                         // when the values are actually out of range for that type. This could be improved.
                         match opt {
                             "size_limit" => {
-                                self.regex_options.size_limit =
-                                    str::parse::<usize>(&self.src[i..j]).ok();
+                                lex_flags.size_limit = str::parse::<usize>(&self.src[i..j]).ok();
                             }
                             "dfa_size_limit" => {
-                                self.regex_options.dfa_size_limit =
+                                lex_flags.dfa_size_limit =
                                     str::parse::<usize>(&self.src[i..j]).ok();
                             }
                             "nest_limit" => {
-                                self.regex_options.nest_limit =
-                                    str::parse::<u32>(&self.src[i..j]).ok();
+                                lex_flags.nest_limit = str::parse::<u32>(&self.src[i..j]).ok();
                             }
                             _ => unreachable!(),
                         }
@@ -329,13 +324,19 @@ where
     ) -> LexInternalBuildResult<usize> {
         i = self.parse_ws(i)?;
         let mut grmtools_section_span_map = HashMap::new();
+        let mut grmtools_section_lex_flags = DEFAULT_REGEX_OPTIONS;
         if let Some(j) = self.lookahead_is("%grmtools", i) {
             i = self.parse_ws(j)?;
             if let Some(j) = self.lookahead_is("{", i) {
                 i = self.parse_ws(j)?;
             }
+
             while self.lookahead_is("}", i).is_none() {
-                i = self.parse_grmtools_section_value(i, &mut grmtools_section_span_map)?;
+                i = self.parse_grmtools_section_value(
+                    i,
+                    &mut grmtools_section_span_map,
+                    &mut grmtools_section_lex_flags,
+                )?;
                 if i == self.src.len() {
                     return Err(self.mk_error(LexErrorKind::PrematureEnd, i));
                 }
