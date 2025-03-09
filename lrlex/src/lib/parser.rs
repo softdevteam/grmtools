@@ -316,8 +316,7 @@ where
                     _ => unreachable!(),
                 }
                 span_map.insert(opt, Span::new(start_pos, end_pos));
-                i = self.parse_ws(i)?;
-                return Ok(i);
+                return self.parse_ws(i);
             }
         }
         Err(self.mk_error(LexErrorKind::InvalidGrmtoolsSectionValue, i))
