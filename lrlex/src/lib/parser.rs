@@ -261,7 +261,6 @@ where
                         spans: vec![*orig_span, Span::new(start_pos, end_pos)],
                     });
                 }
-                span_map.insert(opt, Span::new(start_pos, end_pos));
                 match opt {
                     "dot_matches_new_line" | "multi_line" | "octal" | "posix_escapes" => {
                         match opt {
@@ -316,6 +315,7 @@ where
                     }
                     _ => unreachable!(),
                 }
+                span_map.insert(opt, Span::new(start_pos, end_pos));
                 i = self.parse_ws(i)?;
                 return Ok(i);
             }
