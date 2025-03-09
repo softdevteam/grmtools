@@ -261,6 +261,7 @@ where
                         spans: vec![*orig_span, Span::new(start_pos, end_pos)],
                     });
                 }
+                span_map.insert(opt, Span::new(start_pos, end_pos));
                 match opt {
                     "dot_matches_new_line" | "multi_line" | "octal" | "posix_escapes" => {
                         match opt {
@@ -272,7 +273,6 @@ where
                             "posix_escapes" => self.regex_options.posix_escapes = flag,
                             _ => unreachable!(),
                         }
-                        span_map.insert(opt, Span::new(start_pos, end_pos));
                     }
                     "case_insensitive" | "swap_greed" | "ignore_whitespace" | "unicode" => {
                         match opt {
@@ -284,7 +284,6 @@ where
                             "unicode" => self.regex_options.unicode = Some(flag),
                             _ => unreachable!(),
                         }
-                        span_map.insert(opt, Span::new(start_pos, end_pos));
                     }
                     "size_limit" | "dfa_size_limit" | "nest_limit" => {
                         if !flag {
@@ -313,8 +312,6 @@ where
                             }
                             _ => unreachable!(),
                         }
-
-                        span_map.insert(opt, Span::new(start_pos, end_pos));
                         i = j;
                     }
                     _ => unreachable!(),
