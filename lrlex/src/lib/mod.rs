@@ -24,8 +24,8 @@ pub use crate::{
     ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility},
     defaults::{DefaultLexeme, DefaultLexerTypes},
     lexer::{
-        LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, RegexOptions, Rule,
-        DEFAULT_REGEX_OPTIONS,
+        LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef, Rule, DEFAULT_LEX_FLAGS,
+        UNSPECIFIED_LEX_FLAGS,
     },
     parser::StartState,
     parser::StartStateOperation,
