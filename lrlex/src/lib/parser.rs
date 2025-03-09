@@ -272,7 +272,6 @@ where
                         }
                         i += opt.len();
                         span_map.insert(opt, Span::new(start_pos, i));
-                        return self.parse_nl(i);
                     }
                     "case_insensitive" | "swap_greed" | "ignore_whitespace" | "unicode" => {
                         i += opt.len();
