@@ -368,7 +368,7 @@ where
                 break Err(self.mk_error(LexErrorKind::PrematureEnd, i));
             }
             if let Some(j) = self.lookahead_is("%%", i) {
-                break Ok(j);
+                break Ok(self.parse_spaces(j)?);
             }
             i = self.parse_declaration(i, errs)?;
         }
@@ -501,15 +501,15 @@ where
             let j = self.parse_ws(i)?;
             if j != i {
                 let line_len = RE_LINE_SEP
-                    .find(&self.src[j..])
+                    .find(&self.src[i..])
                     .map(|m| m.start())
-                    .unwrap_or(self.src.len() - j);
+                    .unwrap_or(self.src.len() - i);
                 let err = LexBuildError {
                     kind: LexErrorKind::VerbatimNotSupported,
                     spans: vec![Span::new(i, i + line_len)],
                 };
                 errs.push(err);
-                i = j + line_len;
+                i += line_len;
                 continue;
             }
             if i == self.src.len() {
@@ -1791,9 +1791,25 @@ b "A"
 "#;
         LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).unwrap();
         let src = r#"
+        %%  
+. "SpacesAfterPercentsDontError"
+"#;
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).unwrap();
+        let src = r#"
 %%
  // Historical practice is that in the rules section entries starting with whitespace are copied verbatim into generated code. This is not supported.
 . "InitialWhitespaceDoError"
+"#;
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_line_col(
+            src,
+            LexErrorKind::VerbatimNotSupported,
+            3,
+            1,
+        );
+        let src = r#"
+%%
+    
+. "SpacesOnlyDoError"
 "#;
         LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_line_col(
             src,
