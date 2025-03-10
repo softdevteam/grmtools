@@ -20,12 +20,16 @@ use crate::{
 
 #[doc(hidden)]
 /// Corresponds to the options for `regex::RegexBuilder`.
-#[derive(Clone)]
-pub struct RegexOptions {
-    pub dot_matches_new_line: bool,
-    pub multi_line: bool,
-    pub octal: bool,
-    pub posix_escapes: bool,
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct LexFlags {
+    // The following values when `None` grmtools provides default values for in `DEFAULT_LEX_FLAGS`
+    pub dot_matches_new_line: Option<bool>,
+    pub multi_line: Option<bool>,
+    pub octal: Option<bool>,
+    pub posix_escapes: Option<bool>,
+
+    // All the following values when `None` default to the `regex` crate's default value.
     pub case_insensitive: Option<bool>,
     pub swap_greed: Option<bool>,
     pub ignore_whitespace: Option<bool>,
@@ -35,11 +39,67 @@ pub struct RegexOptions {
     pub nest_limit: Option<u32>,
 }
 
-pub const DEFAULT_REGEX_OPTIONS: RegexOptions = RegexOptions {
-    dot_matches_new_line: true,
-    multi_line: true,
-    octal: true,
-    posix_escapes: false,
+impl LexFlags {
+    /// Merges flags from `other` into `self`
+    /// Flags which are `Some` in `other` overriding flags in self.
+    pub fn merge_from(&mut self, other: &Self) {
+        if other.dot_matches_new_line.is_some() {
+            self.dot_matches_new_line = other.dot_matches_new_line;
+        }
+        if other.multi_line.is_some() {
+            self.multi_line = other.multi_line;
+        }
+        if other.octal.is_some() {
+            self.octal = other.octal;
+        }
+        if other.posix_escapes.is_some() {
+            self.posix_escapes = other.posix_escapes;
+        }
+        if other.case_insensitive.is_some() {
+            self.case_insensitive = other.case_insensitive;
+        }
+        if other.swap_greed.is_some() {
+            self.swap_greed = other.swap_greed;
+        }
+        if other.ignore_whitespace.is_some() {
+            self.ignore_whitespace = other.ignore_whitespace;
+        }
+        if other.unicode.is_some() {
+            self.unicode = other.unicode;
+        }
+        if other.size_limit.is_some() {
+            self.size_limit = other.size_limit;
+        }
+        if other.dfa_size_limit.is_some() {
+            self.dfa_size_limit = other.dfa_size_limit;
+        }
+        if other.nest_limit.is_some() {
+            self.nest_limit = other.nest_limit;
+        }
+    }
+}
+
+/// LexFlags with flags set to default values.
+pub const DEFAULT_LEX_FLAGS: LexFlags = LexFlags {
+    dot_matches_new_line: Some(true),
+    multi_line: Some(true),
+    octal: Some(true),
+    posix_escapes: Some(false),
+    case_insensitive: None,
+    ignore_whitespace: None,
+    swap_greed: None,
+    unicode: None,
+    size_limit: None,
+    dfa_size_limit: None,
+    nest_limit: None,
+};
+
+/// LexFlags with all of the values `None`.
+pub const UNSPECIFIED_LEX_FLAGS: LexFlags = LexFlags {
+    dot_matches_new_line: None,
+    multi_line: None,
+    octal: None,
+    posix_escapes: None,
     case_insensitive: None,
     ignore_whitespace: None,
     swap_greed: None,
@@ -91,33 +151,33 @@ impl<StorageT: PrimInt> Rule<StorageT> {
         re_str: String,
         start_states: Vec<usize>,
         target_state: Option<(usize, StartStateOperation)>,
-        re_opt: &RegexOptions,
+        lex_flags: &LexFlags,
     ) -> Result<Rule<StorageT>, regex::Error> {
         let mut re = RegexBuilder::new(&format!("\\A(?:{})", re_str));
         let mut re = re
-            .octal(re_opt.octal)
-            .multi_line(re_opt.multi_line)
-            .dot_matches_new_line(re_opt.dot_matches_new_line);
+            .octal(lex_flags.octal.unwrap())
+            .multi_line(lex_flags.multi_line.unwrap())
+            .dot_matches_new_line(lex_flags.dot_matches_new_line.unwrap());
 
-        if let Some(flag) = re_opt.ignore_whitespace {
+        if let Some(flag) = lex_flags.ignore_whitespace {
             re = re.ignore_whitespace(flag)
         }
-        if let Some(flag) = re_opt.unicode {
+        if let Some(flag) = lex_flags.unicode {
             re = re.unicode(flag)
         }
-        if let Some(flag) = re_opt.case_insensitive {
+        if let Some(flag) = lex_flags.case_insensitive {
             re = re.case_insensitive(flag)
         }
-        if let Some(flag) = re_opt.swap_greed {
+        if let Some(flag) = lex_flags.swap_greed {
             re = re.swap_greed(flag)
         }
-        if let Some(sz) = re_opt.size_limit {
+        if let Some(sz) = lex_flags.size_limit {
             re = re.size_limit(sz)
         }
-        if let Some(sz) = re_opt.dfa_size_limit {
+        if let Some(sz) = lex_flags.dfa_size_limit {
             re = re.dfa_size_limit(sz)
         }
-        if let Some(lim) = re_opt.nest_limit {
+        if let Some(lim) = lex_flags.nest_limit {
             re = re.nest_limit(lim)
         }
 
@@ -242,6 +302,7 @@ where
 {
     rules: Vec<Rule<LexerTypesT::StorageT>>,
     start_states: Vec<StartState>,
+    lex_flags: Option<LexFlags>,
     phantom: PhantomData<LexerTypesT>,
 }
 
@@ -257,6 +318,7 @@ where
         LRNonStreamingLexerDef {
             rules,
             start_states,
+            lex_flags: None,
             phantom: PhantomData,
         }
     }
@@ -265,6 +327,7 @@ where
         LexParser::<LexerTypesT>::new(s.to_string()).map(|p| LRNonStreamingLexerDef {
             rules: p.rules,
             start_states: p.start_states,
+            lex_flags: Some(p.lex_flags),
             phantom: PhantomData,
         })
     }
@@ -372,14 +435,19 @@ where
 {
     pub fn new_with_options(
         s: &str,
-        re_opts: RegexOptions,
+        force_lex_flags: LexFlags,
+        default_lex_flags: LexFlags,
     ) -> LexBuildResult<LRNonStreamingLexerDef<LexerTypesT>> {
-        LexParser::<LexerTypesT>::new_with_regex_options(s.to_string(), re_opts).map(|p| {
-            LRNonStreamingLexerDef {
-                rules: p.rules,
-                start_states: p.start_states,
-                phantom: PhantomData,
-            }
+        LexParser::<LexerTypesT>::new_with_lex_flags(
+            s.to_string(),
+            force_lex_flags,
+            default_lex_flags,
+        )
+        .map(|p| LRNonStreamingLexerDef {
+            rules: p.rules,
+            start_states: p.start_states,
+            lex_flags: Some(p.lex_flags),
+            phantom: PhantomData,
         })
     }
 
@@ -501,6 +569,10 @@ where
 
     fn get_start_state_by_id(&self, id: usize) -> Option<&StartState> {
         self.start_states.iter().find(|state| state.id == id)
+    }
+
+    pub(crate) fn lex_flags(&self) -> Option<&LexFlags> {
+        self.lex_flags.as_ref()
     }
 }
 
@@ -664,11 +736,14 @@ mod test {
 \q 'normal_char'
 "#
         .to_string();
-        let mut options = DEFAULT_REGEX_OPTIONS;
-        options.posix_escapes = true;
-        let lexerdef =
-            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(&src, options)
-                .unwrap();
+        let mut options = DEFAULT_LEX_FLAGS;
+        options.posix_escapes = Some(true);
+        let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(
+            &src,
+            options,
+            UNSPECIFIED_LEX_FLAGS,
+        )
+        .unwrap();
         let lexemes = lexerdef
             .lexer("\\\x07\x08\x0c\n\r\t\x0bq")
             .iter()
@@ -695,11 +770,14 @@ a\b a 'work_break'
 \q 'normal_char'
 "#
         .to_string();
-        let mut options = DEFAULT_REGEX_OPTIONS;
-        options.posix_escapes = false;
-        let lexerdef =
-            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(&src, options)
-                .unwrap();
+        let mut options = DEFAULT_LEX_FLAGS;
+        options.posix_escapes = Some(false);
+        let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(
+            &src,
+            options,
+            UNSPECIFIED_LEX_FLAGS,
+        )
+        .unwrap();
         let lexemes = lexerdef
             .lexer("\\\x07a a\x0c\n\r\t\x0bq")
             .iter()

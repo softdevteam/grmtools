@@ -24,8 +24,8 @@ pub use crate::{
     ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility},
     defaults::{DefaultLexeme, DefaultLexerTypes},
     lexer::{
-        LRNonStreamingLexer, LRNonStreamingLexerDef, LexerDef, RegexOptions, Rule,
-        DEFAULT_REGEX_OPTIONS,
+        LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef, Rule, DEFAULT_LEX_FLAGS,
+        UNSPECIFIED_LEX_FLAGS,
     },
     parser::StartState,
     parser::StartStateOperation,
@@ -59,6 +59,9 @@ pub enum LexErrorKind {
     InvalidStartStateName,
     DuplicateName,
     RegexError,
+    InvalidGrmtoolsSectionValue,
+    InvalidNumber,
+    DuplicateGrmtoolsSectionValue,
     VerbatimNotSupported,
 }
 
@@ -77,11 +80,13 @@ impl Spanned for LexBuildError {
             | LexErrorKind::UnknownStartState
             | LexErrorKind::InvalidStartState
             | LexErrorKind::InvalidStartStateName
+            | LexErrorKind::InvalidGrmtoolsSectionValue
+            | LexErrorKind::InvalidNumber
             | LexErrorKind::VerbatimNotSupported
             | LexErrorKind::RegexError => SpansKind::Error,
-            LexErrorKind::DuplicateName | LexErrorKind::DuplicateStartState => {
-                SpansKind::DuplicationError
-            }
+            LexErrorKind::DuplicateName
+            | LexErrorKind::DuplicateStartState
+            | LexErrorKind::DuplicateGrmtoolsSectionValue => SpansKind::DuplicationError,
         }
     }
 }
@@ -99,6 +104,9 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::DuplicateStartState => "Start state already exists",
             LexErrorKind::InvalidStartState => "Invalid start state",
             LexErrorKind::InvalidStartStateName => "Invalid start state name",
+            LexErrorKind::InvalidGrmtoolsSectionValue => "Invalid grmtools section value",
+            LexErrorKind::InvalidNumber => "Invalid number",
+            LexErrorKind::DuplicateGrmtoolsSectionValue => "Duplicate grmtools section value",
             LexErrorKind::DuplicateName => "Rule name already exists",
             LexErrorKind::RegexError => "Invalid regular expression",
         };
