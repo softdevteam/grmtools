@@ -507,19 +507,20 @@ pub fn lexerdef() -> {lexerdef_type} {{
         let nest_limit = QuoteOption(nest_limit);
 
         outs.push_str(&format!(
-            "let lex_flags = ::lrlex::LexFlags {{
-            dot_matches_new_line: {dot_matches_new_line},
-            multi_line: {multi_line},
-            octal: {octal},
-            posix_escapes: {posix_escapes},
-            case_insensitive: {case_insensitive},
-            unicode: {unicode},
-            swap_greed: {swap_greed},
-            ignore_whitespace: {ignore_whitespace},
-            size_limit: {size_limit},
-            dfa_size_limit: {dfa_size_limit},
-            nest_limit: {nest_limit},
-        }};",
+            "let mut lex_flags = ::lrlex::DEFAULT_LEX_FLAGS;
+            lex_flags.dot_matches_new_line = {dot_matches_new_line};
+            lex_flags.multi_line = {multi_line};
+            lex_flags.octal = {octal};
+            lex_flags.posix_escapes = {posix_escapes};
+            lex_flags.case_insensitive = {case_insensitive};
+            lex_flags.unicode = {unicode};
+            lex_flags.swap_greed = {swap_greed};
+            lex_flags.ignore_whitespace = {ignore_whitespace};
+            lex_flags.size_limit = {size_limit};
+            lex_flags.dfa_size_limit = {dfa_size_limit};
+            lex_flags.nest_limit = {nest_limit};
+            let lex_flags = lex_flags;
+",
             dot_matches_new_line = quote!(#dot_matches_new_line),
             multi_line = quote!(#multi_line),
             octal = quote!(#octal),

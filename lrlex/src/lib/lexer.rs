@@ -21,6 +21,7 @@ use crate::{
 #[doc(hidden)]
 /// Corresponds to the options for `regex::RegexBuilder`.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct LexFlags {
     // The following values when `None` grmtools provides default values for in `DEFAULT_LEX_FLAGS`
     pub dot_matches_new_line: Option<bool>,
