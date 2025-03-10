@@ -324,7 +324,7 @@ where
     ) -> LexInternalBuildResult<usize> {
         i = self.parse_ws(i)?;
         let mut grmtools_section_span_map = HashMap::new();
-        let mut grmtools_section_lex_flags = DEFAULT_LEX_FLAGS;
+        let mut grmtools_section_lex_flags = UNSPECIFIED_LEX_FLAGS;
         if let Some(j) = self.lookahead_is("%grmtools", i) {
             i = self.parse_ws(j)?;
             if let Some(j) = self.lookahead_is("{", i) {
