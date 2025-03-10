@@ -482,6 +482,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
         .ok();
 
         let LexFlags {
+            allow_wholeline_comments,
             dot_matches_new_line,
             multi_line,
             octal,
@@ -494,6 +495,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             dfa_size_limit,
             nest_limit,
         } = lex_flags;
+        let allow_wholeline_comments = QuoteOption(allow_wholeline_comments);
         let dot_matches_new_line = QuoteOption(dot_matches_new_line);
         let multi_line = QuoteOption(multi_line);
         let octal = QuoteOption(octal);
@@ -508,6 +510,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
 
         outs.push_str(&format!(
             "let mut lex_flags = ::lrlex::DEFAULT_LEX_FLAGS;
+            lex_flags.allow_wholeline_comments = {allow_wholeline_comments};
             lex_flags.dot_matches_new_line = {dot_matches_new_line};
             lex_flags.multi_line = {multi_line};
             lex_flags.octal = {octal};
@@ -521,6 +524,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             lex_flags.nest_limit = {nest_limit};
             let lex_flags = lex_flags;
 ",
+            allow_wholeline_comments = quote!(#allow_wholeline_comments),
             dot_matches_new_line = quote!(#dot_matches_new_line),
             multi_line = quote!(#multi_line),
             octal = quote!(#octal),

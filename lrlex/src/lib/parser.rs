@@ -240,7 +240,8 @@ where
         span_map: &mut HashMap<&str, Span>,
         lex_flags: &mut LexFlags,
     ) -> LexInternalBuildResult<usize> {
-        const OPTIONS: [&str; 11] = [
+        const OPTIONS: [&str; 12] = [
+            "allow_wholeline_comments",
             "dot_matches_new_line",
             "multi_line",
             "octal",
@@ -273,6 +274,7 @@ where
                     });
                 }
                 match opt {
+                    "allow_wholeline_comments" => lex_flags.allow_wholeline_comments = Some(flag),
                     "case_insensitive" => lex_flags.case_insensitive = Some(flag),
                     "swap_greed" => lex_flags.swap_greed = Some(flag),
                     "ignore_whitespace" => lex_flags.ignore_whitespace = Some(flag),
@@ -350,6 +352,15 @@ where
         self.lex_flags.merge_from(&self.default_lex_flags);
         loop {
             i = self.parse_ws(i)?;
+            if self.lex_flags.allow_wholeline_comments.unwrap_or(false)
+                && self.lookahead_is("//", i).is_some()
+            {
+                i = RE_LINE_SEP
+                    .find(&self.src[i..])
+                    .map(|m| m.start() + i)
+                    .unwrap_or(self.src.len());
+                continue;
+            }
             if i == self.src.len() {
                 break Err(self.mk_error(LexErrorKind::PrematureEnd, i));
             }
@@ -470,6 +481,16 @@ where
             // We should be at newline of the previous section separator '%%<here>\n upon entry,
             // otherwise after iterating before the newline of the previous iterations rule or at eof.
             i = self.parse_nl(i)?;
+            let line_len = RE_LINE_SEP
+                .find(&self.src[i..])
+                .map(|m| m.start())
+                .unwrap_or(self.src.len() - i);
+            if self.lex_flags.allow_wholeline_comments.unwrap_or(false)
+                && self.lookahead_is("//", i).is_some()
+            {
+                i += line_len;
+                continue;
+            }
             // According to posix lex:
             //
             // > Any such input (beginning with a <blank> or within "%{" and "%}" delimiter lines)
@@ -486,10 +507,6 @@ where
             // Previously we allowed these, and trimmed leading spaces, parsing any rules after them. Currently we will emit an error.
             let j = self.parse_ws(i)?;
             if j != i {
-                let line_len = RE_LINE_SEP
-                    .find(&self.src[i..])
-                    .map(|m| m.start())
-                    .unwrap_or(self.src.len() - i);
                 let err = LexBuildError {
                     kind: LexErrorKind::VerbatimNotSupported,
                     spans: vec![Span::new(i, i + line_len)],
@@ -1874,6 +1891,43 @@ b "A"
             LexErrorKind::InvalidGrmtoolsSectionValue,
             3,
             3,
+        );
+    }
+
+    #[test]
+    fn test_comments() {
+        let src = r#"
+%grmtools {allow_wholeline_comments}
+// comment
+%s InclusiveState
+%%
+// "comment but an invalid rule name if parsed as a rule"
+\/\/ 'escaping_required'
+. 'dot'
+"#;
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).unwrap();
+        let src = r#"
+// comments not allowed.
+%s InclusiveState
+%%
+. 'dot'
+"#;
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_line_col(
+            src,
+            LexErrorKind::UnknownDeclaration,
+            2,
+            1,
+        );
+        let src = r#"
+%%
+// "Invalid rule name"
+. 'dot'
+"#;
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_line_col(
+            src,
+            LexErrorKind::InvalidName,
+            3,
+            18,
         );
     }
 }
