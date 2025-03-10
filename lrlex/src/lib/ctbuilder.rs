@@ -746,7 +746,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
         self
     }
 
-    /// Sets the `regex::RegexBuilder` option of the same name.
+    /// Enables posix lex compatible escape sequences according to `flag`.
     /// The default value is `false`.
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
