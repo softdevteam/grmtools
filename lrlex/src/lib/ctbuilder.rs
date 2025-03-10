@@ -680,6 +680,18 @@ where
         self
     }
 
+    /// Enables `// comment` style parsing according to `flag``.
+    /// When enabled comments can appear at the beginning of a line,
+    /// and regular expressions with the `/` character should be escaped via `\/`.
+    ///
+    /// The default value is `false`.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
+    pub fn allow_wholeline_comments(mut self, flag: bool) -> Self {
+        self.force_lex_flags.allow_wholeline_comments = Some(flag);
+        self
+    }
+
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// The default value is `true`.
     ///
