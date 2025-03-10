@@ -38,7 +38,8 @@ There are several major differences between Lex and grmtools:
    and ASCII escape sequences. `\\` `\a` `\f` `\n` `\r` `\t` `\v`.
 
    Lex also interprets the escape sequence `\b` as `backspace`.  While regex treats `\b`
-   as a word boundary subsequently grmtools will too.
+   as a word boundary subsequently grmtools will too. The Lex behavior can be enabled
+   using [posix_escapes](lexextensions.md).
 
    Additional escape sequences supported by regex:
 
