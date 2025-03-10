@@ -28,6 +28,7 @@ pub struct LexFlags {
     pub multi_line: Option<bool>,
     pub octal: Option<bool>,
     pub posix_escapes: Option<bool>,
+    pub allow_wholeline_comments: Option<bool>,
 
     // All the following values when `None` default to the `regex` crate's default value.
     pub case_insensitive: Option<bool>,
@@ -43,6 +44,9 @@ impl LexFlags {
     /// Merges flags from `other` into `self`
     /// Flags which are `Some` in `other` overriding flags in self.
     pub fn merge_from(&mut self, other: &Self) {
+        if other.allow_wholeline_comments.is_some() {
+            self.allow_wholeline_comments = other.allow_wholeline_comments;
+        }
         if other.dot_matches_new_line.is_some() {
             self.dot_matches_new_line = other.dot_matches_new_line;
         }
@@ -81,6 +85,7 @@ impl LexFlags {
 
 /// LexFlags with flags set to default values.
 pub const DEFAULT_LEX_FLAGS: LexFlags = LexFlags {
+    allow_wholeline_comments: Some(false),
     dot_matches_new_line: Some(true),
     multi_line: Some(true),
     octal: Some(true),
@@ -96,6 +101,7 @@ pub const DEFAULT_LEX_FLAGS: LexFlags = LexFlags {
 
 /// LexFlags with all of the values `None`.
 pub const UNSPECIFIED_LEX_FLAGS: LexFlags = LexFlags {
+    allow_wholeline_comments: None,
     dot_matches_new_line: None,
     multi_line: None,
     octal: None,
