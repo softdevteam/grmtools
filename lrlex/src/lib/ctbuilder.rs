@@ -24,9 +24,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use regex::Regex;
 use serde::Serialize;
 
-use crate::{
-    DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef, RegexOptions, DEFAULT_REGEX_OPTIONS,
-};
+use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexFlags, LexerDef, UNSPECIFIED_LEX_FLAGS};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -133,7 +131,8 @@ where
     rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
-    regex_options: RegexOptions,
+    force_lex_flags: LexFlags,
+    default_lex_flags: LexFlags,
 }
 
 impl CTLexerBuilder<'_, DefaultLexerTypes<u32>> {
@@ -177,7 +176,8 @@ where
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
-            regex_options: DEFAULT_REGEX_OPTIONS,
+            force_lex_flags: UNSPECIFIED_LEX_FLAGS,
+            default_lex_flags: UNSPECIFIED_LEX_FLAGS,
         }
     }
 
@@ -366,11 +366,14 @@ where
         let lex_src = read_to_string(lexerp)
             .map_err(|e| format!("When reading '{}': {e}", lexerp.display()))?;
         let line_cache = NewlineCache::from_str(&lex_src).unwrap();
-        let mut lexerdef: Box<dyn LexerDef<LexerTypesT>> = match self.lexerkind {
-            LexerKind::LRNonStreamingLexer => Box::new(
-                LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
+        let (mut lexerdef, lex_flags): (Box<dyn LexerDef<LexerTypesT>>, LexFlags) = match self
+            .lexerkind
+        {
+            LexerKind::LRNonStreamingLexer => {
+                let lexerdef = LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
                     &lex_src,
-                    self.regex_options.clone(),
+                    self.force_lex_flags.clone(),
+                    self.default_lex_flags.clone(),
                 )
                 .map_err(|errs| {
                     errs.iter()
@@ -386,8 +389,10 @@ where
                         })
                         .collect::<Vec<_>>()
                         .join("\n")
-                })?,
-            ),
+                })?;
+                let lex_flags = lexerdef.lex_flags().cloned();
+                (Box::new(lexerdef), lex_flags.unwrap())
+            }
         };
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
@@ -476,7 +481,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
         )
         .ok();
 
-        let RegexOptions {
+        let LexFlags {
             dot_matches_new_line,
             multi_line,
             octal,
@@ -488,7 +493,11 @@ pub fn lexerdef() -> {lexerdef_type} {{
             size_limit,
             dfa_size_limit,
             nest_limit,
-        } = self.regex_options;
+        } = lex_flags;
+        let dot_matches_new_line = QuoteOption(dot_matches_new_line);
+        let multi_line = QuoteOption(multi_line);
+        let octal = QuoteOption(octal);
+        let posix_escapes = QuoteOption(posix_escapes);
         let case_insensitive = QuoteOption(case_insensitive);
         let unicode = QuoteOption(unicode);
         let swap_greed = QuoteOption(swap_greed);
@@ -498,19 +507,20 @@ pub fn lexerdef() -> {lexerdef_type} {{
         let nest_limit = QuoteOption(nest_limit);
 
         outs.push_str(&format!(
-            "let regex_options = ::lrlex::RegexOptions {{
-            dot_matches_new_line: {dot_matches_new_line},
-            multi_line: {multi_line},
-            octal: {octal},
-            posix_escapes: {posix_escapes},
-            case_insensitive: {case_insensitive},
-            unicode: {unicode},
-            swap_greed: {swap_greed},
-            ignore_whitespace: {ignore_whitespace},
-            size_limit: {size_limit},
-            dfa_size_limit: {dfa_size_limit},
-            nest_limit: {nest_limit},
-        }};",
+            "let mut lex_flags = ::lrlex::DEFAULT_LEX_FLAGS;
+            lex_flags.dot_matches_new_line = {dot_matches_new_line};
+            lex_flags.multi_line = {multi_line};
+            lex_flags.octal = {octal};
+            lex_flags.posix_escapes = {posix_escapes};
+            lex_flags.case_insensitive = {case_insensitive};
+            lex_flags.unicode = {unicode};
+            lex_flags.swap_greed = {swap_greed};
+            lex_flags.ignore_whitespace = {ignore_whitespace};
+            lex_flags.size_limit = {size_limit};
+            lex_flags.dfa_size_limit = {dfa_size_limit};
+            lex_flags.nest_limit = {nest_limit};
+            let lex_flags = lex_flags;
+",
             dot_matches_new_line = quote!(#dot_matches_new_line),
             multi_line = quote!(#multi_line),
             octal = quote!(#octal),
@@ -553,7 +563,7 @@ pub fn lexerdef() -> {lexerdef_type} {{
             write!(
                 outs,
                 "
-        Rule::new(::lrlex::unstable_api::InternalPublicApi, {}, {}, {}, {}.to_string(), {}.to_vec(), {}, &regex_options).unwrap(),",
+        Rule::new(::lrlex::unstable_api::InternalPublicApi, {}, {}, {}, {}.to_string(), {}.to_vec(), {}, &lex_flags).unwrap(),",
                 quote!(#tok_id),
                 quote!(#n),
                 quote!(#n_span),
@@ -704,78 +714,108 @@ pub fn lexerdef() -> {lexerdef_type} {{
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// The default value is `true`.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn dot_matches_new_line(mut self, flag: bool) -> Self {
-        self.regex_options.dot_matches_new_line = flag;
+        self.force_lex_flags.dot_matches_new_line = Some(flag);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// The default value is `true`.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn multi_line(mut self, flag: bool) -> Self {
-        self.regex_options.multi_line = flag;
+        self.force_lex_flags.multi_line = Some(flag);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// The default value is `false`.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn posix_escapes(mut self, flag: bool) -> Self {
-        self.regex_options.posix_escapes = flag;
+        self.force_lex_flags.posix_escapes = Some(flag);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// The default value is `true`.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn octal(mut self, flag: bool) -> Self {
-        self.regex_options.octal = flag;
+        self.force_lex_flags.octal = Some(flag);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// Default value is specified by regex.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn swap_greed(mut self, flag: bool) -> Self {
-        self.regex_options.swap_greed = Some(flag);
+        self.force_lex_flags.swap_greed = Some(flag);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// Default value is specified by regex.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn ignore_whitespace(mut self, flag: bool) -> Self {
-        self.regex_options.ignore_whitespace = Some(flag);
+        self.force_lex_flags.ignore_whitespace = Some(flag);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// Default value is specified by regex.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn unicode(mut self, flag: bool) -> Self {
-        self.regex_options.unicode = Some(flag);
+        self.force_lex_flags.unicode = Some(flag);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// Default value is specified by regex.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn case_insensitive(mut self, flag: bool) -> Self {
-        self.regex_options.case_insensitive = Some(flag);
+        self.force_lex_flags.case_insensitive = Some(flag);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// Default value is specified by regex.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn size_limit(mut self, sz: usize) -> Self {
-        self.regex_options.size_limit = Some(sz);
+        self.force_lex_flags.size_limit = Some(sz);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// Default value is specified by regex.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn dfa_size_limit(mut self, sz: usize) -> Self {
-        self.regex_options.dfa_size_limit = Some(sz);
+        self.force_lex_flags.dfa_size_limit = Some(sz);
         self
     }
 
     /// Sets the `regex::RegexBuilder` option of the same name.
     /// Default value is specified by regex.
+    ///
+    /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn nest_limit(mut self, lim: u32) -> Self {
-        self.regex_options.nest_limit = Some(lim);
+        self.force_lex_flags.nest_limit = Some(lim);
+        self
+    }
+
+    /// `Some` values in the specified `flags` will be used as a default value
+    /// unless the specified value has already been specified previously via `CTLexerBuilder`
+    /// or was specified in the `%grmtools` section of a *.l* file.
+    pub fn default_lex_flags(mut self, flags: LexFlags) -> Self {
+        self.default_lex_flags = flags;
         self
     }
 }

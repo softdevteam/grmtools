@@ -7,7 +7,7 @@ use std::borrow::{Borrow as _, Cow};
 use std::ops::Not;
 
 use crate::{
-    lexer::{RegexOptions, Rule, DEFAULT_REGEX_OPTIONS},
+    lexer::{LexFlags, Rule, DEFAULT_LEX_FLAGS, UNSPECIFIED_LEX_FLAGS},
     LexBuildError, LexBuildResult, LexErrorKind,
 };
 
@@ -96,7 +96,12 @@ where
     src: String,
     pub(super) rules: Vec<Rule<LexerTypesT::StorageT>>,
     pub(super) start_states: Vec<StartState>,
-    pub(super) regex_options: RegexOptions,
+    /// Forced flags override those in the `%grmtools` section.
+    pub(super) force_lex_flags: LexFlags,
+    /// Default flags are overriden by those in the `%grmtools` section.
+    pub(super) default_lex_flags: LexFlags,
+    /// The resulting flags after parsing the `%grmtools` and merging defaults and forced flags.
+    pub(super) lex_flags: LexFlags,
 }
 
 fn add_duplicate_occurrence(
@@ -140,15 +145,18 @@ where
                 false,
                 Span::new(0, 0),
             )],
-            regex_options: DEFAULT_REGEX_OPTIONS,
+            force_lex_flags: UNSPECIFIED_LEX_FLAGS,
+            default_lex_flags: UNSPECIFIED_LEX_FLAGS,
+            lex_flags: DEFAULT_LEX_FLAGS,
         };
         p.parse()?;
         Ok(p)
     }
 
-    pub(super) fn new_with_regex_options(
+    pub(super) fn new_with_lex_flags(
         src: String,
-        re_opt: RegexOptions,
+        force_lex_flags: LexFlags,
+        default_lex_flags: LexFlags,
     ) -> LexBuildResult<LexParser<LexerTypesT>> {
         let mut p = LexParser {
             src,
@@ -159,7 +167,9 @@ where
                 false,
                 Span::new(0, 0),
             )],
-            regex_options: re_opt,
+            force_lex_flags,
+            default_lex_flags,
+            lex_flags: DEFAULT_LEX_FLAGS,
         };
         p.parse()?;
         Ok(p)
@@ -227,6 +237,11 @@ where
         mut i: usize,
         errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<usize> {
+        let mut grmtools_section_lex_flags = DEFAULT_LEX_FLAGS;
+        grmtools_section_lex_flags.merge_from(&self.force_lex_flags);
+        self.default_lex_flags
+            .merge_from(&grmtools_section_lex_flags);
+        self.lex_flags.merge_from(&self.default_lex_flags);
         loop {
             i = self.parse_ws(i)?;
             if i == self.src.len() {
@@ -466,7 +481,7 @@ where
                 re_str.to_string(),
                 start_states,
                 target_state,
-                &self.regex_options,
+                &self.lex_flags,
             )
             .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
             self.rules.push(rule);
@@ -503,7 +518,7 @@ where
             /// XBD File Format Notation ( '\\', '\a', '\b', '\f' , '\n', '\r', '\t', '\v' ).
             ///
             /// Meaning: The character 'c', unchanged.
-            fn unescape<'b>(re: Cow<'b, str>, regex_options: &'_ RegexOptions) -> Cow<'b, str> {
+            fn unescape<'b>(re: Cow<'b, str>, lex_flags: &'_ LexFlags) -> Cow<'b, str> {
                 // POSIX lex has two layers of escaping, there are escapes for the regular
                 // expressions themselves and the escapes which get handled by lex directly.
                 // We can find what the `regex` crate needs to be escaped with `is_meta_character`.
@@ -554,7 +569,7 @@ where
                 'outer: while let Some((i, s, j, c)) = cursor {
                     if c == 'b' {
                         unescaped.push_str(&re_str[last_pos..i]);
-                        unescaped.push_str(if regex_options.posix_escapes {
+                        unescaped.push_str(if let Some(true) = lex_flags.posix_escapes {
                             "\\x08"
                         } else {
                             "\\b"
@@ -591,7 +606,7 @@ where
                 Cow::from(unescaped)
             }
 
-            Ok((vec![], unescape(Cow::from(re_str), &self.regex_options)))
+            Ok((vec![], unescape(Cow::from(re_str), &self.lex_flags)))
         } else {
             match re_str.find('>') {
                 None => Err(self.mk_error(LexErrorKind::InvalidStartState, off)),
