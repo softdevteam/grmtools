@@ -46,7 +46,7 @@ pub struct LexBuildError {
 impl Error for LexBuildError {}
 
 /// The various different possible Lex parser errors.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum LexErrorKind {
     PrematureEnd,
@@ -59,11 +59,35 @@ pub enum LexErrorKind {
     InvalidStartState,
     InvalidStartStateName,
     DuplicateName,
-    RegexError,
+    RegexError(regex::Error),
     InvalidGrmtoolsSectionValue,
     InvalidNumber,
     DuplicateGrmtoolsSectionValue,
     VerbatimNotSupported,
+}
+
+impl LexErrorKind {
+    fn is_same_kind(&self, other: &Self) -> bool {
+        use LexErrorKind as EK;
+        match (self, other) {
+            (EK::PrematureEnd, EK::PrematureEnd)
+            | (EK::RoutinesNotSupported, EK::RoutinesNotSupported)
+            | (EK::UnknownDeclaration, EK::UnknownDeclaration)
+            | (EK::MissingSpace, EK::MissingSpace)
+            | (EK::InvalidName, EK::InvalidName)
+            | (EK::UnknownStartState, EK::UnknownStartState)
+            | (EK::DuplicateStartState, EK::DuplicateStartState)
+            | (EK::InvalidStartState, EK::InvalidStartState)
+            | (EK::InvalidStartStateName, EK::InvalidStartStateName)
+            | (EK::DuplicateName, EK::DuplicateName)
+            | (EK::InvalidGrmtoolsSectionValue, EK::InvalidGrmtoolsSectionValue)
+            | (EK::InvalidNumber, EK::InvalidNumber)
+            | (EK::DuplicateGrmtoolsSectionValue, EK::DuplicateGrmtoolsSectionValue)
+            | (EK::RegexError(_), EK::RegexError(_))
+            | (EK::VerbatimNotSupported, EK::VerbatimNotSupported) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Spanned for LexBuildError {
@@ -84,7 +108,7 @@ impl Spanned for LexBuildError {
             | LexErrorKind::InvalidGrmtoolsSectionValue
             | LexErrorKind::InvalidNumber
             | LexErrorKind::VerbatimNotSupported
-            | LexErrorKind::RegexError => SpansKind::Error,
+            | LexErrorKind::RegexError(_) => SpansKind::Error,
             LexErrorKind::DuplicateName
             | LexErrorKind::DuplicateStartState
             | LexErrorKind::DuplicateGrmtoolsSectionValue => SpansKind::DuplicationError,
@@ -94,7 +118,7 @@ impl Spanned for LexBuildError {
 
 impl fmt::Display for LexBuildError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match self.kind {
+        let s = match &self.kind {
             LexErrorKind::VerbatimNotSupported => "Verbatim code not supported",
             LexErrorKind::PrematureEnd => "File ends prematurely",
             LexErrorKind::RoutinesNotSupported => "Routines not currently supported",
@@ -109,7 +133,7 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::InvalidNumber => "Invalid number",
             LexErrorKind::DuplicateGrmtoolsSectionValue => "Duplicate grmtools section value",
             LexErrorKind::DuplicateName => "Rule name already exists",
-            LexErrorKind::RegexError => "Invalid regular expression",
+            LexErrorKind::RegexError(e) => return write!(f, "Invalid regular expression: {e}"),
         };
         write!(f, "{s}")
     }

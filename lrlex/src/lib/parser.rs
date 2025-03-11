@@ -125,7 +125,7 @@ fn add_duplicate_occurrence(
     dup_span: Span,
 ) {
     if !errs.iter_mut().any(|e| {
-        if e.kind == kind && e.spans[0] == orig_span {
+        if e.kind.is_same_kind(&kind) && e.spans[0] == orig_span {
             e.spans.push(dup_span);
             true
         } else {
@@ -618,7 +618,7 @@ where
                 target_state,
                 &self.lex_flags,
             )
-            .map_err(|_| self.mk_error(LexErrorKind::RegexError, i))?;
+            .map_err(|e| self.mk_error(LexErrorKind::RegexError(e), i))?;
             self.rules.push(rule);
         }
         Ok(i + line_len)
@@ -864,7 +864,7 @@ mod test {
                 .expect_err("Parsed ok while expecting error");
             assert_eq!(errs.len(), 1);
             let e = &errs[0];
-            assert_eq!(e.kind, kind);
+            assert!(e.kind.is_same_kind(&kind));
             assert_eq!(
                 e.spans()
                     .iter()
@@ -892,20 +892,22 @@ mod test {
                 }
             }
 
-            assert_eq!(
-                errs.iter()
-                    .map(|e| {
-                        (
-                            e.kind.clone(),
-                            e.spans()
-                                .iter()
-                                .map(|span| line_col!(src, span))
-                                .collect::<Vec<_>>(),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-                expected.collect::<Vec<_>>()
-            );
+            for ((ek1, es1), (ek2, es2)) in errs
+                .iter()
+                .map(|e| {
+                    (
+                        e.kind.clone(),
+                        e.spans()
+                            .iter()
+                            .map(|span| line_col!(src, span))
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .zip(expected)
+            {
+                assert!(ek1.is_same_kind(&ek2));
+                assert_eq!(es1, es2);
+            }
         }
     }
 
