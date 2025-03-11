@@ -382,34 +382,46 @@ impl YaccParser {
         update_yacc_kind: bool,
     ) -> Result<usize, YaccGrammarError> {
         // Compares haystack converted to lowercase to needle (assumed to be lowercase).
-        fn starts_with_lower(needle: &'static str, haystack: &'_ str) -> bool {
+        fn starts_with_lower(needle: &'_ str, haystack: &'_ str) -> bool {
             if let Some((prefix, _)) = haystack.split_at_checked(needle.len()) {
                 prefix.to_lowercase() == needle
             } else {
                 false
             }
         }
-
-        const YACC_KINDS: [(&str, YaccKind); 5] = [
-            ("grmtools", YaccKind::Grmtools),
-            (
-                "original(noaction)",
-                YaccKind::Original(YaccOriginalActionKind::NoAction),
-            ),
-            (
-                "original(useraction)",
-                YaccKind::Original(YaccOriginalActionKind::UserAction),
-            ),
-            (
-                "original(genericparsetree)",
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            ),
-            ("Eco", YaccKind::Eco),
+        const ACTION_KINDS: [(&str, YaccOriginalActionKind); 3] = [
+            ("noaction", YaccOriginalActionKind::NoAction),
+            ("useraction", YaccOriginalActionKind::UserAction),
+            ("genericparsetree", YaccOriginalActionKind::GenericParseTree),
         ];
+
+        let mut yacc_kinds = vec![
+            ("grmtools".to_string(), YaccKind::Grmtools),
+            ("yacckind::grmtools".to_string(), YaccKind::Grmtools),
+            ("Eco".to_string(), YaccKind::Eco),
+            ("yackind::Eco".to_string(), YaccKind::Eco),
+        ];
+        for (name, action_kind) in ACTION_KINDS {
+            let yk = "YaccKind".to_lowercase();
+            let ak = "YaccOriginalActionKind".to_lowercase();
+            yacc_kinds.push((format!("original({name})"), YaccKind::Original(action_kind)));
+            yacc_kinds.push((
+                format!("{yk}::original({name})"),
+                YaccKind::Original(action_kind),
+            ));
+            yacc_kinds.push((
+                format!("{yk}::original({ak}::{name})"),
+                YaccKind::Original(action_kind),
+            ));
+            yacc_kinds.push((
+                format!("original({ak}::{name})"),
+                YaccKind::Original(action_kind),
+            ));
+        }
         let j = self.parse_ws(i, false)?;
         let s = &self.src[i..];
-        for (kind_name, kind) in YACC_KINDS {
-            if starts_with_lower(kind_name, s) {
+        for (kind_name, kind) in yacc_kinds {
+            if starts_with_lower(&kind_name, s) {
                 if update_yacc_kind {
                     self.yacc_kind = Some(kind);
                 }
@@ -2763,5 +2775,32 @@ B";
         B: {} ;
         ";
         parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
+    }
+
+    #[test]
+    fn test_grmtools_section_yacckinds() {
+        let srcs = [
+            "%grmtools{yacckind Original(NoAction)}
+             %%
+             Start: ;",
+            "%grmtools{yacckind YaccKind::Original(GenericParseTree)}
+             %%
+             Start: ;",
+            "%grmtools{yacckind YaccKind::Original(yaccoriginalactionkind::useraction)}
+             %actiontype ()
+             %%
+             Start: ;",
+            "%grmtools{yacckind Original(YACCOriginalActionKind::NoAction)}
+             %%
+             Start: ;",
+            "%grmtools{yacckind YaccKind::Grmtools}
+             %%
+             Start -> () : ;",
+        ];
+        for src in srcs {
+            YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
+                .parse()
+                .unwrap();
+        }
     }
 }
