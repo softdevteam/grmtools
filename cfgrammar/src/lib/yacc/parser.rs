@@ -23,6 +23,7 @@ use super::{
 
 /// The various different possible Yacc parser errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[non_exhaustive]
 pub enum YaccGrammarErrorKind {
     IllegalInteger,
     IllegalName,

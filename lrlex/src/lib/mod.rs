@@ -47,6 +47,7 @@ impl Error for LexBuildError {}
 
 /// The various different possible Lex parser errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[non_exhaustive]
 pub enum LexErrorKind {
     PrematureEnd,
     RoutinesNotSupported,
