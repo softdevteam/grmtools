@@ -2,7 +2,6 @@
 
 use std::{
     any::type_name,
-    borrow::Cow,
     collections::{HashMap, HashSet},
     env::{current_dir, var},
     error::Error,
@@ -20,7 +19,7 @@ use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, LexerTypes};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use regex::Regex;
 use serde::Serialize;
 
@@ -54,16 +53,19 @@ pub enum Visibility {
     PublicIn(String),
 }
 
-impl Visibility {
-    fn cow_str(&self) -> Cow<'static, str> {
-        match self {
-            Visibility::Private => Cow::from(""),
-            Visibility::Public => Cow::from("pub"),
-            Visibility::PublicSuper => Cow::from("pub(super)"),
-            Visibility::PublicSelf => Cow::from("pub(self)"),
-            Visibility::PublicCrate => Cow::from("pub(crate)"),
-            Visibility::PublicIn(data) => Cow::from(format!("pub(in {})", data)),
-        }
+impl ToTokens for Visibility {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Visibility::Private => quote!(),
+            Visibility::Public => quote! {pub},
+            Visibility::PublicSuper => quote! {pub(super)},
+            Visibility::PublicSelf => quote! {pub(self)},
+            Visibility::PublicCrate => quote! {pub(crate)},
+            Visibility::PublicIn(data) => {
+                let other = str::parse::<TokenStream>(data).unwrap();
+                quote! {pub(in #other)}
+            }
+        })
     }
 }
 
@@ -452,163 +454,125 @@ where
                 format!("{}_l", stem)
             }
         };
+        let mod_name = format_ident!("{}", mod_name);
+        let mut lexerdef_func_impl = {
+            let LexFlags {
+                allow_wholeline_comments,
+                dot_matches_new_line,
+                multi_line,
+                octal,
+                posix_escapes,
+                case_insensitive,
+                unicode,
+                swap_greed,
+                ignore_whitespace,
+                size_limit,
+                dfa_size_limit,
+                nest_limit,
+            } = lex_flags;
+            let allow_wholeline_comments = QuoteOption(allow_wholeline_comments);
+            let dot_matches_new_line = QuoteOption(dot_matches_new_line);
+            let multi_line = QuoteOption(multi_line);
+            let octal = QuoteOption(octal);
+            let posix_escapes = QuoteOption(posix_escapes);
+            let case_insensitive = QuoteOption(case_insensitive);
+            let unicode = QuoteOption(unicode);
+            let swap_greed = QuoteOption(swap_greed);
+            let ignore_whitespace = QuoteOption(ignore_whitespace);
+            let size_limit = QuoteOption(size_limit);
+            let dfa_size_limit = QuoteOption(dfa_size_limit);
+            let nest_limit = QuoteOption(nest_limit);
 
-        let mut outs = String::new();
-        //
-        // Header
-
-        let (lexerdef_name, lexerdef_type) = match self.lexerkind {
-            LexerKind::LRNonStreamingLexer => (
-                "LRNonStreamingLexerDef",
-                format!(
-                    "LRNonStreamingLexerDef<{lexertypest}>",
-                    lexertypest = type_name::<LexerTypesT>()
-                ),
-            ),
+            // Code gen for the lexerdef() `lex_flags` variable.
+            quote! {
+                let mut lex_flags = ::lrlex::DEFAULT_LEX_FLAGS;
+                lex_flags.allow_wholeline_comments = #allow_wholeline_comments;
+                lex_flags.dot_matches_new_line = #dot_matches_new_line;
+                lex_flags.multi_line = #multi_line;
+                lex_flags.octal = #octal;
+                lex_flags.posix_escapes = #posix_escapes;
+                lex_flags.case_insensitive = #case_insensitive;
+                lex_flags.unicode = #unicode;
+                lex_flags.swap_greed = #swap_greed;
+                lex_flags.ignore_whitespace = #ignore_whitespace;
+                lex_flags.size_limit = #size_limit;
+                lex_flags.dfa_size_limit = #dfa_size_limit;
+                lex_flags.nest_limit = #nest_limit;
+                let lex_flags = lex_flags;
+            }
         };
-
-        write!(
-            outs,
-            "{mod_vis} mod {mod_name} {{
-use lrlex::{{LexerDef, LRNonStreamingLexerDef, Rule, StartState}};
-
-#[allow(dead_code)]
-pub fn lexerdef() -> {lexerdef_type} {{
-",
-            mod_vis = self.visibility.cow_str(),
-            mod_name = mod_name,
-            lexerdef_type = lexerdef_type
-        )
-        .ok();
-
-        let LexFlags {
-            allow_wholeline_comments,
-            dot_matches_new_line,
-            multi_line,
-            octal,
-            posix_escapes,
-            case_insensitive,
-            unicode,
-            swap_greed,
-            ignore_whitespace,
-            size_limit,
-            dfa_size_limit,
-            nest_limit,
-        } = lex_flags;
-        let allow_wholeline_comments = QuoteOption(allow_wholeline_comments);
-        let dot_matches_new_line = QuoteOption(dot_matches_new_line);
-        let multi_line = QuoteOption(multi_line);
-        let octal = QuoteOption(octal);
-        let posix_escapes = QuoteOption(posix_escapes);
-        let case_insensitive = QuoteOption(case_insensitive);
-        let unicode = QuoteOption(unicode);
-        let swap_greed = QuoteOption(swap_greed);
-        let ignore_whitespace = QuoteOption(ignore_whitespace);
-        let size_limit = QuoteOption(size_limit);
-        let dfa_size_limit = QuoteOption(dfa_size_limit);
-        let nest_limit = QuoteOption(nest_limit);
-
-        outs.push_str(&format!(
-            "let mut lex_flags = ::lrlex::DEFAULT_LEX_FLAGS;
-            lex_flags.allow_wholeline_comments = {allow_wholeline_comments};
-            lex_flags.dot_matches_new_line = {dot_matches_new_line};
-            lex_flags.multi_line = {multi_line};
-            lex_flags.octal = {octal};
-            lex_flags.posix_escapes = {posix_escapes};
-            lex_flags.case_insensitive = {case_insensitive};
-            lex_flags.unicode = {unicode};
-            lex_flags.swap_greed = {swap_greed};
-            lex_flags.ignore_whitespace = {ignore_whitespace};
-            lex_flags.size_limit = {size_limit};
-            lex_flags.dfa_size_limit = {dfa_size_limit};
-            lex_flags.nest_limit = {nest_limit};
-            let lex_flags = lex_flags;
-",
-            allow_wholeline_comments = quote!(#allow_wholeline_comments),
-            dot_matches_new_line = quote!(#dot_matches_new_line),
-            multi_line = quote!(#multi_line),
-            octal = quote!(#octal),
-            posix_escapes = quote!(#posix_escapes),
-            case_insensitive = quote!(#case_insensitive),
-            unicode = quote!(#unicode),
-            swap_greed = quote!(#swap_greed),
-            ignore_whitespace = quote!(#ignore_whitespace),
-            size_limit = quote!(#size_limit),
-            dfa_size_limit = quote!(#dfa_size_limit),
-            nest_limit = quote!(#nest_limit),
-        ));
-
-        outs.push_str("    let start_states: Vec<StartState> = vec![");
-        for ss in lexerdef.iter_start_states() {
-            let state_name = &ss.name;
-            write!(
-                outs,
-                "
-        StartState::new({}, {}, {}, ::cfgrammar::Span::new({}, {})),",
-                ss.id,
-                quote!(#state_name),
-                ss.exclusive,
-                ss.name_span.start(),
-                ss.name_span.end()
-            )
-            .ok();
+        {
+            let start_states = lexerdef.iter_start_states();
+            let rules = lexerdef.iter_rules().map(|r| {
+                    let tok_id = QuoteOption(r.tok_id);
+                    let n = QuoteOption(r.name().map(QuoteToString));
+                    let target_state =
+                        QuoteOption(r.target_state().map(|(x, y)| QuoteTuple((x, y))));
+                    let n_span = r.name_span();
+                    let regex = QuoteToString(&r.re_str);
+                    let start_states = r.start_states();
+                    // Code gen to construct a rule.
+                    //
+                    // We cannot `impl ToToken for Rule` because `Rule` never stores `lex_flags`,
+                    // Thus we reference the local lex_flags variable bound earlier.
+                    quote! {
+                        Rule::new(::lrlex::unstable_api::InternalPublicApi, #tok_id, #n, #n_span, #regex.to_string(),
+                                vec![#(#start_states),*], #target_state, &lex_flags).unwrap()
+                    }
+                });
+            // Code gen for `lexerdef()`s rules and the stack of `start_states`.
+            lexerdef_func_impl.append_all(quote! {
+                let start_states: Vec<StartState> = vec![#(#start_states),*];
+                let rules = vec![#(#rules),*];
+            });
         }
-        outs.push_str("\n    ];\n");
-        outs.push_str("    let rules = vec![");
+        let lexerdef_ty = match self.lexerkind {
+            LexerKind::LRNonStreamingLexer => {
+                quote!(::lrlex::LRNonStreamingLexerDef)
+            }
+        };
+        // Code gen for the lexerdef() return value referencing variables bound earlier.
+        lexerdef_func_impl.append_all(quote! {
+            #lexerdef_ty::from_rules(start_states, rules)
+        });
 
-        // Individual rules
-        for r in lexerdef.iter_rules() {
-            let tok_id = QuoteOption(r.tok_id);
-            let n = QuoteOption(r.name().map(QuoteToString));
-            let target_state = QuoteOption(r.target_state().map(|(x, y)| QuoteTuple((x, y))));
-            let n_span = r.name_span();
-            let regex = QuoteToString(&r.re_str);
-            let start_states = r.start_states();
-            write!(
-                outs,
-                "
-        Rule::new(::lrlex::unstable_api::InternalPublicApi, {}, {}, {}, {}.to_string(), {}.to_vec(), {}, &lex_flags).unwrap(),",
-                quote!(#tok_id),
-                quote!(#n),
-                quote!(#n_span),
-                quote!(#regex),
-                quote!([#(#start_states),*]),
-                quote!(#target_state),
-            )
-            .ok();
-        }
-
-        // Footer
-        write!(
-            outs,
-            "
-    ];
-    {lexerdef_name}::from_rules(start_states, rules)
-}}
-
-",
-            lexerdef_name = lexerdef_name
-        )
-        .ok();
-
-        // Token IDs
-        if let Some(ref rim) = self.rule_ids_map {
-            for (n, id) in rim {
-                if RE_TOKEN_ID.is_match(n) {
-                    write!(
-                        outs,
-                        "#[allow(dead_code)]\npub const T_{}: {} = {};\n",
-                        n.to_ascii_uppercase(),
-                        type_name::<LexerTypesT::StorageT>(),
-                        quote!(#id)
-                    )
-                    .ok();
+        let mut token_consts = TokenStream::new();
+        if let Some(rim) = self.rule_ids_map {
+            for (name, id) in rim {
+                if RE_TOKEN_ID.is_match(&name) {
+                    let tok_ident = format_ident!("N_{}", name.to_ascii_uppercase());
+                    let storaget =
+                        str::parse::<TokenStream>(type_name::<LexerTypesT::StorageT>()).unwrap();
+                    // Code gen for the constant token values.
+                    let tok_const = quote! {
+                        #[allow(dead_code)]
+                        pub const #tok_ident: #storaget = #id;
+                    };
+                    token_consts.extend(tok_const)
                 }
             }
         }
+        let token_consts = token_consts.into_iter();
+        let out_tokens = {
+            let lexerdef_param = str::parse::<TokenStream>(type_name::<LexerTypesT>()).unwrap();
+            let mod_vis = self.visibility;
+            // Code gen for the generated module.
+            quote! {
+                #mod_vis mod #mod_name {
+                    use ::lrlex::{LexerDef, Rule, StartState};
+                    #[allow(dead_code)]
+                    pub fn lexerdef() -> #lexerdef_ty<#lexerdef_param> {
+                        #lexerdef_func_impl
+                    }
 
-        // Footer
-        outs.push('}');
+                    #(#token_consts)*
+                }
+            }
+        };
+
+        // Pretty print it.
+        let out_file = syn::parse_file(&out_tokens.to_string()).unwrap();
+        let outs = prettyplease::unparse(&out_file);
 
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the

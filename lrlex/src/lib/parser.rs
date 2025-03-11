@@ -2,6 +2,8 @@ use cfgrammar::Span;
 use lazy_static::lazy_static;
 use lrpar::LexerTypes;
 use num_traits::AsPrimitive;
+use proc_macro2::TokenStream;
+use quote::quote;
 use regex::Regex;
 use std::borrow::{Borrow as _, Cow};
 use std::collections::HashMap;
@@ -71,6 +73,18 @@ impl StartState {
     }
 }
 
+impl quote::ToTokens for StartState {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let StartState {
+            id,
+            name,
+            name_span,
+            exclusive,
+        } = &self;
+        tokens.extend(quote! {::lrlex::StartState::new(#id, #name, #exclusive, #name_span)})
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[doc(hidden)]
 pub enum StartStateOperation {
@@ -79,8 +93,6 @@ pub enum StartStateOperation {
     Pop,
 }
 
-use proc_macro2::TokenStream;
-use quote::quote;
 impl quote::ToTokens for StartStateOperation {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(match *self {
