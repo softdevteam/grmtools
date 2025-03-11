@@ -1,3 +1,4 @@
+%grmtools {yacckind Grmtools}
 %token Incr Decr
 %parse-param val: Rc<RefCell<i64>>
 %%
