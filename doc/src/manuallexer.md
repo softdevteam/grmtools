@@ -38,13 +38,11 @@ Putting these together is then relatively easy. First a `build.rs` file for a
 hand-written lexer will look roughly as follows:
 
 ```rust
-use cfgrammar::yacc::YaccKind;
 use lrlex::{ct_token_map, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
 fn main() {
     let ctp = CTParserBuilder::<DefaultLexerTypes<u8>>::new()
-        .yacckind(YaccKind::Grmtools)
         .grammar_in_src_dir("grammar.y")
         .unwrap()
         .build()
