@@ -114,6 +114,7 @@ pub struct Production {
 pub enum Symbol {
     Rule(String, Span),
     Token(String, Span),
+    Empty(Span),
 }
 
 /// Specifies an index into a `GrammarAst.tokens` or a `GrammarAST.rules`.
@@ -143,6 +144,7 @@ impl fmt::Display for Symbol {
         match *self {
             Symbol::Rule(ref s, _) => write!(f, "{}", s),
             Symbol::Token(ref s, _) => write!(f, "{}", s),
+            Symbol::Empty(_) => write!(f, "%empty"),
         }
     }
 }
@@ -272,6 +274,7 @@ impl GrammarAST {
                                 });
                             }
                         }
+                        Symbol::Empty(_) => {}
                     }
                 }
             }
@@ -310,6 +313,7 @@ impl GrammarAST {
                         });
                     }
                 }
+                Symbol::Empty(_) => {}
             }
         }
         Ok(())
@@ -321,6 +325,9 @@ impl GrammarAST {
                 let (kind, span) = match symidx.symbol(self) {
                     Symbol::Rule(_, span) => (YaccGrammarWarningKind::UnusedRule, span),
                     Symbol::Token(_, span) => (YaccGrammarWarningKind::UnusedToken, span),
+                    Symbol::Empty(_) => {
+                        unreachable!()
+                    }
                 };
                 YaccGrammarWarning {
                     kind,
@@ -350,6 +357,9 @@ impl GrammarAST {
                 Symbol::Token(sym_name, _) => {
                     expected_unused_tokens.insert(sym_name);
                 }
+                Symbol::Empty(_) => {
+                    unreachable!();
+                }
             }
         }
         if let Some(implicit_tokens) = self.implicit_tokens.as_ref() {
@@ -373,6 +383,8 @@ impl GrammarAST {
                         }
                         Symbol::Token(name, _) => {
                             seen_tokens.insert(name);
+                        }
+                        Symbol::Empty(_) => {
                         }
                     };
                 }

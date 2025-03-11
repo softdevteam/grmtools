@@ -801,6 +801,9 @@ impl YaccParser {
         i = self.parse_ws(i, true)?;
         while i < self.src.len() {
             if let Some(j) = self.lookahead_is("|", i) {
+                if syms.is_empty() {
+                    syms.push(Symbol::Empty(Span::new(i, i)));
+                }
                 self.ast.add_prod(rn.clone(), syms, prec, action);
                 syms = Vec::new();
                 prec = None;
@@ -808,6 +811,9 @@ impl YaccParser {
                 i = self.parse_ws(j, true)?;
                 continue;
             } else if let Some(j) = self.lookahead_is(";", i) {
+                if syms.is_empty() {
+                    syms.push(Symbol::Empty(Span::new(i, i)));
+                }
                 self.ast.add_prod(rn, syms, prec, action);
                 return Ok(j);
             }
@@ -835,19 +841,20 @@ impl YaccParser {
                 if !(self.lookahead_is("|", i).is_some() || self.lookahead_is(";", i).is_some()) {
                     return Err(self.mk_error(YaccGrammarErrorKind::ProductionNotTerminated, i));
                 }
-            } else if let Some(mut j) = self.lookahead_is("%empty", i) {
-                j = self.parse_ws(j, true)?;
+            } else if let Some(j) = self.lookahead_is("%empty", i) {
+                let k = self.parse_ws(j, true)?;
                 // %empty could be followed by all sorts of weird syntax errors: all we try and do
                 // is say "does this production look like it's finished" and trust that the other
                 // errors will be caught by other parts of the parser.
                 if !syms.is_empty()
-                    | !(self.lookahead_is("|", j).is_some()
-                        || self.lookahead_is(";", j).is_some()
-                        || self.lookahead_is("{", j).is_some())
+                    | !(self.lookahead_is("|", k).is_some()
+                        || self.lookahead_is(";", k).is_some()
+                        || self.lookahead_is("{", k).is_some())
                 {
                     return Err(self.mk_error(YaccGrammarErrorKind::NonEmptyProduction, i));
                 }
-                i = j;
+                syms.push(Symbol::Empty(Span::new(i, j)));
+                i = k;
             } else {
                 let (j, sym, span) = self.parse_token(i)?;
                 if self.ast.tokens.contains(&sym) {
@@ -1379,7 +1386,7 @@ mod test {
         assert_eq!(
             grm.prods[grm.get_rule("A").unwrap().pidxs[0]],
             Production {
-                symbols: vec![],
+                symbols: vec![Symbol::Empty(Span::new(32, 32))],
                 precedence: None,
                 action: None
             }
@@ -1398,7 +1405,7 @@ mod test {
         assert_eq!(
             grm.prods[grm.get_rule("B").unwrap().pidxs[1]],
             Production {
-                symbols: vec![],
+                symbols: vec![Symbol::Empty(Span::new(56, 56))],
                 precedence: None,
                 action: None
             }
@@ -1407,7 +1414,7 @@ mod test {
         assert_eq!(
             grm.prods[grm.get_rule("C").unwrap().pidxs[0]],
             Production {
-                symbols: vec![],
+                symbols: vec![Symbol::Empty(Span::new(74, 74))],
                 precedence: None,
                 action: None
             }
@@ -2537,6 +2544,7 @@ Expr -> () : D;
             for sym in &ast.prods[*pidx].symbols {
                 let name = match sym {
                     Symbol::Token(name, _) | Symbol::Rule(name, _) => name.clone(),
+                    Symbol::Empty(_) => "%empty".to_string(),
                 };
                 prod_names.insert(name);
             }
@@ -2544,7 +2552,7 @@ Expr -> () : D;
         assert_eq!(ast.prods.len(), 5);
         assert_eq!(
             prod_names,
-            HashSet::from_iter(["A", "B", "C", "D"].map(|s| s.to_owned()))
+            HashSet::from_iter(["A", "B", "C", "D", "%empty"].map(|s| s.to_owned()))
         );
     }
 
