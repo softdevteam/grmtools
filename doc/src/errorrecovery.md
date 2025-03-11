@@ -49,6 +49,7 @@ make use of error recovery.
 A simple calculator grammar looks as follows:
 
 ```rust,noplaypen
+%grmtools{yacckind Grmtools}
 %start Expr
 %%
 Expr -> u64:
@@ -181,6 +182,7 @@ We thus change the grammar so that inserted integers prevent evaluation from
 occurring:
 
 ```rust,noplaypen
+%grmtools{yacckind Grmtools}
 %start Expr
 %%
 Expr -> Result<u64, ()>:
@@ -539,8 +541,7 @@ the first parsing error, with the `recoverer` method in `CTParserBuilder` or
 ```rust,noplaypen
 CTLexerBuilder::new()
     .lrpar_config(|ctp| {
-        ctp.yacckind(YaccKind::Grmtools)
-            .recoverer(lrpar::RecoveryKind::None)
+        ctp.recoverer(lrpar::RecoveryKind::None)
             .grammar_in_src_dir("calc.y")
             .unwrap()
     })

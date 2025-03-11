@@ -1,4 +1,3 @@
-use cfgrammar::yacc::YaccKind;
 use lrlex::{ct_token_map, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
@@ -13,7 +12,6 @@ const TOKENS_MAP: &[(&str, &str)] = &[
 
 fn main() {
     let ctp = CTParserBuilder::<DefaultLexerTypes<u8>>::new()
-        .yacckind(YaccKind::Grmtools)
         .grammar_in_src_dir("calc.y")
         .unwrap()
         .build()

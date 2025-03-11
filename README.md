@@ -14,14 +14,12 @@ grammar and lexing definitions). First we need to create a file `build.rs` in
 the root of our project with the following content:
 
 ```rust
-use cfgrammar::yacc::YaccKind;
 use lrlex::CTLexerBuilder;
 
 fn main() {
     CTLexerBuilder::new()
         .lrpar_config(|ctp| {
-            ctp.yacckind(YaccKind::Grmtools)
-                .grammar_in_src_dir("calc.y")
+            ctp.grammar_in_src_dir("calc.y")
                 .unwrap()
         })
         .lexer_in_src_dir("calc.l")
@@ -48,6 +46,7 @@ lexer can be found in `src/calc.l`:
 and where the definitions for the parser can be found in `src/calc.y`:
 
 ```rust
+%grmtools{yacckind Grmtools}
 %start Expr
 %avoid_insert "INT"
 %%

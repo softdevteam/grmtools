@@ -48,14 +48,12 @@ file inside the root of our project which can process the lexer and grammar.
 Our `build.rs` file thus looks as follows:
 
 ```rust,noplaypen
-use cfgrammar::yacc::YaccKind;
 use lrlex::CTLexerBuilder;
 
 fn main() {
     CTLexerBuilder::new()
         .lrpar_config(|ctp| {
-            ctp.yacckind(YaccKind::Grmtools)
-                .grammar_in_src_dir("calc.y")
+            ctp.grammar_in_src_dir("calc.y")
                 .unwrap()
         })
         .lexer_in_src_dir("calc.l")
@@ -103,6 +101,7 @@ is lexed, but no lexemes are created from it.
 
 Our initial version of calc.y looks as follows:
 ```rust,noplaypen
+%grmtools{yacckind Grmtools}
 %start Expr
 %%
 Expr -> Result<u64, ()>:
