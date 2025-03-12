@@ -184,6 +184,16 @@ pub enum RustEdition {
     Rust2021,
 }
 
+impl RustEdition {
+    fn to_variant_tokens(self) -> TokenStream {
+        match self {
+            RustEdition::Rust2015 => quote!(::lrpar::RustEdition::Rust2015),
+            RustEdition::Rust2018 => quote!(::lrpar::RustEdition::Rust2018),
+            RustEdition::Rust2021 => quote!(::lrpar::RustEdition::Rust2021),
+        }
+    }
+}
+
 impl ToTokens for Visibility {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(match self {
@@ -201,8 +211,8 @@ impl ToTokens for Visibility {
 }
 
 impl Visibility {
-    fn to_variant_tokens(&self, tokens: &mut TokenStream) {
-        tokens.extend(match self {
+    fn to_variant_tokens(&self) -> TokenStream {
+        match self {
             Visibility::Private => quote!(::lrpar::Visibility::Private),
             Visibility::Public => quote!(::lrpar::Visibility::Public),
             Visibility::PublicSuper => quote!(::lrpar::Visibility::PublicSuper),
@@ -212,7 +222,7 @@ impl Visibility {
                 let data = QuoteToString(data);
                 quote!(::lrpar::Visibility::PublicIn(#data))
             }
-        })
+        }
     }
 }
 
@@ -806,10 +816,9 @@ where
         let mod_name = QuoteOption(self.mod_name);
         let recoverer = self.recoverer;
         let yacckind = self.yacckind;
-        let mut visibility = TokenStream::new();
-        self.visibility.to_variant_tokens(&mut visibility);
+        let visibility = self.visibility.to_variant_tokens();
+        let rust_edition = self.rust_edition.to_variant_tokens();
         let error_on_conflicts = self.error_on_conflicts;
-
         let rule_map = grm
             .iter_tidxs()
             .map(|tidx| {
@@ -832,6 +841,7 @@ where
                 const RECOVERER: RecoveryKind = #recoverer;
                 const YACC_KIND: YaccKind = #yacckind;
                 const ERROR_ON_CONFLICTS: bool = #error_on_conflicts;
+                const RUST_EDITION: RustEdition = #rust_edition;
                 const RULE_IDS_MAP: [(usize, &str); #rule_map_len] = [#(#rule_map,)*];
                 fn visibility() -> Visibility {
                     #visibility
