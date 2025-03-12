@@ -811,14 +811,27 @@ where
         // Record the time that this version of lrpar was built. If the source code changes and
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
+        let Self {
+            // All variables except for `output_path` and `phantom` should
+            // be written into the cache.
+            grammar_path,
+            mod_name,
+            recoverer,
+            yacckind,
+            output_path: _,
+            error_on_conflicts,
+            warnings_are_errors,
+            show_warnings,
+            visibility,
+            rust_edition,
+            phantom: _,
+        } = self;
         let build_time = env!("VERGEN_BUILD_TIMESTAMP");
-        let grammar_path = self.grammar_path.as_ref().unwrap().to_string_lossy();
-        let mod_name = QuoteOption(self.mod_name);
-        let recoverer = self.recoverer;
-        let yacckind = self.yacckind;
-        let visibility = self.visibility.to_variant_tokens();
-        let rust_edition = self.rust_edition.to_variant_tokens();
-        let error_on_conflicts = self.error_on_conflicts;
+        let grammar_path = grammar_path.as_ref().unwrap().to_string_lossy();
+        let mod_name = QuoteOption(mod_name.as_deref());
+        let visibility = visibility.to_variant_tokens();
+        let rust_edition = rust_edition.to_variant_tokens();
+        let yacckind = yacckind.expect("is_some() by this point");
         let rule_map = grm
             .iter_tidxs()
             .map(|tidx| {
@@ -841,6 +854,8 @@ where
                 const RECOVERER: RecoveryKind = #recoverer;
                 const YACC_KIND: YaccKind = #yacckind;
                 const ERROR_ON_CONFLICTS: bool = #error_on_conflicts;
+                const SHOW_WARNINGS: bool = #show_warnings;
+                const WARNINGS_ARE_ERRORS: bool = #warnings_are_errors;
                 const RUST_EDITION: RustEdition = #rust_edition;
                 const RULE_IDS_MAP: [(usize, &str); #rule_map_len] = [#(#rule_map,)*];
                 fn visibility() -> Visibility {
