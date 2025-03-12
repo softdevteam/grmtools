@@ -2,7 +2,6 @@
 
 use std::{
     any::type_name,
-    borrow::Cow,
     collections::{HashMap, HashSet},
     env::{current_dir, var},
     error::Error,
@@ -79,6 +78,27 @@ struct UnsuffixedUsize(usize);
 impl ToTokens for UnsuffixedUsize {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.append(Literal::usize_unsuffixed(self.0))
+    }
+}
+
+/// This wrapper adds a missing impl of `ToTokens` for tuples.
+/// For a tuple `(a, b)` emits `(a.to_tokens(), b.to_tokens())`
+struct QuoteTuple<T>(T);
+
+impl<A: ToTokens, B: ToTokens> ToTokens for QuoteTuple<(A, B)> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let (a, b) = &self.0;
+        tokens.append_all(quote!((#a, #b)));
+    }
+}
+
+/// The wrapped `&str` value will be emitted with a call to `to_string()`
+struct QuoteToString<'a>(&'a str);
+
+impl ToTokens for QuoteToString<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let x = &self.0;
+        tokens.append_all(quote! { #x.to_string() });
     }
 }
 
@@ -164,16 +184,35 @@ pub enum RustEdition {
     Rust2021,
 }
 
+impl ToTokens for Visibility {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Visibility::Private => quote!(),
+            Visibility::Public => quote! {pub},
+            Visibility::PublicSuper => quote! {pub(super)},
+            Visibility::PublicSelf => quote! {pub(self)},
+            Visibility::PublicCrate => quote! {pub(crate)},
+            Visibility::PublicIn(data) => {
+                let other = str::parse::<TokenStream>(data).unwrap();
+                quote! {pub(in #other)}
+            }
+        })
+    }
+}
+
 impl Visibility {
-    fn cow_str(&self) -> Cow<'static, str> {
-        match self {
-            Visibility::Private => Cow::from(""),
-            Visibility::Public => Cow::from("pub"),
-            Visibility::PublicSuper => Cow::from("pub(super)"),
-            Visibility::PublicSelf => Cow::from("pub(self)"),
-            Visibility::PublicCrate => Cow::from("pub(crate)"),
-            Visibility::PublicIn(data) => Cow::from(format!("pub(in {})", data)),
-        }
+    fn to_variant_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Visibility::Private => quote!(::lrpar::Visibility::Private),
+            Visibility::Public => quote!(::lrpar::Visibility::Public),
+            Visibility::PublicSuper => quote!(::lrpar::Visibility::PublicSuper),
+            Visibility::PublicSelf => quote!(::lrpar::Visibility::PublicSelf),
+            Visibility::PublicCrate => quote!(::lrpar::Visibility::PublicCrate),
+            Visibility::PublicIn(data) => {
+                let data = QuoteToString(data);
+                quote!(::lrpar::Visibility::PublicIn(#data))
+            }
+        })
     }
 }
 
@@ -708,7 +747,8 @@ where
         cache: &str,
     ) -> Result<(), Box<dyn Error>> {
         let mut outs = String::new();
-        writeln!(outs, "{} mod {} {{", self.visibility.cow_str(), mod_name).ok();
+        let visibility = self.visibility.clone();
+        writeln!(outs, "{} mod {} {{", quote!(#visibility), mod_name).ok();
         // Emit user program section, and actions at the top so they may specify inner attributes.
         if let Some(YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools) =
             self.yacckind
@@ -741,10 +781,10 @@ where
         outs.push_str("    pub use _parser_::*;\n");
         outs.push_str("    #[allow(unused_imports)]\n");
         outs.push_str("    use ::lrpar::Lexeme;\n");
-        outs.push_str("} // End of `mod {mod_name}` \n\n");
 
         // Output the cache so that we can check whether the IDs map is stable.
         outs.push_str(cache);
+        outs.push_str("} // End of `mod {mod_name}` \n\n");
 
         let mut f = File::create(outp_rs)?;
         f.write_all(outs.as_bytes())?;
@@ -757,43 +797,48 @@ where
     fn rebuild_cache(&self, grm: &YaccGrammar<StorageT>) -> String {
         // We don't need to be particularly clever here: we just need to record the various things
         // that could change between builds.
-        let mut cache = String::new();
-        cache.push_str("\n/* CACHE INFORMATION\n");
-
+        //
         // Record the time that this version of lrpar was built. If the source code changes and
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
         let build_time = env!("VERGEN_BUILD_TIMESTAMP");
         let grammar_path = self.grammar_path.as_ref().unwrap().to_string_lossy();
-        let mod_name = self.mod_name;
+        let mod_name = QuoteOption(self.mod_name);
         let recoverer = self.recoverer;
         let yacckind = self.yacckind;
-        let visibility = self.visibility.cow_str();
+        let mut visibility = TokenStream::new();
+        self.visibility.to_variant_tokens(&mut visibility);
         let error_on_conflicts = self.error_on_conflicts;
-        writeln!(cache, "   Build time: {}", quote!(#build_time)).ok();
-        writeln!(cache, "   Grammar path: {}", quote!(#grammar_path)).ok();
-        writeln!(cache, "   Mod name: {}", quote!(#mod_name)).ok();
-        writeln!(cache, "   Recoverer: {}", quote!(#recoverer)).ok();
-        writeln!(cache, "   YaccKind: {}", quote!(#yacckind)).ok();
-        writeln!(cache, "   Visibility: {}", quote!(#visibility)).ok();
-        writeln!(
-            cache,
-            "   Error on conflicts: {}\n",
-            quote!(#error_on_conflicts)
-        )
-        .ok();
 
-        // Record the rule IDs map
-        for tidx in grm.iter_tidxs() {
-            let n = match grm.token_name(tidx) {
-                Some(n) => format!("'{}'", n),
-                None => "<unknown>".to_string(),
-            };
-            writeln!(cache, "   {} {}", usize::from(tidx), n).ok();
-        }
+        let rule_map = grm
+            .iter_tidxs()
+            .map(|tidx| {
+                QuoteTuple((
+                    usize::from(tidx),
+                    grm.token_name(tidx).unwrap_or("<unknown>"),
+                ))
+            })
+            .collect::<Vec<_>>();
+        let rule_map_len = rule_map.len();
+        let cache_module = quote! {
+            #[allow(unused)]
+            mod _cache_information_ {
+                use ::lrpar::{RecoveryKind, Visibility, RustEdition};
+                use ::cfgrammar::yacc::YaccKind;
 
-        cache.push_str("*/\n");
-        cache
+                const BUILD_TIME: &str = #build_time;
+                const GRAMMAR_PATH: &str = #grammar_path;
+                const MOD_NAME: Option<&str> = #mod_name;
+                const RECOVERER: RecoveryKind = #recoverer;
+                const YACC_KIND: YaccKind = #yacckind;
+                const ERROR_ON_CONFLICTS: bool = #error_on_conflicts;
+                const RULE_IDS_MAP: [(usize, &str); #rule_map_len] = [#(#rule_map,)*];
+                fn visibility() -> Visibility {
+                    #visibility
+                }
+            }
+        };
+        cache_module.to_string()
     }
 
     /// Generate the main parse() function for the output file.
