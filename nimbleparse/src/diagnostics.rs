@@ -239,10 +239,11 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
     ) where
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
-        for (r1_prod_idx, r2_prod_idx, _st_idx) in c.rr_conflicts() {
+        for (t_idx, r1_prod_idx, r2_prod_idx, _st_idx) in c.rr_conflicts() {
             let (_r1_prod_names, _r1_prod_spans) = pidx_prods_data(ast, *r1_prod_idx);
             let (_r2_prod_names, _r2_prod_spans) = pidx_prods_data(ast, *r2_prod_idx);
 
+            let t_name = grm.token_name(*t_idx).unwrap_or("$");
             let r1_rule_idx = grm.prod_to_rule(*r1_prod_idx);
             let r2_rule_idx = grm.prod_to_rule(*r2_prod_idx);
             let r1_span = grm.rule_name_span(r1_rule_idx);
@@ -254,8 +255,8 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                 "{}",
                 self.file_location_msg(
                     format!(
-                        "Reduce/Reduce conflict, can reduce '{}' or '{}'",
-                        r1_name, r2_name
+                        "Reduce/Reduce conflict, can reduce '{}' or '{}' with lookahead '{}'",
+                        r1_name, r2_name, t_name,
                     )
                     .as_str(),
                     Some(r1_span)

@@ -23,7 +23,12 @@ use crate::{stategraph::StateGraph, StIdx};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Conflicts<StorageT> {
-    reduce_reduce: Vec<(PIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)>,
+    reduce_reduce: Vec<(
+        TIdx<StorageT>,
+        PIdx<StorageT>,
+        PIdx<StorageT>,
+        StIdx<StorageT>,
+    )>,
     shift_reduce: Vec<(TIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)>,
 }
 
@@ -34,7 +39,14 @@ where
     /// Return an iterator over all reduce/reduce conflicts.
     pub fn rr_conflicts(
         &self,
-    ) -> impl Iterator<Item = &(PIdx<StorageT>, PIdx<StorageT>, StIdx<StorageT>)> {
+    ) -> impl Iterator<
+        Item = &(
+            TIdx<StorageT>,
+            PIdx<StorageT>,
+            PIdx<StorageT>,
+            StIdx<StorageT>,
+        ),
+    > {
         self.reduce_reduce.iter()
     }
 
@@ -69,11 +81,12 @@ where
         let mut s = String::new();
         if self.rr_len() > 0 {
             s.push_str("Reduce/Reduce conflicts:\n");
-            for (pidx, r_pidx, stidx) in self.rr_conflicts() {
+            for (tidx, pidx, r_pidx, stidx) in self.rr_conflicts() {
                 writeln!(
                     s,
-                    "   State {:?}: Reduce({}) / Reduce({})",
+                    "   State {:?} (lookahead {}): Reduce({}) / Reduce({})",
                     usize::from(*stidx),
+                    grm.token_name(*tidx).unwrap_or("$"),
                     grm.pp_prod(*pidx),
                     grm.pp_prod(*r_pidx)
                 )
@@ -227,10 +240,12 @@ where
                             // of the earlier production in the grammar.
                             match pidx.cmp(&r_pidx) {
                                 Ordering::Less => {
-                                    reduce_reduce.push((pidx, r_pidx, stidx));
+                                    reduce_reduce.push((TIdx(tidx.as_()), pidx, r_pidx, stidx));
                                     actions[off] = StateTable::encode(Action::Reduce(pidx));
                                 }
-                                Ordering::Greater => reduce_reduce.push((r_pidx, pidx, stidx)),
+                                Ordering::Greater => {
+                                    reduce_reduce.push((TIdx(tidx.as_()), r_pidx, pidx, stidx))
+                                }
                                 Ordering::Equal => (),
                             }
                         }
@@ -967,9 +982,44 @@ C : 'a';
         assert_eq!(
             conflicts.rr_conflicts().next().unwrap(),
             &(
+                TIdx(1),
                 grm.rule_to_prods(grm.rule_idx("B").unwrap())[0],
                 grm.rule_to_prods(grm.rule_idx("C").unwrap())[0],
                 StIdx(2)
+            )
+        );
+    }
+
+    #[test]
+    fn reduce_reduce_conflict() {
+        let grm = YaccGrammar::new(
+            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            "
+%start S
+%%
+S: A X | B X | A Y;
+A: '0' ; B: '0' ; C: '0' ;
+X: '1' ; Y: '2' ;
+          ",
+        )
+        .unwrap();
+        let sg = pager_stategraph(&grm);
+        let st = StateTable::new(&grm, &sg).unwrap();
+        let conflicts = st.conflicts().unwrap();
+        assert_eq!(conflicts.sr_len(), 0);
+
+        // There is only one reduce/reduce conflict because state 1 has the following item set:
+        // 1:  [B -> '0' ., {'1'}]
+        //     [A -> '0' ., {'1', '2'}]
+        // which causes a conflict only if the lookahead is '1' but not if the lookahead is '2'.
+        assert_eq!(conflicts.rr_len(), 1);
+        assert_eq!(
+            conflicts.rr_conflicts().next().unwrap(),
+            &(
+                TIdx(1),
+                grm.rule_to_prods(grm.rule_idx("A").unwrap())[0],
+                grm.rule_to_prods(grm.rule_idx("B").unwrap())[0],
+                StIdx(1)
             )
         );
     }
