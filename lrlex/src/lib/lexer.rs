@@ -577,7 +577,9 @@ where
         self.start_states.iter().find(|state| state.id == id)
     }
 
-    pub(crate) fn lex_flags(&self) -> Option<&LexFlags> {
+    /// Returns the final `LexFlags` used for this lex source
+    /// after all forced and default flags have been resolved.
+    pub fn lex_flags(&self) -> Option<&LexFlags> {
         self.lex_flags.as_ref()
     }
 }
