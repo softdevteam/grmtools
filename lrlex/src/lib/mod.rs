@@ -69,24 +69,30 @@ pub enum LexErrorKind {
 impl LexErrorKind {
     fn is_same_kind(&self, other: &Self) -> bool {
         use LexErrorKind as EK;
-        match (self, other) {
+        matches!(
+            (self, other),
             (EK::PrematureEnd, EK::PrematureEnd)
-            | (EK::RoutinesNotSupported, EK::RoutinesNotSupported)
-            | (EK::UnknownDeclaration, EK::UnknownDeclaration)
-            | (EK::MissingSpace, EK::MissingSpace)
-            | (EK::InvalidName, EK::InvalidName)
-            | (EK::UnknownStartState, EK::UnknownStartState)
-            | (EK::DuplicateStartState, EK::DuplicateStartState)
-            | (EK::InvalidStartState, EK::InvalidStartState)
-            | (EK::InvalidStartStateName, EK::InvalidStartStateName)
-            | (EK::DuplicateName, EK::DuplicateName)
-            | (EK::InvalidGrmtoolsSectionValue, EK::InvalidGrmtoolsSectionValue)
-            | (EK::InvalidNumber, EK::InvalidNumber)
-            | (EK::DuplicateGrmtoolsSectionValue, EK::DuplicateGrmtoolsSectionValue)
-            | (EK::RegexError(_), EK::RegexError(_))
-            | (EK::VerbatimNotSupported, EK::VerbatimNotSupported) => true,
-            _ => false,
-        }
+                | (EK::RoutinesNotSupported, EK::RoutinesNotSupported)
+                | (EK::UnknownDeclaration, EK::UnknownDeclaration)
+                | (EK::MissingSpace, EK::MissingSpace)
+                | (EK::InvalidName, EK::InvalidName)
+                | (EK::UnknownStartState, EK::UnknownStartState)
+                | (EK::DuplicateStartState, EK::DuplicateStartState)
+                | (EK::InvalidStartState, EK::InvalidStartState)
+                | (EK::InvalidStartStateName, EK::InvalidStartStateName)
+                | (EK::DuplicateName, EK::DuplicateName)
+                | (
+                    EK::InvalidGrmtoolsSectionValue,
+                    EK::InvalidGrmtoolsSectionValue
+                )
+                | (EK::InvalidNumber, EK::InvalidNumber)
+                | (
+                    EK::DuplicateGrmtoolsSectionValue,
+                    EK::DuplicateGrmtoolsSectionValue
+                )
+                | (EK::RegexError(_), EK::RegexError(_))
+                | (EK::VerbatimNotSupported, EK::VerbatimNotSupported)
+        )
     }
 }
 
