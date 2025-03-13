@@ -577,7 +577,7 @@ where
         self.start_states.iter().find(|state| state.id == id)
     }
 
-    pub(crate) fn lex_flags(&self) -> Option<&LexFlags> {
+    pub fn lex_flags(&self) -> Option<&LexFlags> {
         self.lex_flags.as_ref()
     }
 }
