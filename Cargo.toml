@@ -27,7 +27,7 @@ codegen-units = 1
 panic = 'unwind'
 
 [workspace.dependencies]
-bincode = "1.2"
+bincode = { version = "2.0", features = ["serde"] }
 cactus = "1.0"
 filetime = "0.2"
 fnv = "1.0"
@@ -45,5 +45,5 @@ static_assertions = "1.1"
 unicode-width = "0.1.11"
 vob = ">=3.0.2"
 proc-macro2 = "1.0"
-prettyplease = "0.2.30"
+prettyplease = "0.2.31"
 syn = "2.0"
