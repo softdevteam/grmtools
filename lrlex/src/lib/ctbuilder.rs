@@ -352,6 +352,9 @@ where
             .lexer_path
             .as_ref()
             .expect("lexer_path must be specified before processing.");
+        if std::env::var("OUT_DIR").is_ok() {
+            println!("cargo:rerun-if-changed={}", lexerp.display());
+        }
         let outp = self
             .output_path
             .as_ref()
