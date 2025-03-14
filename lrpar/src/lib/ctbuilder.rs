@@ -581,12 +581,12 @@ where
                 if FileTime::from_last_modification_time(out_rs_md)
                     > FileTime::from_last_modification_time(inmd)
                 {
-                    if let Ok(mut outc) = read_to_string(outp) {
+                    if let Ok(outc) = read_to_string(outp) {
                         // Strip whitespace from the output file and the cache since the copy of
                         // the cache in the output file may be affected by pretty printing.
-                        let mut cache = cache.to_string();
-                        outc.retain(|c| !c.is_whitespace());
-                        cache.retain(|c| !c.is_whitespace());
+                        let cache = cache.to_string();
+                        //outc.retain(|c| !c.is_whitespace());
+                        //cache.retain(|c| !c.is_whitespace());
                         if outc.contains(&cache) {
                             return Ok(CTParser {
                                 regenerated: false,
