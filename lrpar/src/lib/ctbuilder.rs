@@ -473,6 +473,9 @@ where
             .grammar_path
             .as_ref()
             .expect("grammar_path must be specified before processing.");
+        if std::env::var("OUT_DIR").is_ok() {
+            println!("cargo:rerun-if-changed={}", grmp.display());
+        }
         let outp = self
             .output_path
             .as_ref()
