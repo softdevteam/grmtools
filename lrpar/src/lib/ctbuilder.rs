@@ -1158,8 +1158,6 @@ where
             } else {
                 None
             };
-            // TODO we can emit #[allow(unused_variables)] when pidx == grm.start_prod
-            // That should allow us to remove parse_param_unit and the associated branches.
             wrappers.extend(quote!{
                 #attrib
                 fn #wrapper_fn<'lexer, 'input: 'lexer>(
