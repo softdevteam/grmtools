@@ -776,7 +776,7 @@ where
             None
         };
         let rule_consts = self.gen_rule_consts(grm)?;
-        let token_epp = str::parse::<TokenStream>(&self.gen_token_epp(grm))?;
+        let token_epp = self.gen_token_epp(grm)?;
         let parse_function = self.gen_parse_function(grm, stable)?;
         let action_wrappers = match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
@@ -1020,25 +1020,28 @@ where
         Ok(toks)
     }
 
-    fn gen_token_epp(&self, grm: &YaccGrammar<StorageT>) -> String {
+    fn gen_token_epp(
+        &self,
+        grm: &YaccGrammar<StorageT>,
+    ) -> Result<TokenStream, proc_macro2::LexError> {
         let mut tidxs = Vec::new();
         for tidx in grm.iter_tidxs() {
-            let tok_epp = QuoteOption(grm.token_epp(tidx));
-            tidxs.push(format!("{}", quote!(#tok_epp)));
+            tidxs.push(QuoteOption(grm.token_epp(tidx)));
         }
-        format!(
-            "    const {prefix}EPP: &[::std::option::Option<&str>] = &[{}];
+        let const_epp_ident = format_ident!("{}EPP", GLOBAL_PREFIX);
+        let storage_ty = str::parse::<TokenStream>(type_name::<StorageT>())?;
+        Ok(quote! {
+            const #const_epp_ident: &[::std::option::Option<&str>] = &[
+                #(#tidxs,)*
+            ];
 
-    /// Return the %epp entry for token `tidx` (where `None` indicates \"the token has no
-    /// pretty-printed value\"). Panics if `tidx` doesn't exist.
-    #[allow(dead_code)]
-    pub fn token_epp<'a>(tidx: ::cfgrammar::TIdx<{storaget}>) -> ::std::option::Option<&'a str> {{
-        {prefix}EPP[usize::from(tidx)]
-    }}",
-            tidxs.join(", "),
-            storaget = type_name::<StorageT>(),
-            prefix = GLOBAL_PREFIX
-        )
+            /// Return the %epp entry for token `tidx` (where `None` indicates \"the token has no
+            /// pretty-printed value\"). Panics if `tidx` doesn't exist.
+            #[allow(dead_code)]
+            pub fn token_epp<'a>(tidx: ::cfgrammar::TIdx<#storage_ty>) -> ::std::option::Option<&'a str> {
+                #const_epp_ident[usize::from(tidx)]
+            }
+        })
     }
 
     /// Generate the wrappers that call user actions
