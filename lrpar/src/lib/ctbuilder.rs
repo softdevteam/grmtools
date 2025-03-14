@@ -8,13 +8,14 @@ use std::{
     fmt::{self, Debug, Write as fmtWrite},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
-    io::{self, Write},
+    io::Write,
     marker::PhantomData,
     path::{Path, PathBuf},
     sync::Mutex,
 };
 
-use bincode::{deserialize, serialize_into};
+use crate::{LexerTypes, RecoveryKind};
+use bincode::serde::{decode_from_slice, encode_to_vec};
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{
@@ -27,11 +28,9 @@ use lazy_static::lazy_static;
 use lrtable::{from_yacc, statetable::Conflicts, Minimiser, StateGraph, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::{Literal, TokenStream};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use regex::Regex;
 use serde::{de::DeserializeOwned, Serialize};
-
-use crate::{LexerTypes, RecoveryKind};
 
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
@@ -40,9 +39,6 @@ const ACTIONS_KIND_PREFIX: &str = "Ak";
 const ACTIONS_KIND_HIDDEN: &str = "__GtActionsKindHidden";
 
 const RUST_FILE_EXT: &str = "rs";
-
-const GRM_CONST_NAME: &str = "__GRM_DATA";
-const STABLE_CONST_NAME: &str = "__STABLE_DATA";
 
 lazy_static! {
     static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
@@ -583,7 +579,7 @@ where
                     > FileTime::from_last_modification_time(inmd)
                 {
                     if let Ok(outc) = read_to_string(outp) {
-                        if outc.contains(&cache) {
+                        if outc.contains(&cache.to_string()) {
                             return Ok(CTParser {
                                 regenerated: false,
                                 rule_ids,
@@ -754,57 +750,62 @@ where
         stable: &StateTable<StorageT>,
         mod_name: &str,
         outp_rs: P,
-        cache: &str,
+        cache: &TokenStream,
     ) -> Result<(), Box<dyn Error>> {
-        let mut outs = String::new();
         let visibility = self.visibility.clone();
-        writeln!(outs, "{} mod {} {{", quote!(#visibility), mod_name).ok();
-        // Emit user program section, and actions at the top so they may specify inner attributes.
-        if let Some(YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools) =
-            self.yacckind
+        let user_actions = if let Some(
+            YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools,
+        ) = self.yacckind
         {
-            outs.push_str(&self.gen_user_actions(grm)?);
-        }
-        outs.push_str("    mod _parser_ {\n");
-        outs.push_str(
-            "        #![allow(clippy::type_complexity)]
-        #![allow(clippy::unnecessary_wraps)]
-        #![deny(unsafe_code)]
-        #[allow(unused_imports)]
-        use super::*;
-",
-        );
-
-        outs.push_str(&self.gen_parse_function(grm, stable)?);
-        outs.push_str(&self.gen_rule_consts(grm));
-        outs.push_str(&self.gen_token_epp(grm));
-        match self.yacckind.unwrap() {
+            Some(str::parse::<TokenStream>(&self.gen_user_actions(grm)?)?)
+        } else {
+            None
+        };
+        let rule_consts = str::parse::<TokenStream>(&self.gen_rule_consts(grm))?;
+        let token_epp = str::parse::<TokenStream>(&self.gen_token_epp(grm))?;
+        let parse_function = self.gen_parse_function(grm, stable)?;
+        let action_wrappers = match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
-                outs.push_str(&self.gen_wrappers(grm));
+                Some(str::parse::<TokenStream>(&self.gen_wrappers(grm))?)
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction)
-            | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => (),
+            | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => None,
             _ => unreachable!(),
-        }
-        outs.push_str("    } // End of `mod _parser_`\n\n");
-        outs.push_str("    #[allow(unused_imports)]\n");
-        outs.push_str("    pub use _parser_::*;\n");
-        outs.push_str("    #[allow(unused_imports)]\n");
-        outs.push_str("    use ::lrpar::Lexeme;\n");
+        };
+        let mod_name = format_ident!("{}", mod_name);
+        let out_tokens = quote! {
+            #visibility mod #mod_name {
+                // At the top so that `user_actions` may contain #![inner_attribute]
+                #user_actions
+                mod _parser_ {
+                    #![allow(clippy::type_complexity)]
+                    #![allow(clippy::unnecessary_wraps)]
+                    #![deny(unsafe_code)]
+                    #[allow(unused_imports)]
+                    use super::*;
+                    #parse_function
+                    #rule_consts
+                    #token_epp
+                    #action_wrappers
+                } // End of `mod _parser_`
+                #[allow(unused_imports)]
+                pub use _parser_::*;
+                #[allow(unused_imports)]
+                use ::lrpar::Lexeme;
 
-        // Output the cache so that we can check whether the IDs map is stable.
-        outs.push_str(cache);
-        outs.push_str("} // End of `mod {mod_name}` \n\n");
-
+                #cache
+            } // End of `mod #mod_name`
+        };
         let mut f = File::create(outp_rs)?;
+        let syntax_tree = syn::parse_str(&out_tokens.to_string())?;
+        let outs = prettyplease::unparse(&syntax_tree);
         f.write_all(outs.as_bytes())?;
-
         Ok(())
     }
 
     /// Generate the cache, which determines if anything's changed enough that we need to
     /// regenerate outputs and force rustc to recompile.
-    fn rebuild_cache(&self, grm: &YaccGrammar<StorageT>) -> String {
+    fn rebuild_cache(&self, grm: &YaccGrammar<StorageT>) -> TokenStream {
         // We don't need to be particularly clever here: we just need to record the various things
         // that could change between builds.
         //
@@ -842,7 +843,7 @@ where
             })
             .collect::<Vec<_>>();
         let rule_map_len = rule_map.len();
-        let cache_module = quote! {
+        quote! {
             #[allow(unused)]
             mod _cache_information_ {
                 use ::lrpar::{RecoveryKind, Visibility, RustEdition};
@@ -862,8 +863,7 @@ where
                     #visibility
                 }
             }
-        };
-        cache_module.to_string()
+        }
     }
 
     /// Generate the main parse() function for the output file.
@@ -871,151 +871,120 @@ where
         &self,
         grm: &YaccGrammar<StorageT>,
         stable: &StateTable<StorageT>,
-    ) -> Result<String, Box<dyn Error>> {
-        let mut outs = String::new();
-
-        // bincode format is serialized into constants which the generated
-        // source code.
-        serialize_bin_output(grm, GRM_CONST_NAME, &mut outs)?;
-        serialize_bin_output(stable, STABLE_CONST_NAME, &mut outs)?;
-
-        match self.yacckind.unwrap() {
-            YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
-                let parse_param = match grm.parse_param() {
-                    Some((name, tyname)) => format!(", {}: {}", name, tyname),
-                    None => "".to_owned(),
-                };
-                write!(outs,
-                    "
-    #[allow(dead_code)]
-    pub fn parse<'lexer, 'input: 'lexer>(
-        lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>{parse_param})
-          -> (::std::option::Option<{actiont}>, ::std::vec::Vec<::lrpar::LexParseError<{storaget}, {lexertypest}>>)
-    {{",
-                    storaget = type_name::<StorageT>(),
-                    lexertypest = type_name::<LexerTypesT>(),
-                    parse_param = parse_param,
-                    actiont = grm.actiontype(self.user_start_ridx(grm)).as_ref().unwrap(),
-                ).ok();
-            }
+    ) -> Result<TokenStream, Box<dyn Error>> {
+        let storaget = str::parse::<TokenStream>(type_name::<StorageT>())?;
+        let lexertypest = str::parse::<TokenStream>(type_name::<LexerTypesT>())?;
+        let recoverer = self.recoverer;
+        let run_parser = match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
-                write!(
-                    outs,
-                    "
-    #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexertypest}>)
-          -> (::std::option::Option<::lrpar::Node<<{lexertypest} as ::lrpar::LexerTypes>::LexemeT, {storaget}>>,
-              ::std::vec::Vec<::lrpar::LexParseError<{storaget}, {lexertypest}>>)
-    {{",
-                    storaget = type_name::<StorageT>(),
-                    lexertypest = type_name::<LexerTypesT>(),
-                )
-                .ok();
+                quote! {
+                    ::lrpar::RTParserBuilder::new(&grm, &stable)
+                        .recoverer(#recoverer)
+                        .parse_generictree(lexer)
+                }
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
-                write!(
-                    outs,
-                    "
-    #[allow(dead_code)]
-    pub fn parse(lexer: &dyn ::lrpar::NonStreamingLexer<{lexertypest}>)
-          -> ::std::vec::Vec<::lrpar::LexParseError<{storaget}, {lexertypest}>>
-    {{",
-                    storaget = type_name::<StorageT>(),
-                    lexertypest = type_name::<LexerTypesT>(),
-                )
-                .ok();
+                quote! {
+                    ::lrpar::RTParserBuilder::new(&grm, &stable)
+                        .recoverer(#recoverer)
+                        .parse_noaction(lexer)
+                }
+            }
+            YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
+                let actionskind = str::parse::<TokenStream>(ACTIONS_KIND)?;
+                // actions always have a parse_param argument, and when the `parse` function lacks one
+                // that parameter will be unit.
+                let (action_fn_parse_param, action_fn_parse_param_ty) = match grm.parse_param() {
+                    Some((name, ty)) => {
+                        let name = str::parse::<TokenStream>(name)?;
+                        let ty = str::parse::<TokenStream>(ty)?;
+                        (quote!(#name), quote!(#ty))
+                    }
+                    None => (quote!(()), quote!(())),
+                };
+                let wrappers = grm.iter_pidxs().map(|pidx| {
+                    let pidx = usize::from(pidx);
+                    format_ident!("{}wrapper_{}", ACTION_PREFIX, pidx)
+                });
+                let edition_lifetime = if self.rust_edition != RustEdition::Rust2015 {
+                    quote!('_,)
+                } else {
+                    quote!()
+                };
+                let ridx = usize::from(self.user_start_ridx(grm));
+                let action_ident = format_ident!("{}{}", ACTIONS_KIND_PREFIX, ridx);
+
+                quote! {
+                    let actions: ::std::vec::Vec<
+                            &dyn Fn(
+                                    ::cfgrammar::RIdx<#storaget>,
+                                    &'lexer dyn ::lrpar::NonStreamingLexer<'input, #lexertypest>,
+                                    ::cfgrammar::Span,
+                                    ::std::vec::Drain<#edition_lifetime ::lrpar::parser::AStackType<<#lexertypest as ::lrpar::LexerTypes>::LexemeT, #actionskind<'input>>>,
+                                    #action_fn_parse_param_ty
+                            ) -> #actionskind<'input>
+                        > = ::std::vec![#(&#wrappers,)*];
+                    match ::lrpar::RTParserBuilder::new(&grm, &stable)
+                        .recoverer(#recoverer)
+                        .parse_actions(lexer, &actions, #action_fn_parse_param) {
+                            (Some(#actionskind::#action_ident(x)), y) => (Some(x), y),
+                            (None, y) => (None, y),
+                            _ => unreachable!()
+                    }
+                }
             }
             YaccKind::Eco => unreachable!(),
         };
 
-        write!(
-            outs,
-            "
-        let (grm, stable) = ::lrpar::ctbuilder::_reconstitute({}, {});",
-            GRM_CONST_NAME, STABLE_CONST_NAME
-        )
-        .ok();
-
-        let recoverer = match self.recoverer {
-            RecoveryKind::CPCTPlus => "CPCTPlus",
-            RecoveryKind::None => "None",
-        };
-        match self.yacckind.unwrap() {
+        // `parse()` may or may not have an argument for `%parseparam`.
+        let parse_fn_parse_param = match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
-                // action function references
-                let wrappers = grm
-                    .iter_pidxs()
-                    .map(|pidx| {
-                        let pidx = UnsuffixedUsize(usize::from(pidx));
-                        format!("&{prefix}wrapper_{}", quote!(#pidx), prefix = ACTION_PREFIX)
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",\n                        ");
-                let (parse_param, parse_paramty) = match grm.parse_param() {
-                    Some((name, tyname)) => (name.clone(), tyname.clone()),
-                    None => ("()".to_owned(), "()".to_owned()),
-                };
-                write!(outs,
-                    "\n        #[allow(clippy::type_complexity)]
-        let actions: ::std::vec::Vec<&dyn Fn(::cfgrammar::RIdx<{storaget}>,
-                       &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>,
-                       ::cfgrammar::Span,
-                       ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<<{lexertypest} as ::lrpar::LexerTypes>::LexemeT, {actionskind}<'input>>>,
-                       {parse_paramty})
-                    -> {actionskind}<'input>> = ::std::vec![{wrappers}];\n",
-                    actionskind = ACTIONS_KIND,
-                    storaget = type_name::<StorageT>(),
-                    lexertypest = type_name::<LexerTypesT>(),
-                    parse_paramty = parse_paramty,
-                    wrappers = wrappers,
-                    edition_lifetime = if self.rust_edition != RustEdition::Rust2015 { "'_, " } else { "" },
-                ).ok();
-                let ridx = UnsuffixedUsize(usize::from(self.user_start_ridx(grm)));
-                write!(
-                    outs,
-                    "
-        match ::lrpar::RTParserBuilder::new(&grm, &stable)
-            .recoverer(::lrpar::RecoveryKind::{recoverer})
-            .parse_actions(lexer, &actions, {parse_param}) {{
-                (Some({actionskind}::{actionskindprefix}{ridx}(x)), y) => (Some(x), y),
-                (None, y) => (None, y),
-                _ => unreachable!()
-        }}",
-                    parse_param = parse_param,
-                    actionskind = ACTIONS_KIND,
-                    actionskindprefix = ACTIONS_KIND_PREFIX,
-                    ridx = quote!(#ridx),
-                    recoverer = recoverer,
-                )
-                .ok();
+                if let Some((name, tyname)) = grm.parse_param() {
+                    let name = str::parse::<TokenStream>(name)?;
+                    let tyname = str::parse::<TokenStream>(tyname)?;
+                    Some(quote! {#name: #tyname})
+                } else {
+                    None
+                }
             }
-            YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
-                write!(
-                    outs,
-                    "
-        ::lrpar::RTParserBuilder::new(&grm, &stable)
-            .recoverer(::lrpar::RecoveryKind::{})
-            .parse_generictree(lexer)\n",
-                    recoverer
-                )
-                .ok();
+            _ => None,
+        };
+        let parse_fn_return_ty = match self.yacckind.unwrap() {
+            YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
+                let actiont = grm
+                    .actiontype(self.user_start_ridx(grm))
+                    .as_ref()
+                    .map(|at| str::parse::<TokenStream>(at))
+                    .transpose()?;
+                quote! {
+                    (::std::option::Option<#actiont>, ::std::vec::Vec<::lrpar::LexParseError<#storaget, #lexertypest>>)
+                }
             }
-            YaccKind::Original(YaccOriginalActionKind::NoAction) => {
-                write!(
-                    outs,
-                    "
-        ::lrpar::RTParserBuilder::new(&grm, &stable)
-            .recoverer(::lrpar::RecoveryKind::{})
-            .parse_noaction(lexer)\n",
-                    recoverer
-                )
-                .ok();
-            }
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => quote! {
+                (::std::option::Option<::lrpar::Node<<#lexertypest as ::lrpar::LexerTypes>::LexemeT, #storaget>>,
+                    ::std::vec::Vec<::lrpar::LexParseError<#storaget, #lexertypest>>)
+            },
+            YaccKind::Original(YaccOriginalActionKind::NoAction) => quote! {
+                ::std::vec::Vec<::lrpar::LexParseError<#storaget, #lexertypest>>
+            },
             YaccKind::Eco => unreachable!(),
         };
 
-        outs.push_str("\n    }\n\n");
-        Ok(outs)
+        let grm_data = encode_to_vec(grm, bincode::config::legacy())?;
+        let stable_data = encode_to_vec(stable, bincode::config::legacy())?;
+        Ok(quote! {
+            const __GRM_DATA: &[u8] = &[#(#grm_data,)*];
+            const __STABLE_DATA: &[u8] = &[#(#stable_data,)*];
+
+            #[allow(dead_code)]
+            pub fn parse<'lexer, 'input: 'lexer>(
+                 lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, #lexertypest>,
+                 #parse_fn_parse_param
+            ) -> #parse_fn_return_ty {
+                let (grm, stable) = ::lrpar::ctbuilder::_reconstitute(__GRM_DATA, __STABLE_DATA);
+                #run_parser
+            }
+        })
     }
 
     fn gen_rule_consts(&self, grm: &YaccGrammar<StorageT>) -> String {
@@ -1352,56 +1321,9 @@ pub fn _reconstitute<StorageT: DeserializeOwned + Hash + PrimInt + Unsigned>(
     grm_buf: &[u8],
     stable_buf: &[u8],
 ) -> (YaccGrammar<StorageT>, StateTable<StorageT>) {
-    let grm = deserialize(grm_buf).unwrap();
-    let stable = deserialize(stable_buf).unwrap();
+    let (grm, _) = decode_from_slice(grm_buf, bincode::config::legacy()).unwrap();
+    let (stable, _) = decode_from_slice(stable_buf, bincode::config::legacy()).unwrap();
     (grm, stable)
-}
-
-fn serialize_bin_output<T: Serialize + ?Sized>(
-    ser: &T,
-    name: &str,
-    buffer: &mut String,
-) -> Result<(), Box<dyn Error>> {
-    let mut w = ArrayWriter::new(name);
-    serialize_into(&mut w, ser)?;
-    let data = w.finish();
-    buffer.push_str(&data);
-    Ok(())
-}
-
-/// Makes formatting bytes into a rust array relatively painless.
-struct ArrayWriter {
-    buffer: String,
-}
-
-impl ArrayWriter {
-    /// create a new array with the specified name
-    fn new(name: &str) -> Self {
-        Self {
-            buffer: format!(r#"#[allow(dead_code)] const {}: &[u8] = &["#, name),
-        }
-    }
-
-    /// complete the array, and return the finished string
-    fn finish(mut self) -> String {
-        self.buffer.push_str("];\n");
-        self.buffer
-    }
-}
-
-impl Write for ArrayWriter {
-    #[allow(dead_code)]
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        for b in buf {
-            self.buffer.write_fmt(format_args!("{},", b)).unwrap();
-        }
-        Ok(buf.len())
-    }
-
-    #[allow(dead_code)]
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
 }
 
 /// An interface to the result of [CTParserBuilder::build()].

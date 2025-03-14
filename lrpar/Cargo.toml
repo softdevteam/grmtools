@@ -40,6 +40,8 @@ regex.workspace = true
 serde = { workspace = true, features = ["derive"] }
 static_assertions.workspace = true
 vob.workspace = true
+syn.workspace = true
+prettyplease.workspace = true
 
 [dev-dependencies]
 tempfile = "3.0"
