@@ -775,7 +775,7 @@ where
         } else {
             None
         };
-        let rule_consts = str::parse::<TokenStream>(&self.gen_rule_consts(grm))?;
+        let rule_consts = self.gen_rule_consts(grm)?;
         let token_epp = str::parse::<TokenStream>(&self.gen_token_epp(grm))?;
         let parse_function = self.gen_parse_function(grm, stable)?;
         let action_wrappers = match self.yacckind.unwrap() {
@@ -1001,21 +1001,23 @@ where
         })
     }
 
-    fn gen_rule_consts(&self, grm: &YaccGrammar<StorageT>) -> String {
-        let mut outs = String::new();
+    fn gen_rule_consts(
+        &self,
+        grm: &YaccGrammar<StorageT>,
+    ) -> Result<TokenStream, proc_macro2::LexError> {
+        let mut toks = TokenStream::new();
         for ridx in grm.iter_rules() {
             if !grm.rule_to_prods(ridx).contains(&grm.start_prod()) {
-                write!(
-                    outs,
-                    "    #[allow(dead_code)]\n    pub const R_{}: {} = {};\n",
-                    grm.rule_name_str(ridx).to_ascii_uppercase(),
-                    type_name::<StorageT>(),
-                    usize::from(ridx)
-                )
-                .ok();
+                let r_const = format_ident!("R_{}", grm.rule_name_str(ridx).to_ascii_uppercase());
+                let storage_ty = str::parse::<TokenStream>(type_name::<StorageT>())?;
+                let ridx = UnsuffixedUsize(usize::from(ridx));
+                toks.extend(quote! {
+                    #[allow(dead_code)]
+                    pub const #r_const: #storage_ty = #ridx;
+                });
             }
         }
-        outs
+        Ok(toks)
     }
 
     fn gen_token_epp(&self, grm: &YaccGrammar<StorageT>) -> String {
