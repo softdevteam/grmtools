@@ -1053,16 +1053,14 @@ where
         &self,
         grm: &YaccGrammar<StorageT>,
     ) -> Result<TokenStream, proc_macro2::LexError> {
-        let (parse_param_unit, parse_paramname, parse_paramdef);
+        let (parse_paramname, parse_paramdef);
         match grm.parse_param() {
             Some((name, tyname)) => {
-                parse_param_unit = tyname.trim() == "()";
                 parse_paramname = str::parse::<TokenStream>(name)?;
                 let ty = str::parse::<TokenStream>(tyname)?;
                 parse_paramdef = quote!(#parse_paramname: #ty);
             }
             None => {
-                parse_param_unit = true;
                 parse_paramname = quote!(());
                 parse_paramdef = quote! {_: ()};
             }
@@ -1146,22 +1144,6 @@ where
                     }
                 })
             } else if pidx == grm.start_prod() {
-                // The action for the start production (i.e. the extra rule/production
-                // added by lrpar) will never be executed, so a dummy function is all
-                // that's required. We add "unreachable" as a check in case some other
-                // detail of lrpar changes in the future.
-                if !parse_param_unit {
-                    // If the parse parameter is the unit type, `let _ = ();` leads to Clippy
-                    // warnings.
-                    //
-                    // As of rust 1.85.0 I don't see that lint triggering anymore, it might
-                    // have been relaxed since .
-                    wrapper_fn_body.extend(quote! {
-                        // This appears to be here to silence "unused_variables" lint,
-                        // in a way that doesn't require renaming the variable.
-                        let _ = #parse_paramname;
-                    });
-                }
                 wrapper_fn_body.extend(quote!(unreachable!()));
             } else {
                 panic!(
@@ -1170,9 +1152,14 @@ where
                 );
             };
 
-            // TODO we can emit #[allow(unused_variables)] when pidx == grm.start_prod
-            // That should allow us to remove parse_param_unit and the associated branches.
+            let attrib = if pidx == grm.start_prod() {
+                // The start prod has an unreachable body so it doesn't use it's variables.
+                Some(quote!(#[allow(unused_variables)]))
+            } else {
+                None
+            };
             wrappers.extend(quote!{
+                #attrib
                 fn #wrapper_fn<'lexer, 'input: 'lexer>(
                     #ridx_var: ::cfgrammar::RIdx<#storaget>,
                     #lexer_var: &'lexer dyn ::lrpar::NonStreamingLexer<'input, #lexertypest>,
