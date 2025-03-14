@@ -780,7 +780,7 @@ where
         let parse_function = self.gen_parse_function(grm, stable)?;
         let action_wrappers = match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
-                Some(str::parse::<TokenStream>(&self.gen_wrappers(grm))?)
+                Some(self.gen_wrappers(grm)?)
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction)
             | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => None,
@@ -1049,161 +1049,163 @@ where
     }
 
     /// Generate the wrappers that call user actions
-    fn gen_wrappers(&self, grm: &YaccGrammar<StorageT>) -> String {
-        let mut outs = String::new();
-
-        outs.push_str("\n\n    // Wrappers\n\n");
-
-        let (parse_paramname, parse_paramdef) = match grm.parse_param() {
-            Some((name, tyname)) => (name.to_owned(), format!("{}: {}", name, tyname)),
-            None => ("()".to_owned(), "_: ()".to_owned()),
+    fn gen_wrappers(
+        &self,
+        grm: &YaccGrammar<StorageT>,
+    ) -> Result<TokenStream, proc_macro2::LexError> {
+        let (parse_param_unit, parse_paramname, parse_paramdef);
+        match grm.parse_param() {
+            Some((name, tyname)) => {
+                parse_param_unit = tyname.trim() == "()";
+                parse_paramname = str::parse::<TokenStream>(name)?;
+                let ty = str::parse::<TokenStream>(tyname)?;
+                parse_paramdef = quote!(#parse_paramname: #ty);
+            }
+            None => {
+                parse_param_unit = true;
+                parse_paramname = quote!(());
+                parse_paramdef = quote! {_: ()};
+            }
         };
+
+        let mut wrappers = TokenStream::new();
         for pidx in grm.iter_pidxs() {
             let ridx = grm.prod_to_rule(pidx);
-            let pidx_num = UnsuffixedUsize(usize::from(pidx));
 
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]). At
             // the same time extract &str from tokens and actiontype from nonterminals.
-            write!(outs,
-                "    fn {prefix}wrapper_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                      {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>,
-                      {prefix}span: ::cfgrammar::Span,
-                      mut {prefix}args: ::std::vec::Drain<{edition_lifetime} ::lrpar::parser::AStackType<<{lexertypest} as ::lrpar::LexerTypes>::LexemeT, {actionskind}<'input>>>,
-                      {parse_paramdef})
-                   -> {actionskind}<'input> {{",
-                quote!(#pidx_num),
-                storaget = type_name::<StorageT>(),
-                lexertypest = type_name::<LexerTypesT>(),
-                prefix = ACTION_PREFIX,
-                parse_paramdef = parse_paramdef,
-                actionskind = ACTIONS_KIND,
-                edition_lifetime = if self.rust_edition != RustEdition::Rust2015 { "'_, " } else { "" },
-            ).ok();
-
+            let wrapper_fn = format_ident!("{}wrapper_{}", ACTION_PREFIX, usize::from(pidx));
+            let ridx_var = format_ident!("{}ridx", ACTION_PREFIX);
+            let lexer_var = format_ident!("{}lexer", ACTION_PREFIX);
+            let span_var = format_ident!("{}span", ACTION_PREFIX);
+            let args_var = format_ident!("{}args", ACTION_PREFIX);
+            let storaget = str::parse::<TokenStream>(type_name::<StorageT>())?;
+            let lexertypest = str::parse::<TokenStream>(type_name::<LexerTypesT>())?;
+            let actionskind = str::parse::<TokenStream>(ACTIONS_KIND)?;
+            let edition_lifetime = if self.rust_edition != RustEdition::Rust2015 {
+                Some(quote!('_,))
+            } else {
+                None
+            };
+            let mut wrapper_fn_body = TokenStream::new();
             if grm.action(pidx).is_some() {
                 // Unpack the arguments passed to us by the drain
                 for i in 0..grm.prod(pidx).len() {
-                    match grm.prod(pidx)[i] {
+                    let arg = format_ident!("{}arg_{}", ACTION_PREFIX, i + 1);
+                    wrapper_fn_body.extend(match grm.prod(pidx)[i] {
                         Symbol::Rule(ref_ridx) => {
-                            write!(outs,
-                            "
-        #[allow(clippy::let_unit_value)]
-        let {prefix}arg_{i} = match {prefix}args.next().unwrap() {{
-            ::lrpar::parser::AStackType::ActionType({actionskind}::{actionskindprefix}{ref_ridx}(x)) => x,
-            _ => unreachable!()
-        }};",
-                            i = i + 1,
-                            ref_ridx = usize::from(ref_ridx),
-                            prefix = ACTION_PREFIX,
-                            actionskind = ACTIONS_KIND,
-                            actionskindprefix = ACTIONS_KIND_PREFIX
-                        ).ok();
+                            let ref_ridx = usize::from(ref_ridx);
+                            let actionvariant = format_ident!("{}{}", ACTIONS_KIND_PREFIX, ref_ridx);
+                            quote!{
+                                #[allow(clippy::let_unit_value)]
+                                let #arg = match #args_var.next().unwrap() {
+                                    ::lrpar::parser::AStackType::ActionType(#actionskind::#actionvariant(x)) => x,
+                                    _ => unreachable!()
+                                };
+                            }
                         }
                         Symbol::Token(_) => {
-                            write!(
-                                outs,
-                                "
-        let {prefix}arg_{} = match {prefix}args.next().unwrap() {{
-            ::lrpar::parser::AStackType::Lexeme(l) => {{
-                if l.faulty() {{
-                    Err(l)
-                }} else {{
-                    Ok(l)
-                }}
-            }},
-            ::lrpar::parser::AStackType::ActionType(_) => unreachable!()
-        }};",
-                                i + 1,
-                                prefix = ACTION_PREFIX
-                            )
-                            .ok();
+                            quote!{
+                                let #arg = match #args_var.next().unwrap() {
+                                    ::lrpar::parser::AStackType::Lexeme(l) => {
+                                        if l.faulty() {
+                                            Err(l)
+                                        } else {
+                                            Ok(l)
+                                        }
+                                    },
+                                    ::lrpar::parser::AStackType::ActionType(_) => unreachable!()
+                                };
+                            }
                         }
-                    }
+                    })
                 }
 
                 // Call the user code
                 let args = (0..grm.prod(pidx).len())
-                    .map(|i| format!("{prefix}arg_{i}", prefix = ACTION_PREFIX, i = i + 1))
+                    .map(|i| format_ident!("{}arg_{}", ACTION_PREFIX, i + 1))
                     .collect::<Vec<_>>();
-                // If the rule `r` that we're calling has the unit type then Clippy will warn that
-                // `enum::A(wrapper_r())` is pointless. We thus have to split it into two:
-                // `wrapper_r(); enum::A(())`.
-                match grm.actiontype(ridx) {
+                let action_fn = format_ident!("{}action_{}", ACTION_PREFIX, usize::from(pidx));
+                let actionsvariant = format_ident!("{}{}", ACTIONS_KIND_PREFIX, usize::from(ridx));
+
+                wrapper_fn_body.extend(match grm.actiontype(ridx) {
                     Some(s) if s == "()" => {
-                        write!(outs, "\n        {prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {parse_paramname}, {args});
-        {actionskind}::{actionskindprefix}{ridx}(())",
-                            actionskind = ACTIONS_KIND,
-                            actionskindprefix = ACTIONS_KIND_PREFIX,
-                            prefix = ACTION_PREFIX,
-                            ridx = usize::from(ridx),
-                            pidx = usize::from(pidx),
-                            parse_paramname = parse_paramname,
-                            args = args.join(", ")).ok();
+                        // If the rule `r` that we're calling has the unit type then Clippy will warn that
+                        // `enum::A(wrapper_r())` is pointless. We thus have to split it into two:
+                        // `wrapper_r(); enum::A(())`.
+                        quote!{
+                            #action_fn(#ridx_var, #lexer_var, #span_var, #parse_paramname, #(#args,)*);
+                            #actionskind::#actionsvariant(())
+                        }
                     }
                     _ => {
-                        write!(outs, "\n        {actionskind}::{actionskindprefix}{ridx}({prefix}action_{pidx}({prefix}ridx, {prefix}lexer, {prefix}span, {parse_paramname}, {args}))",
-                            actionskind = ACTIONS_KIND,
-                            actionskindprefix = ACTIONS_KIND_PREFIX,
-                            prefix = ACTION_PREFIX,
-                            ridx = usize::from(ridx),
-                            pidx = usize::from(pidx),
-                            parse_paramname = parse_paramname,
-                            args = args.join(", ")).ok();
+                        quote!{
+                            #actionskind::#actionsvariant(#action_fn(#ridx_var, #lexer_var, #span_var, #parse_paramname, #(#args,)*))
+                        }
                     }
-                }
+                })
             } else if pidx == grm.start_prod() {
                 // The action for the start production (i.e. the extra rule/production
                 // added by lrpar) will never be executed, so a dummy function is all
                 // that's required. We add "unreachable" as a check in case some other
                 // detail of lrpar changes in the future.
-                if parse_paramname != "()" {
+                if !parse_param_unit {
                     // If the parse parameter is the unit type, `let _ = ();` leads to Clippy
                     // warnings.
-                    write!(outs, "\n        let _ = {parse_paramname:};").ok();
+                    //
+                    // As of rust 1.85.0 I don't see that lint triggering anymore, it might
+                    // have been relaxed since .
+                    wrapper_fn_body.extend(quote! {
+                        // This appears to be here to silence "unused_variables" lint,
+                        // in a way that doesn't require renaming the variable.
+                        let _ = #parse_paramname;
+                    });
                 }
-                outs.push_str("\n        unreachable!()");
+                wrapper_fn_body.extend(quote!(unreachable!()));
             } else {
                 panic!(
                     "Production in rule '{}' must have an action body.",
                     grm.rule_name_str(grm.prod_to_rule(pidx))
                 );
-            }
-            outs.push_str("\n    }\n\n");
+            };
+
+            // TODO we can emit #[allow(unused_variables)] when pidx == grm.start_prod
+            // That should allow us to remove parse_param_unit and the associated branches.
+            wrappers.extend(quote!{
+                fn #wrapper_fn<'lexer, 'input: 'lexer>(
+                    #ridx_var: ::cfgrammar::RIdx<#storaget>,
+                    #lexer_var: &'lexer dyn ::lrpar::NonStreamingLexer<'input, #lexertypest>,
+                    #span_var: ::cfgrammar::Span,
+                    mut #args_var: ::std::vec::Drain<#edition_lifetime ::lrpar::parser::AStackType<<#lexertypest as ::lrpar::LexerTypes>::LexemeT, #actionskind<'input>>>,
+                    #parse_paramdef
+                ) -> #actionskind<'input> {
+                    #wrapper_fn_body
+                }
+             })
         }
-
-        // Wrappers enum
-
-        write!(
-            outs,
-            "    #[allow(dead_code)]
-    enum {}<'input> {{\n",
-            ACTIONS_KIND
-        )
-        .ok();
+        let mut actionskindvariants = Vec::new();
+        let actionskindhidden = format_ident!("_{}", ACTIONS_KIND_HIDDEN);
+        let actionskind = str::parse::<TokenStream>(ACTIONS_KIND).unwrap();
         for ridx in grm.iter_rules() {
-            if grm.actiontype(ridx).is_none() {
-                continue;
+            if let Some(actiont) = grm.actiontype(ridx) {
+                let actionskindvariant =
+                    format_ident!("{}{}", ACTIONS_KIND_PREFIX, usize::from(ridx));
+                let actiont = str::parse::<TokenStream>(actiont).unwrap();
+                actionskindvariants.push(quote! {
+                    #actionskindvariant(#actiont)
+                })
             }
-
-            writeln!(
-                outs,
-                "        {actionskindprefix}{ridx}({actiont}),",
-                actionskindprefix = ACTIONS_KIND_PREFIX,
-                ridx = usize::from(ridx),
-                actiont = grm.actiontype(ridx).as_ref().unwrap()
-            )
-            .ok();
         }
-        write!(
-            outs,
-            "    _{actionskindhidden}(::std::marker::PhantomData<&'input ()>)
-    }}\n\n",
-            actionskindhidden = ACTIONS_KIND_HIDDEN
-        )
-        .ok();
-
-        outs
+        actionskindvariants
+            .push(quote!(#actionskindhidden(::std::marker::PhantomData<&'input ()>)));
+        wrappers.extend(quote! {
+            #[allow(dead_code)]
+            enum #actionskind<'input> {
+                #(#actionskindvariants,)*
+            }
+        });
+        Ok(wrappers)
     }
 
     /// Generate the user action functions (if any).
