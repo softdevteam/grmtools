@@ -811,8 +811,15 @@ where
             } // End of `mod #mod_name`
         };
         let mut f = File::create(outp_rs)?;
-        let syntax_tree = syn::parse_str(&out_tokens.to_string())?;
-        let outs = prettyplease::unparse(&syntax_tree);
+        let unformatted = out_tokens.to_string();
+        let outs = if let Ok(syntax_tree) = syn::parse_str(&unformatted) {
+            prettyplease::unparse(&syntax_tree)
+        } else {
+            // We failed to parse the source string before pretty printing.
+            // This is likely due to a syntax error in the source text.
+            // We should still emit the unformatted source text.
+            unformatted
+        };
         f.write_all(outs.as_bytes())?;
         Ok(())
     }
