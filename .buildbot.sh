@@ -4,6 +4,7 @@ set -e
 
 export CARGO_HOME="`pwd`/.cargo"
 export RUSTUP_HOME="`pwd`/.rustup"
+export RUSTFLAGS="--cfg grmtools_extra_checks"
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
 sh rustup.sh --default-host x86_64-unknown-linux-gnu --default-toolchain stable -y --no-modify-path
@@ -23,12 +24,17 @@ cargo test --lib lrpar --features serde
 root=`pwd`
 cd $root/lrlex/examples/calc_manual_lex
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
+# Touching these files shouldn't invalidate the cache (via --cfg grmtools_extra_checks)
+touch src/main.rs src/calc.y && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
 cd $root/lrpar/examples/calc_actions
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
+touch src/main.rs src/calc.y && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
 cd $root/lrpar/examples/calc_ast
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
+touch src/main.rs src/calc.y && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
 cd $root/lrpar/examples/calc_parsetree
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
+touch src/main.rs src/calc.y && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
 cd $root
 
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps
