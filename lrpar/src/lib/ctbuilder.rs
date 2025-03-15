@@ -568,7 +568,27 @@ where
             .iter()
             .map(|(&n, &i)| (n.to_owned(), i.as_storaget()))
             .collect::<HashMap<_, _>>();
-        let cache = self.rebuild_cache(&grm);
+
+        let derived_mod_name = match self.mod_name {
+            Some(s) => s.to_owned(),
+            None => {
+                // The user hasn't specified a module name, so we create one automatically: what we
+                // do is strip off all the filename extensions (note that it's likely that inp ends
+                // with `y.rs`, so we potentially have to strip off more than one extension) and
+                // then add `_y` to the end.
+                let mut stem = grmp.to_str().unwrap();
+                loop {
+                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
+                    if stem == new_stem {
+                        break;
+                    }
+                    stem = new_stem;
+                }
+                format!("{}_y", stem)
+            }
+        };
+
+        let cache = self.rebuild_cache(&derived_mod_name, &grm);
 
         // We don't need to go through the full rigmarole of generating an output file if all of
         // the following are true: the output file exists; it is newer than the input file; and the
@@ -627,26 +647,7 @@ where
             }
         }
 
-        let mod_name = match self.mod_name {
-            Some(s) => s.to_owned(),
-            None => {
-                // The user hasn't specified a module name, so we create one automatically: what we
-                // do is strip off all the filename extensions (note that it's likely that inp ends
-                // with `y.rs`, so we potentially have to strip off more than one extension) and
-                // then add `_y` to the end.
-                let mut stem = grmp.to_str().unwrap();
-                loop {
-                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
-                    if stem == new_stem {
-                        break;
-                    }
-                    stem = new_stem;
-                }
-                format!("{}_y", stem)
-            }
-        };
-
-        self.output_file(&grm, &stable, &mod_name, outp, &cache)?;
+        self.output_file(&grm, &stable, &derived_mod_name, outp, &cache)?;
         let conflicts = if stable.conflicts().is_some() {
             Some((grm, sgraph, stable))
         } else {
@@ -827,7 +828,7 @@ where
 
     /// Generate the cache, which determines if anything's changed enough that we need to
     /// regenerate outputs and force rustc to recompile.
-    fn rebuild_cache(&self, grm: &YaccGrammar<StorageT>) -> TokenStream {
+    fn rebuild_cache(&self, derived_mod_name: &'_ str, grm: &YaccGrammar<StorageT>) -> TokenStream {
         // We don't need to be particularly clever here: we just need to record the various things
         // that could change between builds.
         //
@@ -872,7 +873,10 @@ where
                 use ::cfgrammar::yacc::YaccKind;
 
                 const BUILD_TIME: &str = #build_time;
+                // May differ from `MOD_NAME` by being derived from the grammar path.
+                const DERIVED_MOD_NAME: &str = #derived_mod_name;
                 const GRAMMAR_PATH: &str = #grammar_path;
+                // As explicitly set by the builder.
                 const MOD_NAME: Option<&str> = #mod_name;
                 const RECOVERER: RecoveryKind = #recoverer;
                 const YACC_KIND: YaccKind = #yacckind;
