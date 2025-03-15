@@ -30,6 +30,7 @@ pub enum YaccKindResolver {
 /// The particular Yacc variant this grammar makes use of.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
 pub enum YaccKind {
     /// The original Yacc style as documented by
     /// [Johnson](http://dinosaur.compilertools.net/yacc/index.html),

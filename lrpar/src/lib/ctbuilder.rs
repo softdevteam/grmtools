@@ -954,7 +954,7 @@ where
                     }
                 }
             }
-            YaccKind::Eco => unreachable!(),
+            kind => panic!("YaccKind {:?} not supported", kind),
         };
 
         // `parse()` may or may not have an argument for `%parseparam`.
@@ -988,7 +988,7 @@ where
             YaccKind::Original(YaccOriginalActionKind::NoAction) => quote! {
                 ::std::vec::Vec<::lrpar::LexParseError<#storaget, #lexertypest>>
             },
-            YaccKind::Eco => unreachable!(),
+            _ => unreachable!(),
         };
 
         let grm_data = encode_to_vec(grm, bincode::config::legacy())?;
