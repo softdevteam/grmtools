@@ -160,6 +160,7 @@ impl fmt::Display for YaccGrammarErrorKind {
 /// The various different possible Yacc parser errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
 pub enum YaccGrammarWarningKind {
     UnusedRule,
     UnusedToken,
@@ -214,6 +215,7 @@ impl Spanned for YaccGrammarWarning {
 }
 
 /// Indicates how to interpret the spans of an error.
+#[non_exhaustive]
 pub enum SpansKind {
     /// The first span is the first occurrence, and a span for each subsequent occurrence.
     DuplicationError,
