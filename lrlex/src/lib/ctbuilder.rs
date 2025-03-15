@@ -74,6 +74,7 @@ impl ToTokens for Visibility {
 ///
 /// [Rust Edition]: https://doc.rust-lang.org/edition-guide/rust-2021/index.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[non_exhaustive]
 pub enum RustEdition {
     Rust2015,
     Rust2018,
