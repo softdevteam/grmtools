@@ -163,6 +163,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                     SpansKind::Error => {
                         unreachable!("Should contain a single span at the site of the error")
                     }
+                    _ => format!("Unrecognized spanskind"),
                 };
                 out.push_str(&self.prefixed_underline_span_with_text(dots, *span, s, '-'));
             }
