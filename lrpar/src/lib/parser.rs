@@ -615,6 +615,7 @@ pub(super) trait Recoverer<
 /// What recovery algorithm should be used when a syntax error is encountered?
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
 pub enum RecoveryKind {
     /// The CPCT+ algorithm from Diekmann/Tratt "Don't Panic! Better, Fewer, Syntax Errors for LR
     /// Parsers".

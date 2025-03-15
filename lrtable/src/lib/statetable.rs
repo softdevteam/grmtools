@@ -118,12 +118,14 @@ where
 
 /// The various different possible Yacc parser errors.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum StateTableErrorKind<StorageT> {
     AcceptReduceConflict(Option<PIdx<StorageT>>),
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct StateTableError<StorageT> {
     pub kind: StateTableErrorKind<StorageT>,
     pub pidx: PIdx<StorageT>,
