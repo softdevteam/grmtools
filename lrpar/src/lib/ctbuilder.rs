@@ -771,7 +771,7 @@ where
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools,
         ) = self.yacckind
         {
-            Some(str::parse::<TokenStream>(&self.gen_user_actions(grm)?)?)
+            Some(self.gen_user_actions(grm)?)
         } else {
             None
         };
@@ -1209,20 +1209,27 @@ where
     }
 
     /// Generate the user action functions (if any).
-    fn gen_user_actions(&self, grm: &YaccGrammar<StorageT>) -> Result<String, Box<dyn Error>> {
-        let mut outs = String::new();
-
-        if let Some(s) = grm.programs() {
-            outs.push_str("\n// User code from the program section\n\n");
-            outs.push_str(s);
-            outs.push_str("\n// End of user code from the program section\n\n");
-        }
-
+    fn gen_user_actions(&self, grm: &YaccGrammar<StorageT>) -> Result<TokenStream, Box<dyn Error>> {
+        let programs = grm
+            .programs()
+            .as_ref()
+            .map(|s| str::parse::<TokenStream>(s))
+            .transpose()?;
+        let mut action_fns = TokenStream::new();
         // Convert actions to functions
-        outs.push_str("\n    // User actions\n\n");
-        let (parse_paramname, parse_paramdef) = match grm.parse_param() {
-            Some((name, tyname)) => (name.to_owned(), format!("{}: {}", name, tyname)),
-            None => ("()".to_owned(), "_: ()".to_owned()),
+        let (parse_paramname, parse_paramdef, parse_param_unit);
+        match grm.parse_param() {
+            Some((name, tyname)) => {
+                parse_param_unit = tyname.trim() == "()";
+                parse_paramname = str::parse::<TokenStream>(name)?;
+                let ty = str::parse::<TokenStream>(tyname)?;
+                parse_paramdef = quote!(#parse_paramname: #ty);
+            }
+            None => {
+                parse_param_unit = true;
+                parse_paramname = quote!(());
+                parse_paramdef = quote! {_: ()};
+            }
         };
         for pidx in grm.iter_pidxs() {
             if pidx == grm.start_prod() {
@@ -1233,13 +1240,17 @@ where
             let mut args = Vec::with_capacity(grm.prod(pidx).len());
             for i in 0..grm.prod(pidx).len() {
                 let argt = match grm.prod(pidx)[i] {
-                    Symbol::Rule(ref_ridx) => grm.actiontype(ref_ridx).as_ref().unwrap().clone(),
-                    Symbol::Token(_) => format!(
-                        "::std::result::Result<{lexemet}, {lexemet}>",
-                        lexemet = type_name::<LexerTypesT::LexemeT>(),
-                    ),
+                    Symbol::Rule(ref_ridx) => {
+                        str::parse::<TokenStream>(grm.actiontype(ref_ridx).as_ref().unwrap())?
+                    }
+                    Symbol::Token(_) => {
+                        let lexemet =
+                            str::parse::<TokenStream>(type_name::<LexerTypesT::LexemeT>())?;
+                        quote!(::std::result::Result<#lexemet, #lexemet>)
+                    }
                 };
-                args.push(format!("mut {}arg_{}: {}", ACTION_PREFIX, i + 1, argt));
+                let arg = format_ident!("{}arg_{}", ACTION_PREFIX, i + 1);
+                args.push(quote!(mut #arg: #argt));
             }
 
             // If this rule's `actiont` is `()` then Clippy will warn that the return type `-> ()`
@@ -1248,36 +1259,23 @@ where
             let returnt = {
                 let actiont = grm.actiontype(grm.prod_to_rule(pidx)).as_ref().unwrap();
                 if actiont == "()" {
-                    "".to_owned()
+                    None
                 } else {
-                    format!("\n                 -> {}", actiont)
+                    let actiont = str::parse::<TokenStream>(actiont)?;
+                    Some(quote!( -> #actiont))
                 }
             };
-            write!(
-                outs,
-                "    // {rulename}
-    #[allow(clippy::too_many_arguments)]
-    fn {prefix}action_{}<'lexer, 'input: 'lexer>({prefix}ridx: ::cfgrammar::RIdx<{storaget}>,
-                     {prefix}lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, {lexertypest}>,
-                     {prefix}span: ::cfgrammar::Span,
-                     {parse_paramdef},
-                     {args}){returnt} {{\n",
-                usize::from(pidx),
-                rulename = grm.rule_name_str(grm.prod_to_rule(pidx)),
-                storaget = type_name::<StorageT>(),
-                lexertypest = type_name::<LexerTypesT>(),
-                prefix = ACTION_PREFIX,
-                returnt = returnt,
-                parse_paramdef = parse_paramdef,
-                args = args.join(",\n                     ")
-            )
-            .ok();
-
-            if parse_paramname != "()" {
-                // If the parse parameter is the unit type, `let _ = ();` leads to Clippy
-                // warnings.
-                writeln!(outs, "        let _ = {parse_paramname:};").ok();
-            }
+            let action_fn = format_ident!("{}action_{}", ACTION_PREFIX, usize::from(pidx));
+            let lexer_var = format_ident!("{}lexer", ACTION_PREFIX);
+            let span_var = format_ident!("{}span", ACTION_PREFIX);
+            let ridx_var = format_ident!("{}ridx", ACTION_PREFIX);
+            let storaget = str::parse::<TokenStream>(type_name::<StorageT>())?;
+            let lexertypest = str::parse::<TokenStream>(type_name::<LexerTypesT>())?;
+            let bind_parse_param = if !parse_param_unit {
+                Some(quote! {let _ = #parse_paramname;})
+            } else {
+                None
+            };
 
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]).
@@ -1288,6 +1286,7 @@ where
                 )
             })?;
             let mut last = 0;
+            let mut outs = String::new();
             loop {
                 match pre_action[last..].find('$') {
                     Some(off) => {
@@ -1322,9 +1321,24 @@ where
                 }
             }
 
-            outs.push_str("\n    }\n\n");
+            let action_body = str::parse::<TokenStream>(&outs)?;
+            action_fns.extend(quote!{
+                    #[allow(clippy::too_many_arguments)]
+                    fn #action_fn<'lexer, 'input: 'lexer>(#ridx_var: ::cfgrammar::RIdx<#storaget>,
+                                    #lexer_var: &'lexer dyn ::lrpar::NonStreamingLexer<'input, #lexertypest>,
+                                    #span_var: ::cfgrammar::Span,
+                                    #parse_paramdef,
+                                    #(#args,)*)#returnt {
+                        #bind_parse_param
+                        #action_body
+                    }
+
+            })
         }
-        Ok(outs)
+        Ok(quote! {
+            #programs
+            #action_fns
+        })
     }
 
     /// Return the `RIdx` of the %start rule in the grammar (which will not be the same as
