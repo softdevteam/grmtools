@@ -32,6 +32,7 @@ lazy_static! {
     static ref GENERATED_PATHS: Mutex<HashSet<PathBuf>> = Mutex::new(HashSet::new());
 }
 
+#[non_exhaustive]
 pub enum LexerKind {
     LRNonStreamingLexer,
 }
