@@ -588,7 +588,7 @@ where
             name = Some(orig_name[1..orig_name.len() - 1].to_string());
             name_span = Span::new(i + rspace + 2, i + rspace + orig_name.len());
             self.rules.iter().any(|r| {
-                let dupe = r.name().map_or(false, |n| n == name.as_ref().unwrap());
+                let dupe = r.name().is_some_and(|n| n == name.as_ref().unwrap());
                 if dupe {
                     add_duplicate_occurrence(
                         errs,

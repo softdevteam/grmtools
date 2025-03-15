@@ -253,10 +253,7 @@ where
                 prods_rules.push(Some(ridx));
                 actions.push(None);
                 continue;
-            } else if implicit_start_rule
-                .as_ref()
-                .map_or(false, |s| s == astrulename)
-            {
+            } else if implicit_start_rule.as_ref() == Some(astrulename) {
                 // Add the intermediate start rule (handling implicit tokens at the beginning of
                 // the file):
                 //   ^~: ~ S;
@@ -268,7 +265,7 @@ where
                 prod_precs.push(Some(None));
                 prods_rules.push(Some(ridx));
                 continue;
-            } else if implicit_rule.as_ref().map_or(false, |s| s == astrulename) {
+            } else if implicit_rule.as_ref() == Some(astrulename) {
                 // Add the implicit rule: ~: "IMPLICIT_TOKEN_1" ~ | ... | "IMPLICIT_TOKEN_N" ~ | ;
                 let implicit_prods = &mut rules_prods[usize::from(rule_map[astrulename])];
                 // Add a production for each implicit token
@@ -556,7 +553,7 @@ where
     pub fn token_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
         self.token_names
             .iter()
-            .position(|x| x.as_ref().map_or(false, |(_, x)| x == n))
+            .position(|x| x.as_ref().is_some_and(|(_, x)| x == n))
             // The call to as_() is safe because token_names is guaranteed to be small
             // enough to fit into StorageT
             .map(|x| TIdx(x.as_()))
