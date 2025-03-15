@@ -27,14 +27,21 @@ echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 # Touching these files shouldn't invalidate the cache (via --cfg grmtools_extra_checks)
 touch src/main.rs src/calc.y && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
 cd $root/lrpar/examples/calc_actions
+echo -n "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 touch src/main.rs src/calc.y && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
 cd $root/lrpar/examples/calc_ast
+echo -n "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 touch src/main.rs src/calc.y && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
 cd $root/lrpar/examples/calc_parsetree
+echo -n "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 touch src/main.rs src/calc.y && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
+cd $root/lrpar/examples/clone_param
+echo -n "1+++" | cargo run --package nimbleparse -- src/param.l src/param.y -
+cd $root/lrpar/examples/start_states
+echo -n "/* /* commented out */ */ uncommented text /* */" | cargo run --package nimbleparse -- src/comment.l src/comment.y -
 cd $root
 
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps
