@@ -25,19 +25,19 @@ root=`pwd`
 cd $root/lrlex/examples/calc_manual_lex
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 # Touching these files shouldn't invalidate the cache (via --cfg grmtools_extra_checks)
-touch src/main.rs && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
+touch src/main.rs && CACHE_EXPECTED=y cargo build
 cd $root/lrpar/examples/calc_actions
 echo -n "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
-touch src/main.rs && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
+touch src/main.rs && CACHE_EXPECTED=y cargo build
 cd $root/lrpar/examples/calc_ast
 echo -n "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
-touch src/main.rs && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
+touch src/main.rs && CACHE_EXPECTED=y cargo build
 cd $root/lrpar/examples/calc_parsetree
 echo -n "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
-touch src/main.rs && echo "2 + 3 * 4" | CACHE_EXPECTED=y cargo run | grep "Result: 14"
+touch src/main.rs && CACHE_EXPECTED=y cargo build
 cd $root/lrpar/examples/clone_param
 echo -n "1+++" | cargo run --package nimbleparse -- src/param.l src/param.y -
 cd $root/lrpar/examples/start_states
