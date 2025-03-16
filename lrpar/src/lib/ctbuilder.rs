@@ -474,9 +474,6 @@ where
             .grammar_path
             .as_ref()
             .expect("grammar_path must be specified before processing.");
-        if std::env::var("OUT_DIR").is_ok() {
-            println!("cargo:rerun-if-changed={}", grmp.display());
-        }
         let outp = self
             .output_path
             .as_ref()
@@ -602,13 +599,8 @@ where
                 if FileTime::from_last_modification_time(out_rs_md)
                     > FileTime::from_last_modification_time(inmd)
                 {
-                    if let Ok(mut outc) = read_to_string(outp) {
-                        // Strip whitespace from the output file and the cache since the copy of
-                        // the cache in the output file may be affected by pretty printing.
-                        let mut cache = cache.to_string();
-                        outc.retain(|c| !c.is_whitespace());
-                        cache.retain(|c| !c.is_whitespace());
-                        if outc.contains(&cache) {
+                    if let Ok(outc) = read_to_string(outp) {
+                        if outc.contains(&cache.to_string()) {
                             return Ok(CTParser {
                                 regenerated: false,
                                 rule_ids,
@@ -617,6 +609,8 @@ where
                         } else {
                             #[cfg(grmtools_extra_checks)]
                             if std::env::var("CACHE_EXPECTED").is_ok() {
+                                eprintln!("outc: {}", outc);
+                                eprintln!("using cache: {}", cache,);
                                 // Primarily for use in the testsuite.
                                 panic!("The cache regenerated however, it was expected to match");
                             }
@@ -647,7 +641,20 @@ where
             }
         }
 
-        self.output_file(&grm, &stable, &derived_mod_name, outp, &cache)?;
+        self.output_file(
+            &grm,
+            &stable,
+            &derived_mod_name,
+            outp,
+            &quote! {
+                // This declaration can be affected by the pretty printer.
+                // But we would hope the actual cache string is not.
+                //
+                // This is emitted for the purposes of performing the cache check.
+                // on the output source, but is not used by generated parser.
+                const _: &str = #cache;
+            },
+        )?;
         let conflicts = if stable.conflicts().is_some() {
             Some((grm, sgraph, stable))
         } else {
@@ -865,31 +872,22 @@ where
                 ))
             })
             .collect::<Vec<_>>();
-        let rule_map_len = rule_map.len();
-        quote! {
-            #[allow(unused)]
-            mod _cache_information_ {
-                use ::lrpar::{RecoveryKind, Visibility, RustEdition};
-                use ::cfgrammar::yacc::YaccKind;
-
-                const BUILD_TIME: &str = #build_time;
-                // May differ from `MOD_NAME` by being derived from the grammar path.
-                const DERIVED_MOD_NAME: &str = #derived_mod_name;
-                const GRAMMAR_PATH: &str = #grammar_path;
-                // As explicitly set by the builder.
-                const MOD_NAME: Option<&str> = #mod_name;
-                const RECOVERER: RecoveryKind = #recoverer;
-                const YACC_KIND: YaccKind = #yacckind;
-                const ERROR_ON_CONFLICTS: bool = #error_on_conflicts;
-                const SHOW_WARNINGS: bool = #show_warnings;
-                const WARNINGS_ARE_ERRORS: bool = #warnings_are_errors;
-                const RUST_EDITION: RustEdition = #rust_edition;
-                const RULE_IDS_MAP: [(usize, &str); #rule_map_len] = [#(#rule_map,)*];
-                fn visibility() -> Visibility {
-                    #visibility
-                }
-            }
-        }
+        let cache_info = quote! {
+            BUILD_TIME = #build_time
+            DERIVED_MOD_NAME = #derived_mod_name
+            GRAMMAR_PATH = #grammar_path
+            MOD_NAME = #mod_name
+            RECOVERER = #recoverer
+            YACC_KIND = #yacckind
+            ERROR_ON_CONFLICTS = #error_on_conflicts
+            SHOW_WARNINGS = #show_warnings
+            WARNINGS_ARE_ERRORS = #warnings_are_errors
+            RUST_EDITION = #rust_edition
+            RULE_IDS_MAP = [#(#rule_map,)*]
+            VISIBILITY = #visibility
+        };
+        let cache_info_str = cache_info.to_string();
+        quote!(#cache_info_str)
     }
 
     /// Generate the main parse() function for the output file.
