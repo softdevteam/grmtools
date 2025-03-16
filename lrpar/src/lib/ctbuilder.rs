@@ -600,7 +600,7 @@ where
                     > FileTime::from_last_modification_time(inmd)
                 {
                     if let Ok(outc) = read_to_string(outp) {
-                        if outc.contains(&cache.to_string()) {
+                        if outc.contains(&cache.to_string().to_uppercase()) {
                             return Ok(CTParser {
                                 regenerated: false,
                                 rule_ids,
