@@ -3,7 +3,6 @@ name = "lrtable"
 description = "LR grammar table generation"
 repository = "https://github.com/softdevteam/grmtools"
 version = "0.13.10"
-authors = ["Lukas Diekmann <http://lukasdiekmann.com/>", "Laurence Tratt <http://tratt.net/laurie/>"]
 edition = "2021"
 readme = "README.md"
 license = "Apache-2.0/MIT"
