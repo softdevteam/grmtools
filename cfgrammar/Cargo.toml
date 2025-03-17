@@ -10,16 +10,21 @@ license = "Apache-2.0/MIT"
 categories = ["parsing"]
 keywords = ["yacc", "grammar"]
 
+[features]
+serde = ["dep:serde", "serde/derive", "vob/serde"]
+bincode = ["dep:bincode", "vob/bincode"]
+
 [lib]
 name = "cfgrammar"
 path = "src/lib/mod.rs"
 
 [dependencies]
+bincode = { workspace = true, optional = true, features = ["derive"] }
 lazy_static.workspace = true
 indexmap.workspace = true
 num-traits.workspace = true
 regex.workspace = true
-serde = { workspace = true, features = ["derive"], optional = true }
-vob = { workspace = true, features = ["serde"] }
+serde = { workspace = true, optional = true }
+vob = { workspace = true }
 quote.workspace = true
 proc-macro2.workspace = true

@@ -14,6 +14,7 @@ use std::{
     sync::Mutex,
 };
 
+use bincode::Encode;
 use cfgrammar::{newlinecache::NewlineCache, Spanned};
 use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, LexerTypes};
@@ -21,7 +22,6 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use regex::Regex;
-use serde::Serialize;
 
 use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexFlags, LexerDef, UNSPECIFIED_LEX_FLAGS};
 
@@ -150,7 +150,7 @@ impl CTLexerBuilder<'_, DefaultLexerTypes<u32>> {
 impl<'a, LexerTypesT: LexerTypes> CTLexerBuilder<'a, LexerTypesT>
 where
     LexerTypesT::StorageT:
-        'static + Debug + Eq + Hash + PrimInt + Serialize + TryFrom<usize> + Unsigned + ToTokens,
+        'static + Debug + Eq + Hash + PrimInt + Encode + TryFrom<usize> + Unsigned + ToTokens,
     usize: AsPrimitive<LexerTypesT::StorageT>,
 {
     /// Create a new [CTLexerBuilder].

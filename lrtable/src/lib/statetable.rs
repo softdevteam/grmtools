@@ -8,6 +8,8 @@ use std::{
     marker::PhantomData,
 };
 
+#[cfg(feature = "bincode")]
+use bincode::{Decode, Encode};
 use cfgrammar::{
     yacc::{AssocKind, YaccGrammar},
     PIdx, RIdx, Symbol, TIdx,
@@ -21,6 +23,7 @@ use vob::{IterSetBits, Vob};
 use crate::{stategraph::StateGraph, StIdx};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
 #[derive(Debug)]
 pub struct Conflicts<StorageT> {
     reduce_reduce: Vec<(
@@ -145,6 +148,7 @@ impl<StorageT> fmt::Display for StateTableError<StorageT> {
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
 pub struct StateTable<StorageT> {
     actions: SparseVec<usize>,
     state_actions: Vob<u64>,

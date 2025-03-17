@@ -1,6 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use std::{cell::RefCell, collections::HashMap, fmt::Write};
 
+#[cfg(feature = "bincode")]
+use bincode::{Decode, Encode};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -19,6 +21,7 @@ const IMPLICIT_START_RULE: &str = "^~";
 pub type PrecedenceLevel = u64;
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
 pub struct Precedence {
     pub level: PrecedenceLevel,
     pub kind: AssocKind,
@@ -26,6 +29,7 @@ pub struct Precedence {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
 pub enum AssocKind {
     Left,
     Right,
@@ -35,6 +39,7 @@ pub enum AssocKind {
 /// Representation of a `YaccGrammar`. See the [top-level documentation](../../index.html) for the
 /// guarantees this struct makes about rules, tokens, productions, and symbols.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "bincode", derive(Encode))]
 pub struct YaccGrammar<StorageT = u32> {
     /// How many rules does this grammar have?
     rules_len: RIdx<StorageT>,
@@ -86,6 +91,88 @@ pub struct YaccGrammar<StorageT = u32> {
     expect: Option<usize>,
     /// How many reduce/reduce conflicts the grammar author expected (if any).
     expectrr: Option<usize>,
+}
+
+// The implementations of `Decode` and `BorrowDecode`
+// Contain a modified copy of the output of `cargo expand` of the derivation:
+// #[cfg_attr(feature = "bincode", derive(Decode))]
+//
+// The current version of bincode has bugs in it's derive macro implementation
+// https://github.com/bincode-org/bincode/issues/763
+// https://github.com/bincode-org/bincode/issues/646
+//
+// Once those are fixed, we can replace this with derive.
+
+#[cfg(feature = "bincode")]
+impl<StorageT, __Context> Decode<__Context> for YaccGrammar<StorageT>
+where
+    StorageT: Decode<__Context> + 'static,
+{
+    fn decode<__D: bincode::de::Decoder<Context = __Context>>(
+        decoder: &mut __D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Ok(Self {
+            rules_len: Decode::decode(decoder)?,
+            rule_names: Decode::decode(decoder)?,
+            token_names: Decode::decode(decoder)?,
+            token_precs: Decode::decode(decoder)?,
+            token_epp: Decode::decode(decoder)?,
+            tokens_len: Decode::decode(decoder)?,
+            eof_token_idx: Decode::decode(decoder)?,
+            prods_len: Decode::decode(decoder)?,
+            start_prod: Decode::decode(decoder)?,
+            prods: Decode::decode(decoder)?,
+            rules_prods: Decode::decode(decoder)?,
+            prods_rules: Decode::decode(decoder)?,
+            prod_precs: Decode::decode(decoder)?,
+            implicit_rule: Decode::decode(decoder)?,
+            actions: Decode::decode(decoder)?,
+            parse_param: Decode::decode(decoder)?,
+            programs: Decode::decode(decoder)?,
+            actiontypes: Decode::decode(decoder)?,
+            avoid_insert: Decode::decode(decoder)?,
+            expect: Decode::decode(decoder)?,
+            expectrr: Decode::decode(decoder)?,
+        })
+    }
+}
+
+// Eventually this should just be provided through:
+// #[cfg_attr(feature = "bincode", derive(Decode))]
+//
+// See comment at the corresponding bincode::Decode impl.
+#[cfg(feature = "bincode")]
+impl<'__de, StorageT, __Context> bincode::BorrowDecode<'__de, __Context> for YaccGrammar<StorageT>
+where
+    StorageT: bincode::de::BorrowDecode<'__de, __Context> + '__de,
+{
+    fn borrow_decode<__D: ::bincode::de::BorrowDecoder<'__de, Context = __Context>>(
+        decoder: &mut __D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Ok(Self {
+            rules_len: bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            rule_names: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            token_names: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            token_precs: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            token_epp: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            tokens_len: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            eof_token_idx: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            prods_len: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            start_prod: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            prods: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            rules_prods: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            prods_rules: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            prod_precs: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            implicit_rule: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            actions: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            parse_param: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            programs: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            actiontypes: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            avoid_insert: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            expect: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            expectrr: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+        })
+    }
 }
 
 // Internally, we assume that a grammar's start rule has a single production. Since we manually

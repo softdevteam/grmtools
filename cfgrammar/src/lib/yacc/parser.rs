@@ -1,5 +1,7 @@
 // Note: this is the parser for both YaccKind::Original(YaccOriginalActionKind::GenericParseTree) and YaccKind::Eco yacc kinds.
 
+#[cfg(feature = "bincode")]
+use bincode::{Decode, Encode};
 use lazy_static::lazy_static;
 use num_traits::PrimInt;
 use regex::Regex;
@@ -160,6 +162,7 @@ impl fmt::Display for YaccGrammarErrorKind {
 /// The various different possible Yacc parser errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
 #[non_exhaustive]
 pub enum YaccGrammarWarningKind {
     UnusedRule,
@@ -169,6 +172,7 @@ pub enum YaccGrammarWarningKind {
 /// Any Warning from the Yacc parser returns an instance of this struct.
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
 pub struct YaccGrammarWarning {
     /// The specific kind of warning.
     pub(crate) kind: YaccGrammarWarningKind,
