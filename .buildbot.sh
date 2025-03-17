@@ -47,6 +47,6 @@ cd $root
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps
 
 which cargo-deny | cargo install cargo-deny || true
-if [ "X`which cargo-deny`" != "X"]; then
+if [ "X`which cargo-deny`" != "X" ]; then
     cargo-deny check license
 fi
