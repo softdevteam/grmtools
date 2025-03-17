@@ -42,5 +42,8 @@ vob.workspace = true
 syn.workspace = true
 prettyplease.workspace = true
 
-[dev-dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1.1.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tempfile = "3.0"

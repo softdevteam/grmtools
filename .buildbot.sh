@@ -2,21 +2,27 @@
 
 set -e
 
-export CARGO_HOME="`pwd`/.cargo"
+export CARGO_HOME="`pwd`/.cargo_install"
 export RUSTUP_HOME="`pwd`/.rustup"
 export RUSTFLAGS="--cfg grmtools_extra_checks"
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
 sh rustup.sh --default-host x86_64-unknown-linux-gnu --default-toolchain stable -y --no-modify-path
 
-export PATH=`pwd`/.cargo/bin/:$PATH
+export PATH=`pwd`/.cargo_install/bin/:$PATH
+rustup target add wasm32-unknown-unknown
+rustup target add wasm32-wasip2
+cargo install wasm-bindgen-cli
 
 cargo fmt --all -- --check
 
 rustup toolchain install stable
 rustup default stable
+
 cargo test
 cargo test --release
+cargo test --target wasm32-unknown-unknown
+cargo test --target wasm32-wasip2
 
 cargo test --lib cfgrammar --features serde
 cargo test --lib lrpar --features serde

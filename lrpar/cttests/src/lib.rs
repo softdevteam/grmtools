@@ -1,8 +1,12 @@
 #[cfg(test)]
 use cfgrammar::Span;
+
 mod cgen_helper;
 #[allow(unused)]
 use cgen_helper::run_test_path;
+
+mod calc_wasm;
+
 #[cfg(test)]
 use cttests_macro::generate_codegen_fail_tests;
 use lrlex::lrlex_mod;
