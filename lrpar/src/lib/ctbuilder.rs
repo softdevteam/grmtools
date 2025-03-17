@@ -646,14 +646,7 @@ where
             &stable,
             &derived_mod_name,
             outp,
-            &quote! {
-                // This declaration can be affected by the pretty printer.
-                // But we would hope the actual cache string is not.
-                //
-                // This is emitted for the purposes of performing the cache check.
-                // on the output source, but is not used by generated parser.
-                const _: &str = #cache;
-            },
+            &format!("/* CACHE INFORMATION {} */\n", cache),
         )?;
         let conflicts = if stable.conflicts().is_some() {
             Some((grm, sgraph, stable))
@@ -773,7 +766,7 @@ where
         stable: &StateTable<StorageT>,
         mod_name: &str,
         outp_rs: P,
-        cache: &TokenStream,
+        cache: &str,
     ) -> Result<(), Box<dyn Error>> {
         let visibility = self.visibility.clone();
         let user_actions = if let Some(
@@ -815,8 +808,6 @@ where
                 pub use _parser_::*;
                 #[allow(unused_imports)]
                 use ::lrpar::Lexeme;
-
-                #cache
             } // End of `mod #mod_name`
         };
         let mut f = File::create(outp_rs)?;
@@ -830,6 +821,7 @@ where
             unformatted
         };
         f.write_all(outs.as_bytes())?;
+        f.write_all(cache.as_bytes())?;
         Ok(())
     }
 
