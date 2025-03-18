@@ -15,7 +15,9 @@ name = "lrpar"
 path = "src/lib/mod.rs"
 
 [features]
+default = ["prettyplease"]
 serde = []
+# Enable the pretty please code formatter on generated code.
 prettyplease = ["dep:prettyplease"]
 _unstable_api = []
 _unsealed_unstable_traits = ["_unstable_api"]
