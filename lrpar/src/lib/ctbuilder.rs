@@ -813,14 +813,9 @@ where
         let mut f = File::create(outp_rs)?;
         let outs = out_tokens.to_string();
         #[cfg(feature = "prettyplease")]
-        let outs = if let Ok(syntax_tree) = syn::parse_str(&outs) {
-            prettyplease::unparse(&syntax_tree)
-        } else {
-            // We failed to parse the source string before pretty printing.
-            // This is likely due to a syntax error in the source text.
-            // We should still emit the unformatted source text.
-            outs
-        };
+        let outs = syn::parse_str(&outs)
+            .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
+            .unwrap_or(outs);
         f.write_all(outs.as_bytes())?;
         f.write_all(cache.as_bytes())?;
         Ok(())
