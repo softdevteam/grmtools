@@ -810,16 +810,12 @@ where
                 use ::lrpar::Lexeme;
             } // End of `mod #mod_name`
         };
-        let mut f = File::create(outp_rs)?;
+        // Try and run a code formatter on the generated code.
         let unformatted = out_tokens.to_string();
-        let outs = if let Ok(syntax_tree) = syn::parse_str(&unformatted) {
-            prettyplease::unparse(&syntax_tree)
-        } else {
-            // We failed to parse the source string before pretty printing.
-            // This is likely due to a syntax error in the source text.
-            // We should still emit the unformatted source text.
-            unformatted
-        };
+        let outs = syn::parse_str(&unformatted)
+            .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
+            .unwrap_or(unformatted);
+        let mut f = File::create(outp_rs)?;
         f.write_all(outs.as_bytes())?;
         f.write_all(cache.as_bytes())?;
         Ok(())

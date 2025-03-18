@@ -572,11 +572,11 @@ where
                 }
             }
         };
-
-        // Pretty print it.
-        let out_file = syn::parse_file(&out_tokens.to_string()).unwrap();
-        let outs = prettyplease::unparse(&out_file);
-
+        // Try and run a code formatter on the generated code.
+        let unformatted = out_tokens.to_string();
+        let outs = syn::parse_str(&unformatted)
+            .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
+            .unwrap_or(unformatted);
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the
         // binary etc).
