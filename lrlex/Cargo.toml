@@ -17,6 +17,7 @@ name = "lrlex"
 path = "src/lib/mod.rs"
 
 [features]
+prettyplease = ["dep:prettyplease"]
 _unstable_api = []
 _unsealed_unstable_traits = ["_unstable_api"]
 
@@ -32,8 +33,8 @@ lazy_static.workspace = true
 regex.workspace = true
 regex-syntax.workspace = true
 num-traits.workspace = true
+prettyplease = { workspace = true, optional = true }
 proc-macro2.workspace = true
 quote.workspace = true
 serde.workspace = true
-prettyplease.workspace = true
 syn.workspace = true

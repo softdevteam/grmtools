@@ -16,6 +16,7 @@ path = "src/lib/mod.rs"
 
 [features]
 serde = []
+prettyplease = ["dep:prettyplease"]
 _unstable_api = []
 _unsealed_unstable_traits = ["_unstable_api"]
 
@@ -33,6 +34,7 @@ indexmap.workspace = true
 lazy_static.workspace = true
 num-traits.workspace = true
 packedvec.workspace = true
+prettyplease = { workspace = true, optional = true }
 proc-macro2.workspace = true
 quote.workspace = true
 regex.workspace = true
@@ -40,7 +42,6 @@ serde = { workspace = true, features = ["derive"] }
 static_assertions.workspace = true
 vob.workspace = true
 syn.workspace = true
-prettyplease.workspace = true
 
 [dev-dependencies]
 tempfile = "3.0"
