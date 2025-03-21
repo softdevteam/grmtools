@@ -3,6 +3,7 @@ use glob::glob;
 mod cgen_helper;
 use cfg_aliases::cfg_aliases;
 use cgen_helper::run_test_path;
+use lrlex::{CTLexerBuilder, DefaultLexerTypes};
 
 // Compiles the `*.test` files within `src`. Test files are written in Yaml syntax and have 4
 // mandatory sections: name (describing what the test does), yacckind (defining the grammar type
@@ -19,5 +20,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         wasm32_unknown: { all(target_arch = "wasm32", target_os="unknown", target_vendor="unknown") },
     }
 
+    // Because we're modifying the `StorageT` this isn't something `run_test_path` can do,
+    // Since it modifies the type of the builder.
+    CTLexerBuilder::<DefaultLexerTypes<u8>>::new_with_lexemet()
+        .rust_edition(lrlex::RustEdition::Rust2021)
+        .lrpar_config(|ctp| {
+            ctp.rust_edition(lrpar::RustEdition::Rust2021)
+                .grammar_in_src_dir("storaget.y")
+                .unwrap()
+        })
+        .lexer_in_src_dir("storaget.l")
+        .unwrap()
+        .build()
+        .unwrap();
     Ok(())
 }
