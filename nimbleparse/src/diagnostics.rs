@@ -24,18 +24,14 @@ where
     usize: num_traits::AsPrimitive<StorageT>,
     StorageT: 'static + num_traits::PrimInt + num_traits::Unsigned,
 {
-    if usize::from(pidx) < ast.prods.len() {
-        let prod = &ast.prods[usize::from(pidx)];
-        prod.symbols
-            .iter()
-            .map(|sym| match sym {
-                Symbol::Rule(name, span) => (format!("'{}'", name), span),
-                Symbol::Token(name, span) => (format!("'{}'", name), span),
-            })
-            .unzip()
-    } else {
-        (vec![], vec![])
-    }
+    let prod = &ast.prods[usize::from(pidx)];
+    prod.symbols
+        .iter()
+        .map(|sym| match sym {
+            Symbol::Rule(name, span) => (format!("'{}'", name), span),
+            Symbol::Token(name, span) => (format!("'{}'", name), span),
+        })
+        .unzip()
 }
 
 impl<'a> SpannedDiagnosticFormatter<'a> {
@@ -120,7 +116,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             ));
             // Add underline upto the end of line.
             out.push_str(&(underline_c.to_string()).repeat(UnicodeWidthStr::width(
-                &self.src[underline_span.start()..underline_span.end()],
+                &self.src[underline_span.start()..underline_span.end().max(1)],
             )));
 
             if source_lines.peek().is_none() {
@@ -217,7 +213,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             out.push_str(
                 &underline_c
                     .to_string()
-                    .repeat(UnicodeWidthStr::width(&self.src[span.start()..span.end()])),
+                    .repeat(UnicodeWidthStr::width(&self.src[span.start()..span.end()]).max(1)),
             );
             if let Some(next_span) = spans.peek() {
                 out.push_str(&" ".repeat(UnicodeWidthStr::width(
@@ -279,7 +275,8 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             let s_tok_span = grm.token_span(*s_tok_idx).unwrap();
             let shift_name = grm.token_name(*s_tok_idx).unwrap();
             let reduce_name = grm.rule_name_str(r_rule_idx);
-            let (_r_prod_names, r_prod_spans) = pidx_prods_data(ast, *r_prod_idx);
+            let (_r_prod_names, mut r_prod_spans) = pidx_prods_data(ast, *r_prod_idx);
+            let fallback_span = ast.prods[usize::from(*r_prod_idx)].prod_span;
             eprintln!(
                 "{}",
                 self.file_location_msg(
@@ -300,13 +297,17 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                 "{}",
                 self.underline_span_with_text(r_rule_span, "Reduced rule".to_string(), '+')
             );
+
+            if r_prod_spans.is_empty() {
+                r_prod_spans.push(fallback_span);
+            }
+
             let mut prod_lines = r_prod_spans
                 .iter()
                 .map(|span| self.nlc.span_line_bytes(*span))
                 .collect::<Vec<_>>();
             prod_lines.sort();
             prod_lines.dedup();
-            assert!(!r_prod_spans.is_empty());
 
             for lines in &prod_lines {
                 let mut spans_on_line = Vec::new();
