@@ -50,6 +50,9 @@ lrpar_mod!("passthrough.y");
 lrlex_mod!("span.l");
 lrpar_mod!("span.y");
 
+lrlex_mod!("storaget.l");
+lrpar_mod!("storaget.y");
+
 #[test]
 fn multitypes() {
     let lexerdef = multitypes_l::lexerdef();
@@ -284,6 +287,19 @@ fn test_passthrough() {
         (Some(Ok(ref s)), _) if s == "$101" => (),
         _ => unreachable!(),
     }
+}
+
+#[test]
+fn test_storaget() {
+    let lexerdef = storaget_l::lexerdef();
+    let lexer = lexerdef.lexer("glasses, keys, umbrella");
+    let expect = ["glasses", "keys", "umbrella"]
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>();
+    let (val, e) = storaget_y::parse(&lexer);
+    assert_eq!(val, Some(expect));
+    assert!(e.is_empty());
 }
 
 #[test]
