@@ -5,6 +5,7 @@ set -e
 export CARGO_HOME="`pwd`/.cargo_install"
 export RUSTUP_HOME="`pwd`/.rustup"
 export WASMTIME_HOME="`pwd`/.wasmtime"
+export NVM_DIR="`pwd`/.nodejs"
 export RUSTFLAGS="--cfg grmtools_extra_checks"
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
@@ -19,6 +20,12 @@ if [ "X`which wasmtime`" = "X" ]; then
     PROFILE=".wasmtime_profile" bash -c 'curl https://wasmtime.dev/install.sh -sSf | bash'
 fi
 . ./.wasmtime_profile
+
+mkdir -p $NVM_DIR
+PROFILE=/dev/null bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash'
+. "$NVM_DIR/nvm.sh"
+# Download and install Node.js:
+nvm install 22
 
 rustup target add wasm32-unknown-unknown
 rustup target add wasm32-wasip2
