@@ -107,6 +107,7 @@ pub struct Production {
     pub symbols: Vec<Symbol>,
     pub precedence: Option<String>,
     pub action: Option<String>,
+    pub prod_span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -185,12 +186,14 @@ impl GrammarAST {
         symbols: Vec<Symbol>,
         precedence: Option<String>,
         action: Option<String>,
+        prod_span: Span,
     ) {
         self.rules[&rule_name].pidxs.push(self.prods.len());
         self.prods.push(Production {
             symbols,
             precedence,
             action,
+            prod_span,
         });
     }
 
@@ -436,7 +439,7 @@ mod test {
         let empty_span = Span::new(0, 0);
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("B".to_string(), empty_span), None);
-        grm.add_prod("B".to_string(), vec![], None, None);
+        grm.add_prod("B".to_string(), vec![], None, None, empty_span);
         match grm.complete_and_validate() {
             Err(YaccGrammarError {
                 kind: YaccGrammarErrorKind::InvalidStartRule(_),
@@ -452,7 +455,7 @@ mod test {
         let empty_span = Span::new(0, 0);
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![], None, None);
+        grm.add_prod("A".to_string(), vec![], None, None, empty_span);
         assert!(grm.complete_and_validate().is_ok());
     }
 
@@ -463,8 +466,8 @@ mod test {
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
         grm.add_rule(("B".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![rule("B")], None, None);
-        grm.add_prod("B".to_string(), vec![], None, None);
+        grm.add_prod("A".to_string(), vec![rule("B")], None, None, empty_span);
+        grm.add_prod("B".to_string(), vec![], None, None, empty_span);
         assert!(grm.complete_and_validate().is_ok());
     }
 
@@ -474,7 +477,7 @@ mod test {
         let empty_span = Span::new(0, 0);
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![rule("B")], None, None);
+        grm.add_prod("A".to_string(), vec![rule("B")], None, None, empty_span);
         match grm.complete_and_validate() {
             Err(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownRuleRef(_),
@@ -491,7 +494,7 @@ mod test {
         grm.tokens.insert("b".to_string());
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![token("b")], None, None);
+        grm.add_prod("A".to_string(), vec![token("b")], None, None, empty_span);
         assert!(grm.complete_and_validate().is_ok());
     }
 
@@ -504,7 +507,7 @@ mod test {
         grm.tokens.insert("b".to_string());
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![rule("b")], None, None);
+        grm.add_prod("A".to_string(), vec![rule("b")], None, None, empty_span);
         assert!(grm.complete_and_validate().is_err());
     }
 
@@ -514,7 +517,7 @@ mod test {
         let empty_span = Span::new(0, 0);
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![token("b")], None, None);
+        grm.add_prod("A".to_string(), vec![token("b")], None, None, empty_span);
         match grm.complete_and_validate() {
             Err(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownToken(_),
@@ -530,7 +533,13 @@ mod test {
         let empty_span = Span::new(0, 0);
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![rule("b"), token("b")], None, None);
+        grm.add_prod(
+            "A".to_string(),
+            vec![rule("b"), token("b")],
+            None,
+            None,
+            Span::new(0, 2),
+        );
         match grm.complete_and_validate() {
             Err(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownRuleRef(_),
@@ -546,7 +555,7 @@ mod test {
         let empty_span = Span::new(2, 3);
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![], None, None);
+        grm.add_prod("A".to_string(), vec![], None, None, empty_span);
         grm.epp
             .insert("k".to_owned(), (empty_span, ("v".to_owned(), empty_span)));
         match grm.complete_and_validate() {
@@ -580,6 +589,7 @@ mod test {
             vec![token("b")],
             Some("b".to_string()),
             None,
+            empty_span,
         );
         assert!(grm.complete_and_validate().is_ok());
     }
@@ -595,6 +605,7 @@ mod test {
             vec![token("b")],
             Some("b".to_string()),
             None,
+            empty_span,
         );
         match grm.complete_and_validate() {
             Err(YaccGrammarError {
@@ -619,11 +630,11 @@ mod test {
         let empty_span = Span::new(0, 0);
         grm.start = Some(("A".to_string(), empty_span));
         grm.add_rule(("A".to_string(), empty_span), None);
-        grm.add_prod("A".to_string(), vec![], None, None);
+        grm.add_prod("A".to_string(), vec![], None, None, empty_span);
         grm.tokens.insert("b".to_string());
         grm.spans.push(Span::new(4, 5));
         grm.add_rule(("B".to_string(), Span::new(1, 2)), None);
-        grm.add_prod("B".to_string(), vec![token("b")], None, None);
+        grm.add_prod("B".to_string(), vec![token("b")], None, None, empty_span);
 
         assert_eq!(
             grm.unused_symbols()

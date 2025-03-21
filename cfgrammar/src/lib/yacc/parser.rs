@@ -801,21 +801,37 @@ impl YaccParser {
         let mut prec = None;
         let mut action = None;
         i = self.parse_ws(i, true)?;
+        let mut pos_prod_start = i;
+        let mut pos_prod_end = None;
         while i < self.src.len() {
             if let Some(j) = self.lookahead_is("|", i) {
-                self.ast.add_prod(rn.clone(), syms, prec, action);
+                self.ast.add_prod(
+                    rn.clone(),
+                    syms,
+                    prec,
+                    action,
+                    Span::new(pos_prod_start, pos_prod_end.take().unwrap_or(i)),
+                );
                 syms = Vec::new();
                 prec = None;
                 action = None;
                 i = self.parse_ws(j, true)?;
+                pos_prod_start = i;
                 continue;
             } else if let Some(j) = self.lookahead_is(";", i) {
-                self.ast.add_prod(rn, syms, prec, action);
+                self.ast.add_prod(
+                    rn,
+                    syms,
+                    prec,
+                    action,
+                    Span::new(pos_prod_start, pos_prod_end.take().unwrap_or(i)),
+                );
                 return Ok(j);
             }
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
                 let (j, sym, span) = self.parse_token(i)?;
+                pos_prod_end = Some(j);
                 i = self.parse_ws(j, true)?;
                 if self.ast.tokens.insert(sym.clone()) {
                     self.ast.spans.push(span);
@@ -828,8 +844,10 @@ impl YaccParser {
                     self.ast.spans.push(span);
                 }
                 prec = Some(sym);
+                pos_prod_end = Some(k);
                 i = k;
             } else if self.lookahead_is("{", i).is_some() {
+                pos_prod_end = Some(i);
                 let (j, a) = self.parse_action(i)?;
                 i = self.parse_ws(j, true)?;
                 action = Some(a);
@@ -837,21 +855,23 @@ impl YaccParser {
                 if !(self.lookahead_is("|", i).is_some() || self.lookahead_is(";", i).is_some()) {
                     return Err(self.mk_error(YaccGrammarErrorKind::ProductionNotTerminated, i));
                 }
-            } else if let Some(mut j) = self.lookahead_is("%empty", i) {
-                j = self.parse_ws(j, true)?;
+            } else if let Some(j) = self.lookahead_is("%empty", i) {
+                let k = self.parse_ws(j, true)?;
                 // %empty could be followed by all sorts of weird syntax errors: all we try and do
                 // is say "does this production look like it's finished" and trust that the other
                 // errors will be caught by other parts of the parser.
                 if !syms.is_empty()
-                    | !(self.lookahead_is("|", j).is_some()
-                        || self.lookahead_is(";", j).is_some()
-                        || self.lookahead_is("{", j).is_some())
+                    | !(self.lookahead_is("|", k).is_some()
+                        || self.lookahead_is(";", k).is_some()
+                        || self.lookahead_is("{", k).is_some())
                 {
                     return Err(self.mk_error(YaccGrammarErrorKind::NonEmptyProduction, i));
                 }
-                i = j;
+                pos_prod_end = Some(j);
+                i = k;
             } else {
                 let (j, sym, span) = self.parse_token(i)?;
+                pos_prod_end = Some(j);
                 if self.ast.tokens.contains(&sym) {
                     syms.push(Symbol::Token(sym, span));
                 } else {
@@ -1322,7 +1342,8 @@ mod test {
             Production {
                 symbols: vec![token_span("a", a_span)],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(32, 35),
             }
         );
         assert_eq!(&src[a_span.start()..a_span.end()], "a");
@@ -1347,7 +1368,8 @@ mod test {
             Production {
                 symbols: vec![token_span("a", a_span)],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(32, 35),
             }
         );
         assert_eq!(&src[a_span.start()..a_span.end()], "a");
@@ -1357,7 +1379,8 @@ mod test {
             Production {
                 symbols: vec![token_span("b", Span::new(54, 55))],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(53, 56),
             }
         );
         assert_eq!(&src[b_span.start()..b_span.end()], "b");
@@ -1383,7 +1406,8 @@ mod test {
             Production {
                 symbols: vec![],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(32, 32),
             }
         );
 
@@ -1393,7 +1417,8 @@ mod test {
             Production {
                 symbols: vec![token_span("b", b_span)],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(50, 53),
             }
         );
         assert_eq!(&src[b_span.start()..b_span.end()], "b");
@@ -1402,7 +1427,8 @@ mod test {
             Production {
                 symbols: vec![],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(56, 56),
             }
         );
 
@@ -1411,7 +1437,8 @@ mod test {
             Production {
                 symbols: vec![],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(74, 74),
             }
         );
         let c_span = Span::new(77, 78);
@@ -1420,7 +1447,8 @@ mod test {
             Production {
                 symbols: vec![token_span("c", c_span)],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(76, 79),
             }
         );
         assert_eq!(&src[c_span.start()..c_span.end()], "c");
@@ -1451,7 +1479,8 @@ mod test {
             Production {
                 symbols: vec![token_span("a", a_span), rule_span("B", b_span)],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(7, 12),
             }
         );
         assert_eq!(&src[a_span.start()..a_span.end()], "a");
@@ -1473,7 +1502,8 @@ mod test {
             Production {
                 symbols: vec![token_span("a", a_span), token_span("b", b_span)],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: Span::new(7, 14),
             }
         );
         assert_eq!(&src[a_span.start()..a_span.end()], "a");
@@ -1552,7 +1582,8 @@ mod test {
             Production {
                 symbols: vec![token_span("T", t_span)],
                 precedence: None,
-                action: None
+                action: None,
+                prod_span: t_span,
             }
         );
         assert_eq!(&src[t_span.start()..t_span.end() + 1], "T;");
@@ -2803,6 +2834,74 @@ B";
             YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
                 .parse()
                 .unwrap();
+        }
+    }
+
+    #[test]
+    fn test_empty_production_spans_issue_473() {
+        let empty_prod_conflicts = [
+            (
+                "%start Expr
+%%
+Expr: %empty | Factor;
+Factor: ')' Expr ')';
+",
+                (0, Span::new(21, 27)),
+            ),
+            (
+                "%start Expr
+%%
+Expr: | Factor;
+Factor: ')' Expr ')';
+",
+                (0, Span::new(21, 21)),
+            ),
+            (
+                "%start Expr
+%%
+Expr:| Factor;
+Factor: ')' Expr ')';
+",
+                (0, Span::new(20, 20)),
+            ),
+            (
+                "%start Expr
+%%
+Expr: Factor | %empty;
+Factor: ')' Expr ')';
+",
+                (1, Span::new(30, 36)),
+            ),
+            (
+                "%start Expr
+%%
+Expr: Factor | ;
+Factor: ')' Expr ')';
+",
+                (1, Span::new(30, 30)),
+            ),
+            (
+                "%start Expr
+%%
+Expr: Factor|;
+Factor: ')' Expr ')';
+",
+                (1, Span::new(28, 28)),
+            ),
+        ];
+
+        for (i, (src, (empty_pidx, empty_span))) in empty_prod_conflicts.iter().enumerate() {
+            eprintln!("{}", i);
+            let ast = parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
+            assert_eq!(
+                ast.prods[ast.get_rule("Expr").unwrap().pidxs[*empty_pidx]],
+                Production {
+                    symbols: vec![],
+                    precedence: None,
+                    action: None,
+                    prod_span: *empty_span,
+                }
+            );
         }
     }
 }
