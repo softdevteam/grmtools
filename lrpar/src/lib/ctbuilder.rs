@@ -1398,7 +1398,8 @@ where
     }
 }
 
-#[cfg(test)]
+// Tests dealing with the filesystem not supported under wasm32
+#[cfg(all(not(target_arch = "wasm32"), test))]
 mod test {
     use std::{fs::File, io::Write, path::PathBuf};
 

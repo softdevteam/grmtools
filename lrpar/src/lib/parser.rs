@@ -4,9 +4,14 @@ use std::{
     fmt::{self, Debug, Display, Write as _},
     hash::Hash,
     marker::PhantomData,
-    time::{Duration, Instant},
     vec,
 };
+
+// Can be used on non-wasm32 but to avoid the dependency.
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{Duration, Instant};
+#[cfg(target_arch = "wasm32")]
+use web_time::{Duration, Instant};
 
 use cactus::Cactus;
 use cfgrammar::{yacc::YaccGrammar, RIdx, Span, TIdx};

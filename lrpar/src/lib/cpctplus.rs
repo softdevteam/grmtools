@@ -3,8 +3,13 @@ use std::{
     collections::HashSet,
     fmt::Debug,
     hash::{Hash, Hasher},
-    time::Instant,
 };
+
+// web_time can be used on non-wasm32 but to avoid the dependency.
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use cactus::Cactus;
 use cfgrammar::{Span, TIdx};

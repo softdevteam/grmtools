@@ -1,0 +1,6 @@
+[target.wasm32-wasip2]
+runner = "wasmtime run --dir ."
+
+[target.wasm32-unknown-unknown]
+# Provided by the crate wasm-bindgen-cli.
+runner = "wasm-bindgen-test-runner"
