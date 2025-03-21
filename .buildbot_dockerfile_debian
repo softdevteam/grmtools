@@ -3,7 +3,7 @@ ARG CI_UID
 RUN useradd -m -u ${CI_UID} ci
 RUN apt-get update && \
 apt-get -y install build-essential curl procps file \
-rust-wasmtime nodejs
+nodejs
 WORKDIR /ci
 RUN chown ${CI_UID}:${CI_UID} .
 COPY --chown=${CI_UID}:${CI_UID} . .
