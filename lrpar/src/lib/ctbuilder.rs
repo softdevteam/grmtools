@@ -981,8 +981,8 @@ where
             _ => unreachable!(),
         };
 
-        let grm_data = encode_to_vec(grm, bincode::config::legacy())?;
-        let stable_data = encode_to_vec(stable, bincode::config::legacy())?;
+        let grm_data = encode_to_vec(grm, bincode::config::standard())?;
+        let stable_data = encode_to_vec(stable, bincode::config::standard())?;
         Ok(quote! {
             const __GRM_DATA: &[u8] = &[#(#grm_data,)*];
             const __STABLE_DATA: &[u8] = &[#(#stable_data,)*];
@@ -1340,8 +1340,8 @@ pub fn _reconstitute<StorageT: Decode<()> + Hash + PrimInt + Unsigned + 'static>
     grm_buf: &[u8],
     stable_buf: &[u8],
 ) -> (YaccGrammar<StorageT>, StateTable<StorageT>) {
-    let (grm, _) = decode_from_slice(grm_buf, bincode::config::legacy()).unwrap();
-    let (stable, _) = decode_from_slice(stable_buf, bincode::config::legacy()).unwrap();
+    let (grm, _) = decode_from_slice(grm_buf, bincode::config::standard()).unwrap();
+    let (stable, _) = decode_from_slice(stable_buf, bincode::config::standard()).unwrap();
     (grm, stable)
 }
 
