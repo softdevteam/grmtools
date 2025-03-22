@@ -8,15 +8,20 @@ readme = "README.md"
 license = "Apache-2.0/MIT"
 categories = ["parsing"]
 
+[features]
+bincode = ["dep:bincode", "sparsevec/bincode", "cfgrammar/bincode"]
+serde = ["dep:serde", "sparsevec/serde", "cfgrammar/serde"]
+
 [lib]
 name = "lrtable"
 path = "src/lib/mod.rs"
 
 [dependencies]
-cfgrammar = { path="../cfgrammar", version = "0.13", features=["serde"] }
+cfgrammar = { path="../cfgrammar", version = "0.13" }
 
+bincode = { workspace = true, features = ["derive"], optional = true }
 fnv.workspace = true
 num-traits.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
-vob = { workspace = true, features = ["serde"] }
-sparsevec = { workspace = true, features = ["serde"] }
+vob.workspace = true
+sparsevec.workspace = true

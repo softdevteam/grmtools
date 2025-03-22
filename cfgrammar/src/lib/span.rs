@@ -1,3 +1,5 @@
+#[cfg(feature = "bincode")]
+use bincode::{Decode, Encode};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens, TokenStreamExt};
 #[cfg(feature = "serde")]
@@ -7,6 +9,7 @@ use serde::{Deserialize, Serialize};
 /// references (i.e. the `Span` doesn't hold a reference / copy of the actual input).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
 pub struct Span {
     start: usize,
     end: usize,

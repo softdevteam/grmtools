@@ -15,7 +15,7 @@ use std::{
 };
 
 use crate::{LexerTypes, RecoveryKind};
-use bincode::serde::{decode_from_slice, encode_to_vec};
+use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{
@@ -30,7 +30,6 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use regex::Regex;
-use serde::{de::DeserializeOwned, Serialize};
 
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
@@ -248,7 +247,7 @@ where
 
 impl<
         'a,
-        StorageT: 'static + Debug + Hash + PrimInt + Serialize + Unsigned,
+        StorageT: 'static + Debug + Hash + PrimInt + Encode + Unsigned,
         LexerTypesT: LexerTypes<StorageT = StorageT>,
     > CTParserBuilder<'a, LexerTypesT>
 where
@@ -1335,9 +1334,9 @@ where
 }
 
 /// This function is called by generated files; it exists so that generated files don't require a
-/// dependency on serde and rmps.
+/// direct dependency on bincode.
 #[doc(hidden)]
-pub fn _reconstitute<StorageT: DeserializeOwned + Hash + PrimInt + Unsigned>(
+pub fn _reconstitute<StorageT: Decode<()> + Hash + PrimInt + Unsigned + 'static>(
     grm_buf: &[u8],
     stable_buf: &[u8],
 ) -> (YaccGrammar<StorageT>, StateTable<StorageT>) {

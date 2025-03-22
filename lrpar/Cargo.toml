@@ -15,7 +15,7 @@ name = "lrpar"
 path = "src/lib/mod.rs"
 
 [features]
-serde = []
+serde = ["dep:serde", "cfgrammar/serde", "lrtable/serde"]
 _unstable_api = []
 _unsealed_unstable_traits = ["_unstable_api"]
 
@@ -23,10 +23,10 @@ _unsealed_unstable_traits = ["_unstable_api"]
 vergen = { version = "8", default-features = false, features = ["build"] }
 
 [dependencies]
-cfgrammar = { path="../cfgrammar", version = "0.13", features=["serde"] }
-lrtable = { path="../lrtable", version = "0.13", features=["serde"] }
+cfgrammar = { path="../cfgrammar", version = "0.13", features = ["bincode"] }
+lrtable = { path="../lrtable", version = "0.13", features = ["bincode"] }
 
-bincode.workspace = true
+bincode = { workspace = true, features = ["derive"] }
 cactus.workspace = true
 filetime.workspace = true
 indexmap.workspace = true
@@ -36,7 +36,7 @@ packedvec.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
 regex.workspace = true
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"], optional = true }
 static_assertions.workspace = true
 vob.workspace = true
 syn.workspace = true
