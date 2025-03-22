@@ -867,7 +867,8 @@ impl YaccParser {
                 if !syms.is_empty()
                     | !(self.lookahead_is("|", k).is_some()
                         || self.lookahead_is(";", k).is_some()
-                        || self.lookahead_is("{", k).is_some())
+                        || self.lookahead_is("{", k).is_some()
+                        || self.lookahead_is("%prec", k).is_some())
                 {
                     return Err(self.mk_error(YaccGrammarErrorKind::NonEmptyProduction, i));
                 }
@@ -1907,6 +1908,20 @@ x"
         assert_eq!(grm.prods[grm.rules["expr"].pidxs[3]].symbols.len(), 3);
         assert_eq!(grm.prods[grm.rules["expr"].pidxs[4]].symbols.len(), 2);
         assert_eq!(grm.prods[grm.rules["expr"].pidxs[4]].precedence, Some("*".to_string()));
+    }
+
+    #[test]
+    fn test_prec_empty() {
+        let src = "
+        %%
+        expr : 'a'
+             | %empty %prec 'a';
+        ";
+        let grm = parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
+        assert_eq!(
+            grm.prods[grm.rules["expr"].pidxs[1]].precedence,
+            Some("a".to_string())
+        );
     }
 
     #[test]
