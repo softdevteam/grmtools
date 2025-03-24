@@ -46,7 +46,7 @@ lexer can be found in `src/calc.l`:
 and where the definitions for the parser can be found in `src/calc.y`:
 
 ```rust
-%grmtools{yacckind Grmtools}
+%grmtools{yacckind: Grmtools}
 %start Expr
 %avoid_insert "INT"
 %%

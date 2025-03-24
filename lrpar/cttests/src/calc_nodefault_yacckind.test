@@ -1,6 +1,6 @@
 name: Test basic user actions using the calculator grammar
 grammar: |
-    %grmtools {yacckind Original(UserAction)}
+    %grmtools {yacckind: Original(UserAction)}
     %start Expr
     %actiontype Result<u64, ()>
     %avoid_insert 'INT'

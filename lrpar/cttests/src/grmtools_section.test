@@ -1,0 +1,103 @@
+grammar: |
+    %grmtools{yacckind: Grmtools}
+    %token MAGIC IDENT NUM
+    %epp MAGIC "%grmtools"
+    %%
+    start -> Vec<ValBind<'input>>
+    : MAGIC '{' contents '}' { $3 }
+    ;
+
+    contents -> Vec<ValBind<'input>>
+    : %empty { vec![] }
+    | val_seq comma_opt { $1 }
+    ;
+
+    val_seq -> Vec<ValBind<'input>>
+    : valbind {
+        vec![$1]
+    }
+    | val_seq ',' valbind {
+        $1.push($3);
+        $1
+    }
+    ;
+
+    path -> Path<'input>
+    : IDENT {
+        let ident = $lexer.span_str($1.as_ref().unwrap().span());
+        Path::Ident(ident)
+    }
+    | IDENT '::' IDENT {
+        let scope = $lexer.span_str($1.as_ref().unwrap().span());
+        let ident = $lexer.span_str($2.as_ref().unwrap().span());
+        Path::Scoped(scope, ident)
+    }
+    ;
+
+    valbind -> ValBind<'input>
+    : IDENT ':' val {
+        let key = $lexer.span_str($1.as_ref().unwrap().span());
+        ValBind::Bind(key, $3)
+    }
+    | IDENT {
+        let key = $lexer.span_str($1.as_ref().unwrap().span());
+        ValBind::TrueKey(key)
+    }
+    | '!' IDENT {
+        let key = $lexer.span_str($2.as_ref().unwrap().span());
+        ValBind::FalseKey(key)
+    }
+    ;
+
+    val -> Val<'input>
+    : path { Val::PathLike($1) }
+    | NUM  {
+        let n = str::parse::<u64>($lexer.span_str($1.as_ref().unwrap().span()));
+        Val::Num(n.expect("convertible"))
+    }
+    | path '(' path ')' { Val::ArgLike($1, $3) }
+    ;
+
+    comma_opt -> ()
+    : %empty { }
+    | ',' { }
+    ;
+    %%
+    #![allow(dead_code)]
+    #![allow(unused)]
+
+    #[derive(Debug)]
+    pub enum ValBind<'a> {
+        FalseKey(&'a str),
+        TrueKey(&'a str),
+        Bind(&'a str, Val<'a>),
+    }
+
+    #[derive(Debug)]
+    pub enum Path<'a> {
+        Ident(&'a str),
+        Scoped(&'a str, &'a str),
+    }
+
+    #[derive(Debug)]
+    pub enum Val<'a> {
+        PathLike(Path<'a>),
+        ArgLike(Path<'a>, Path<'a>),
+        Num(u64),
+    }
+
+lexer: |
+    %grmtools{case_insensitive}
+    %%
+    %grmtools 'MAGIC'
+    ! '!'
+    [A-Z][A-Z_]* 'IDENT'
+    [0-9]+ 'NUM'
+    , ','
+    \{ '{'
+    \} '}'
+    \( '('
+    \) ')'
+    :: '::'
+    : ':'
+    [\n\t\ ] ;

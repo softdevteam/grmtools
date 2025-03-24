@@ -35,6 +35,9 @@ lrpar_mod!("expect.y");
 lrlex_mod!("lexer_lifetime.l");
 lrpar_mod!("lexer_lifetime.y");
 
+lrlex_mod!("lex_flags.l");
+lrpar_mod!("lex_flags.y");
+
 lrlex_mod!("multitypes.l");
 lrpar_mod!("multitypes.y");
 
@@ -47,11 +50,17 @@ lrpar_mod!("parseparam_copy.y");
 lrlex_mod!("passthrough.l");
 lrpar_mod!("passthrough.y");
 
+lrlex_mod!("regex_opt.l");
+lrlex_mod!("regex_opt.y");
+
 lrlex_mod!("span.l");
 lrpar_mod!("span.y");
 
 lrlex_mod!("storaget.l");
 lrpar_mod!("storaget.y");
+
+lrlex_mod!("grmtools_section.l");
+lrpar_mod!("grmtools_section.y");
 
 #[test]
 fn multitypes() {
@@ -305,6 +314,117 @@ fn test_storaget() {
 #[test]
 fn test_expect() {
     // This test merely needs to compile in order to be successful.
+}
+
+// This test isn't run on wasm32-wasi because it accesses
+// various files from across the project workspace.
+//
+// Wasi's filesystem access is sandboxed by default.
+#[test]
+fn test_grmtools_section_files() {
+    use glob::glob;
+    use std::env;
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::io::{BufRead as _, Read as _};
+
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let examples_glob = format!("{manifest_dir}/../examples/**");
+    let examples_l_glob = format!("{examples_glob}/*.l");
+    let examples_y_glob = format!("{examples_glob}/*.y");
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let cttests_l_glob = format!("{out_dir}/*.l");
+    let cttests_y_glob = format!("{out_dir}/*.y");
+    let files = glob(&examples_l_glob)
+        .unwrap()
+        .chain(glob(&examples_y_glob).unwrap())
+        .chain(glob(&cttests_l_glob).unwrap())
+        .chain(glob(&cttests_y_glob).unwrap())
+        .collect::<Vec<_>>();
+    assert!(!files.is_empty());
+    for file_path in files {
+        let file_path = file_path.unwrap();
+        let mut s = String::new();
+        let mut f = File::open(&file_path).unwrap();
+        let _ = f.read_to_string(&mut s).unwrap();
+        if s.starts_with("%grmtools") {
+            let mut buf = Vec::new();
+            let mut reader = BufReader::new(s.as_bytes());
+            let _ = reader.read_until(b'}', &mut buf);
+            let lexerdef = grmtools_section_l::lexerdef();
+            let s = String::from_utf8(buf).unwrap();
+            let l = lexerdef.lexer(&s);
+            let (val, errs) = grmtools_section_y::parse(&l);
+            if !errs.is_empty() {
+                let mut s = "Errors:\n".to_string();
+                for e in errs {
+                    s.push_str(&format!("\t{}\n", e));
+                }
+                panic!("{}", s);
+            } else {
+                eprintln!("%grmtools {:?} {:?}", file_path.file_name(), val);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_grmtools_section() {
+    let srcs = [
+        "%grmtools{}",
+        "%grmtools{x}",
+        "%grmtools{x,}",
+        "%grmtools{!x}",
+        "%grmtools{!x,}",
+        "%grmtools{x: y}",
+        "%grmtools{x: y,}",
+        "%grmtools{x, y}",
+        "%grmtools{x, y,}",
+        "%grmtools{x, !y}",
+        "%grmtools{x, !y,}",
+        "%grmtools{x: y(z)}",
+        "%grmtools{x: y(z),}",
+        "%grmtools{a, x: y(z),}",
+        "%grmtools{a, x: y(z)}",
+        "%grmtools{a, !b, x: y(z), e: f}",
+        "%grmtools{a, !b, x: y(z), e: f,}",
+    ];
+
+    let lexerdef = grmtools_section_l::lexerdef();
+    for src in srcs {
+        let l = lexerdef.lexer(src);
+        let (val, errs) = grmtools_section_y::parse(&l);
+        if !errs.is_empty() {
+            let mut s = "Errors:\n".to_string();
+            for e in errs {
+                s.push_str(&format!("\t{}\n", e));
+            }
+            panic!("{}", s);
+        }
+        println!("{:?}", val);
+    }
+}
+
+// regex options set through the builder methods.
+#[test]
+fn test_regex_opt() {
+    let lexerdef = regex_opt_l::lexerdef();
+    let lexer = lexerdef.lexer("a");
+    match regex_opt_y::parse(&lexer) {
+        ref errs if errs.is_empty() => (),
+        e => panic!("{:?}", e),
+    }
+}
+
+// Lex flags set through the grmtools section.
+#[test]
+fn test_lex_flags() {
+    let lexerdef = lex_flags_l::lexerdef();
+    let lexer = lexerdef.lexer("a");
+    match lex_flags_y::parse(&lexer) {
+        ref errs if errs.is_empty() => (),
+        e => panic!("{:?}", e),
+    }
 }
 
 // Codegen failure tests

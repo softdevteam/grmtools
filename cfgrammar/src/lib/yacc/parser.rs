@@ -455,6 +455,14 @@ impl YaccParser {
                     let (key_end_pos, key) = self.parse_name(i)?;
                     i = self.parse_ws(key_end_pos, false)?;
                     if key == "yacckind" {
+                        if let Some(j) = self.lookahead_is(":", i) {
+                            i = self.parse_ws(j, false)?;
+                        } else {
+                            return Err(YaccGrammarError {
+                                kind: YaccGrammarErrorKind::InvalidGrmtoolsHeaderKey,
+                                spans: vec![Span::new(i, i)],
+                            });
+                        }
                         let val_end_pos = self.parse_yacckind(i, update_yacc_kind)?;
                         if let Some(orig) = yacc_kind_key_span {
                             let dupe = Span::new(key_start_pos, key_end_pos);
@@ -465,6 +473,12 @@ impl YaccParser {
                         } else {
                             yacc_kind_key_span = Some(Span::new(key_start_pos, key_end_pos));
                             i = self.parse_ws(val_end_pos, true)?;
+                        }
+                        if let Some(j) = self.lookahead_is(",", i) {
+                            i = self.parse_ws(j, true)?;
+                            continue;
+                        } else {
+                            break;
                         }
                     } else {
                         return Err(YaccGrammarError {
@@ -2832,20 +2846,20 @@ B";
     #[test]
     fn test_grmtools_section_yacckinds() {
         let srcs = [
-            "%grmtools{yacckind Original(NoAction)}
+            "%grmtools{yacckind: Original(NoAction)}
              %%
              Start: ;",
-            "%grmtools{yacckind YaccKind::Original(GenericParseTree)}
+            "%grmtools{yacckind: YaccKind::Original(GenericParseTree)}
              %%
              Start: ;",
-            "%grmtools{yacckind YaccKind::Original(yaccoriginalactionkind::useraction)}
+            "%grmtools{yacckind: YaccKind::Original(yaccoriginalactionkind::useraction)}
              %actiontype ()
              %%
              Start: ;",
-            "%grmtools{yacckind Original(YACCOriginalActionKind::NoAction)}
+            "%grmtools{yacckind: Original(YACCOriginalActionKind::NoAction)}
              %%
              Start: ;",
-            "%grmtools{yacckind YaccKind::Grmtools}
+            "%grmtools{yacckind: YaccKind::Grmtools}
              %%
              Start -> () : ;",
         ];
@@ -2854,6 +2868,35 @@ B";
                 .parse()
                 .unwrap();
         }
+    }
+
+    #[test]
+    fn test_grmtools_section_commas() {
+        // We can't actually test much here, because
+        // We don't have a second value to test.
+        //
+        // `RecoveryKind` seemed like an option for an additional value to allow,
+        // but that is part of `lrpar` which cfgrammar doesn't depend upon.
+        let src = r#"
+            %grmtools{
+                yacckind: YaccKind::Grmtools,
+            }
+            %%
+            Start -> () : ;
+        "#;
+        YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
+            .parse()
+            .unwrap();
+        let src = r#"
+            %grmtools{
+                yacckind: YaccKind::Grmtools
+            }
+            %%
+            Start -> () : ;
+        "#;
+        YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
+            .parse()
+            .unwrap();
     }
 
     #[test]

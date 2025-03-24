@@ -79,10 +79,10 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
         // Create grammar files
         let base = path.file_stem().unwrap().to_str().unwrap();
         let mut pg = PathBuf::from(&out_dir);
-        pg.push(format!("{}.y.rs", base));
+        pg.push(format!("{}.test.y", base));
         fs::write(&pg, grm).unwrap();
         let mut pl = PathBuf::from(&out_dir);
-        pl.push(format!("{}.l.rs", base));
+        pl.push(format!("{}.test.l", base));
         fs::write(&pl, lex).unwrap();
 
         // Build parser and lexer

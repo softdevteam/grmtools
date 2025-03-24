@@ -1,4 +1,4 @@
-name: Test NoAction using the calculator grammar
+name: Test regex options via builder.
 yacckind: Original(YaccOriginalActionKind::NoAction)
 lex_flags: ['!dot_matches_new_line', 'octal']
 grammar: |

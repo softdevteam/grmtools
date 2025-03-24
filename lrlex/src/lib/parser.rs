@@ -304,6 +304,15 @@ where
                             });
                         }
                         i = self.parse_spaces(i)?;
+                        if let Some(j) = self.lookahead_is(":", i) {
+                            i = j
+                        } else {
+                            return Err(LexBuildError {
+                                kind: LexErrorKind::InvalidGrmtoolsSectionValue,
+                                spans: vec![Span::new(i, i)],
+                            });
+                        }
+                        i = self.parse_spaces(i)?;
                         let j = self.parse_digits(i)?;
                         // This checks that the digits are valid numbers, but currently just returns `None`
                         // when the values are actually out of range for that type. This could be improved.
@@ -351,11 +360,18 @@ where
                     &mut grmtools_section_span_map,
                     &mut grmtools_section_lex_flags,
                 )?;
-                if i == self.src.len() {
-                    return Err(self.mk_error(LexErrorKind::PrematureEnd, i));
+                if let Some(j) = self.lookahead_is(",", i) {
+                    i = self.parse_ws(j)?;
+                    continue;
+                } else {
+                    break;
                 }
             }
-            i = self.lookahead_is("}", i).unwrap();
+            if let Some(j) = self.lookahead_is("}", i) {
+                i = j
+            } else {
+                return Err(self.mk_error(LexErrorKind::PrematureEnd, i));
+            }
             i = self.parse_ws(i)?;
         }
         grmtools_section_lex_flags.merge_from(&self.force_lex_flags);
@@ -864,7 +880,9 @@ mod test {
                 .expect_err("Parsed ok while expecting error");
             assert_eq!(errs.len(), 1);
             let e = &errs[0];
-            assert!(e.kind.is_same_kind(&kind));
+            if !e.kind.is_same_kind(&kind) {
+                panic!("expected {:?}.is_same_kind({:?})", &e.kind, &kind);
+            }
             assert_eq!(
                 e.spans()
                     .iter()
@@ -1864,7 +1882,7 @@ b "A"
     fn test_grmtools_section_fails() {
         let src = r#"
 %grmtools {
-  !unicode
+  !unicode,
   unicode
 }
 %%
@@ -1879,8 +1897,8 @@ b "A"
 
         let src = r#"
 %grmtools {
-  size_limit 5
-  size_limit 6
+  size_limit: 5,
+  size_limit: 6,
 }
 %%
 . "dot";
@@ -1894,7 +1912,7 @@ b "A"
 
         let src = r#"
 %grmtools {
-  !size_limit 5
+  !size_limit: 5,
 }
 %%
 . "dot"
@@ -1905,6 +1923,22 @@ b "A"
             LexErrorKind::InvalidGrmtoolsSectionValue,
             3,
             3,
+        );
+        // The following is missing comma separators for more than 2 elements
+        // This is to avoid parsing it as "key value" number of elements.
+        // However we actually error after the first element since the parser
+        // knows "case_insensitive" is a flag with no arguments.
+        let src = r#"
+%grmtools {unicode, case_insensitive posix_escapes allow_comments}
+%%
+. "dot"
+\n+ ;
+"#;
+        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_line_col(
+            src,
+            LexErrorKind::PrematureEnd,
+            2,
+            38,
         );
     }
 

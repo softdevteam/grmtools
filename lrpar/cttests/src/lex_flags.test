@@ -1,0 +1,13 @@
+name: Lex flags in the grmtools section
+grammar: |
+    %grmtools{yacckind: Original(NoAction)}
+    %start Start
+    %%
+    Start: 'ANY' | 'a' | 'NL';
+
+lexer: |
+    %grmtools{!dot_matches_new_line, octal, size_limit: 1048576}
+    %%
+    \141 'a'
+    . 'ANY'
+    [\n] 'NL'

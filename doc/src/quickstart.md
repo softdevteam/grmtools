@@ -101,7 +101,7 @@ is lexed, but no lexemes are created from it.
 
 Our initial version of calc.y looks as follows:
 ```rust,noplaypen
-%grmtools{yacckind Grmtools}
+%grmtools{yacckind: Grmtools}
 %start Expr
 %%
 Expr -> Result<u64, ()>:

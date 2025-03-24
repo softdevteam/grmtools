@@ -15,21 +15,20 @@ export PATH=`pwd`/.cargo_install/bin/:$WASMTIME_HOME/bin:$PATH
 
 # Install wasmtime once debian trixie is stablized
 # we can likely just use rust-wasmtime.
+#
+# Needed for wasm32-wasip2
 touch .wasmtime_profile
 if [ "X`which wasmtime`" = "X" ]; then
     PROFILE=".wasmtime_profile" bash -c 'curl https://wasmtime.dev/install.sh -sSf | bash'
 fi
 . ./.wasmtime_profile
 
+# Needed for wasm32-unknown-unknown
 mkdir -p $NVM_DIR
 PROFILE=/dev/null bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash'
 . "$NVM_DIR/nvm.sh"
 # Download and install Node.js:
 nvm install 22
-
-rustup target add wasm32-unknown-unknown
-rustup target add wasm32-wasip2
-cargo install wasm-bindgen-cli
 
 cargo fmt --all -- --check
 
@@ -38,7 +37,13 @@ rustup default stable
 
 cargo test
 cargo test --release
+
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli
 cargo test --target wasm32-unknown-unknown
+
+rustup target add wasm32-wasip2
+cargo install workspace_runner
 cargo test --target wasm32-wasip2
 
 cargo test --lib cfgrammar --features serde
