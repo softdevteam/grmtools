@@ -49,7 +49,7 @@ make use of error recovery.
 A simple calculator grammar looks as follows:
 
 ```rust,noplaypen
-%grmtools{yacckind Grmtools}
+%grmtools{yacckind: Grmtools}
 %start Expr
 %%
 Expr -> u64:
@@ -182,7 +182,7 @@ We thus change the grammar so that inserted integers prevent evaluation from
 occurring:
 
 ```rust,noplaypen
-%grmtools{yacckind Grmtools}
+%grmtools{yacckind: Grmtools}
 %start Expr
 %%
 Expr -> Result<u64, ()>:

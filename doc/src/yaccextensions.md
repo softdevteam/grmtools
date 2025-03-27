@@ -11,7 +11,7 @@ But a default can be set or forced by using a `YaccKindResolver`.
 ## Example
 
 ```
-%grmtools{yacckind Grmtools}
+%grmtools{yacckind: Grmtools}
 %%
 Start: ;
 ```

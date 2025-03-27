@@ -15,9 +15,9 @@ other flags should specify their value immediately after the flag name.
 
 ```
 %grmtools {
-    allow_wholeline_comments
-    !octal
-    size_limit 1024
+    allow_wholeline_comments,
+    !octal,
+    size_limit: 1024,
 }
 %%
 . "rule"
@@ -56,7 +56,7 @@ The following flags can change the behavior to match posix lex more closely.
 
 ```
 %grmtools {
-    !dot_matches_new_line
+    !dot_matches_new_line,
     posix_escapes
 }
 %%

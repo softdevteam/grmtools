@@ -1,4 +1,4 @@
-%grmtools{yacckind Original(GenericParseTree)}
+%grmtools{yacckind: Original(GenericParseTree)}
 %start Expr
 %avoid_insert "INT"
 %%

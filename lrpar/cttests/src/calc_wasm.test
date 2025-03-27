@@ -1,6 +1,6 @@
 name: Test running on wasm targets
 grammar: |
-    %grmtools {yacckind Grmtools}
+    %grmtools {yacckind: Grmtools}
     %start Expr
     %avoid_insert "INT"
     %expect-unused Unmatched "UNMATCHED"

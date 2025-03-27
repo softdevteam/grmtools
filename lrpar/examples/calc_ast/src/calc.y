@@ -1,4 +1,4 @@
-%grmtools {yacckind Grmtools}
+%grmtools {yacckind: Grmtools}
 %start Expr
 %avoid_insert "INT"
 %expect-unused Unmatched "UNMATCHED"
