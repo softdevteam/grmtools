@@ -12,7 +12,7 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
     let out_dir = env::var("OUT_DIR").unwrap();
     let path = path.as_ref();
     if path.is_file() {
-        println!("cargo:rerun-if-changed={}", path.display());
+        println!("cargo::rerun-if-changed={}", path.display());
         // Parse test file
         let s = fs::read_to_string(path).unwrap();
         let docs = YamlLoader::load_from_str(&s).unwrap();
