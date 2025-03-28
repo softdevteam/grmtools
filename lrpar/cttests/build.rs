@@ -11,6 +11,9 @@ use lrlex::{CTLexerBuilder, DefaultLexerTypes};
 // two modules `<filename>_y` and `<filename>_l`, which we can then import into src/lib.rs and
 // write tests for.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    for src in glob("src/*.rs")? {
+        println!("cargo::rerun-if-changed={}", src?.display());
+    }
     for entry in glob("src/*.test")? {
         run_test_path(entry.unwrap())?;
     }
@@ -24,8 +27,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Since it modifies the type of the builder.
     CTLexerBuilder::<DefaultLexerTypes<u8>>::new_with_lexemet()
         .rust_edition(lrlex::RustEdition::Rust2021)
+        .output_path(format!(
+            "{}/storaget.l.rs",
+            std::env::var("OUT_DIR").unwrap()
+        ))
         .lrpar_config(|ctp| {
             ctp.rust_edition(lrpar::RustEdition::Rust2021)
+                .output_path(format!(
+                    "{}/storaget.y.rs",
+                    std::env::var("OUT_DIR").unwrap()
+                ))
                 .grammar_in_src_dir("storaget.y")
                 .unwrap()
         })
@@ -33,5 +44,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap()
         .build()
         .unwrap();
+    println!("cargo::rerun-if-changed=src/storaget.l");
+    println!(
+        "cargo::rerun-if-changed={}/storaget.l.rs",
+        std::env::var("OUT_DIR").unwrap()
+    );
+    println!("cargo::rerun-if-changed=src/storaget.y");
+    println!(
+        "cargo::rerun-if-changed={}/storaget.y.rs",
+        std::env::var("OUT_DIR").unwrap()
+    );
     Ok(())
 }
