@@ -12,29 +12,21 @@ pub enum HeaderError {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ValBind<'a> {
-    // ! [A-Za-z]+
     FalseKey(&'a str, Span),
-    // [A-Za-z]+
     TrueKey(&'a str, Span),
-    // ([A-Za-z]+ ':' VAL)
     Bind((&'a str, Span), Val<'a>),
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Path<'a> {
-    // [A-Za-z]+
     Ident(&'a str, Span),
-    // ([A-Za-z]+ '::' [A-Za-z]+)
     Scoped((&'a str, Span), (&'a str, Span)),
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Val<'a> {
-    // PATH
     PathLike(Path<'a>),
-    // PATH1 '(' PATH2 ')'
     ArgLike(Path<'a>, Path<'a>),
-    // [0-9]+
     Num(u64, Span),
 }
 
