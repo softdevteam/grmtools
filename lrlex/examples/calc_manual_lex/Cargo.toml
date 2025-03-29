@@ -13,7 +13,6 @@ name = "calc_manual_lex"
 cfgrammar = { path="../../../cfgrammar" }
 lrlex = { path="../../" }
 lrpar = { path="../../../lrpar" }
-maplit = "1"
 
 [dependencies]
 cfgrammar = { path="../../../cfgrammar" }

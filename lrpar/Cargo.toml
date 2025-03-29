@@ -37,7 +37,6 @@ proc-macro2.workspace = true
 quote.workspace = true
 regex.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
-static_assertions.workspace = true
 vob.workspace = true
 syn.workspace = true
 prettyplease.workspace = true

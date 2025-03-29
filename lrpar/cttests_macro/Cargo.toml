@@ -9,7 +9,7 @@ proc-macro = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-glob = "0.3"
-quote = "1.0"
+glob.workspace = true
+quote.workspace = true
 proc-macro2 = { version = "1.0", features=["proc-macro"]}
-syn = "2.0"
+syn.workspace = true
