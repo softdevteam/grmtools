@@ -56,6 +56,7 @@ use bincode::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[doc(hidden)]
 pub mod header;
 mod idxnewtype;
 pub mod newlinecache;

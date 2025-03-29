@@ -4,6 +4,7 @@ use regex::{Regex, RegexBuilder};
 
 #[derive(Debug)]
 #[non_exhaustive]
+#[doc(hidden)]
 pub enum HeaderError {
     MissingGrmtoolsSection(Span),
     IllegalName(Span),
@@ -11,6 +12,7 @@ pub enum HeaderError {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+#[doc(hidden)]
 pub enum ValBind<'a> {
     FalseKey(&'a str, Span),
     TrueKey(&'a str, Span),
@@ -18,12 +20,14 @@ pub enum ValBind<'a> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+#[doc(hidden)]
 pub enum Path<'a> {
     Ident(&'a str, Span),
     Scoped((&'a str, Span), (&'a str, Span)),
 }
 
 #[derive(Debug, Eq, PartialEq)]
+#[doc(hidden)]
 pub enum Val<'a> {
     PathLike(Path<'a>),
     ArgLike(Path<'a>, Path<'a>),
@@ -31,6 +35,7 @@ pub enum Val<'a> {
 }
 
 /// Parser for the `%grmtools` section
+#[doc(hidden)]
 pub struct GrmtoolsSectionParser<'input> {
     src: &'input str,
     required: bool,
