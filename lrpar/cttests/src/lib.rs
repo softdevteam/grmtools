@@ -404,16 +404,21 @@ fn test_grmtools_section_strings() {
     for src in srcs {
         let l = lexerdef.lexer(src);
         let (yacc_parsed, errs) = grmtools_section_y::parse(&l);
+        let mut parse_error = false;
+
         if !errs.is_empty() {
             let mut s = "Errors:\n".to_string();
-            for e in errs {
+            for e in &errs {
                 s.push_str(&format!("\t{}\n", e));
             }
-            panic!("{}", s);
+            eprintln!("{}", s);
+            parse_error = true;
         }
         let parser = cfgrammar::header::GrmtoolsSectionParser::new(src, true);
-        let (header_parsed, _) = parser.parse().unwrap();
+        let res = parser.parse();
+        let (header_parsed, _) = res.unwrap();
         assert_eq!(yacc_parsed, Some(header_parsed));
+        assert!(!parse_error);
         println!("{:?} {:?}", src, yacc_parsed);
     }
 }
