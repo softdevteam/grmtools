@@ -126,6 +126,15 @@ impl<'input> GrmtoolsSectionParser<'input> {
         }
     }
 
+    /// Parses any `%grmtools` section at the beginning of `src`.
+    /// If `required` is true, the parse function will
+    /// return an error if the `%grmtools` section is
+    /// missing.
+    ///
+    /// If required is set and the section is empty, no error will be
+    /// produced. If a caller requires a value they should
+    /// produce an error that specifies the required value.
+    ///
     pub fn new(src: &'input str, required: bool) -> Self {
         Self { src, required }
     }
