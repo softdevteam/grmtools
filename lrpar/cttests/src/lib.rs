@@ -354,22 +354,17 @@ fn test_grmtools_section_files() {
             let lexerdef = grmtools_section_l::lexerdef();
             let s = String::from_utf8(buf).unwrap();
             let l = lexerdef.lexer(&s);
-            let (val, errs) = grmtools_section_y::parse(&l);
-            if !errs.is_empty() {
-                let mut s = "Errors:\n".to_string();
-                for e in errs {
-                    s.push_str(&format!("\t{}\n", e));
-                }
-                panic!("{}", s);
-            } else {
-                eprintln!("%grmtools {:?} {:?}", file_path.file_name(), val);
-            }
+            let (yacc_parsed, errs) = grmtools_section_y::parse(&l);
+            let parser = cfgrammar::header::GrmtoolsSectionParser::new(&s, true);
+            let (header_parsed, _) = parser.parse().unwrap();
+            assert_eq!(yacc_parsed.unwrap().unwrap(), header_parsed);
+            assert!(errs.is_empty());
         }
     }
 }
 
 #[test]
-fn test_grmtools_section() {
+fn test_grmtools_section_strings() {
     let srcs = [
         "%grmtools{}",
         "%grmtools{x}",
@@ -388,20 +383,21 @@ fn test_grmtools_section() {
         "%grmtools{a, x: y(z)}",
         "%grmtools{a, !b, x: y(z), e: f}",
         "%grmtools{a, !b, x: y(z), e: f,}",
+        "%grmtools{a, !b, x: w::y(z), e: f}",
+        "%grmtools{a, !b, x: w::y(z), e: f,}",
+        "%grmtools{a, !b, x: w::y(z), e: g::f}",
+        "%grmtools{a, !b, x: w::y(z), e: g::f,}",
     ];
 
     let lexerdef = grmtools_section_l::lexerdef();
     for src in srcs {
         let l = lexerdef.lexer(src);
-        let (val, errs) = grmtools_section_y::parse(&l);
-        if !errs.is_empty() {
-            let mut s = "Errors:\n".to_string();
-            for e in errs {
-                s.push_str(&format!("\t{}\n", e));
-            }
-            panic!("{}", s);
-        }
-        println!("{:?}", val);
+        let (yacc_parsed, errs) = grmtools_section_y::parse(&l);
+        let yacc_parsed = yacc_parsed.unwrap().unwrap();
+        let parser = cfgrammar::header::GrmtoolsSectionParser::new(src, true);
+        let (header_parsed, _) = parser.parse().unwrap();
+        assert_eq!(yacc_parsed, header_parsed);
+        assert!(errs.is_empty());
     }
 }
 
