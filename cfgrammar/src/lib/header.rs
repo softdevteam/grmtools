@@ -224,4 +224,14 @@ mod test {
             assert!(res.is_err());
         }
     }
+
+    #[test]
+    fn test_header_missing_curly_bracket_invalid() {
+        let src = "%grmtools {####";
+        for flag in [true, false] {
+            let parser = GrmtoolsSectionParser::new(src, flag);
+            let res = parser.parse();
+            assert!(res.is_err());
+        }
+    }
 }
