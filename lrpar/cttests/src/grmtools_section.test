@@ -24,36 +24,44 @@ grammar: |
 
     path -> Path<'input>
     : IDENT {
-        let ident = $lexer.span_str($1.as_ref().unwrap().span());
-        Path::Ident(ident)
+        let ident_span = $1.as_ref().unwrap().span();
+        let ident = $lexer.span_str(ident_span);
+        Path::Ident(ident, ident_span)
     }
     | IDENT '::' IDENT {
-        let scope = $lexer.span_str($1.as_ref().unwrap().span());
-        let ident = $lexer.span_str($2.as_ref().unwrap().span());
-        Path::Scoped(scope, ident)
+        let scope_span = $1.as_ref().unwrap().span();
+        let scope = $lexer.span_str(scope_span);
+
+        let ident_span = $3.as_ref().unwrap().span();
+        let ident = $lexer.span_str(ident_span);
+        Path::Scoped((scope, scope_span), (ident, ident_span))
     }
     ;
 
     valbind -> ValBind<'input>
     : IDENT ':' val {
-        let key = $lexer.span_str($1.as_ref().unwrap().span());
-        ValBind::Bind(key, $3)
+        let key_span = $1.as_ref().unwrap().span();
+        let key = $lexer.span_str(key_span);
+        ValBind::Bind((key, key_span), $3)
     }
     | IDENT {
-        let key = $lexer.span_str($1.as_ref().unwrap().span());
-        ValBind::TrueKey(key)
+        let key_span = $1.as_ref().unwrap().span();
+        let key = $lexer.span_str(key_span);
+        ValBind::TrueKey(key, key_span)
     }
     | '!' IDENT {
-        let key = $lexer.span_str($2.as_ref().unwrap().span());
-        ValBind::FalseKey(key)
+        let key_span = $2.as_ref().unwrap().span();
+        let key = $lexer.span_str(key_span);
+        ValBind::FalseKey(key, key_span)
     }
     ;
 
     val -> Val<'input>
     : path { Val::PathLike($1) }
     | NUM  {
-        let n = str::parse::<u64>($lexer.span_str($1.as_ref().unwrap().span()));
-        Val::Num(n.expect("convertible"))
+        let num_span = $1.as_ref().unwrap().span();
+        let n = str::parse::<u64>($lexer.span_str(num_span));
+        Val::Num(n.expect("convertible"), num_span)
     }
     | path '(' path ')' { Val::ArgLike($1, $3) }
     ;
@@ -66,25 +74,11 @@ grammar: |
     #![allow(dead_code)]
     #![allow(unused)]
 
-    #[derive(Debug)]
-    pub enum ValBind<'a> {
-        FalseKey(&'a str),
-        TrueKey(&'a str),
-        Bind(&'a str, Val<'a>),
-    }
-
-    #[derive(Debug)]
-    pub enum Path<'a> {
-        Ident(&'a str),
-        Scoped(&'a str, &'a str),
-    }
-
-    #[derive(Debug)]
-    pub enum Val<'a> {
-        PathLike(Path<'a>),
-        ArgLike(Path<'a>, Path<'a>),
-        Num(u64),
-    }
+    use cfgrammar::header::{
+        ValBind,
+        Path,
+        Val
+    };
 
 lexer: |
     %grmtools{case_insensitive}
