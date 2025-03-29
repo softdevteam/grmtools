@@ -143,19 +143,28 @@ impl<'input> GrmtoolsSectionParser<'input> {
         if let Some(mut i) = self.lookahead_is(MAGIC, 0) {
             let mut vals = vec![];
             i = self.parse_ws(i);
+            let section_start_pos = i;
             if let Some(j) = self.lookahead_is("{", i) {
                 i = self.parse_ws(j);
-                while self.lookahead_is("}", i).is_none() {
+                while self.lookahead_is("}", i).is_none() && i < self.src.len() {
                     let (val, j) = self.parse_valbind(i)?;
                     vals.push(val);
                     if let Some(j) = self.lookahead_is(",", j) {
                         i = self.parse_ws(j);
                         continue;
                     } else {
-                        return Ok((vals, j));
+                        i = j;
+                        break;
                     }
                 }
-                Ok((vals, i))
+                if self.lookahead_is("}", i).is_some() {
+                    Ok((vals, i))
+                } else {
+                    return Err(HeaderError::ExpectedToken(
+                        '}',
+                        Span::new(section_start_pos, self.src.len()),
+                    ));
+                }
             } else {
                 Err(HeaderError::ExpectedToken('{', Span::new(i, i)))
             }
@@ -189,5 +198,30 @@ impl<'input> GrmtoolsSectionParser<'input> {
             .find(&self.src[i..])
             .map(|m| m.end() + i)
             .unwrap_or(i)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_header_missing_curly_bracket() {
+        let src = "%grmtools { a, b";
+        for flag in [true, false] {
+            let parser = GrmtoolsSectionParser::new(src, flag);
+            let res = parser.parse();
+            assert!(res.is_err());
+        }
+    }
+
+    #[test]
+    fn test_header_missing_curly_bracket_empty() {
+        let src = "%grmtools {";
+        for flag in [true, false] {
+            let parser = GrmtoolsSectionParser::new(src, flag);
+            let res = parser.parse();
+            assert!(res.is_err());
+        }
     }
 }
