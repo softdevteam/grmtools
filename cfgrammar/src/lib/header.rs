@@ -7,8 +7,6 @@ use regex::Regex;
 pub enum HeaderError {
     MissingGrmtoolsSection(Span),
     IllegalName(Span),
-    InvalidValue(Span),
-    MalformedPath(Span),
     ExpectedToken(char, Span),
 }
 
