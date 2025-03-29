@@ -160,10 +160,10 @@ impl<'input> GrmtoolsSectionParser<'input> {
                 if self.lookahead_is("}", i).is_some() {
                     Ok((vals, i))
                 } else {
-                    return Err(HeaderError::ExpectedToken(
+                    Err(HeaderError::ExpectedToken(
                         '}',
                         Span::new(section_start_pos, self.src.len()),
-                    ));
+                    ))
                 }
             } else {
                 Err(HeaderError::ExpectedToken('{', Span::new(i, i)))
