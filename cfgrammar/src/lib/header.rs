@@ -1,6 +1,6 @@
 use crate::Span;
 use lazy_static::lazy_static;
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -38,7 +38,10 @@ pub struct GrmtoolsSectionParser<'input> {
 
 lazy_static! {
     static ref RE_LEADING_WS: Regex = Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap();
-    static ref RE_NAME: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z_]*").unwrap();
+    static ref RE_NAME: Regex = RegexBuilder::new(r"^[A-Z][A-Z_]*")
+        .case_insensitive(true)
+        .build()
+        .unwrap();
     static ref RE_DIGITS: Regex = Regex::new(r"^[0-9]+").unwrap();
 }
 
