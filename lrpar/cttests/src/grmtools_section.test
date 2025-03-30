@@ -3,59 +3,98 @@ grammar: |
     %token MAGIC IDENT NUM
     %epp MAGIC "%grmtools"
     %%
-    start -> Vec<ValBind<'input>>
+    start -> Result<HashMap<&'input str, (Span, Value<'input>)>, Vec<HeaderError>>
     : MAGIC '{' contents '}' { $3 }
     ;
 
-    contents -> Vec<ValBind<'input>>
-    : %empty { vec![] }
+    contents -> Result<HashMap<&'input str, (Span, Value<'input>)>, Vec<HeaderError>>
+    : %empty { Ok(HashMap::new()) }
     | val_seq comma_opt { $1 }
     ;
 
-    val_seq -> Vec<ValBind<'input>>
+    val_seq -> Result<HashMap<&'input str, (Span, Value<'input>)>, Vec<HeaderError>>
     : valbind {
-        vec![$1]
+        let ((key, key_span), val) = $1;
+        let mut ret = HashMap::new();
+        match ret.entry(key) {
+            Entry::Occupied(orig) => {
+                let (orig_span, _) = orig.get();
+                // One difference between the manually written parser and this
+                // is we don't try return multiple errors, or coalesce them.
+                return Err(vec![HeaderError {
+                    kind: HeaderErrorKind::DuplicateEntry,
+                    spans: vec![*orig_span, key_span]
+                }]);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert((key_span, val));
+            }
+        }
+        Ok(ret)
     }
     | val_seq ',' valbind {
-        $1.push($3);
-        $1
+        let ((key, key_span), val) = $3;
+        let mut ret = $1?;
+        match ret.entry(key) {
+            Entry::Occupied(orig) => {
+                let (orig_span, _) = orig.get();
+                // One difference between the manually written parser and this
+                // is we don't try return multiple errors, or coalesce them.
+                return Err(vec![HeaderError {
+                    kind: HeaderErrorKind::DuplicateEntry,
+                    spans: vec![*orig_span, key_span]
+                }]);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert((key_span, val));
+            }
+        }
+        Ok(ret)
     }
     ;
 
     path -> Path<'input>
     : IDENT {
-        let ident = $lexer.span_str($1.as_ref().unwrap().span());
-        Path::Ident(ident)
+        let ident_span = $1.as_ref().unwrap().span();
+        let ident = $lexer.span_str(ident_span);
+        Path::Ident(ident, ident_span)
     }
     | IDENT '::' IDENT {
-        let scope = $lexer.span_str($1.as_ref().unwrap().span());
-        let ident = $lexer.span_str($2.as_ref().unwrap().span());
-        Path::Scoped(scope, ident)
+        let scope_span = $1.as_ref().unwrap().span();
+        let scope = $lexer.span_str(scope_span);
+
+        let ident_span = $3.as_ref().unwrap().span();
+        let ident = $lexer.span_str(ident_span);
+        Path::Scoped((scope, scope_span), (ident, ident_span))
     }
     ;
 
-    valbind -> ValBind<'input>
+    valbind -> ((&'input str, Span), Value<'input>)
     : IDENT ':' val {
-        let key = $lexer.span_str($1.as_ref().unwrap().span());
-        ValBind::Bind(key, $3)
+        let key_span = $1.as_ref().unwrap().span();
+        let key = $lexer.span_str(key_span);
+        ((key, key_span), Value::Setting($3))
     }
     | IDENT {
-        let key = $lexer.span_str($1.as_ref().unwrap().span());
-        ValBind::TrueKey(key)
+        let key_span = $1.as_ref().unwrap().span();
+        let key = $lexer.span_str(key_span);
+        ((key, key_span), Value::Flag(true))
     }
     | '!' IDENT {
-        let key = $lexer.span_str($2.as_ref().unwrap().span());
-        ValBind::FalseKey(key)
+        let key_span = $2.as_ref().unwrap().span();
+        let key = $lexer.span_str(key_span);
+        ((key, key_span), Value::Flag(false))
     }
     ;
 
-    val -> Val<'input>
-    : path { Val::PathLike($1) }
+    val -> Setting<'input>
+    : path { Setting::PathLike($1) }
     | NUM  {
-        let n = str::parse::<u64>($lexer.span_str($1.as_ref().unwrap().span()));
-        Val::Num(n.expect("convertible"))
+        let num_span = $1.as_ref().unwrap().span();
+        let n = str::parse::<u64>($lexer.span_str(num_span));
+        Setting::Num(n.expect("convertible"), num_span)
     }
-    | path '(' path ')' { Val::ArgLike($1, $3) }
+    | path '(' path ')' { Setting::ArgLike($1, $3) }
     ;
 
     comma_opt -> ()
@@ -66,25 +105,17 @@ grammar: |
     #![allow(dead_code)]
     #![allow(unused)]
 
-    #[derive(Debug)]
-    pub enum ValBind<'a> {
-        FalseKey(&'a str),
-        TrueKey(&'a str),
-        Bind(&'a str, Val<'a>),
-    }
-
-    #[derive(Debug)]
-    pub enum Path<'a> {
-        Ident(&'a str),
-        Scoped(&'a str, &'a str),
-    }
-
-    #[derive(Debug)]
-    pub enum Val<'a> {
-        PathLike(Path<'a>),
-        ArgLike(Path<'a>, Path<'a>),
-        Num(u64),
-    }
+    use std::collections::{hash_map::Entry, HashMap};
+    use cfgrammar::{
+        Span,
+        header::{
+            Path,
+            Value,
+            Setting,
+            HeaderError,
+            HeaderErrorKind
+        }
+    };
 
 lexer: |
     %grmtools{case_insensitive}
