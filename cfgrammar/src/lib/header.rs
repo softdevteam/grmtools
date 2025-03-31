@@ -18,19 +18,40 @@ pub enum HeaderErrorKind {
     ExpectedToken(char),
     DuplicateEntry,
 }
-
+/// Indicates a value prefixed by an optional namespace.
+/// `Foo::Bar` with optional `Foo` specified being
+/// ```rust,ignore
+/// Namespaced{
+///     namespace: Some(("Foo", ...)),
+///     member: ("Bar", ...)
+/// }
+/// ```
+///
+/// Alternately just `Bar` alone without a namespace is represented by :
+/// ```rust,ignore
+/// Namespaced{
+///     namespace: None,
+///     member: ("Bar", ...)
+/// }
+/// ```
 #[derive(Debug, Eq, PartialEq)]
-#[doc(hidden)]
-pub enum Path<'a> {
-    Ident(&'a str, Span),
-    Scoped((&'a str, Span), (&'a str, Span)),
+pub struct Namespaced {
+    pub namespace: Option<(String, Span)>,
+    pub member: (String, Span),
 }
 
 #[derive(Debug, Eq, PartialEq)]
 #[doc(hidden)]
-pub enum Setting<'a> {
-    PathLike(Path<'a>),
-    ArgLike(Path<'a>, Path<'a>),
+pub enum Setting {
+    /// A value like `YaccKind::Grmtools`
+    Unitary(Namespaced),
+    /// A value like `YaccKind::Original(UserActions)`.
+    /// In that example the field ctor would be: `Namespaced { namespace: "YaccKind", member: "Original" }`.
+    /// The field would be `Namespaced{ None, UserActions }`.
+    Constructor {
+        ctor: Namespaced,
+        arg: Namespaced,
+    },
     Num(u64, Span),
 }
 
@@ -42,9 +63,9 @@ pub struct GrmtoolsSectionParser<'input> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum Value<'a> {
+pub enum Value {
     Flag(bool),
-    Setting(Setting<'a>),
+    Setting(Setting),
 }
 
 lazy_static! {
@@ -83,7 +104,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
     pub fn parse_value(
         &'_ self,
         mut i: usize,
-    ) -> Result<(&'_ str, Span, Value<'_>, usize), HeaderError> {
+    ) -> Result<(String, Span, Value, usize), HeaderError> {
         if let Some(i) = self.lookahead_is("!", i) {
             let (flag_name, j) = self.parse_name(i)?;
             Ok((
@@ -109,17 +130,20 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         Ok((key_name, key_span, Value::Setting(val), i))
                     }
                     None => {
-                        let (path_val, j) = self.parse_path(i)?;
+                        let (path_val, j) = self.parse_namespaced(i)?;
                         i = self.parse_ws(j);
                         if let Some(j) = self.lookahead_is("(", i) {
-                            let (arg, j) = self.parse_path(j)?;
+                            let (arg, j) = self.parse_namespaced(j)?;
                             i = self.parse_ws(j);
                             if let Some(j) = self.lookahead_is(")", i) {
                                 i = self.parse_ws(j);
                                 Ok((
                                     key_name,
                                     key_span,
-                                    Value::Setting(Setting::ArgLike(path_val, arg)),
+                                    Value::Setting(Setting::Constructor {
+                                        ctor: path_val,
+                                        arg,
+                                    }),
                                     i,
                                 ))
                             } else {
@@ -132,7 +156,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                             Ok((
                                 key_name,
                                 key_span,
-                                Value::Setting(Setting::PathLike(path_val)),
+                                Value::Setting(Setting::Unitary(path_val)),
                                 i,
                             ))
                         }
@@ -144,21 +168,31 @@ impl<'input> GrmtoolsSectionParser<'input> {
         }
     }
 
-    fn parse_path(&'_ self, mut i: usize) -> Result<(Path<'_>, usize), HeaderError> {
+    fn parse_namespaced(&self, mut i: usize) -> Result<(Namespaced, usize), HeaderError> {
+        // Either a name alone, or a namespace which will be followed by a member.
         let (name, j) = self.parse_name(i)?;
         let name_span = Span::new(i, j);
         i = self.parse_ws(j);
         if let Some(j) = self.lookahead_is("::", i) {
             i = self.parse_ws(j);
-            let (scoped_val, j) = self.parse_name(i)?;
-            let scoped_span = Span::new(i, j);
+            let (member_val, j) = self.parse_name(i)?;
+            let member_val_span = Span::new(i, j);
             i = self.parse_ws(j);
             Ok((
-                Path::Scoped((name, name_span), (scoped_val, scoped_span)),
+                Namespaced {
+                    namespace: Some((name, name_span)),
+                    member: (member_val, member_val_span),
+                },
                 i,
             ))
         } else {
-            Ok((Path::Ident(name, name_span), i))
+            Ok((
+                Namespaced {
+                    namespace: None,
+                    member: (name, name_span),
+                },
+                i,
+            ))
         }
     }
 
@@ -176,11 +210,9 @@ impl<'input> GrmtoolsSectionParser<'input> {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn parse(
-        &'_ self,
-    ) -> Result<(HashMap<&'_ str, (Span, Value<'_>)>, usize), Vec<HeaderError>> {
+    pub fn parse(&'_ self) -> Result<(HashMap<String, (Span, Value)>, usize), Vec<HeaderError>> {
         let mut errs = Vec::new();
-        if let Some(mut i) = self.lookahead_is(MAGIC, 0) {
+        if let Some(mut i) = self.lookahead_is(MAGIC, self.parse_ws(0)) {
             let mut ret = HashMap::new();
             i = self.parse_ws(i);
             let section_start_pos = i;
@@ -216,7 +248,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         break;
                     }
                 }
-                if self.lookahead_is("}", i).is_some() {
+                if let Some(i) = self.lookahead_is("}", i) {
                     if errs.is_empty() {
                         Ok((ret, i))
                     } else {
@@ -247,11 +279,14 @@ impl<'input> GrmtoolsSectionParser<'input> {
         }
     }
 
-    fn parse_name(&self, i: usize) -> Result<(&str, usize), HeaderError> {
+    fn parse_name(&self, i: usize) -> Result<(String, usize), HeaderError> {
         match RE_NAME.find(&self.src[i..]) {
             Some(m) => {
                 assert_eq!(m.start(), 0);
-                Ok((&self.src[i..i + m.end()], i + m.end()))
+                Ok((
+                    self.src[i..i + m.end()].to_string().to_lowercase(),
+                    i + m.end(),
+                ))
             }
             None => Err(HeaderError {
                 kind: HeaderErrorKind::IllegalName,
