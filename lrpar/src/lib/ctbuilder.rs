@@ -235,7 +235,7 @@ where
     grammar_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     mod_name: Option<&'a str>,
-    recoverer: RecoveryKind,
+    recoverer: Option<RecoveryKind>,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     warnings_are_errors: bool,
@@ -279,7 +279,7 @@ where
             grammar_path: None,
             output_path: None,
             mod_name: None,
-            recoverer: RecoveryKind::CPCTPlus,
+            recoverer: None,
             yacckind: None,
             error_on_conflicts: true,
             warnings_are_errors: true,
@@ -378,7 +378,7 @@ where
 
     /// Set the recoverer for this parser to `rk`. Defaults to `RecoveryKind::CPCTPlus`.
     pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
-        self.recoverer = rk;
+        self.recoverer = Some(rk);
         self
     }
 
@@ -491,26 +491,87 @@ where
             lk.insert(outp.clone());
         }
 
-        let inc =
-            read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
-        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
-        self.yacckind = ast_validation.yacc_kind();
-        let warnings = ast_validation.ast().warnings();
-        let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
-            if let Some((line, column)) =
-                line_cache.byte_to_line_num_and_col_num(inc, x.spans()[0].start())
+        let span_fmt = |span: cfgrammar::Span, s: &str, inc: &str, line_cache: &NewlineCache| {
+            if let Some((line, column)) = line_cache.byte_to_line_num_and_col_num(inc, span.start())
             {
-                format!("{} at line {line} column {column}", x)
+                format!("{} at line {line} column {column}", s)
             } else {
-                format!("{}", x)
+                s.to_string()
             }
         };
 
+        let inc =
+            read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
+        let mut line_cache = NewlineCache::new();
+        line_cache.feed(&inc);
+        let header_parser = cfgrammar::header::GrmtoolsSectionParser::new(&inc, false);
+        match header_parser.parse() {
+            Ok((header, _)) => {
+                if self.recoverer.is_none() {
+                    if let Some((key_span, recoverer)) = header.get("recoverer") {
+                        use cfgrammar::header::{Namespaced, Setting, Value};
+                        match recoverer {
+                            Value::Flag(_) => {
+                                return Err(span_fmt(*key_span, "Invalid RecoveryKind specified in %grmtools section, RecoveryKind is not a bool", &inc, &line_cache).into());
+                            }
+                            Value::Setting(Setting::Num(_, span)) => {
+                                return Err(span_fmt(*span, "Invalid RecoveryKind specified in %grmtools section, RecoveryKind is not a numerical value.", &inc, &line_cache).into());
+                            }
+                            Value::Setting(Setting::Unitary(Namespaced {
+                                namespace,
+                                member: (member, member_span),
+                            })) => {
+                                if let Some((namespace, span)) = namespace {
+                                    if namespace != "recoverykind" {
+                                        return Err(span_fmt(
+                                            *span,
+                                            &format!("Unknown RecoveryKind: {}", namespace),
+                                            &inc,
+                                            &line_cache,
+                                        )
+                                        .into());
+                                    }
+                                }
+
+                                let rk = [
+                                    ("none", RecoveryKind::None),
+                                    ("cpctplus", RecoveryKind::CPCTPlus),
+                                ]
+                                .iter()
+                                .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
+                                if rk.is_none() {
+                                    return Err(span_fmt(*member_span, "Invalid RecoveryKind specified in %grmtools section", &inc, &line_cache).into());
+                                }
+                                if self.recoverer.is_none() {
+                                    self.recoverer = rk;
+                                }
+                            }
+                            Value::Setting(Setting::Constructor { ctor: _, arg: _ }) => {
+                                return Err(span_fmt(*key_span, "Invalid RecoveryKind specified in %grmtools section.", &inc, &line_cache).into());
+                            }
+                        }
+                    }
+                }
+            }
+
+            Err(es) => {
+                let err_strings = es.iter().map(|e| format!("{}", e)).collect::<Vec<_>>();
+                return Err(err_strings.join(" ").into());
+            }
+        }
+
+        self.recoverer = Some(self.recoverer.unwrap_or(RecoveryKind::CPCTPlus));
+
+        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        self.yacckind = ast_validation.yacc_kind();
+        let warnings = ast_validation.ast().warnings();
         let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
+        let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
+            span_fmt(x.spans()[0], &format!("{}", x), inc, line_cache)
+        };
+
         let grm = match res {
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
                 return Err(ErrorString(if warnings.len() > 1 {
                     // Indent under the "Error:" prefix.
                     format!(
@@ -527,8 +588,6 @@ where
             }
             Ok(grm) => {
                 if !warnings.is_empty() {
-                    let mut line_cache = NewlineCache::new();
-                    line_cache.feed(&inc);
                     for w in warnings {
                         // Assume if this variable is set we are running under cargo.
                         if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
@@ -885,7 +944,7 @@ where
     ) -> Result<TokenStream, Box<dyn Error>> {
         let storaget = str::parse::<TokenStream>(type_name::<StorageT>())?;
         let lexertypest = str::parse::<TokenStream>(type_name::<LexerTypesT>())?;
-        let recoverer = self.recoverer;
+        let recoverer = self.recoverer.unwrap();
         let run_parser = match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 quote! {

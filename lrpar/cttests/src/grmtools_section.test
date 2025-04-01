@@ -1,5 +1,5 @@
 grammar: |
-    %grmtools{yacckind: Grmtools}
+    %grmtools{yacckind: Grmtools, recoverer:RecoveryKind::CPCTPlus}
     %token MAGIC IDENT NUM
     %epp MAGIC "%grmtools"
     %%

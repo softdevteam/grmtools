@@ -1,12 +1,24 @@
 use crate::Span;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    error::Error,
+    fmt,
+};
 
 #[derive(Debug)]
 pub struct HeaderError {
     pub kind: HeaderErrorKind,
     pub spans: Vec<Span>,
+}
+
+impl Error for HeaderError {}
+
+impl fmt::Display for HeaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -17,6 +29,18 @@ pub enum HeaderErrorKind {
     IllegalName,
     ExpectedToken(char),
     DuplicateEntry,
+}
+
+impl fmt::Display for HeaderErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            HeaderErrorKind::MissingGrmtoolsSection => "Missing %grmtools section",
+            HeaderErrorKind::IllegalName => "Illegal name",
+            HeaderErrorKind::ExpectedToken(c) => &format!("Expected token: '{}", c),
+            HeaderErrorKind::DuplicateEntry => "DuplicateEntry",
+        };
+        write!(f, "{}", s)
+    }
 }
 /// Indicates a value prefixed by an optional namespace.
 /// `Foo::Bar` with optional `Foo` specified being
