@@ -3,16 +3,16 @@ grammar: |
     %token MAGIC IDENT NUM
     %epp MAGIC "%grmtools"
     %%
-    start -> Result<HashMap<&'input str, (Span, Value<'input>)>, Vec<HeaderError>>
+    start -> Result<HashMap<String, (Span, Value)>, Vec<HeaderError>>
     : MAGIC '{' contents '}' { $3 }
     ;
 
-    contents -> Result<HashMap<&'input str, (Span, Value<'input>)>, Vec<HeaderError>>
+    contents -> Result<HashMap<String, (Span, Value)>, Vec<HeaderError>>
     : %empty { Ok(HashMap::new()) }
     | val_seq comma_opt { $1 }
     ;
 
-    val_seq -> Result<HashMap<&'input str, (Span, Value<'input>)>, Vec<HeaderError>>
+    val_seq -> Result<HashMap<String, (Span, Value)>, Vec<HeaderError>>
     : valbind {
         let ((key, key_span), val) = $1;
         let mut ret = HashMap::new();
@@ -53,48 +53,54 @@ grammar: |
     }
     ;
 
-    path -> Path<'input>
+    namespaced -> Namespaced
     : IDENT {
         let ident_span = $1.as_ref().unwrap().span();
-        let ident = $lexer.span_str(ident_span);
-        Path::Ident(ident, ident_span)
+        let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
+        Namespaced{
+            namespace: None,
+            member: (ident, ident_span)
+        }
     }
     | IDENT '::' IDENT {
-        let scope_span = $1.as_ref().unwrap().span();
-        let scope = $lexer.span_str(scope_span);
+        let namespace_span = $1.as_ref().unwrap().span();
+        let namespace = $lexer.span_str(namespace_span).to_string().to_lowercase();
 
         let ident_span = $3.as_ref().unwrap().span();
-        let ident = $lexer.span_str(ident_span);
-        Path::Scoped((scope, scope_span), (ident, ident_span))
+        let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
+        Namespaced {
+            namespace: Some((namespace, namespace_span)),
+            member: (ident, ident_span)
+        }
     }
     ;
 
-    valbind -> ((&'input str, Span), Value<'input>)
+    valbind -> ((String, Span), Value)
     : IDENT ':' val {
         let key_span = $1.as_ref().unwrap().span();
-        let key = $lexer.span_str(key_span);
+        let key = $lexer.span_str(key_span).to_string().to_lowercase();
         ((key, key_span), Value::Setting($3))
     }
     | IDENT {
         let key_span = $1.as_ref().unwrap().span();
-        let key = $lexer.span_str(key_span);
+        let key = $lexer.span_str(key_span).to_string().to_lowercase();
         ((key, key_span), Value::Flag(true))
     }
     | '!' IDENT {
         let key_span = $2.as_ref().unwrap().span();
-        let key = $lexer.span_str(key_span);
+        let key = $lexer.span_str(key_span).to_string().to_lowercase();
         ((key, key_span), Value::Flag(false))
     }
     ;
 
-    val -> Setting<'input>
-    : path { Setting::PathLike($1) }
+    val -> Setting
+    : namespaced { Setting::Unitary($1) }
     | NUM  {
         let num_span = $1.as_ref().unwrap().span();
         let n = str::parse::<u64>($lexer.span_str(num_span));
         Setting::Num(n.expect("convertible"), num_span)
     }
-    | path '(' path ')' { Setting::ArgLike($1, $3) }
+    | namespaced '(' namespaced ')' { Setting::Constructor{ctor: $1, arg: $3} }
     ;
 
     comma_opt -> ()
@@ -109,11 +115,11 @@ grammar: |
     use cfgrammar::{
         Span,
         header::{
-            Path,
             Value,
             Setting,
             HeaderError,
-            HeaderErrorKind
+            HeaderErrorKind,
+            Namespaced,
         }
     };
 

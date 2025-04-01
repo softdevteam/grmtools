@@ -27,6 +27,12 @@ pub enum YaccKindResolver {
     NoDefault,
 }
 
+impl YaccKindResolver {
+    fn forced(self) -> bool {
+        matches!(self, Self::Force(_))
+    }
+}
+
 /// The particular Yacc variant this grammar makes use of.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
