@@ -10,11 +10,12 @@ use super::{
     YaccGrammarWarningKind, YaccKind, YaccKindResolver,
 };
 
-use crate::Span;
+use crate::{header::Header, Span};
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
     yacc_kind: Option<YaccKind>,
+    header: Header,
     ast: GrammarAST,
     errs: Vec<YaccGrammarError>,
 }
@@ -26,18 +27,19 @@ impl ASTWithValidityInfo {
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
     pub fn new(yacc_kind_resolver: YaccKindResolver, s: &str) -> Self {
         let mut errs = Vec::new();
-        let (yacc_kind, ast) = {
+        let (yacc_kind, header, ast) = {
             let mut yp = YaccParser::new(yacc_kind_resolver, s.to_string());
             yp.parse().map_err(|e| errs.extend(e)).ok();
-            let (yacc_kind, mut ast) = yp.build();
+            let (yacc_kind, header, mut ast) = yp.build();
             if yacc_kind.is_some() {
                 ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
             }
-            (yacc_kind, ast)
+            (yacc_kind, header, ast)
         };
         ASTWithValidityInfo {
             ast,
             errs,
+            header,
             yacc_kind,
         }
     }
@@ -64,6 +66,17 @@ impl ASTWithValidityInfo {
     /// Returns all errors which were encountered during AST construction.
     pub fn errors(&self) -> &[YaccGrammarError] {
         self.errs.as_slice()
+    }
+
+    /// Returns a mutable reference to the parsed contents
+    /// of the `%grmtools` section from the file header.
+    pub fn header_mut(&mut self) -> &mut Header {
+        &mut self.header
+    }
+    /// Returns a reference to the parsed contents
+    /// of the `%grmtools` section from the file header.
+    pub fn header(&self) -> &Header {
+        &self.header
     }
 }
 
