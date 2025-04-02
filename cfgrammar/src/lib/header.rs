@@ -42,6 +42,20 @@ impl fmt::Display for HeaderErrorKind {
         write!(f, "{}", s)
     }
 }
+
+#[derive(Debug)]
+pub struct HeaderContentsError {
+    pub kind: HeaderContentsErrorKind,
+    pub spans: Vec<Span>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+#[non_exhaustive]
+#[doc(hidden)]
+pub enum HeaderContentsErrorKind {
+    WrongValueVariant,
+}
+
 /// Indicates a value prefixed by an optional namespace.
 /// `Foo::Bar` with optional `Foo` specified being
 /// ```rust,ignore
@@ -90,6 +104,51 @@ pub struct GrmtoolsSectionParser<'input> {
 pub enum Value {
     Flag(bool),
     Setting(Setting),
+}
+
+impl Value {
+    pub fn matches_query_mask(&self, mask: u16) -> bool {
+        let q = self.query_bits() as u16;
+        (q & mask) == q
+    }
+    fn query_bits(&self) -> u16 {
+        match self {
+            Self::Flag(_) => ValueQuery::Flag as u16,
+            Self::Setting(x) => x.query_bits(),
+        }
+    }
+}
+
+impl Setting {
+    pub fn matches_query_mask(&self, mask: u16) -> bool {
+        let q = self.query_bits();
+        (q & mask) == q
+    }
+    pub fn query_bits(&self) -> u16 {
+        let q = match self {
+            Self::Num(_, _) => SettingQuery::Num,
+            Self::Unitary(_) => SettingQuery::Unitary,
+            Self::Constructor { ctor: _, arg: _ } => SettingQuery::Constructor,
+        };
+        q as u16
+    }
+}
+
+/// Repr vaues bit representation should not overlap `SettingQuery`,
+/// The first 8 bits is reserved for `ValueQuery`.
+#[repr(u16)]
+pub enum ValueQuery {
+    Flag = 1 << 0,
+    Setting = 1 << 1,
+}
+
+/// Repr vaues bit representation should not overlap `ValueQuery`.
+/// The last 8 bits is reserved for `SettingQuery`
+#[repr(u16)]
+pub enum SettingQuery {
+    Unitary = (ValueQuery::Setting as u16) | 1 << 8,
+    Constructor = (ValueQuery::Setting as u16) | 1 << 9,
+    Num = (ValueQuery::Setting as u16) | 1 << 10,
 }
 
 lazy_static! {
@@ -234,10 +293,11 @@ impl<'input> GrmtoolsSectionParser<'input> {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn parse(&'_ self) -> Result<(HashMap<String, (Span, Value)>, usize), Vec<HeaderError>> {
+    pub fn parse(&'_ self) -> Result<(Header, usize), Vec<HeaderError>> {
         let mut errs = Vec::new();
         if let Some(mut i) = self.lookahead_is(MAGIC, self.parse_ws(0)) {
-            let mut ret = HashMap::new();
+            let mut ret = Header::new();
+            let map = ret.contents_mut();
             i = self.parse_ws(i);
             let section_start_pos = i;
             if let Some(j) = self.lookahead_is("{", i) {
@@ -250,7 +310,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                             return Err(errs);
                         }
                     };
-                    match ret.entry(key) {
+                    match map.entry(key) {
                         Entry::Occupied(orig) => {
                             let (orig_span, _) = orig.get();
                             add_duplicate_occurrence(
@@ -299,7 +359,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             });
             Err(errs)
         } else {
-            Ok((HashMap::new(), 0))
+            Ok((Header::new(), 0))
         }
     }
 
@@ -335,6 +395,110 @@ impl<'input> GrmtoolsSectionParser<'input> {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct Header {
+    contents: HashMap<String, (Span, Value)>,
+    used: Vec<String>,
+}
+
+impl Header {
+    pub fn new() -> Self {
+        Header {
+            contents: HashMap::new(),
+            used: vec![],
+        }
+    }
+
+    pub fn contents(&self) -> &HashMap<String, (Span, Value)> {
+        &self.contents
+    }
+
+    pub fn contents_mut(&mut self) -> &mut HashMap<String, (Span, Value)> {
+        &mut self.contents
+    }
+
+    pub fn mark_key_used(self: &mut Self, key: String) {
+        let pos = self.used.binary_search(&key);
+        match pos {
+            // Already Used
+            Ok(_) => {}
+            Err(pos) => {
+                self.used.insert(pos, key);
+            }
+        }
+    }
+
+    pub fn unused(&self) -> impl Iterator<Item = (&String, &(Span, Value))> {
+        // On the happy path this is empty. It might be faster to add the map to a vec.
+        // then call `sort_by_key` from the first element to compare against the sorted
+        // `used` field in a single pass. However that is probably overkill and this is
+        // simple to implement.
+        self.contents
+            .iter()
+            .filter(|(key, _)| self.used.binary_search(key).is_ok())
+    }
+
+    pub fn query_key(
+        &self,
+        key: &str,
+        query_mask: u16,
+    ) -> Option<Result<(&String, (&Span, &Value)), HeaderContentsError>> {
+        if let Some((hash_key, (key_span, value))) = self.contents.get_key_value(key) {
+            if value.matches_query_mask(query_mask) {
+                Some(Ok((hash_key, (key_span, value))))
+            } else {
+                Some(match value {
+                    Value::Flag(_) => Err(HeaderContentsError {
+                        kind: HeaderContentsErrorKind::WrongValueVariant,
+                        spans: vec![*key_span],
+                    }),
+                    Value::Setting(Setting::Num(_, num_span)) => Err(HeaderContentsError {
+                        kind: HeaderContentsErrorKind::WrongValueVariant,
+                        spans: vec![*num_span],
+                    }),
+                    Value::Setting(Setting::Unitary(Namespaced {
+                        namespace,
+                        member: (_, member_span),
+                    })) => {
+                        let first_span = if namespace.is_some() {
+                            &namespace.as_ref().unwrap().1
+                        } else {
+                            member_span
+                        };
+                        Err(HeaderContentsError {
+                            kind: HeaderContentsErrorKind::WrongValueVariant,
+                            spans: vec![Span::new(first_span.start(), member_span.end())],
+                        })
+                    }
+                    Value::Setting(Setting::Constructor {
+                        ctor:
+                            Namespaced {
+                                namespace,
+                                member: (_, ctor_span),
+                            },
+                        arg:
+                            Namespaced {
+                                namespace: _,
+                                member: (_, arg_span),
+                            },
+                    }) => {
+                        let first_span = if namespace.is_some() {
+                            &namespace.as_ref().unwrap().1
+                        } else {
+                            ctor_span
+                        };
+                        Err(HeaderContentsError {
+                            kind: HeaderContentsErrorKind::WrongValueVariant,
+                            spans: vec![Span::new(first_span.start(), arg_span.end())],
+                        })
+                    }
+                })
+            }
+        } else {
+            None
+        }
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

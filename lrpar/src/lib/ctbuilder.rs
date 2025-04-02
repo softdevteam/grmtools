@@ -507,6 +507,7 @@ where
         let header_parser = cfgrammar::header::GrmtoolsSectionParser::new(&inc, false);
         match header_parser.parse() {
             Ok((header, _)) => {
+                let header = header.contents();
                 if self.recoverer.is_none() {
                     if let Some((key_span, recoverer)) = header.get("recoverer") {
                         use cfgrammar::header::{Namespaced, Setting, Value};
@@ -540,14 +541,26 @@ where
                                 .iter()
                                 .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
                                 if rk.is_none() {
-                                    return Err(span_fmt(*member_span, "Invalid RecoveryKind specified in %grmtools section", &inc, &line_cache).into());
+                                    return Err(span_fmt(
+                                        *member_span,
+                                        "Invalid RecoveryKind specified in %grmtools section",
+                                        &inc,
+                                        &line_cache,
+                                    )
+                                    .into());
                                 }
                                 if self.recoverer.is_none() {
                                     self.recoverer = rk;
                                 }
                             }
                             Value::Setting(Setting::Constructor { ctor: _, arg: _ }) => {
-                                return Err(span_fmt(*key_span, "Invalid RecoveryKind specified in %grmtools section.", &inc, &line_cache).into());
+                                return Err(span_fmt(
+                                    *key_span,
+                                    "Invalid RecoveryKind specified in %grmtools section.",
+                                    &inc,
+                                    &line_cache,
+                                )
+                                .into());
                             }
                         }
                     }

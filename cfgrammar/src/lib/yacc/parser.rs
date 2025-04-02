@@ -17,7 +17,7 @@ use std::{
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
 
 use crate::{
-    header::{GrmtoolsSectionParser, HeaderErrorKind, Namespaced, Setting, Value},
+    header::{GrmtoolsSectionParser, Header, HeaderErrorKind, Namespaced, Setting, Value},
     Span, Spanned,
 };
 
@@ -353,7 +353,7 @@ impl YaccParser {
         let section_required = matches!(self.yacc_kind_resolver, YaccKindResolver::NoDefault);
         let header_parser = GrmtoolsSectionParser::new(&self.src, section_required);
         let result = match header_parser.parse() {
-            Ok((header, i)) => self.update_yacckind(header, i),
+            Ok((mut header, i)) => self.update_yacckind(&mut header, i),
             Err(es) => {
                 errs.extend(es.iter().map(|e| YaccGrammarError {
                     kind: match e.kind {
@@ -427,10 +427,10 @@ impl YaccParser {
 
     fn update_yacckind(
         &mut self,
-        header: HashMap<String, (Span, Value)>,
+        header: &mut Header,
         i: usize,
     ) -> Result<usize, Vec<YaccGrammarError>> {
-        if let Some((key_span, yk_setting)) = header.get("yacckind") {
+        if let Some((key_span, yk_setting)) = header.contents().get("yacckind") {
             match yk_setting {
                 Value::Flag(_) => {
                     return Err(vec![YaccGrammarError {
