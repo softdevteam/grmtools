@@ -553,6 +553,16 @@ where
                 None => {}
             }
         }
+
+        let unused: Vec<String> = ast_validation
+            .header()
+            .unused()
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        if !unused.is_empty() {
+            return Err(format!("Unused header settings:\n {}", unused.join("\n")).into());
+        }
+
         self.recoverer = Some(self.recoverer.unwrap_or(RecoveryKind::CPCTPlus));
         self.yacckind = ast_validation.yacc_kind();
         let warnings = ast_validation.ast().warnings();
