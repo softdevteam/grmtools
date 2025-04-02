@@ -5,6 +5,7 @@ use cfgrammar::{
         ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
     },
     Span,
+    header::{SettingQuery, Value, Setting, Namespaced}
 };
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
@@ -115,11 +116,11 @@ fn main() {
     let dump_state_graph = matches.opt_present("d");
     let quiet = matches.opt_present("q");
 
-    let recoverykind = match matches.opt_str("r") {
-        None => RecoveryKind::CPCTPlus,
+    let mut recoverykind = match matches.opt_str("r") {
+        None => None,
         Some(s) => match &*s.to_lowercase() {
-            "cpctplus" => RecoveryKind::CPCTPlus,
-            "none" => RecoveryKind::None,
+            "cpctplus" => Some(RecoveryKind::CPCTPlus),
+            "none" => Some(RecoveryKind::None),
             _ => usage(prog, &format!("Unknown recoverer '{}'.", s)),
         },
     };
@@ -154,7 +155,57 @@ fn main() {
 
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
-    let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
+    let mut ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
+    if recoverykind.is_none() {
+        let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
+        let recoverer_setting = ast_validation
+            .header_mut()
+            .query("recoverer", SettingQuery::Unitary as u16);
+        match recoverer_setting {
+            Some(Ok((
+                _,
+                Value::Setting(Setting::Unitary(Namespaced {
+                    namespace,
+                    member: (member, member_span),
+                })),
+            ))) => {
+                if let Some((namespace, span)) = namespace {
+                    if namespace != "recoverykind" {
+                        formatter.underline_span_with_text(*span, "Unknown namespace, expected RecoveryKind".to_string(), '^');
+                        process::exit(1);
+                    }
+                }
+
+                let rk = [
+                    ("none", RecoveryKind::None),
+                    ("cpctplus", RecoveryKind::CPCTPlus),
+                ]
+                .iter()
+                .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
+                if rk.is_none() {
+                    formatter.underline_span_with_text(*member_span, "Invalid RecoveryKind specified in %grmtools section".to_string(), '^');
+                }
+                recoverykind = rk;
+            }
+            Some(Err(err)) => {
+                eprintln!("{}", err);
+                process::exit(1);
+            }
+            Some(_) => {}
+            None => {}
+        }
+    }
+    let recoverykind = recoverykind.unwrap_or(RecoveryKind::CPCTPlus);
+    ast_validation.header_mut().mark_key_used("recoverer");
+    let unused: Vec<String> = ast_validation
+        .header()
+        .unused()
+        .map(|(key, _)| key.clone())
+        .collect::<Vec<_>>();
+    if !unused.is_empty() {
+        // Print but don't exit?
+        eprintln!("Unused header settings: {}", unused.join(" "));
+    }
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(&ast_validation);
     let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;
