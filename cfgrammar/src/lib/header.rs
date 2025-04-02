@@ -435,7 +435,7 @@ impl Header {
         // simple to implement.
         self.contents
             .iter()
-            .filter(|(key, _)| self.used.binary_search(key).is_ok())
+            .filter(|(key, _)| self.used.binary_search(key).is_err())
     }
 
     pub fn query_key(
