@@ -122,7 +122,7 @@ pub enum Value {
 
 impl Value {
     pub fn matches_query_mask(&self, mask: u16) -> bool {
-        let q = self.query_bits() as u16;
+        let q = self.query_bits();
         (q & mask) == q
     }
     pub fn query_bits(&self) -> u16 {
@@ -160,9 +160,9 @@ pub enum ValueQuery {
 /// The last 8 bits is reserved for `SettingQuery`
 #[repr(u16)]
 pub enum SettingQuery {
-    Unitary = (ValueQuery::Setting as u16) | 1 << 8,
-    Constructor = (ValueQuery::Setting as u16) | 1 << 9,
-    Num = (ValueQuery::Setting as u16) | 1 << 10,
+    Unitary = (ValueQuery::Setting as u16) | (1 << 8),
+    Constructor = (ValueQuery::Setting as u16) | (1 << 9),
+    Num = (ValueQuery::Setting as u16) | (1 << 10),
 }
 
 lazy_static! {
@@ -431,7 +431,7 @@ impl Header {
         &mut self.contents
     }
 
-    pub fn mark_key_used(self: &mut Self, key: &str) {
+    pub fn mark_key_used(&mut self, key: &str) {
         let key = key.to_owned();
         let pos = self.used.binary_search(&key);
         match pos {
