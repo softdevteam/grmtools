@@ -17,6 +17,7 @@ use std::{
 use crate::{LexerTypes, RecoveryKind};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
+    header::{Namespaced, Setting, SettingQuery, Value},
     newlinecache::NewlineCache,
     yacc::{
         ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
@@ -504,78 +505,57 @@ where
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
         let mut line_cache = NewlineCache::new();
         line_cache.feed(&inc);
-        let header_parser = cfgrammar::header::GrmtoolsSectionParser::new(&inc, false);
-        match header_parser.parse() {
-            Ok((header, _)) => {
-                let header = header.contents();
-                if self.recoverer.is_none() {
-                    if let Some((key_span, recoverer)) = header.get("recoverer") {
-                        use cfgrammar::header::{Namespaced, Setting, Value};
-                        match recoverer {
-                            Value::Flag(_) => {
-                                return Err(span_fmt(*key_span, "Invalid RecoveryKind specified in %grmtools section, RecoveryKind is not a bool", &inc, &line_cache).into());
-                            }
-                            Value::Setting(Setting::Num(_, span)) => {
-                                return Err(span_fmt(*span, "Invalid RecoveryKind specified in %grmtools section, RecoveryKind is not a numerical value.", &inc, &line_cache).into());
-                            }
-                            Value::Setting(Setting::Unitary(Namespaced {
-                                namespace,
-                                member: (member, member_span),
-                            })) => {
-                                if let Some((namespace, span)) = namespace {
-                                    if namespace != "recoverykind" {
-                                        return Err(span_fmt(
-                                            *span,
-                                            &format!("Unknown RecoveryKind: {}", namespace),
-                                            &inc,
-                                            &line_cache,
-                                        )
-                                        .into());
-                                    }
-                                }
-
-                                let rk = [
-                                    ("none", RecoveryKind::None),
-                                    ("cpctplus", RecoveryKind::CPCTPlus),
-                                ]
-                                .iter()
-                                .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
-                                if rk.is_none() {
-                                    return Err(span_fmt(
-                                        *member_span,
-                                        "Invalid RecoveryKind specified in %grmtools section",
-                                        &inc,
-                                        &line_cache,
-                                    )
-                                    .into());
-                                }
-                                if self.recoverer.is_none() {
-                                    self.recoverer = rk;
-                                }
-                            }
-                            Value::Setting(Setting::Constructor { ctor: _, arg: _ }) => {
-                                return Err(span_fmt(
-                                    *key_span,
-                                    "Invalid RecoveryKind specified in %grmtools section.",
-                                    &inc,
-                                    &line_cache,
-                                )
-                                .into());
-                            }
+        let mut ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        if self.recoverer.is_none() {
+            let recoverer_setting = ast_validation
+                .header_mut()
+                .query("recoverer", SettingQuery::Unitary as u16);
+            match recoverer_setting {
+                Some(Ok((
+                    _,
+                    Value::Setting(Setting::Unitary(Namespaced {
+                        namespace,
+                        member: (member, member_span),
+                    })),
+                ))) => {
+                    if let Some((namespace, span)) = namespace {
+                        if namespace != "recoverykind" {
+                            return Err(span_fmt(
+                                *span,
+                                &format!("Unknown RecoveryKind: {}", namespace),
+                                &inc,
+                                &line_cache,
+                            )
+                            .into());
                         }
                     }
-                }
-            }
 
-            Err(es) => {
-                let err_strings = es.iter().map(|e| format!("{}", e)).collect::<Vec<_>>();
-                return Err(err_strings.join(" ").into());
+                    let rk = [
+                        ("none", RecoveryKind::None),
+                        ("cpctplus", RecoveryKind::CPCTPlus),
+                    ]
+                    .iter()
+                    .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
+                    if rk.is_none() {
+                        return Err(span_fmt(
+                            *member_span,
+                            "Invalid RecoveryKind specified in %grmtools section",
+                            &inc,
+                            &line_cache,
+                        )
+                        .into());
+                    }
+                    if self.recoverer.is_none() {
+                        self.recoverer = rk;
+                    }
+                }
+                Some(err) => {
+                    err?;
+                }
+                None => {}
             }
         }
-
         self.recoverer = Some(self.recoverer.unwrap_or(RecoveryKind::CPCTPlus));
-
-        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
         self.yacckind = ast_validation.yacc_kind();
         let warnings = ast_validation.ast().warnings();
         let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
