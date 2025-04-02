@@ -43,19 +43,33 @@ impl fmt::Display for HeaderErrorKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct HeaderContentsError {
     pub kind: HeaderContentsErrorKind,
     pub spans: Vec<Span>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[non_exhaustive]
 #[doc(hidden)]
 pub enum HeaderContentsErrorKind {
     WrongValueVariant,
 }
 
+impl fmt::Display for HeaderContentsErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            HeaderContentsErrorKind::WrongValueVariant => "value has an unexpected type",
+        };
+        write!(f, "{}", s)
+    }
+}
+impl Error for HeaderContentsError {}
+impl fmt::Display for HeaderContentsError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
 /// Indicates a value prefixed by an optional namespace.
 /// `Foo::Bar` with optional `Foo` specified being
 /// ```rust,ignore
@@ -111,7 +125,7 @@ impl Value {
         let q = self.query_bits() as u16;
         (q & mask) == q
     }
-    fn query_bits(&self) -> u16 {
+    pub fn query_bits(&self) -> u16 {
         match self {
             Self::Flag(_) => ValueQuery::Flag as u16,
             Self::Setting(x) => x.query_bits(),
@@ -417,7 +431,8 @@ impl Header {
         &mut self.contents
     }
 
-    pub fn mark_key_used(self: &mut Self, key: String) {
+    pub fn mark_key_used(self: &mut Self, key: &str) {
+        let key = key.to_owned();
         let pos = self.used.binary_search(&key);
         match pos {
             // Already Used
@@ -438,14 +453,22 @@ impl Header {
             .filter(|(key, _)| self.used.binary_search(key).is_err())
     }
 
-    pub fn query_key(
-        &self,
+    /// A wrapper around `HashMap::get`, which checks the `query_mask`
+    /// against the `value.query_bits()`
+    ///
+    /// Regardless of whether this query mask check succeeds or fails,
+    /// if the `contents` contains the key, will mark the key as being used.
+    pub fn query(
+        &mut self,
         key: &str,
         query_mask: u16,
-    ) -> Option<Result<(&String, (&Span, &Value)), HeaderContentsError>> {
-        if let Some((hash_key, (key_span, value))) = self.contents.get_key_value(key) {
+    ) -> Option<Result<(&Span, &Value), HeaderContentsError>> {
+        if self.contents.contains_key(key) {
+            self.mark_key_used(key);
+        }
+        if let Some((key_span, value)) = self.contents.get(key) {
             if value.matches_query_mask(query_mask) {
-                Some(Ok((hash_key, (key_span, value))))
+                Some(Ok((key_span, value)))
             } else {
                 Some(match value {
                     Value::Flag(_) => Err(HeaderContentsError {

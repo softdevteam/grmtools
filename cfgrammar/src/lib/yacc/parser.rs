@@ -17,7 +17,10 @@ use std::{
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
 
 use crate::{
-    header::{GrmtoolsSectionParser, Header, HeaderErrorKind, Namespaced, Setting, Value},
+    header::{
+        GrmtoolsSectionParser, Header, HeaderContentsError, HeaderContentsErrorKind,
+        HeaderErrorKind, Namespaced, Setting, SettingQuery, Value,
+    },
     Span, Spanned,
 };
 
@@ -70,6 +73,7 @@ pub enum YaccGrammarErrorKind {
     InvalidGrmtoolsSectionEntry,
     DuplicateGrmtoolsSectionEntry,
     MissingGrmtoolsSection,
+    HeaderContents(HeaderContentsErrorKind),
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -82,6 +86,15 @@ pub struct YaccGrammarError {
     /// Refer to [SpansKind] via [spanskind](Self::spanskind)
     /// For meaning and interpretation of spans and their ordering.
     pub(crate) spans: Vec<Span>,
+}
+
+impl From<HeaderContentsError> for YaccGrammarError {
+    fn from(it: HeaderContentsError) -> YaccGrammarError {
+        YaccGrammarError {
+            kind: YaccGrammarErrorKind::HeaderContents(it.kind),
+            spans: it.spans,
+        }
+    }
 }
 
 impl Error for YaccGrammarError {}
@@ -167,6 +180,9 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::InvalidYaccKindNamespace => "Invalid yacc kind namespace",
             YaccGrammarErrorKind::InvalidActionKind => "Invalid action kind",
             YaccGrammarErrorKind::InvalidActionKindNamespace => "Invalid action kind namespace",
+            YaccGrammarErrorKind::HeaderContents(k) => {
+                &format!("Error in '%grmtools' section: {}", k)
+            }
         };
         write!(f, "{}", s)
     }
@@ -282,6 +298,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::InvalidActionKind
             | YaccGrammarErrorKind::InvalidActionKindNamespace
             | YaccGrammarErrorKind::ExpectedInput(_)
+            | YaccGrammarErrorKind::HeaderContents(_)
             | YaccGrammarErrorKind::UnknownEPP(_) => SpansKind::Error,
             YaccGrammarErrorKind::DuplicatePrecedence
             | YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration
@@ -355,7 +372,11 @@ impl YaccParser {
         let section_required = matches!(self.yacc_kind_resolver, YaccKindResolver::NoDefault);
         let header_parser = GrmtoolsSectionParser::new(&self.src, section_required);
         let result = match header_parser.parse() {
-            Ok((mut header, i)) => self.update_yacckind(&mut header, i),
+            Ok((mut header, i)) => {
+                let result = self.update_yacckind(&mut header, i);
+                self.header = header;
+                result
+            }
             Err(es) => {
                 errs.extend(es.iter().map(|e| YaccGrammarError {
                     kind: match e.kind {
@@ -432,26 +453,20 @@ impl YaccParser {
         header: &mut Header,
         i: usize,
     ) -> Result<usize, Vec<YaccGrammarError>> {
-        if let Some((key_span, yk_setting)) = header.contents().get("yacckind") {
-            match yk_setting {
-                Value::Flag(_) => {
-                    return Err(vec![YaccGrammarError {
-                        kind: YaccGrammarErrorKind::InvalidYaccKind,
-                        spans: vec![*key_span],
-                    }])
-                }
-
-                Value::Setting(Setting::Num(_, span)) => {
-                    return Err(vec![YaccGrammarError {
-                        kind: YaccGrammarErrorKind::InvalidYaccKind,
-                        spans: vec![*span],
-                    }])
-                }
-                Value::Setting(Setting::Unitary(Namespaced {
-                    namespace,
-                    member: (yk_value, yk_value_span),
-                })) => {
-                    let mut errs = vec![];
+        let mut errs = vec![];
+        if let Some(value) = header.query(
+            "yacckind",
+            SettingQuery::Unitary as u16 | SettingQuery::Constructor as u16,
+        ) {
+            match value {
+                Err(e) => errs.push(e.into()),
+                Ok((
+                    _,
+                    Value::Setting(Setting::Unitary(Namespaced {
+                        namespace,
+                        member: (yk_value, yk_value_span),
+                    })),
+                )) => {
                     if let Some((ns, ns_span)) = namespace {
                         if ns != "yacckind" {
                             errs.push(YaccGrammarError {
@@ -482,18 +497,22 @@ impl YaccParser {
                         return Err(errs);
                     }
                 }
-                Value::Setting(Setting::Constructor {
-                    ctor:
-                        Namespaced {
-                            namespace: yk_namespace,
-                            member: (yk_str, yk_span),
-                        },
-                    arg:
-                        Namespaced {
-                            namespace: ak_namespace,
-                            member: (ak_str, ak_span),
-                        },
-                }) => {
+
+                Ok((
+                    _,
+                    Value::Setting(Setting::Constructor {
+                        ctor:
+                            Namespaced {
+                                namespace: yk_namespace,
+                                member: (yk_str, yk_span),
+                            },
+                        arg:
+                            Namespaced {
+                                namespace: ak_namespace,
+                                member: (ak_str, ak_span),
+                            },
+                    }),
+                )) => {
                     let mut errs = vec![];
 
                     if let Some((yk_ns, yk_ns_span)) = yk_namespace {
@@ -543,6 +562,9 @@ impl YaccParser {
                         });
                         return Err(errs);
                     }
+                }
+                Ok(_) => {
+                    unreachable!();
                 }
             }
         }
