@@ -545,9 +545,7 @@ where
                         )
                         .into());
                     }
-                    if self.recoverer.is_none() {
-                        self.recoverer = rk;
-                    }
+                    self.recoverer = rk;
                 }
                 Some(err) => {
                     err?;
