@@ -3,5 +3,5 @@
 .                       "TEXT"
 <COMMENT,INITIAL>/\*    <+COMMENT>;
 <COMMENT>.              ;
-<COMMENT>\n             ;
+<INITIAL,COMMENT>\n             ;
 <COMMENT>\*/            <-COMMENT>;
