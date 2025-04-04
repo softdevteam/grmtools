@@ -554,11 +554,7 @@ where
             }
         }
 
-        let unused: Vec<String> = ast_validation
-            .header()
-            .unused()
-            .map(|(key, _)| key.clone())
-            .collect::<Vec<_>>();
+        let unused: Vec<String> = ast_validation.header().contents().unused();
         if !unused.is_empty() {
             return Err(format!("Unused header settings:\n {}", unused.join("\n")).into());
         }

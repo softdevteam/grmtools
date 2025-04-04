@@ -59,10 +59,10 @@ use serde::{Deserialize, Serialize};
 #[doc(hidden)]
 pub mod header;
 mod idxnewtype;
+pub mod markmap;
 pub mod newlinecache;
 pub mod span;
 pub mod yacc;
-
 pub use newlinecache::NewlineCache;
 pub use span::{Span, Spanned};
 

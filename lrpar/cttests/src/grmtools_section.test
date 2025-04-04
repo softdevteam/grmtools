@@ -112,7 +112,6 @@ grammar: |
     #![allow(dead_code)]
     #![allow(unused)]
 
-    use std::collections::{hash_map::Entry, HashMap};
     use cfgrammar::{
         Span,
         header::{
@@ -122,7 +121,8 @@ grammar: |
             HeaderErrorKind,
             Namespaced,
             Header
-        }
+        },
+        markmap::{Entry, MarkMap},
     };
 
 lexer: |

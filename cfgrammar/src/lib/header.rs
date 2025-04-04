@@ -1,11 +1,10 @@
-use crate::Span;
+use crate::{
+    markmap::{Entry, MarkMap},
+    Span,
+};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    error::Error,
-    fmt,
-};
+use std::{error::Error, fmt};
 
 #[derive(Debug)]
 pub struct HeaderError {
@@ -411,46 +410,22 @@ impl<'input> GrmtoolsSectionParser<'input> {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Header {
-    contents: HashMap<String, (Span, Value)>,
-    used: Vec<String>,
+    contents: crate::markmap::MarkMap<String, (Span, Value)>,
 }
 
 impl Header {
     pub fn new() -> Self {
         Header {
-            contents: HashMap::new(),
-            used: vec![],
+            contents: MarkMap::new(),
         }
     }
 
-    pub fn contents(&self) -> &HashMap<String, (Span, Value)> {
+    pub fn contents(&self) -> &MarkMap<String, (Span, Value)> {
         &self.contents
     }
 
-    pub fn contents_mut(&mut self) -> &mut HashMap<String, (Span, Value)> {
+    pub fn contents_mut(&mut self) -> &mut MarkMap<String, (Span, Value)> {
         &mut self.contents
-    }
-
-    pub fn mark_key_used(&mut self, key: &str) {
-        let key = key.to_owned();
-        let pos = self.used.binary_search(&key);
-        match pos {
-            // Already Used
-            Ok(_) => {}
-            Err(pos) => {
-                self.used.insert(pos, key);
-            }
-        }
-    }
-
-    pub fn unused(&self) -> impl Iterator<Item = (&String, &(Span, Value))> {
-        // On the happy path this is empty. It might be faster to add the map to a vec.
-        // then call `sort_by_key` from the first element to compare against the sorted
-        // `used` field in a single pass. However that is probably overkill and this is
-        // simple to implement.
-        self.contents
-            .iter()
-            .filter(|(key, _)| self.used.binary_search(key).is_err())
     }
 
     /// A wrapper around `HashMap::get`, which checks the `query_mask`
@@ -464,7 +439,7 @@ impl Header {
         query_mask: u16,
     ) -> Option<Result<(&Span, &Value), HeaderContentsError>> {
         if self.contents.contains_key(key) {
-            self.mark_key_used(key);
+            self.contents_mut().mark_used(&key.to_owned());
         }
         if let Some((key_span, value)) = self.contents.get(key) {
             if value.matches_query_mask(query_mask) {

@@ -1,11 +1,11 @@
 mod diagnostics;
 use crate::diagnostics::*;
 use cfgrammar::{
+    header::{Namespaced, Setting, SettingQuery, Value},
     yacc::{
         ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
     },
     Span,
-    header::{SettingQuery, Value, Setting, Namespaced}
 };
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
@@ -171,7 +171,11 @@ fn main() {
             ))) => {
                 if let Some((namespace, span)) = namespace {
                     if namespace != "recoverykind" {
-                        formatter.underline_span_with_text(*span, "Unknown namespace, expected RecoveryKind".to_string(), '^');
+                        formatter.underline_span_with_text(
+                            *span,
+                            "Unknown namespace, expected RecoveryKind".to_string(),
+                            '^',
+                        );
                         process::exit(1);
                     }
                 }
@@ -183,7 +187,11 @@ fn main() {
                 .iter()
                 .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
                 if rk.is_none() {
-                    formatter.underline_span_with_text(*member_span, "Invalid RecoveryKind specified in %grmtools section".to_string(), '^');
+                    formatter.underline_span_with_text(
+                        *member_span,
+                        "Invalid RecoveryKind specified in %grmtools section".to_string(),
+                        '^',
+                    );
                 }
                 recoverykind = rk;
             }
@@ -196,12 +204,11 @@ fn main() {
         }
     }
     let recoverykind = recoverykind.unwrap_or(RecoveryKind::CPCTPlus);
-    ast_validation.header_mut().mark_key_used("recoverer");
-    let unused: Vec<String> = ast_validation
-        .header()
-        .unused()
-        .map(|(key, _)| key.clone())
-        .collect::<Vec<_>>();
+    ast_validation
+        .header_mut()
+        .contents_mut()
+        .mark_used(&"recoverer".to_string());
+    let unused: Vec<String> = ast_validation.header().contents().unused();
     if !unused.is_empty() {
         // Print but don't exit?
         eprintln!("Unused header settings: {}", unused.join(" "));
