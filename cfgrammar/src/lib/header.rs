@@ -4,7 +4,6 @@ use crate::{
     Span,
 };
 use lazy_static::lazy_static;
-use quote::{quote, ToTokens};
 use regex::{Regex, RegexBuilder};
 use std::{error::Error, fmt};
 
@@ -93,20 +92,6 @@ pub struct Namespaced {
     pub member: (String, Span),
 }
 
-impl ToTokens for Namespaced {
-    fn to_tokens(&self, toks: &mut proc_macro2::TokenStream) {
-        let namespace = self.namespace.as_ref().map(|(str, _)| str);
-        let member = &self.member.0;
-        toks.extend(if namespace.is_some() {
-            quote! {
-                #namespace::#member
-            }
-        } else {
-            quote!(#member)
-        })
-    }
-}
-
 #[derive(Debug, Eq, PartialEq)]
 #[doc(hidden)]
 pub enum Setting {
@@ -122,16 +107,6 @@ pub enum Setting {
     Num(u64, Span),
 }
 
-impl ToTokens for Setting {
-    fn to_tokens(&self, toks: &mut proc_macro2::TokenStream) {
-        toks.extend(match self {
-            Self::Unitary(namespaced) => quote!(#namespaced),
-            Self::Constructor { ctor, arg } => quote!(#ctor(#arg)),
-            Self::Num(num, _) => quote!(#num),
-        })
-    }
-}
-
 /// Parser for the `%grmtools` section
 #[doc(hidden)]
 pub struct GrmtoolsSectionParser<'input> {
@@ -143,15 +118,6 @@ pub struct GrmtoolsSectionParser<'input> {
 pub enum Value {
     Flag(bool),
     Setting(Setting),
-}
-
-impl ToTokens for Value {
-    fn to_tokens(&self, toks: &mut proc_macro2::TokenStream) {
-        match self {
-            Value::Flag(flag) => toks.extend(quote!(#flag)),
-            Value::Setting(setting) => toks.extend(quote!(#setting)),
-        }
-    }
 }
 
 impl Value {

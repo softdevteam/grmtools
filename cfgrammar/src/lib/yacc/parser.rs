@@ -374,7 +374,6 @@ impl YaccParser {
                 self.update_yacckind(i)
             }
             Err(es) => {
-
                 errs.extend(es.iter().map(|e| YaccGrammarError {
                     kind: match e.kind {
                         HeaderErrorKind::MissingGrmtoolsSection => {
