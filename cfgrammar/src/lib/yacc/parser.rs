@@ -26,7 +26,7 @@ use crate::{
 
 use super::{
     ast::{GrammarAST, Symbol},
-    AssocKind, Precedence, YaccKind, YaccKindResolver, YaccOriginalActionKind,
+    AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
 };
 
 /// The various different possible Yacc parser errors.
@@ -314,7 +314,6 @@ impl Spanned for YaccGrammarError {
 }
 
 pub(crate) struct YaccParser {
-    yacc_kind_resolver: YaccKindResolver,
     yacc_kind: Option<YaccKind>,
     header: Header,
     src: String,
@@ -352,11 +351,10 @@ fn add_duplicate_occurrence(
 
 /// The actual parser is intended to be entirely opaque from outside users.
 impl YaccParser {
-    pub(crate) fn new(yacc_kind_resolver: YaccKindResolver, src: String) -> YaccParser {
+    pub(crate) fn new(header: Header, src: String) -> YaccParser {
         YaccParser {
-            yacc_kind_resolver,
             yacc_kind: None,
-            header: Header::new(),
+            header,
             src,
             num_newlines: 0,
             ast: GrammarAST::new(),
@@ -369,15 +367,14 @@ impl YaccParser {
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let section_required = matches!(self.yacc_kind_resolver, YaccKindResolver::NoDefault);
-        let header_parser = GrmtoolsSectionParser::new(&self.src, section_required);
+        let header_parser = GrmtoolsSectionParser::new(&self.src, false);
         let result = match header_parser.parse() {
-            Ok((mut header, i)) => {
-                let result = self.update_yacckind(&mut header, i);
-                self.header = header;
-                result
+            Ok((parsed_header, i)) => {
+                self.header.merge_from(parsed_header).unwrap();
+                self.update_yacckind(i)
             }
             Err(es) => {
+
                 errs.extend(es.iter().map(|e| YaccGrammarError {
                     kind: match e.kind {
                         HeaderErrorKind::MissingGrmtoolsSection => {
@@ -396,19 +393,12 @@ impl YaccParser {
                 return Err(errs);
             }
         };
-        if result.is_ok() && (self.yacc_kind.is_none() || self.yacc_kind_resolver.forced()) {
-            match self.yacc_kind_resolver {
-                YaccKindResolver::Default(kind) | YaccKindResolver::Force(kind) => {
-                    self.yacc_kind = Some(kind);
-                }
-                YaccKindResolver::NoDefault => {
-                    errs.push(YaccGrammarError {
-                        kind: YaccGrammarErrorKind::InvalidYaccKind,
-                        spans: vec![Span::new(0, 0)],
-                    });
-                    return Err(errs);
-                }
-            }
+        if result.is_ok() && self.yacc_kind.is_none() {
+            errs.push(YaccGrammarError {
+                kind: YaccGrammarErrorKind::InvalidYaccKind,
+                spans: vec![Span::new(0, 0)],
+            });
+            return Err(errs);
         }
         let mut result = self.parse_declarations(
             match result {
@@ -448,13 +438,9 @@ impl YaccParser {
         }
     }
 
-    fn update_yacckind(
-        &mut self,
-        header: &mut Header,
-        i: usize,
-    ) -> Result<usize, Vec<YaccGrammarError>> {
+    fn update_yacckind(&mut self, i: usize) -> Result<usize, Vec<YaccGrammarError>> {
         let mut errs = vec![];
-        if let Some(value) = header.query(
+        if let Some(value) = self.header.query(
             "yacckind",
             SettingQuery::Unitary as u16 | SettingQuery::Constructor as u16,
         ) {
@@ -1255,15 +1241,25 @@ impl YaccParser {
 mod test {
     use super::{
         super::{
+            super::header::Header,
             ast::{GrammarAST, Production, Symbol},
-            AssocKind, Precedence, YaccKind, YaccKindResolver, YaccOriginalActionKind,
+            AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
         Span, Spanned, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
     use std::collections::HashSet;
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
-        let mut yp = YaccParser::new(YaccKindResolver::Force(yacc_kind), s.to_string());
+        let mut header = crate::header::Header::new();
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().set_merge_behavior(
+            &"yacckind".to_string(),
+            crate::markmap::MergeBehavior::MutuallyExclusive,
+        );
+        header
+            .contents_mut()
+            .insert("yacckind".to_string(), (Span::new(0, 0), yacc_kind.into()));
+        let mut yp = YaccParser::new(header, s.to_string());
         yp.parse()?;
         Ok(yp.build().2)
     }
@@ -2936,9 +2932,9 @@ B";
              Start -> () : ;",
         ];
         for src in srcs {
-            YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
-                .parse()
-                .unwrap();
+            let mut header = Header::new();
+            header.contents_mut().mark_required(&"yacckind".to_string());
+            YaccParser::new(header, src.to_string()).parse().unwrap();
         }
     }
 
@@ -2963,7 +2959,7 @@ B";
 
         for src in srcs {
             let s = format!("{}\n%%\nStart();\n", src);
-            let parse_result = YaccParser::new(YaccKindResolver::NoDefault, s.to_string()).parse();
+            let parse_result = YaccParser::new(Header::new(), s.to_string()).parse();
             assert!(parse_result.is_err());
         }
     }
@@ -2982,7 +2978,7 @@ B";
             %%
             Start -> () : ;
         "#;
-        YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
+        YaccParser::new(Header::new(), src.to_string())
             .parse()
             .unwrap();
         let src = r#"
@@ -2992,7 +2988,7 @@ B";
             %%
             Start -> () : ;
         "#;
-        YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
+        YaccParser::new(Header::new(), src.to_string())
             .parse()
             .unwrap();
     }

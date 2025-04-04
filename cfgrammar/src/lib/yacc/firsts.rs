@@ -143,7 +143,10 @@ where
 #[cfg(test)]
 mod test {
     use super::{
-        super::{YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind},
+        super::{
+            super::{header::Header, markmap::MergeBehavior, Span},
+            YaccGrammar, YaccKind, YaccOriginalActionKind,
+        },
         YaccFirsts,
     };
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -179,8 +182,20 @@ mod test {
 
     #[test]
     fn test_first() {
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert(
+            "yacckind".into(),
+            (
+                Span::new(0, 0),
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
+            ),
+        );
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            header,
             "
           %start C
           %token c d
@@ -201,8 +216,20 @@ mod test {
 
     #[test]
     fn test_first_no_subsequent_rules() {
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert(
+            "yacckind".into(),
+            (
+                Span::new(0, 0),
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
+            ),
+        );
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            header,
             "
           %start C
           %token c d
@@ -219,8 +246,20 @@ mod test {
 
     #[test]
     fn test_first_epsilon() {
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert(
+            "yacckind".into(),
+            (
+                Span::new(0, 0),
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
+            ),
+        );
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            header,
             "
           %start A
           %token a b c
@@ -240,8 +279,20 @@ mod test {
 
     #[test]
     fn test_last_epsilon() {
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert(
+            "yacckind".into(),
+            (
+                Span::new(0, 0),
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
+            ),
+        );
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            header,
             "
           %start A
           %token b c
@@ -260,8 +311,20 @@ mod test {
 
     #[test]
     fn test_first_no_multiples() {
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert(
+            "yacckind".into(),
+            (
+                Span::new(0, 0),
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
+            ),
+        );
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            header,
             "
           %start A
           %token b c
@@ -276,8 +339,20 @@ mod test {
     }
 
     fn eco_grammar() -> YaccGrammar {
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert(
+            "yacckind".into(),
+            (
+                Span::new(0, 0),
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
+            ),
+        );
         YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            header,
             "
           %start S
           %token a b c d f
@@ -307,8 +382,20 @@ mod test {
 
     #[test]
     fn test_first_from_eco_bug() {
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert(
+            "yacckind".into(),
+            (
+                Span::new(0, 0),
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
+            ),
+        );
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            header,
             "
           %start E
           %token a b c d e f

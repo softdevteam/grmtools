@@ -17,11 +17,10 @@ use std::{
 use crate::{LexerTypes, RecoveryKind};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
-    header::{Namespaced, Setting, SettingQuery, Value},
+    header::{Header, Namespaced, Setting, SettingQuery, Value},
+    markmap::MergeBehavior,
     newlinecache::NewlineCache,
-    yacc::{
-        ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
-    },
+    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -478,11 +477,33 @@ where
             .output_path
             .as_ref()
             .expect("output_path must be specified before processing.");
-        let yk = match self.yacckind {
-            None => YaccKindResolver::NoDefault,
+        let mut builder_header = Header::new();
+        builder_header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::MutuallyExclusive);
+        builder_header
+            .contents_mut()
+            .mark_required(&"yacckind".to_string());
+        match self.yacckind {
+            None => {}
             Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
-            Some(x) => YaccKindResolver::Force(x),
-        };
+            Some(yk) => {
+                builder_header.contents_mut().insert(
+                    "yacckind".to_string(),
+                    (cfgrammar::Span::new(0, 0), yk.into()),
+                );
+            }
+        }
+
+        builder_header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::MutuallyExclusive);
+        if let Some(recoverer) = self.recoverer {
+            builder_header.contents_mut().insert(
+                "recoverer".to_string(),
+                (cfgrammar::Span::new(0, 0), recoverer.into()),
+            );
+        }
 
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
@@ -505,7 +526,7 @@ where
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
         let mut line_cache = NewlineCache::new();
         line_cache.feed(&inc);
-        let mut ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        let mut ast_validation = ASTWithValidityInfo::new(builder_header, &inc);
         if self.recoverer.is_none() {
             let recoverer_setting = ast_validation
                 .header_mut()
@@ -555,8 +576,11 @@ where
         }
 
         let unused: Vec<String> = ast_validation.header().contents().unused();
+        assert!(unused.is_empty());
         if !unused.is_empty() {
-            return Err(format!("Unused header settings:\n {}", unused.join("\n")).into());
+            return Err(
+                ErrorString(format!("Unused header settings: {}", unused.join(", "))).into(),
+            );
         }
 
         self.recoverer = Some(self.recoverer.unwrap_or(RecoveryKind::CPCTPlus));

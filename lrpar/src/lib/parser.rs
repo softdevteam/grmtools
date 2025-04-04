@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use web_time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{yacc::YaccGrammar, RIdx, Span, TIdx};
+use cfgrammar::{header, yacc::YaccGrammar, RIdx, Span, TIdx};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
@@ -638,6 +638,22 @@ impl quote::ToTokens for RecoveryKind {
     }
 }
 
+impl From<RecoveryKind> for header::Value {
+    fn from(val: RecoveryKind) -> Self {
+        use header::{Namespaced, Setting};
+        header::Value::Setting(Setting::Unitary(Namespaced {
+            namespace: Some(("recoverykind".to_string(), Span::new(0, 0))),
+            member: (
+                match val {
+                    RecoveryKind::CPCTPlus => "ctcplus".to_string(),
+                    RecoveryKind::None => "none".to_string(),
+                },
+                Span::new(0, 0),
+            ),
+        }))
+    }
+}
+
 /// A lexing or parsing error. Although the two are quite distinct in terms of what can be reported
 /// to users, both can (at least conceptually) occur at any point of the intertwined lexing/parsing
 /// process.
@@ -971,7 +987,9 @@ pub(crate) mod test {
     use std::collections::HashMap;
 
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind},
+        header::Header,
+        markmap::MergeBehavior,
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Span,
     };
     use lrtable::{from_yacc, Minimiser};
@@ -1020,11 +1038,19 @@ pub(crate) mod test {
             ),
         >,
     ) {
-        let grm = YaccGrammar::<u16>::new_with_storaget(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
-            grms,
-        )
-        .unwrap();
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert(
+            "yacckind".into(),
+            (
+                Span::new(0, 0),
+                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
+            ),
+        );
+        let grm = YaccGrammar::<u16>::new_with_storaget(header, grms).unwrap();
         let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let rule_ids = grm
             .tokens_map()

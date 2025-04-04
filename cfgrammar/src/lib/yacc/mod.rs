@@ -16,23 +16,6 @@ use quote::quote;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum YaccKindResolver {
-    /// The user can specify `%grmtools` in their grammar but unless it is compatible with this `YaccKind`, it's an error
-    Force(YaccKind),
-    /// Use `YaccKind` if the user doesn't specify `%grmtools` in their grammar
-    Default(YaccKind),
-    /// The user must specify `%grmtools` in their grammars or we throw an error
-    NoDefault,
-}
-
-impl YaccKindResolver {
-    fn forced(self) -> bool {
-        matches!(self, Self::Force(_))
-    }
-}
-
 /// The particular Yacc variant this grammar makes use of.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

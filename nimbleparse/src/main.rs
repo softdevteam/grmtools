@@ -1,10 +1,10 @@
 mod diagnostics;
 use crate::diagnostics::*;
 use cfgrammar::{
+    header::Header,
     header::{Namespaced, Setting, SettingQuery, Value},
-    yacc::{
-        ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
-    },
+    markmap::MergeBehavior,
+    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     Span,
 };
 use getopts::Options;
@@ -125,15 +125,12 @@ fn main() {
         },
     };
 
-    let yacckind = match matches.opt_str("y") {
-        None => YaccKindResolver::NoDefault,
-        Some(s) => YaccKindResolver::Force(match &*s.to_lowercase() {
-            "eco" => YaccKind::Eco,
-            "grmtools" => YaccKind::Grmtools,
-            "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s)),
-        }),
-    };
+    let yacckind = matches.opt_str("y").map(|s| match &*s.to_lowercase() {
+        "eco" => YaccKind::Eco,
+        "grmtools" => YaccKind::Grmtools,
+        "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+        _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s)),
+    });
 
     if matches.free.len() != 3 {
         usage(prog, "Too few arguments given.");
@@ -155,7 +152,17 @@ fn main() {
 
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
-    let mut ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
+    let mut header = Header::new();
+    header
+        .contents_mut()
+        .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+    header.contents_mut().mark_required(&"yacckind".to_string());
+    yacckind.map(|yacckind| {
+        header
+            .contents_mut()
+            .insert("yacckind".into(), (Span::new(0, 0), yacckind.into()))
+    });
+    let mut ast_validation = ASTWithValidityInfo::new(header, &yacc_src);
     if recoverykind.is_none() {
         let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
         let recoverer_setting = ast_validation

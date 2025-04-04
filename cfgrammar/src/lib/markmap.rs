@@ -1,3 +1,4 @@
+use quote::{quote, ToTokens};
 use std::borrow::Borrow;
 
 #[repr(u8)]
@@ -28,6 +29,7 @@ pub enum MergeBehavior {
     MutuallyExclusive = 1 << 2,
 }
 
+#[derive(Debug)]
 pub enum MergeError {
     // Both theirs and ours were some.
     Exclusivity,
@@ -142,6 +144,17 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
                 self.contents
                     .insert(pos, (key.to_owned(), Some(Mark::Required.repr()), None));
             }
+        }
+    }
+
+    pub fn is_required(&self, key: &K) -> bool {
+        let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
+        match pos {
+            Ok(pos) => self.contents[pos]
+                .1
+                .map(|x| x & Mark::Required.repr() != 0)
+                .unwrap_or(false),
+            _ => false,
         }
     }
 
@@ -295,6 +308,61 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
             }
         }
         ret
+    }
+}
+
+impl<K, V> ToTokens for MarkMap<K, V>
+where
+    K: ToTokens,
+    V: ToTokens,
+{
+    fn to_tokens(&self, toks: &mut proc_macro2::TokenStream) {
+        for (x, y) in self {
+            toks.extend(quote! { (#x, #y) });
+        }
+    }
+}
+
+pub struct MarkMapIter<K, V> {
+    map: MarkMap<K, V>,
+}
+
+impl<K, V> Iterator for MarkMapIter<K, V> {
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.map.contents.is_empty() {
+            let (k, _, v) = self.map.contents.swap_remove(0);
+            v.map(|v| (k, v))
+        } else {
+            None
+        }
+    }
+}
+
+pub struct MarkMapIterRef<'a, K, V> {
+    pos: usize,
+    map: &'a MarkMap<K, V>,
+}
+
+impl<'a, K, V> Iterator for MarkMapIterRef<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((k, _, v)) = self.map.contents.get(self.pos) {
+            self.pos += 1;
+            v.as_ref().map(|v| (k, v))
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a MarkMap<K, V> {
+    type Item = (&'a K, &'a V);
+    type IntoIter = MarkMapIterRef<'a, K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        MarkMapIterRef { pos: 0, map: self }
     }
 }
 

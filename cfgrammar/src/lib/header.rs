@@ -1,8 +1,10 @@
 use crate::{
     markmap::{Entry, MarkMap},
+    yacc::{YaccKind, YaccOriginalActionKind},
     Span,
 };
 use lazy_static::lazy_static;
+use quote::{quote, ToTokens};
 use regex::{Regex, RegexBuilder};
 use std::{error::Error, fmt};
 
@@ -91,6 +93,20 @@ pub struct Namespaced {
     pub member: (String, Span),
 }
 
+impl ToTokens for Namespaced {
+    fn to_tokens(&self, toks: &mut proc_macro2::TokenStream) {
+        let namespace = self.namespace.as_ref().map(|(str, _)| str);
+        let member = &self.member.0;
+        toks.extend(if namespace.is_some() {
+            quote! {
+                #namespace::#member
+            }
+        } else {
+            quote!(#member)
+        })
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 #[doc(hidden)]
 pub enum Setting {
@@ -106,6 +122,16 @@ pub enum Setting {
     Num(u64, Span),
 }
 
+impl ToTokens for Setting {
+    fn to_tokens(&self, toks: &mut proc_macro2::TokenStream) {
+        toks.extend(match self {
+            Self::Unitary(namespaced) => quote!(#namespaced),
+            Self::Constructor { ctor, arg } => quote!(#ctor(#arg)),
+            Self::Num(num, _) => quote!(#num),
+        })
+    }
+}
+
 /// Parser for the `%grmtools` section
 #[doc(hidden)]
 pub struct GrmtoolsSectionParser<'input> {
@@ -117,6 +143,15 @@ pub struct GrmtoolsSectionParser<'input> {
 pub enum Value {
     Flag(bool),
     Setting(Setting),
+}
+
+impl ToTokens for Value {
+    fn to_tokens(&self, toks: &mut proc_macro2::TokenStream) {
+        match self {
+            Value::Flag(flag) => toks.extend(quote!(#flag)),
+            Value::Setting(setting) => toks.extend(quote!(#setting)),
+        }
+    }
 }
 
 impl Value {
@@ -144,6 +179,41 @@ impl Setting {
             Self::Constructor { ctor: _, arg: _ } => SettingQuery::Constructor,
         };
         q as u16
+    }
+}
+
+impl From<YaccKind> for Value {
+    fn from(kind: YaccKind) -> Value {
+        match kind {
+            YaccKind::Grmtools => Value::Setting(Setting::Unitary(Namespaced {
+                namespace: Some(("yacckind".to_string(), Span::new(0, 0))),
+                member: ("grmtools".to_string(), Span::new(0, 0)),
+            })),
+            YaccKind::Eco => Value::Setting(Setting::Unitary(Namespaced {
+                namespace: Some(("yacckind".to_string(), Span::new(0, 0))),
+                member: ("eco".to_string(), Span::new(0, 0)),
+            })),
+            YaccKind::Original(action_kind) => Value::Setting(Setting::Constructor {
+                ctor: Namespaced {
+                    namespace: Some(("yacckind".to_string(), Span::new(0, 0))),
+                    member: ("original".to_string(), Span::new(0, 0)),
+                },
+                arg: match action_kind {
+                    YaccOriginalActionKind::NoAction => Namespaced {
+                        namespace: Some(("yaccoriginalactionkind".to_string(), Span::new(0, 0))),
+                        member: ("noaction".to_string(), Span::new(0, 0)),
+                    },
+                    YaccOriginalActionKind::UserAction => Namespaced {
+                        namespace: Some(("yaccoriginalactionkind".to_string(), Span::new(0, 0))),
+                        member: ("useraction".to_string(), Span::new(0, 0)),
+                    },
+                    YaccOriginalActionKind::GenericParseTree => Namespaced {
+                        namespace: Some(("yaccoriginalactionkind".to_string(), Span::new(0, 0))),
+                        member: ("genericparsetree".to_string(), Span::new(0, 0)),
+                    },
+                },
+            }),
+        }
     }
 }
 
@@ -420,6 +490,10 @@ impl Header {
         }
     }
 
+    pub fn merge_from(&mut self, other: Self) -> Result<(), crate::markmap::MergeError> {
+        self.contents.merge_from(other.contents)
+    }
+
     pub fn contents(&self) -> &MarkMap<String, (Span, Value)> {
         &self.contents
     }
@@ -438,9 +512,7 @@ impl Header {
         key: &str,
         query_mask: u16,
     ) -> Option<Result<(&Span, &Value), HeaderContentsError>> {
-        if self.contents.contains_key(key) {
-            self.contents_mut().mark_used(&key.to_owned());
-        }
+        self.contents_mut().mark_used(&key.to_owned());
         if let Some((key_span, value)) = self.contents.get(key) {
             if value.matches_query_mask(query_mask) {
                 Some(Ok((key_span, value)))

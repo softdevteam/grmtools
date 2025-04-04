@@ -250,16 +250,22 @@ pub(crate) fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
 mod test {
     use crate::{pager::pager_stategraph, StIdx};
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind},
-        Symbol,
+        header::Header,
+        markmap::MergeBehavior,
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
+        Span, Symbol,
     };
 
     #[test]
     #[rustfmt::skip]
     fn test_statetable_core() {
         // Taken from p13 of https://link.springer.com/article/10.1007/s00236-010-0115-6
+        let mut header = Header::new();
+        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            header,
             "
             %start A
             %%
