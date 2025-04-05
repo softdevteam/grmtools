@@ -15,6 +15,15 @@ pub struct Span {
     end: usize,
 }
 
+/// A possibly inexact location which could either be a `Span`,
+/// a command-line option, or some other location described textually.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Location {
+    Span(Span),
+    CommandLine,
+    Other(String),
+}
+
 impl Span {
     /// Create a new span starting at byte `start` and ending at byte `end`.
     ///

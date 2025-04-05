@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use web_time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{header, yacc::YaccGrammar, RIdx, Span, TIdx};
+use cfgrammar::{header, span::Location, yacc::YaccGrammar, RIdx, Span, TIdx};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
@@ -642,13 +642,16 @@ impl From<RecoveryKind> for header::Value {
     fn from(val: RecoveryKind) -> Self {
         use header::{Namespaced, Setting};
         header::Value::Setting(Setting::Unitary(Namespaced {
-            namespace: Some(("recoverykind".to_string(), None)),
+            namespace: Some((
+                "recoverykind".to_string(),
+                Location::Other("From<RecoveryKind>".to_string()),
+            )),
             member: (
                 match val {
                     RecoveryKind::CPCTPlus => "ctcplus".to_string(),
                     RecoveryKind::None => "none".to_string(),
                 },
-                None,
+                Location::Other("From<RecoveryKind>".to_string()),
             ),
         }))
     }

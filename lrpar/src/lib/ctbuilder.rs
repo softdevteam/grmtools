@@ -20,8 +20,11 @@ use cfgrammar::{
     header::{Header, Namespaced, Setting, SettingQuery, Value},
     markmap::MergeBehavior,
     newlinecache::NewlineCache,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
-    RIdx, Spanned, Symbol,
+    yacc::{
+        ast::ASTWithValidityInfo, parser::ParserError, YaccGrammar, YaccKind,
+        YaccOriginalActionKind,
+    },
+    Location, RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -513,20 +516,26 @@ where
             lk.insert(outp.clone());
         }
 
-        let span_fmt =
-            |span: Option<cfgrammar::Span>, s: &str, inc: &str, line_cache: &NewlineCache| {
-                if let Some(span) = span {
-                    if let Some((line, column)) =
-                        line_cache.byte_to_line_num_and_col_num(inc, span.start())
-                    {
-                        format!("{} at line {line} column {column}", s)
-                    } else {
-                        s.to_string()
-                    }
+        let loc_fmt = |loc: Location, s: &str, inc: &str, line_cache: &NewlineCache| match loc {
+            Location::Span(span) => {
+                if let Some((line, column)) =
+                    line_cache.byte_to_line_num_and_col_num(inc, span.start())
+                {
+                    format!("{} at line {line} column {column}", s)
                 } else {
                     s.to_string()
                 }
-            };
+            }
+            Location::CommandLine => {
+                format!("{} from the command-line", s)
+            }
+            Location::Other(loc_str) => {
+                format!("{} at {}", s, loc_str)
+            }
+        };
+        let span_fmt = |span: cfgrammar::Span, s: &str, inc: &str, line_cache: &NewlineCache| {
+            loc_fmt(Location::Span(span), s, inc, line_cache)
+        };
 
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
@@ -540,13 +549,13 @@ where
                     _,
                     Value::Setting(Setting::Unitary(Namespaced {
                         namespace,
-                        member: (member, member_span),
+                        member: (member, member_loc),
                     })),
                 ))) => {
-                    if let Some((namespace, span)) = namespace {
+                    if let Some((namespace, loc)) = namespace {
                         if namespace != "recoverykind" {
-                            return Err(span_fmt(
-                                *span,
+                            return Err(loc_fmt(
+                                loc.clone(),
                                 &format!("Unknown RecoveryKind: {}", namespace),
                                 &inc,
                                 &line_cache,
@@ -562,8 +571,8 @@ where
                     .iter()
                     .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
                     if rk.is_none() {
-                        return Err(span_fmt(
-                            *member_span,
+                        return Err(loc_fmt(
+                            member_loc.clone(),
                             "Invalid RecoveryKind specified in %grmtools section",
                             &inc,
                             &line_cache,
@@ -592,7 +601,7 @@ where
         let warnings = ast_validation.ast().warnings();
         let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
-            span_fmt(Some(x.spans()[0]), &format!("{}", x), inc, line_cache)
+            span_fmt(x.spans()[0], &format!("{}", x), inc, line_cache)
         };
 
         let grm = match res {
@@ -632,13 +641,47 @@ where
                     format!(
                         "\n\t{}",
                         errs.iter()
-                            .map(|e| spanned_fmt(e, &inc, &line_cache))
+                            .map(|e| match e {
+                                ParserError::YaccGrammarError(e) => {
+                                    spanned_fmt(e, &inc, &line_cache)
+                                }
+                                ParserError::HeaderError(e) => {
+                                    loc_fmt(
+                                        e.locations[0].clone(),
+                                        &format!("{}", e),
+                                        &inc,
+                                        &line_cache,
+                                    )
+                                }
+                                ParserError::HeaderContentsError(e) => {
+                                    loc_fmt(
+                                        e.locations[0].clone(),
+                                        &format!("{}", e),
+                                        &inc,
+                                        &line_cache,
+                                    )
+                                }
+                                _ => {
+                                    format!("{}", e)
+                                }
+                            })
                             .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
                             .collect::<Vec<_>>()
                             .join("\n\t")
                     )
                 } else {
-                    spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
+                    match errs.first().unwrap() {
+                        ParserError::YaccGrammarError(e) => spanned_fmt(e, &inc, &line_cache),
+                        ParserError::HeaderError(e) => {
+                            loc_fmt(e.locations[0].clone(), &format!("{}", e), &inc, &line_cache)
+                        }
+                        ParserError::HeaderContentsError(e) => {
+                            loc_fmt(e.locations[0].clone(), &format!("{}", e), &inc, &line_cache)
+                        }
+                        e => {
+                            format!("{}", e)
+                        }
+                    }
                 }))?;
             }
         };

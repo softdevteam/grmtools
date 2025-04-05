@@ -6,8 +6,9 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 
 use super::{
-    parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
-    YaccGrammarWarningKind, YaccKind,
+    parser::{ParserError, YaccParser},
+    Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
+    YaccKind,
 };
 
 use crate::{header::Header, Span};
@@ -16,7 +17,7 @@ use crate::{header::Header, Span};
 pub struct ASTWithValidityInfo {
     yacc_kind: Option<YaccKind>,
     ast: GrammarAST,
-    errs: Vec<YaccGrammarError>,
+    errs: Vec<ParserError>,
 }
 
 impl ASTWithValidityInfo {
@@ -31,7 +32,9 @@ impl ASTWithValidityInfo {
             yp.parse().map_err(|e| errs.extend(e)).ok();
             let (yacc_kind, mut ast) = yp.build();
             if yacc_kind.is_some() {
-                ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+                ast.complete_and_validate()
+                    .map_err(|e| errs.push(ParserError::YaccGrammarError(e)))
+                    .ok();
             }
             (yacc_kind, ast)
         };
@@ -62,7 +65,7 @@ impl ASTWithValidityInfo {
     }
 
     /// Returns all errors which were encountered during AST construction.
-    pub fn errors(&self) -> &[YaccGrammarError] {
+    pub fn errors(&self) -> &[ParserError] {
         self.errs.as_slice()
     }
 }

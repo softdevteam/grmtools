@@ -1,16 +1,16 @@
 use crate::{
     markmap::{Entry, MarkMap},
     yacc::{YaccKind, YaccOriginalActionKind},
-    Span,
+    Location, Span,
 };
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use std::{error::Error, fmt};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HeaderError {
     pub kind: HeaderErrorKind,
-    pub spans: Vec<Span>,
+    pub locations: Vec<Location>,
 }
 
 impl Error for HeaderError {}
@@ -21,7 +21,7 @@ impl fmt::Display for HeaderError {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 #[non_exhaustive]
 #[doc(hidden)]
 pub enum HeaderErrorKind {
@@ -46,20 +46,22 @@ impl fmt::Display for HeaderErrorKind {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct HeaderContentsError {
     pub kind: HeaderContentsErrorKind,
-    pub spans: Vec<Span>,
+    pub locations: Vec<Location>,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 #[non_exhaustive]
 #[doc(hidden)]
 pub enum HeaderContentsErrorKind {
     QueryTypeMismatch,
+    InvalidEntry(String),
 }
 
 impl fmt::Display for HeaderContentsErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
             HeaderContentsErrorKind::QueryTypeMismatch => "value has an unexpected type",
+            HeaderContentsErrorKind::InvalidEntry(key) => &format!("Invalid entry '{}'", key),
         };
         write!(f, "{}", s)
     }
@@ -88,8 +90,8 @@ impl fmt::Display for HeaderContentsError {
 /// ```
 #[derive(Debug, Eq, PartialEq)]
 pub struct Namespaced {
-    pub namespace: Option<(String, Option<Span>)>,
-    pub member: (String, Option<Span>),
+    pub namespace: Option<(String, Location)>,
+    pub member: (String, Location),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -104,7 +106,7 @@ pub enum Setting {
         ctor: Namespaced,
         arg: Namespaced,
     },
-    Num(u64, Option<Span>),
+    Num(u64, Location),
 }
 
 /// Parser for the `%grmtools` section
@@ -150,32 +152,33 @@ impl Setting {
 
 impl From<YaccKind> for Value {
     fn from(kind: YaccKind) -> Value {
+        let from_loc = Location::Other("From<YaccKind>".to_string());
         match kind {
             YaccKind::Grmtools => Value::Setting(Setting::Unitary(Namespaced {
-                namespace: Some(("yacckind".to_string(), None)),
-                member: ("grmtools".to_string(), None),
+                namespace: Some(("yacckind".to_string(), from_loc.clone())),
+                member: ("grmtools".to_string(), from_loc),
             })),
             YaccKind::Eco => Value::Setting(Setting::Unitary(Namespaced {
-                namespace: Some(("yacckind".to_string(), None)),
-                member: ("eco".to_string(), None),
+                namespace: Some(("yacckind".to_string(), from_loc.clone())),
+                member: ("eco".to_string(), from_loc),
             })),
             YaccKind::Original(action_kind) => Value::Setting(Setting::Constructor {
                 ctor: Namespaced {
-                    namespace: Some(("yacckind".to_string(), None)),
-                    member: ("original".to_string(), None),
+                    namespace: Some(("yacckind".to_string(), from_loc.clone())),
+                    member: ("original".to_string(), from_loc.clone()),
                 },
                 arg: match action_kind {
                     YaccOriginalActionKind::NoAction => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
-                        member: ("noaction".to_string(), None),
+                        namespace: Some(("yaccoriginalactionkind".to_string(), from_loc.clone())),
+                        member: ("noaction".to_string(), from_loc),
                     },
                     YaccOriginalActionKind::UserAction => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
-                        member: ("useraction".to_string(), None),
+                        namespace: Some(("yaccoriginalactionkind".to_string(), from_loc.clone())),
+                        member: ("useraction".to_string(), from_loc),
                     },
                     YaccOriginalActionKind::GenericParseTree => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
-                        member: ("genericparsetree".to_string(), None),
+                        namespace: Some(("yaccoriginalactionkind".to_string(), from_loc.clone())),
+                        member: ("genericparsetree".to_string(), from_loc),
                     },
                 },
             }),
@@ -214,12 +217,12 @@ const MAGIC: &str = "%grmtools";
 fn add_duplicate_occurrence(
     errs: &mut Vec<HeaderError>,
     kind: HeaderErrorKind,
-    orig_span: Span,
-    dup_span: Span,
+    orig_loc: Location,
+    dup_loc: Location,
 ) {
     if !errs.iter_mut().any(|e| {
-        if e.kind == kind && e.spans[0] == orig_span {
-            e.spans.push(dup_span);
+        if e.kind == kind && e.locations[0] == orig_loc {
+            e.locations.push(dup_loc.clone());
             true
         } else {
             false
@@ -227,7 +230,7 @@ fn add_duplicate_occurrence(
     }) {
         errs.push(HeaderError {
             kind,
-            spans: vec![orig_span, dup_span],
+            locations: vec![orig_loc, dup_loc],
         });
     }
 }
@@ -257,7 +260,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         let num_str = &self.src[num_span.start()..num_span.end()];
                         // If the above regex matches we expect this to succeed.
                         let num = str::parse::<u64>(num_str).unwrap();
-                        let val = Setting::Num(num, Some(num_span));
+                        let val = Setting::Num(num, Location::Span(num_span));
                         i = self.parse_ws(num_span.end());
                         Ok((key_name, key_span, Value::Setting(val), i))
                     }
@@ -281,7 +284,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                             } else {
                                 Err(HeaderError {
                                     kind: HeaderErrorKind::ExpectedToken(')'),
-                                    spans: vec![Span::new(i, i)],
+                                    locations: vec![Location::Span(Span::new(i, i))],
                                 })
                             }
                         } else {
@@ -312,8 +315,8 @@ impl<'input> GrmtoolsSectionParser<'input> {
             i = self.parse_ws(j);
             Ok((
                 Namespaced {
-                    namespace: Some((name, Some(name_span))),
-                    member: (member_val, Some(member_val_span)),
+                    namespace: Some((name, Location::Span(name_span))),
+                    member: (member_val, Location::Span(member_val_span)),
                 },
                 i,
             ))
@@ -321,7 +324,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             Ok((
                 Namespaced {
                     namespace: None,
-                    member: (name, Some(name_span)),
+                    member: (name, Location::Span(name_span)),
                 },
                 i,
             ))
@@ -365,8 +368,8 @@ impl<'input> GrmtoolsSectionParser<'input> {
                             add_duplicate_occurrence(
                                 &mut errs,
                                 HeaderErrorKind::DuplicateEntry(key),
-                                *orig_span,
-                                key_span,
+                                Location::Span(*orig_span),
+                                Location::Span(key_span),
                             )
                         }
                         Entry::Vacant(entry) => {
@@ -390,21 +393,24 @@ impl<'input> GrmtoolsSectionParser<'input> {
                 } else {
                     errs.push(HeaderError {
                         kind: HeaderErrorKind::ExpectedToken('}'),
-                        spans: vec![Span::new(section_start_pos, self.src.len())],
+                        locations: vec![Location::Span(Span::new(
+                            section_start_pos,
+                            self.src.len(),
+                        ))],
                     });
                     Err(errs)
                 }
             } else {
                 errs.push(HeaderError {
                     kind: HeaderErrorKind::ExpectedToken('{'),
-                    spans: vec![Span::new(i, i)],
+                    locations: vec![Location::Span(Span::new(i, i))],
                 });
                 Err(errs)
             }
         } else if self.required {
             errs.push(HeaderError {
                 kind: HeaderErrorKind::MissingGrmtoolsSection,
-                spans: vec![Span::new(0, 0)],
+                locations: vec![Location::Span(Span::new(0, 0))],
             });
             Err(errs)
         } else {
@@ -423,7 +429,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             }
             None => Err(HeaderError {
                 kind: HeaderErrorKind::IllegalName,
-                spans: vec![Span::new(i, i)],
+                locations: vec![Location::Span(Span::new(i, i))],
             }),
         }
     }
@@ -486,64 +492,34 @@ impl Header {
                 Some(match value {
                     Value::Flag(_) => Err(HeaderContentsError {
                         kind: HeaderContentsErrorKind::QueryTypeMismatch,
-                        spans: vec![*key_span],
+                        locations: vec![Location::Span(*key_span)],
                     }),
-                    Value::Setting(Setting::Num(_, num_span)) => Err(HeaderContentsError {
+                    Value::Setting(Setting::Num(_, num_loc)) => Err(HeaderContentsError {
                         kind: HeaderContentsErrorKind::QueryTypeMismatch,
-                        spans: if num_span.is_some() {
-                            vec![num_span.unwrap()]
-                        } else {
-                            vec![]
-                        },
+                        locations: vec![num_loc.clone()],
                     }),
                     Value::Setting(Setting::Unitary(Namespaced {
-                        namespace,
-                        member: (_, member_span),
-                    })) => {
-                        let first_span = if namespace.is_some() {
-                            &namespace.as_ref().unwrap().1
-                        } else {
-                            member_span
-                        };
-                        Err(HeaderContentsError {
-                            kind: HeaderContentsErrorKind::QueryTypeMismatch,
-                            spans: if let (Some(first_span), Some(member_span)) =
-                                (first_span, member_span)
-                            {
-                                vec![Span::new(first_span.start(), member_span.end())]
-                            } else {
-                                vec![]
-                            },
-                        })
-                    }
+                        namespace: _,
+                        member: (_, member_loc),
+                    })) => Err(HeaderContentsError {
+                        kind: HeaderContentsErrorKind::QueryTypeMismatch,
+                        locations: vec![member_loc.clone()],
+                    }),
                     Value::Setting(Setting::Constructor {
                         ctor:
                             Namespaced {
-                                namespace,
-                                member: (_, ctor_span),
+                                namespace: _,
+                                member: (_, _),
                             },
                         arg:
                             Namespaced {
                                 namespace: _,
                                 member: (_, arg_span),
                             },
-                    }) => {
-                        let first_span = if namespace.is_some() {
-                            &namespace.as_ref().unwrap().1
-                        } else {
-                            ctor_span
-                        };
-                        Err(HeaderContentsError {
-                            kind: HeaderContentsErrorKind::QueryTypeMismatch,
-                            spans: if let (Some(first_span), Some(arg_span)) =
-                                (first_span, arg_span)
-                            {
-                                vec![Span::new(first_span.start(), arg_span.end())]
-                            } else {
-                                vec![]
-                            },
-                        })
-                    }
+                    }) => Err(HeaderContentsError {
+                        kind: HeaderContentsErrorKind::QueryTypeMismatch,
+                        locations: vec![arg_span.clone()],
+                    }),
                 })
             }
         } else {
@@ -597,7 +573,7 @@ mod test {
                 errs[0].kind,
                 HeaderErrorKind::DuplicateEntry("dupe".to_string())
             );
-            assert_eq!(errs[0].spans.len(), 3);
+            assert_eq!(errs[0].locations.len(), 3);
         }
     }
 }

@@ -24,7 +24,7 @@ grammar: |
                 // is we don't try return multiple errors, or coalesce them.
                 return Err(vec![HeaderError {
                     kind: HeaderErrorKind::DuplicateEntry(key),
-                    spans: vec![*orig_span, key_span]
+                    locations: vec![Location::Span(*orig_span), Location::Span(key_span)]
                 }]);
             }
             Entry::Vacant(entry) => {
@@ -43,7 +43,7 @@ grammar: |
                 // is we don't try return multiple errors, or coalesce them.
                 return Err(vec![HeaderError {
                     kind: HeaderErrorKind::DuplicateEntry(key),
-                    spans: vec![*orig_span, key_span]
+                    locations: vec![Location::Span(*orig_span), Location::Span(key_span)]
                 }]);
             }
             Entry::Vacant(entry) => {
@@ -60,7 +60,7 @@ grammar: |
         let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
         Namespaced{
             namespace: None,
-            member: (ident, Some(ident_span))
+            member: (ident, Location::Span(ident_span))
         }
     }
     | IDENT '::' IDENT {
@@ -70,8 +70,8 @@ grammar: |
         let ident_span = $3.as_ref().unwrap().span();
         let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
         Namespaced {
-            namespace: Some((namespace, Some(namespace_span))),
-            member: (ident, Some(ident_span))
+            namespace: Some((namespace, Location::Span(namespace_span))),
+            member: (ident, Location::Span(ident_span))
         }
     }
     ;
@@ -99,7 +99,7 @@ grammar: |
     | NUM  {
         let num_span = $1.as_ref().unwrap().span();
         let n = str::parse::<u64>($lexer.span_str(num_span));
-        Setting::Num(n.expect("convertible"), Some(num_span))
+        Setting::Num(n.expect("convertible"), Location::Span(num_span))
     }
     | namespaced '(' namespaced ')' { Setting::Constructor{ctor: $1, arg: $3} }
     ;
@@ -114,6 +114,7 @@ grammar: |
 
     use cfgrammar::{
         Span,
+        span::Location,
         header::{
             Value,
             Setting,

@@ -4,7 +4,11 @@ use cfgrammar::{
     header::Header,
     header::{Namespaced, Setting, SettingQuery, Value},
     markmap::MergeBehavior,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    span::Location,
+    yacc::{
+        ast::ASTWithValidityInfo, parser::ParserError, YaccGrammar, YaccKind,
+        YaccOriginalActionKind,
+    },
     Span,
 };
 use getopts::Options;
@@ -171,19 +175,23 @@ fn main() {
                 _,
                 Value::Setting(Setting::Unitary(Namespaced {
                     namespace,
-                    member: (member, member_span),
+                    member: (member, member_loc),
                 })),
             ))) => {
-                if let Some((namespace, span)) = namespace {
+                if let Some((namespace, loc)) = namespace {
                     if namespace != "recoverykind" {
                         let err_str =
                             format!("Unknown namespace: '{}' expected RecoveryKind", namespace);
-                        if let Some(span) = span {
-                            formatter.underline_span_with_text(*span, err_str, '^');
-                            process::exit(1);
-                        } else {
-                            eprintln!("{}", err_str);
-                        }
+
+                        let loc_str = match loc {
+                            Location::Span(span) => {
+                                formatter.underline_span_with_text(*span, err_str, '^')
+                            }
+                            Location::CommandLine => format!("{} from command-line", err_str),
+                            Location::Other(other_str) => format!("at {}", other_str),
+                        };
+                        eprintln!("{loc_str}");
+                        process::exit(1);
                     }
                 }
 
@@ -198,11 +206,15 @@ fn main() {
                         "Invalid RecoveryKind: '{}' specified in %grmtools section",
                         member
                     );
-                    if let Some(member_span) = member_span {
-                        formatter.underline_span_with_text(*member_span, err_str, '^');
-                    } else {
-                        eprintln!("{}", err_str);
-                    }
+                    eprintln!(
+                        "{}",
+                        match member_loc {
+                            Location::Span(span) =>
+                                formatter.underline_span_with_text(*span, err_str, '^'),
+                            Location::CommandLine => format!("{}: from command line", err_str),
+                            Location::Other(s) => format!("{} at {}", err_str, s),
+                        }
+                    );
                 }
                 recoverykind = rk;
             }
@@ -240,7 +252,14 @@ fn main() {
             let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
             eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                match e {
+                    ParserError::YaccGrammarError(e) => {
+                        eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                    }
+                    e => {
+                        eprintln!("{}", e);
+                    }
+                }
             }
             eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
             for w in warnings {

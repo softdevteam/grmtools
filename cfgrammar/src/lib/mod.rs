@@ -66,7 +66,7 @@ pub mod span;
 pub mod yacc;
 
 pub use newlinecache::NewlineCache;
-pub use span::{Span, Spanned};
+pub use span::{Location, Span, Spanned};
 
 #[cfg(test)]
 pub mod test_utils;
