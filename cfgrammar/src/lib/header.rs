@@ -28,7 +28,7 @@ pub enum HeaderErrorKind {
     MissingGrmtoolsSection,
     IllegalName,
     ExpectedToken(char),
-    DuplicateEntry,
+    DuplicateEntry(String),
 }
 
 impl fmt::Display for HeaderErrorKind {
@@ -37,7 +37,7 @@ impl fmt::Display for HeaderErrorKind {
             HeaderErrorKind::MissingGrmtoolsSection => "Missing %grmtools section",
             HeaderErrorKind::IllegalName => "Illegal name",
             HeaderErrorKind::ExpectedToken(c) => &format!("Expected token: '{}", c),
-            HeaderErrorKind::DuplicateEntry => "DuplicateEntry",
+            HeaderErrorKind::DuplicateEntry(key) => &format!("Duplicate entry: '{}'", key),
         };
         write!(f, "{}", s)
     }
@@ -359,12 +359,12 @@ impl<'input> GrmtoolsSectionParser<'input> {
                             return Err(errs);
                         }
                     };
-                    match map.entry(key) {
+                    match map.entry(key.clone()) {
                         Entry::Occupied(orig) => {
                             let (orig_span, _) = orig.get();
                             add_duplicate_occurrence(
                                 &mut errs,
-                                HeaderErrorKind::DuplicateEntry,
+                                HeaderErrorKind::DuplicateEntry(key),
                                 *orig_span,
                                 key_span,
                             )
@@ -456,7 +456,7 @@ impl Header {
         }
     }
 
-    pub fn merge_from(&mut self, other: Self) -> Result<(), crate::markmap::MergeError> {
+    pub fn merge_from(&mut self, other: Self) -> Result<(), crate::markmap::MergeError<String>> {
         self.contents.merge_from(other.contents)
     }
 
@@ -593,7 +593,7 @@ mod test {
             let res = parser.parse();
             let errs = res.unwrap_err();
             assert_eq!(errs.len(), 1);
-            assert_eq!(errs[0].kind, HeaderErrorKind::DuplicateEntry);
+            assert_eq!(errs[0].kind, HeaderErrorKind::DuplicateEntry("dupe".to_string()));
             assert_eq!(errs[0].spans.len(), 3);
         }
     }

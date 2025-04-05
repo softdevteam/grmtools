@@ -71,7 +71,7 @@ pub enum YaccGrammarErrorKind {
     InvalidActionKind,
     InvalidActionKindNamespace,
     InvalidGrmtoolsSectionEntry,
-    DuplicateGrmtoolsSectionEntry,
+    DuplicateGrmtoolsSectionEntry(String),
     MissingGrmtoolsSection,
     HeaderContents(HeaderContentsErrorKind),
 }
@@ -170,8 +170,8 @@ impl fmt::Display for YaccGrammarErrorKind {
                 )
             }
             YaccGrammarErrorKind::MissingGrmtoolsSection => "Missing '%grmtools' section",
-            YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry => {
-                "Duplicate entry in %grmtools section"
+            YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(key) => {
+                &format!("Duplicate entry: '{}' in %grmtools section", key)
             }
             YaccGrammarErrorKind::InvalidGrmtoolsSectionEntry => {
                 "Invalid entry in %grmtools section"
@@ -305,12 +305,12 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration
             | YaccGrammarErrorKind::DuplicateStartDeclaration
             | YaccGrammarErrorKind::DuplicateActiontypeDeclaration
-            | YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry
             | YaccGrammarErrorKind::DuplicateEPP => SpansKind::DuplicationError,
             YaccGrammarErrorKind::HeaderContents(_)
             | YaccGrammarErrorKind::InvalidActionKind
             | YaccGrammarErrorKind::InvalidYaccKindNamespace
             | YaccGrammarErrorKind::InvalidActionKindNamespace
+            | YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(_)
             | YaccGrammarErrorKind::InvalidYaccKind => SpansKind::OptionalSpan,
         }
     }
@@ -373,21 +373,34 @@ impl<'a> YaccParser<'a> {
         let header_parser = GrmtoolsSectionParser::new(&self.src, false);
         let result = match header_parser.parse() {
             Ok((parsed_header, i)) => {
-                self.header.merge_from(parsed_header).unwrap();
+                match self.header.merge_from(parsed_header) {
+                    Err(crate::markmap::MergeError::Exclusivity(key))=> {
+                        errs.push(
+                            YaccGrammarError{
+                                kind: YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(key),
+                                spans: vec![],
+                            }
+                        );
+                    }
+
+                    Ok(x) => {
+                        x
+                    }
+                }
                 self.update_yacckind(i)
             }
             Err(es) => {
                 errs.extend(es.iter().map(|e| YaccGrammarError {
-                    kind: match e.kind {
+                    kind: match &e.kind {
                         HeaderErrorKind::MissingGrmtoolsSection => {
                             YaccGrammarErrorKind::MissingGrmtoolsSection
                         }
                         HeaderErrorKind::IllegalName => {
                             YaccGrammarErrorKind::InvalidGrmtoolsSectionEntry
                         }
-                        HeaderErrorKind::ExpectedToken(c) => YaccGrammarErrorKind::ExpectedInput(c),
-                        HeaderErrorKind::DuplicateEntry => {
-                            YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry
+                        HeaderErrorKind::ExpectedToken(c) => YaccGrammarErrorKind::ExpectedInput(*c),
+                        HeaderErrorKind::DuplicateEntry(key) => {
+                            YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(key.clone())
                         }
                     },
                     spans: e.spans.clone(),

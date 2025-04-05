@@ -30,9 +30,9 @@ pub enum MergeBehavior {
 }
 
 #[derive(Debug)]
-pub enum MergeError {
+pub enum MergeError<K> {
     // Both theirs and ours were some.
-    Exclusivity,
+    Exclusivity(K),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -243,7 +243,7 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     ///
     /// For the behavior of exclusive or mark the behavior as also `Mark::Required`, then after merge call `missing()`
     /// to check all required values.
-    pub fn merge_from(&mut self, other: Self) -> Result<(), MergeError> {
+    pub fn merge_from(&mut self, other: Self) -> Result<(), MergeError<K>> {
         for (their_key, their_mark, their_val) in other.contents {
             let pos = self.contents.binary_search_by(|x| x.0.cmp(&their_key));
             match pos {
@@ -260,10 +260,9 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
                                 | (my_mark & theirs_mark)
                         })
                         .unwrap_or(0);
-                    eprintln!("{:?}", merge_behavior);
                     if merge_behavior == exclusive_mark || merge_behavior == 0 {
                         if my_val.is_some() && their_val.is_some() {
-                            return Err(MergeError::Exclusivity);
+                            return Err(MergeError::Exclusivity(their_key.clone()));
                         } else if my_val.is_none() {
                             self.contents[pos].2 = their_val;
                             return Ok(());

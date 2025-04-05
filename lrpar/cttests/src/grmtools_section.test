@@ -17,13 +17,13 @@ grammar: |
         let ((key, key_span), val) = $1;
         let mut ret = Header::new();
         let mut map = ret.contents_mut();
-        match map.entry(key) {
+        match map.entry(key.clone()) {
             Entry::Occupied(orig) => {
                 let (orig_span, _) = orig.get();
                 // One difference between the manually written parser and this
                 // is we don't try return multiple errors, or coalesce them.
                 return Err(vec![HeaderError {
-                    kind: HeaderErrorKind::DuplicateEntry,
+                    kind: HeaderErrorKind::DuplicateEntry(key),
                     spans: vec![*orig_span, key_span]
                 }]);
             }
@@ -36,13 +36,13 @@ grammar: |
     | val_seq ',' valbind {
         let ((key, key_span), val) = $3;
         let mut ret = $1?;
-        match ret.contents_mut().entry(key) {
+        match ret.contents_mut().entry(key.clone()) {
             Entry::Occupied(orig) => {
                 let (orig_span, _) = orig.get();
                 // One difference between the manually written parser and this
                 // is we don't try return multiple errors, or coalesce them.
                 return Err(vec![HeaderError {
-                    kind: HeaderErrorKind::DuplicateEntry,
+                    kind: HeaderErrorKind::DuplicateEntry(key),
                     spans: vec![*orig_span, key_span]
                 }]);
             }
