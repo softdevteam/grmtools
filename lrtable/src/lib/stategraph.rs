@@ -261,7 +261,7 @@ mod test {
         // Taken from p13 of https://link.springer.com/article/10.1007/s00236-010-0115-6
         let grm = YaccGrammar::new(
             &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
-                        "
+            "
             %start A
             %%
             A: 'OPEN_BRACKET' A 'CLOSE_BRACKET'
