@@ -158,11 +158,10 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::test_utils::*;
     use cfgrammar::{
-        header::Header,
-        markmap::MergeBehavior,
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        SIdx, Span, Symbol,
+        yacc::{YaccGrammar, YaccOriginalActionKind},
+        SIdx, Symbol,
     };
     use vob::Vob;
 
@@ -173,12 +172,8 @@ mod test {
     #[rustfmt::skip]
     fn test_dragon_grammar() {
         // From http://binarysculpting.com/2012/02/04/computing-lr1-closure/
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %%
@@ -205,21 +200,9 @@ mod test {
     }
 
     fn eco_grammar() -> YaccGrammar {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        // FIXME seems like this this should be Eco!
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         YaccGrammar::new(
-            &mut header,
+            // FIXME should be Eco?
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %token a b c d f
@@ -269,20 +252,8 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %token a b c d

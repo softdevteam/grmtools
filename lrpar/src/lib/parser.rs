@@ -987,8 +987,6 @@ pub(crate) mod test {
     use std::collections::HashMap;
 
     use cfgrammar::{
-        header::Header,
-        markmap::MergeBehavior,
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Span,
     };
@@ -997,6 +995,7 @@ pub(crate) mod test {
     use regex::Regex;
 
     use super::*;
+    use crate::test_utils::*;
     use crate::{
         test_utils::{TestLexError, TestLexeme, TestLexerTypes},
         Lexeme, Lexer,
@@ -1038,19 +1037,11 @@ pub(crate) mod test {
             ),
         >,
     ) {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
-        let grm = YaccGrammar::<u16>::new_with_storaget(&mut header, grms).unwrap();
+        let grm = YaccGrammar::<u16>::new_with_storaget(
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            grms,
+        )
+        .unwrap();
         let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let rule_ids = grm
             .tokens_map()

@@ -176,7 +176,7 @@ where
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
 impl YaccGrammar<u32> {
-    pub fn new<'a>(header: &'a mut Header, s: &str) -> YaccGrammarResult<Self> {
+    pub fn new(header: &mut Header, s: &str) -> YaccGrammarResult<Self> {
         YaccGrammar::new_with_storaget(header, s)
     }
 }
@@ -192,7 +192,7 @@ where
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget<'a>(header: &'a mut Header, s: &str) -> YaccGrammarResult<Self> {
+    pub fn new_with_storaget(header: &mut Header, s: &str) -> YaccGrammarResult<Self> {
         let ast_validation = ast::ASTWithValidityInfo::new(header, s);
         Self::new_from_ast_with_validity_info(&ast_validation)
     }
@@ -1125,6 +1125,7 @@ mod test {
         },
         rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE,
     };
+    use crate::test_utils::*;
     use crate::{PIdx, RIdx, Span, Symbol, TIdx};
     use std::collections::HashMap;
 
@@ -1144,19 +1145,11 @@ mod test {
 
     #[test]
     fn test_minimal() {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
-        let grm = YaccGrammar::new(&mut header, "%start R %token T %% R: 'T';").unwrap();
+        let grm = YaccGrammar::new(
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            "%start R %token T %% R: 'T';",
+        )
+        .unwrap();
 
         assert_eq!(grm.start_prod, PIdx(1));
         assert_eq!(grm.implicit_rule(), None);
@@ -1183,19 +1176,11 @@ mod test {
 
     #[test]
     fn test_rule_ref() {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
-        let grm = YaccGrammar::new(&mut header, "%start R %token T %% R : S; S: 'T';").unwrap();
+        let grm = YaccGrammar::new(
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            "%start R %token T %% R : S; S: 'T';",
+        )
+        .unwrap();
 
         grm.rule_idx("^").unwrap();
         grm.rule_idx("R").unwrap();
@@ -1220,12 +1205,8 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_long_prod() {
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';"
         ).unwrap();
 
@@ -1255,20 +1236,8 @@ mod test {
 
     #[test]
     fn test_prods_rules() {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start A
             %%
@@ -1290,12 +1259,8 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_left_right_nonassoc_precs() {
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start Expr
             %right '='
@@ -1327,12 +1292,8 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_prec_override() {
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start expr
             %left '+' '-'
@@ -1359,13 +1320,8 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_implicit_tokens_rewrite() {
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Eco.into()));
         let grm = YaccGrammar::new(
-            &mut header,
-            "
+            &mut header_for_yacckind!(YaccKind::Eco),"
           %implicit_tokens ws1 ws2
           %start S
           %%
@@ -1439,12 +1395,8 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_has_path() {
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start A
             %%
@@ -1470,12 +1422,8 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_rule_min_costs() {
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start A
             %%
@@ -1497,20 +1445,8 @@ mod test {
 
     #[test]
     fn test_min_sentences() {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start A
             %%
@@ -1557,12 +1493,8 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_rule_max_costs1() {
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start A
             %%
@@ -1585,12 +1517,8 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_rule_max_costs2() {
-        let mut header = Header::new();
-        header.contents_mut().set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start A
             %%
@@ -1611,20 +1539,8 @@ mod test {
     #[test]
     fn test_out_of_order_productions() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start S
             %%
@@ -1655,19 +1571,11 @@ mod test {
     #[test]
     fn test_token_spans() {
         let src = "%%\nAB: 'a' | 'foo';";
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::NoAction).into(),
-            ),
-        );
-        let grm = YaccGrammar::new(&mut header, src).unwrap();
+        let grm = YaccGrammar::new(
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::NoAction)),
+            src,
+        )
+        .unwrap();
         let token_map = grm.tokens_map();
         let a_tidx = token_map.get("a");
         let foo_tidx = token_map.get("foo");
@@ -1691,19 +1599,11 @@ mod test {
                    AB: A AB | B ';' AB;
                    %%
                    ";
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::NoAction).into(),
-            ),
-        );
-        let grm = YaccGrammar::new(&mut header, src).unwrap();
+        let grm = YaccGrammar::new(
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::NoAction)),
+            src,
+        )
+        .unwrap();
         let token_map = grm.tokens_map();
         let c_tidx = token_map.get("c").unwrap();
         assert_eq!(grm.token_name(*c_tidx), Some("c"));

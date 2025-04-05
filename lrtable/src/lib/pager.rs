@@ -398,12 +398,11 @@ where
 mod test {
     use vob::Vob;
 
+    use crate::test_utils::*;
     use crate::{pager::pager_stategraph, stategraph::state_exists, StIdx};
     use cfgrammar::{
-        header::Header,
-        markmap::MergeBehavior,
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
-        SIdx, Span, Symbol,
+        yacc::{YaccGrammar, YaccOriginalActionKind},
+        SIdx, Symbol,
     };
 
     use super::vob_intersect;
@@ -441,20 +440,8 @@ mod test {
     //     a
     //     aSb
     fn grammar3() -> YaccGrammar {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
           %start S
           %token a b c d
@@ -532,20 +519,8 @@ mod test {
 
     // Pager grammar
     fn grammar_pager() -> YaccGrammar {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start X
             %%

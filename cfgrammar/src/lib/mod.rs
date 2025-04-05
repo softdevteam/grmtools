@@ -59,12 +59,17 @@ use serde::{Deserialize, Serialize};
 #[doc(hidden)]
 pub mod header;
 mod idxnewtype;
+
 pub mod markmap;
 pub mod newlinecache;
 pub mod span;
 pub mod yacc;
+
 pub use newlinecache::NewlineCache;
 pub use span::{Span, Spanned};
+
+#[cfg(test)]
+pub mod test_utils;
 
 /// A type specifically for rule indices.
 pub use crate::idxnewtype::{PIdx, RIdx, SIdx, TIdx};

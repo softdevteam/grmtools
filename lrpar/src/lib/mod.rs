@@ -201,7 +201,7 @@ pub mod lex_api;
 #[doc(hidden)]
 pub mod parser;
 #[cfg(test)]
-mod test_utils;
+pub mod test_utils;
 
 pub use crate::{
     ctbuilder::{CTParser, CTParserBuilder, RustEdition, Visibility},

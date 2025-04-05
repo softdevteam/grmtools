@@ -24,7 +24,7 @@ impl ASTWithValidityInfo {
     /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
     /// then unused to construct a `YaccGrammar`, which will either produce an
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
-    pub fn new<'a>(header: &'a mut Header, s: &'_ str) -> Self {
+    pub fn new(header: &mut Header, s: &'_ str) -> Self {
         let mut errs = Vec::new();
         let (yacc_kind, ast) = {
             let mut yp = YaccParser::new(header, s.to_string());

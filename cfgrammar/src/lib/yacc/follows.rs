@@ -121,6 +121,7 @@ mod test {
         },
         YaccFollows,
     };
+    use crate::test_utils::*;
     use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
     fn has<StorageT: 'static + PrimInt + Unsigned>(
@@ -151,20 +152,8 @@ mod test {
     #[test]
     fn test_follow() {
         // Adapted from p2 of https://www.cs.uaf.edu/~cs331/notes/FirstFollow.pdf
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
                 %start E
                 %%
@@ -187,20 +176,8 @@ mod test {
     #[test]
     fn test_follow2() {
         // Adapted from https://www.l2f.inesc-id.pt/~david/w/pt/Top-Down_Parsing/Exercise_5:_Test_2010/07/01
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
                 %start A
                 %%
@@ -222,20 +199,8 @@ mod test {
 
     #[test]
     fn test_follow3() {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
                 %start S
                 %%
@@ -251,20 +216,8 @@ mod test {
 
     #[test]
     fn test_follow_corchuelo() {
-        let mut header = Header::new();
-        header
-            .contents_mut()
-            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
-        header.contents_mut().mark_required(&"yacckind".to_string());
-        header.contents_mut().insert(
-            "yacckind".into(),
-            (
-                Span::new(0, 0),
-                YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
-            ),
-        );
         let grm = YaccGrammar::new(
-            &mut header,
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
                 %start E
                 %%
