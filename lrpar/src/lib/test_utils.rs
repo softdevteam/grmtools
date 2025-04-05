@@ -86,3 +86,22 @@ impl fmt::Display for TestLexError {
         unreachable!();
     }
 }
+
+#[macro_export]
+#[cfg(test)]
+macro_rules! header_for_yacckind {
+    ($yk:expr) => {{
+        use cfgrammar::{header::Header, markmap::MergeBehavior, Span};
+        let mut header = Header::new();
+        header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::Ours);
+        header.contents_mut().mark_required(&"yacckind".to_string());
+        header
+            .contents_mut()
+            .insert("yacckind".into(), (Span::new(0, 0), $yk.into()));
+        header
+    }};
+}
+
+pub use header_for_yacckind;

@@ -17,6 +17,9 @@ mod pager;
 mod stategraph;
 pub mod statetable;
 
+#[cfg(test)]
+pub mod test_utils;
+
 pub use crate::{
     stategraph::StateGraph,
     statetable::{Action, StateTable, StateTableError, StateTableErrorKind},

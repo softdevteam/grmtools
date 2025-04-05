@@ -1,12 +1,24 @@
-use crate::Span;
+use crate::{
+    markmap::{Entry, MarkMap},
+    yacc::{YaccKind, YaccOriginalActionKind},
+    Span,
+};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
-use std::collections::{hash_map::Entry, HashMap};
+use std::{error::Error, fmt};
 
 #[derive(Debug)]
 pub struct HeaderError {
     pub kind: HeaderErrorKind,
     pub spans: Vec<Span>,
+}
+
+impl Error for HeaderError {}
+
+impl fmt::Display for HeaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -16,7 +28,47 @@ pub enum HeaderErrorKind {
     MissingGrmtoolsSection,
     IllegalName,
     ExpectedToken(char),
-    DuplicateEntry,
+    DuplicateEntry(String),
+}
+
+impl fmt::Display for HeaderErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            HeaderErrorKind::MissingGrmtoolsSection => "Missing %grmtools section",
+            HeaderErrorKind::IllegalName => "Illegal name",
+            HeaderErrorKind::ExpectedToken(c) => &format!("Expected token: '{}", c),
+            HeaderErrorKind::DuplicateEntry(key) => &format!("Duplicate entry: '{}'", key),
+        };
+        write!(f, "{}", s)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct HeaderContentsError {
+    pub kind: HeaderContentsErrorKind,
+    pub spans: Vec<Span>,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[non_exhaustive]
+#[doc(hidden)]
+pub enum HeaderContentsErrorKind {
+    QueryTypeMismatch,
+}
+
+impl fmt::Display for HeaderContentsErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            HeaderContentsErrorKind::QueryTypeMismatch => "value has an unexpected type",
+        };
+        write!(f, "{}", s)
+    }
+}
+impl Error for HeaderContentsError {}
+impl fmt::Display for HeaderContentsError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
 }
 /// Indicates a value prefixed by an optional namespace.
 /// `Foo::Bar` with optional `Foo` specified being
@@ -36,8 +88,8 @@ pub enum HeaderErrorKind {
 /// ```
 #[derive(Debug, Eq, PartialEq)]
 pub struct Namespaced {
-    pub namespace: Option<(String, Span)>,
-    pub member: (String, Span),
+    pub namespace: Option<(String, Option<Span>)>,
+    pub member: (String, Option<Span>),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -52,7 +104,7 @@ pub enum Setting {
         ctor: Namespaced,
         arg: Namespaced,
     },
-    Num(u64, Span),
+    Num(u64, Option<Span>),
 }
 
 /// Parser for the `%grmtools` section
@@ -66,6 +118,86 @@ pub struct GrmtoolsSectionParser<'input> {
 pub enum Value {
     Flag(bool),
     Setting(Setting),
+}
+
+impl Value {
+    pub fn matches_query_mask(&self, mask: u16) -> bool {
+        let q = self.query_bits();
+        (q & mask) == q
+    }
+    pub fn query_bits(&self) -> u16 {
+        match self {
+            Self::Flag(_) => ValueQuery::Flag as u16,
+            Self::Setting(x) => x.query_bits(),
+        }
+    }
+}
+
+impl Setting {
+    pub fn matches_query_mask(&self, mask: u16) -> bool {
+        let q = self.query_bits();
+        (q & mask) == q
+    }
+    pub fn query_bits(&self) -> u16 {
+        let q = match self {
+            Self::Num(_, _) => SettingQuery::Num,
+            Self::Unitary(_) => SettingQuery::Unitary,
+            Self::Constructor { ctor: _, arg: _ } => SettingQuery::Constructor,
+        };
+        q as u16
+    }
+}
+
+impl From<YaccKind> for Value {
+    fn from(kind: YaccKind) -> Value {
+        match kind {
+            YaccKind::Grmtools => Value::Setting(Setting::Unitary(Namespaced {
+                namespace: Some(("yacckind".to_string(), None)),
+                member: ("grmtools".to_string(), None),
+            })),
+            YaccKind::Eco => Value::Setting(Setting::Unitary(Namespaced {
+                namespace: Some(("yacckind".to_string(), None)),
+                member: ("eco".to_string(), None),
+            })),
+            YaccKind::Original(action_kind) => Value::Setting(Setting::Constructor {
+                ctor: Namespaced {
+                    namespace: Some(("yacckind".to_string(), None)),
+                    member: ("original".to_string(), None),
+                },
+                arg: match action_kind {
+                    YaccOriginalActionKind::NoAction => Namespaced {
+                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
+                        member: ("noaction".to_string(), None),
+                    },
+                    YaccOriginalActionKind::UserAction => Namespaced {
+                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
+                        member: ("useraction".to_string(), None),
+                    },
+                    YaccOriginalActionKind::GenericParseTree => Namespaced {
+                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
+                        member: ("genericparsetree".to_string(), None),
+                    },
+                },
+            }),
+        }
+    }
+}
+
+/// Repr vaues bit representation should not overlap `SettingQuery`,
+/// The first 8 bits is reserved for `ValueQuery`.
+#[repr(u16)]
+pub enum ValueQuery {
+    Flag = 1 << 0,
+    Setting = 1 << 1,
+}
+
+/// Repr vaues bit representation should not overlap `ValueQuery`.
+/// The last 8 bits is reserved for `SettingQuery`
+#[repr(u16)]
+pub enum SettingQuery {
+    Unitary = (ValueQuery::Setting as u16) | (1 << 8),
+    Constructor = (ValueQuery::Setting as u16) | (1 << 9),
+    Num = (ValueQuery::Setting as u16) | (1 << 10),
 }
 
 lazy_static! {
@@ -125,7 +257,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         let num_str = &self.src[num_span.start()..num_span.end()];
                         // If the above regex matches we expect this to succeed.
                         let num = str::parse::<u64>(num_str).unwrap();
-                        let val = Setting::Num(num, num_span);
+                        let val = Setting::Num(num, Some(num_span));
                         i = self.parse_ws(num_span.end());
                         Ok((key_name, key_span, Value::Setting(val), i))
                     }
@@ -180,8 +312,8 @@ impl<'input> GrmtoolsSectionParser<'input> {
             i = self.parse_ws(j);
             Ok((
                 Namespaced {
-                    namespace: Some((name, name_span)),
-                    member: (member_val, member_val_span),
+                    namespace: Some((name, Some(name_span))),
+                    member: (member_val, Some(member_val_span)),
                 },
                 i,
             ))
@@ -189,7 +321,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             Ok((
                 Namespaced {
                     namespace: None,
-                    member: (name, name_span),
+                    member: (name, Some(name_span)),
                 },
                 i,
             ))
@@ -210,10 +342,11 @@ impl<'input> GrmtoolsSectionParser<'input> {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn parse(&'_ self) -> Result<(HashMap<String, (Span, Value)>, usize), Vec<HeaderError>> {
+    pub fn parse(&'_ self) -> Result<(Header, usize), Vec<HeaderError>> {
         let mut errs = Vec::new();
         if let Some(mut i) = self.lookahead_is(MAGIC, self.parse_ws(0)) {
-            let mut ret = HashMap::new();
+            let mut ret = Header::new();
+            let map = ret.contents_mut();
             i = self.parse_ws(i);
             let section_start_pos = i;
             if let Some(j) = self.lookahead_is("{", i) {
@@ -226,12 +359,12 @@ impl<'input> GrmtoolsSectionParser<'input> {
                             return Err(errs);
                         }
                     };
-                    match ret.entry(key) {
+                    match map.entry(key.clone()) {
                         Entry::Occupied(orig) => {
                             let (orig_span, _) = orig.get();
                             add_duplicate_occurrence(
                                 &mut errs,
-                                HeaderErrorKind::DuplicateEntry,
+                                HeaderErrorKind::DuplicateEntry(key),
                                 *orig_span,
                                 key_span,
                             )
@@ -275,7 +408,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             });
             Err(errs)
         } else {
-            Ok((HashMap::new(), 0))
+            Ok((Header::new(), 0))
         }
     }
 
@@ -311,6 +444,113 @@ impl<'input> GrmtoolsSectionParser<'input> {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct Header {
+    contents: crate::markmap::MarkMap<String, (Span, Value)>,
+}
+
+impl Header {
+    pub fn new() -> Self {
+        Header {
+            contents: MarkMap::new(),
+        }
+    }
+
+    pub fn merge_from(&mut self, other: Self) -> Result<(), crate::markmap::MergeError<String>> {
+        self.contents.merge_from(other.contents)
+    }
+
+    pub fn contents(&self) -> &MarkMap<String, (Span, Value)> {
+        &self.contents
+    }
+
+    pub fn contents_mut(&mut self) -> &mut MarkMap<String, (Span, Value)> {
+        &mut self.contents
+    }
+
+    /// A wrapper around `HashMap::get`, which checks the `query_mask`
+    /// against the `value.query_bits()`
+    ///
+    /// Regardless of whether this query mask check succeeds or fails,
+    /// if the `contents` contains the key, will mark the key as being used.
+    pub fn query(
+        &mut self,
+        key: &str,
+        query_mask: u16,
+    ) -> Option<Result<(&Span, &Value), HeaderContentsError>> {
+        self.contents_mut().mark_used(&key.to_owned());
+        if let Some((key_span, value)) = self.contents.get(key) {
+            if value.matches_query_mask(query_mask) {
+                Some(Ok((key_span, value)))
+            } else {
+                Some(match value {
+                    Value::Flag(_) => Err(HeaderContentsError {
+                        kind: HeaderContentsErrorKind::QueryTypeMismatch,
+                        spans: vec![*key_span],
+                    }),
+                    Value::Setting(Setting::Num(_, num_span)) => Err(HeaderContentsError {
+                        kind: HeaderContentsErrorKind::QueryTypeMismatch,
+                        spans: if num_span.is_some() {
+                            vec![num_span.unwrap()]
+                        } else {
+                            vec![]
+                        },
+                    }),
+                    Value::Setting(Setting::Unitary(Namespaced {
+                        namespace,
+                        member: (_, member_span),
+                    })) => {
+                        let first_span = if namespace.is_some() {
+                            &namespace.as_ref().unwrap().1
+                        } else {
+                            member_span
+                        };
+                        Err(HeaderContentsError {
+                            kind: HeaderContentsErrorKind::QueryTypeMismatch,
+                            spans: if let (Some(first_span), Some(member_span)) =
+                                (first_span, member_span)
+                            {
+                                vec![Span::new(first_span.start(), member_span.end())]
+                            } else {
+                                vec![]
+                            },
+                        })
+                    }
+                    Value::Setting(Setting::Constructor {
+                        ctor:
+                            Namespaced {
+                                namespace,
+                                member: (_, ctor_span),
+                            },
+                        arg:
+                            Namespaced {
+                                namespace: _,
+                                member: (_, arg_span),
+                            },
+                    }) => {
+                        let first_span = if namespace.is_some() {
+                            &namespace.as_ref().unwrap().1
+                        } else {
+                            ctor_span
+                        };
+                        Err(HeaderContentsError {
+                            kind: HeaderContentsErrorKind::QueryTypeMismatch,
+                            spans: if let (Some(first_span), Some(arg_span)) =
+                                (first_span, arg_span)
+                            {
+                                vec![Span::new(first_span.start(), arg_span.end())]
+                            } else {
+                                vec![]
+                            },
+                        })
+                    }
+                })
+            }
+        } else {
+            None
+        }
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -353,7 +593,10 @@ mod test {
             let res = parser.parse();
             let errs = res.unwrap_err();
             assert_eq!(errs.len(), 1);
-            assert_eq!(errs[0].kind, HeaderErrorKind::DuplicateEntry);
+            assert_eq!(
+                errs[0].kind,
+                HeaderErrorKind::DuplicateEntry("dupe".to_string())
+            );
             assert_eq!(errs[0].spans.len(), 3);
         }
     }

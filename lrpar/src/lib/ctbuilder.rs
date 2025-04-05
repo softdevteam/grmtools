@@ -17,10 +17,10 @@ use std::{
 use crate::{LexerTypes, RecoveryKind};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
+    header::{Header, Namespaced, Setting, SettingQuery, Value},
+    markmap::MergeBehavior,
     newlinecache::NewlineCache,
-    yacc::{
-        ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
-    },
+    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -235,7 +235,7 @@ where
     grammar_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     mod_name: Option<&'a str>,
-    recoverer: RecoveryKind,
+    recoverer: Option<RecoveryKind>,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     warnings_are_errors: bool,
@@ -279,7 +279,7 @@ where
             grammar_path: None,
             output_path: None,
             mod_name: None,
-            recoverer: RecoveryKind::CPCTPlus,
+            recoverer: None,
             yacckind: None,
             error_on_conflicts: true,
             warnings_are_errors: true,
@@ -378,7 +378,7 @@ where
 
     /// Set the recoverer for this parser to `rk`. Defaults to `RecoveryKind::CPCTPlus`.
     pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
-        self.recoverer = rk;
+        self.recoverer = Some(rk);
         self
     }
 
@@ -477,11 +477,33 @@ where
             .output_path
             .as_ref()
             .expect("output_path must be specified before processing.");
-        let yk = match self.yacckind {
-            None => YaccKindResolver::NoDefault,
+        let mut builder_header = Header::new();
+        builder_header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::MutuallyExclusive);
+        builder_header
+            .contents_mut()
+            .mark_required(&"yacckind".to_string());
+        match self.yacckind {
+            None => {}
             Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
-            Some(x) => YaccKindResolver::Force(x),
-        };
+            Some(yk) => {
+                builder_header.contents_mut().insert(
+                    "yacckind".to_string(),
+                    (cfgrammar::Span::new(0, 0), yk.into()),
+                );
+            }
+        }
+
+        builder_header
+            .contents_mut()
+            .set_merge_behavior(&"yacckind".to_string(), MergeBehavior::MutuallyExclusive);
+        if let Some(recoverer) = self.recoverer {
+            builder_header.contents_mut().insert(
+                "recoverer".to_string(),
+                (cfgrammar::Span::new(0, 0), recoverer.into()),
+            );
+        }
 
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
@@ -491,26 +513,90 @@ where
             lk.insert(outp.clone());
         }
 
+        let span_fmt =
+            |span: Option<cfgrammar::Span>, s: &str, inc: &str, line_cache: &NewlineCache| {
+                if let Some(span) = span {
+                    if let Some((line, column)) =
+                        line_cache.byte_to_line_num_and_col_num(inc, span.start())
+                    {
+                        format!("{} at line {line} column {column}", s)
+                    } else {
+                        s.to_string()
+                    }
+                } else {
+                    s.to_string()
+                }
+            };
+
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
-        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        let mut line_cache = NewlineCache::new();
+        line_cache.feed(&inc);
+        let ast_validation = ASTWithValidityInfo::new(&mut builder_header, &inc);
+        if self.recoverer.is_none() {
+            let recoverer_setting = builder_header.query("recoverer", SettingQuery::Unitary as u16);
+            match recoverer_setting {
+                Some(Ok((
+                    _,
+                    Value::Setting(Setting::Unitary(Namespaced {
+                        namespace,
+                        member: (member, member_span),
+                    })),
+                ))) => {
+                    if let Some((namespace, span)) = namespace {
+                        if namespace != "recoverykind" {
+                            return Err(span_fmt(
+                                *span,
+                                &format!("Unknown RecoveryKind: {}", namespace),
+                                &inc,
+                                &line_cache,
+                            )
+                            .into());
+                        }
+                    }
+
+                    let rk = [
+                        ("none", RecoveryKind::None),
+                        ("cpctplus", RecoveryKind::CPCTPlus),
+                    ]
+                    .iter()
+                    .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
+                    if rk.is_none() {
+                        return Err(span_fmt(
+                            *member_span,
+                            "Invalid RecoveryKind specified in %grmtools section",
+                            &inc,
+                            &line_cache,
+                        )
+                        .into());
+                    }
+                    self.recoverer = rk;
+                }
+                Some(err) => {
+                    err?;
+                }
+                None => {}
+            }
+        }
+
+        let unused: Vec<String> = builder_header.contents().unused();
+        assert!(unused.is_empty());
+        if !unused.is_empty() {
+            return Err(
+                ErrorString(format!("Unused header settings: {}", unused.join(", "))).into(),
+            );
+        }
+
+        self.recoverer = Some(self.recoverer.unwrap_or(RecoveryKind::CPCTPlus));
         self.yacckind = ast_validation.yacc_kind();
         let warnings = ast_validation.ast().warnings();
+        let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
-            if let Some((line, column)) =
-                line_cache.byte_to_line_num_and_col_num(inc, x.spans()[0].start())
-            {
-                format!("{} at line {line} column {column}", x)
-            } else {
-                format!("{}", x)
-            }
+            span_fmt(Some(x.spans()[0]), &format!("{}", x), inc, line_cache)
         };
 
-        let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
         let grm = match res {
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
                 return Err(ErrorString(if warnings.len() > 1 {
                     // Indent under the "Error:" prefix.
                     format!(
@@ -527,8 +613,6 @@ where
             }
             Ok(grm) => {
                 if !warnings.is_empty() {
-                    let mut line_cache = NewlineCache::new();
-                    line_cache.feed(&inc);
                     for w in warnings {
                         // Assume if this variable is set we are running under cargo.
                         if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
@@ -885,7 +969,7 @@ where
     ) -> Result<TokenStream, Box<dyn Error>> {
         let storaget = str::parse::<TokenStream>(type_name::<StorageT>())?;
         let lexertypest = str::parse::<TokenStream>(type_name::<LexerTypesT>())?;
-        let recoverer = self.recoverer;
+        let recoverer = self.recoverer.unwrap();
         let run_parser = match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 quote! {
