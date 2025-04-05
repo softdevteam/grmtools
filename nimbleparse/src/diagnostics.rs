@@ -153,11 +153,14 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             } else {
                 out.push('\n');
                 let s = match e.spanskind() {
-                    SpansKind::DuplicationError => {
+                    SpansKind::DuplicationError | SpansKind::OptionalDuplicationSpan => {
                         format!("{} occurrence", Self::ordinal(span_num + 1))
                     }
                     SpansKind::Error => {
-                        unreachable!("Should contain a single span at the site of the error")
+                        unreachable!("Should contain a single span at the site of the error, not more")
+                    }
+                    SpansKind::OptionalSpan => {
+                        unreachable!("Should contain 0 or 1 spans at the site of the error, not more")
                     }
                     _ => "Unrecognized spanskind".to_string(),
                 };

@@ -257,6 +257,9 @@ pub enum SpansKind {
     /// May contain an empty list of spans indicating the error does not originate from a source location.
     /// Otherwise the spans may contain a single span at the site of the error.
     OptionalSpan,
+    /// Like Duplication error except spans may be optional, and missing spans
+    /// Indicate values which are not represented by a source location.
+    OptionalDuplicationSpan,
 }
 
 impl Spanned for YaccGrammarError {
@@ -310,8 +313,10 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::InvalidActionKind
             | YaccGrammarErrorKind::InvalidYaccKindNamespace
             | YaccGrammarErrorKind::InvalidActionKindNamespace
-            | YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(_)
             | YaccGrammarErrorKind::InvalidYaccKind => SpansKind::OptionalSpan,
+            YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(_) => {
+                SpansKind::OptionalDuplicationSpan
+            }
         }
     }
 }
@@ -374,18 +379,14 @@ impl<'a> YaccParser<'a> {
         let result = match header_parser.parse() {
             Ok((parsed_header, i)) => {
                 match self.header.merge_from(parsed_header) {
-                    Err(crate::markmap::MergeError::Exclusivity(key))=> {
-                        errs.push(
-                            YaccGrammarError{
-                                kind: YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(key),
-                                spans: vec![],
-                            }
-                        );
+                    Err(crate::markmap::MergeError::Exclusivity(key)) => {
+                        errs.push(YaccGrammarError {
+                            kind: YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(key),
+                            spans: vec![],
+                        });
                     }
 
-                    Ok(x) => {
-                        x
-                    }
+                    Ok(x) => x,
                 }
                 self.update_yacckind(i)
             }
@@ -398,7 +399,9 @@ impl<'a> YaccParser<'a> {
                         HeaderErrorKind::IllegalName => {
                             YaccGrammarErrorKind::InvalidGrmtoolsSectionEntry
                         }
-                        HeaderErrorKind::ExpectedToken(c) => YaccGrammarErrorKind::ExpectedInput(*c),
+                        HeaderErrorKind::ExpectedToken(c) => {
+                            YaccGrammarErrorKind::ExpectedInput(*c)
+                        }
                         HeaderErrorKind::DuplicateEntry(key) => {
                             YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry(key.clone())
                         }

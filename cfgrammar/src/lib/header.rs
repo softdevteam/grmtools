@@ -593,7 +593,10 @@ mod test {
             let res = parser.parse();
             let errs = res.unwrap_err();
             assert_eq!(errs.len(), 1);
-            assert_eq!(errs[0].kind, HeaderErrorKind::DuplicateEntry("dupe".to_string()));
+            assert_eq!(
+                errs[0].kind,
+                HeaderErrorKind::DuplicateEntry("dupe".to_string())
+            );
             assert_eq!(errs[0].spans.len(), 3);
         }
     }
