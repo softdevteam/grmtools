@@ -454,7 +454,7 @@ mod test {
             ),
         );
         YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start S
           %token a b c d
@@ -545,7 +545,7 @@ mod test {
             ),
         );
         YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start X
             %%

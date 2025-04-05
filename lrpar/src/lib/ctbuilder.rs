@@ -526,11 +526,9 @@ where
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
         let mut line_cache = NewlineCache::new();
         line_cache.feed(&inc);
-        let mut ast_validation = ASTWithValidityInfo::new(builder_header, &inc);
+        let ast_validation = ASTWithValidityInfo::new(&mut builder_header, &inc);
         if self.recoverer.is_none() {
-            let recoverer_setting = ast_validation
-                .header_mut()
-                .query("recoverer", SettingQuery::Unitary as u16);
+            let recoverer_setting = builder_header.query("recoverer", SettingQuery::Unitary as u16);
             match recoverer_setting {
                 Some(Ok((
                     _,
@@ -575,7 +573,7 @@ where
             }
         }
 
-        let unused: Vec<String> = ast_validation.header().contents().unused();
+        let unused: Vec<String> = builder_header.contents().unused();
         assert!(unused.is_empty());
         if !unused.is_empty() {
             return Err(

@@ -15,7 +15,6 @@ use crate::{header::Header, Span};
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
     yacc_kind: Option<YaccKind>,
-    header: Header,
     ast: GrammarAST,
     errs: Vec<YaccGrammarError>,
 }
@@ -25,21 +24,20 @@ impl ASTWithValidityInfo {
     /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
     /// then unused to construct a `YaccGrammar`, which will either produce an
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
-    pub fn new(header: Header, s: &str) -> Self {
+    pub fn new<'a>(header: &'a mut Header, s: &'_ str) -> Self {
         let mut errs = Vec::new();
-        let (yacc_kind, header, ast) = {
+        let (yacc_kind, ast) = {
             let mut yp = YaccParser::new(header, s.to_string());
             yp.parse().map_err(|e| errs.extend(e)).ok();
-            let (yacc_kind, header, mut ast) = yp.build();
+            let (yacc_kind, mut ast) = yp.build();
             if yacc_kind.is_some() {
                 ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
             }
-            (yacc_kind, header, ast)
+            (yacc_kind, ast)
         };
         ASTWithValidityInfo {
             ast,
             errs,
-            header,
             yacc_kind,
         }
     }
@@ -66,17 +64,6 @@ impl ASTWithValidityInfo {
     /// Returns all errors which were encountered during AST construction.
     pub fn errors(&self) -> &[YaccGrammarError] {
         self.errs.as_slice()
-    }
-
-    /// Returns a mutable reference to the parsed contents
-    /// of the `%grmtools` section from the file header.
-    pub fn header_mut(&mut self) -> &mut Header {
-        &mut self.header
-    }
-    /// Returns a reference to the parsed contents
-    /// of the `%grmtools` section from the file header.
-    pub fn header(&self) -> &Header {
-        &self.header
     }
 }
 

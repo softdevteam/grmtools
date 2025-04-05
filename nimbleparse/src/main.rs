@@ -162,12 +162,10 @@ fn main() {
             .contents_mut()
             .insert("yacckind".into(), (Span::new(0, 0), yacckind.into()))
     });
-    let mut ast_validation = ASTWithValidityInfo::new(header, &yacc_src);
+    let ast_validation = ASTWithValidityInfo::new(&mut header, &yacc_src);
     if recoverykind.is_none() {
         let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
-        let recoverer_setting = ast_validation
-            .header_mut()
-            .query("recoverer", SettingQuery::Unitary as u16);
+        let recoverer_setting = header.query("recoverer", SettingQuery::Unitary as u16);
         match recoverer_setting {
             Some(Ok((
                 _,
@@ -211,11 +209,8 @@ fn main() {
         }
     }
     let recoverykind = recoverykind.unwrap_or(RecoveryKind::CPCTPlus);
-    ast_validation
-        .header_mut()
-        .contents_mut()
-        .mark_used(&"recoverer".to_string());
-    let unused: Vec<String> = ast_validation.header().contents().unused();
+    header.contents_mut().mark_used(&"recoverer".to_string());
+    let unused: Vec<String> = header.contents().unused();
     if !unused.is_empty() {
         // Print but don't exit?
         eprintln!("Unused header settings: {}", unused.join(" "));

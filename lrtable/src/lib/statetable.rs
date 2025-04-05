@@ -638,7 +638,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start Expr
             %%
@@ -724,7 +724,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header, "
+            &mut header, "
             %start A
             %%
             A : B 'x' | C 'x' 'x';
@@ -753,7 +753,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header, "
+            &mut header, "
             %start Expr
             %%
             Expr : Expr '+' Expr
@@ -788,7 +788,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header, "
+            &mut header, "
             %start S
             %%
             S: A 'c' 'd'
@@ -818,7 +818,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header, "
+            &mut header, "
             %start Expr
             %left '+'
             %left '*'
@@ -862,7 +862,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = &YaccGrammar::new(
-            header, "
+            &mut header, "
             %start Expr
             %right '='
             %left '+'
@@ -923,7 +923,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header, "
+            &mut header, "
             %start Expr
             %right '='
             %left '+'
@@ -1010,7 +1010,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
 %start A
 %%
@@ -1059,7 +1059,7 @@ C : 'a';
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
 %start S
 %%
@@ -1105,7 +1105,7 @@ X: '1' ; Y: '2' ;
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
 %start D
 %%
@@ -1140,7 +1140,7 @@ S: S | ;";
                 YaccKind::Original(YaccOriginalActionKind::NoAction).into(),
             ),
         );
-        let ast_validity = ASTWithValidityInfo::new(header, src);
+        let ast_validity = ASTWithValidityInfo::new(&mut header, src);
         let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(&ast_validity).unwrap();
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {
@@ -1203,7 +1203,7 @@ T: S | ;";
                 YaccKind::Original(YaccOriginalActionKind::NoAction).into(),
             ),
         );
-        let ast_validity = ASTWithValidityInfo::new(header, src);
+        let ast_validity = ASTWithValidityInfo::new(&mut header, src);
         let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(&ast_validity).unwrap();
         let sg = pager_stategraph(&grm);
         match StateTable::new(&grm, &sg) {

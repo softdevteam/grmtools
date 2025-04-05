@@ -195,7 +195,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start C
           %token c d
@@ -229,7 +229,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start C
           %token c d
@@ -259,7 +259,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start A
           %token a b c
@@ -292,7 +292,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start A
           %token b c
@@ -324,7 +324,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start A
           %token b c
@@ -352,7 +352,7 @@ mod test {
             ),
         );
         YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start S
           %token a b c d f
@@ -395,7 +395,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start E
           %token a b c d e f

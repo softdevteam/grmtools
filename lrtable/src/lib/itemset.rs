@@ -178,7 +178,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start S
           %%
@@ -219,7 +219,7 @@ mod test {
             ),
         );
         YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start S
           %token a b c d f
@@ -282,7 +282,7 @@ mod test {
             ),
         );
         YaccGrammar::new(
-            header,
+            &mut header,
             "
           %start S
           %token a b c d

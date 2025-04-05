@@ -176,7 +176,7 @@ where
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
 impl YaccGrammar<u32> {
-    pub fn new(header: Header, s: &str) -> YaccGrammarResult<Self> {
+    pub fn new<'a>(header: &'a mut Header, s: &str) -> YaccGrammarResult<Self> {
         YaccGrammar::new_with_storaget(header, s)
     }
 }
@@ -192,7 +192,7 @@ where
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(header: Header, s: &str) -> YaccGrammarResult<Self> {
+    pub fn new_with_storaget<'a>(header: &'a mut Header, s: &str) -> YaccGrammarResult<Self> {
         let ast_validation = ast::ASTWithValidityInfo::new(header, s);
         Self::new_from_ast_with_validity_info(&ast_validation)
     }
@@ -1156,7 +1156,7 @@ mod test {
                 YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
             ),
         );
-        let grm = YaccGrammar::new(header, "%start R %token T %% R: 'T';").unwrap();
+        let grm = YaccGrammar::new(&mut header, "%start R %token T %% R: 'T';").unwrap();
 
         assert_eq!(grm.start_prod, PIdx(1));
         assert_eq!(grm.implicit_rule(), None);
@@ -1195,7 +1195,7 @@ mod test {
                 YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
             ),
         );
-        let grm = YaccGrammar::new(header, "%start R %token T %% R : S; S: 'T';").unwrap();
+        let grm = YaccGrammar::new(&mut header, "%start R %token T %% R : S; S: 'T';").unwrap();
 
         grm.rule_idx("^").unwrap();
         grm.rule_idx("R").unwrap();
@@ -1225,7 +1225,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';"
         ).unwrap();
 
@@ -1268,7 +1268,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start A
             %%
@@ -1295,7 +1295,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start Expr
             %right '='
@@ -1332,7 +1332,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start expr
             %left '+' '-'
@@ -1364,7 +1364,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Eco.into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
           %implicit_tokens ws1 ws2
           %start S
@@ -1444,7 +1444,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start A
             %%
@@ -1475,7 +1475,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start A
             %%
@@ -1510,7 +1510,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start A
             %%
@@ -1562,7 +1562,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start A
             %%
@@ -1590,7 +1590,7 @@ mod test {
         header.contents_mut().mark_required(&"yacckind".to_string());
         header.contents_mut().insert("yacckind".into(), (Span::new(0, 0), YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into()));
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start A
             %%
@@ -1624,7 +1624,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
             %start S
             %%
@@ -1667,7 +1667,7 @@ mod test {
                 YaccKind::Original(YaccOriginalActionKind::NoAction).into(),
             ),
         );
-        let grm = YaccGrammar::new(header, src).unwrap();
+        let grm = YaccGrammar::new(&mut header, src).unwrap();
         let token_map = grm.tokens_map();
         let a_tidx = token_map.get("a");
         let foo_tidx = token_map.get("foo");
@@ -1703,7 +1703,7 @@ mod test {
                 YaccKind::Original(YaccOriginalActionKind::NoAction).into(),
             ),
         );
-        let grm = YaccGrammar::new(header, src).unwrap();
+        let grm = YaccGrammar::new(&mut header, src).unwrap();
         let token_map = grm.tokens_map();
         let c_tidx = token_map.get("c").unwrap();
         assert_eq!(grm.token_name(*c_tidx), Some("c"));

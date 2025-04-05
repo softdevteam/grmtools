@@ -313,9 +313,9 @@ impl Spanned for YaccGrammarError {
     }
 }
 
-pub(crate) struct YaccParser {
+pub(crate) struct YaccParser<'a> {
     yacc_kind: Option<YaccKind>,
-    header: Header,
+    header: &'a mut Header,
     src: String,
     num_newlines: usize,
     ast: GrammarAST,
@@ -350,8 +350,8 @@ fn add_duplicate_occurrence(
 }
 
 /// The actual parser is intended to be entirely opaque from outside users.
-impl YaccParser {
-    pub(crate) fn new(header: Header, src: String) -> YaccParser {
+impl<'a> YaccParser<'a> {
+    pub(crate) fn new(header: &'a mut Header, src: String) -> YaccParser<'a> {
         YaccParser {
             yacc_kind: None,
             header,
@@ -556,8 +556,8 @@ impl YaccParser {
         Ok(i)
     }
 
-    pub(crate) fn build(self) -> (Option<YaccKind>, Header, GrammarAST) {
-        (self.yacc_kind, self.header, self.ast)
+    pub(crate) fn build(self) -> (Option<YaccKind>, GrammarAST) {
+        (self.yacc_kind, self.ast)
     }
 
     fn parse_declarations(
@@ -1258,9 +1258,9 @@ mod test {
         header
             .contents_mut()
             .insert("yacckind".to_string(), (Span::new(0, 0), yacc_kind.into()));
-        let mut yp = YaccParser::new(header, s.to_string());
+        let mut yp = YaccParser::new(&mut header, s.to_string());
         yp.parse()?;
-        Ok(yp.build().2)
+        Ok(yp.build().1)
     }
 
     fn rule(n: &str) -> Symbol {
@@ -2933,7 +2933,9 @@ B";
         for src in srcs {
             let mut header = Header::new();
             header.contents_mut().mark_required(&"yacckind".to_string());
-            YaccParser::new(header, src.to_string()).parse().unwrap();
+            YaccParser::new(&mut header, src.to_string())
+                .parse()
+                .unwrap();
         }
     }
 
@@ -2958,7 +2960,7 @@ B";
 
         for src in srcs {
             let s = format!("{}\n%%\nStart();\n", src);
-            let parse_result = YaccParser::new(Header::new(), s.to_string()).parse();
+            let parse_result = YaccParser::new(&mut Header::new(), s.to_string()).parse();
             assert!(parse_result.is_err());
         }
     }
@@ -2977,7 +2979,7 @@ B";
             %%
             Start -> () : ;
         "#;
-        YaccParser::new(Header::new(), src.to_string())
+        YaccParser::new(&mut Header::new(), src.to_string())
             .parse()
             .unwrap();
         let src = r#"
@@ -2987,7 +2989,7 @@ B";
             %%
             Start -> () : ;
         "#;
-        YaccParser::new(Header::new(), src.to_string())
+        YaccParser::new(&mut Header::new(), src.to_string())
             .parse()
             .unwrap();
     }

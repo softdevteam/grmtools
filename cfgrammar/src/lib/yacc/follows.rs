@@ -164,7 +164,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
                 %start E
                 %%
@@ -200,7 +200,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
                 %start A
                 %%
@@ -235,7 +235,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
                 %start S
                 %%
@@ -264,7 +264,7 @@ mod test {
             ),
         );
         let grm = YaccGrammar::new(
-            header,
+            &mut header,
             "
                 %start E
                 %%

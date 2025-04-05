@@ -1050,7 +1050,7 @@ pub(crate) mod test {
                 YaccKind::Original(YaccOriginalActionKind::GenericParseTree).into(),
             ),
         );
-        let grm = YaccGrammar::<u16>::new_with_storaget(header, grms).unwrap();
+        let grm = YaccGrammar::<u16>::new_with_storaget(&mut header, grms).unwrap();
         let (_, stable) = from_yacc(&grm, Minimiser::Pager).unwrap();
         let rule_ids = grm
             .tokens_map()
