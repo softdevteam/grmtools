@@ -53,13 +53,13 @@ pub struct HeaderContentsError {
 #[non_exhaustive]
 #[doc(hidden)]
 pub enum HeaderContentsErrorKind {
-    WrongValueVariant,
+    QueryTypeMismatch,
 }
 
 impl fmt::Display for HeaderContentsErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
-            HeaderContentsErrorKind::WrongValueVariant => "value has an unexpected type",
+            HeaderContentsErrorKind::QueryTypeMismatch => "value has an unexpected type",
         };
         write!(f, "{}", s)
     }
@@ -485,11 +485,11 @@ impl Header {
             } else {
                 Some(match value {
                     Value::Flag(_) => Err(HeaderContentsError {
-                        kind: HeaderContentsErrorKind::WrongValueVariant,
+                        kind: HeaderContentsErrorKind::QueryTypeMismatch,
                         spans: vec![*key_span],
                     }),
                     Value::Setting(Setting::Num(_, num_span)) => Err(HeaderContentsError {
-                        kind: HeaderContentsErrorKind::WrongValueVariant,
+                        kind: HeaderContentsErrorKind::QueryTypeMismatch,
                         spans: if num_span.is_some() {
                             vec![num_span.unwrap()]
                         } else {
@@ -506,7 +506,7 @@ impl Header {
                             member_span
                         };
                         Err(HeaderContentsError {
-                            kind: HeaderContentsErrorKind::WrongValueVariant,
+                            kind: HeaderContentsErrorKind::QueryTypeMismatch,
                             spans: if let (Some(first_span), Some(member_span)) =
                                 (first_span, member_span)
                             {
@@ -534,7 +534,7 @@ impl Header {
                             ctor_span
                         };
                         Err(HeaderContentsError {
-                            kind: HeaderContentsErrorKind::WrongValueVariant,
+                            kind: HeaderContentsErrorKind::QueryTypeMismatch,
                             spans: if let (Some(first_span), Some(arg_span)) =
                                 (first_span, arg_span)
                             {
