@@ -254,6 +254,9 @@ pub enum SpansKind {
     DuplicationError,
     /// Contains a single span at the site of the error.
     Error,
+    /// May contain an empty list of spans indicating the error does not originate from a source location.
+    /// Otherwise the spans may contain a single span at the site of the error.
+    OptionalSpan,
 }
 
 impl Spanned for YaccGrammarError {
@@ -293,12 +296,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::NoPrecForToken(_)
             | YaccGrammarErrorKind::MissingGrmtoolsSection
             | YaccGrammarErrorKind::InvalidGrmtoolsSectionEntry
-            | YaccGrammarErrorKind::InvalidYaccKind
-            | YaccGrammarErrorKind::InvalidYaccKindNamespace
-            | YaccGrammarErrorKind::InvalidActionKind
-            | YaccGrammarErrorKind::InvalidActionKindNamespace
             | YaccGrammarErrorKind::ExpectedInput(_)
-            | YaccGrammarErrorKind::HeaderContents(_)
             | YaccGrammarErrorKind::UnknownEPP(_) => SpansKind::Error,
             YaccGrammarErrorKind::DuplicatePrecedence
             | YaccGrammarErrorKind::DuplicateAvoidInsertDeclaration
@@ -309,6 +307,11 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::DuplicateActiontypeDeclaration
             | YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry
             | YaccGrammarErrorKind::DuplicateEPP => SpansKind::DuplicationError,
+            YaccGrammarErrorKind::HeaderContents(_)
+            | YaccGrammarErrorKind::InvalidActionKind
+            | YaccGrammarErrorKind::InvalidYaccKindNamespace
+            | YaccGrammarErrorKind::InvalidActionKindNamespace
+            | YaccGrammarErrorKind::InvalidYaccKind => SpansKind::OptionalSpan,
         }
     }
 }
@@ -456,7 +459,11 @@ impl<'a> YaccParser<'a> {
                         if ns != "yacckind" {
                             errs.push(YaccGrammarError {
                                 kind: YaccGrammarErrorKind::InvalidYaccKindNamespace,
-                                spans: vec![*ns_span],
+                                spans: if let Some(ns_span) = ns_span {
+                                    vec![*ns_span]
+                                } else {
+                                    vec![]
+                                },
                             });
                         }
                     }
@@ -477,7 +484,11 @@ impl<'a> YaccParser<'a> {
                     } else {
                         errs.push(YaccGrammarError {
                             kind: YaccGrammarErrorKind::InvalidYaccKind,
-                            spans: vec![*yk_value_span],
+                            spans: if let Some(yk_value_span) = yk_value_span {
+                                vec![*yk_value_span]
+                            } else {
+                                vec![]
+                            },
                         });
                         return Err(errs);
                     }
@@ -504,7 +515,11 @@ impl<'a> YaccParser<'a> {
                         if yk_ns != "yacckind" {
                             errs.push(YaccGrammarError {
                                 kind: YaccGrammarErrorKind::InvalidYaccKindNamespace,
-                                spans: vec![*yk_ns_span],
+                                spans: if let Some(yk_ns_span) = yk_ns_span {
+                                    vec![*yk_ns_span]
+                                } else {
+                                    vec![]
+                                },
                             });
                         }
                     }
@@ -512,7 +527,11 @@ impl<'a> YaccParser<'a> {
                     if yk_str != "original" {
                         errs.push(YaccGrammarError {
                             kind: YaccGrammarErrorKind::InvalidYaccKind,
-                            spans: vec![*yk_span],
+                            spans: if let Some(yk_span) = yk_span {
+                                vec![*yk_span]
+                            } else {
+                                vec![]
+                            },
                         });
                     }
 
@@ -520,7 +539,11 @@ impl<'a> YaccParser<'a> {
                         if ak_ns != "yaccoriginalactionkind" {
                             errs.push(YaccGrammarError {
                                 kind: YaccGrammarErrorKind::InvalidActionKindNamespace,
-                                spans: vec![*ak_ns_span],
+                                spans: if let Some(ak_ns_span) = ak_ns_span {
+                                    vec![*ak_ns_span]
+                                } else {
+                                    vec![]
+                                },
                             });
                         }
                     }
@@ -543,7 +566,11 @@ impl<'a> YaccParser<'a> {
                     } else {
                         errs.push(YaccGrammarError {
                             kind: YaccGrammarErrorKind::InvalidActionKind,
-                            spans: vec![*ak_span],
+                            spans: if let Some(ak_span) = ak_span {
+                                vec![*ak_span]
+                            } else {
+                                vec![]
+                            },
                         });
                         return Err(errs);
                     }

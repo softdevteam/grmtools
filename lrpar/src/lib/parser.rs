@@ -642,13 +642,13 @@ impl From<RecoveryKind> for header::Value {
     fn from(val: RecoveryKind) -> Self {
         use header::{Namespaced, Setting};
         header::Value::Setting(Setting::Unitary(Namespaced {
-            namespace: Some(("recoverykind".to_string(), Span::new(0, 0))),
+            namespace: Some(("recoverykind".to_string(), None)),
             member: (
                 match val {
                     RecoveryKind::CPCTPlus => "ctcplus".to_string(),
                     RecoveryKind::None => "none".to_string(),
                 },
-                Span::new(0, 0),
+                None,
             ),
         }))
     }

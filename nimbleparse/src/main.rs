@@ -176,12 +176,14 @@ fn main() {
             ))) => {
                 if let Some((namespace, span)) = namespace {
                     if namespace != "recoverykind" {
-                        formatter.underline_span_with_text(
-                            *span,
-                            "Unknown namespace, expected RecoveryKind".to_string(),
-                            '^',
-                        );
-                        process::exit(1);
+                        let err_str =
+                            format!("Unknown namespace: '{}' expected RecoveryKind", namespace);
+                        if let Some(span) = span {
+                            formatter.underline_span_with_text(*span, err_str, '^');
+                            process::exit(1);
+                        } else {
+                            eprintln!("{}", err_str);
+                        }
                     }
                 }
 
@@ -192,11 +194,15 @@ fn main() {
                 .iter()
                 .find_map(|(rk_str, rk)| (member == rk_str).then_some(*rk));
                 if rk.is_none() {
-                    formatter.underline_span_with_text(
-                        *member_span,
-                        "Invalid RecoveryKind specified in %grmtools section".to_string(),
-                        '^',
+                    let err_str = format!(
+                        "Invalid RecoveryKind: '{}' specified in %grmtools section",
+                        member
                     );
+                    if let Some(member_span) = member_span {
+                        formatter.underline_span_with_text(*member_span, err_str, '^');
+                    } else {
+                        eprintln!("{}", err_str);
+                    }
                 }
                 recoverykind = rk;
             }

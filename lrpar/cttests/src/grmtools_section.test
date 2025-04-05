@@ -60,7 +60,7 @@ grammar: |
         let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
         Namespaced{
             namespace: None,
-            member: (ident, ident_span)
+            member: (ident, Some(ident_span))
         }
     }
     | IDENT '::' IDENT {
@@ -70,8 +70,8 @@ grammar: |
         let ident_span = $3.as_ref().unwrap().span();
         let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
         Namespaced {
-            namespace: Some((namespace, namespace_span)),
-            member: (ident, ident_span)
+            namespace: Some((namespace, Some(namespace_span))),
+            member: (ident, Some(ident_span))
         }
     }
     ;
@@ -99,7 +99,7 @@ grammar: |
     | NUM  {
         let num_span = $1.as_ref().unwrap().span();
         let n = str::parse::<u64>($lexer.span_str(num_span));
-        Setting::Num(n.expect("convertible"), num_span)
+        Setting::Num(n.expect("convertible"), Some(num_span))
     }
     | namespaced '(' namespaced ')' { Setting::Constructor{ctor: $1, arg: $3} }
     ;

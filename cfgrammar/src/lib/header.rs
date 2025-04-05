@@ -88,8 +88,8 @@ impl fmt::Display for HeaderContentsError {
 /// ```
 #[derive(Debug, Eq, PartialEq)]
 pub struct Namespaced {
-    pub namespace: Option<(String, Span)>,
-    pub member: (String, Span),
+    pub namespace: Option<(String, Option<Span>)>,
+    pub member: (String, Option<Span>),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -104,7 +104,7 @@ pub enum Setting {
         ctor: Namespaced,
         arg: Namespaced,
     },
-    Num(u64, Span),
+    Num(u64, Option<Span>),
 }
 
 /// Parser for the `%grmtools` section
@@ -152,30 +152,30 @@ impl From<YaccKind> for Value {
     fn from(kind: YaccKind) -> Value {
         match kind {
             YaccKind::Grmtools => Value::Setting(Setting::Unitary(Namespaced {
-                namespace: Some(("yacckind".to_string(), Span::new(0, 0))),
-                member: ("grmtools".to_string(), Span::new(0, 0)),
+                namespace: Some(("yacckind".to_string(), None)),
+                member: ("grmtools".to_string(), None),
             })),
             YaccKind::Eco => Value::Setting(Setting::Unitary(Namespaced {
-                namespace: Some(("yacckind".to_string(), Span::new(0, 0))),
-                member: ("eco".to_string(), Span::new(0, 0)),
+                namespace: Some(("yacckind".to_string(), None)),
+                member: ("eco".to_string(), None),
             })),
             YaccKind::Original(action_kind) => Value::Setting(Setting::Constructor {
                 ctor: Namespaced {
-                    namespace: Some(("yacckind".to_string(), Span::new(0, 0))),
-                    member: ("original".to_string(), Span::new(0, 0)),
+                    namespace: Some(("yacckind".to_string(), None)),
+                    member: ("original".to_string(), None),
                 },
                 arg: match action_kind {
                     YaccOriginalActionKind::NoAction => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), Span::new(0, 0))),
-                        member: ("noaction".to_string(), Span::new(0, 0)),
+                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
+                        member: ("noaction".to_string(), None),
                     },
                     YaccOriginalActionKind::UserAction => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), Span::new(0, 0))),
-                        member: ("useraction".to_string(), Span::new(0, 0)),
+                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
+                        member: ("useraction".to_string(), None),
                     },
                     YaccOriginalActionKind::GenericParseTree => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), Span::new(0, 0))),
-                        member: ("genericparsetree".to_string(), Span::new(0, 0)),
+                        namespace: Some(("yaccoriginalactionkind".to_string(), None)),
+                        member: ("genericparsetree".to_string(), None),
                     },
                 },
             }),
@@ -257,7 +257,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         let num_str = &self.src[num_span.start()..num_span.end()];
                         // If the above regex matches we expect this to succeed.
                         let num = str::parse::<u64>(num_str).unwrap();
-                        let val = Setting::Num(num, num_span);
+                        let val = Setting::Num(num, Some(num_span));
                         i = self.parse_ws(num_span.end());
                         Ok((key_name, key_span, Value::Setting(val), i))
                     }
@@ -312,8 +312,8 @@ impl<'input> GrmtoolsSectionParser<'input> {
             i = self.parse_ws(j);
             Ok((
                 Namespaced {
-                    namespace: Some((name, name_span)),
-                    member: (member_val, member_val_span),
+                    namespace: Some((name, Some(name_span))),
+                    member: (member_val, Some(member_val_span)),
                 },
                 i,
             ))
@@ -321,7 +321,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             Ok((
                 Namespaced {
                     namespace: None,
-                    member: (name, name_span),
+                    member: (name, Some(name_span)),
                 },
                 i,
             ))
@@ -490,7 +490,11 @@ impl Header {
                     }),
                     Value::Setting(Setting::Num(_, num_span)) => Err(HeaderContentsError {
                         kind: HeaderContentsErrorKind::WrongValueVariant,
-                        spans: vec![*num_span],
+                        spans: if num_span.is_some() {
+                            vec![num_span.unwrap()]
+                        } else {
+                            vec![]
+                        },
                     }),
                     Value::Setting(Setting::Unitary(Namespaced {
                         namespace,
@@ -503,7 +507,13 @@ impl Header {
                         };
                         Err(HeaderContentsError {
                             kind: HeaderContentsErrorKind::WrongValueVariant,
-                            spans: vec![Span::new(first_span.start(), member_span.end())],
+                            spans: if let (Some(first_span), Some(member_span)) =
+                                (first_span, member_span)
+                            {
+                                vec![Span::new(first_span.start(), member_span.end())]
+                            } else {
+                                vec![]
+                            },
                         })
                     }
                     Value::Setting(Setting::Constructor {
@@ -525,7 +535,13 @@ impl Header {
                         };
                         Err(HeaderContentsError {
                             kind: HeaderContentsErrorKind::WrongValueVariant,
-                            spans: vec![Span::new(first_span.start(), arg_span.end())],
+                            spans: if let (Some(first_span), Some(arg_span)) =
+                                (first_span, arg_span)
+                            {
+                                vec![Span::new(first_span.start(), arg_span.end())]
+                            } else {
+                                vec![]
+                            },
                         })
                     }
                 })

@@ -513,14 +513,20 @@ where
             lk.insert(outp.clone());
         }
 
-        let span_fmt = |span: cfgrammar::Span, s: &str, inc: &str, line_cache: &NewlineCache| {
-            if let Some((line, column)) = line_cache.byte_to_line_num_and_col_num(inc, span.start())
-            {
-                format!("{} at line {line} column {column}", s)
-            } else {
-                s.to_string()
-            }
-        };
+        let span_fmt =
+            |span: Option<cfgrammar::Span>, s: &str, inc: &str, line_cache: &NewlineCache| {
+                if let Some(span) = span {
+                    if let Some((line, column)) =
+                        line_cache.byte_to_line_num_and_col_num(inc, span.start())
+                    {
+                        format!("{} at line {line} column {column}", s)
+                    } else {
+                        s.to_string()
+                    }
+                } else {
+                    s.to_string()
+                }
+            };
 
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
@@ -586,7 +592,7 @@ where
         let warnings = ast_validation.ast().warnings();
         let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
-            span_fmt(x.spans()[0], &format!("{}", x), inc, line_cache)
+            span_fmt(Some(x.spans()[0]), &format!("{}", x), inc, line_cache)
         };
 
         let grm = match res {
