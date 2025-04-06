@@ -37,7 +37,7 @@ pub enum MergeError<K> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MarkMap<K, V> {
-    contents: Vec<(K, Option<u16>, Option<V>)>,
+    contents: Vec<(K, u16, Option<V>)>,
 }
 
 pub enum Entry<'a, K, V> {
@@ -51,7 +51,7 @@ impl<K: Ord + Clone, V> VacantEntry<'_, K, V> {
             Ok(pos) => {
                 self.map.contents[pos].2 = Some(val);
             }
-            Err(pos) => self.map.contents.insert(pos, (self.key, None, Some(val))),
+            Err(pos) => self.map.contents.insert(pos, (self.key, 0, Some(val))),
         }
     }
 
@@ -71,8 +71,37 @@ impl<K: Ord, V> OccupiedEntry<'_, K, V> {
         v.unwrap()
     }
 
-    pub fn mark(&self) -> Option<u16> {
+    pub fn get_mark(&self) -> u16 {
         self.map.contents[self.pos].1
+    }
+
+    pub fn mark_used(&mut self) {
+        let repr = self.map.contents[self.pos].1 | Mark::Used.repr();
+        self.map.contents[self.pos].1 = repr;
+    }
+
+    pub fn is_used(&self) -> bool {
+        self.map.contents[self.pos].1 & Mark::Used.repr() != 0
+    }
+
+    pub fn mark_required(&mut self) {
+        let repr = self.map.contents[self.pos].1 | Mark::Required.repr();
+        self.map.contents[self.pos].1 = repr;
+    }
+
+    pub fn is_required(&self) -> bool {
+        self.map.contents[self.pos].1 & Mark::Required.repr() != 0
+    }
+
+    pub fn set_merge_behavior(&mut self, mb: MergeBehavior) {
+        let mut repr = self.map.contents[self.pos].1;
+        let merge_reprs = Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr()
+            | Mark::MergeBehavior(MergeBehavior::Ours).repr()
+            | Mark::MergeBehavior(MergeBehavior::Theirs).repr();
+        // Zap just the MergeBehavior bits.
+        repr ^= repr & merge_reprs;
+        repr |= Mark::MergeBehavior(mb).repr();
+        self.map.contents[self.pos].1 = repr;
     }
 }
 
@@ -102,7 +131,7 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
                 ret
             }
             Err(pos) => {
-                self.contents.insert(pos, (key, None, Some(val)));
+                self.contents.insert(pos, (key, 0, Some(val)));
                 None
             }
         }
@@ -112,7 +141,7 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     pub(crate) fn get_mark(&mut self, key: &K) -> Option<u16> {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
-            Ok(pos) => self.contents[pos].1,
+            Ok(pos) => Some(self.contents[pos].1),
             Err(_) => None,
         }
     }
@@ -121,13 +150,13 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
             Ok(pos) => {
-                let mut repr = self.contents[pos].1.unwrap_or(0);
+                let mut repr = self.contents[pos].1;
                 repr |= Mark::Used.repr();
-                self.contents[pos].1 = Some(repr);
+                self.contents[pos].1 = repr;
             }
             Err(pos) => {
                 self.contents
-                    .insert(pos, (key.to_owned(), Some(Mark::Used.repr()), None));
+                    .insert(pos, (key.to_owned(), Mark::Used.repr(), None));
             }
         }
     }
@@ -136,13 +165,13 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
             Ok(pos) => {
-                let mut repr = self.contents[pos].1.unwrap_or(0);
+                let mut repr = self.contents[pos].1;
                 repr |= Mark::Required.repr();
-                self.contents[pos].1 = Some(repr);
+                self.contents[pos].1 = repr;
             }
             Err(pos) => {
                 self.contents
-                    .insert(pos, (key.to_owned(), Some(Mark::Required.repr()), None));
+                    .insert(pos, (key.to_owned(), Mark::Required.repr(), None));
             }
         }
     }
@@ -150,10 +179,7 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     pub fn is_required(&self, key: &K) -> bool {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
-            Ok(pos) => self.contents[pos]
-                .1
-                .map(|x| x & Mark::Required.repr() != 0)
-                .unwrap_or(false),
+            Ok(pos) => self.contents[pos].1 & Mark::Required.repr() != 0,
             _ => false,
         }
     }
@@ -162,20 +188,18 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
             Ok(pos) => {
-                let mut repr = self.contents[pos].1.unwrap_or(0);
+                let mut repr = self.contents[pos].1;
                 let merge_reprs = Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr()
                     | Mark::MergeBehavior(MergeBehavior::Ours).repr()
                     | Mark::MergeBehavior(MergeBehavior::Theirs).repr();
                 // Zap just the MergeBehavior bits.
                 repr ^= repr & merge_reprs;
                 repr |= Mark::MergeBehavior(mb).repr();
-                self.contents[pos].1 = Some(repr);
+                self.contents[pos].1 = repr;
             }
             Err(pos) => {
-                self.contents.insert(
-                    pos,
-                    (key.to_owned(), Some(Mark::MergeBehavior(mb).repr()), None),
-                );
+                self.contents
+                    .insert(pos, (key.to_owned(), Mark::MergeBehavior(mb).repr(), None));
             }
         }
     }
@@ -253,13 +277,9 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
                     let ours_mark = Mark::MergeBehavior(MergeBehavior::Ours).repr();
                     let exclusive_mark =
                         Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr();
-                    let merge_behavior = my_mark
-                        .map(|my_mark| {
-                            (my_mark & exclusive_mark)
-                                | (my_mark & ours_mark)
-                                | (my_mark & theirs_mark)
-                        })
-                        .unwrap_or(0);
+                    let merge_behavior = (my_mark & exclusive_mark)
+                        | (my_mark & ours_mark)
+                        | (my_mark & theirs_mark);
                     if merge_behavior == exclusive_mark || merge_behavior == 0 {
                         if my_val.is_some() && their_val.is_some() {
                             return Err(MergeError::Exclusivity(their_key.clone()));
@@ -287,11 +307,26 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
         Ok(())
     }
 
+    pub fn is_used<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
+        if let Ok(pos) = self.contents.binary_search_by(|x| {
+            let k: &Q = x.0.borrow();
+            k.borrow().cmp(key)
+        }) {
+            self.contents[pos].1 & Mark::Used.repr() != 0
+        } else {
+            false
+        }
+    }
+
     pub fn unused(&self) -> Vec<K> {
         let mut ret = Vec::new();
         for (k, mark, v) in &self.contents {
             let used_mark = Mark::Used.repr();
-            if v.is_some() && mark.map(|mark| mark & used_mark) != Some(used_mark) {
+            if v.is_some() && mark & used_mark == 0 {
                 ret.push(k.to_owned())
             }
         }
@@ -302,7 +337,7 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
         let mut ret = Vec::new();
         for (k, mark, v) in &self.contents {
             let required_mark = Mark::Required.repr();
-            if v.is_none() && mark.map(|mark| mark & required_mark) == Some(required_mark) {
+            if v.is_none() && mark & required_mark != 0 {
                 ret.push(k)
             }
         }
@@ -381,15 +416,26 @@ mod test {
     fn test_entry_occupied() {
         let mut mm = MarkMap::new();
         mm.insert("a", "test");
+        assert!(!mm.is_required(&"a"));
+        assert!(!mm.is_used(&"a"));
         let ent = mm.entry("a");
         match ent {
-            Entry::Occupied(o) => {
-                assert_eq!(o.get(), &"test");
+            Entry::Occupied(mut o) => {
+                assert!(!o.is_required());
+                assert!(!o.is_used());
+                o.mark_used();
+                assert!(o.is_used());
+                assert!(!o.is_required());
+                o.mark_required();
+                assert!(o.is_required());
+                assert!(o.is_used());
             }
             Entry::Vacant(_) => {
                 panic!("Expected occupied entry");
             }
         }
+        assert!(mm.is_required(&"a"));
+        assert!(mm.is_used(&"a"));
     }
 
     #[test]
@@ -487,7 +533,7 @@ mod test {
             mm.mark_used(&"a");
             assert!(mm.insert("b", "unused").is_none());
             assert_eq!(mm.get_mark(&"a"), Some(Mark::Used.repr()));
-            assert_eq!(mm.get_mark(&"b"), None);
+            assert_eq!(mm.get_mark(&"b"), Some(0));
             assert_eq!(mm.unused().as_slice(), &["b"]);
         }
     }
@@ -630,7 +676,6 @@ mod test {
             let mut theirs = MarkMap::new();
             ours.insert("a", "ours");
             ours.set_merge_behavior(&"a", MergeBehavior::Theirs);
-            eprintln!("{:?}", ours.get_mark(&"a"));
             theirs.insert("a", "theirs");
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"theirs"));
