@@ -45,13 +45,30 @@ pub enum Entry<'a, K, V> {
     Vacant(VacantEntry<'a, K, V>),
 }
 
-impl<K: Ord + Clone, V> VacantEntry<'_, K, V> {
-    pub fn insert(self, val: V) {
+impl<'a, K: Ord + Clone, V> VacantEntry<'a, K, V> {
+    pub fn insert(self, val: V) -> &'a mut V {
         match self.pos {
             Ok(pos) => {
                 self.map.contents[pos].2 = Some(val);
+                self.map.contents[pos].2.as_mut().unwrap()
             }
-            Err(pos) => self.map.contents.insert(pos, (self.key, 0, Some(val))),
+            Err(pos) => {
+                self.map.contents.insert(pos, (self.key, 0, Some(val)));
+                self.map.contents[pos].2.as_mut().unwrap()
+            }
+        }
+    }
+
+    pub fn insert_entry(self, val: V) -> OccupiedEntry<'a, K, V> {
+        match self.pos {
+            Ok(pos) => {
+                self.map.contents[pos].2 = Some(val);
+                OccupiedEntry { pos, map: self.map }
+            }
+            Err(pos) => {
+                self.map.contents.insert(pos, (self.key, 0, Some(val)));
+                OccupiedEntry { pos, map: self.map }
+            }
         }
     }
 
@@ -695,5 +712,28 @@ mod test {
             assert_eq!(ours.get(&"a"), Some(&"ours"));
             assert_eq!(ours.get(&"b"), Some(&"theirs"));
         }
+    }
+
+    #[test]
+    fn test_vacant() {
+        let mut mm = MarkMap::new();
+        let v = mm.entry("a");
+        match v {
+            Entry::Occupied(_) => {
+                panic!("Expected vacant entry");
+            }
+            Entry::Vacant(v) => {
+                let mut o = v.insert_entry("ours");
+                o.mark_required();
+                o.mark_used();
+                assert_eq!(o.get(), &"ours");
+                assert!(o.is_required());
+                assert!(o.is_used());
+            }
+        }
+
+        assert_eq!(mm.get(&"a"), Some(&"ours"));
+        assert!(mm.is_required(&"a"));
+        assert!(mm.is_used(&"a"));
     }
 }
