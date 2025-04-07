@@ -8,7 +8,10 @@ pub mod parser;
 
 pub use self::{
     grammar::{AssocKind, Precedence, SentenceGenerator, YaccGrammar},
-    parser::{YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind},
+    parser::{
+        ParserError, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
+        YaccGrammarWarningKind,
+    },
 };
 use proc_macro2::TokenStream;
 use quote::quote;

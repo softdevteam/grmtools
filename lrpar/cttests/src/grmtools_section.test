@@ -3,50 +3,50 @@ grammar: |
     %token MAGIC IDENT NUM
     %epp MAGIC "%grmtools"
     %%
-    start -> Result<HashMap<String, (Span, Value)>, Vec<HeaderError>>
+    start -> Result<HashMap<String, (Location, Value)>, Vec<HeaderError>>
     : MAGIC '{' contents '}' { $3 }
     ;
 
-    contents -> Result<HashMap<String, (Span, Value)>, Vec<HeaderError>>
+    contents -> Result<HashMap<String, (Location, Value)>, Vec<HeaderError>>
     : %empty { Ok(HashMap::new()) }
     | val_seq comma_opt { $1 }
     ;
 
-    val_seq -> Result<HashMap<String, (Span, Value)>, Vec<HeaderError>>
+    val_seq -> Result<HashMap<String, (Location, Value)>, Vec<HeaderError>>
     : valbind {
-        let ((key, key_span), val) = $1;
+        let ((key, key_loc), val) = $1;
         let mut ret = HashMap::new();
         match ret.entry(key) {
             Entry::Occupied(orig) => {
-                let (orig_span, _) = orig.get();
+                let (orig_loc, _): &(Location, Value) = orig.get();
                 // One difference between the manually written parser and this
                 // is we don't try return multiple errors, or coalesce them.
                 return Err(vec![HeaderError {
                     kind: HeaderErrorKind::DuplicateEntry,
-                    spans: vec![*orig_span, key_span]
+                    locations: vec![orig_loc.clone(), key_loc]
                 }]);
             }
             Entry::Vacant(entry) => {
-                entry.insert((key_span, val));
+                entry.insert((key_loc, val));
             }
         }
         Ok(ret)
     }
     | val_seq ',' valbind {
-        let ((key, key_span), val) = $3;
+        let ((key, key_loc), val) = $3;
         let mut ret = $1?;
         match ret.entry(key) {
             Entry::Occupied(orig) => {
-                let (orig_span, _) = orig.get();
+                let (orig_loc, _) = orig.get();
                 // One difference between the manually written parser and this
                 // is we don't try return multiple errors, or coalesce them.
                 return Err(vec![HeaderError {
                     kind: HeaderErrorKind::DuplicateEntry,
-                    spans: vec![*orig_span, key_span]
+                    locations: vec![orig_loc.clone(), key_loc]
                 }]);
             }
             Entry::Vacant(entry) => {
-                entry.insert((key_span, val));
+                entry.insert((key_loc, val));
             }
         }
         Ok(ret)
@@ -59,7 +59,7 @@ grammar: |
         let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
         Namespaced{
             namespace: None,
-            member: (ident, ident_span)
+            member: (ident, Location::Span(ident_span))
         }
     }
     | IDENT '::' IDENT {
@@ -69,27 +69,27 @@ grammar: |
         let ident_span = $3.as_ref().unwrap().span();
         let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
         Namespaced {
-            namespace: Some((namespace, namespace_span)),
-            member: (ident, ident_span)
+            namespace: Some((namespace, Location::Span(namespace_span))),
+            member: (ident, Location::Span(ident_span))
         }
     }
     ;
 
-    valbind -> ((String, Span), Value)
+    valbind -> ((String, Location), Value)
     : IDENT ':' val {
         let key_span = $1.as_ref().unwrap().span();
         let key = $lexer.span_str(key_span).to_string().to_lowercase();
-        ((key, key_span), Value::Setting($3))
+        ((key, Location::Span(key_span)), Value::Setting($3))
     }
     | IDENT {
         let key_span = $1.as_ref().unwrap().span();
         let key = $lexer.span_str(key_span).to_string().to_lowercase();
-        ((key, key_span), Value::Flag(true))
+        ((key, Location::Span(key_span)), Value::Flag(true))
     }
     | '!' IDENT {
         let key_span = $2.as_ref().unwrap().span();
         let key = $lexer.span_str(key_span).to_string().to_lowercase();
-        ((key, key_span), Value::Flag(false))
+        ((key, Location::Span(key_span)), Value::Flag(false))
     }
     ;
 
@@ -98,7 +98,7 @@ grammar: |
     | NUM  {
         let num_span = $1.as_ref().unwrap().span();
         let n = str::parse::<u64>($lexer.span_str(num_span));
-        Setting::Num(n.expect("convertible"), num_span)
+        Setting::Num(n.expect("convertible"), Location::Span(num_span))
     }
     | namespaced '(' namespaced ')' { Setting::Constructor{ctor: $1, arg: $3} }
     ;
@@ -114,6 +114,7 @@ grammar: |
     use std::collections::{hash_map::Entry, HashMap};
     use cfgrammar::{
         Span,
+        Location,
         header::{
             Value,
             Setting,

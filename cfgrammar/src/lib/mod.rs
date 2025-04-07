@@ -64,7 +64,7 @@ pub mod span;
 pub mod yacc;
 
 pub use newlinecache::NewlineCache;
-pub use span::{Span, Spanned};
+pub use span::{Location, Span, Spanned};
 
 /// A type specifically for rule indices.
 pub use crate::idxnewtype::{PIdx, RIdx, SIdx, TIdx};

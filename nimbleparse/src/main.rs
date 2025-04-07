@@ -2,7 +2,8 @@ mod diagnostics;
 use crate::diagnostics::*;
 use cfgrammar::{
     yacc::{
-        ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
+        ast::ASTWithValidityInfo, ParserError, YaccGrammar, YaccKind, YaccKindResolver,
+        YaccOriginalActionKind,
     },
     Span,
 };
@@ -174,7 +175,17 @@ fn main() {
             let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
             eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                match e {
+                    ParserError::YaccGrammarError(e) => {
+                        eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                    }
+                    ParserError::HeaderError(e) => {
+                        eprintln!("{}", indent(&e.to_string(), "    "));
+                    }
+                    e => {
+                        eprintln!("{}", indent(&e.to_string(), "    "));
+                    }
+                }
             }
             eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
             for w in warnings {
