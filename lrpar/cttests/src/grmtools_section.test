@@ -3,19 +3,19 @@ grammar: |
     %token MAGIC IDENT NUM
     %epp MAGIC "%grmtools"
     %%
-    start -> Result<HashMap<String, (Location, Value)>, Vec<HeaderError>>
+    start -> Result<Header, Vec<HeaderError>>
     : MAGIC '{' contents '}' { $3 }
     ;
 
-    contents -> Result<HashMap<String, (Location, Value)>, Vec<HeaderError>>
-    : %empty { Ok(HashMap::new()) }
+    contents -> Result<Header, Vec<HeaderError>>
+    : %empty { Ok(Header::new()) }
     | val_seq comma_opt { $1 }
     ;
 
-    val_seq -> Result<HashMap<String, (Location, Value)>, Vec<HeaderError>>
+    val_seq -> Result<Header, Vec<HeaderError>>
     : valbind {
         let ((key, key_loc), val) = $1;
-        let mut ret = HashMap::new();
+        let mut ret = Header::new();
         match ret.entry(key) {
             Entry::Occupied(orig) => {
                 let (orig_loc, _): &(Location, Value) = orig.get();
@@ -112,7 +112,6 @@ grammar: |
     #![allow(dead_code)]
     #![allow(unused)]
 
-    use std::collections::{hash_map::Entry, HashMap};
     use cfgrammar::{
         Span,
         Location,
@@ -122,7 +121,9 @@ grammar: |
             HeaderError,
             HeaderErrorKind,
             Namespaced,
-        }
+            Header,
+        },
+        markmap::Entry,
     };
 
 lexer: |

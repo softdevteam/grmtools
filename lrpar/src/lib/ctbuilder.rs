@@ -17,11 +17,10 @@ use std::{
 use crate::{LexerTypes, RecoveryKind};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
+    header::{Header, Value},
+    markmap::{Entry, MergeBehavior},
     newlinecache::NewlineCache,
-    yacc::{
-        ast::ASTWithValidityInfo, ParserError, YaccGrammar, YaccKind, YaccKindResolver,
-        YaccOriginalActionKind,
-    },
+    yacc::{ast::ASTWithValidityInfo, ParserError, YaccGrammar, YaccKind, YaccOriginalActionKind},
     Location, RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -478,12 +477,23 @@ where
             .output_path
             .as_ref()
             .expect("output_path must be specified before processing.");
-        let yk = match self.yacckind {
-            None => YaccKindResolver::NoDefault,
-            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
-            Some(x) => YaccKindResolver::Force(x),
-        };
+        let mut header = Header::new();
 
+        match header.entry("yacckind".to_string()) {
+            Entry::Occupied(_) => unreachable!(),
+            Entry::Vacant(v) => match self.yacckind {
+                Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
+                Some(yk) => {
+                    let yk_value = Value::try_from(yk)?;
+                    let mut o =
+                        v.insert_entry((Location::Other("CTParserBuilder".to_string()), yk_value));
+                    o.set_merge_behavior(MergeBehavior::Ours);
+                }
+                None => {
+                    v.occupied_entry().mark_required();
+                }
+            },
+        }
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
             if lk.contains(outp.as_path()) {
@@ -494,7 +504,19 @@ where
 
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
-        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        let ast_validation = ASTWithValidityInfo::new(&mut header, &inc);
+        let unused_keys = header.unused();
+        if !unused_keys.is_empty() {
+            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
+        }
+        let missing_keys = header.missing();
+        if !missing_keys.is_empty() {
+            return Err(format!(
+                "Required values were missing from the header: {}",
+                unused_keys.join(", ")
+            )
+            .into());
+        }
         self.yacckind = ast_validation.yacc_kind();
         let warnings = ast_validation.ast().warnings();
         let loc_fmt = |err_str, loc, inc: &str, line_cache: &NewlineCache| match loc {

@@ -971,7 +971,7 @@ pub(crate) mod test {
     use std::collections::HashMap;
 
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind},
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Span,
     };
     use lrtable::{from_yacc, Minimiser};
@@ -980,7 +980,7 @@ pub(crate) mod test {
 
     use super::*;
     use crate::{
-        test_utils::{TestLexError, TestLexeme, TestLexerTypes},
+        test_utils::{header_for_yacckind, TestLexError, TestLexeme, TestLexerTypes},
         Lexeme, Lexer,
     };
 
@@ -1021,7 +1021,7 @@ pub(crate) mod test {
         >,
     ) {
         let grm = YaccGrammar::<u16>::new_with_storaget(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             grms,
         )
         .unwrap();

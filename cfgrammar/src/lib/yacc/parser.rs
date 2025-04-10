@@ -14,6 +14,12 @@ use std::{
     str::FromStr,
 };
 
+use crate::{
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind},
+    markmap::MergeError,
+    Span, Spanned,
+};
+
 pub type YaccGrammarResult<T> = Result<T, Vec<ParserError>>;
 
 #[derive(Debug, Clone)]
@@ -43,14 +49,9 @@ impl From<YaccGrammarError> for ParserError {
     }
 }
 
-use crate::{
-    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, Namespaced, Setting, Value},
-    Location, Span, Spanned,
-};
-
 use super::{
     ast::{GrammarAST, Symbol},
-    AssocKind, Precedence, YaccKind, YaccKindResolver, YaccOriginalActionKind,
+    AssocKind, Precedence, YaccKind,
 };
 
 /// The various different possible Yacc parser errors.
@@ -323,8 +324,8 @@ impl Spanned for YaccGrammarError {
     }
 }
 
-pub(crate) struct YaccParser {
-    yacc_kind_resolver: YaccKindResolver,
+pub(crate) struct YaccParser<'a> {
+    header: &'a mut Header,
     yacc_kind: Option<YaccKind>,
     src: String,
     num_newlines: usize,
@@ -360,10 +361,10 @@ fn add_duplicate_occurrence(
 }
 
 /// The actual parser is intended to be entirely opaque from outside users.
-impl YaccParser {
-    pub(crate) fn new(yacc_kind_resolver: YaccKindResolver, src: String) -> YaccParser {
+impl YaccParser<'_> {
+    pub(crate) fn new(header: &mut Header, src: String) -> YaccParser {
         YaccParser {
-            yacc_kind_resolver,
+            header,
             yacc_kind: None,
             src,
             num_newlines: 0,
@@ -377,31 +378,39 @@ impl YaccParser {
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let section_required = matches!(self.yacc_kind_resolver, YaccKindResolver::NoDefault);
-        let header_parser = GrmtoolsSectionParser::new(&self.src, section_required);
+        let header_parser = GrmtoolsSectionParser::new(&self.src, false);
         let result = match header_parser.parse() {
-            Ok((header, i)) => self.update_yacckind(header, i),
+            Ok((parsed_header, i)) => {
+                match self.header.merge_from(parsed_header) {
+                    Err(MergeError::Exclusivity(key, boxed_val)) => {
+                        let (their_loc, _) = boxed_val.as_ref();
+                        let (header_loc, _) = self.header.get(&key).unwrap();
+                        errs.push(
+                            HeaderError {
+                                kind: HeaderErrorKind::DuplicateEntry,
+                                locations: vec![their_loc.clone(), header_loc.clone()],
+                            }
+                            .into(),
+                        )
+                    }
+                    Ok(()) => (),
+                }
+                self.update_yacckind(i)
+            }
             Err(es) => {
                 errs.extend(es.iter().cloned().map(ParserError::from));
                 return Err(errs);
             }
         };
-        if result.is_ok() && (self.yacc_kind.is_none() || self.yacc_kind_resolver.forced()) {
-            match self.yacc_kind_resolver {
-                YaccKindResolver::Default(kind) | YaccKindResolver::Force(kind) => {
-                    self.yacc_kind = Some(kind);
+        if result.is_ok() && self.yacc_kind.is_none() {
+            errs.push(
+                YaccGrammarError {
+                    kind: YaccGrammarErrorKind::InvalidYaccKind,
+                    spans: vec![Span::new(0, 0)],
                 }
-                YaccKindResolver::NoDefault => {
-                    errs.push(
-                        YaccGrammarError {
-                            kind: YaccGrammarErrorKind::InvalidYaccKind,
-                            spans: vec![Span::new(0, 0)],
-                        }
-                        .into(),
-                    );
-                    return Err(errs);
-                }
-            }
+                .into(),
+            );
+            return Err(errs);
         }
         let mut y_errs = Vec::new();
         let mut result = self.parse_declarations(
@@ -443,114 +452,23 @@ impl YaccParser {
         }
     }
 
-    fn update_yacckind(
-        &mut self,
-        header: HashMap<String, (Location, Value)>,
-        i: usize,
-    ) -> Result<usize, HeaderError> {
-        let mut err_locs = Vec::new();
-        if let Some((key_loc, yk_setting)) = header.get("yacckind") {
-            match yk_setting {
-                Value::Flag(_, _) => {
-                    err_locs.push(key_loc.clone());
-                }
-
-                Value::Setting(Setting::Num(_, num_loc)) => {
-                    err_locs.push(num_loc.clone());
-                }
-                Value::Setting(Setting::Unitary(Namespaced {
-                    namespace,
-                    member: (yk_value, yk_value_loc),
-                })) => {
-                    if let Some((ns, ns_loc)) = namespace {
-                        if ns != "yacckind" {
-                            err_locs.push(ns_loc.clone());
-                        }
-                    }
-                    let yacckinds = [
-                        ("grmtools".to_string(), YaccKind::Grmtools),
-                        ("eco".to_string(), YaccKind::Eco),
-                    ];
-                    let yk_found = yacckinds
-                        .iter()
-                        .find_map(|(yk_str, yk)| (yk_str == yk_value).then_some(yk));
-                    if yk_found.is_some() {
-                        if err_locs.is_empty() {
-                            self.yacc_kind = yk_found.cloned();
-                            return Ok(i);
-                        } else {
-                            return Err(HeaderError {
-                                kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                                locations: err_locs,
-                            });
-                        }
-                    } else {
-                        err_locs.push(yk_value_loc.clone());
-                    }
-                }
-                Value::Setting(Setting::Constructor {
-                    ctor:
-                        Namespaced {
-                            namespace: yk_namespace,
-                            member: (yk_str, yk_loc),
-                        },
-                    arg:
-                        Namespaced {
-                            namespace: ak_namespace,
-                            member: (ak_str, ak_loc),
-                        },
-                }) => {
-                    if let Some((yk_ns, yk_ns_loc)) = yk_namespace {
-                        if yk_ns != "yacckind" {
-                            err_locs.push(yk_ns_loc.clone());
-                        }
-                    }
-
-                    if yk_str != "original" {
-                        err_locs.push(yk_loc.clone());
-                    }
-
-                    if let Some((ak_ns, ak_ns_loc)) = ak_namespace {
-                        if ak_ns != "yaccoriginalactionkind" {
-                            err_locs.push(ak_ns_loc.clone());
-                        }
-                    }
-                    let actionkinds = [
-                        ("noaction", YaccOriginalActionKind::NoAction),
-                        ("useraction", YaccOriginalActionKind::UserAction),
-                        ("genericparsetree", YaccOriginalActionKind::GenericParseTree),
-                    ];
-                    let yk_found = actionkinds.iter().find_map(|(actionkind_str, actionkind)| {
-                        (ak_str == actionkind_str).then_some(YaccKind::Original(*actionkind))
-                    });
-                    if yk_found.is_some() {
-                        if err_locs.is_empty() {
-                            self.yacc_kind = yk_found;
-                            return Ok(i);
-                        } else {
-                            return Err(HeaderError {
-                                kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                                locations: err_locs,
-                            });
-                        }
-                    } else {
-                        err_locs.push(ak_loc.clone());
-                        return Err(HeaderError {
-                            kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                            locations: err_locs,
-                        });
-                    }
-                }
+    fn update_yacckind(&mut self, i: usize) -> Result<usize, HeaderError> {
+        use crate::markmap::Entry;
+        use crate::Location;
+        match self.header.entry("yacckind".to_string()) {
+            Entry::Occupied(mut o) => {
+                o.mark_used();
+                let (_, val) = o.get();
+                self.yacc_kind = Some(YaccKind::try_from(val)?);
+            }
+            Entry::Vacant(_) => {
+                return Err(HeaderError {
+                    kind: HeaderErrorKind::InvalidEntry("yacckind"),
+                    locations: vec![Location::Span(Span::new(i, i))],
+                });
             }
         }
-        if err_locs.is_empty() {
-            Ok(i)
-        } else {
-            Err(HeaderError {
-                kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                locations: err_locs,
-            })
-        }
+        Ok(i)
     }
 
     pub(crate) fn build(self) -> (Option<YaccKind>, GrammarAST) {
@@ -1238,14 +1156,16 @@ mod test {
     use super::{
         super::{
             ast::{GrammarAST, Production, Symbol},
-            AssocKind, Precedence, YaccKind, YaccKindResolver, YaccOriginalActionKind,
+            AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
         ParserError, Span, Spanned, YaccGrammarErrorKind, YaccParser,
     };
+    use crate::test_utils::*;
     use std::collections::HashSet;
 
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<ParserError>> {
-        let mut yp = YaccParser::new(YaccKindResolver::Force(yacc_kind), s.to_string());
+        let mut header = header_for_yacckind!(yacc_kind);
+        let mut yp = YaccParser::new(&mut header, s.to_string());
         yp.parse()?;
         Ok(yp.build().1)
     }
@@ -2937,7 +2857,7 @@ B";
              Start -> () : ;",
         ];
         for src in srcs {
-            YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
+            YaccParser::new(&mut Header::new(), src.to_string())
                 .parse()
                 .unwrap();
         }
@@ -2964,7 +2884,7 @@ B";
 
         for src in srcs {
             let s = format!("{}\n%%\nStart();\n", src);
-            let parse_result = YaccParser::new(YaccKindResolver::NoDefault, s.to_string()).parse();
+            let parse_result = YaccParser::new(&mut Header::new(), s.to_string()).parse();
             assert!(parse_result.is_err());
         }
     }
@@ -2983,7 +2903,7 @@ B";
             %%
             Start -> () : ;
         "#;
-        YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
+        YaccParser::new(&mut Header::new(), src.to_string())
             .parse()
             .unwrap();
         let src = r#"
@@ -2993,7 +2913,7 @@ B";
             %%
             Start -> () : ;
         "#;
-        YaccParser::new(YaccKindResolver::NoDefault, src.to_string())
+        YaccParser::new(&mut Header::new(), src.to_string())
             .parse()
             .unwrap();
     }

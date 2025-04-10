@@ -1,11 +1,10 @@
 use crate::{
-     markmap::MarkMap,
+    markmap::{Entry, MarkMap},
     yacc::{ParserError, YaccKind, YaccOriginalActionKind},
     Location, Span,
 };
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
-use std::collections::{hash_map::Entry, HashMap};
 use std::{error::Error, fmt};
 
 /// An error regarding the `%grmtools` header section.
@@ -259,12 +258,10 @@ impl<'input> GrmtoolsSectionParser<'input> {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn parse(
-        &'_ self,
-    ) -> Result<(HashMap<String, (Location, Value)>, usize), Vec<HeaderError>> {
+    pub fn parse(&'_ self) -> Result<(Header, usize), Vec<HeaderError>> {
         let mut errs = Vec::new();
         if let Some(mut i) = self.lookahead_is(MAGIC, self.parse_ws(0)) {
-            let mut ret = HashMap::new();
+            let mut ret = Header::new();
             i = self.parse_ws(i);
             let section_start_pos = i;
             if let Some(j) = self.lookahead_is("{", i) {
@@ -329,7 +326,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             });
             Err(errs)
         } else {
-            Ok((HashMap::new(), 0))
+            Ok((Header::new(), 0))
         }
     }
 

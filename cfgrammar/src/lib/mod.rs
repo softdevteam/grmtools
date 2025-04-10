@@ -61,6 +61,8 @@ mod idxnewtype;
 pub mod markmap;
 pub mod newlinecache;
 pub mod span;
+#[cfg(test)]
+pub mod test_utils;
 pub mod yacc;
 
 pub use newlinecache::NewlineCache;

@@ -7,10 +7,10 @@ use indexmap::{IndexMap, IndexSet};
 
 use super::{
     parser::YaccParser, ParserError, Precedence, YaccGrammarError, YaccGrammarErrorKind,
-    YaccGrammarWarning, YaccGrammarWarningKind, YaccKind, YaccKindResolver,
+    YaccGrammarWarning, YaccGrammarWarningKind, YaccKind,
 };
 
-use crate::Span;
+use crate::{header::Header, Span};
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
@@ -24,10 +24,10 @@ impl ASTWithValidityInfo {
     /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
     /// then unused to construct a `YaccGrammar`, which will either produce an
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
-    pub fn new(yacc_kind_resolver: YaccKindResolver, s: &str) -> Self {
+    pub fn new(header: &mut Header, s: &str) -> Self {
         let mut errs = Vec::new();
         let (yacc_kind, ast) = {
-            let mut yp = YaccParser::new(yacc_kind_resolver, s.to_string());
+            let mut yp = YaccParser::new(header, s.to_string());
             yp.parse().map_err(|e| errs.extend(e)).ok();
             let (yacc_kind, mut ast) = yp.build();
             if yacc_kind.is_some() {
