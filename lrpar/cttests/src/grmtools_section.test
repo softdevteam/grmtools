@@ -84,12 +84,13 @@ grammar: |
     | IDENT {
         let key_span = $1.as_ref().unwrap().span();
         let key = $lexer.span_str(key_span).to_string().to_lowercase();
-        ((key, Location::Span(key_span)), Value::Flag(true))
+        ((key, Location::Span(key_span)), Value::Flag(true, Location::Span(key_span)))
     }
     | '!' IDENT {
+        let bang_span = $1.as_ref().unwrap().span();
         let key_span = $2.as_ref().unwrap().span();
         let key = $lexer.span_str(key_span).to_string().to_lowercase();
-        ((key, Location::Span(key_span)), Value::Flag(false))
+        ((key, Location::Span(key_span)), Value::Flag(false, Location::Span(Span::new(bang_span.start(), key_span.end()))))
     }
     ;
 

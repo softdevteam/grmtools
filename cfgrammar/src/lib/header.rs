@@ -93,7 +93,7 @@ pub struct GrmtoolsSectionParser<'input> {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Value {
-    Flag(bool),
+    Flag(bool, Location),
     Setting(Setting),
 }
 
@@ -134,13 +134,13 @@ impl<'input> GrmtoolsSectionParser<'input> {
         &'_ self,
         mut i: usize,
     ) -> Result<(String, Location, Value, usize), HeaderError> {
-        if let Some(i) = self.lookahead_is("!", i) {
-            let (flag_name, j) = self.parse_name(i)?;
+        if let Some(j) = self.lookahead_is("!", i) {
+            let (flag_name, k) = self.parse_name(j)?;
             Ok((
                 flag_name,
-                Location::Span(Span::new(i, j)),
-                Value::Flag(false),
-                self.parse_ws(j),
+                Location::Span(Span::new(j, k)),
+                Value::Flag(false, Location::Span(Span::new(i, k))),
+                self.parse_ws(k),
             ))
         } else {
             let (key_name, j) = self.parse_name(i)?;
@@ -192,7 +192,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                     }
                 }
             } else {
-                Ok((key_name, key_span, Value::Flag(true), i))
+                Ok((key_name, key_span.clone(), Value::Flag(true, key_span), i))
             }
         }
     }

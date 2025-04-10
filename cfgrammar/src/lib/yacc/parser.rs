@@ -451,7 +451,7 @@ impl YaccParser {
         let mut err_locs = Vec::new();
         if let Some((key_loc, yk_setting)) = header.get("yacckind") {
             match yk_setting {
-                Value::Flag(_) => {
+                Value::Flag(_, _) => {
                     err_locs.push(key_loc.clone());
                 }
 
