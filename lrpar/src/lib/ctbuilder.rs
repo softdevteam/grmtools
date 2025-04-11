@@ -235,7 +235,7 @@ where
     grammar_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     mod_name: Option<&'a str>,
-    recoverer: RecoveryKind,
+    recoverer: Option<RecoveryKind>,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     warnings_are_errors: bool,
@@ -279,7 +279,7 @@ where
             grammar_path: None,
             output_path: None,
             mod_name: None,
-            recoverer: RecoveryKind::CPCTPlus,
+            recoverer: None,
             yacckind: None,
             error_on_conflicts: true,
             warnings_are_errors: true,
@@ -378,7 +378,7 @@ where
 
     /// Set the recoverer for this parser to `rk`. Defaults to `RecoveryKind::CPCTPlus`.
     pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
-        self.recoverer = rk;
+        self.recoverer = Some(rk);
         self
     }
 
@@ -494,6 +494,18 @@ where
                 }
             },
         }
+        if let Some(recoverer) = self.recoverer {
+            match header.entry("recoverer".to_string()) {
+                Entry::Occupied(_) => unreachable!(),
+                Entry::Vacant(v) => {
+                    let rk_value: Value = Value::try_from(recoverer)?;
+                    let mut o =
+                        v.insert_entry((Location::Other("CTParserBuilder".to_string()), rk_value));
+                    o.set_merge_behavior(MergeBehavior::Ours);
+                }
+            }
+        }
+
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
             if lk.contains(outp.as_path()) {
@@ -505,6 +517,16 @@ where
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
         let ast_validation = ASTWithValidityInfo::new(&mut header, &inc);
+        header.mark_used(&"recoverer".to_string());
+        let rk_val = header.get("recoverer").map(|(_, rk_val)| rk_val);
+
+        if let Some(rk_val) = rk_val {
+            self.recoverer = Some(RecoveryKind::try_from(rk_val)?);
+        } else {
+            // Fallback to the default recoverykind.
+            self.recoverer = Some(RecoveryKind::CPCTPlus);
+        }
+
         let unused_keys = header.unused();
         if !unused_keys.is_empty() {
             return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
