@@ -344,18 +344,17 @@ where
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
     pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
-        let lexerp = self
-            .lexer_path
-            .as_ref()
-            .expect("lexer_path must be specified before processing.");
         if let Some(ref lrcfg) = self.lrpar_config {
             let mut ctp = CTParserBuilder::<LexerTypesT>::new();
-            ctp = ctp.lexer_path(lexerp.to_owned());
             ctp = lrcfg(ctp);
             let map = ctp.build()?;
             self.rule_ids_map = Some(map.token_map().to_owned());
         }
 
+        let lexerp = self
+            .lexer_path
+            .as_ref()
+            .expect("lexer_path must be specified before processing.");
         let outp = self
             .output_path
             .as_ref()
