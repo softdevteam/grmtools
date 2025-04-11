@@ -242,13 +242,17 @@ where
     show_warnings: bool,
     visibility: Visibility,
     rust_edition: RustEdition,
+    lexer_path: Option<PathBuf>,
     // We want lifetimes that imply the callback can't capture the header or the grammar.
-    header_callback: Option<
+    inspect_callback: Option<
         Box<
-            dyn for<'h, 'y> Fn(
-                &'h mut Header,
+            dyn for<'y> Fn(
+                &'y mut Header,
                 RecoveryKind,
                 &'y YaccGrammar<LexerTypesT::StorageT>,
+                &'y StateTable<LexerTypesT::StorageT>,
+                &'y StateGraph<LexerTypesT::StorageT>,
+                Option<PathBuf>,
             ) -> Result<(), Box<dyn Error>>,
         >,
     >,
@@ -296,7 +300,8 @@ where
             show_warnings: true,
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
-            header_callback: None,
+            inspect_callback: None,
+            lexer_path: None,
             phantom: PhantomData,
         }
     }
@@ -427,17 +432,27 @@ where
         self
     }
 
-    pub fn process_header(
+    /// Sets the path to the lexer sources this is for usage from within callbacks only, and
+    /// not used during the build process.
+    pub fn lexer_path(mut self, lexer_path: PathBuf) -> Self {
+        self.lexer_path = Some(lexer_path);
+        self
+    }
+
+    pub fn inspect(
         mut self,
         cb: Box<
             dyn for<'h, 'y> Fn(
                 &'h mut Header,
                 RecoveryKind,
                 &'y YaccGrammar<StorageT>,
+                &'y StateTable<StorageT>,
+                &'y StateGraph<StorageT>,
+                Option<PathBuf>,
             ) -> Result<(), Box<dyn Error>>,
         >,
     ) -> Self {
-        self.header_callback = Some(cb);
+        self.inspect_callback = Some(cb);
         self
     }
 
@@ -637,27 +652,6 @@ where
             }
         };
 
-        if let Some(cb) = &self.header_callback {
-            cb(
-                &mut header,
-                self.recoverer.expect("has a default value"),
-                &grm,
-            )?;
-        }
-
-        let unused_keys = header.unused();
-        if !unused_keys.is_empty() {
-            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
-        }
-        let missing_keys = header.missing();
-        if !missing_keys.is_empty() {
-            return Err(format!(
-                "Required values were missing from the header: {}",
-                unused_keys.join(", ")
-            )
-            .into());
-        }
-
         let rule_ids = grm
             .tokens_map()
             .iter()
@@ -727,6 +721,31 @@ where
         fs::remove_file(outp).ok();
 
         let (sgraph, stable) = from_yacc(&grm, Minimiser::Pager)?;
+
+        if let Some(cb) = &self.inspect_callback {
+            cb(
+                &mut header,
+                self.recoverer.expect("has a default value"),
+                &grm,
+                &stable,
+                &sgraph,
+                self.lexer_path.clone(),
+            )?;
+        }
+
+        let unused_keys = header.unused();
+        if !unused_keys.is_empty() {
+            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
+        }
+        let missing_keys = header.missing();
+        if !missing_keys.is_empty() {
+            return Err(format!(
+                "Required values were missing from the header: {}",
+                unused_keys.join(", ")
+            )
+            .into());
+        }
+
         if self.error_on_conflicts {
             if let Some(c) = stable.conflicts() {
                 match (grm.expect(), grm.expectrr()) {
@@ -853,7 +872,8 @@ where
             show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
-            header_callback: None,
+            inspect_callback: None,
+            lexer_path: self.lexer_path.clone(),
             phantom: PhantomData,
         };
         Ok(cl.build()?.rule_ids)
@@ -930,7 +950,7 @@ where
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
         let Self {
-            // All variables except for `output_path`, `header_callback` and `phantom` should
+            // All variables except for `output_path`, `inspect_callback` and `phantom` should
             // be written into the cache.
             grammar_path,
             mod_name,
@@ -942,11 +962,14 @@ where
             show_warnings,
             visibility,
             rust_edition,
-            header_callback: _,
+            inspect_callback: _,
+            lexer_path,
             phantom: _,
         } = self;
         let build_time = env!("VERGEN_BUILD_TIMESTAMP");
         let grammar_path = grammar_path.as_ref().unwrap().to_string_lossy();
+        let empty_path = PathBuf::new();
+        let lexer_path = lexer_path.as_ref().unwrap_or(&empty_path).to_string_lossy();
         let mod_name = QuoteOption(mod_name.as_deref());
         let visibility = visibility.to_variant_tokens();
         let rust_edition = rust_edition.to_variant_tokens();
@@ -973,6 +996,7 @@ where
             RUST_EDITION = #rust_edition
             RULE_IDS_MAP = [#(#rule_map,)*]
             VISIBILITY = #visibility
+            LEX_PATH = #lexer_path
         };
         let cache_info_str = cache_info.to_string();
         quote!(#cache_info_str)

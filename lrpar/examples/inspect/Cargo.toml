@@ -1,0 +1,21 @@
+[package]
+name = "inspect"
+description = "During the code generation step inspect the generated parser"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0/MIT"
+
+[[bin]]
+doc = false
+name = "inspect"
+
+[build-dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }
+num-traits.workspace = true
+
+[dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }
