@@ -12,7 +12,6 @@ members=[
     "lrpar/examples/calc_parsetree",
     "lrpar/examples/start_states",
     "lrpar/examples/clone_param",
-    "lrpar/examples/inspect",
     "lrtable",
     "nimbleparse",
 ]
