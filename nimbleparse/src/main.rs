@@ -118,7 +118,10 @@ fn main() {
     match matches.opt_str("r") {
         None => (),
         Some(s) => {
-            header.set_merge_behavior(&"recoverer".to_string(), cfgrammar::markmap::MergeBehavior::Ours);
+            header.set_merge_behavior(
+                &"recoverer".to_string(),
+                cfgrammar::markmap::MergeBehavior::Ours,
+            );
             header.insert(
                 "recoverer".to_string(),
                 (

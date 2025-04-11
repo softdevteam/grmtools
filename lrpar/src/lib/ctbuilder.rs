@@ -242,6 +242,16 @@ where
     show_warnings: bool,
     visibility: Visibility,
     rust_edition: RustEdition,
+    // We want lifetimes that imply the callback can't capture the header or the grammar.
+    header_callback: Option<
+        Box<
+            dyn for<'h, 'y> Fn(
+                &'h mut Header,
+                RecoveryKind,
+                &'y YaccGrammar<LexerTypesT::StorageT>,
+            ) -> Result<(), Box<dyn Error>>,
+        >,
+    >,
     phantom: PhantomData<LexerTypesT>,
 }
 
@@ -286,6 +296,7 @@ where
             show_warnings: true,
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
+            header_callback: None,
             phantom: PhantomData,
         }
     }
@@ -416,6 +427,20 @@ where
         self
     }
 
+    pub fn process_header(
+        mut self,
+        cb: Box<
+            dyn for<'h, 'y> Fn(
+                &'h mut Header,
+                RecoveryKind,
+                &'y YaccGrammar<StorageT>,
+            ) -> Result<(), Box<dyn Error>>,
+        >,
+    ) -> Self {
+        self.header_callback = Some(cb);
+        self
+    }
+
     /// Statically compile the Yacc file specified by [CTParserBuilder::grammar_path()] into Rust,
     /// placing the output into the file spec [CTParserBuilder::output_path()]. Note that three
     /// additional files will be created with the same name as specified in [self.output_path] but
@@ -527,18 +552,6 @@ where
             self.recoverer = Some(RecoveryKind::CPCTPlus);
         }
 
-        let unused_keys = header.unused();
-        if !unused_keys.is_empty() {
-            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
-        }
-        let missing_keys = header.missing();
-        if !missing_keys.is_empty() {
-            return Err(format!(
-                "Required values were missing from the header: {}",
-                unused_keys.join(", ")
-            )
-            .into());
-        }
         self.yacckind = ast_validation.yacc_kind();
         let warnings = ast_validation.ast().warnings();
         let loc_fmt = |err_str, loc, inc: &str, line_cache: &NewlineCache| match loc {
@@ -623,6 +636,27 @@ where
                 }))?;
             }
         };
+
+        if let Some(cb) = &self.header_callback {
+            cb(
+                &mut header,
+                self.recoverer.expect("has a default value"),
+                &grm,
+            )?;
+        }
+
+        let unused_keys = header.unused();
+        if !unused_keys.is_empty() {
+            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
+        }
+        let missing_keys = header.missing();
+        if !missing_keys.is_empty() {
+            return Err(format!(
+                "Required values were missing from the header: {}",
+                unused_keys.join(", ")
+            )
+            .into());
+        }
 
         let rule_ids = grm
             .tokens_map()
@@ -819,6 +853,7 @@ where
             show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
+            header_callback: None,
             phantom: PhantomData,
         };
         Ok(cl.build()?.rule_ids)
@@ -895,7 +930,7 @@ where
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
         let Self {
-            // All variables except for `output_path` and `phantom` should
+            // All variables except for `output_path`, `header_callback` and `phantom` should
             // be written into the cache.
             grammar_path,
             mod_name,
@@ -907,6 +942,7 @@ where
             show_warnings,
             visibility,
             rust_edition,
+            header_callback: _,
             phantom: _,
         } = self;
         let build_time = env!("VERGEN_BUILD_TIMESTAMP");
