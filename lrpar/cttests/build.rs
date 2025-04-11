@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         use lrpar::RecoveryKind as RK;
         #[rustfmt::skip]
-        let recovery_kinds = vec![
+        let recovery_kinds = [
             //  Builder,          Header setting,     Expected result.
             // -----------       ------------------  -------------------
             (Some(RK::None),      Some(RK::None),     Some(RK::None)),
@@ -109,15 +109,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .output_path(y_out_path.clone())
                     .grammar_path(y_path.clone());
                 if let Some(builder_arg) = builder_arg {
-                    cp_builder.recoverer(builder_arg.clone())
+                    cp_builder.recoverer(builder_arg)
                 } else {
                     cp_builder
                 }
-                .process_header(Box::new(move |_, rk, _| {
-                    if match (rk, expected_rk) {
-                        (RK::None, Some(RK::None)) | (RK::CPCTPlus, Some(RK::CPCTPlus)) => true,
-                        _ => false,
-                    } {
+                .inspect(Box::new(move |_, rk, _, _, _, _| {
+                    if matches!(
+                        (rk, expected_rk),
+                        (RK::None, Some(RK::None)) | (RK::CPCTPlus, Some(RK::CPCTPlus))
+                    ) {
                         Ok(())
                     } else {
                         panic!("Unexpected recovery kind")
