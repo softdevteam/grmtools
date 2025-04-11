@@ -56,15 +56,17 @@ use bincode::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[doc(hidden)]
 pub mod header;
 mod idxnewtype;
+pub mod markmap;
 pub mod newlinecache;
 pub mod span;
+#[cfg(test)]
+pub mod test_utils;
 pub mod yacc;
 
 pub use newlinecache::NewlineCache;
-pub use span::{Span, Spanned};
+pub use span::{Location, Span, Spanned};
 
 /// A type specifically for rule indices.
 pub use crate::idxnewtype::{PIdx, RIdx, SIdx, TIdx};

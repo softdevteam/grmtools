@@ -17,11 +17,11 @@ use std::{
 use crate::{LexerTypes, RecoveryKind};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
+    header::{Header, Value},
+    markmap::{Entry, MergeBehavior},
     newlinecache::NewlineCache,
-    yacc::{
-        ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
-    },
-    RIdx, Spanned, Symbol,
+    yacc::{ast::ASTWithValidityInfo, ParserError, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    Location, RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -477,12 +477,23 @@ where
             .output_path
             .as_ref()
             .expect("output_path must be specified before processing.");
-        let yk = match self.yacckind {
-            None => YaccKindResolver::NoDefault,
-            Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
-            Some(x) => YaccKindResolver::Force(x),
-        };
+        let mut header = Header::new();
 
+        match header.entry("yacckind".to_string()) {
+            Entry::Occupied(_) => unreachable!(),
+            Entry::Vacant(v) => match self.yacckind {
+                Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
+                Some(yk) => {
+                    let yk_value = Value::try_from(yk)?;
+                    let mut o =
+                        v.insert_entry((Location::Other("CTParserBuilder".to_string()), yk_value));
+                    o.set_merge_behavior(MergeBehavior::Ours);
+                }
+                None => {
+                    v.occupied_entry().mark_required();
+                }
+            },
+        }
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
             if lk.contains(outp.as_path()) {
@@ -493,16 +504,48 @@ where
 
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
-        let ast_validation = ASTWithValidityInfo::new(yk, &inc);
+        let ast_validation = ASTWithValidityInfo::new(&mut header, &inc);
+        let unused_keys = header.unused();
+        if !unused_keys.is_empty() {
+            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
+        }
+        let missing_keys = header.missing();
+        if !missing_keys.is_empty() {
+            return Err(format!(
+                "Required values were missing from the header: {}",
+                unused_keys.join(", ")
+            )
+            .into());
+        }
         self.yacckind = ast_validation.yacc_kind();
         let warnings = ast_validation.ast().warnings();
+        let loc_fmt = |err_str, loc, inc: &str, line_cache: &NewlineCache| match loc {
+            Location::Span(span) => {
+                if let Some((line, column)) =
+                    line_cache.byte_to_line_num_and_col_num(inc, span.start())
+                {
+                    format!("{} at line {line} column {column}", err_str)
+                } else {
+                    err_str
+                }
+            }
+            Location::CommandLine => {
+                format!("{} from the command-line.", err_str)
+            }
+            Location::Other(s) => {
+                format!("{} from '{}'", err_str, s)
+            }
+        };
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
-            if let Some((line, column)) =
-                line_cache.byte_to_line_num_and_col_num(inc, x.spans()[0].start())
-            {
-                format!("{} at line {line} column {column}", x)
-            } else {
-                format!("{}", x)
+            loc_fmt(x.to_string(), Location::Span(x.spans()[0]), inc, line_cache)
+        };
+        let perror_fmt = |e: &ParserError, inc: &str, line_cache: &NewlineCache| match e {
+            ParserError::YaccGrammarError(e) => spanned_fmt(e, inc, line_cache),
+            ParserError::HeaderError(e) => {
+                loc_fmt(e.to_string(), e.locations[0].clone(), inc, line_cache)
+            }
+            _ => {
+                format!("Unrecognized error: {}", e)
             }
         };
 
@@ -548,13 +591,13 @@ where
                     format!(
                         "\n\t{}",
                         errs.iter()
-                            .map(|e| spanned_fmt(e, &inc, &line_cache))
+                            .map(|e| perror_fmt(e, &inc, &line_cache))
                             .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
                             .collect::<Vec<_>>()
                             .join("\n\t")
                     )
                 } else {
-                    spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
+                    perror_fmt(errs.first().unwrap(), &inc, &line_cache)
                 }))?;
             }
         };

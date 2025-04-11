@@ -66,3 +66,12 @@ impl ToTokens for Span {
         tokens.append_all(quote! {::cfgrammar::Span::new(#start, #end)});
     }
 }
+
+/// A possibly inexact location which could either be a `Span`,
+/// a command-line option, or some other location described textually.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Location {
+    Span(Span),
+    CommandLine,
+    Other(String),
+}

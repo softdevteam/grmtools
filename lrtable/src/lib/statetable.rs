@@ -617,11 +617,12 @@ fn resolve_shift_reduce<StorageT: 'static + Hash + PrimInt + Unsigned>(
 #[cfg(test)]
 mod test {
     use super::{Action, StateTable, StateTableError, StateTableErrorKind};
+    use crate::test_utils::*;
     use crate::{pager::pager_stategraph, StIdx};
     use cfgrammar::{
         yacc::{
             ast::{self, ASTWithValidityInfo},
-            YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
+            YaccGrammar, YaccKind, YaccOriginalActionKind,
         },
         PIdx, Span, Symbol, TIdx,
     };
@@ -632,7 +633,7 @@ mod test {
     fn test_statetable() {
         // Taken from p19 of www.cs.umd.edu/~mvz/cmsc430-s07/M10lr.pdf
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
             %start Expr
             %%
@@ -713,7 +714,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_default_reduce_reduce() {
-        let grm = YaccGrammar::new(YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
+        let grm = YaccGrammar::new(&mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
             %start A
             %%
             A : B 'x' | C 'x' 'x';
@@ -737,7 +738,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_default_shift_reduce() {
-        let grm = YaccGrammar::new(YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
+        let grm = YaccGrammar::new(&mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
             %start Expr
             %%
             Expr : Expr '+' Expr
@@ -767,7 +768,7 @@ mod test {
     #[rustfmt::skip]
     fn test_conflict_resolution() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
-        let grm = YaccGrammar::new(YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
+        let grm = YaccGrammar::new(&mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
             %start S
             %%
             S: A 'c' 'd'
@@ -792,7 +793,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_left_associativity() {
-        let grm = YaccGrammar::new(YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
+        let grm = YaccGrammar::new(&mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
             %start Expr
             %left '+'
             %left '*'
@@ -831,7 +832,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_left_right_associativity() {
-        let grm = &YaccGrammar::new(YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
+        let grm = &YaccGrammar::new(&mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
             %start Expr
             %right '='
             %left '+'
@@ -887,7 +888,7 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_left_right_nonassoc_associativity() {
-        let grm = YaccGrammar::new(YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
+        let grm = YaccGrammar::new(&mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)), "
             %start Expr
             %right '='
             %left '+'
@@ -962,7 +963,7 @@ mod test {
     #[test]
     fn conflicts() {
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
 %start A
 %%
@@ -999,7 +1000,7 @@ C : 'a';
     #[test]
     fn reduce_reduce_conflict() {
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
 %start S
 %%
@@ -1033,7 +1034,7 @@ X: '1' ; Y: '2' ;
     #[test]
     fn accept_reduce_conflict() {
         let grm = YaccGrammar::new(
-            YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
             "
 %start D
 %%
@@ -1056,7 +1057,7 @@ D : D;
     fn test_accept_reduce_conflict_spans1() {
         let src = "%%
 S: S | ;";
-        let yk = YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::NoAction));
+        let yk = &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::NoAction));
         let ast_validity = ASTWithValidityInfo::new(yk, src);
         let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(&ast_validity).unwrap();
         let sg = pager_stategraph(&grm);
@@ -1108,7 +1109,7 @@ S: S | ;";
         let src = "%%
 S: T | ;
 T: S | ;";
-        let yk = YaccKindResolver::Force(YaccKind::Original(YaccOriginalActionKind::NoAction));
+        let yk = &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::NoAction));
         let ast_validity = ASTWithValidityInfo::new(yk, src);
         let grm = YaccGrammar::<u32>::new_from_ast_with_validity_info(&ast_validity).unwrap();
         let sg = pager_stategraph(&grm);

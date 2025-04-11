@@ -1,10 +1,10 @@
 mod diagnostics;
 use crate::diagnostics::*;
 use cfgrammar::{
-    yacc::{
-        ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccKindResolver, YaccOriginalActionKind,
-    },
-    Span,
+    header::{Header, Value},
+    markmap::Entry,
+    yacc::{ast::ASTWithValidityInfo, ParserError, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    Location, Span,
 };
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
@@ -124,14 +124,26 @@ fn main() {
         },
     };
 
-    let yacckind = match matches.opt_str("y") {
-        None => YaccKindResolver::NoDefault,
-        Some(s) => YaccKindResolver::Force(match &*s.to_lowercase() {
-            "eco" => YaccKind::Eco,
-            "grmtools" => YaccKind::Grmtools,
-            "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-            _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s)),
-        }),
+    let mut header = Header::new();
+    let entry = match header.entry("yacckind".to_string()) {
+        Entry::Occupied(_) => unreachable!("Header should be empty"),
+        Entry::Vacant(v) => v.occupied_entry(),
+    };
+
+    match matches.opt_str("y") {
+        None => {}
+        Some(s) => {
+            entry.insert((
+                Location::CommandLine,
+                Value::try_from(match &*s.to_lowercase() {
+                    "eco" => YaccKind::Eco,
+                    "grmtools" => YaccKind::Grmtools,
+                    "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+                    _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s)),
+                })
+                .expect("All these yacckinds should convert without error"),
+            ));
+        }
     };
 
     if matches.free.len() != 3 {
@@ -154,7 +166,7 @@ fn main() {
 
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
-    let ast_validation = ASTWithValidityInfo::new(yacckind, &yacc_src);
+    let ast_validation = ASTWithValidityInfo::new(&mut header, &yacc_src);
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(&ast_validation);
     let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;
@@ -174,7 +186,17 @@ fn main() {
             let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
             eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                match e {
+                    ParserError::YaccGrammarError(e) => {
+                        eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                    }
+                    ParserError::HeaderError(e) => {
+                        eprintln!("{}", indent(&e.to_string(), "    "));
+                    }
+                    e => {
+                        eprintln!("{}", indent(&e.to_string(), "    "));
+                    }
+                }
             }
             eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
             for w in warnings {
