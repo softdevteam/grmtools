@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use web_time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{yacc::YaccGrammar, RIdx, Span, TIdx};
+use cfgrammar::{header::Value, yacc::YaccGrammar, RIdx, Span, TIdx};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
@@ -627,6 +627,90 @@ pub enum RecoveryKind {
     CPCTPlus,
     /// Don't use error recovery: return as soon as the first syntax error is encountered.
     None,
+}
+
+impl TryFrom<RecoveryKind> for Value {
+    type Error = cfgrammar::header::HeaderError;
+    fn try_from(rk: RecoveryKind) -> Result<Value, Self::Error> {
+        use cfgrammar::{
+            header::{Namespaced, Setting},
+            Location,
+        };
+        let from_loc = Location::Other("From<RecoveryKind>".to_string());
+        Ok(match rk {
+            RecoveryKind::CPCTPlus => Value::Setting(Setting::Unitary(Namespaced {
+                namespace: Some(("RecoveryKind".to_string(), from_loc.clone())),
+                member: ("CPCTPlus".to_string(), from_loc.clone()),
+            })),
+            RecoveryKind::None => Value::Setting(Setting::Unitary(Namespaced {
+                namespace: Some(("RecoveryKind".to_string(), from_loc.clone())),
+                member: ("None".to_string(), from_loc.clone()),
+            })),
+        })
+    }
+}
+
+impl TryFrom<&Value> for RecoveryKind {
+    type Error = cfgrammar::header::HeaderError;
+    fn try_from(rk: &Value) -> Result<RecoveryKind, Self::Error> {
+        use cfgrammar::header::{HeaderError, HeaderErrorKind, Namespaced, Setting};
+
+        match rk {
+            Value::Flag(_, loc) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "RecoveryKind",
+                    "Cannot convert boolean to RecoveryKind",
+                ),
+                locations: vec![loc.clone()],
+            }),
+            Value::Setting(Setting::Num(_, loc)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "RecoveryKind",
+                    "Cannot convert number to RecoveryKind",
+                ),
+                locations: vec![loc.clone()],
+            }),
+            Value::Setting(Setting::Unitary(Namespaced {
+                namespace,
+                member: (kind, kind_loc),
+            })) => {
+                match namespace {
+                    Some((ns, loc)) if ns.to_lowercase() != "recoverykind" => {
+                        return Err(HeaderError {
+                            kind: HeaderErrorKind::ConversionError(
+                                "RecoveryKind",
+                                "Unknown namespace",
+                            ),
+                            locations: vec![loc.clone()],
+                        })
+                    }
+                    _ => {}
+                }
+                match kind.to_lowercase().as_ref() {
+                    "cpctplus" => Ok(RecoveryKind::CPCTPlus),
+                    "none" => Ok(RecoveryKind::None),
+                    _ => Err(HeaderError {
+                        kind: HeaderErrorKind::ConversionError("RecoveryKind", "Unknown variant"),
+                        locations: vec![kind_loc.clone()],
+                    }),
+                }
+            }
+            Value::Setting(Setting::Constructor {
+                ctor: _,
+                arg:
+                    Namespaced {
+                        namespace: _,
+                        member: (_, arg_loc),
+                    },
+            }) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "RecoveryKind",
+                    "Cannot convert constructor to RecoveryKind",
+                ),
+                locations: vec![arg_loc.clone()],
+            }),
+        }
+    }
 }
 
 impl quote::ToTokens for RecoveryKind {

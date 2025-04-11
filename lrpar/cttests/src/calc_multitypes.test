@@ -1,5 +1,6 @@
 name: Test basic user actions using the calculator grammar
 yacckind: Grmtools
+recoverer: RecoveryKind::CPCTPlus
 grammar: |
     %start Expr
     %avoid_insert "INT"
