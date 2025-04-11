@@ -114,22 +114,32 @@ fn main() {
 
     let dump_state_graph = matches.opt_present("d");
     let quiet = matches.opt_present("q");
-
-    let recoverykind = match matches.opt_str("r") {
-        None => RecoveryKind::CPCTPlus,
-        Some(s) => match &*s.to_lowercase() {
-            "cpctplus" => RecoveryKind::CPCTPlus,
-            "none" => RecoveryKind::None,
-            _ => usage(prog, &format!("Unknown recoverer '{}'.", s)),
-        },
-    };
-
     let mut header = Header::new();
+    match matches.opt_str("r") {
+        None => (),
+        Some(s) => {
+            header.set_merge_behavior(
+                &"recoverer".to_string(),
+                cfgrammar::markmap::MergeBehavior::Ours,
+            );
+            header.insert(
+                "recoverer".to_string(),
+                (
+                    Location::CommandLine,
+                    Value::try_from(match &*s.to_lowercase() {
+                        "cpctplus" => RecoveryKind::CPCTPlus,
+                        "none" => RecoveryKind::None,
+                        _ => usage(prog, &format!("Unknown recoverer '{}'.", s)),
+                    })
+                    .expect("All these RecoveryKinds should convert without error"),
+                ),
+            );
+        }
+    };
     let entry = match header.entry("yacckind".to_string()) {
         Entry::Occupied(_) => unreachable!("Header should be empty"),
         Entry::Vacant(v) => v.occupied_entry(),
     };
-
     match matches.opt_str("y") {
         None => {}
         Some(s) => {
@@ -167,6 +177,18 @@ fn main() {
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
     let ast_validation = ASTWithValidityInfo::new(&mut header, &yacc_src);
+    let recoverykind = if let Some((_, rk_val)) = header.get("recoverer") {
+        match RecoveryKind::try_from(rk_val) {
+            Err(e) => {
+                eprintln!("{e}");
+                process::exit(1)
+            }
+            Ok(rk) => rk,
+        }
+    } else {
+        // Fallback to the default recoverykind
+        RecoveryKind::CPCTPlus
+    };
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(&ast_validation);
     let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;

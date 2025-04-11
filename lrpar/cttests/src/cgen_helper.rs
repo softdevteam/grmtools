@@ -1,6 +1,6 @@
 use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 use lrlex::{CTLexerBuilder, DefaultLexerTypes};
-use lrpar::CTParserBuilder;
+use lrpar::{CTParserBuilder, RecoveryKind};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -31,6 +31,11 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
             }
             Some(s) => panic!("YaccKind '{}' not supported", s),
             None => None,
+        };
+        let recoverer = match docs[0]["revoverer"].as_str() {
+            Some("RecoveryKind::CPCTPlus") => Some(RecoveryKind::CPCTPlus),
+            Some("RecoveryKind::None") => Some(RecoveryKind::None),
+            _ => None,
         };
         let (negative_yacc_flags, positive_yacc_flags) = &docs[0]["yacc_flags"]
             .as_vec()
@@ -92,6 +97,9 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
         let mut cp_build = CTParserBuilder::<DefaultLexerTypes<u32>>::new();
         if let Some(yacckind) = yacckind {
             cp_build = cp_build.yacckind(yacckind);
+        }
+        if let Some(recoverer) = recoverer {
+            cp_build = cp_build.recoverer(recoverer)
         }
         cp_build = cp_build
             .grammar_path(pg.to_str().unwrap())
