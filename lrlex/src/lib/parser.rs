@@ -34,6 +34,7 @@ lazy_static! {
     static ref RE_LEADING_WS: Regex = Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap();
     static ref RE_WS: Regex = Regex::new(r"\p{Pattern_White_Space}").unwrap();
     static ref RE_LEADING_DIGITS: Regex = Regex::new(r"^[0-9]+").unwrap();
+    static ref RE_NAME: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z]*").unwrap();
 }
 const INITIAL_START_STATE_NAME: &str = "INITIAL";
 
@@ -252,7 +253,7 @@ where
         span_map: &mut HashMap<&str, Span>,
         lex_flags: &mut LexFlags,
     ) -> LexInternalBuildResult<usize> {
-        const OPTIONS: [&str; 12] = [
+        const OPTIONS: [&str; 13] = [
             "allow_wholeline_comments",
             "dot_matches_new_line",
             "multi_line",
@@ -265,6 +266,7 @@ where
             "size_limit",
             "dfa_size_limit",
             "nest_limit",
+            "lexerkind",
         ];
         let start_pos = i;
         // RegexBuilder isn't uniform regarding whether the default value of an options is true
@@ -330,6 +332,26 @@ where
                             _ => unreachable!(),
                         }
                         i = j;
+                    }
+                    "lexerkind" => {
+                        // We just want to skip this, we already know we're `LRNonStreamingLexer`
+                        i = self.parse_ws(i)?;
+                        if let Some(j) = self.lookahead_is(":", i) {
+                            i = j
+                        } else {
+                            return Err(LexBuildError {
+                                kind: LexErrorKind::InvalidGrmtoolsSectionValue,
+                                spans: vec![Span::new(i, i)],
+                            });
+                        }
+                        i = self.parse_ws(i)?;
+                        let (j, _) = self.parse_name(i)?;
+                        i = self.parse_ws(j)?;
+                        if let Some(j) = self.lookahead_is("::", j) {
+                            i = self.parse_ws(j)?;
+                            let (j, _) = self.parse_name(i)?;
+                            i = j;
+                        }
                     }
                     _ => unreachable!(),
                 }
@@ -807,6 +829,19 @@ where
                 kind: LexErrorKind::InvalidNumber,
                 spans: vec![Span::new(i, i)],
             })
+    }
+
+    fn parse_name(&self, i: usize) -> Result<(usize, String), LexBuildError> {
+        match RE_NAME.find(&self.src[i..]) {
+            Some(m) => {
+                assert_eq!(m.start(), 0);
+                Ok((i + m.end(), self.src[i..i + m.end()].to_string()))
+            }
+            None => Err(LexBuildError {
+                kind: LexErrorKind::InvalidGrmtoolsSectionValue,
+                spans: vec![Span::new(i, i)],
+            }),
+        }
     }
 
     fn parse_spaces(&mut self, i: usize) -> LexInternalBuildResult<usize> {
