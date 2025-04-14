@@ -31,10 +31,38 @@ pub use crate::{
     parser::StartStateOperation,
 };
 
+use cfgrammar::header::HeaderError;
 use cfgrammar::yacc::parser::SpansKind;
 use cfgrammar::{Span, Spanned};
 
 pub type LexBuildResult<T> = Result<T, Vec<LexBuildError>>;
+
+#[derive(Debug)]
+pub enum LexBuildHeaderError {
+    Header(HeaderError),
+    Build(LexBuildError),
+}
+impl Error for LexBuildHeaderError {}
+impl fmt::Display for LexBuildHeaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Build(e) => write!(f, "{e}"),
+            Self::Header(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl From<LexBuildError> for LexBuildHeaderError {
+    fn from(it: LexBuildError) -> LexBuildHeaderError {
+        LexBuildHeaderError::Build(it)
+    }
+}
+
+impl From<HeaderError> for LexBuildHeaderError {
+    fn from(it: HeaderError) -> LexBuildHeaderError {
+        LexBuildHeaderError::Header(it)
+    }
+}
 
 /// Any error from the Lex parser returns an instance of this struct.
 #[derive(Debug)]
@@ -60,9 +88,6 @@ pub enum LexErrorKind {
     InvalidStartStateName,
     DuplicateName,
     RegexError(regex::Error),
-    InvalidGrmtoolsSectionValue,
-    InvalidNumber,
-    DuplicateGrmtoolsSectionValue,
     VerbatimNotSupported,
 }
 
@@ -81,15 +106,6 @@ impl LexErrorKind {
                 | (EK::InvalidStartState, EK::InvalidStartState)
                 | (EK::InvalidStartStateName, EK::InvalidStartStateName)
                 | (EK::DuplicateName, EK::DuplicateName)
-                | (
-                    EK::InvalidGrmtoolsSectionValue,
-                    EK::InvalidGrmtoolsSectionValue
-                )
-                | (EK::InvalidNumber, EK::InvalidNumber)
-                | (
-                    EK::DuplicateGrmtoolsSectionValue,
-                    EK::DuplicateGrmtoolsSectionValue
-                )
                 | (EK::RegexError(_), EK::RegexError(_))
                 | (EK::VerbatimNotSupported, EK::VerbatimNotSupported)
         )
@@ -111,13 +127,11 @@ impl Spanned for LexBuildError {
             | LexErrorKind::UnknownStartState
             | LexErrorKind::InvalidStartState
             | LexErrorKind::InvalidStartStateName
-            | LexErrorKind::InvalidGrmtoolsSectionValue
-            | LexErrorKind::InvalidNumber
             | LexErrorKind::VerbatimNotSupported
             | LexErrorKind::RegexError(_) => SpansKind::Error,
-            LexErrorKind::DuplicateName
-            | LexErrorKind::DuplicateStartState
-            | LexErrorKind::DuplicateGrmtoolsSectionValue => SpansKind::DuplicationError,
+            LexErrorKind::DuplicateName | LexErrorKind::DuplicateStartState => {
+                SpansKind::DuplicationError
+            }
         }
     }
 }
@@ -135,9 +149,6 @@ impl fmt::Display for LexBuildError {
             LexErrorKind::DuplicateStartState => "Start state already exists",
             LexErrorKind::InvalidStartState => "Invalid start state",
             LexErrorKind::InvalidStartStateName => "Invalid start state name",
-            LexErrorKind::InvalidGrmtoolsSectionValue => "Invalid grmtools section value",
-            LexErrorKind::InvalidNumber => "Invalid number",
-            LexErrorKind::DuplicateGrmtoolsSectionValue => "Duplicate grmtools section value",
             LexErrorKind::DuplicateName => "Rule name already exists",
             LexErrorKind::RegexError(e) => return write!(f, "Invalid regular expression: {e}"),
         };

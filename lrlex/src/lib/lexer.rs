@@ -7,7 +7,12 @@ use std::{
     str::FromStr,
 };
 
-use cfgrammar::{NewlineCache, Span};
+use cfgrammar::{
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, Value},
+    markmap::MergeBehavior,
+    span::Location,
+    NewlineCache, Span,
+};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::{Regex, RegexBuilder};
 
@@ -15,7 +20,7 @@ use lrpar::{Lexeme, Lexer, LexerTypes, NonStreamingLexer};
 
 use crate::{
     parser::{LexParser, StartState, StartStateOperation},
-    LRLexError, LexBuildResult, StartStateId,
+    LRLexError, LexBuildHeaderError, StartStateId,
 };
 
 #[doc(hidden)]
@@ -40,47 +45,151 @@ pub struct LexFlags {
     pub nest_limit: Option<u32>,
 }
 
-impl LexFlags {
-    /// Merges flags from `other` into `self`
-    /// Flags which are `Some` in `other` overriding flags in self.
-    pub fn merge_from(&mut self, other: &Self) {
-        if other.allow_wholeline_comments.is_some() {
-            self.allow_wholeline_comments = other.allow_wholeline_comments;
+impl TryFrom<&Header> for LexFlags {
+    type Error = HeaderError;
+    fn try_from(header: &Header) -> Result<LexFlags, HeaderError> {
+        use cfgrammar::header::Setting;
+        let mut lex_flags = UNSPECIFIED_LEX_FLAGS;
+        let LexFlags {
+            dot_matches_new_line,
+            multi_line,
+            octal,
+            posix_escapes,
+            allow_wholeline_comments,
+            case_insensitive,
+            swap_greed,
+            ignore_whitespace,
+            unicode,
+            size_limit,
+            dfa_size_limit,
+            nest_limit,
+        } = &mut lex_flags;
+        macro_rules! cvt_flag {
+            ($it:ident) => {
+                *$it = match header.get(stringify!($it)) {
+                    Some((_, Value::Flag(flag, _))) => Some(*flag),
+                    Some((loc, _)) => Err(HeaderError {
+                        kind: HeaderErrorKind::ConversionError("LexFlags", "Expected boolean"),
+                        locations: vec![loc.clone()],
+                    })?,
+                    None => None,
+                }
+            };
         }
-        if other.dot_matches_new_line.is_some() {
-            self.dot_matches_new_line = other.dot_matches_new_line;
+        cvt_flag!(dot_matches_new_line);
+        cvt_flag!(multi_line);
+        cvt_flag!(octal);
+        cvt_flag!(posix_escapes);
+        cvt_flag!(allow_wholeline_comments);
+        cvt_flag!(case_insensitive);
+        cvt_flag!(swap_greed);
+        cvt_flag!(ignore_whitespace);
+        cvt_flag!(unicode);
+        macro_rules! cvt_num {
+            ($it:ident, $num_ty: ty) => {
+                *$it = match header.get(stringify!($it)) {
+                    Some((_, Value::Setting(Setting::Num(n, _)))) => Some(*n as $num_ty),
+                    Some((loc, _)) => Err(HeaderError {
+                        kind: HeaderErrorKind::ConversionError("LexFlags", "Expected numeric"),
+                        locations: vec![loc.clone()],
+                    })?,
+                    None => None,
+                }
+            };
         }
-        if other.multi_line.is_some() {
-            self.multi_line = other.multi_line;
-        }
-        if other.octal.is_some() {
-            self.octal = other.octal;
-        }
-        if other.posix_escapes.is_some() {
-            self.posix_escapes = other.posix_escapes;
-        }
-        if other.case_insensitive.is_some() {
-            self.case_insensitive = other.case_insensitive;
-        }
-        if other.swap_greed.is_some() {
-            self.swap_greed = other.swap_greed;
-        }
-        if other.ignore_whitespace.is_some() {
-            self.ignore_whitespace = other.ignore_whitespace;
-        }
-        if other.unicode.is_some() {
-            self.unicode = other.unicode;
-        }
-        if other.size_limit.is_some() {
-            self.size_limit = other.size_limit;
-        }
-        if other.dfa_size_limit.is_some() {
-            self.dfa_size_limit = other.dfa_size_limit;
-        }
-        if other.nest_limit.is_some() {
-            self.nest_limit = other.nest_limit;
-        }
+        cvt_num!(size_limit, usize);
+        cvt_num!(dfa_size_limit, usize);
+        cvt_num!(nest_limit, u32);
+        Ok(lex_flags)
     }
+}
+
+impl From<&LexFlags> for Header {
+    fn from(flags: &LexFlags) -> Header {
+        let mut header = Header::new();
+        let LexFlags {
+            dot_matches_new_line,
+            multi_line,
+            octal,
+            posix_escapes,
+            allow_wholeline_comments,
+            case_insensitive,
+            swap_greed,
+            ignore_whitespace,
+            unicode,
+            size_limit,
+            dfa_size_limit,
+            nest_limit,
+        } = flags;
+        macro_rules! cvt_flag {
+            ($it: ident) => {
+                $it.map(|x| {
+                    header.insert(
+                        stringify!($it).to_string(),
+                        (
+                            Location::Other("From<&LexFlags".to_string()),
+                            Value::Flag(x, Location::Other("From<&LexFlags>".to_string())),
+                        ),
+                    )
+                });
+            };
+        }
+        cvt_flag!(dot_matches_new_line);
+        cvt_flag!(multi_line);
+        cvt_flag!(octal);
+        cvt_flag!(posix_escapes);
+        cvt_flag!(allow_wholeline_comments);
+        cvt_flag!(case_insensitive);
+        cvt_flag!(swap_greed);
+        cvt_flag!(ignore_whitespace);
+        cvt_flag!(unicode);
+
+        macro_rules! cvt_num {
+            ($it: ident) => {
+                $it.map(|x| {
+                    use cfgrammar::header::Setting;
+                    header.insert(
+                        stringify!($it).to_string(),
+                        (
+                            Location::Other("From<&LexFlags".to_string()),
+                            Value::Setting(Setting::Num(
+                                x as u64,
+                                Location::Other("From<&LexFlags>".to_string()),
+                            )),
+                        ),
+                    )
+                });
+            };
+        }
+        cvt_num!(size_limit);
+        cvt_num!(dfa_size_limit);
+        cvt_num!(nest_limit);
+
+        header
+    }
+}
+
+pub(crate) fn default_lex_flags_header() -> Header {
+    let loc = Location::Other("default_lex_flags_header".to_string());
+    let mut header = Header::new();
+    // Default false keys
+    for key in [
+        "allow_wholeline_comments".to_string(),
+        "posix_escapes".to_string(),
+    ] {
+        header.set_merge_behavior(&key, MergeBehavior::Theirs);
+        header.insert(key, (loc.clone(), Value::Flag(false, loc.clone())));
+    }
+    // Default true keys
+    for key in [
+        "dot_matches_new_line".to_string(),
+        "multi_line".to_string(),
+        "octal".to_string(),
+    ] {
+        header.set_merge_behavior(&key, MergeBehavior::Theirs);
+        header.insert(key, (loc.clone(), Value::Flag(true, loc.clone())));
+    }
+    header
 }
 
 /// LexFlags with flags set to default values.
@@ -252,7 +361,7 @@ where
         Self: Sized;
 
     /// Instantiate a lexer from a string (e.g. representing a `.l` file).
-    fn from_str(s: &str) -> LexBuildResult<Self>
+    fn from_str(s: &str) -> Result<Self, Vec<LexBuildHeaderError>>
     where
         Self: Sized;
 
@@ -308,7 +417,7 @@ where
 {
     rules: Vec<Rule<LexerTypesT::StorageT>>,
     start_states: Vec<StartState>,
-    lex_flags: Option<LexFlags>,
+    lex_flags: LexFlags,
     phantom: PhantomData<LexerTypesT>,
 }
 
@@ -324,18 +433,33 @@ where
         LRNonStreamingLexerDef {
             rules,
             start_states,
-            lex_flags: None,
+            lex_flags: DEFAULT_LEX_FLAGS,
             phantom: PhantomData,
         }
     }
 
-    fn from_str(s: &str) -> LexBuildResult<LRNonStreamingLexerDef<LexerTypesT>> {
-        LexParser::<LexerTypesT>::new(s.to_string()).map(|p| LRNonStreamingLexerDef {
-            rules: p.rules,
-            start_states: p.start_states,
-            lex_flags: Some(p.lex_flags),
-            phantom: PhantomData,
-        })
+    fn from_str(s: &str) -> Result<LRNonStreamingLexerDef<LexerTypesT>, Vec<LexBuildHeaderError>> {
+        let mut defaults = default_lex_flags_header();
+        let (header, pos) = GrmtoolsSectionParser::new(s, false)
+            .parse()
+            .map_err(|mut es| {
+                es.drain(..)
+                    .map(LexBuildHeaderError::Header)
+                    .collect::<Vec<_>>()
+            })?;
+        defaults
+            .merge_from(header)
+            .expect("merging into defaults cannot fail");
+        let flags = LexFlags::try_from(&defaults).map_err(|e| vec![e.into()])?;
+        match LexParser::<LexerTypesT>::new_with_lex_flags(s[pos..].to_string(), flags.clone()) {
+            Ok(p) => Ok(LRNonStreamingLexerDef {
+                rules: p.rules,
+                start_states: p.start_states,
+                lex_flags: flags,
+                phantom: PhantomData,
+            }),
+            Err(mut es) => Err(es.drain(..).map(|e| e.into()).collect::<Vec<_>>()),
+        }
     }
 
     fn get_rule(&self, idx: usize) -> Option<&Rule<LexerTypesT::StorageT>> {
@@ -441,20 +565,64 @@ where
 {
     pub fn new_with_options(
         s: &str,
-        force_lex_flags: LexFlags,
-        default_lex_flags: LexFlags,
-    ) -> LexBuildResult<LRNonStreamingLexerDef<LexerTypesT>> {
-        LexParser::<LexerTypesT>::new_with_lex_flags(
-            s.to_string(),
-            force_lex_flags,
-            default_lex_flags,
-        )
-        .map(|p| LRNonStreamingLexerDef {
-            rules: p.rules,
-            start_states: p.start_states,
-            lex_flags: Some(p.lex_flags),
-            phantom: PhantomData,
-        })
+        flags: LexFlags,
+    ) -> Result<LRNonStreamingLexerDef<LexerTypesT>, Vec<LexBuildHeaderError>> {
+        let mut defaults = default_lex_flags_header();
+        let args_header = Header::from(&flags);
+        defaults
+            .merge_from(args_header)
+            .expect("merging into defaults cannot fail");
+        let (header, pos) = GrmtoolsSectionParser::new(s, false)
+            .parse()
+            .map_err(|mut es| {
+                es.drain(..)
+                    .map(LexBuildHeaderError::Header)
+                    .collect::<Vec<_>>()
+            })?;
+        defaults.merge_from(header).unwrap();
+        let lex_flags =
+            LexFlags::try_from(&defaults).map_err(|e| vec![LexBuildHeaderError::Header(e)])?;
+        let p =
+            LexParser::<LexerTypesT>::new_with_lex_flags(s[pos..].to_string(), lex_flags.clone());
+        match p {
+            Ok(p) => Ok(LRNonStreamingLexerDef {
+                rules: p.rules,
+                start_states: p.start_states,
+                lex_flags,
+                phantom: PhantomData,
+            }),
+            Err(mut e) => Err(e.drain(..).map(|e| e.into()).collect::<Vec<_>>()),
+        }
+    }
+
+    pub fn new_with_header(
+        s: &str,
+        args_header: &mut Header,
+    ) -> Result<LRNonStreamingLexerDef<LexerTypesT>, Vec<LexBuildHeaderError>> {
+        let defaults = default_lex_flags_header();
+        defaults
+            .merge_into(args_header)
+            .expect("merging into defaults cannot fail");
+        let (header, pos) = GrmtoolsSectionParser::new(s, false)
+            .parse()
+            .map_err(|mut es| {
+                es.drain(..)
+                    .map(LexBuildHeaderError::Header)
+                    .collect::<Vec<_>>()
+            })?;
+        args_header.merge_from(header).unwrap();
+        let lex_flags = LexFlags::try_from(&*args_header).map_err(|e| vec![e.into()])?;
+        let p =
+            LexParser::<LexerTypesT>::new_with_lex_flags(s[pos..].to_string(), lex_flags.clone());
+        match p {
+            Ok(p) => Ok(LRNonStreamingLexerDef {
+                rules: p.rules,
+                start_states: p.start_states,
+                lex_flags,
+                phantom: PhantomData,
+            }),
+            Err(mut e) => Err(e.drain(..).map(|e| e.into()).collect::<Vec<_>>()),
+        }
     }
 
     /// Return an [LRNonStreamingLexer] for the `String` `s` that will lex relative to this
@@ -580,7 +748,7 @@ where
     /// Returns the final `LexFlags` used for this lex source
     /// after all forced and default flags have been resolved.
     pub fn lex_flags(&self) -> Option<&LexFlags> {
-        self.lex_flags.as_ref()
+        Some(&self.lex_flags)
     }
 }
 
@@ -746,12 +914,9 @@ mod test {
         .to_string();
         let mut options = DEFAULT_LEX_FLAGS;
         options.posix_escapes = Some(true);
-        let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(
-            &src,
-            options,
-            UNSPECIFIED_LEX_FLAGS,
-        )
-        .unwrap();
+        let lexerdef =
+            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(&src, options)
+                .unwrap();
         let lexemes = lexerdef
             .lexer("\\\x07\x08\x0c\n\r\t\x0bq")
             .iter()
@@ -780,12 +945,9 @@ a\b a 'work_break'
         .to_string();
         let mut options = DEFAULT_LEX_FLAGS;
         options.posix_escapes = Some(false);
-        let lexerdef = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(
-            &src,
-            options,
-            UNSPECIFIED_LEX_FLAGS,
-        )
-        .unwrap();
+        let lexerdef =
+            LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::new_with_options(&src, options)
+                .unwrap();
         let lexemes = lexerdef
             .lexer("\\\x07a a\x0c\n\r\t\x0bq")
             .iter()

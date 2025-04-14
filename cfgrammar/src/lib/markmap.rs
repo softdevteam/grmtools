@@ -409,6 +409,48 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
         Ok(())
     }
 
+    /// Similar to `merge_from` except the `MergeBehavior` of self is used when merging into `*other*`.
+    #[doc(hidden)]
+    pub fn merge_into(mut self, other: &'_ mut Self) -> Result<(), MergeError<K, Box<V>>> {
+        for (src_key, src_mark, src_val) in self.contents.drain(..) {
+            let pos = other.contents.binary_search_by(|x| x.0.cmp(&src_key));
+            match pos {
+                Ok(pos) => {
+                    let (_, dest_mark, dest_val) = &mut other.contents[pos];
+                    let theirs_mark = Mark::MergeBehavior(MergeBehavior::Theirs).repr();
+                    let ours_mark = Mark::MergeBehavior(MergeBehavior::Ours).repr();
+                    let exclusive_mark =
+                        Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr();
+                    let merge_behavior = (src_mark & exclusive_mark)
+                        | (src_mark & ours_mark)
+                        | (src_mark & theirs_mark);
+                    if merge_behavior == exclusive_mark || merge_behavior == 0 {
+                        // If only clippy could convince me and the borrow checker this is actually unnecessary.
+                        #[allow(clippy::unnecessary_unwrap)]
+                        if src_val.is_some() && dest_val.is_some() {
+                            return Err(MergeError::Exclusivity(
+                                src_key,
+                                Box::new(src_val.unwrap()),
+                            ));
+                        } else if dest_val.is_none() {
+                            *dest_val = src_val;
+                        }
+                    } else if merge_behavior == ours_mark && src_val.is_some()
+                        || merge_behavior == theirs_mark && dest_val.is_none()
+                    {
+                        *dest_mark = src_mark;
+                        *dest_val = src_val;
+                    }
+                }
+                Err(pos) => {
+                    other.contents
+                        .insert(pos, (src_key, src_mark, src_val));
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Returns whether `key` has been marked as used.
     #[doc(hidden)]
     pub fn is_used<Q>(&self, key: &Q) -> bool

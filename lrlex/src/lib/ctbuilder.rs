@@ -16,8 +16,12 @@ use std::{
 
 use bincode::Encode;
 use cfgrammar::{
-    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, Namespaced, Setting, Value},
+    header::{
+        GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, Namespaced, Setting, Value,
+    },
+    markmap::MergeBehavior,
     newlinecache::NewlineCache,
+    span::Location,
     Spanned,
 };
 use lazy_static::lazy_static;
@@ -27,7 +31,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use regex::Regex;
 
-use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexFlags, LexerDef, UNSPECIFIED_LEX_FLAGS};
+use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexBuildHeaderError, LexFlags, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -203,8 +207,7 @@ where
     rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
-    force_lex_flags: LexFlags,
-    default_lex_flags: LexFlags,
+    header: Header,
     #[cfg(test)]
     inspect_lexerkind_cb: Option<Box<dyn Fn(LexerKind) -> Result<(), Box<dyn Error>>>>,
 }
@@ -250,8 +253,7 @@ where
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
             allow_missing_tokens_in_parser: true,
-            force_lex_flags: UNSPECIFIED_LEX_FLAGS,
-            default_lex_flags: UNSPECIFIED_LEX_FLAGS,
+            header: Header::new(),
             #[cfg(test)]
             inspect_lexerkind_cb: None,
         }
@@ -463,29 +465,34 @@ where
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
             inspect_lexerkind_cb(lexerkind)?
         }
+        let mut header = Header::new();
         let (mut lexerdef, lex_flags): (Box<dyn LexerDef<LexerTypesT>>, LexFlags) = match lexerkind
         {
             LexerKind::LRNonStreamingLexer => {
-                let lexerdef = LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
-                    &lex_src,
-                    self.force_lex_flags.clone(),
-                    self.default_lex_flags.clone(),
-                )
-                .map_err(|errs| {
-                    errs.iter()
-                        .map(|e| {
-                            if let Some((line, column)) = line_cache.byte_to_line_num_and_col_num(
-                                &lex_src,
-                                e.spans().first().unwrap().start(),
-                            ) {
-                                format!("{} at line {line} column {column}", e)
-                            } else {
-                                format!("{}", e)
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                })?;
+                let lexerdef =
+                    LRNonStreamingLexerDef::<LexerTypesT>::new_with_header(&lex_src, &mut header)
+                        .map_err(|errs| {
+                            errs.iter()
+                                .map(|e| match e {
+                                    LexBuildHeaderError::Build(e) => {
+                                        if let Some((line, column)) = line_cache
+                                            .byte_to_line_num_and_col_num(
+                                                &lex_src,
+                                                e.spans().first().unwrap().start(),
+                                            )
+                                        {
+                                            format!("{} at line {line} column {column}", e)
+                                        } else {
+                                            format!("{}", e)
+                                        }
+                                    }
+                                    LexBuildHeaderError::Header(e) => {
+                                        format!("{}", e)
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        })?;
                 let lex_flags = lexerdef.lex_flags().cloned();
                 (Box::new(lexerdef), lex_flags.unwrap())
             }
@@ -782,7 +789,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn allow_wholeline_comments(mut self, flag: bool) -> Self {
-        self.force_lex_flags.allow_wholeline_comments = Some(flag);
+        let key = "allow_wholeline_comments".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -791,7 +806,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn dot_matches_new_line(mut self, flag: bool) -> Self {
-        self.force_lex_flags.dot_matches_new_line = Some(flag);
+        let key = "dot_matches_new_line".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -800,7 +823,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn multi_line(mut self, flag: bool) -> Self {
-        self.force_lex_flags.multi_line = Some(flag);
+        let key = "multi_line".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -809,7 +840,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn posix_escapes(mut self, flag: bool) -> Self {
-        self.force_lex_flags.posix_escapes = Some(flag);
+        let key = "posix_escapes".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -818,7 +857,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn octal(mut self, flag: bool) -> Self {
-        self.force_lex_flags.octal = Some(flag);
+        let key = "octal".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -827,7 +874,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn swap_greed(mut self, flag: bool) -> Self {
-        self.force_lex_flags.swap_greed = Some(flag);
+        let key = "swap_greed".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -836,7 +891,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn ignore_whitespace(mut self, flag: bool) -> Self {
-        self.force_lex_flags.ignore_whitespace = Some(flag);
+        let key = "ignore_whitespace".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -845,7 +908,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn unicode(mut self, flag: bool) -> Self {
-        self.force_lex_flags.unicode = Some(flag);
+        let key = "unicode".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -854,7 +925,15 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn case_insensitive(mut self, flag: bool) -> Self {
-        self.force_lex_flags.case_insensitive = Some(flag);
+        let key = "case_insensitive".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+            ),
+        );
         self
     }
 
@@ -863,7 +942,18 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn size_limit(mut self, sz: usize) -> Self {
-        self.force_lex_flags.size_limit = Some(sz);
+        let key = "size_limit".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Setting(Setting::Num(
+                    sz as u64,
+                    Location::Other("CTLexerBuilder".to_string()),
+                )),
+            ),
+        );
         self
     }
 
@@ -872,7 +962,18 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn dfa_size_limit(mut self, sz: usize) -> Self {
-        self.force_lex_flags.dfa_size_limit = Some(sz);
+        let key = "dfa_size_limit".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Setting(Setting::Num(
+                    sz as u64,
+                    Location::Other("CTLexerBuilder".to_string()),
+                )),
+            ),
+        );
         self
     }
 
@@ -881,15 +982,18 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn nest_limit(mut self, lim: u32) -> Self {
-        self.force_lex_flags.nest_limit = Some(lim);
-        self
-    }
-
-    /// `Some` values in the specified `flags` will be used as a default value
-    /// unless the specified value has already been specified previously via `CTLexerBuilder`
-    /// or was specified in the `%grmtools` section of a *.l* file.
-    pub fn default_lex_flags(mut self, flags: LexFlags) -> Self {
-        self.default_lex_flags = flags;
+        let key = "nest_limit".to_string();
+        self.header.set_merge_behavior(&key, MergeBehavior::Ours);
+        self.header.insert(
+            key,
+            (
+                Location::Other("CTLexerBuilder".to_string()),
+                Value::Setting(Setting::Num(
+                    lim as u64,
+                    Location::Other("CTLexerBuilder".to_string()),
+                )),
+            ),
+        );
         self
     }
 

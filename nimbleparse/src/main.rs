@@ -7,7 +7,7 @@ use cfgrammar::{
     Location, Span,
 };
 use getopts::Options;
-use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
+use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexBuildHeaderError, LexerDef};
 use lrpar::{
     parser::{RTParserBuilder, RecoveryKind},
     LexerTypes,
@@ -168,7 +168,14 @@ fn main() {
             let formatter = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path).unwrap();
             eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                match e {
+                    LexBuildHeaderError::Build(e) => {
+                        eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                    }
+                    LexBuildHeaderError::Header(e) => {
+                        eprintln!("{}", indent(&format!("{}", e), "    "))
+                    }
+                }
             }
             process::exit(1);
         }
