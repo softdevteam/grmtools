@@ -369,19 +369,19 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     /// For the behavior of exclusive or mark the behavior as also `Mark::Required`, then after merge call `missing()`
     /// to check all required values.
     #[doc(hidden)]
-    pub fn merge_from(&mut self, other: Self) -> Result<(), MergeError<K, Box<V>>> {
-        for (their_key, their_mark, their_val) in other.contents {
+    pub fn merge_from(&mut self, mut other: Self) -> Result<(), MergeError<K, Box<V>>> {
+        for (their_key, their_mark, their_val) in other.contents.drain(..) {
             let pos = self.contents.binary_search_by(|x| x.0.cmp(&their_key));
             match pos {
                 Ok(pos) => {
-                    let (_, my_mark, my_val) = &self.contents[pos];
+                    let (_, my_mark, my_val) = &mut self.contents[pos];
                     let theirs_mark = Mark::MergeBehavior(MergeBehavior::Theirs).repr();
                     let ours_mark = Mark::MergeBehavior(MergeBehavior::Ours).repr();
                     let exclusive_mark =
                         Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr();
-                    let merge_behavior = (my_mark & exclusive_mark)
-                        | (my_mark & ours_mark)
-                        | (my_mark & theirs_mark);
+                    let merge_behavior = (*my_mark & exclusive_mark)
+                        | (*my_mark & ours_mark)
+                        | (*my_mark & theirs_mark);
                     if merge_behavior == exclusive_mark || merge_behavior == 0 {
                         // If only clippy could convince me and the borrow checker this is actually unnecessary.
                         #[allow(clippy::unnecessary_unwrap)]
@@ -391,18 +391,13 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
                                 Box::new(their_val.unwrap()),
                             ));
                         } else if my_val.is_none() {
-                            self.contents[pos].2 = their_val;
-                            return Ok(());
+                            *my_val = their_val;
                         }
-                    }
-                    if merge_behavior == theirs_mark && their_val.is_some() {
-                        self.contents[pos].2 = their_val;
-                        return Ok(());
-                    }
-
-                    if merge_behavior == ours_mark && my_val.is_none() {
-                        self.contents[pos].2 = their_val;
-                        return Ok(());
+                    } else if merge_behavior == theirs_mark && their_val.is_some()
+                        || merge_behavior == ours_mark && my_val.is_none()
+                    {
+                        *my_mark = their_mark;
+                        *my_val = their_val;
                     }
                 }
                 Err(pos) => {
@@ -457,6 +452,12 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
         }
         ret
     }
+
+    /// Returns an `Iterator` over all the keys of the `MarkMap`.
+    #[doc(hidden)]
+    pub fn keys(&self) -> Keys<'_, K, V> {
+        Keys { pos: 0, map: self }
+    }
 }
 
 /// Iterator over the owned keys and values of a `MarkMap`.
@@ -506,6 +507,30 @@ impl<'a, K, V> IntoIterator for &'a MarkMap<K, V> {
     type IntoIter = MarkMapIterRef<'a, K, V>;
     fn into_iter(self) -> Self::IntoIter {
         MarkMapIterRef { pos: 0, map: self }
+    }
+}
+
+/// Iterator over references to keys and values of a `MarkMap`.
+#[doc(hidden)]
+pub struct Keys<'a, K, V> {
+    pos: usize,
+    map: &'a MarkMap<K, V>,
+}
+
+impl<'a, K, V> Iterator for Keys<'a, K, V> {
+    type Item = &'a K;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.pos >= self.map.contents.len() {
+                return None;
+            }
+            let pos = self.pos;
+            self.pos += 1;
+            if self.map.contents[pos].2.is_some() {
+                return Some(&self.map.contents[pos].0);
+            }
+        }
     }
 }
 
@@ -827,5 +852,22 @@ mod test {
         assert_eq!(mm.get(&"a"), Some(&"ours"));
         assert!(mm.is_required(&"a"));
         assert!(mm.is_used(&"a"));
+    }
+
+    #[test]
+    fn test_merge_many() {
+        let mut mm = MarkMap::new();
+        mm.insert("a", ());
+        mm.insert("b", ());
+
+        let mut mm2 = MarkMap::new();
+        mm2.insert("x", ());
+        mm2.insert("y", ());
+
+        mm.merge_from(mm2).unwrap();
+        assert_eq!(
+            mm.keys().cloned().collect::<Vec<_>>(),
+            vec!["a", "b", "x", "y"]
+        );
     }
 }
