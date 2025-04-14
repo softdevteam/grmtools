@@ -235,13 +235,16 @@ where
     grammar_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     mod_name: Option<&'a str>,
-    recoverer: RecoveryKind,
+    recoverer: Option<RecoveryKind>,
     yacckind: Option<YaccKind>,
     error_on_conflicts: bool,
     warnings_are_errors: bool,
     show_warnings: bool,
     visibility: Visibility,
     rust_edition: RustEdition,
+    // test function for inspecting private state
+    #[cfg(test)]
+    inspect_callback: Option<Box<dyn Fn(RecoveryKind) -> Result<(), Box<dyn Error>>>>,
     phantom: PhantomData<LexerTypesT>,
 }
 
@@ -279,13 +282,15 @@ where
             grammar_path: None,
             output_path: None,
             mod_name: None,
-            recoverer: RecoveryKind::CPCTPlus,
+            recoverer: None,
             yacckind: None,
             error_on_conflicts: true,
             warnings_are_errors: true,
             show_warnings: true,
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
+            #[cfg(test)]
+            inspect_callback: None,
             phantom: PhantomData,
         }
     }
@@ -378,7 +383,7 @@ where
 
     /// Set the recoverer for this parser to `rk`. Defaults to `RecoveryKind::CPCTPlus`.
     pub fn recoverer(mut self, rk: RecoveryKind) -> Self {
-        self.recoverer = rk;
+        self.recoverer = Some(rk);
         self
     }
 
@@ -413,6 +418,15 @@ where
     /// rust supported by grmtools.
     pub fn rust_edition(mut self, edition: RustEdition) -> Self {
         self.rust_edition = edition;
+        self
+    }
+
+    #[cfg(test)]
+    pub fn inspect_recoverer(
+        mut self,
+        cb: Box<dyn for<'h, 'y> Fn(RecoveryKind) -> Result<(), Box<dyn Error>>>,
+    ) -> Self {
+        self.inspect_callback = Some(cb);
         self
     }
 
@@ -494,6 +508,18 @@ where
                 }
             },
         }
+        if let Some(recoverer) = self.recoverer {
+            match header.entry("recoverer".to_string()) {
+                Entry::Occupied(_) => unreachable!(),
+                Entry::Vacant(v) => {
+                    let rk_value: Value = Value::try_from(recoverer)?;
+                    let mut o =
+                        v.insert_entry((Location::Other("CTParserBuilder".to_string()), rk_value));
+                    o.set_merge_behavior(MergeBehavior::Ours);
+                }
+            }
+        }
+
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
             if lk.contains(outp.as_path()) {
@@ -505,18 +531,16 @@ where
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
         let ast_validation = ASTWithValidityInfo::new(&mut header, &inc);
-        let unused_keys = header.unused();
-        if !unused_keys.is_empty() {
-            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
+        header.mark_used(&"recoverer".to_string());
+        let rk_val = header.get("recoverer").map(|(_, rk_val)| rk_val);
+
+        if let Some(rk_val) = rk_val {
+            self.recoverer = Some(RecoveryKind::try_from(rk_val)?);
+        } else {
+            // Fallback to the default recoverykind.
+            self.recoverer = Some(RecoveryKind::CPCTPlus);
         }
-        let missing_keys = header.missing();
-        if !missing_keys.is_empty() {
-            return Err(format!(
-                "Required values were missing from the header: {}",
-                unused_keys.join(", ")
-            )
-            .into());
-        }
+
         self.yacckind = ast_validation.yacc_kind();
         let warnings = ast_validation.ast().warnings();
         let loc_fmt = |err_str, loc, inc: &str, line_cache: &NewlineCache| match loc {
@@ -601,6 +625,24 @@ where
                 }))?;
             }
         };
+
+        #[cfg(test)]
+        if let Some(cb) = &self.inspect_callback {
+            cb(self.recoverer.expect("has a default value"))?;
+        }
+
+        let unused_keys = header.unused();
+        if !unused_keys.is_empty() {
+            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
+        }
+        let missing_keys = header.missing();
+        if !missing_keys.is_empty() {
+            return Err(format!(
+                "Required values were missing from the header: {}",
+                unused_keys.join(", ")
+            )
+            .into());
+        }
 
         let rule_ids = grm
             .tokens_map()
@@ -797,6 +839,8 @@ where
             show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
+            #[cfg(test)]
+            inspect_callback: None,
             phantom: PhantomData,
         };
         Ok(cl.build()?.rule_ids)
@@ -873,7 +917,7 @@ where
         // rustc forces a recompile, this will change this value, causing anything which depends on
         // this build of lrpar to be recompiled too.
         let Self {
-            // All variables except for `output_path` and `phantom` should
+            // All variables except for `output_path`, `inspect_callback` and `phantom` should
             // be written into the cache.
             grammar_path,
             mod_name,
@@ -885,6 +929,8 @@ where
             show_warnings,
             visibility,
             rust_edition,
+            #[cfg(test)]
+                inspect_callback: _,
             phantom: _,
         } = self;
         let build_time = env!("VERGEN_BUILD_TIMESTAMP");
@@ -1572,5 +1618,76 @@ C : 'a';"
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
             }
         }
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn test_recoverer_header() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::RecoveryKind as RK;
+        #[rustfmt::skip]
+            let recovery_kinds = [
+                //  Builder,          Header setting,     Expected result.
+                // -----------       ------------------  -------------------
+                (Some(RK::None),      Some(RK::None),     Some(RK::None)),
+                (Some(RK::None),      Some(RK::CPCTPlus), Some(RK::None)),
+                (Some(RK::CPCTPlus),  Some(RK::CPCTPlus), Some(RK::CPCTPlus)),
+                (Some(RK::CPCTPlus),  Some(RK::None),     Some(RK::CPCTPlus)),
+                (None,                Some(RK::CPCTPlus), Some(RK::CPCTPlus)),
+                (None,                Some(RK::None),     Some(RK::None)),
+                (None,                None,               Some(RK::CPCTPlus)),
+                (Some(RK::None),      None,               Some(RK::None)),
+                (Some(RK::CPCTPlus),  None,               Some(RK::CPCTPlus)),
+            ];
+
+        for (i, (builder_arg, header_arg, expected_rk)) in
+            recovery_kinds.iter().cloned().enumerate()
+        {
+            let y_src = if let Some(header_arg) = header_arg {
+                format!(
+                    "\
+                    %grmtools{{yacckind: Original(NoAction), recoverer: {}}} \
+                    %% \
+                    start: ; \
+                    ",
+                    match header_arg {
+                        RK::None => "RecoveryKind::None",
+                        RK::CPCTPlus => "RecoveryKind::CPCTPlus",
+                    }
+                )
+            } else {
+                r#"
+                    %grmtools{yacckind: Original(NoAction)}
+                    %%
+                    Start: ;
+                    "#
+                .to_string()
+            };
+            let out_dir = std::env::var("OUT_DIR").unwrap();
+            let y_path = format!("{out_dir}/recoverykind_test_{i}.y");
+            let y_out_path = format!("{y_path}.rs");
+            std::fs::File::create(y_path.clone()).unwrap();
+            std::fs::write(y_path.clone(), y_src).unwrap();
+            let mut cp_builder = CTParserBuilder::<TestLexerTypes>::new();
+            cp_builder = cp_builder
+                .output_path(y_out_path.clone())
+                .grammar_path(y_path.clone());
+            cp_builder = if let Some(builder_arg) = builder_arg {
+                cp_builder.recoverer(builder_arg)
+            } else {
+                cp_builder
+            }
+            .inspect_recoverer(Box::new(move |rk| {
+                if matches!(
+                    (rk, expected_rk),
+                    (RK::None, Some(RK::None)) | (RK::CPCTPlus, Some(RK::CPCTPlus))
+                ) {
+                    Ok(())
+                } else {
+                    panic!("Unexpected recovery kind")
+                }
+            }));
+            cp_builder.build()?;
+        }
+        Ok(())
     }
 }
