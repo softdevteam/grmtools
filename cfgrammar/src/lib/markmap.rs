@@ -1,4 +1,6 @@
 use std::borrow::Borrow;
+use std::error::Error;
+use std::fmt;
 
 // MarkMap is a key value data structure that uses an API similar to that of
 // `std::collections::HashMap` and `std::collections::BTreeMap`.
@@ -45,6 +47,18 @@ pub enum MergeBehavior {
 pub enum MergeError<K, V> {
     // Contains the key which was present in both, and the value which was present in `Theirs`.
     Exclusivity(K, V),
+}
+
+impl<K: fmt::Debug, V: fmt::Debug> Error for MergeError<K, V> {}
+
+impl<K: fmt::Debug, V> fmt::Display for MergeError<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Exclusivity(k, _) => {
+                write!(f, "Merge behavior forbids overriding key: {:?}", k)
+            }
+        }
+    }
 }
 
 /// A view into a single entry in a `MarkMap`, which may either be vacant or occupied.

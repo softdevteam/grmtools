@@ -1,5 +1,5 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use std::{cell::RefCell, collections::HashMap, fmt::Write};
+use std::{cell::RefCell, collections::HashMap, fmt::Write, str::FromStr};
 
 #[cfg(feature = "bincode")]
 use bincode::{Decode, Encode};
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use vob::Vob;
 
 use super::{ast, firsts::YaccFirsts, follows::YaccFollows, parser::YaccGrammarResult, YaccKind};
-use crate::{header::Header, PIdx, RIdx, SIdx, Span, Symbol, TIdx};
+use crate::{header::HeaderError, PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
 const START_RULE: &str = "^";
 const IMPLICIT_RULE: &str = "~";
@@ -176,8 +176,19 @@ where
 // create the start rule ourselves (without relying on user input), this is a safe assumption.
 
 impl YaccGrammar<u32> {
-    pub fn new(header: &mut Header, s: &str) -> YaccGrammarResult<Self> {
-        YaccGrammar::new_with_storaget(header, s)
+    pub fn new(yk: YaccKind, s: &str) -> YaccGrammarResult<Self> {
+        YaccGrammar::new_with_storaget(yk, s)
+    }
+}
+
+impl<StorageT: 'static + PrimInt + Unsigned> FromStr for YaccGrammar<StorageT>
+where
+    usize: AsPrimitive<StorageT>,
+{
+    type Err = Vec<HeaderError>;
+    fn from_str(s: &str) -> Result<Self, Vec<HeaderError>> {
+        let ast_validation = ast::ASTWithValidityInfo::from_str(s)?;
+        Ok(Self::new_from_ast_with_validity_info(&ast_validation).unwrap())
     }
 }
 
@@ -192,8 +203,8 @@ where
     /// As we're compiling the `YaccGrammar`, we add a new start rule (which we'll refer to as `^`,
     /// though the actual name is a fresh name that is guaranteed to be unique) that references the
     /// user defined start rule.
-    pub fn new_with_storaget(header: &mut Header, s: &str) -> YaccGrammarResult<Self> {
-        let ast_validation = ast::ASTWithValidityInfo::new(header, s);
+    pub fn new_with_storaget(yk: YaccKind, s: &str) -> YaccGrammarResult<Self> {
+        let ast_validation = ast::ASTWithValidityInfo::new(yk, s);
         Self::new_from_ast_with_validity_info(&ast_validation)
     }
 
@@ -235,10 +246,7 @@ where
 
         let implicit_rule;
         let implicit_start_rule;
-        match ast_validation
-            .yacc_kind()
-            .expect("is_valid() ensures Some(yacc_kind)")
-        {
+        match ast_validation.yacc_kind() {
             YaccKind::Original(_) | YaccKind::Grmtools => {
                 implicit_rule = None;
                 implicit_start_rule = None;
@@ -1122,8 +1130,9 @@ mod test {
         super::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind},
         rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE,
     };
-    use crate::{test_utils::*, PIdx, RIdx, Span, Symbol, TIdx};
+    use crate::{PIdx, RIdx, Span, Symbol, TIdx};
     use std::collections::HashMap;
+    use std::str::FromStr;
 
     macro_rules! bslice {
         () => (
@@ -1142,7 +1151,7 @@ mod test {
     #[test]
     fn test_minimal() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "%start R %token T %% R: 'T';",
         )
         .unwrap();
@@ -1173,7 +1182,7 @@ mod test {
     #[test]
     fn test_rule_ref() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "%start R %token T %% R : S; S: 'T';",
         )
         .unwrap();
@@ -1202,7 +1211,7 @@ mod test {
     #[rustfmt::skip]
     fn test_long_prod() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "%start R %token T1 T2 %% R : S 'T1' S; S: 'T2';"
         ).unwrap();
 
@@ -1233,7 +1242,7 @@ mod test {
     #[test]
     fn test_prods_rules() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1256,7 +1265,7 @@ mod test {
     #[rustfmt::skip]
     fn test_left_right_nonassoc_precs() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start Expr
             %right '='
@@ -1289,7 +1298,7 @@ mod test {
     #[rustfmt::skip]
     fn test_prec_override() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start expr
             %left '+' '-'
@@ -1317,7 +1326,7 @@ mod test {
     #[rustfmt::skip]
     fn test_implicit_tokens_rewrite() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Eco),
+            YaccKind::Eco,
             "
           %implicit_tokens ws1 ws2
           %start S
@@ -1393,7 +1402,7 @@ mod test {
     #[rustfmt::skip]
     fn test_has_path() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1420,7 +1429,7 @@ mod test {
     #[rustfmt::skip]
     fn test_rule_min_costs() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1443,7 +1452,7 @@ mod test {
     #[test]
     fn test_min_sentences() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1491,7 +1500,7 @@ mod test {
     #[rustfmt::skip]
     fn test_rule_max_costs1() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1515,7 +1524,7 @@ mod test {
     #[rustfmt::skip]
     fn test_rule_max_costs2() {
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%
@@ -1537,7 +1546,7 @@ mod test {
     fn test_out_of_order_productions() {
         // Example taken from p54 of Locally least-cost error repair in LR parsers, Carl Cerecke
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start S
             %%
@@ -1568,11 +1577,8 @@ mod test {
     #[test]
     fn test_token_spans() {
         let src = "%%\nAB: 'a' | 'foo';";
-        let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::NoAction)),
-            src,
-        )
-        .unwrap();
+        let grm =
+            YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
         let token_map = grm.tokens_map();
         let a_tidx = token_map.get("a");
         let foo_tidx = token_map.get("foo");
@@ -1596,15 +1602,87 @@ mod test {
                    AB: A AB | B ';' AB;
                    %%
                    ";
-        let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::NoAction)),
-            src,
-        )
-        .unwrap();
+        let grm =
+            YaccGrammar::new(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
         let token_map = grm.tokens_map();
         let c_tidx = token_map.get("c").unwrap();
         assert_eq!(grm.token_name(*c_tidx), Some("c"));
         let c_span = grm.token_span(*c_tidx).unwrap();
         assert_eq!(&src[c_span.start()..c_span.end()], "c");
+    }
+
+    #[test]
+    fn test_grmtools_section_yacckinds() {
+        let srcs = [
+            "%grmtools{yacckind: Original(NoAction)}
+                 %%
+                 Start: ;",
+            "%grmtools{yacckind: YaccKind::Original(GenericParseTree)}
+                 %%
+                 Start: ;",
+            "%grmtools{yacckind: YaccKind::Original(yaccoriginalactionkind::useraction)}
+                 %actiontype ()
+                 %%
+                 Start: ;",
+            "%grmtools{yacckind: Original(YACCOriginalActionKind::NoAction)}
+                 %%
+                 Start: ;",
+            "%grmtools{yacckind: YaccKind::Grmtools}
+                 %%
+                 Start -> () : ;",
+        ];
+        for src in srcs {
+            YaccGrammar::<u32>::from_str(src).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_grmtools_section_invalid_yacckinds() {
+        let srcs = [
+            "%grmtools{yacckind: Foo}",
+            "%grmtools{yacckind: YaccKind::Foo}",
+            "%grmtools{yacckindof: YaccKind::Grmtools}",
+            "%grmtools{yacckindof: Grmtools}",
+            "%grmtools{yacckindof: YaccKindFoo::Foo}",
+            "%grmtools{yacckind: Foo::Grmtools}",
+            "%grmtools{yacckind: YaccKind::Original}",
+            "%grmtools{yacckind: YaccKind::OriginalFoo}",
+            "%grmtools{yacckind: YaccKind::Original()}",
+            "%grmtools{yacckind: YaccKind::Original(Foo)}",
+            "%grmtools{yacckind: YaccKind::Original(YaccOriginalActionKind)}",
+            "%grmtools{yacckind: YaccKind::Original(YaccOriginalActionKind::Foo)}",
+            "%grmtools{yacckind: YaccKind::Original(Foo::NoActions)}",
+            "%grmtools{yacckind: YaccKind::Original(Foo::NoActionsBar)}",
+        ];
+
+        for src in srcs {
+            let s = format!("{}\n%%\nStart();\n", src);
+            assert!(YaccGrammar::<u32>::from_str(&s).is_err());
+        }
+    }
+
+    #[test]
+    fn test_grmtools_section_commas() {
+        // We can't actually test much here, because
+        // We don't have a second value to test.
+        //
+        // `RecoveryKind` seemed like an option for an additional value to allow,
+        // but that is part of `lrpar` which cfgrammar doesn't depend upon.
+        let src = r#"
+                %grmtools{
+                    yacckind: YaccKind::Grmtools,
+                }
+                %%
+                Start -> () : ;
+            "#;
+        YaccGrammar::<u32>::from_str(src).unwrap();
+        let src = r#"
+                %grmtools{
+                    yacckind: YaccKind::Grmtools
+                }
+                %%
+                Start -> () : ;
+            "#;
+        YaccGrammar::<u32>::from_str(src).unwrap();
     }
 }

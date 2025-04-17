@@ -1064,7 +1064,7 @@ pub(crate) mod test {
 
     use super::*;
     use crate::{
-        test_utils::{header_for_yacckind, TestLexError, TestLexeme, TestLexerTypes},
+        test_utils::{TestLexError, TestLexeme, TestLexerTypes},
         Lexeme, Lexer,
     };
 
@@ -1105,7 +1105,7 @@ pub(crate) mod test {
         >,
     ) {
         let grm = YaccGrammar::<u16>::new_with_storaget(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             grms,
         )
         .unwrap();
