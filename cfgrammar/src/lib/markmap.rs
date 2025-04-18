@@ -2,26 +2,27 @@ use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt;
 
-// MarkMap is a key value data structure that uses an API similar to that of
-// `std::collections::HashMap` and `std::collections::BTreeMap`.
-//
-// The current implementation is based on a sorted `Vec` is not optimized for
-// storing large number of items.
-//
-// On top of the familiar `std::collections` API it has a few additions:
-//
-// * Marking a key with a condition.
-// * Marking a key with a merge behavior.
-// * A merge operator.
-//
-// The current *conditions* are [`Used`](MarkMap::mark_used) and [`Required`](MarkMap::mark_required).
-//
-// The available merge behaviors are [`Theirs`](MergeBehavior::Theirs), [`Ours`](MergeBehavior::Ours),
-// and [`MutuallyExclusive`](MergeBehavior::MutuallyExclusive).
-//
-// Merge behaviors configure how the merge operator handles cases where both `MarkMaps` being merged
-// contain a particular key.
+/// MarkMap is a key value data structure that uses an API similar to that of
+/// `std::collections::HashMap` and `std::collections::BTreeMap`.
+///
+/// The current implementation is based on a sorted `Vec` is not optimized for
+/// storing large number of items.
+///
+/// On top of the familiar `std::collections` API it has a few additions:
+///
+/// * Marking a key with a condition.
+/// * Marking a key with a merge behavior.
+/// * A merge operator.
+///
+/// The current *conditions* are [`Used`](MarkMap::mark_used) and [`Required`](MarkMap::mark_required).
+///
+/// The available merge behaviors are [`Theirs`](MergeBehavior::Theirs), [`Ours`](MergeBehavior::Ours),
+/// and [`MutuallyExclusive`](MergeBehavior::MutuallyExclusive).
+///
+/// Merge behaviors configure how the merge operator handles cases where both `MarkMaps` being merged
+/// contain a particular key.
 #[derive(Debug, PartialEq, Eq)]
+#[doc(hidden)]
 pub struct MarkMap<K, V> {
     contents: Vec<(K, u16, Option<V>)>,
 }
@@ -219,7 +220,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Inserts a `key` `value` pair.
-    #[doc(hidden)]
     pub fn insert(&mut self, key: K, val: V) -> Option<V> {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(&key));
         match pos {
@@ -246,7 +246,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Marks `key` as used.
-    #[doc(hidden)]
     pub fn mark_used(&mut self, key: &K) {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
@@ -263,7 +262,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Marks `key` as a required value.
-    #[doc(hidden)]
     pub fn mark_required(&mut self, key: &K) {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
@@ -280,7 +278,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns whether `key` is required.
-    #[doc(hidden)]
     pub fn is_required(&self, key: &K) -> bool {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
@@ -290,7 +287,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Sets the merge behavior for `key`.
-    #[doc(hidden)]
     pub fn set_merge_behavior(&mut self, key: &K, mb: MergeBehavior) {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
@@ -312,7 +308,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns a `Some(value)` associated with `key` if present otherwise `None`.
-    #[doc(hidden)]
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
@@ -329,7 +324,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns true if the `MarkMap` contains `key` otherwise false.
-    #[doc(hidden)]
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
@@ -339,7 +333,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Removes `key` from the `MarkMap` and returns the previous value when present.
-    #[doc(hidden)]
     pub fn remove(&mut self, key: &K) -> Option<V> {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(key));
         match pos {
@@ -349,7 +342,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns an `Entry` for `key`.
-    #[doc(hidden)]
     pub fn entry(&mut self, key: K) -> Entry<K, V> {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(&key));
         match pos {
@@ -382,7 +374,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     ///
     /// For the behavior of exclusive or mark the behavior as also `Mark::Required`, then after merge call `missing()`
     /// to check all required values.
-    #[doc(hidden)]
     pub fn merge_from<U>(&mut self, mut other: MarkMap<K, U>) -> Result<(), MergeError<K, Box<V>>>
     where
         U: Into<V>,
@@ -427,7 +418,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns whether `key` has been marked as used.
-    #[doc(hidden)]
     pub fn is_used<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
@@ -444,7 +434,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns a `Vec` containing all the keys that are not marked as used.
-    #[doc(hidden)]
     pub fn unused(&self) -> Vec<K> {
         let mut ret = Vec::new();
         for (k, mark, v) in &self.contents {
@@ -458,7 +447,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
 
     /// Returns a `Vec` containing all the keys that are marked as required,
     /// but have values that are not present in the `MarkMap`.
-    #[doc(hidden)]
     pub fn missing(&self) -> Vec<&K> {
         let mut ret = Vec::new();
         for (k, mark, v) in &self.contents {
@@ -471,7 +459,6 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns an `Iterator` over all the keys of the `MarkMap`.
-    #[doc(hidden)]
     pub fn keys(&self) -> Keys<'_, K, V> {
         Keys { pos: 0, map: self }
     }

@@ -41,6 +41,7 @@ impl From<HeaderError<Span>> for YaccGrammarError {
 // This is essentially a tuple that needs a newtype so we can implement `From` for it.
 // Thus we aren't worried about it being `pub`.
 #[derive(Debug, PartialEq)]
+#[doc(hidden)]
 pub struct HeaderValue<T>(pub T, pub Value<T>);
 
 impl From<HeaderValue<Span>> for HeaderValue<Location> {
@@ -429,6 +430,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
 }
 
 /// A data structure representation of the %grmtools section.
+#[doc(hidden)]
 pub type Header<T> = MarkMap<String, HeaderValue<T>>;
 
 impl TryFrom<YaccKind> for Value<Location> {
