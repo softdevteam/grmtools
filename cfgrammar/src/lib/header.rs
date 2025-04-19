@@ -1,6 +1,8 @@
 use crate::{
     markmap::{Entry, MarkMap},
-    yacc::{ParserError, YaccKind, YaccOriginalActionKind},
+    yacc::{
+        parser::SpansKind, YaccGrammarError, YaccGrammarErrorKind, YaccKind, YaccOriginalActionKind,
+    },
     Location, Span,
 };
 use lazy_static::lazy_static;
@@ -14,21 +16,36 @@ use std::{error::Error, fmt};
 /// * An error during parsing the section.
 /// * An error resulting from a value in the section having an invalid value.
 #[derive(Debug, Clone)]
-pub struct HeaderError {
+#[doc(hidden)]
+pub struct HeaderError<T> {
     pub kind: HeaderErrorKind,
-    pub locations: Vec<Location>,
+    pub locations: Vec<T>,
 }
 
-impl Error for HeaderError {}
-impl fmt::Display for HeaderError {
+impl<T: fmt::Debug> Error for HeaderError<T> {}
+impl<T> fmt::Display for HeaderError<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.kind)
     }
 }
 
-impl From<HeaderError> for ParserError {
-    fn from(e: HeaderError) -> ParserError {
-        ParserError::HeaderError(e)
+impl From<HeaderError<Span>> for YaccGrammarError {
+    fn from(e: HeaderError<Span>) -> YaccGrammarError {
+        YaccGrammarError {
+            kind: YaccGrammarErrorKind::Header(e.kind, e.spanskind()),
+            spans: e.locations,
+        }
+    }
+}
+
+// This is essentially a tuple that needs a newtype so we can implement `From` for it.
+// Thus we aren't worried about it being `pub`.
+#[derive(Debug, PartialEq)]
+pub struct HeaderValue<T>(pub T, pub Value<T>);
+
+impl From<HeaderValue<Span>> for HeaderValue<Location> {
+    fn from(hv: HeaderValue<Span>) -> HeaderValue<Location> {
+        HeaderValue(hv.0.into(), hv.1.into())
     }
 }
 
@@ -60,6 +77,16 @@ impl fmt::Display for HeaderErrorKind {
     }
 }
 
+impl<T> HeaderError<T> {
+    /// Returns the [SpansKind] associated with this error.
+    pub fn spanskind(&self) -> SpansKind {
+        match self.kind {
+            HeaderErrorKind::DuplicateEntry => SpansKind::DuplicationError,
+            _ => SpansKind::Error,
+        }
+    }
+}
+
 /// Indicates a value prefixed by an optional namespace.
 /// `Foo::Bar` with optional `Foo` specified being
 /// ```rust,ignore
@@ -78,24 +105,24 @@ impl fmt::Display for HeaderErrorKind {
 /// ```
 #[derive(Debug, Eq, PartialEq)]
 #[doc(hidden)]
-pub struct Namespaced {
-    pub namespace: Option<(String, Location)>,
-    pub member: (String, Location),
+pub struct Namespaced<T> {
+    pub namespace: Option<(String, T)>,
+    pub member: (String, T),
 }
 
 #[derive(Debug, Eq, PartialEq)]
 #[doc(hidden)]
-pub enum Setting {
+pub enum Setting<T> {
     /// A value like `YaccKind::Grmtools`
-    Unitary(Namespaced),
+    Unitary(Namespaced<T>),
     /// A value like `YaccKind::Original(UserActions)`.
     /// In that example the field ctor would be: `Namespaced { namespace: "YaccKind", member: "Original" }`.
     /// The field would be `Namespaced{ None, UserActions }`.
     Constructor {
-        ctor: Namespaced,
-        arg: Namespaced,
+        ctor: Namespaced<T>,
+        arg: Namespaced<T>,
     },
-    Num(u64, Location),
+    Num(u64, T),
 }
 
 /// Parser for the `%grmtools` section
@@ -111,9 +138,48 @@ pub struct GrmtoolsSectionParser<'input> {
 /// like booleans, numeric types, and string values.
 #[derive(Debug, Eq, PartialEq)]
 #[doc(hidden)]
-pub enum Value {
-    Flag(bool, Location),
-    Setting(Setting),
+pub enum Value<T> {
+    Flag(bool, T),
+    Setting(Setting<T>),
+}
+
+impl From<Value<Span>> for Value<Location> {
+    fn from(v: Value<Span>) -> Value<Location> {
+        match v {
+            Value::Flag(flag, u) => Value::Flag(flag, u.into()),
+            Value::Setting(s) => Value::Setting(match s {
+                Setting::Unitary(Namespaced {
+                    namespace,
+                    member: (m, ml),
+                }) => Setting::Unitary(Namespaced {
+                    namespace: namespace.map(|(n, nl)| (n, nl.into())),
+                    member: (m, ml.into()),
+                }),
+                Setting::Constructor {
+                    ctor:
+                        Namespaced {
+                            namespace: ctor_ns,
+                            member: (ctor_m, ctor_ml),
+                        },
+                    arg:
+                        Namespaced {
+                            namespace: arg_ns,
+                            member: (arg_m, arg_ml),
+                        },
+                } => Setting::Constructor {
+                    ctor: Namespaced {
+                        namespace: ctor_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
+                        member: (ctor_m, ctor_ml.into()),
+                    },
+                    arg: Namespaced {
+                        namespace: arg_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
+                        member: (arg_m, arg_ml.into()),
+                    },
+                },
+                Setting::Num(num, num_loc) => Setting::Num(num, num_loc.into()),
+            }),
+        }
+    }
 }
 
 lazy_static! {
@@ -127,11 +193,11 @@ lazy_static! {
 
 const MAGIC: &str = "%grmtools";
 
-fn add_duplicate_occurrence(
-    errs: &mut Vec<HeaderError>,
+fn add_duplicate_occurrence<T: Eq + PartialEq + Clone>(
+    errs: &mut Vec<HeaderError<T>>,
     kind: HeaderErrorKind,
-    orig_loc: Location,
-    dup_loc: Location,
+    orig_loc: T,
+    dup_loc: T,
 ) {
     if !errs.iter_mut().any(|e| {
         if e.kind == kind && e.locations[0] == orig_loc {
@@ -152,18 +218,18 @@ impl<'input> GrmtoolsSectionParser<'input> {
     pub fn parse_value(
         &'_ self,
         mut i: usize,
-    ) -> Result<(String, Location, Value, usize), HeaderError> {
+    ) -> Result<(String, Span, Value<Span>, usize), HeaderError<Span>> {
         if let Some(j) = self.lookahead_is("!", i) {
             let (flag_name, k) = self.parse_name(j)?;
             Ok((
                 flag_name,
-                Location::Span(Span::new(j, k)),
-                Value::Flag(false, Location::Span(Span::new(i, k))),
+                Span::new(j, k),
+                Value::Flag(false, Span::new(i, k)),
                 self.parse_ws(k),
             ))
         } else {
             let (key_name, j) = self.parse_name(i)?;
-            let key_span = Location::Span(Span::new(i, j));
+            let key_span = Span::new(i, j);
             i = self.parse_ws(j);
             if let Some(j) = self.lookahead_is(":", i) {
                 i = self.parse_ws(j);
@@ -173,7 +239,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         let num_str = &self.src[num_span.start()..num_span.end()];
                         // If the above regex matches we expect this to succeed.
                         let num = str::parse::<u64>(num_str).unwrap();
-                        let val = Setting::Num(num, Location::Span(num_span));
+                        let val = Setting::Num(num, num_span);
                         i = self.parse_ws(num_span.end());
                         Ok((key_name, key_span, Value::Setting(val), i))
                     }
@@ -197,7 +263,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                             } else {
                                 Err(HeaderError {
                                     kind: HeaderErrorKind::ExpectedToken(')'),
-                                    locations: vec![Location::Span(Span::new(i, i))],
+                                    locations: vec![Span::new(i, i)],
                                 })
                             }
                         } else {
@@ -211,20 +277,23 @@ impl<'input> GrmtoolsSectionParser<'input> {
                     }
                 }
             } else {
-                Ok((key_name, key_span.clone(), Value::Flag(true, key_span), i))
+                Ok((key_name, key_span, Value::Flag(true, key_span), i))
             }
         }
     }
 
-    fn parse_namespaced(&self, mut i: usize) -> Result<(Namespaced, usize), HeaderError> {
+    fn parse_namespaced(
+        &self,
+        mut i: usize,
+    ) -> Result<(Namespaced<Span>, usize), HeaderError<Span>> {
         // Either a name alone, or a namespace which will be followed by a member.
         let (name, j) = self.parse_name(i)?;
-        let name_span = Location::Span(Span::new(i, j));
+        let name_span = Span::new(i, j);
         i = self.parse_ws(j);
         if let Some(j) = self.lookahead_is("::", i) {
             i = self.parse_ws(j);
             let (member_val, j) = self.parse_name(i)?;
-            let member_val_span = Location::Span(Span::new(i, j));
+            let member_val_span = Span::new(i, j);
             i = self.parse_ws(j);
             Ok((
                 Namespaced {
@@ -258,7 +327,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn parse(&'_ self) -> Result<(Header, usize), Vec<HeaderError>> {
+    pub fn parse(&'_ self) -> Result<(Header<Span>, usize), Vec<HeaderError<Span>>> {
         let mut errs = Vec::new();
         if let Some(mut i) = self.lookahead_is(MAGIC, self.parse_ws(0)) {
             let mut ret = Header::new();
@@ -276,16 +345,16 @@ impl<'input> GrmtoolsSectionParser<'input> {
                     };
                     match ret.entry(key) {
                         Entry::Occupied(orig) => {
-                            let (orig_loc, _): &(Location, Value) = orig.get();
+                            let HeaderValue(orig_loc, _): &HeaderValue<Span> = orig.get();
                             add_duplicate_occurrence(
                                 &mut errs,
                                 HeaderErrorKind::DuplicateEntry,
-                                orig_loc.clone(),
+                                *orig_loc,
                                 key_loc,
                             )
                         }
                         Entry::Vacant(entry) => {
-                            entry.insert((key_loc, val));
+                            entry.insert(HeaderValue(key_loc, val));
                         }
                     }
                     if let Some(j) = self.lookahead_is(",", j) {
@@ -305,24 +374,21 @@ impl<'input> GrmtoolsSectionParser<'input> {
                 } else {
                     errs.push(HeaderError {
                         kind: HeaderErrorKind::ExpectedToken('}'),
-                        locations: vec![Location::Span(Span::new(
-                            section_start_pos,
-                            self.src.len(),
-                        ))],
+                        locations: vec![Span::new(section_start_pos, self.src.len())],
                     });
                     Err(errs)
                 }
             } else {
                 errs.push(HeaderError {
                     kind: HeaderErrorKind::ExpectedToken('{'),
-                    locations: vec![Location::Span(Span::new(i, i))],
+                    locations: vec![Span::new(i, i)],
                 });
                 Err(errs)
             }
         } else if self.required {
             errs.push(HeaderError {
                 kind: HeaderErrorKind::MissingGrmtoolsSection,
-                locations: vec![Location::Span(Span::new(0, 0))],
+                locations: vec![Span::new(0, 0)],
             });
             Err(errs)
         } else {
@@ -330,7 +396,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
         }
     }
 
-    fn parse_name(&self, i: usize) -> Result<(String, usize), HeaderError> {
+    fn parse_name(&self, i: usize) -> Result<(String, usize), HeaderError<Span>> {
         match RE_NAME.find(&self.src[i..]) {
             Some(m) => {
                 assert_eq!(m.start(), 0);
@@ -341,7 +407,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             }
             None => Err(HeaderError {
                 kind: HeaderErrorKind::IllegalName,
-                locations: vec![Location::Span(Span::new(i, i))],
+                locations: vec![Span::new(i, i)],
             }),
         }
     }
@@ -363,11 +429,11 @@ impl<'input> GrmtoolsSectionParser<'input> {
 }
 
 /// A data structure representation of the %grmtools section.
-pub type Header = MarkMap<String, (Location, Value)>;
+pub type Header<T> = MarkMap<String, HeaderValue<T>>;
 
-impl TryFrom<YaccKind> for Value {
-    type Error = HeaderError;
-    fn try_from(kind: YaccKind) -> Result<Value, HeaderError> {
+impl TryFrom<YaccKind> for Value<Location> {
+    type Error = HeaderError<Location>;
+    fn try_from(kind: YaccKind) -> Result<Value<Location>, HeaderError<Location>> {
         let from_loc = Location::Other("From<YaccKind>".to_string());
         Ok(match kind {
             YaccKind::Grmtools => Value::Setting(Setting::Unitary(Namespaced {
@@ -402,9 +468,9 @@ impl TryFrom<YaccKind> for Value {
     }
 }
 
-impl TryFrom<&Value> for YaccKind {
-    type Error = HeaderError;
-    fn try_from(value: &Value) -> Result<YaccKind, HeaderError> {
+impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
+    type Error = HeaderError<T>;
+    fn try_from(value: &Value<T>) -> Result<YaccKind, HeaderError<T>> {
         let mut err_locs = Vec::new();
         match value {
             Value::Flag(_, loc) => Err(HeaderError {

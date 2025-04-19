@@ -383,7 +383,10 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     /// For the behavior of exclusive or mark the behavior as also `Mark::Required`, then after merge call `missing()`
     /// to check all required values.
     #[doc(hidden)]
-    pub fn merge_from(&mut self, mut other: Self) -> Result<(), MergeError<K, Box<V>>> {
+    pub fn merge_from<U>(&mut self, mut other: MarkMap<K, U>) -> Result<(), MergeError<K, Box<V>>>
+    where
+        U: Into<V>,
+    {
         for (their_key, their_mark, their_val) in other.contents.drain(..) {
             let pos = self.contents.binary_search_by(|x| x.0.cmp(&their_key));
             match pos {
@@ -402,21 +405,21 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
                         if my_val.is_some() && their_val.is_some() {
                             return Err(MergeError::Exclusivity(
                                 their_key,
-                                Box::new(their_val.unwrap()),
+                                Box::new(their_val.unwrap().into()),
                             ));
                         } else if my_val.is_none() {
-                            *my_val = their_val;
+                            *my_val = their_val.map(|u| u.into());
                         }
                     } else if merge_behavior == theirs_mark && their_val.is_some()
                         || merge_behavior == ours_mark && my_val.is_none()
                     {
                         *my_mark = their_mark;
-                        *my_val = their_val;
+                        *my_val = their_val.map(|u| u.into());
                     }
                 }
                 Err(pos) => {
                     self.contents
-                        .insert(pos, (their_key, their_mark, their_val));
+                        .insert(pos, (their_key, their_mark, their_val.map(|u| u.into())));
                 }
             }
         }
@@ -710,7 +713,7 @@ mod test {
     fn test_merge_empty() {
         {
             let mut ours: MarkMap<&str, &str> = MarkMap::new();
-            let theirs = MarkMap::new();
+            let theirs: MarkMap<&str, &str> = MarkMap::new();
             assert!(ours.merge_from(theirs).is_ok());
         }
         {

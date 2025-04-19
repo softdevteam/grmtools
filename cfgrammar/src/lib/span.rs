@@ -75,3 +75,9 @@ pub enum Location {
     CommandLine,
     Other(String),
 }
+
+impl From<Span> for Location {
+    fn from(span: Span) -> Location {
+        Location::Span(span)
+    }
+}

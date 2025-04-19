@@ -1,7 +1,7 @@
 mod diagnostics;
 use crate::diagnostics::*;
 use cfgrammar::{
-    header::{GrmtoolsSectionParser, Header, Value},
+    header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
     markmap::Entry,
     yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     Location, Span,
@@ -124,7 +124,7 @@ fn main() {
             );
             header.insert(
                 "recoverer".to_string(),
-                (
+                HeaderValue(
                     Location::CommandLine,
                     Value::try_from(match &*s.to_lowercase() {
                         "cpctplus" => RecoveryKind::CPCTPlus,
@@ -143,7 +143,7 @@ fn main() {
     match matches.opt_str("y") {
         None => {}
         Some(s) => {
-            entry.insert((
+            entry.insert(HeaderValue(
                 Location::CommandLine,
                 Value::try_from(match &*s.to_lowercase() {
                     "eco" => YaccKind::Eco,
@@ -202,10 +202,10 @@ fn main() {
         eprintln!("yacckind not specified in the %grmtools section of the grammar or via the '-y' parameter");
         std::process::exit(1);
     }
-    let (_, yk_val) = yk_val.unwrap();
+    let HeaderValue(_, yk_val) = yk_val.unwrap();
     let yacc_kind = YaccKind::try_from(yk_val).unwrap_or(YaccKind::Grmtools);
     let ast_validation = ASTWithValidityInfo::new(yacc_kind, &yacc_src);
-    let recoverykind = if let Some((_, rk_val)) = header.get("recoverer") {
+    let recoverykind = if let Some(HeaderValue(_, rk_val)) = header.get("recoverer") {
         match RecoveryKind::try_from(rk_val) {
             Err(e) => {
                 eprintln!("{e}");

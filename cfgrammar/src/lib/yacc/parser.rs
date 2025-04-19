@@ -15,38 +15,11 @@ use std::{
 };
 
 use crate::{
-    header::{GrmtoolsSectionParser, HeaderError},
+    header::{GrmtoolsSectionParser, HeaderErrorKind},
     Span, Spanned,
 };
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
-
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub enum ParserError {
-    YaccGrammarError(YaccGrammarError),
-    HeaderError(HeaderError),
-}
-
-impl Error for ParserError {}
-impl fmt::Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::YaccGrammarError(e) => e.to_string(),
-                Self::HeaderError(e) => e.to_string(),
-            }
-        )
-    }
-}
-
-impl From<YaccGrammarError> for ParserError {
-    fn from(e: YaccGrammarError) -> ParserError {
-        ParserError::YaccGrammarError(e)
-    }
-}
 
 use super::{
     ast::{GrammarAST, Symbol},
@@ -97,6 +70,7 @@ pub enum YaccGrammarErrorKind {
     InvalidGrmtoolsSectionEntry,
     DuplicateGrmtoolsSectionEntry,
     MissingGrmtoolsSection,
+    Header(HeaderErrorKind, SpansKind),
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -194,6 +168,7 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::InvalidYaccKindNamespace => "Invalid yacc kind namespace",
             YaccGrammarErrorKind::InvalidActionKind => "Invalid action kind",
             YaccGrammarErrorKind::InvalidActionKindNamespace => "Invalid action kind namespace",
+            YaccGrammarErrorKind::Header(hk, _) => &format!("Error in '%grmtools' {}", hk),
         };
         write!(f, "{}", s)
     }
@@ -259,6 +234,7 @@ impl Spanned for YaccGrammarWarning {
 }
 
 /// Indicates how to interpret the spans of an error.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[non_exhaustive]
 pub enum SpansKind {
     /// The first span is the first occurrence, and a span for each subsequent occurrence.
@@ -319,6 +295,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::DuplicateActiontypeDeclaration
             | YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry
             | YaccGrammarErrorKind::DuplicateEPP => SpansKind::DuplicationError,
+            YaccGrammarErrorKind::Header(_, spanskind) => spanskind,
         }
     }
 }
@@ -372,7 +349,9 @@ impl YaccParser<'_> {
 
     pub(crate) fn parse(&mut self) -> YaccGrammarResult<usize> {
         let mut errs = Vec::new();
-        let (_, pos) = GrmtoolsSectionParser::new(self.src, false).parse().unwrap();
+        let (_, pos) = GrmtoolsSectionParser::new(self.src, false)
+            .parse()
+            .map_err(|mut errs| errs.drain(..).map(|e| e.into()).collect::<Vec<_>>())?;
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).

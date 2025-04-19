@@ -12,7 +12,7 @@ use super::{
 };
 
 use crate::{
-    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind},
+    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, HeaderValue},
     Span,
 };
 /// Contains a `GrammarAST` structure produced from a grammar source file.
@@ -73,13 +73,15 @@ impl ASTWithValidityInfo {
 }
 
 impl FromStr for ASTWithValidityInfo {
-    type Err = Vec<HeaderError>;
+    type Err = Vec<YaccGrammarError>;
     /// Parses the `%grmtools section` expecting it to contain a `yacckind` entry.
-    fn from_str(src: &str) -> Result<Self, Vec<HeaderError>> {
+    fn from_str(src: &str) -> Result<Self, Vec<YaccGrammarError>> {
         let mut errs = Vec::new();
-        let (header, _) = GrmtoolsSectionParser::new(src, true).parse()?;
-        if let Some((_, yk_val)) = header.get("yacckind") {
-            let yacc_kind = YaccKind::try_from(yk_val).map_err(|e| vec![e])?;
+        let (header, _) = GrmtoolsSectionParser::new(src, true)
+            .parse()
+            .map_err(|mut errs| errs.drain(..).map(|e| e.into()).collect::<Vec<_>>())?;
+        if let Some(HeaderValue(_, yk_val)) = header.get("yacckind") {
+            let yacc_kind = YaccKind::try_from(yk_val).map_err(|e| vec![e.into()])?;
             let ast = {
                 // We don't want to strip off the header so that span's will be correct.
                 let mut yp = YaccParser::new(yacc_kind, src);
@@ -96,8 +98,9 @@ impl FromStr for ASTWithValidityInfo {
         } else {
             Err(vec![HeaderError {
                 kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                locations: vec![],
-            }])
+                locations: vec![Span::new(0, 0)],
+            }
+            .into()])
         }
     }
 }

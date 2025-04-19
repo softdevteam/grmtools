@@ -17,7 +17,7 @@ use std::{
 use crate::{LexerTypes, RecoveryKind};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
-    header::{GrmtoolsSectionParser, Header, Value},
+    header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
     markmap::{Entry, MergeBehavior},
     newlinecache::NewlineCache,
     yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
@@ -499,8 +499,10 @@ where
                 Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
                 Some(yk) => {
                     let yk_value = Value::try_from(yk)?;
-                    let mut o =
-                        v.insert_entry((Location::Other("CTParserBuilder".to_string()), yk_value));
+                    let mut o = v.insert_entry(HeaderValue(
+                        Location::Other("CTParserBuilder".to_string()),
+                        yk_value,
+                    ));
                     o.set_merge_behavior(MergeBehavior::Ours);
                 }
                 None => {
@@ -512,9 +514,11 @@ where
             match header.entry("recoverer".to_string()) {
                 Entry::Occupied(_) => unreachable!(),
                 Entry::Vacant(v) => {
-                    let rk_value: Value = Value::try_from(recoverer)?;
-                    let mut o =
-                        v.insert_entry((Location::Other("CTParserBuilder".to_string()), rk_value));
+                    let rk_value: Value<Location> = Value::try_from(recoverer)?;
+                    let mut o = v.insert_entry(HeaderValue(
+                        Location::Other("CTParserBuilder".to_string()),
+                        rk_value,
+                    ));
                     o.set_merge_behavior(MergeBehavior::Ours);
                 }
             }
@@ -544,7 +548,7 @@ where
         header.merge_from(parsed_header)?;
         self.yacckind = header
             .get("yacckind")
-            .map(|(_, val)| val)
+            .map(|HeaderValue(_, val)| val)
             .map(YaccKind::try_from)
             .transpose()?;
         header.mark_used(&"yacckind".to_string());
@@ -555,7 +559,7 @@ where
         };
 
         header.mark_used(&"recoverer".to_string());
-        let rk_val = header.get("recoverer").map(|(_, rk_val)| rk_val);
+        let rk_val = header.get("recoverer").map(|HeaderValue(_, rk_val)| rk_val);
 
         if let Some(rk_val) = rk_val {
             self.recoverer = Some(RecoveryKind::try_from(rk_val)?);

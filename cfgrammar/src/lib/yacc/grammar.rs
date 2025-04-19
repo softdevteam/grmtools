@@ -8,8 +8,14 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use serde::{Deserialize, Serialize};
 use vob::Vob;
 
-use super::{ast, firsts::YaccFirsts, follows::YaccFollows, parser::YaccGrammarResult, YaccKind};
-use crate::{header::HeaderError, PIdx, RIdx, SIdx, Span, Symbol, TIdx};
+use super::{
+    ast,
+    firsts::YaccFirsts,
+    follows::YaccFollows,
+    parser::{YaccGrammarError, YaccGrammarResult},
+    YaccKind,
+};
+use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
 const START_RULE: &str = "^";
 const IMPLICIT_RULE: &str = "~";
@@ -185,10 +191,10 @@ impl<StorageT: 'static + PrimInt + Unsigned> FromStr for YaccGrammar<StorageT>
 where
     usize: AsPrimitive<StorageT>,
 {
-    type Err = Vec<HeaderError>;
-    fn from_str(s: &str) -> Result<Self, Vec<HeaderError>> {
+    type Err = Vec<YaccGrammarError>;
+    fn from_str(s: &str) -> YaccGrammarResult<Self> {
         let ast_validation = ast::ASTWithValidityInfo::from_str(s)?;
-        Ok(Self::new_from_ast_with_validity_info(&ast_validation).unwrap())
+        Self::new_from_ast_with_validity_info(&ast_validation)
     }
 }
 
