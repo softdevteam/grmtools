@@ -1,9 +1,9 @@
 mod diagnostics;
 use crate::diagnostics::*;
 use cfgrammar::{
-    header::{Header, Value},
+    header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
     markmap::Entry,
-    yacc::{ast::ASTWithValidityInfo, ParserError, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     Location, Span,
 };
 use getopts::Options;
@@ -124,7 +124,7 @@ fn main() {
             );
             header.insert(
                 "recoverer".to_string(),
-                (
+                HeaderValue(
                     Location::CommandLine,
                     Value::try_from(match &*s.to_lowercase() {
                         "cpctplus" => RecoveryKind::CPCTPlus,
@@ -143,7 +143,7 @@ fn main() {
     match matches.opt_str("y") {
         None => {}
         Some(s) => {
-            entry.insert((
+            entry.insert(HeaderValue(
                 Location::CommandLine,
                 Value::try_from(match &*s.to_lowercase() {
                     "eco" => YaccKind::Eco,
@@ -176,8 +176,36 @@ fn main() {
 
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
-    let ast_validation = ASTWithValidityInfo::new(&mut header, &yacc_src);
-    let recoverykind = if let Some((_, rk_val)) = header.get("recoverer") {
+    let yk_val = header.get("yacckind");
+    if yk_val.is_none() {
+        let parsed_header = GrmtoolsSectionParser::new(&yacc_src, true).parse();
+        match parsed_header {
+            Ok((parsed_header, _)) => {
+                header
+                    .merge_from(parsed_header)
+                    .expect("Specified merge behavior cannot fail");
+            }
+            Err(errs) => {
+                eprintln!(
+                    "Error(s) parsing `%grmtools` section:\n {}\n",
+                    errs.iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+    let yk_val = header.get("yacckind");
+    if yk_val.is_none() {
+        eprintln!("yacckind not specified in the %grmtools section of the grammar or via the '-y' parameter");
+        std::process::exit(1);
+    }
+    let HeaderValue(_, yk_val) = yk_val.unwrap();
+    let yacc_kind = YaccKind::try_from(yk_val).unwrap_or(YaccKind::Grmtools);
+    let ast_validation = ASTWithValidityInfo::new(yacc_kind, &yacc_src);
+    let recoverykind = if let Some(HeaderValue(_, rk_val)) = header.get("recoverer") {
         match RecoveryKind::try_from(rk_val) {
             Err(e) => {
                 eprintln!("{e}");
@@ -208,17 +236,7 @@ fn main() {
             let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
             eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
             for e in errs {
-                match e {
-                    ParserError::YaccGrammarError(e) => {
-                        eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
-                    }
-                    ParserError::HeaderError(e) => {
-                        eprintln!("{}", indent(&e.to_string(), "    "));
-                    }
-                    e => {
-                        eprintln!("{}", indent(&e.to_string(), "    "));
-                    }
-                }
+                eprintln!("{}", indent(&e.to_string(), "    "));
             }
             eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
             for w in warnings {

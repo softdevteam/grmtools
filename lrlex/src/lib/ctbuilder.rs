@@ -16,7 +16,10 @@ use std::{
 
 use bincode::Encode;
 use cfgrammar::{
-    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, Namespaced, Setting, Value},
+    header::{
+        GrmtoolsSectionParser, HeaderError, HeaderErrorKind, HeaderValue, Namespaced, Setting,
+        Value,
+    },
     newlinecache::NewlineCache,
     Spanned,
 };
@@ -41,9 +44,9 @@ pub enum LexerKind {
     LRNonStreamingLexer,
 }
 
-impl TryFrom<&Value> for LexerKind {
-    type Error = cfgrammar::header::HeaderError;
-    fn try_from(it: &Value) -> Result<LexerKind, Self::Error> {
+impl<T: Clone> TryFrom<&Value<T>> for LexerKind {
+    type Error = cfgrammar::header::HeaderError<T>;
+    fn try_from(it: &Value<T>) -> Result<LexerKind, Self::Error> {
         match it {
             Value::Flag(_, loc) => Err(HeaderError {
                 kind: HeaderErrorKind::ConversionError(
@@ -451,7 +454,7 @@ where
         let lexerkind = match self.lexerkind {
             Some(lexerkind) => lexerkind,
             None => {
-                if let Some((_, lk_val)) = header.get("lexerkind") {
+                if let Some(HeaderValue(_, lk_val)) = header.get("lexerkind") {
                     LexerKind::try_from(lk_val)?
                 } else {
                     LexerKind::LRNonStreamingLexer

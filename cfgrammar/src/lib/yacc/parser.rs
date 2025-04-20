@@ -15,39 +15,11 @@ use std::{
 };
 
 use crate::{
-    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind},
-    markmap::MergeError,
+    header::{GrmtoolsSectionParser, HeaderErrorKind},
     Span, Spanned,
 };
 
-pub type YaccGrammarResult<T> = Result<T, Vec<ParserError>>;
-
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub enum ParserError {
-    YaccGrammarError(YaccGrammarError),
-    HeaderError(HeaderError),
-}
-
-impl Error for ParserError {}
-impl fmt::Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::YaccGrammarError(e) => e.to_string(),
-                Self::HeaderError(e) => e.to_string(),
-            }
-        )
-    }
-}
-
-impl From<YaccGrammarError> for ParserError {
-    fn from(e: YaccGrammarError) -> ParserError {
-        ParserError::YaccGrammarError(e)
-    }
-}
+pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
 
 use super::{
     ast::{GrammarAST, Symbol},
@@ -98,6 +70,7 @@ pub enum YaccGrammarErrorKind {
     InvalidGrmtoolsSectionEntry,
     DuplicateGrmtoolsSectionEntry,
     MissingGrmtoolsSection,
+    Header(HeaderErrorKind, SpansKind),
 }
 
 /// Any error from the Yacc parser returns an instance of this struct.
@@ -195,6 +168,7 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::InvalidYaccKindNamespace => "Invalid yacc kind namespace",
             YaccGrammarErrorKind::InvalidActionKind => "Invalid action kind",
             YaccGrammarErrorKind::InvalidActionKindNamespace => "Invalid action kind namespace",
+            YaccGrammarErrorKind::Header(hk, _) => &format!("Error in '%grmtools' {}", hk),
         };
         write!(f, "{}", s)
     }
@@ -260,6 +234,7 @@ impl Spanned for YaccGrammarWarning {
 }
 
 /// Indicates how to interpret the spans of an error.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[non_exhaustive]
 pub enum SpansKind {
     /// The first span is the first occurrence, and a span for each subsequent occurrence.
@@ -320,14 +295,14 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::DuplicateActiontypeDeclaration
             | YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry
             | YaccGrammarErrorKind::DuplicateEPP => SpansKind::DuplicationError,
+            YaccGrammarErrorKind::Header(_, spanskind) => spanskind,
         }
     }
 }
 
 pub(crate) struct YaccParser<'a> {
-    header: &'a mut Header,
-    yacc_kind: Option<YaccKind>,
-    src: String,
+    yacc_kind: YaccKind,
+    src: &'a str,
     num_newlines: usize,
     ast: GrammarAST,
     global_actiontype: Option<(String, Span)>,
@@ -362,10 +337,9 @@ fn add_duplicate_occurrence(
 
 /// The actual parser is intended to be entirely opaque from outside users.
 impl YaccParser<'_> {
-    pub(crate) fn new(header: &mut Header, src: String) -> YaccParser {
+    pub(crate) fn new(yacc_kind: YaccKind, src: &str) -> YaccParser {
         YaccParser {
-            header,
-            yacc_kind: None,
+            yacc_kind,
             src,
             num_newlines: 0,
             ast: GrammarAST::new(),
@@ -375,59 +349,17 @@ impl YaccParser<'_> {
 
     pub(crate) fn parse(&mut self) -> YaccGrammarResult<usize> {
         let mut errs = Vec::new();
+        let (_, pos) = GrmtoolsSectionParser::new(self.src, false)
+            .parse()
+            .map_err(|mut errs| errs.drain(..).map(|e| e.into()).collect::<Vec<_>>())?;
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
-        let header_parser = GrmtoolsSectionParser::new(&self.src, false);
-        let result = match header_parser.parse() {
-            Ok((parsed_header, i)) => {
-                match self.header.merge_from(parsed_header) {
-                    Err(MergeError::Exclusivity(key, boxed_val)) => {
-                        let (their_loc, _) = boxed_val.as_ref();
-                        let (header_loc, _) = self.header.get(&key).unwrap();
-                        errs.push(
-                            HeaderError {
-                                kind: HeaderErrorKind::DuplicateEntry,
-                                locations: vec![their_loc.clone(), header_loc.clone()],
-                            }
-                            .into(),
-                        )
-                    }
-                    Ok(()) => (),
-                }
-                self.update_yacckind(i)
-            }
-            Err(es) => {
-                errs.extend(es.iter().cloned().map(ParserError::from));
-                return Err(errs);
-            }
-        };
-        if result.is_ok() && self.yacc_kind.is_none() {
-            errs.push(
-                YaccGrammarError {
-                    kind: YaccGrammarErrorKind::InvalidYaccKind,
-                    spans: vec![Span::new(0, 0)],
-                }
-                .into(),
-            );
-            return Err(errs);
-        }
-        let mut y_errs = Vec::new();
-        let mut result = self.parse_declarations(
-            match result {
-                Ok(i) => i,
-                Err(e) => {
-                    errs.push(e.into());
-                    return Err(errs);
-                }
-            },
-            &mut y_errs,
-        );
-        errs.extend(y_errs.drain(..).map(ParserError::from));
+        let mut result = self.parse_declarations(pos, &mut errs);
         result = self.parse_rules(match result {
             Ok(i) => i,
             Err(e) => {
-                errs.push(e.into());
+                errs.push(e);
                 return Err(errs);
             }
         });
@@ -435,44 +367,24 @@ impl YaccParser<'_> {
             match result {
                 Ok(i) => i,
                 Err(e) => {
-                    errs.push(e.into());
+                    errs.push(e);
                     return Err(errs);
                 }
             },
-            &mut y_errs,
+            &mut errs,
         );
-        errs.extend(y_errs.drain(..).map(ParserError::from));
         match result {
             Ok(i) if errs.is_empty() => Ok(i),
             Err(e) => {
-                errs.push(e.into());
+                errs.push(e);
                 Err(errs)
             }
             _ => Err(errs),
         }
     }
 
-    fn update_yacckind(&mut self, i: usize) -> Result<usize, HeaderError> {
-        use crate::markmap::Entry;
-        use crate::Location;
-        match self.header.entry("yacckind".to_string()) {
-            Entry::Occupied(mut o) => {
-                o.mark_used();
-                let (_, val) = o.get();
-                self.yacc_kind = Some(YaccKind::try_from(val)?);
-            }
-            Entry::Vacant(_) => {
-                return Err(HeaderError {
-                    kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                    locations: vec![Location::Span(Span::new(i, i))],
-                });
-            }
-        }
-        Ok(i)
-    }
-
-    pub(crate) fn build(self) -> (Option<YaccKind>, GrammarAST) {
-        (self.yacc_kind, self.ast)
+    pub(crate) fn build(self) -> GrammarAST {
+        self.ast
     }
 
     fn parse_declarations(
@@ -497,7 +409,7 @@ impl YaccParser<'_> {
                 }
                 continue;
             }
-            if let Some(YaccKind::Original(_)) = self.yacc_kind {
+            if let YaccKind::Original(_) = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%actiontype", i) {
                     i = self.parse_ws(j, false)?;
                     let (j, n) = self.parse_to_eol(i)?;
@@ -658,7 +570,7 @@ impl YaccParser<'_> {
                 i = self.parse_ws(j, true)?;
                 continue;
             }
-            if let Some(YaccKind::Eco) = self.yacc_kind {
+            if let YaccKind::Eco = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
                     i = self.parse_ws(j, false)?;
                     let num_newlines = self.num_newlines;
@@ -755,8 +667,7 @@ impl YaccParser<'_> {
             self.ast.start = Some((rn.clone(), span));
         }
         match self.yacc_kind {
-            None => unreachable!("Concrete YaccKind resolved at this point"),
-            Some(YaccKind::Original(_)) | Some(YaccKind::Eco) => {
+            YaccKind::Original(_) | YaccKind::Eco => {
                 if self.ast.get_rule(&rn).is_none() {
                     self.ast.add_rule(
                         (rn.clone(), span),
@@ -765,7 +676,7 @@ impl YaccParser<'_> {
                 }
                 i = j;
             }
-            Some(YaccKind::Grmtools) => {
+            YaccKind::Grmtools => {
                 i = self.parse_ws(j, true)?;
                 if let Some(j) = self.lookahead_is("->", i) {
                     i = j;
@@ -1158,16 +1069,14 @@ mod test {
             ast::{GrammarAST, Production, Symbol},
             AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
         },
-        ParserError, Span, Spanned, YaccGrammarErrorKind, YaccParser,
+        Span, Spanned, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
-    use crate::test_utils::*;
     use std::collections::HashSet;
 
-    fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<ParserError>> {
-        let mut header = header_for_yacckind!(yacc_kind);
-        let mut yp = YaccParser::new(&mut header, s.to_string());
+    fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
+        let mut yp = YaccParser::new(yacc_kind, s);
         yp.parse()?;
-        Ok(yp.build().1)
+        Ok(yp.build())
     }
 
     fn rule(n: &str) -> Symbol {
@@ -1221,7 +1130,7 @@ mod test {
         );
     }
 
-    impl ErrorsHelper for Result<GrammarAST, Vec<ParserError>> {
+    impl ErrorsHelper for Result<GrammarAST, Vec<YaccGrammarError>> {
         #[track_caller]
         fn expect_error_at_line(self, src: &str, kind: YaccGrammarErrorKind, line: usize) {
             let errs = self
@@ -1230,11 +1139,6 @@ mod test {
                 .expect_err("Parsed ok while expecting error");
             assert_eq!(errs.len(), 1);
             let e = &errs[0];
-            let e = match e {
-                ParserError::YaccGrammarError(e) => e,
-                _ => panic!("Expected YaccGrammarError {}", e),
-            };
-
             assert_eq!(e.kind, kind);
             assert_eq!(line_of_offset(src, e.spans()[0].start()), line);
             assert_eq!(e.spans.len(), 1);
@@ -1264,10 +1168,6 @@ mod test {
                 .expect_err("Parsed ok while expecting error");
             assert_eq!(errs.len(), 1);
             let e = &errs[0];
-            let e = match e {
-                ParserError::YaccGrammarError(e) => e,
-                _ => panic!("Expected YaccGrammarError {}", e),
-            };
             assert_eq!(e.kind, kind);
             assert_eq!(
                 e.spans()
@@ -1289,16 +1189,6 @@ mod test {
             expected: &mut dyn Iterator<Item = (YaccGrammarErrorKind, Vec<(usize, usize)>)>,
         ) {
             let errs = self.expect_err("Parsed ok while expecting error");
-            let y_errs = errs
-                .iter()
-                .cloned()
-                .map(|e| match e {
-                    ParserError::YaccGrammarError(e) => e,
-                    e => panic!("Expected YaccGrammarError got: '{}'", e),
-                })
-                .collect::<Vec<_>>();
-
-            let errs = y_errs;
             for e in &errs {
                 // Check that it is valid to slice the source with the spans.
                 for span in e.spans() {
@@ -2834,88 +2724,6 @@ B";
         B: {} ;
         ";
         parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
-    }
-
-    #[test]
-    fn test_grmtools_section_yacckinds() {
-        let srcs = [
-            "%grmtools{yacckind: Original(NoAction)}
-             %%
-             Start: ;",
-            "%grmtools{yacckind: YaccKind::Original(GenericParseTree)}
-             %%
-             Start: ;",
-            "%grmtools{yacckind: YaccKind::Original(yaccoriginalactionkind::useraction)}
-             %actiontype ()
-             %%
-             Start: ;",
-            "%grmtools{yacckind: Original(YACCOriginalActionKind::NoAction)}
-             %%
-             Start: ;",
-            "%grmtools{yacckind: YaccKind::Grmtools}
-             %%
-             Start -> () : ;",
-        ];
-        for src in srcs {
-            YaccParser::new(&mut Header::new(), src.to_string())
-                .parse()
-                .unwrap();
-        }
-    }
-
-    #[test]
-    fn test_grmtools_section_invalid_yacckinds() {
-        let srcs = [
-            "%grmtools{yacckind: Foo}",
-            "%grmtools{yacckind: YaccKind::Foo}",
-            "%grmtools{yacckindof: YaccKind::Grmtools}",
-            "%grmtools{yacckindof: Grmtools}",
-            "%grmtools{yacckindof: YaccKindFoo::Foo}",
-            "%grmtools{yacckind: Foo::Grmtools}",
-            "%grmtools{yacckind: YaccKind::Original}",
-            "%grmtools{yacckind: YaccKind::OriginalFoo}",
-            "%grmtools{yacckind: YaccKind::Original()}",
-            "%grmtools{yacckind: YaccKind::Original(Foo)}",
-            "%grmtools{yacckind: YaccKind::Original(YaccOriginalActionKind)}",
-            "%grmtools{yacckind: YaccKind::Original(YaccOriginalActionKind::Foo)}",
-            "%grmtools{yacckind: YaccKind::Original(Foo::NoActions)}",
-            "%grmtools{yacckind: YaccKind::Original(Foo::NoActionsBar)}",
-        ];
-
-        for src in srcs {
-            let s = format!("{}\n%%\nStart();\n", src);
-            let parse_result = YaccParser::new(&mut Header::new(), s.to_string()).parse();
-            assert!(parse_result.is_err());
-        }
-    }
-
-    #[test]
-    fn test_grmtools_section_commas() {
-        // We can't actually test much here, because
-        // We don't have a second value to test.
-        //
-        // `RecoveryKind` seemed like an option for an additional value to allow,
-        // but that is part of `lrpar` which cfgrammar doesn't depend upon.
-        let src = r#"
-            %grmtools{
-                yacckind: YaccKind::Grmtools,
-            }
-            %%
-            Start -> () : ;
-        "#;
-        YaccParser::new(&mut Header::new(), src.to_string())
-            .parse()
-            .unwrap();
-        let src = r#"
-            %grmtools{
-                yacckind: YaccKind::Grmtools
-            }
-            %%
-            Start -> () : ;
-        "#;
-        YaccParser::new(&mut Header::new(), src.to_string())
-            .parse()
-            .unwrap();
     }
 
     #[test]

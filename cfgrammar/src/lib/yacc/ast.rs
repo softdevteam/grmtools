@@ -1,22 +1,26 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt,
+    str::FromStr,
 };
 
 use indexmap::{IndexMap, IndexSet};
 
 use super::{
-    parser::YaccParser, ParserError, Precedence, YaccGrammarError, YaccGrammarErrorKind,
-    YaccGrammarWarning, YaccGrammarWarningKind, YaccKind,
+    parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
+    YaccGrammarWarningKind, YaccKind,
 };
 
-use crate::{header::Header, Span};
+use crate::{
+    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, HeaderValue},
+    Span,
+};
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
 pub struct ASTWithValidityInfo {
-    yacc_kind: Option<YaccKind>,
+    yacc_kind: YaccKind,
     ast: GrammarAST,
-    errs: Vec<ParserError>,
+    errs: Vec<YaccGrammarError>,
 }
 
 impl ASTWithValidityInfo {
@@ -24,18 +28,17 @@ impl ASTWithValidityInfo {
     /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
     /// then unused to construct a `YaccGrammar`, which will either produce an
     /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
-    pub fn new(header: &mut Header, s: &str) -> Self {
+    ///
+    /// This function ignores the `%grmtools` section entirely, assuming that the caller has
+    /// already extracted the `YaccKind` if any.
+    pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
         let mut errs = Vec::new();
-        let (yacc_kind, ast) = {
-            let mut yp = YaccParser::new(header, s.to_string());
+        let ast = {
+            let mut yp = YaccParser::new(yacc_kind, s);
             yp.parse().map_err(|e| errs.extend(e)).ok();
-            let (yacc_kind, mut ast) = yp.build();
-            if yacc_kind.is_some() {
-                ast.complete_and_validate()
-                    .map_err(|e| errs.push(e.into()))
-                    .ok();
-            }
-            (yacc_kind, ast)
+            let mut ast = yp.build();
+            ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+            ast
         };
         ASTWithValidityInfo {
             ast,
@@ -59,13 +62,46 @@ impl ASTWithValidityInfo {
     }
 
     /// Returns the `YaccKind` that was used to parse the `GrammarAST`.
-    pub fn yacc_kind(&self) -> Option<YaccKind> {
+    pub fn yacc_kind(&self) -> YaccKind {
         self.yacc_kind
     }
 
     /// Returns all errors which were encountered during AST construction.
-    pub fn errors(&self) -> &[ParserError] {
+    pub fn errors(&self) -> &[YaccGrammarError] {
         self.errs.as_slice()
+    }
+}
+
+impl FromStr for ASTWithValidityInfo {
+    type Err = Vec<YaccGrammarError>;
+    /// Parses the `%grmtools section` expecting it to contain a `yacckind` entry.
+    fn from_str(src: &str) -> Result<Self, Vec<YaccGrammarError>> {
+        let mut errs = Vec::new();
+        let (header, _) = GrmtoolsSectionParser::new(src, true)
+            .parse()
+            .map_err(|mut errs| errs.drain(..).map(|e| e.into()).collect::<Vec<_>>())?;
+        if let Some(HeaderValue(_, yk_val)) = header.get("yacckind") {
+            let yacc_kind = YaccKind::try_from(yk_val).map_err(|e| vec![e.into()])?;
+            let ast = {
+                // We don't want to strip off the header so that span's will be correct.
+                let mut yp = YaccParser::new(yacc_kind, src);
+                yp.parse().map_err(|e| errs.extend(e)).ok();
+                let mut ast = yp.build();
+                ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+                ast
+            };
+            Ok(ASTWithValidityInfo {
+                ast,
+                errs,
+                yacc_kind,
+            })
+        } else {
+            Err(vec![HeaderError {
+                kind: HeaderErrorKind::InvalidEntry("yacckind"),
+                locations: vec![Span::new(0, 0)],
+            }
+            .into()])
+        }
     }
 }
 

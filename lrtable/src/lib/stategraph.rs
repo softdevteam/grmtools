@@ -248,7 +248,6 @@ pub(crate) fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    use crate::test_utils::*;
     use crate::{pager::pager_stategraph, StIdx};
     use cfgrammar::{
         yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
@@ -260,7 +259,7 @@ mod test {
     fn test_statetable_core() {
         // Taken from p13 of https://link.springer.com/article/10.1007/s00236-010-0115-6
         let grm = YaccGrammar::new(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             "
             %start A
             %%

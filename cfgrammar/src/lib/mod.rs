@@ -56,13 +56,13 @@ use bincode::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[doc(hidden)]
 pub mod header;
 mod idxnewtype;
+#[doc(hidden)]
 pub mod markmap;
 pub mod newlinecache;
 pub mod span;
-#[cfg(test)]
-pub mod test_utils;
 pub mod yacc;
 
 pub use newlinecache::NewlineCache;

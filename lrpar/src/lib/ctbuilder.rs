@@ -17,10 +17,10 @@ use std::{
 use crate::{LexerTypes, RecoveryKind};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
-    header::{Header, Value},
+    header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
     markmap::{Entry, MergeBehavior},
     newlinecache::NewlineCache,
-    yacc::{ast::ASTWithValidityInfo, ParserError, YaccGrammar, YaccKind, YaccOriginalActionKind},
+    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     Location, RIdx, Spanned, Symbol,
 };
 use filetime::FileTime;
@@ -499,8 +499,10 @@ where
                 Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
                 Some(yk) => {
                     let yk_value = Value::try_from(yk)?;
-                    let mut o =
-                        v.insert_entry((Location::Other("CTParserBuilder".to_string()), yk_value));
+                    let mut o = v.insert_entry(HeaderValue(
+                        Location::Other("CTParserBuilder".to_string()),
+                        yk_value,
+                    ));
                     o.set_merge_behavior(MergeBehavior::Ours);
                 }
                 None => {
@@ -512,9 +514,11 @@ where
             match header.entry("recoverer".to_string()) {
                 Entry::Occupied(_) => unreachable!(),
                 Entry::Vacant(v) => {
-                    let rk_value: Value = Value::try_from(recoverer)?;
-                    let mut o =
-                        v.insert_entry((Location::Other("CTParserBuilder".to_string()), rk_value));
+                    let rk_value: Value<Location> = Value::try_from(recoverer)?;
+                    let mut o = v.insert_entry(HeaderValue(
+                        Location::Other("CTParserBuilder".to_string()),
+                        rk_value,
+                    ));
                     o.set_merge_behavior(MergeBehavior::Ours);
                 }
             }
@@ -530,9 +534,32 @@ where
 
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
-        let ast_validation = ASTWithValidityInfo::new(&mut header, &inc);
+        let parsed_header = GrmtoolsSectionParser::new(&inc, false).parse();
+        if let Err(errs) = parsed_header {
+            return Err(format!(
+                "Error parsing `%grmtools` section:\n{}",
+                errs.iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ))?;
+        }
+        let (parsed_header, _) = parsed_header.unwrap();
+        header.merge_from(parsed_header)?;
+        self.yacckind = header
+            .get("yacckind")
+            .map(|HeaderValue(_, val)| val)
+            .map(YaccKind::try_from)
+            .transpose()?;
+        header.mark_used(&"yacckind".to_string());
+        let ast_validation = if let Some(yk) = self.yacckind {
+            ASTWithValidityInfo::new(yk, &inc)
+        } else {
+            Err("Missing 'yacckind'".to_string())?
+        };
+
         header.mark_used(&"recoverer".to_string());
-        let rk_val = header.get("recoverer").map(|(_, rk_val)| rk_val);
+        let rk_val = header.get("recoverer").map(|HeaderValue(_, rk_val)| rk_val);
 
         if let Some(rk_val) = rk_val {
             self.recoverer = Some(RecoveryKind::try_from(rk_val)?);
@@ -540,8 +567,7 @@ where
             // Fallback to the default recoverykind.
             self.recoverer = Some(RecoveryKind::CPCTPlus);
         }
-
-        self.yacckind = ast_validation.yacc_kind();
+        self.yacckind = Some(ast_validation.yacc_kind());
         let warnings = ast_validation.ast().warnings();
         let loc_fmt = |err_str, loc, inc: &str, line_cache: &NewlineCache| match loc {
             Location::Span(span) => {
@@ -562,15 +588,6 @@ where
         };
         let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
             loc_fmt(x.to_string(), Location::Span(x.spans()[0]), inc, line_cache)
-        };
-        let perror_fmt = |e: &ParserError, inc: &str, line_cache: &NewlineCache| match e {
-            ParserError::YaccGrammarError(e) => spanned_fmt(e, inc, line_cache),
-            ParserError::HeaderError(e) => {
-                loc_fmt(e.to_string(), e.locations[0].clone(), inc, line_cache)
-            }
-            _ => {
-                format!("Unrecognized error: {}", e)
-            }
         };
 
         let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
@@ -615,13 +632,13 @@ where
                     format!(
                         "\n\t{}",
                         errs.iter()
-                            .map(|e| perror_fmt(e, &inc, &line_cache))
+                            .map(|e| spanned_fmt(e, &inc, &line_cache))
                             .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
                             .collect::<Vec<_>>()
                             .join("\n\t")
                     )
                 } else {
-                    perror_fmt(errs.first().unwrap(), &inc, &line_cache)
+                    spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
                 }))?;
             }
         };
@@ -635,11 +652,15 @@ where
         if !unused_keys.is_empty() {
             return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
         }
-        let missing_keys = header.missing();
+        let missing_keys = header
+            .missing()
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>();
         if !missing_keys.is_empty() {
             return Err(format!(
                 "Required values were missing from the header: {}",
-                unused_keys.join(", ")
+                missing_keys.join(", ")
             )
             .into());
         }

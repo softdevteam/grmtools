@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use web_time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{header::Value, yacc::YaccGrammar, RIdx, Span, TIdx};
+use cfgrammar::{header::Value, span::Location, yacc::YaccGrammar, RIdx, Span, TIdx};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
@@ -629,9 +629,9 @@ pub enum RecoveryKind {
     None,
 }
 
-impl TryFrom<RecoveryKind> for Value {
-    type Error = cfgrammar::header::HeaderError;
-    fn try_from(rk: RecoveryKind) -> Result<Value, Self::Error> {
+impl TryFrom<RecoveryKind> for Value<Location> {
+    type Error = cfgrammar::header::HeaderError<Location>;
+    fn try_from(rk: RecoveryKind) -> Result<Value<Location>, Self::Error> {
         use cfgrammar::{
             header::{Namespaced, Setting},
             Location,
@@ -650,9 +650,9 @@ impl TryFrom<RecoveryKind> for Value {
     }
 }
 
-impl TryFrom<&Value> for RecoveryKind {
-    type Error = cfgrammar::header::HeaderError;
-    fn try_from(rk: &Value) -> Result<RecoveryKind, Self::Error> {
+impl TryFrom<&Value<Location>> for RecoveryKind {
+    type Error = cfgrammar::header::HeaderError<Location>;
+    fn try_from(rk: &Value<Location>) -> Result<RecoveryKind, Self::Error> {
         use cfgrammar::header::{HeaderError, HeaderErrorKind, Namespaced, Setting};
 
         match rk {
@@ -1064,7 +1064,7 @@ pub(crate) mod test {
 
     use super::*;
     use crate::{
-        test_utils::{header_for_yacckind, TestLexError, TestLexeme, TestLexerTypes},
+        test_utils::{TestLexError, TestLexeme, TestLexerTypes},
         Lexeme, Lexer,
     };
 
@@ -1105,7 +1105,7 @@ pub(crate) mod test {
         >,
     ) {
         let grm = YaccGrammar::<u16>::new_with_storaget(
-            &mut header_for_yacckind!(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)),
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             grms,
         )
         .unwrap();
