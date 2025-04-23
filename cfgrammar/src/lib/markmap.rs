@@ -24,12 +24,13 @@ use std::fmt;
 #[derive(Debug, PartialEq, Eq)]
 #[doc(hidden)]
 pub struct MarkMap<K, V> {
+    default_merge_behavior: MergeBehavior,
     contents: Vec<(K, u16, Option<V>)>,
 }
 
 /// Defines the merge behavior for a single key in the markmap.
 #[repr(u8)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 #[doc(hidden)]
 pub enum MergeBehavior {
     /// The value in `self` takes precedence.
@@ -216,7 +217,10 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     /// Returns a new `MarkMap`.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        MarkMap { contents: vec![] }
+        MarkMap {
+            default_merge_behavior: MergeBehavior::MutuallyExclusive,
+            contents: vec![],
+        }
     }
 
     /// Inserts a `key` `value` pair.
@@ -284,6 +288,10 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
             Ok(pos) => self.contents[pos].1 & Mark::Required.repr() != 0,
             _ => false,
         }
+    }
+
+    pub fn set_default_merge_behavior(&mut self, mb: MergeBehavior) {
+        self.default_merge_behavior = mb;
     }
 
     /// Sets the merge behavior for `key`.
@@ -387,10 +395,13 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
                     let ours_mark = Mark::MergeBehavior(MergeBehavior::Ours).repr();
                     let exclusive_mark =
                         Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr();
-                    let merge_behavior = (*my_mark & exclusive_mark)
+                    let mut merge_behavior = (*my_mark & exclusive_mark)
                         | (*my_mark & ours_mark)
                         | (*my_mark & theirs_mark);
-                    if merge_behavior == exclusive_mark || merge_behavior == 0 {
+                    if merge_behavior == 0 {
+                        merge_behavior = Mark::MergeBehavior(self.default_merge_behavior).repr();
+                    }
+                    if merge_behavior == exclusive_mark {
                         // If only clippy could convince me and the borrow checker this is actually unnecessary.
                         #[allow(clippy::unnecessary_unwrap)]
                         if my_val.is_some() && their_val.is_some() {
@@ -872,6 +883,26 @@ mod test {
         assert_eq!(
             mm.keys().cloned().collect::<Vec<_>>(),
             vec!["a", "b", "x", "y"]
+        );
+    }
+
+    #[test]
+    fn test_default_merge_behavior() {
+        let mut mm = MarkMap::new();
+        mm.set_default_merge_behavior(MergeBehavior::Ours);
+        mm.insert("a", "mm");
+        mm.insert("b", "mm");
+        mm.set_merge_behavior(&"b", MergeBehavior::Theirs);
+
+        let mut mm2 = MarkMap::new();
+        mm2.insert("x", "mm2");
+        mm2.insert("b", "mm2");
+        mm2.insert("a", "mm2");
+
+        mm.merge_from(mm2).unwrap();
+        assert_eq!(
+            mm.into_iter().collect::<Vec<_>>(),
+            vec![(&"a", &"mm"), (&"b", &"mm2"), (&"x", &"mm2")]
         );
     }
 }
