@@ -64,12 +64,6 @@ pub enum YaccGrammarErrorKind {
     UnknownEPP(String),
     ExpectedInput(char),
     InvalidYaccKind,
-    InvalidYaccKindNamespace,
-    InvalidActionKind,
-    InvalidActionKindNamespace,
-    InvalidGrmtoolsSectionEntry,
-    DuplicateGrmtoolsSectionEntry,
-    MissingGrmtoolsSection,
     Header(HeaderErrorKind, SpansKind),
 }
 
@@ -157,17 +151,7 @@ impl fmt::Display for YaccGrammarErrorKind {
                     name
                 )
             }
-            YaccGrammarErrorKind::MissingGrmtoolsSection => "Missing '%grmtools' section",
-            YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry => {
-                "Duplicate entry in %grmtools section"
-            }
-            YaccGrammarErrorKind::InvalidGrmtoolsSectionEntry => {
-                "Invalid entry in %grmtools section"
-            }
             YaccGrammarErrorKind::InvalidYaccKind => "Invalid yacc kind",
-            YaccGrammarErrorKind::InvalidYaccKindNamespace => "Invalid yacc kind namespace",
-            YaccGrammarErrorKind::InvalidActionKind => "Invalid action kind",
-            YaccGrammarErrorKind::InvalidActionKindNamespace => "Invalid action kind namespace",
             YaccGrammarErrorKind::Header(hk, _) => &format!("Error in '%grmtools' {}", hk),
         };
         write!(f, "{}", s)
@@ -278,12 +262,7 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::UnknownRuleRef(_)
             | YaccGrammarErrorKind::UnknownToken(_)
             | YaccGrammarErrorKind::NoPrecForToken(_)
-            | YaccGrammarErrorKind::MissingGrmtoolsSection
-            | YaccGrammarErrorKind::InvalidGrmtoolsSectionEntry
             | YaccGrammarErrorKind::InvalidYaccKind
-            | YaccGrammarErrorKind::InvalidYaccKindNamespace
-            | YaccGrammarErrorKind::InvalidActionKind
-            | YaccGrammarErrorKind::InvalidActionKindNamespace
             | YaccGrammarErrorKind::ExpectedInput(_)
             | YaccGrammarErrorKind::UnknownEPP(_) => SpansKind::Error,
             YaccGrammarErrorKind::DuplicatePrecedence
@@ -293,7 +272,6 @@ impl Spanned for YaccGrammarError {
             | YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration
             | YaccGrammarErrorKind::DuplicateStartDeclaration
             | YaccGrammarErrorKind::DuplicateActiontypeDeclaration
-            | YaccGrammarErrorKind::DuplicateGrmtoolsSectionEntry
             | YaccGrammarErrorKind::DuplicateEPP => SpansKind::DuplicationError,
             YaccGrammarErrorKind::Header(_, spanskind) => spanskind,
         }

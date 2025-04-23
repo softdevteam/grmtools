@@ -5,14 +5,13 @@ use num_traits::AsPrimitive;
 use proc_macro2::TokenStream;
 use quote::quote;
 use regex::Regex;
-use std::borrow::{Borrow as _, Cow};
-use std::collections::HashMap;
-use std::ops::Not;
 
 use crate::{
-    lexer::{LexFlags, Rule, DEFAULT_LEX_FLAGS, UNSPECIFIED_LEX_FLAGS},
-    LexBuildError, LexBuildResult, LexErrorKind,
+    lexer::{LexFlags, Rule},
+    LexBuildError, LexBuildResult, LexErrorKind, DEFAULT_LEX_FLAGS,
 };
+use std::borrow::{Borrow as _, Cow};
+use std::ops::Not;
 
 type LexInternalBuildResult<T> = Result<T, LexBuildError>;
 
@@ -34,7 +33,6 @@ lazy_static! {
     static ref RE_LEADING_WS: Regex = Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap();
     static ref RE_WS: Regex = Regex::new(r"\p{Pattern_White_Space}").unwrap();
     static ref RE_LEADING_DIGITS: Regex = Regex::new(r"^[0-9]+").unwrap();
-    static ref RE_NAME: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z]*").unwrap();
 }
 const INITIAL_START_STATE_NAME: &str = "INITIAL";
 
@@ -111,11 +109,6 @@ where
     src: String,
     pub(super) rules: Vec<Rule<LexerTypesT::StorageT>>,
     pub(super) start_states: Vec<StartState>,
-    /// Forced flags override those in the `%grmtools` section.
-    pub(super) force_lex_flags: LexFlags,
-    /// Default flags are overriden by those in the `%grmtools` section.
-    pub(super) default_lex_flags: LexFlags,
-    /// The resulting flags after parsing the `%grmtools` and merging defaults and forced flags.
     pub(super) lex_flags: LexFlags,
 }
 
@@ -150,41 +143,47 @@ where
     usize: AsPrimitive<LexerTypesT::StorageT>,
     LexerTypesT::StorageT: TryFrom<usize>,
 {
-    pub(super) fn new(src: String) -> LexBuildResult<LexParser<LexerTypesT>> {
-        let mut p = LexParser {
-            src,
-            rules: Vec::new(),
-            start_states: vec![StartState::new(
-                0,
-                INITIAL_START_STATE_NAME,
-                false,
-                Span::new(0, 0),
-            )],
-            force_lex_flags: UNSPECIFIED_LEX_FLAGS,
-            default_lex_flags: UNSPECIFIED_LEX_FLAGS,
-            lex_flags: DEFAULT_LEX_FLAGS,
-        };
-        p.parse()?;
-        Ok(p)
-    }
-
     pub(super) fn new_with_lex_flags(
         src: String,
-        force_lex_flags: LexFlags,
-        default_lex_flags: LexFlags,
+        mut lex_flags: LexFlags,
     ) -> LexBuildResult<LexParser<LexerTypesT>> {
+        let LexFlags {
+            allow_wholeline_comments,
+            dot_matches_new_line,
+            multi_line,
+            octal,
+            posix_escapes,
+            case_insensitive,
+            ignore_whitespace,
+            swap_greed,
+            unicode,
+            size_limit,
+            dfa_size_limit,
+            nest_limit,
+        } = &mut lex_flags;
+        *octal = octal.or(DEFAULT_LEX_FLAGS.octal);
+        *multi_line = multi_line.or(DEFAULT_LEX_FLAGS.multi_line);
+        *dot_matches_new_line = dot_matches_new_line.or(DEFAULT_LEX_FLAGS.dot_matches_new_line);
+        *posix_escapes = posix_escapes.or(DEFAULT_LEX_FLAGS.posix_escapes);
+        *allow_wholeline_comments =
+            allow_wholeline_comments.or(DEFAULT_LEX_FLAGS.allow_wholeline_comments);
+        *case_insensitive = case_insensitive.or(DEFAULT_LEX_FLAGS.allow_wholeline_comments);
+        *ignore_whitespace = ignore_whitespace.or(DEFAULT_LEX_FLAGS.ignore_whitespace);
+        *swap_greed = swap_greed.or(DEFAULT_LEX_FLAGS.swap_greed);
+        *unicode = unicode.or(DEFAULT_LEX_FLAGS.unicode);
+        *size_limit = size_limit.or(DEFAULT_LEX_FLAGS.size_limit);
+        *dfa_size_limit = dfa_size_limit.or(DEFAULT_LEX_FLAGS.dfa_size_limit);
+        *nest_limit = nest_limit.or(DEFAULT_LEX_FLAGS.nest_limit);
         let mut p = LexParser {
             src,
             rules: Vec::new(),
+            lex_flags,
             start_states: vec![StartState::new(
                 0,
                 INITIAL_START_STATE_NAME,
                 false,
                 Span::new(0, 0),
             )],
-            force_lex_flags,
-            default_lex_flags,
-            lex_flags: DEFAULT_LEX_FLAGS,
         };
         p.parse()?;
         Ok(p)
@@ -247,159 +246,12 @@ where
         }
     }
 
-    fn parse_grmtools_section_value(
-        &mut self,
-        mut i: usize,
-        span_map: &mut HashMap<&str, Span>,
-        lex_flags: &mut LexFlags,
-    ) -> LexInternalBuildResult<usize> {
-        const OPTIONS: [&str; 13] = [
-            "allow_wholeline_comments",
-            "dot_matches_new_line",
-            "multi_line",
-            "octal",
-            "posix_escapes",
-            "case_insensitive",
-            "swap_greed",
-            "ignore_whitespace",
-            "unicode",
-            "size_limit",
-            "dfa_size_limit",
-            "nest_limit",
-            "lexerkind",
-        ];
-        let start_pos = i;
-        // RegexBuilder isn't uniform regarding whether the default value of an options is true
-        // or false. For instance `unicode` is `true` but `case_insensitive` defaults to false.
-        let flag = if self.src[i..].starts_with("!") {
-            i += 1;
-            false
-        } else {
-            true
-        };
-        for opt in OPTIONS {
-            if self.src[i..].to_lowercase().starts_with(opt) {
-                i += opt.len();
-                let end_pos = i;
-                if let Some(orig_span) = span_map.get(opt) {
-                    return Err(LexBuildError {
-                        kind: LexErrorKind::DuplicateGrmtoolsSectionValue,
-                        spans: vec![*orig_span, Span::new(start_pos, end_pos)],
-                    });
-                }
-                match opt {
-                    "allow_wholeline_comments" => lex_flags.allow_wholeline_comments = Some(flag),
-                    "case_insensitive" => lex_flags.case_insensitive = Some(flag),
-                    "swap_greed" => lex_flags.swap_greed = Some(flag),
-                    "ignore_whitespace" => lex_flags.ignore_whitespace = Some(flag),
-                    "unicode" => lex_flags.unicode = Some(flag),
-                    "dot_matches_new_line" => lex_flags.dot_matches_new_line = Some(flag),
-                    "multi_line" => lex_flags.multi_line = Some(flag),
-                    "octal" => lex_flags.octal = Some(flag),
-                    "posix_escapes" => lex_flags.posix_escapes = Some(flag),
-                    "size_limit" | "dfa_size_limit" | "nest_limit" => {
-                        if !flag {
-                            // We've seen a silly statement like `!size_limit 5``
-                            return Err(LexBuildError {
-                                kind: LexErrorKind::InvalidGrmtoolsSectionValue,
-                                spans: vec![Span::new(start_pos, end_pos)],
-                            });
-                        }
-                        i = self.parse_spaces(i)?;
-                        if let Some(j) = self.lookahead_is(":", i) {
-                            i = j
-                        } else {
-                            return Err(LexBuildError {
-                                kind: LexErrorKind::InvalidGrmtoolsSectionValue,
-                                spans: vec![Span::new(i, i)],
-                            });
-                        }
-                        i = self.parse_spaces(i)?;
-                        let j = self.parse_digits(i)?;
-                        // This checks that the digits are valid numbers, but currently just returns `None`
-                        // when the values are actually out of range for that type. This could be improved.
-                        match opt {
-                            "size_limit" => {
-                                lex_flags.size_limit = str::parse::<usize>(&self.src[i..j]).ok();
-                            }
-                            "dfa_size_limit" => {
-                                lex_flags.dfa_size_limit =
-                                    str::parse::<usize>(&self.src[i..j]).ok();
-                            }
-                            "nest_limit" => {
-                                lex_flags.nest_limit = str::parse::<u32>(&self.src[i..j]).ok();
-                            }
-                            _ => unreachable!(),
-                        }
-                        i = j;
-                    }
-                    "lexerkind" => {
-                        // We just want to skip this, we already know we're `LRNonStreamingLexer`
-                        i = self.parse_ws(i)?;
-                        if let Some(j) = self.lookahead_is(":", i) {
-                            i = j
-                        } else {
-                            return Err(LexBuildError {
-                                kind: LexErrorKind::InvalidGrmtoolsSectionValue,
-                                spans: vec![Span::new(i, i)],
-                            });
-                        }
-                        i = self.parse_ws(i)?;
-                        let (j, _) = self.parse_name(i)?;
-                        i = self.parse_ws(j)?;
-                        if let Some(j) = self.lookahead_is("::", j) {
-                            i = self.parse_ws(j)?;
-                            let (j, _) = self.parse_name(i)?;
-                            i = j;
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-                span_map.insert(opt, Span::new(start_pos, end_pos));
-                return self.parse_ws(i);
-            }
-        }
-        Err(self.mk_error(LexErrorKind::InvalidGrmtoolsSectionValue, i))
-    }
-
     fn parse_declarations(
         &mut self,
         mut i: usize,
         errs: &mut Vec<LexBuildError>,
     ) -> LexInternalBuildResult<usize> {
         i = self.parse_ws(i)?;
-        let mut grmtools_section_span_map = HashMap::new();
-        let mut grmtools_section_lex_flags = UNSPECIFIED_LEX_FLAGS;
-        if let Some(j) = self.lookahead_is("%grmtools", i) {
-            i = self.parse_ws(j)?;
-            if let Some(j) = self.lookahead_is("{", i) {
-                i = self.parse_ws(j)?;
-            }
-
-            while self.lookahead_is("}", i).is_none() {
-                i = self.parse_grmtools_section_value(
-                    i,
-                    &mut grmtools_section_span_map,
-                    &mut grmtools_section_lex_flags,
-                )?;
-                if let Some(j) = self.lookahead_is(",", i) {
-                    i = self.parse_ws(j)?;
-                    continue;
-                } else {
-                    break;
-                }
-            }
-            if let Some(j) = self.lookahead_is("}", i) {
-                i = j
-            } else {
-                return Err(self.mk_error(LexErrorKind::PrematureEnd, i));
-            }
-            i = self.parse_ws(i)?;
-        }
-        grmtools_section_lex_flags.merge_from(&self.force_lex_flags);
-        self.default_lex_flags
-            .merge_from(&grmtools_section_lex_flags);
-        self.lex_flags.merge_from(&self.default_lex_flags);
         loop {
             i = self.parse_ws(i)?;
             if self.lex_flags.allow_wholeline_comments.unwrap_or(false)
@@ -778,7 +630,6 @@ where
                 }
                 Cow::from(unescaped)
             }
-
             Ok((vec![], unescape(Cow::from(re_str), &self.lex_flags)))
         } else {
             match re_str.find('>') {
@@ -819,29 +670,6 @@ where
             .find(&self.src[i..])
             .map(|m| m.end() + i)
             .unwrap_or(i))
-    }
-
-    fn parse_digits(&mut self, i: usize) -> LexInternalBuildResult<usize> {
-        RE_LEADING_DIGITS
-            .find(&self.src[i..])
-            .map(|m| m.end() + i)
-            .ok_or(LexBuildError {
-                kind: LexErrorKind::InvalidNumber,
-                spans: vec![Span::new(i, i)],
-            })
-    }
-
-    fn parse_name(&self, i: usize) -> Result<(usize, String), LexBuildError> {
-        match RE_NAME.find(&self.src[i..]) {
-            Some(m) => {
-                assert_eq!(m.start(), 0);
-                Ok((i + m.end(), self.src[i..i + m.end()].to_string()))
-            }
-            None => Err(LexBuildError {
-                kind: LexErrorKind::InvalidGrmtoolsSectionValue,
-                spans: vec![Span::new(i, i)],
-            }),
-        }
     }
 
     fn parse_spaces(&mut self, i: usize) -> LexInternalBuildResult<usize> {
@@ -943,23 +771,23 @@ mod test {
                 for span in e.spans() {
                     let _ = &src[span.start()..span.end()];
                 }
-            }
 
-            for ((ek1, es1), (ek2, es2)) in errs
-                .iter()
-                .map(|e| {
-                    (
-                        e.kind.clone(),
-                        e.spans()
-                            .iter()
-                            .map(|span| line_col!(src, span))
-                            .collect::<Vec<_>>(),
-                    )
-                })
-                .zip(expected)
-            {
-                assert!(ek1.is_same_kind(&ek2));
-                assert_eq!(es1, es2);
+                for ((ek1, es1), (ek2, es2)) in errs
+                    .iter()
+                    .map(|e| {
+                        (
+                            e.kind.clone(),
+                            e.spans()
+                                .iter()
+                                .map(|span| line_col!(src, span))
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .zip(&mut *expected)
+                {
+                    assert!(ek1.is_same_kind(&ek2));
+                    assert_eq!(es1, es2);
+                }
             }
         }
     }
@@ -1924,11 +1752,7 @@ b "A"
 . "dot";
 \n+ ;
 "#;
-        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_lines_cols(
-            src,
-            LexErrorKind::DuplicateGrmtoolsSectionValue,
-            &mut [(3, 3), (4, 3)].into_iter(),
-        );
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).is_err());
 
         let src = r#"
 %grmtools {
@@ -1939,11 +1763,7 @@ b "A"
 . "dot";
 \n+ ;
 "#;
-        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_lines_cols(
-            src,
-            LexErrorKind::DuplicateGrmtoolsSectionValue,
-            &mut [(3, 3), (4, 3)].into_iter(),
-        );
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).is_err());
 
         let src = r#"
 %grmtools {
@@ -1953,12 +1773,7 @@ b "A"
 . "dot"
 \n+ ;
 "#;
-        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_line_col(
-            src,
-            LexErrorKind::InvalidGrmtoolsSectionValue,
-            3,
-            3,
-        );
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).is_err());
         // The following is missing comma separators for more than 2 elements
         // This is to avoid parsing it as "key value" number of elements.
         // However we actually error after the first element since the parser
@@ -1969,12 +1784,7 @@ b "A"
 . "dot"
 \n+ ;
 "#;
-        LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).expect_error_at_line_col(
-            src,
-            LexErrorKind::PrematureEnd,
-            2,
-            38,
-        );
+        assert!(LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(src).is_err());
     }
 
     #[test]
