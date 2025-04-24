@@ -111,9 +111,14 @@ impl FromStr for ASTWithValidityInfo {
 #[derive(Debug)]
 pub struct GrammarAST {
     pub start: Option<(String, Span)>,
-    // map from a rule name to indexes into prods
+    // map from a rule name to indexes into `prods`
     pub rules: IndexMap<String, Rule>,
     pub prods: Vec<Production>,
+    // A set of indexes into `tokens` for all tokens in `%token` directives.
+    // e.g. given a `%token a` and a token "b" not specified in any `%token` directive
+    // we have `self.tokens.get_index_of("a") ∈ self.token_directives`. However for
+    // token "b" we have `self.tokens.get_index_of("b") ∉ self.token_directives`.
+    pub token_directives: HashSet<usize>,
     pub tokens: IndexSet<String>,
     pub spans: Vec<Span>,
     pub precs: HashMap<String, (Precedence, Span)>,
@@ -195,6 +200,7 @@ impl GrammarAST {
             prods: Vec::new(),
             spans: Vec::new(),
             tokens: IndexSet::new(),
+            token_directives: HashSet::new(),
             precs: HashMap::new(),
             avoid_insert: None,
             implicit_tokens: None,
@@ -684,5 +690,75 @@ mod test {
                 Symbol::Token("b".to_string(), Span::new(4, 5))
             ]
         )
+    }
+
+    #[test]
+    fn token_rule_confusion_issue_557() {
+        use super::*;
+        use crate::yacc::*;
+        let ast_validity = ASTWithValidityInfo::new(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            r#"
+            %start start
+            %%
+            start: "a" a;
+            a: "c";"#,
+        );
+        assert!(ast_validity.ast().prods[0]
+            .symbols
+            .contains(&Symbol::Rule("a".to_string(), Span::new(64, 65))));
+        let ast_validity = ASTWithValidityInfo::new(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            r#"
+            %start start
+            %%
+            start: "a" x;
+            x: "c";"#,
+        );
+        assert!(ast_validity.ast().prods[0]
+            .symbols
+            .contains(&Symbol::Rule("x".to_string(), Span::new(64, 65))));
+        let ast_validity = ASTWithValidityInfo::new(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            r#"
+        %start start
+        %token a
+        %%
+        start: "a" a;
+        "#,
+        );
+        assert_eq!(
+            ast_validity.ast().prods[0].symbols,
+            [
+                Symbol::Token("a".to_string(), Span::new(66, 67)),
+                Symbol::Token("a".to_string(), Span::new(69, 70))
+            ]
+        );
+    }
+
+    #[test]
+    fn test_token_directives() {
+        use super::*;
+        use crate::yacc::*;
+
+        // Testing that `%token a` after `%left "a"` still ends up in
+        let ast_validity = ASTWithValidityInfo::new(
+            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+            r#"
+                %left "a"
+                %token a
+                %start start
+                %%
+                start: "a" a "b";
+                "#,
+        );
+        assert!(ast_validity
+            .ast()
+            .token_directives
+            .contains(&ast_validity.ast().tokens.get_index_of("a").unwrap()));
+        assert!(!ast_validity
+            .ast()
+            .token_directives
+            .contains(&ast_validity.ast().tokens.get_index_of("b").unwrap()));
     }
 }
