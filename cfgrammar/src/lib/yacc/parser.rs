@@ -379,10 +379,12 @@ impl YaccParser<'_> {
             if let Some(j) = self.lookahead_is("%token", i) {
                 i = self.parse_ws(j, false)?;
                 while i < self.src.len() && self.lookahead_is("%", i).is_none() {
-                    let (j, n, span) = self.parse_token(i)?;
-                    if self.ast.tokens.insert(n) {
+                    let (j, n, span, _) = self.parse_token(i)?;
+                    let (idx, new_tok) = self.ast.tokens.insert_full(n);
+                    if new_tok {
                         self.ast.spans.push(span);
                     }
+                    self.ast.token_directives.insert(idx);
                     i = self.parse_ws(j, true)?;
                 }
                 continue;
@@ -425,7 +427,7 @@ impl YaccParser<'_> {
             }
             if let Some(j) = self.lookahead_is("%epp", i) {
                 i = self.parse_ws(j, false)?;
-                let (j, n, _) = self.parse_token(i)?;
+                let (j, n, _, _) = self.parse_token(i)?;
                 let span = Span::new(i, j);
                 i = self.parse_ws(j, false)?;
                 let (j, v) = self.parse_string(i)?;
@@ -475,7 +477,7 @@ impl YaccParser<'_> {
                             j
                         }
                         Err(_) => match self.parse_token(i) {
-                            Ok((j, n, span)) => {
+                            Ok((j, n, span, _)) => {
                                 self.ast.expect_unused.push(Symbol::Token(n, span));
                                 j
                             }
@@ -512,7 +514,7 @@ impl YaccParser<'_> {
                     self.ast.avoid_insert = Some(HashMap::new());
                 }
                 while j < self.src.len() && self.num_newlines == num_newlines {
-                    let (j, n, span) = self.parse_token(i)?;
+                    let (j, n, span, _) = self.parse_token(i)?;
                     if self.ast.tokens.insert(n.clone()) {
                         self.ast.spans.push(span);
                     }
@@ -556,7 +558,7 @@ impl YaccParser<'_> {
                         self.ast.implicit_tokens = Some(HashMap::new());
                     }
                     while j < self.src.len() && self.num_newlines == num_newlines {
-                        let (j, n, span) = self.parse_token(i)?;
+                        let (j, n, span, _) = self.parse_token(i)?;
                         if self.ast.tokens.insert(n.clone()) {
                             self.ast.spans.push(span);
                         }
@@ -598,7 +600,7 @@ impl YaccParser<'_> {
                 i = self.parse_ws(k, false)?;
                 let num_newlines = self.num_newlines;
                 while i < self.src.len() && num_newlines == self.num_newlines {
-                    let (j, n, span) = self.parse_token(i)?;
+                    let (j, n, span, _) = self.parse_token(i)?;
                     match self.ast.precs.entry(n) {
                         Entry::Occupied(orig) => {
                             let (_, orig_span) = orig.get();
@@ -709,7 +711,7 @@ impl YaccParser<'_> {
             }
 
             if self.lookahead_is("\"", i).is_some() || self.lookahead_is("'", i).is_some() {
-                let (j, sym, span) = self.parse_token(i)?;
+                let (j, sym, span, _) = self.parse_token(i)?;
                 pos_prod_end = Some(j);
                 i = self.parse_ws(j, true)?;
                 if self.ast.tokens.insert(sym.clone()) {
@@ -718,7 +720,7 @@ impl YaccParser<'_> {
                 syms.push(Symbol::Token(sym, span));
             } else if let Some(j) = self.lookahead_is("%prec", i) {
                 i = self.parse_ws(j, true)?;
-                let (k, sym, span) = self.parse_token(i)?;
+                let (k, sym, span, _) = self.parse_token(i)?;
                 if self.ast.tokens.insert(sym.clone()) {
                     self.ast.spans.push(span);
                 }
@@ -750,9 +752,14 @@ impl YaccParser<'_> {
                 pos_prod_end = Some(j);
                 i = k;
             } else {
-                let (j, sym, span) = self.parse_token(i)?;
+                let (j, sym, span, quoted) = self.parse_token(i)?;
                 pos_prod_end = Some(j);
-                if self.ast.tokens.contains(&sym) {
+                if self
+                    .ast
+                    .tokens
+                    .get_index_of(&sym)
+                    .is_some_and(|idx| quoted || self.ast.token_directives.contains(&idx))
+                {
                     syms.push(Symbol::Token(sym, span));
                 } else {
                     syms.push(Symbol::Rule(sym, span));
@@ -774,7 +781,7 @@ impl YaccParser<'_> {
         }
     }
 
-    fn parse_token(&self, i: usize) -> Result<(usize, String, Span), YaccGrammarError> {
+    fn parse_token(&self, i: usize) -> Result<(usize, String, Span, bool), YaccGrammarError> {
         match RE_TOKEN.find(&self.src[i..]) {
             Some(m) => {
                 assert!(m.start() == 0 && m.end() > 0);
@@ -787,12 +794,14 @@ impl YaccParser<'_> {
                             i + m.end(),
                             self.src[start_cidx..end_cidx].to_string(),
                             Span::new(start_cidx, end_cidx),
+                            true,
                         ))
                     }
                     _ => Ok((
                         i + m.end(),
                         self.src[i..i + m.end()].to_string(),
                         Span::new(i, i + m.end()),
+                        false,
                     )),
                 }
             }
