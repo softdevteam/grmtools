@@ -9,7 +9,7 @@ use crate::{LexError, Lexeme, LexerTypes};
 
 type StorageT = u16;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct TestLexerTypes();
 
 impl LexerTypes for TestLexerTypes {

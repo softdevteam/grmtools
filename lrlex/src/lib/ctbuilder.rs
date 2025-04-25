@@ -32,7 +32,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use regex::Regex;
 
-use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexFlags, LexerDef};
+use crate::{DefaultLexerTypes, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -220,7 +220,8 @@ impl CTLexerBuilder<'_, DefaultLexerTypes<u32>> {
     }
 }
 
-impl<'a, LexerTypesT: LexerTypes> CTLexerBuilder<'a, LexerTypesT>
+impl<'a, LexerTypesT: LexerTypes<LexErrorT = crate::LRLexError> + 'static>
+    CTLexerBuilder<'a, LexerTypesT>
 where
     LexerTypesT::StorageT:
         'static + Debug + Eq + Hash + PrimInt + Encode + TryFrom<usize> + Unsigned + ToTokens,
@@ -420,13 +421,6 @@ where
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
     pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
-        if let Some(ref lrcfg) = self.lrpar_config {
-            let mut ctp = CTParserBuilder::<LexerTypesT>::new();
-            ctp = lrcfg(ctp);
-            let map = ctp.build()?;
-            self.rule_ids_map = Some(map.token_map().to_owned());
-        }
-
         let lexerp = self
             .lexer_path
             .as_ref()
@@ -471,7 +465,7 @@ where
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
             inspect_lexerkind_cb(lexerkind)?
         }
-        let (mut lexerdef, lex_flags): (Box<dyn LexerDef<LexerTypesT>>, LexFlags) = match lexerkind
+        let (lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) = match lexerkind
         {
             LexerKind::LRNonStreamingLexer => {
                 let lex_flags = LexFlags::try_from(&mut header)?;
@@ -495,10 +489,41 @@ where
                                 .join("\n")
                         })?;
                 let lex_flags = lexerdef.lex_flags().cloned();
-                (Box::new(lexerdef), lex_flags.unwrap())
+                (lexerdef, lex_flags.unwrap())
             }
         };
 
+        if let Some(ref lrcfg) = self.lrpar_config {
+            let mut lexerdef = lexerdef.clone();
+            let mut ctp = CTParserBuilder::<LexerTypesT>::new().inspect_rt(Box::new(
+                move |yacc_header, rtpb, rule_ids_map| {
+                    let owned_map = rule_ids_map
+                        .iter()
+                        .map(|(x, y)| (&**x, *y))
+                        .collect::<HashMap<_, _>>();
+                    lexerdef.set_rule_ids(&owned_map);
+                    yacc_header.mark_used(&"test_files".to_string());
+                    // We need to add HeaderValue::String or glob mechanism for this.
+                    let test_glob = yacc_header.get("test_files");
+                    if let Some(_test_glob) = test_glob {
+                        // We need to do something with testglob, read input files etc
+                        // then read some input files, etc.
+                        let placeholder_input = String::new();
+                        let l: LRNonStreamingLexer<LexerTypesT> =
+                            lexerdef.lexer(&placeholder_input);
+                        for e in rtpb.parse_noaction(&l) {
+                            Err(e.to_string())?
+                        }
+                    }
+                    Ok(())
+                },
+            ));
+            ctp = lrcfg(ctp);
+            let map = ctp.build()?;
+            self.rule_ids_map = Some(map.token_map().to_owned());
+        }
+
+        let mut lexerdef = Box::new(lexerdef);
         let unused_header_values = header.unused();
         if !unused_header_values.is_empty() {
             return Err(

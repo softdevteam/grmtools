@@ -7,7 +7,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use crate::LRLexError;
 
 /// lrlex's standard [LexerTypes] `struct`, provided as a convenience.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DefaultLexerTypes<T = u32>
 where
     T: 'static + fmt::Debug + Hash + PrimInt + Unsigned,
