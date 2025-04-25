@@ -1,14 +1,22 @@
-%grmtools {yacckind: Grmtools}
+%grmtools {
+    yacckind: Grmtools,
+    test_files: "input.txt",
+}
+%expect-unused Unmatched "UNMATCHED"
 %token Incr Decr
 %parse-param val: Rc<RefCell<i64>>
 %%
 Expr -> () : "INT" Ops {
-	*val.borrow_mut() += parse_int($lexer.span_str($1.map_err(|_| "<evaluation aborted>").unwrap().span())).unwrap()
-	};
+    *val.borrow_mut() += parse_int($lexer.span_str($1.map_err(|_| "<evaluation aborted>").unwrap().span())).unwrap()
+};
 Ops -> (): 
-	%empty {}
-	| Ops Incr { *val.borrow_mut() += 1; }
-	| Ops Decr { *val.borrow_mut() -= 1; };
+    %empty {}
+  | Ops Incr { *val.borrow_mut() += 1; }
+  | Ops Decr { *val.borrow_mut() -= 1; }
+  ;
+Unmatched -> ():
+    "UNMATCHED" { }
+  ;
 %%
 use std::{ rc::Rc, cell::RefCell, error::Error };
 

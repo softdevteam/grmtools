@@ -25,6 +25,7 @@ use cfgrammar::{
     span::Location,
     Spanned,
 };
+use glob::glob;
 use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, LexerTypes};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -61,6 +62,13 @@ impl<T: Clone> TryFrom<&Value<T>> for LexerKind {
                 kind: HeaderErrorKind::ConversionError(
                     "LexerKind",
                     "Expected `LexerKind` found numeric",
+                ),
+                locations: vec![loc.clone()],
+            }),
+            Value::Setting(Setting::String(_, loc)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "LexerKind",
+                    "Expected `LexerKind` found string",
                 ),
                 locations: vec![loc.clone()],
             }),
@@ -496,26 +504,32 @@ where
         if let Some(ref lrcfg) = self.lrpar_config {
             let mut lexerdef = lexerdef.clone();
             let mut ctp = CTParserBuilder::<LexerTypesT>::new().inspect_rt(Box::new(
-                move |yacc_header, rtpb, rule_ids_map| {
+                move |yacc_header, rtpb, rule_ids_map, grm_path| {
                     let owned_map = rule_ids_map
                         .iter()
                         .map(|(x, y)| (&**x, *y))
                         .collect::<HashMap<_, _>>();
                     lexerdef.set_rule_ids(&owned_map);
                     yacc_header.mark_used(&"test_files".to_string());
-                    // We need to add HeaderValue::String or glob mechanism for this.
                     let test_glob = yacc_header.get("test_files");
-                    if let Some(_test_glob) = test_glob {
-                        // We need to do something with testglob, read input files etc
-                        // then read some input files, etc.
-                        let placeholder_input = String::new();
-                        let l: LRNonStreamingLexer<LexerTypesT> =
-                            lexerdef.lexer(&placeholder_input);
-                        for e in rtpb.parse_noaction(&l) {
-                            Err(e.to_string())?
+                    match test_glob {
+                        Some(HeaderValue(_, Value::Setting(Setting::String(test_files, _)))) => {
+                            let path_joined = grm_path.parent().unwrap().join(test_files);
+                            for path in
+                                glob(&path_joined.to_string_lossy()).map_err(|e| e.to_string())?
+                            {
+                                let path = path?;
+                                let input = fs::read_to_string(&path)?;
+                                let l: LRNonStreamingLexer<LexerTypesT> = lexerdef.lexer(&input);
+                                for e in rtpb.parse_noaction(&l) {
+                                    Err(format!("parsing {}: {}", path.display(), e))?
+                                }
+                            }
+                            Ok(())
                         }
+                        Some(_) => Err("Invalid value for setting 'test_files'".into()),
+                        None => Ok(()),
                     }
-                    Ok(())
                 },
             ));
             ctp = lrcfg(ctp);

@@ -248,6 +248,7 @@ where
                 &'b mut Header<Location>,
                 RTParserBuilder<LexerTypesT::StorageT, LexerTypesT>,
                 &'b HashMap<String, LexerTypesT::StorageT>,
+                &PathBuf,
             ) -> Result<(), Box<dyn Error>>,
         >,
     >,
@@ -448,6 +449,7 @@ where
                 &'b mut Header<Location>,
                 RTParserBuilder<'y, StorageT, LexerTypesT>,
                 &'b HashMap<String, StorageT>,
+                &PathBuf,
             ) -> Result<(), Box<dyn Error>>,
         >,
     ) -> Self {
@@ -762,7 +764,7 @@ where
             } else {
                 rt
             };
-            inspector_rt(&mut header, rt, &rule_ids)?
+            inspector_rt(&mut header, rt, &rule_ids, grmp)?
         }
 
         let unused_keys = header.unused();

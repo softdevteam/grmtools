@@ -1,6 +1,6 @@
 grammar: |
     %grmtools{yacckind: Grmtools}
-    %token MAGIC IDENT NUM
+    %token MAGIC IDENT NUM STRING
     %epp MAGIC "%grmtools"
     %%
     start -> Result<Header<Span>, Vec<HeaderError<Span>>>
@@ -101,6 +101,13 @@ grammar: |
         let n = str::parse::<u64>($lexer.span_str(num_span));
         Setting::Num(n.expect("convertible"), num_span)
     }
+    | STRING {
+        let string_span = $1.as_ref().unwrap().span();
+        // Trim the leading and trailing " characters.
+        let string_span = Span::new(string_span.start() + 1, string_span.end() - 1);
+        let s = $lexer.span_str(string_span).to_string();
+        Setting::String(s, string_span)
+    }
     | namespaced '(' namespaced ')' { Setting::Constructor{ctor: $1, arg: $3} }
     ;
 
@@ -140,4 +147,5 @@ lexer: |
     \) ')'
     :: '::'
     : ':'
+    \"(\\.|[^"\\])*\" 'STRING'
     [\n\t\ ] ;

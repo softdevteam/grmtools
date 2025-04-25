@@ -670,6 +670,13 @@ impl TryFrom<&Value<Location>> for RecoveryKind {
                 ),
                 locations: vec![loc.clone()],
             }),
+            Value::Setting(Setting::String(_, loc)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "RecoveryKind",
+                    "Cannot convert string to RecoveryKind",
+                ),
+                locations: vec![loc.clone()],
+            }),
             Value::Setting(Setting::Unitary(Namespaced {
                 namespace,
                 member: (kind, kind_loc),

@@ -38,3 +38,4 @@ bincode.workspace = true
 serde = { workspace = true, optional = true }
 prettyplease.workspace = true
 syn.workspace = true
+glob.workspace = true
