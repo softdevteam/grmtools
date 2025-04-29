@@ -7,15 +7,18 @@ use cfgrammar::{
     Location, Span,
 };
 use getopts::Options;
-use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexerDef};
+use lrlex::{DefaultLexerTypes, LRLexError, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{
     parser::{RTParserBuilder, RecoveryKind},
     LexerTypes,
 };
-use lrtable::{from_yacc, Minimiser};
+use lrtable::{from_yacc, Minimiser, StateTable};
+use num_traits::AsPrimitive;
 use num_traits::ToPrimitive as _;
 use std::{
     env,
+    error::Error,
+    fmt,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
@@ -34,7 +37,7 @@ fn usage(prog: &str, msg: &str) -> ! {
     if !msg.is_empty() {
         eprintln!("{}", msg);
     }
-    eprintln!("Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dq] <lexer.l> <parser.y> <input file>", leaf);
+    eprintln!("Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dq] <lexer.l> <parser.y> <input files> ...", leaf);
     process::exit(1);
 }
 
@@ -155,8 +158,8 @@ fn main() {
             ));
         }
     };
-
-    if matches.free.len() != 3 {
+    let args_len = matches.free.len();
+    if args_len < 2 {
         usage(prog, "Too few arguments given.");
     }
 
@@ -319,8 +322,8 @@ fn main() {
                         )
                     );
                 }
+                eprintln!();
             }
-            eprintln!();
             if let Some(token_spans) = missing_from_parser {
                 let formatter = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path).unwrap();
                 let err_indent = " ".repeat(ERROR.len());
@@ -346,24 +349,214 @@ fn main() {
         }
     }
 
-    let input = if &matches.free[2] == "-" {
-        let mut s = String::new();
-        std::io::stdin().read_to_string(&mut s).unwrap();
-        s
-    } else {
-        read_file(&matches.free[2])
+    let parser_build_ctxt = ParserBuildCtxt {
+        header,
+        lexerdef,
+        grm,
+        stable,
+        yacc_y_path,
+        recoverykind,
     };
-    let lexer = lexerdef.lexer(&input);
-    let pb = RTParserBuilder::new(&grm, &stable).recoverer(recoverykind);
-    let (pt, errs) = pb.parse_generictree(&lexer);
-    match pt {
-        Some(pt) => println!("{}", pt.pp(&grm, &input)),
-        None => println!("Unable to repair input sufficiently to produce parse tree.\n"),
-    }
-    for e in &errs {
-        println!("{}", e.pp(&lexer, &|t| grm.token_epp(t)));
-    }
-    if !errs.is_empty() {
+
+    if matches.free.len() == 3 {
+        let input_path = PathBuf::from(&matches.free[2]);
+        // If there is only one input file we want to print the generic parse tree.
+        // We also want to handle `-` as stdin.
+        let input = if &matches.free[2] == "-" {
+            let mut s = String::new();
+            std::io::stdin().read_to_string(&mut s).unwrap();
+            s
+        } else {
+            read_file(&matches.free[2])
+        };
+        if let Err(e) = parser_build_ctxt.parse_string(input_path, input) {
+            eprintln!("{}", e);
+            process::exit(1);
+        }
+    } else if let Err(e) = parser_build_ctxt.parse_many(&matches.free[2..]) {
+        eprintln!("{}", e);
         process::exit(1);
+    }
+}
+
+struct ParserBuildCtxt<LexerTypesT>
+where
+    LexerTypesT: LexerTypes,
+    usize: AsPrimitive<LexerTypesT::StorageT>,
+{
+    header: Header<Location>,
+    lexerdef: LRNonStreamingLexerDef<LexerTypesT>,
+    grm: YaccGrammar<LexerTypesT::StorageT>,
+    yacc_y_path: PathBuf,
+    stable: StateTable<LexerTypesT::StorageT>,
+    recoverykind: RecoveryKind,
+}
+
+#[derive(Debug)]
+enum NimbleparseError {
+    Source {
+        // We could consider including the source text here and
+        // using the span error formatting machinery.
+        src_path: PathBuf,
+        errs: Vec<String>,
+    },
+    Glob(glob::GlobError),
+    Pattern(glob::PatternError),
+    Other(Box<dyn Error>),
+}
+
+impl From<glob::GlobError> for NimbleparseError {
+    fn from(it: glob::GlobError) -> Self {
+        NimbleparseError::Glob(it)
+    }
+}
+
+impl From<Box<dyn Error>> for NimbleparseError {
+    fn from(it: Box<dyn Error>) -> Self {
+        NimbleparseError::Other(it)
+    }
+}
+
+impl From<glob::PatternError> for NimbleparseError {
+    fn from(it: glob::PatternError) -> Self {
+        NimbleparseError::Pattern(it)
+    }
+}
+
+impl Error for NimbleparseError {}
+
+impl fmt::Display for NimbleparseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Source { src_path, errs } => {
+                writeln!(f, "While parsing: {}", src_path.display())?;
+                for e in errs {
+                    writeln!(f, "{}", e)?
+                }
+                Ok(())
+            }
+            Self::Glob(e) => {
+                write!(f, "{}", e)
+            }
+            Self::Pattern(e) => {
+                write!(f, "{}", e)
+            }
+            Self::Other(e) => {
+                write!(f, "{}", e)
+            }
+        }
+    }
+}
+
+impl<LexerTypesT> ParserBuildCtxt<LexerTypesT>
+where
+    LexerTypesT: LexerTypes<LexErrorT = LRLexError>,
+    usize: AsPrimitive<LexerTypesT::StorageT>,
+    LexerTypesT::StorageT: TryFrom<usize>,
+{
+    fn parse_string(self, input_path: PathBuf, input_src: String) -> Result<(), NimbleparseError> {
+        let lexer = self.lexerdef.lexer(&input_src);
+        let pb = RTParserBuilder::new(&self.grm, &self.stable).recoverer(self.recoverykind);
+        let (pt, errs) = pb.parse_generictree(&lexer);
+        match pt {
+            Some(pt) => println!("{}", pt.pp(&self.grm, &input_src)),
+            None => println!("Unable to repair input sufficiently to produce parse tree.\n"),
+        }
+        if !errs.is_empty() {
+            return Err(NimbleparseError::Source {
+                src_path: input_path,
+                errs: errs
+                    .iter()
+                    .map(|e| e.pp(&lexer, &|t| self.grm.token_epp(t)))
+                    .collect::<Vec<_>>(),
+            });
+        }
+        Ok(())
+    }
+
+    fn parse_many(self, input_paths: &[String]) -> Result<(), NimbleparseError> {
+        let input_paths = if input_paths.is_empty() {
+            // If given no input paths, try to find some with `test_files` in the header.
+            if let Some(HeaderValue(_, val)) = self.header.get("test_files") {
+                let s = val.expect_string_with_context("'test_files' in %grmtools")?;
+                if let Some(yacc_y_path_dir) = self.yacc_y_path.parent() {
+                    let joined = yacc_y_path_dir.join(s);
+                    let joined = joined.as_os_str().to_str();
+                    if let Some(s) = joined {
+                        let mut paths = glob::glob(s)?.peekable();
+                        if paths.peek().is_none() {
+                            return Err(NimbleparseError::Other(
+                                format!("'test_files' glob '{}' matched no paths", s)
+                                    .to_string()
+                                    .into(),
+                            ));
+                        }
+                        let mut input_paths = Vec::new();
+                        for path in paths {
+                            input_paths.push(path?);
+                        }
+                        input_paths
+                    } else {
+                        return Err(NimbleparseError::Other(
+                            format!(
+                                "Unable to convert joined path to str {} with glob '{}'",
+                                self.yacc_y_path.display(),
+                                s
+                            )
+                            .into(),
+                        ));
+                    }
+                } else {
+                    return Err(NimbleparseError::Other(
+                        format!(
+                            "Unable to find parent path for {}",
+                            self.yacc_y_path.display()
+                        )
+                        .into(),
+                    ));
+                }
+            } else {
+                return Err(NimbleparseError::Other(
+                    "Missing <input file> argument".into(),
+                ));
+            }
+        } else {
+            // Just convert the given arguments to paths.
+            input_paths
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<PathBuf>>()
+        };
+        if input_paths.is_empty() {
+            return Err(NimbleparseError::Other(
+                "Missing <input file> argument".into(),
+            ));
+        }
+        let pb = RTParserBuilder::new(&self.grm, &self.stable).recoverer(self.recoverykind);
+        // Actually parse the given arguments or the `test_files` specified in the grammar.
+        for input_path in input_paths {
+            let input = read_file(&input_path);
+            let lexer = self.lexerdef.lexer(&input);
+            let (pt, errs) = pb.parse_generictree(&lexer);
+            if errs.is_empty() && pt.is_some() {
+                // Since we're parsing many files, don't output all of their parse trees, just print the file name.
+                println!("parsed: {}", input_path.display())
+            } else {
+                if pt.is_none() {
+                    eprintln!(
+                        "Unable to repair input at '{}' sufficiently to produce parse tree.\n",
+                        input_path.display()
+                    );
+                }
+                return Err(NimbleparseError::Source {
+                    src_path: input_path,
+                    errs: errs
+                        .iter()
+                        .map(|e| e.pp(&lexer, &|t| self.grm.token_epp(t)))
+                        .collect::<Vec<_>>(),
+                });
+            }
+        }
+        Ok(())
     }
 }

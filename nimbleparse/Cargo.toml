@@ -21,3 +21,4 @@ lrtable = { path="../lrtable", version="0.13" }
 getopts.workspace = true
 num-traits.workspace = true
 unicode-width.workspace = true
+glob.workspace = true

@@ -1,6 +1,6 @@
 %grmtools{
     yacckind: Original(GenericParseTree),
-    test_files: "input.txt",
+    test_files: "input*.txt",
 }
 %start Expr
 %avoid_insert "INT"

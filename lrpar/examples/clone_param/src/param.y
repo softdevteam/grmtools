@@ -1,6 +1,6 @@
 %grmtools {
     yacckind: Grmtools,
-    test_files: "input.txt",
+    test_files: "input*.txt",
 }
 %expect-unused Unmatched "UNMATCHED"
 %token Incr Decr
