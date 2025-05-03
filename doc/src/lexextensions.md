@@ -26,20 +26,21 @@ other flags should specify their value immediately after the flag name.
 
 ## List of flags:
 
-| Flag                          | Value | Required | Regex[^regex] |
-|-------------------------------|-------|----------|---------------|
-| `posix_escapes`[^†]           | bool  | &cross;  | &cross;       |
-| `allow_wholeline_comment`[^‡] | bool  | &cross;  | &cross;       |
-| `case_insensitive`            | bool  | &cross;  | &checkmark;   |
-| `dot_matches_new_line`        | bool  | &cross;  | &checkmark;   |
-| `multi_line`                  | bool  | &cross;  | &checkmark;   |
-| `octal`                       | bool  | &cross;  | &checkmark;   |
-| `swap_greed`                  | bool  | &cross;  | &checkmark;   |
-| `ignore_whitespace`           | bool  | &cross;  | &checkmark;   |
-| `unicode`                     | bool  | &cross;  | &checkmark;   |
-| `size_limit`                  | usize | &cross;  | &checkmark;   |
-| `dfa_size_limit`              | usize | &cross;  | &checkmark;   |
-| `nest_limit`                  | u32   | &cross;  | &checkmark;   |
+| Flag                          | Value     | Required | Regex[^regex] |
+|-------------------------------|-----------|----------|---------------|
+| `lexerkind`                   | [LexerKind](lexcompatibility.md#lexerkinds) | &cross;  | &cross; |
+| `posix_escapes`[^†]           | bool      | &cross;  | &cross;       |
+| `allow_wholeline_comment`[^‡] | bool      | &cross;  | &cross;       |
+| `case_insensitive`            | bool      | &cross;  | &checkmark;   |
+| `dot_matches_new_line`        | bool      | &cross;  | &checkmark;   |
+| `multi_line`                  | bool      | &cross;  | &checkmark;   |
+| `octal`                       | bool      | &cross;  | &checkmark;   |
+| `swap_greed`                  | bool      | &cross;  | &checkmark;   |
+| `ignore_whitespace`           | bool      | &cross;  | &checkmark;   |
+| `unicode`                     | bool      | &cross;  | &checkmark;   |
+| `size_limit`                  | usize     | &cross;  | &checkmark;   |
+| `dfa_size_limit`              | usize     | &cross;  | &checkmark;   |
+| `nest_limit`                  | u32       | &cross;  | &checkmark;   |
 
 [^†]: Enable compatibility with posix escape sequences.
 [^‡]: Enables rust style `// comments` at the start of lines.

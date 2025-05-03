@@ -61,3 +61,9 @@ There are several major differences between Lex and grmtools:
 
 * Lex treats lines in the rules section beginning with whitespace as code to be copied verbatim
   into the generated lexer source.  Grmtools lex does not support these and produces an error. 
+
+## LexerKinds
+
+### LRNonStreamingLexerKind
+
+Currently lrlex only supports a single `LexKind::LRNonStreamingLexerKind` which is the default if unspecified.
