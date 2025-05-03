@@ -560,3 +560,11 @@ Unable to evaluate expression.
 Unless you have a good reason to do so (e.g. quickly hacking together a grammar
 where you would prefer not to think about error recovery at all), we do not
 recommend turning off error recovery.
+
+## RecoveryKinds
+
+The complete list of `RecoveryKind` values are:
+
+* `CPCTPlus` Error recovery using the `CPCT+` algorithm (the default).
+
+* `None` Error recovery disabled.
