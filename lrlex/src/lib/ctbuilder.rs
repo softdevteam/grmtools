@@ -25,6 +25,7 @@ use cfgrammar::{
     span::Location,
     Spanned,
 };
+use glob::glob;
 use lazy_static::lazy_static;
 use lrpar::{CTParserBuilder, LexerTypes};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
@@ -32,7 +33,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use regex::Regex;
 
-use crate::{DefaultLexerTypes, LRNonStreamingLexerDef, LexFlags, LexerDef};
+use crate::{DefaultLexerTypes, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -61,6 +62,13 @@ impl<T: Clone> TryFrom<&Value<T>> for LexerKind {
                 kind: HeaderErrorKind::ConversionError(
                     "LexerKind",
                     "Expected `LexerKind` found numeric",
+                ),
+                locations: vec![loc.clone()],
+            }),
+            Value::Setting(Setting::String(_, loc)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "LexerKind",
+                    "Expected `LexerKind` found string",
                 ),
                 locations: vec![loc.clone()],
             }),
@@ -220,7 +228,8 @@ impl CTLexerBuilder<'_, DefaultLexerTypes<u32>> {
     }
 }
 
-impl<'a, LexerTypesT: LexerTypes> CTLexerBuilder<'a, LexerTypesT>
+impl<'a, LexerTypesT: LexerTypes<LexErrorT = crate::LRLexError> + 'static>
+    CTLexerBuilder<'a, LexerTypesT>
 where
     LexerTypesT::StorageT:
         'static + Debug + Eq + Hash + PrimInt + Encode + TryFrom<usize> + Unsigned + ToTokens,
@@ -420,13 +429,6 @@ where
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
     pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
-        if let Some(ref lrcfg) = self.lrpar_config {
-            let mut ctp = CTParserBuilder::<LexerTypesT>::new();
-            ctp = lrcfg(ctp);
-            let map = ctp.build()?;
-            self.rule_ids_map = Some(map.token_map().to_owned());
-        }
-
         let lexerp = self
             .lexer_path
             .as_ref()
@@ -471,7 +473,7 @@ where
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
             inspect_lexerkind_cb(lexerkind)?
         }
-        let (mut lexerdef, lex_flags): (Box<dyn LexerDef<LexerTypesT>>, LexFlags) = match lexerkind
+        let (lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) = match lexerkind
         {
             LexerKind::LRNonStreamingLexer => {
                 let lex_flags = LexFlags::try_from(&mut header)?;
@@ -495,10 +497,47 @@ where
                                 .join("\n")
                         })?;
                 let lex_flags = lexerdef.lex_flags().cloned();
-                (Box::new(lexerdef), lex_flags.unwrap())
+                (lexerdef, lex_flags.unwrap())
             }
         };
 
+        if let Some(ref lrcfg) = self.lrpar_config {
+            let mut lexerdef = lexerdef.clone();
+            let mut ctp = CTParserBuilder::<LexerTypesT>::new().inspect_rt(Box::new(
+                move |yacc_header, rtpb, rule_ids_map, grm_path| {
+                    let owned_map = rule_ids_map
+                        .iter()
+                        .map(|(x, y)| (&**x, *y))
+                        .collect::<HashMap<_, _>>();
+                    lexerdef.set_rule_ids(&owned_map);
+                    yacc_header.mark_used(&"test_files".to_string());
+                    let test_glob = yacc_header.get("test_files");
+                    match test_glob {
+                        Some(HeaderValue(_, Value::Setting(Setting::String(test_files, _)))) => {
+                            let path_joined = grm_path.parent().unwrap().join(test_files);
+                            for path in
+                                glob(&path_joined.to_string_lossy()).map_err(|e| e.to_string())?
+                            {
+                                let path = path?;
+                                let input = fs::read_to_string(&path)?;
+                                let l: LRNonStreamingLexer<LexerTypesT> = lexerdef.lexer(&input);
+                                for e in rtpb.parse_noaction(&l) {
+                                    Err(format!("parsing {}: {}", path.display(), e))?
+                                }
+                            }
+                            Ok(())
+                        }
+                        Some(_) => Err("Invalid value for setting 'test_files'".into()),
+                        None => Ok(()),
+                    }
+                },
+            ));
+            ctp = lrcfg(ctp);
+            let map = ctp.build()?;
+            self.rule_ids_map = Some(map.token_map().to_owned());
+        }
+
+        let mut lexerdef = Box::new(lexerdef);
         let unused_header_values = header.unused();
         if !unused_header_values.is_empty() {
             return Err(

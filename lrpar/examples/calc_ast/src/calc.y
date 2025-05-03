@@ -1,4 +1,7 @@
-%grmtools {yacckind: Grmtools}
+%grmtools {
+    yacckind: Grmtools,
+    test_files: "input*.txt",
+}
 %start Expr
 %avoid_insert "INT"
 %expect-unused Unmatched "UNMATCHED"

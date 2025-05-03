@@ -1,0 +1,2 @@
+coment /* */
+nested comment /* /* */ */

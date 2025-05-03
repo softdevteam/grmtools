@@ -14,7 +14,7 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{LexerTypes, RecoveryKind};
+use crate::{LexerTypes, RTParserBuilder, RecoveryKind};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
     header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
@@ -242,6 +242,16 @@ where
     show_warnings: bool,
     visibility: Visibility,
     rust_edition: RustEdition,
+    inspect_rt: Option<
+        Box<
+            dyn for<'b> FnMut(
+                &'b mut Header<Location>,
+                RTParserBuilder<LexerTypesT::StorageT, LexerTypesT>,
+                &'b HashMap<String, LexerTypesT::StorageT>,
+                &PathBuf,
+            ) -> Result<(), Box<dyn Error>>,
+        >,
+    >,
     // test function for inspecting private state
     #[cfg(test)]
     inspect_callback: Option<Box<dyn Fn(RecoveryKind) -> Result<(), Box<dyn Error>>>>,
@@ -289,6 +299,7 @@ where
             show_warnings: true,
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
+            inspect_rt: None,
             #[cfg(test)]
             inspect_callback: None,
             phantom: PhantomData,
@@ -427,6 +438,22 @@ where
         cb: Box<dyn for<'h, 'y> Fn(RecoveryKind) -> Result<(), Box<dyn Error>>>,
     ) -> Self {
         self.inspect_callback = Some(cb);
+        self
+    }
+
+    #[doc(hidden)]
+    pub fn inspect_rt(
+        mut self,
+        cb: Box<
+            dyn for<'b, 'y> FnMut(
+                &'b mut Header<Location>,
+                RTParserBuilder<'y, StorageT, LexerTypesT>,
+                &'b HashMap<String, StorageT>,
+                &PathBuf,
+            ) -> Result<(), Box<dyn Error>>,
+        >,
+    ) -> Self {
+        self.inspect_rt = Some(cb);
         self
     }
 
@@ -648,23 +675,6 @@ where
             cb(self.recoverer.expect("has a default value"))?;
         }
 
-        let unused_keys = header.unused();
-        if !unused_keys.is_empty() {
-            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
-        }
-        let missing_keys = header
-            .missing()
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>();
-        if !missing_keys.is_empty() {
-            return Err(format!(
-                "Required values were missing from the header: {}",
-                missing_keys.join(", ")
-            )
-            .into());
-        }
-
         let rule_ids = grm
             .tokens_map()
             .iter()
@@ -744,6 +754,34 @@ where
                     _ => return Err(Box::new(CTConflictsError { stable })),
                 }
             }
+        }
+
+        if let Some(ref mut inspector_rt) = self.inspect_rt {
+            let rt: RTParserBuilder<'_, StorageT, LexerTypesT> =
+                RTParserBuilder::new(&grm, &stable);
+            let rt = if let Some(rk) = self.recoverer {
+                rt.recoverer(rk)
+            } else {
+                rt
+            };
+            inspector_rt(&mut header, rt, &rule_ids, grmp)?
+        }
+
+        let unused_keys = header.unused();
+        if !unused_keys.is_empty() {
+            return Err(format!("Unused keys in header: {}", unused_keys.join(", ")).into());
+        }
+        let missing_keys = header
+            .missing()
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>();
+        if !missing_keys.is_empty() {
+            return Err(format!(
+                "Required values were missing from the header: {}",
+                missing_keys.join(", ")
+            )
+            .into());
         }
 
         self.output_file(
@@ -860,6 +898,7 @@ where
             show_warnings: self.show_warnings,
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
+            inspect_rt: None,
             #[cfg(test)]
             inspect_callback: None,
             phantom: PhantomData,
@@ -950,6 +989,7 @@ where
             show_warnings,
             visibility,
             rust_edition,
+            inspect_rt: _,
             #[cfg(test)]
                 inspect_callback: _,
             phantom: _,

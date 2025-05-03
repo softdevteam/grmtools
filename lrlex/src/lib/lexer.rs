@@ -202,7 +202,7 @@ pub const UNSPECIFIED_LEX_FLAGS: LexFlags = LexFlags {
     nest_limit: None,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[doc(hidden)]
 pub struct Rule<StorageT> {
     /// If `Some`, this specifies the ID that lexemes resulting from this rule will have. Note that
@@ -388,7 +388,7 @@ where
 
 /// This struct represents, in essence, a .l file in memory. From it one can produce an
 /// [LRNonStreamingLexer] which actually lexes inputs.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LRNonStreamingLexerDef<LexerTypesT: LexerTypes>
 where
     usize: AsPrimitive<LexerTypesT::StorageT>,

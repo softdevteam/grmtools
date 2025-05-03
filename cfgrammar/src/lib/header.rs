@@ -124,6 +124,7 @@ pub enum Setting<T> {
         arg: Namespaced<T>,
     },
     Num(u64, T),
+    String(String, T),
 }
 
 /// Parser for the `%grmtools` section
@@ -178,8 +179,58 @@ impl From<Value<Span>> for Value<Location> {
                     },
                 },
                 Setting::Num(num, num_loc) => Setting::Num(num, num_loc.into()),
+                Setting::String(s, str_loc) => Setting::String(s, str_loc.into()),
             }),
         }
+    }
+}
+
+impl<T> Value<T> {
+    pub fn expect_string_with_context(&self, ctxt: &str) -> Result<&str, Box<dyn Error>> {
+        let found = match self {
+            Value::Flag(_, _) => "bool".to_string(),
+            Value::Setting(Setting::String(s, _)) => {
+                return Ok(s);
+            }
+            Value::Setting(Setting::Num(_, _)) => "numeric".to_string(),
+            Value::Setting(Setting::Unitary(Namespaced {
+                namespace,
+                member: (member, _),
+            })) => {
+                if let Some((ns, _)) = namespace {
+                    format!("'{ns}::{member}'")
+                } else {
+                    format!("'{member}'")
+                }
+            }
+            Value::Setting(Setting::Constructor {
+                ctor:
+                    Namespaced {
+                        namespace: ctor_ns,
+                        member: (ctor_memb, _),
+                    },
+                arg:
+                    Namespaced {
+                        namespace: arg_ns,
+                        member: (arg_memb, _),
+                    },
+            }) => {
+                format!(
+                    "'{}({})'",
+                    if let Some((ns, _)) = ctor_ns {
+                        format!("{ns}::{ctor_memb}")
+                    } else {
+                        arg_memb.to_string()
+                    },
+                    if let Some((ns, _)) = arg_ns {
+                        format!("{ns}::{arg_memb}")
+                    } else {
+                        arg_memb.to_string()
+                    }
+                )
+            }
+        };
+        Err(format!("Expected 'String' value, found {}, at {ctxt}", found).into())
     }
 }
 
@@ -190,6 +241,7 @@ lazy_static! {
         .build()
         .unwrap();
     static ref RE_DIGITS: Regex = Regex::new(r"^[0-9]+").unwrap();
+    static ref RE_STRING: Regex = Regex::new(r#"^\"(\\.|[^"\\])*\""#).unwrap();
 }
 
 const MAGIC: &str = "%grmtools";
@@ -244,38 +296,50 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         i = self.parse_ws(num_span.end());
                         Ok((key_name, key_span, Value::Setting(val), i))
                     }
-                    None => {
-                        let (path_val, j) = self.parse_namespaced(i)?;
-                        i = self.parse_ws(j);
-                        if let Some(j) = self.lookahead_is("(", i) {
-                            let (arg, j) = self.parse_namespaced(j)?;
+                    None => match RE_STRING.find(&self.src[i..]) {
+                        Some(m) => {
+                            let end = i + m.end();
+                            // Trim the leading and trailing quotes.
+                            let str_span = Span::new(i + m.start() + 1, end - 1);
+                            let str = &self.src[str_span.start()..str_span.end()];
+                            let setting = Setting::String(str.to_string(), str_span);
+                            // After the trailing quotes.
+                            i = self.parse_ws(end);
+                            Ok((key_name, key_span, Value::Setting(setting), i))
+                        }
+                        None => {
+                            let (path_val, j) = self.parse_namespaced(i)?;
                             i = self.parse_ws(j);
-                            if let Some(j) = self.lookahead_is(")", i) {
+                            if let Some(j) = self.lookahead_is("(", i) {
+                                let (arg, j) = self.parse_namespaced(j)?;
                                 i = self.parse_ws(j);
+                                if let Some(j) = self.lookahead_is(")", i) {
+                                    i = self.parse_ws(j);
+                                    Ok((
+                                        key_name,
+                                        key_span,
+                                        Value::Setting(Setting::Constructor {
+                                            ctor: path_val,
+                                            arg,
+                                        }),
+                                        i,
+                                    ))
+                                } else {
+                                    Err(HeaderError {
+                                        kind: HeaderErrorKind::ExpectedToken(')'),
+                                        locations: vec![Span::new(i, i)],
+                                    })
+                                }
+                            } else {
                                 Ok((
                                     key_name,
                                     key_span,
-                                    Value::Setting(Setting::Constructor {
-                                        ctor: path_val,
-                                        arg,
-                                    }),
+                                    Value::Setting(Setting::Unitary(path_val)),
                                     i,
                                 ))
-                            } else {
-                                Err(HeaderError {
-                                    kind: HeaderErrorKind::ExpectedToken(')'),
-                                    locations: vec![Span::new(i, i)],
-                                })
                             }
-                        } else {
-                            Ok((
-                                key_name,
-                                key_span,
-                                Value::Setting(Setting::Unitary(path_val)),
-                                i,
-                            ))
                         }
-                    }
+                    },
                 }
             } else {
                 Ok((key_name, key_span, Value::Flag(true, key_span), i))
@@ -489,6 +553,14 @@ impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
                 ),
                 locations: vec![loc.clone()],
             }),
+            Value::Setting(Setting::String(_, loc)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "From<YaccKind>",
+                    "Cannot convert string to YaccKind",
+                ),
+                locations: vec![loc.clone()],
+            }),
+
             Value::Setting(Setting::Unitary(Namespaced {
                 namespace,
                 member: (yk_value, yk_value_loc),

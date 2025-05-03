@@ -5,7 +5,7 @@ use std::{cmp, error::Error, fmt, hash::Hash, marker};
 use cfgrammar::Span;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-pub trait LexerTypes: fmt::Debug
+pub trait LexerTypes: fmt::Debug + Clone
 where
     usize: AsPrimitive<Self::StorageT>,
 {

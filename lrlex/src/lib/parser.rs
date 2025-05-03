@@ -36,7 +36,7 @@ lazy_static! {
 }
 const INITIAL_START_STATE_NAME: &str = "INITIAL";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[doc(hidden)]
 pub struct StartState {
     /// Associated id of this start state - rules which have this start state
