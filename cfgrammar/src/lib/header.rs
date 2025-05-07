@@ -57,6 +57,7 @@ pub enum HeaderErrorKind {
     MissingGrmtoolsSection,
     IllegalName,
     ExpectedToken(char),
+    UnexpectedToken(char, &'static str),
     DuplicateEntry,
     InvalidEntry(&'static str),
     ConversionError(&'static str, &'static str),
@@ -67,7 +68,10 @@ impl fmt::Display for HeaderErrorKind {
         let s = match self {
             HeaderErrorKind::MissingGrmtoolsSection => "Missing %grmtools section",
             HeaderErrorKind::IllegalName => "Illegal name",
-            HeaderErrorKind::ExpectedToken(c) => &format!("Expected token: '{}", c),
+            HeaderErrorKind::ExpectedToken(c) => &format!("Expected token: '{}'", c),
+            HeaderErrorKind::UnexpectedToken(c, hint) => {
+                &format!("Unxpected token: '{}', {} ", c, hint)
+            }
             HeaderErrorKind::InvalidEntry(s) => &format!("Invalid entry: '{}'", s),
             HeaderErrorKind::DuplicateEntry => "Duplicate Entry",
             HeaderErrorKind::ConversionError(t, err_str) => {
@@ -430,7 +434,16 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         break;
                     }
                 }
-                if let Some(i) = self.lookahead_is("}", i) {
+                if let Some(j) = self.lookahead_is("*", i) {
+                    errs.push(HeaderError {
+                        kind: HeaderErrorKind::UnexpectedToken(
+                            '*',
+                            "perhaps this is a glob, in which case it requires string quoting.",
+                        ),
+                        locations: vec![Span::new(i, j)],
+                    });
+                    Err(errs)
+                } else if let Some(i) = self.lookahead_is("}", i) {
                     if errs.is_empty() {
                         Ok((ret, i))
                     } else {
@@ -439,7 +452,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                 } else {
                     errs.push(HeaderError {
                         kind: HeaderErrorKind::ExpectedToken('}'),
-                        locations: vec![Span::new(section_start_pos, self.src.len())],
+                        locations: vec![Span::new(section_start_pos, i)],
                     });
                     Err(errs)
                 }
@@ -470,10 +483,22 @@ impl<'input> GrmtoolsSectionParser<'input> {
                     i + m.end(),
                 ))
             }
-            None => Err(HeaderError {
-                kind: HeaderErrorKind::IllegalName,
-                locations: vec![Span::new(i, i)],
-            }),
+            None => {
+                if self.src[i..].starts_with("*") {
+                    Err(HeaderError {
+                        kind: HeaderErrorKind::UnexpectedToken(
+                            '*',
+                            "perhaps this is a glob, in which case it requires string quoting.",
+                        ),
+                        locations: vec![Span::new(i, i)],
+                    })
+                } else {
+                    Err(HeaderError {
+                        kind: HeaderErrorKind::IllegalName,
+                        locations: vec![Span::new(i, i)],
+                    })
+                }
+            }
         }
     }
 
@@ -695,6 +720,27 @@ mod test {
             assert_eq!(errs.len(), 1);
             assert_eq!(errs[0].kind, HeaderErrorKind::DuplicateEntry);
             assert_eq!(errs[0].locations.len(), 3);
+        }
+    }
+
+    #[test]
+    fn test_unquoted_globs() {
+        let srcs = [
+            "%grmtools {test_files: *.test,}",
+            "%grmtools {test_files: foo*.test,}",
+        ];
+        for src in srcs {
+            let parser = GrmtoolsSectionParser::new(src, true);
+            let res = parser.parse();
+            let errs = res.unwrap_err();
+            assert_eq!(errs.len(), 1);
+            match errs[0] {
+                HeaderError {
+                    kind: HeaderErrorKind::UnexpectedToken('*', _),
+                    locations: _,
+                } => (),
+                _ => panic!("Expected glob specific error"),
+            }
         }
     }
 }
