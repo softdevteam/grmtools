@@ -682,11 +682,27 @@ mod test {
 
     #[test]
     fn test_header_missing_curly_bracket() {
-        let src = "%grmtools { a, b";
-        for flag in [true, false] {
-            let parser = GrmtoolsSectionParser::new(src, flag);
-            let res = parser.parse();
-            assert!(res.is_err());
+        let srcs = [
+            "%grmtools { a",
+            "%grmtools { a, b",
+            "%grmtools { a, b,",
+            "%grmtools { yacckind",
+            "%grmtools { yacckind:",
+            "%grmtools { yacckind: GrmTools",
+            "%grmtools { yacckind: GrmTools,",
+            r#"%grmtools { test_files: ""#,
+            r#"%grmtools { test_files: "test"#,
+            r#"%grmtools { test_files: "test""#,
+            r#"%grmtools { test_files: "test","#,
+            "%grmtools { !flag",
+            "%grmtools { !flag,",
+        ];
+        for src in srcs {
+            for flag in [true, false] {
+                let parser = GrmtoolsSectionParser::new(src, flag);
+                let res = parser.parse();
+                assert!(res.is_err());
+            }
         }
     }
 
