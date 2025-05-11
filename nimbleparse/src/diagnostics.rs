@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display, path::Path, str::FromStr};
+use std::{cell::OnceCell, error::Error, fmt::Display, path::Path};
 
 use cfgrammar::{
     newlinecache::NewlineCache,
@@ -16,7 +16,7 @@ use unicode_width::UnicodeWidthStr;
 pub struct SpannedDiagnosticFormatter<'a> {
     src: &'a str,
     path: &'a Path,
-    nlc: NewlineCache,
+    nlc: OnceCell<NewlineCache>,
 }
 
 fn pidx_prods_data<StorageT>(ast: &GrammarAST, pidx: PIdx<StorageT>) -> (Vec<String>, Vec<Span>)
@@ -36,11 +36,19 @@ where
 
 impl<'a> SpannedDiagnosticFormatter<'a> {
     #[allow(clippy::result_unit_err)]
-    pub fn new(src: &'a str, path: &'a Path) -> Result<Self, ()> {
-        Ok(Self {
+    pub fn new(src: &'a str, path: &'a Path) -> Self {
+        Self {
             src,
             path,
-            nlc: NewlineCache::from_str(src)?,
+            nlc: OnceCell::new(),
+        }
+    }
+
+    pub fn nlc(&self) -> &NewlineCache {
+        self.nlc.get_or_init(|| {
+            let mut nlc = NewlineCache::new();
+            nlc.feed(self.src);
+            nlc
         })
     }
 
@@ -60,7 +68,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
     pub fn file_location_msg(&self, msg: &str, span: Option<Span>) -> String {
         if let Some(span) = span {
             let (line, col) = self
-                .nlc
+                .nlc()
                 .byte_to_line_num_and_col_num(self.src, span.start())
                 .unwrap_or((0, 0));
             format!("{} at {}:{line}:{col}", msg, self.path.display())
@@ -85,11 +93,11 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
         underline_c: char,
     ) -> String {
         let mut out = String::new();
-        let (start_byte, end_byte) = self.nlc.span_line_bytes(span);
+        let (start_byte, end_byte) = self.nlc().span_line_bytes(span);
         // Produce an underline underneath a span which may cover multiple lines, and a message on the last line.
         let mut source_lines = self.src[start_byte..end_byte].lines().peekable();
         while let Some(source_line) = source_lines.next() {
-            let (line_start_byte, _) = self.nlc.span_line_bytes(span);
+            let (line_start_byte, _) = self.nlc().span_line_bytes(span);
             let span_offset_from_start = span.start() - line_start_byte;
 
             // An underline bounded by the current line.
@@ -99,7 +107,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                     .min(span.start() + (source_line.len() - span_offset_from_start)),
             );
             let (line_num, _) = self
-                .nlc
+                .nlc()
                 .byte_to_line_num_and_col_num(self.src, span.start())
                 .expect("Span must correlate to a line in source");
             // Print the line_num/source text for the line.
@@ -137,13 +145,13 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
         let mut spans = e.spans().iter().enumerate().peekable();
         while let Some((span_num, span)) = spans.next() {
             let (line, _) = self
-                .nlc
+                .nlc()
                 .byte_to_line_num_and_col_num(self.src, span.start())
                 .unwrap_or((0, 0));
             let next_line = spans
                 .peek()
                 .map(|(_, span)| span)
-                .map(|s| self.nlc.byte_to_line_num(s.start()).unwrap_or(line))
+                .map(|s| self.nlc().byte_to_line_num(s.start()).unwrap_or(line))
                 .unwrap_or(line);
             // Is this line contiguous with the next, if not prefix it with dots.
             let dots = if next_line - line > 1 { "..." } else { "" };
@@ -180,7 +188,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
     ) -> String {
         let mut lines = spans
             .clone()
-            .map(|span| self.nlc.span_line_bytes(span))
+            .map(|span| self.nlc().span_line_bytes(span))
             .collect::<Vec<_>>();
         lines.dedup();
         assert!(lines.len() == 1);
@@ -192,10 +200,10 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
         //       ____      ___
         // indent    indent
         let (line_at_start, _) = self
-            .nlc
+            .nlc()
             .byte_to_line_num_and_col_num(self.src, first_span.start())
             .expect("Span should correlate to a line in source");
-        let (line_start_byte, end_byte) = self.nlc.span_line_bytes(*first_span);
+        let (line_start_byte, end_byte) = self.nlc().span_line_bytes(*first_span);
         // Print the line_num/source text for the line.
         out.push_str(&format!(
             "{}| {}\n",
@@ -304,7 +312,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
 
             let mut prod_lines = r_prod_spans
                 .iter()
-                .map(|span| self.nlc.span_line_bytes(*span))
+                .map(|span| self.nlc().span_line_bytes(*span))
                 .collect::<Vec<_>>();
             prod_lines.sort();
             prod_lines.dedup();
@@ -312,7 +320,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             for lines in &prod_lines {
                 let mut spans_on_line = Vec::new();
                 for span in &r_prod_spans {
-                    if lines == &self.nlc.span_line_bytes(*span) {
+                    if lines == &self.nlc().span_line_bytes(*span) {
                         spans_on_line.push(*span)
                     }
                 }
@@ -375,7 +383,7 @@ mod test {
     fn underline_multiline_span_test() {
         let s = "\naaaaaabbb\nbbb\nbbbb\n";
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(s, &test_path).unwrap();
+        let formatter = SpannedDiagnosticFormatter::new(s, &test_path);
 
         let span = Span::new(7, 7 + 12);
         let out = format!(
@@ -413,7 +421,7 @@ mod test {
     fn underline_single_line_span_test() {
         let s = "\naaaaaabbb bbb bbbb\n";
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(s, &test_path).unwrap();
+        let formatter = SpannedDiagnosticFormatter::new(s, &test_path);
 
         let span = Span::new(7, 7 + 12);
         let out = format!(
@@ -442,7 +450,7 @@ mod test {
     fn span_prefix() {
         let s = "\naaaaaabbb\nbbb\nbbbb\n";
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(s, &test_path).unwrap();
+        let formatter = SpannedDiagnosticFormatter::new(s, &test_path);
         // For raw string alignment.
         let mut out = String::from("\n");
         // On occasion we want dots to signal that the lines are not contiguous.
@@ -473,7 +481,7 @@ mod test {
     fn span_prefix_2() {
         let s = "\n\n\n\n\n\n\n\n\n\n\naaaaaabbb\nbbb\nbbbb\n";
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(s, &test_path).unwrap();
+        let formatter = SpannedDiagnosticFormatter::new(s, &test_path);
         let mut out = String::from("\n");
         // On occasion we want dots to signal that the lines are not contiguous.
         out.push_str(&formatter.prefixed_underline_span_with_text(
@@ -504,7 +512,7 @@ mod test {
         let crabs = " 🦀🦀🦀 ";
         let crustaceans = format!("\"{crabs}\n{crabs}\"");
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(&crustaceans, &test_path).unwrap();
+        let formatter = SpannedDiagnosticFormatter::new(&crustaceans, &test_path);
         // For raw string alignment.
         let mut out = String::from("\n");
         out.push_str(&formatter.underline_span_with_text(
@@ -528,7 +536,7 @@ mod test {
         let lobster = "🦞";
         let crustaceans = format!("{crab}{lobster}{crab}{crab}{lobster}");
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(&crustaceans, &test_path).unwrap();
+        let formatter = SpannedDiagnosticFormatter::new(&crustaceans, &test_path);
         // For raw string alignment.
         let mut out = String::from("\n");
         out.push_str(&formatter.prefixed_underline_span_with_text(
@@ -560,7 +568,7 @@ mod test {
     fn underline_single_line_spans_test() {
         let s = "\naaaaaabbb bbb bbbb\n";
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(s, &test_path).unwrap();
+        let formatter = SpannedDiagnosticFormatter::new(s, &test_path);
         let spans = [(7, 10), (11, 14), (15, 19)]
             .iter()
             .map(|(i, j): &(usize, usize)| Span::new(*i, *j));
@@ -617,7 +625,7 @@ mod test {
         let lobster = "🦞";
         let crustaceans = format!("{crab}{lobster}{crab}{lobster}");
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(&crustaceans, &test_path).unwrap();
+        let formatter = SpannedDiagnosticFormatter::new(&crustaceans, &test_path);
         // For raw string alignment.
         let mut out = String::from("\n");
         let spans = [
