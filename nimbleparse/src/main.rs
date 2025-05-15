@@ -141,12 +141,12 @@ fn main() {
     };
     let entry = match header.entry("yacckind".to_string()) {
         Entry::Occupied(_) => unreachable!("Header should be empty"),
-        Entry::Vacant(v) => v.occupied_entry(),
+        Entry::Vacant(v) => v,
     };
     match matches.opt_str("y") {
         None => {}
         Some(s) => {
-            entry.insert(HeaderValue(
+            entry.insert_entry(HeaderValue(
                 Location::CommandLine,
                 Value::try_from(match &*s.to_lowercase() {
                     "eco" => YaccKind::Eco,
