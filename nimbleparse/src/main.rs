@@ -1,7 +1,7 @@
 mod diagnostics;
 use crate::diagnostics::*;
 use cfgrammar::{
-    header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Value},
     markmap::Entry,
     yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
     Location, Span,
@@ -141,12 +141,12 @@ fn main() {
     };
     let entry = match header.entry("yacckind".to_string()) {
         Entry::Occupied(_) => unreachable!("Header should be empty"),
-        Entry::Vacant(v) => v.occupied_entry(),
+        Entry::Vacant(v) => v,
     };
     match matches.opt_str("y") {
         None => {}
         Some(s) => {
-            entry.insert(HeaderValue(
+            entry.insert_entry(HeaderValue(
                 Location::CommandLine,
                 Value::try_from(match &*s.to_lowercase() {
                     "eco" => YaccKind::Eco,
@@ -165,13 +165,13 @@ fn main() {
 
     let lex_l_path = PathBuf::from(&matches.free[0]);
     let lex_src = read_file(&lex_l_path);
+    let lex_diag = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path);
     let mut lexerdef = match LRNonStreamingLexerDef::<DefaultLexerTypes<u32>>::from_str(&lex_src) {
         Ok(ast) => ast,
         Err(errs) => {
-            let formatter = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path).unwrap();
-            eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
+            eprintln!("{ERROR}{}", lex_diag.file_location_msg("", None));
             for e in errs {
-                eprintln!("{}", indent(&formatter.format_error(e).to_string(), "    "));
+                eprintln!("{}", indent(&lex_diag.format_error(e).to_string(), "    "));
             }
             process::exit(1);
         }
@@ -179,6 +179,7 @@ fn main() {
 
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
+    let yacc_diag = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path);
     let yk_val = header.get("yacckind");
     if yk_val.is_none() {
         let parsed_header = GrmtoolsSectionParser::new(&yacc_src, true).parse();
@@ -190,12 +191,12 @@ fn main() {
             }
             Err(errs) => {
                 eprintln!(
-                    "Error(s) parsing `%grmtools` section:\n {}\n",
-                    errs.iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<_>>()
-                        .join("\n")
+                    "{ERROR}{}",
+                    yacc_diag.file_location_msg(" parsing the `%grmtools` section:", None)
                 );
+                for e in errs {
+                    eprintln!("{}", indent(&yacc_diag.format_error(e).to_string(), "    "));
+                }
                 std::process::exit(1);
             }
         }
@@ -211,7 +212,25 @@ fn main() {
     let recoverykind = if let Some(HeaderValue(_, rk_val)) = header.get("recoverer") {
         match RecoveryKind::try_from(rk_val) {
             Err(e) => {
-                eprintln!("{e}");
+                eprintln!(
+                    "{ERROR}{}",
+                    yacc_diag.file_location_msg(" parsing the `%grmtools` section:", None)
+                );
+                let spanned_e: HeaderError<Span> = HeaderError {
+                    kind: e.kind,
+                    locations: e
+                        .locations
+                        .iter()
+                        .map(|l| match l {
+                            Location::Span(span) => *span,
+                            _ => unreachable!("All reachable errors should contain spans"),
+                        })
+                        .collect::<Vec<_>>(),
+                };
+                eprintln!(
+                    "{}",
+                    indent(&yacc_diag.format_error(spanned_e).to_string(), "    ")
+                );
                 process::exit(1)
             }
             Ok(rk) => rk,
@@ -222,28 +241,24 @@ fn main() {
     };
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(&ast_validation);
-    let mut yacc_diagnostic_formatter: Option<SpannedDiagnosticFormatter> = None;
     let grm = match res {
         Ok(x) => {
             if !warnings.is_empty() {
-                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
-                eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
+                eprintln!("{WARNING}{}", yacc_diag.file_location_msg("", None));
                 for w in warnings {
-                    eprintln!("{}", indent(&formatter.format_warning(w), "    "));
+                    eprintln!("{}", indent(&yacc_diag.format_warning(w), "    "));
                 }
-                yacc_diagnostic_formatter = Some(formatter);
             }
             x
         }
         Err(errs) => {
-            let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
-            eprintln!("{ERROR}{}", formatter.file_location_msg("", None));
+            eprintln!("{ERROR}{}", yacc_diag.file_location_msg("", None));
             for e in errs {
-                eprintln!("{}", indent(&e.to_string(), "    "));
+                eprintln!("{}", indent(&yacc_diag.format_error(e).to_string(), "    "));
             }
-            eprintln!("{WARNING}{}", formatter.file_location_msg("", None));
+            eprintln!("{WARNING}{}", yacc_diag.file_location_msg("", None));
             for w in warnings {
-                eprintln!("{}", indent(&formatter.format_warning(w), "    "));
+                eprintln!("{}", indent(&yacc_diag.format_warning(w), "    "));
             }
             process::exit(1);
         }
@@ -262,14 +277,6 @@ fn main() {
 
     if !quiet {
         if let Some(c) = stable.conflicts() {
-            let formatter = if let Some(yacc_diagnostic_formatter) = &yacc_diagnostic_formatter {
-                yacc_diagnostic_formatter
-            } else {
-                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
-                yacc_diagnostic_formatter = Some(formatter);
-                yacc_diagnostic_formatter.as_ref().unwrap()
-            };
-
             let pp_rr = if let Some(i) = grm.expectrr() {
                 i != c.rr_len()
             } else {
@@ -289,7 +296,7 @@ fn main() {
             if (pp_rr || pp_sr) && !dump_state_graph {
                 println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
             }
-            formatter.handle_conflicts::<DefaultLexerTypes<u32>>(
+            yacc_diag.handle_conflicts::<DefaultLexerTypes<u32>>(
                 &grm,
                 ast_validation.ast(),
                 c,
@@ -303,19 +310,18 @@ fn main() {
     {
         if !quiet {
             if let Some(token_spans) = missing_from_lexer {
-                let formatter = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path).unwrap();
                 let warn_indent = " ".repeat(WARNING.len());
                 eprintln!(
                     "{WARNING} these tokens are not referenced in the lexer but defined as follows"
                 );
                 eprintln!(
                     "{warn_indent} {}",
-                    formatter.file_location_msg("in the grammar", None)
+                    yacc_diag.file_location_msg("in the grammar", None)
                 );
                 for span in token_spans {
                     eprintln!(
                         "{}",
-                        formatter.underline_span_with_text(
+                        yacc_diag.underline_span_with_text(
                             span,
                             "Missing from lexer".to_string(),
                             '^'
@@ -325,19 +331,18 @@ fn main() {
                 eprintln!();
             }
             if let Some(token_spans) = missing_from_parser {
-                let formatter = SpannedDiagnosticFormatter::new(&lex_src, &lex_l_path).unwrap();
                 let err_indent = " ".repeat(ERROR.len());
                 eprintln!(
                     "{ERROR} these tokens are not referenced in the grammar but defined as follows"
                 );
                 eprintln!(
                     "{err_indent} {}",
-                    formatter.file_location_msg("in the lexer", None)
+                    lex_diag.file_location_msg("in the lexer", None)
                 );
                 for span in token_spans {
                     eprintln!(
                         "{}",
-                        formatter.underline_span_with_text(
+                        lex_diag.underline_span_with_text(
                             span,
                             "Missing from parser".to_string(),
                             '^'

@@ -3,7 +3,7 @@ use crate::{
     yacc::{
         parser::SpansKind, YaccGrammarError, YaccGrammarErrorKind, YaccKind, YaccOriginalActionKind,
     },
-    Location, Span,
+    Location, Span, Spanned,
 };
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
@@ -35,6 +35,15 @@ impl From<HeaderError<Span>> for YaccGrammarError {
             kind: YaccGrammarErrorKind::Header(e.kind, e.spanskind()),
             spans: e.locations,
         }
+    }
+}
+
+impl Spanned for HeaderError<Span> {
+    fn spans(&self) -> &[Span] {
+        self.locations.as_slice()
+    }
+    fn spanskind(&self) -> SpansKind {
+        self.spanskind()
     }
 }
 
