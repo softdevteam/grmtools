@@ -123,9 +123,12 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                 )
             ));
             // Add underline upto the end of line.
-            out.push_str(&(underline_c.to_string()).repeat(UnicodeWidthStr::width(
-                &self.src[underline_span.start()..underline_span.end().max(1)],
-            )));
+            out.push_str(
+                &(underline_c.to_string()).repeat(
+                    UnicodeWidthStr::width(&self.src[underline_span.start()..underline_span.end()])
+                        .max(1),
+                ),
+            );
 
             if source_lines.peek().is_none() {
                 // If we're at the end print the message.
@@ -648,6 +651,27 @@ mod test {
             r"
 1| 🦀🦞🦀🦞
      ^^  ^^ Not crabs"
+        );
+    }
+
+    #[test]
+    fn underline_zero_length() {
+        let s = r#"Error is between the quotes "" there"#;
+        let test_path = PathBuf::from("test");
+        let formatter = SpannedDiagnosticFormatter::new(&s, &test_path);
+        let mut out = String::from("\n");
+        let pos = s.find("\"").unwrap() + 1;
+        out.push_str(&formatter.prefixed_underline_span_with_text(
+            "",
+            Span::new(pos, pos),
+            "Here".to_string(),
+            '^',
+        ));
+        assert_eq!(
+            out,
+            r#"
+1| Error is between the quotes "" there
+                                ^ Here"#
         );
     }
 }
