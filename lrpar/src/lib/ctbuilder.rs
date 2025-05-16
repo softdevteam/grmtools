@@ -522,7 +522,7 @@ where
 
         match header.entry("yacckind".to_string()) {
             Entry::Occupied(_) => unreachable!(),
-            Entry::Vacant(v) => match self.yacckind {
+            Entry::Vacant(mut v) => match self.yacckind {
                 Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
                 Some(yk) => {
                     let yk_value = Value::try_from(yk)?;
@@ -533,7 +533,7 @@ where
                     o.set_merge_behavior(MergeBehavior::Ours);
                 }
                 None => {
-                    v.occupied_entry().mark_required();
+                    v.mark_required();
                 }
             },
         }
