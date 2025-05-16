@@ -122,19 +122,41 @@ impl<'a, K: Ord + Clone, V> VacantEntry<'a, K, V> {
         }
     }
 
-    /// Inserts the key into the `MarkMap`.
-    ///
-    /// If you want to insert a value into the `MarkMap` use `insert` or `insert_entry` instead.
-    /// This function can be used if you want to mark a vacant key as `required` or `used`.
-    pub fn occupied_entry(self) -> OccupiedEntry<'a, K, V> {
+    /// Marks the key associated with this entry as required.
+    pub fn mark_required(&mut self) {
         match self.pos {
             Ok(pos) => {
-                self.map.contents[pos].2 = None;
-                OccupiedEntry { pos, map: self.map }
+                let repr = self.map.contents[pos].1;
+                self.map.contents[pos].1 = repr | Mark::Required.repr();
             }
             Err(pos) => {
-                self.map.contents.insert(pos, (self.key, 0, None));
-                OccupiedEntry { pos, map: self.map }
+                self.map
+                    .contents
+                    .insert(pos, (self.key.clone(), Mark::Required.repr(), None));
+                self.pos = Ok(pos)
+            }
+        }
+    }
+
+    /// Sets the merge behavior for the key associated with this entry.
+    pub fn set_merge_behavior(&mut self, mb: MergeBehavior) {
+        match self.pos {
+            Ok(pos) => {
+                let merge_reprs = Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr()
+                    | Mark::MergeBehavior(MergeBehavior::Ours).repr()
+                    | Mark::MergeBehavior(MergeBehavior::Theirs).repr();
+                let mut repr = self.map.contents[pos].1;
+                // Zap just the MergeBehavior bits.
+                repr ^= repr & merge_reprs;
+                repr |= Mark::MergeBehavior(mb).repr();
+                self.map.contents[pos].1 = repr;
+            }
+            Err(pos) => {
+                self.map.contents.insert(
+                    pos,
+                    (self.key.clone(), Mark::MergeBehavior(mb).repr(), None),
+                );
+                self.pos = Ok(pos)
             }
         }
     }
@@ -208,6 +230,9 @@ pub struct OccupiedEntry<'a, K, V> {
 /// A view into a vacant entry in a `MarkMap`. It is part of the `Entry` enum.
 #[doc(hidden)]
 pub struct VacantEntry<'a, K, V> {
+    // The values of the `pos` result imply:
+    // * When `Ok(pos)` the key was found at `pos`, and it's value was `None`.
+    // * When `Err(pos)` the key was not found at `pos`.
     pos: Result<usize, usize>,
     key: K,
     map: &'a mut MarkMap<K, V>,
@@ -904,5 +929,69 @@ mod test {
             mm.into_iter().collect::<Vec<_>>(),
             vec![(&"a", &"mm"), (&"b", &"mm2"), (&"x", &"mm2")]
         );
+    }
+
+    #[test]
+    fn test_vacant_entry_required() {
+        let mut mm = MarkMap::new();
+        // To test the first case we want a marked key with no value associated to it.
+        mm.mark_used(&"a");
+        let e = mm.entry("a");
+        match e {
+            Entry::Occupied(_) => panic!("Expected unoccupied entry"),
+            Entry::Vacant(mut e) => {
+                e.mark_required();
+                e.insert_entry("a");
+            }
+        }
+        assert!(mm.is_required(&"a"));
+        assert!(mm.is_used(&"a"));
+        // For the second case we want an unmarked key with another key in it's binary search pos.
+        mm.insert("c", "c");
+        let e = mm.entry("b");
+        match e {
+            Entry::Occupied(_) => panic!("Expected unoccupied entry"),
+            Entry::Vacant(mut e) => {
+                e.mark_required();
+            }
+        }
+        assert!(mm.is_required(&"b"));
+        assert!(!mm.is_required(&"c"));
+    }
+
+    #[test]
+    fn test_vacant_entry_merge_behavior() {
+        let mut mm = MarkMap::new();
+        // To test the first case we want a marked key with no value associated to it.
+        mm.mark_used(&"a");
+        let mut mm2 = MarkMap::new();
+        mm2.insert("a", "a2");
+        mm2.insert("a", "c2");
+        let e = mm.entry("a");
+        match e {
+            Entry::Occupied(_) => panic!("Expected unoccupied entry"),
+            Entry::Vacant(mut e) => {
+                e.set_merge_behavior(MergeBehavior::Ours);
+                e.insert_entry("a1");
+            }
+        }
+        assert_eq!(
+            mm.get_mark(&"a"),
+            Some(Mark::MergeBehavior(MergeBehavior::Ours).repr() | Mark::Used.repr())
+        );
+        // For the second case we want an unmarked key with another key in it's binary search pos.
+        mm.insert("c", "c");
+        let e = mm.entry("b");
+        match e {
+            Entry::Occupied(_) => panic!("Expected unoccupied entry"),
+            Entry::Vacant(mut e) => {
+                e.set_merge_behavior(MergeBehavior::Theirs);
+            }
+        }
+        assert_eq!(
+            mm.get_mark(&"b"),
+            Some(Mark::MergeBehavior(MergeBehavior::Theirs).repr())
+        );
+        assert_eq!(mm.get_mark(&"c"), Some(0));
     }
 }
