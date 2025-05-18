@@ -1,5 +1,6 @@
 use std::{cell::OnceCell, error::Error, fmt::Display, path::Path};
 
+use crate::LexerTypes;
 use cfgrammar::{
     newlinecache::NewlineCache,
     yacc::{
@@ -9,7 +10,6 @@ use cfgrammar::{
     },
     PIdx, Span, Spanned,
 };
-use lrpar::LexerTypes;
 use lrtable::statetable::Conflicts;
 use unicode_width::UnicodeWidthStr;
 

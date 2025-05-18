@@ -40,6 +40,7 @@ serde = { workspace = true, features = ["derive"], optional = true }
 vob.workspace = true
 syn.workspace = true
 prettyplease.workspace = true
+unicode-width.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-time = "1.1.0"

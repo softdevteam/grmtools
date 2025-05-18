@@ -195,6 +195,8 @@
 mod cpctplus;
 #[doc(hidden)]
 pub mod ctbuilder;
+#[doc(hidden)]
+pub mod diagnostics;
 mod dijkstra;
 #[doc(hidden)]
 pub mod lex_api;

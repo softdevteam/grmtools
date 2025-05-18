@@ -1,5 +1,3 @@
-mod diagnostics;
-use crate::diagnostics::*;
 use cfgrammar::{
     header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Value},
     markmap::Entry,
@@ -9,6 +7,7 @@ use cfgrammar::{
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRLexError, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{
+    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
     parser::{RTParserBuilder, RecoveryKind},
     LexerTypes,
 };
@@ -54,6 +53,16 @@ fn read_file<P: AsRef<Path>>(path: P) -> String {
     s
 }
 
+/// Indents a multi-line string and trims any trailing newline.
+/// This currently assumes that indentation on blank lines does not matter.
+///
+/// The algorithm used by this function is:
+/// 1. Prefix `s` with the indentation, indenting the first line.
+/// 2. Trim any trailing newlines.
+/// 3. Replace all newlines with `\n{indent}`` to indent all lines after the first.
+///
+/// It is plausible that we should a step 4, but currently do not:
+/// 4. Replace all `\n{indent}\n` with `\n\n`
 fn indent(s: &str, indent: &str) -> String {
     format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }

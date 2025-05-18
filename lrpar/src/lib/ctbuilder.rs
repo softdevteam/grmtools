@@ -14,14 +14,16 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{LexerTypes, RTParserBuilder, RecoveryKind};
+use crate::{
+    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
+    LexerTypes, RTParserBuilder, RecoveryKind,
+};
 use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
 use cfgrammar::{
     header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
     markmap::{Entry, MergeBehavior},
-    newlinecache::NewlineCache,
     yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
-    Location, RIdx, Spanned, Symbol,
+    Location, RIdx, Symbol,
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
@@ -38,6 +40,9 @@ const ACTIONS_KIND_PREFIX: &str = "Ak";
 const ACTIONS_KIND_HIDDEN: &str = "__GtActionsKindHidden";
 
 const RUST_FILE_EXT: &str = "rs";
+
+const WARNING: &str = "[Warning]";
+const ERROR: &str = "[Error]";
 
 lazy_static! {
     static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
@@ -561,15 +566,18 @@ where
 
         let inc =
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
+        let yacc_diag = SpannedDiagnosticFormatter::new(&inc, grmp);
         let parsed_header = GrmtoolsSectionParser::new(&inc, false).parse();
         if let Err(errs) = parsed_header {
-            return Err(format!(
-                "Error parsing `%grmtools` section:\n{}",
-                errs.iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ))?;
+            let mut out = String::new();
+            out.push_str(&format!(
+                "\n{ERROR}{}\n",
+                yacc_diag.file_location_msg(" parsing the `%grmtools` section", None)
+            ));
+            for e in errs {
+                out.push_str(&indent(&yacc_diag.format_error(e).to_string(), "     "));
+            }
+            return Err(ErrorString(out))?;
         }
         let (parsed_header, _) = parsed_header.unwrap();
         header.merge_from(parsed_header)?;
@@ -596,77 +604,51 @@ where
         }
         self.yacckind = Some(ast_validation.yacc_kind());
         let warnings = ast_validation.ast().warnings();
-        let loc_fmt = |err_str, loc, inc: &str, line_cache: &NewlineCache| match loc {
-            Location::Span(span) => {
-                if let Some((line, column)) =
-                    line_cache.byte_to_line_num_and_col_num(inc, span.start())
-                {
-                    format!("{} at line {line} column {column}", err_str)
-                } else {
-                    err_str
-                }
-            }
-            Location::CommandLine => {
-                format!("{} from the command-line.", err_str)
-            }
-            Location::Other(s) => {
-                format!("{} from '{}'", err_str, s)
-            }
-        };
-        let spanned_fmt = |x: &dyn Spanned, inc: &str, line_cache: &NewlineCache| {
-            loc_fmt(x.to_string(), Location::Span(x.spans()[0]), inc, line_cache)
-        };
-
         let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
         let grm = match res {
             Ok(_) if self.warnings_are_errors && !warnings.is_empty() => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                return Err(ErrorString(if warnings.len() > 1 {
-                    // Indent under the "Error:" prefix.
-                    format!(
-                        "\n\t{}",
-                        warnings
-                            .iter()
-                            .map(|w| spanned_fmt(w, &inc, &line_cache))
-                            .collect::<Vec<_>>()
-                            .join("\n\t")
-                    )
-                } else {
-                    spanned_fmt(warnings.first().unwrap(), &inc, &line_cache)
-                }))?;
+                let mut out = String::new();
+                out.push_str(&format!(
+                    "\n{ERROR}{}\n",
+                    yacc_diag.file_location_msg("", None)
+                ));
+                for e in warnings {
+                    out.push_str(&format!(
+                        "{}\n",
+                        indent(&yacc_diag.format_warning(e).to_string(), "    ")
+                    ));
+                }
+                return Err(ErrorString(out))?;
             }
             Ok(grm) => {
                 if !warnings.is_empty() {
-                    let mut line_cache = NewlineCache::new();
-                    line_cache.feed(&inc);
                     for w in warnings {
+                        let ws_loc = yacc_diag.file_location_msg("", None);
+                        let ws = indent(&yacc_diag.format_warning(w).to_string(), "    ");
                         // Assume if this variable is set we are running under cargo.
                         if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
-                            println!("cargo:warning={}", spanned_fmt(&w, &inc, &line_cache));
+                            println!("cargo:warning={}", ws_loc);
+                            println!("cargo:warning={}", ws);
                         } else if self.show_warnings {
-                            eprintln!("{}", spanned_fmt(&w, &inc, &line_cache));
+                            eprintln!("{}", ws_loc);
+                            eprintln!("{WARNING} {}", ws);
                         }
                     }
                 }
                 grm
             }
             Err(errs) => {
-                let mut line_cache = NewlineCache::new();
-                line_cache.feed(&inc);
-                return Err(ErrorString(if errs.len() + warnings.len() > 1 {
-                    // Indent under the "Error:" prefix.
-                    format!(
-                        "\n\t{}",
-                        errs.iter()
-                            .map(|e| spanned_fmt(e, &inc, &line_cache))
-                            .chain(warnings.iter().map(|w| spanned_fmt(w, &inc, &line_cache)))
-                            .collect::<Vec<_>>()
-                            .join("\n\t")
-                    )
-                } else {
-                    spanned_fmt(errs.first().unwrap(), &inc, &line_cache)
-                }))?;
+                let mut out = String::new();
+                out.push_str(&format!(
+                    "\n{ERROR}{}\n",
+                    yacc_diag.file_location_msg("", None)
+                ));
+                for e in errs {
+                    out.push_str(&indent(&yacc_diag.format_error(e).to_string(), "     "));
+                    out.push('\n');
+                }
+
+                return Err(ErrorString(out))?;
             }
         };
 
@@ -751,6 +733,8 @@ where
                     (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
                     (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
                     (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
+                    // TODO change SpannedDiagnosticsFormatter::handle_conflicts to return
+                    // a string instead of using eprintln directly, then use that here.
                     _ => return Err(Box::new(CTConflictsError { stable })),
                 }
             }
@@ -1545,6 +1529,20 @@ where
         }
         None
     }
+}
+
+/// Indents a multi-line string and trims any trailing newline.
+/// This currently assumes that indentation on blank lines does not matter.
+///
+/// The algorithm used by this function is:
+/// 1. Prefix `s` with the indentation, indenting the first line.
+/// 2. Trim any trailing newlines.
+/// 3. Replace all newlines with `\n{indent}`` to indent all lines after the first.
+///
+/// It is plausible that we should a step 4, but currently do not:
+/// 4. Replace all `\n{indent}\n` with `\n\n`
+fn indent(s: &str, indent: &str) -> String {
+    format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }
 
 // Tests dealing with the filesystem not supported under wasm32
