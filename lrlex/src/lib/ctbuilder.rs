@@ -5,12 +5,11 @@ use std::{
     collections::{HashMap, HashSet},
     env::{current_dir, var},
     error::Error,
-    fmt::{Debug, Display, Write as _},
+    fmt::{self, Debug, Display, Write as _},
     fs::{self, create_dir_all, read_to_string, File},
     hash::Hash,
     io::Write,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::Mutex,
 };
 
@@ -21,13 +20,14 @@ use cfgrammar::{
         Setting, Value,
     },
     markmap::MergeBehavior,
-    newlinecache::NewlineCache,
     span::Location,
-    Spanned,
 };
 use glob::glob;
 use lazy_static::lazy_static;
-use lrpar::{CTParserBuilder, LexerTypes};
+use lrpar::{
+    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
+    CTParserBuilder, LexerTypes,
+};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
@@ -36,6 +36,8 @@ use regex::Regex;
 use crate::{DefaultLexerTypes, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef};
 
 const RUST_FILE_EXT: &str = "rs";
+
+const ERROR: &str = "[Error]";
 
 lazy_static! {
     static ref RE_TOKEN_ID: Regex = Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap();
@@ -198,6 +200,22 @@ impl ToTokens for QuoteToString<'_> {
         tokens.append_all(quote! { #x.to_string() });
     }
 }
+
+/// A string which uses `Display` for it's `Debug` impl.
+struct ErrorString(String);
+impl fmt::Display for ErrorString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ErrorString(s) = self;
+        write!(f, "{}", s)
+    }
+}
+impl fmt::Debug for ErrorString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ErrorString(s) = self;
+        write!(f, "{}", s)
+    }
+}
+impl Error for ErrorString {}
 
 /// A `CTLexerBuilder` allows one to specify the criteria for building a statically generated
 /// lexer.
@@ -447,14 +465,21 @@ where
         }
         let lex_src = read_to_string(lexerp)
             .map_err(|e| format!("When reading '{}': {e}", lexerp.display()))?;
+        let lex_diag = SpannedDiagnosticFormatter::new(&lex_src, lexerp);
         let mut header = self.header;
         let (parsed_header, _) = GrmtoolsSectionParser::new(&lex_src, false)
             .parse()
             .map_err(|es| {
-                es.iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<_>>()
-                    .join("\n")
+                let mut out = String::new();
+                out.push_str(&format!(
+                    "\n{ERROR}{}\n",
+                    lex_diag.file_location_msg(" parsing the `%grmtools` section", None)
+                ));
+                for e in es {
+                    out.push_str(&indent(&lex_diag.format_error(e).to_string(), "     "));
+                    out.push('\n');
+                }
+                ErrorString(out)
             })?;
         header.merge_from(parsed_header)?;
         header.mark_used(&"lexerkind".to_string());
@@ -468,38 +493,33 @@ where
                 }
             }
         };
-        let line_cache = NewlineCache::from_str(&lex_src).unwrap();
         #[cfg(test)]
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
             inspect_lexerkind_cb(lexerkind)?
         }
-        let (lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) = match lexerkind
-        {
-            LexerKind::LRNonStreamingLexer => {
-                let lex_flags = LexFlags::try_from(&mut header)?;
-                let lexerdef =
-                    LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(&lex_src, lex_flags)
-                        .map_err(|errs| {
-                            errs.iter()
-                                .map(|e| {
-                                    if let Some((line, column)) = line_cache
-                                        .byte_to_line_num_and_col_num(
-                                            &lex_src,
-                                            e.spans().first().unwrap().start(),
-                                        )
-                                    {
-                                        format!("{} at line {line} column {column}", e)
-                                    } else {
-                                        format!("{}", e)
-                                    }
-                                })
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        })?;
-                let lex_flags = lexerdef.lex_flags().cloned();
-                (lexerdef, lex_flags.unwrap())
-            }
-        };
+        let (lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) =
+            match lexerkind {
+                LexerKind::LRNonStreamingLexer => {
+                    let lex_flags = LexFlags::try_from(&mut header)?;
+                    let lexerdef = LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
+                        &lex_src, lex_flags,
+                    )
+                    .map_err(|errs| {
+                        let mut out = String::new();
+                        out.push_str(&format!(
+                            "\n{ERROR}{}\n",
+                            lex_diag.file_location_msg("", None)
+                        ));
+                        for e in errs {
+                            out.push_str(&indent(&lex_diag.format_error(e).to_string(), "     "));
+                            out.push('\n');
+                        }
+                        ErrorString(out)
+                    })?;
+                    let lex_flags = lexerdef.lex_flags().cloned();
+                    (lexerdef, lex_flags.unwrap())
+                }
+            };
 
         if let Some(ref lrcfg) = self.lrpar_config {
             let mut lexerdef = lexerdef.clone();
@@ -1136,6 +1156,20 @@ pub fn ct_token_map<StorageT: Display>(
     let mut f = File::create(outp)?;
     f.write_all(outs.as_bytes())?;
     Ok(())
+}
+
+/// Indents a multi-line string and trims any trailing newline.
+/// This currently assumes that indentation on blank lines does not matter.
+///
+/// The algorithm used by this function is:
+/// 1. Prefix `s` with the indentation, indenting the first line.
+/// 2. Trim any trailing newlines.
+/// 3. Replace all newlines with `\n{indent}`` to indent all lines after the first.
+///
+/// It is plausible that we should a step 4, but currently do not:
+/// 4. Replace all `\n{indent}\n` with `\n\n`
+fn indent(s: &str, indent: &str) -> String {
+    format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }
 
 #[cfg(test)]
