@@ -50,7 +50,10 @@ lazy_static! {
 }
 
 struct CTConflictsError<StorageT: Eq + Hash> {
+    conflicts_diagnostic: String,
+    #[cfg(test)]
     stable: StateTable<StorageT>,
+    phantom: PhantomData<StorageT>,
 }
 
 /// The quote impl of `ToTokens` for `Option` prints an empty string for `None`
@@ -108,13 +111,7 @@ where
     usize: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let conflicts = self.stable.conflicts().unwrap();
-        write!(
-            f,
-            "CTConflictsError{{{} Reduce/Reduce, {} Shift/Reduce}}",
-            conflicts.rr_len(),
-            conflicts.sr_len()
-        )
+        write!(f, "{}", self.conflicts_diagnostic)
     }
 }
 
@@ -124,13 +121,7 @@ where
     usize: AsPrimitive<StorageT>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let conflicts = self.stable.conflicts().unwrap();
-        write!(
-            f,
-            "CTConflictsError{{{} Reduce/Reduce, {} Shift/Reduce}}",
-            conflicts.rr_len(),
-            conflicts.sr_len()
-        )
+        write!(f, "{}", self.conflicts_diagnostic)
     }
 }
 
@@ -733,9 +724,21 @@ where
                     (Some(i), None) if i == c.sr_len() && 0 == c.rr_len() => (),
                     (None, Some(j)) if 0 == c.sr_len() && j == c.rr_len() => (),
                     (None, None) if 0 == c.rr_len() && 0 == c.sr_len() => (),
-                    // TODO change SpannedDiagnosticsFormatter::handle_conflicts to return
-                    // a string instead of using eprintln directly, then use that here.
-                    _ => return Err(Box::new(CTConflictsError { stable })),
+                    _ => {
+                        let conflicts_diagnostic = yacc_diag.format_conflicts::<LexerTypesT>(
+                            &grm,
+                            ast_validation.ast(),
+                            c,
+                            &sgraph,
+                            &stable,
+                        );
+                        return Err(Box::new(CTConflictsError {
+                            conflicts_diagnostic,
+                            phantom: PhantomData,
+                            #[cfg(test)]
+                            stable,
+                        }));
+                    }
                 }
             }
         }
