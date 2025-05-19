@@ -305,12 +305,15 @@ fn main() {
             if (pp_rr || pp_sr) && !dump_state_graph {
                 println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
             }
-            yacc_diag.handle_conflicts::<DefaultLexerTypes<u32>>(
-                &grm,
-                ast_validation.ast(),
-                c,
-                &sgraph,
-                &stable,
+            eprintln!(
+                "{}",
+                yacc_diag.format_conflicts::<DefaultLexerTypes<u32>>(
+                    &grm,
+                    ast_validation.ast(),
+                    c,
+                    &sgraph,
+                    &stable,
+                )
             );
         }
     }

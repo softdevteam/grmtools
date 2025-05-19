@@ -19,6 +19,19 @@ pub struct SpannedDiagnosticFormatter<'a> {
     nlc: OnceCell<NewlineCache>,
 }
 
+/// Implements a `pushln` convenience function to `String`
+trait PushLine {
+    /// Appends a given string slice and a newline to the end of this `String`.
+    fn pushln<S: AsRef<str>>(&mut self, s: S);
+}
+
+impl PushLine for String {
+    fn pushln<S: AsRef<str>>(&mut self, s: S) {
+        self.push_str(s.as_ref());
+        self.push('\n');
+    }
+}
+
 fn pidx_prods_data<StorageT>(ast: &GrammarAST, pidx: PIdx<StorageT>) -> (Vec<String>, Vec<Span>)
 where
     usize: num_traits::AsPrimitive<StorageT>,
@@ -237,16 +250,19 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
         out
     }
 
-    pub fn handle_conflicts<LexerTypesT: LexerTypes<StorageT = u32>>(
+    pub fn format_conflicts<LexerTypesT>(
         &self,
-        grm: &YaccGrammar,
+        grm: &YaccGrammar<LexerTypesT::StorageT>,
         ast: &GrammarAST,
         c: &Conflicts<LexerTypesT::StorageT>,
         _sgraph: &lrtable::StateGraph<LexerTypesT::StorageT>,
         _stable: &lrtable::StateTable<LexerTypesT::StorageT>,
-    ) where
+    ) -> String
+    where
+        LexerTypesT: LexerTypes,
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
+        let mut out = String::new();
         for (t_idx, r1_prod_idx, r2_prod_idx, _st_idx) in c.rr_conflicts() {
             let (_r1_prod_names, _r1_prod_spans) = pidx_prods_data(ast, *r1_prod_idx);
             let (_r2_prod_names, _r2_prod_spans) = pidx_prods_data(ast, *r2_prod_idx);
@@ -259,26 +275,19 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             let r1_name = grm.rule_name_str(r1_rule_idx);
             let r2_name = grm.rule_name_str(r2_rule_idx);
 
-            eprintln!(
-                "{}",
+            out.pushln(
                 self.file_location_msg(
                     format!(
                         "Reduce/Reduce conflict, can reduce '{}' or '{}' with lookahead '{}'",
                         r1_name, r2_name, t_name,
                     )
                     .as_str(),
-                    Some(r1_span)
-                )
+                    Some(r1_span),
+                ),
             );
-            eprintln!(
-                "{}",
-                self.underline_span_with_text(r1_span, "First reduce".to_string(), '^')
-            );
-            eprintln!(
-                "{}",
-                self.underline_span_with_text(r2_span, "Second reduce".to_string(), '-')
-            );
-            eprintln!();
+            out.pushln(self.underline_span_with_text(r1_span, "First reduce".to_string(), '^'));
+            out.pushln(self.underline_span_with_text(r2_span, "Second reduce".to_string(), '-'));
+            out.push('\n');
         }
         for (s_tok_idx, r_prod_idx, _st_idx) in c.sr_conflicts() {
             let r_rule_idx = grm.prod_to_rule(*r_prod_idx);
@@ -288,26 +297,19 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             let reduce_name = grm.rule_name_str(r_rule_idx);
             let (_r_prod_names, mut r_prod_spans) = pidx_prods_data(ast, *r_prod_idx);
             let fallback_span = ast.prods[usize::from(*r_prod_idx)].prod_span;
-            eprintln!(
-                "{}",
+            out.pushln(
                 self.file_location_msg(
                     format!(
                         "Shift/Reduce conflict, can shift '{}' or reduce '{}'",
                         shift_name, reduce_name
                     )
                     .as_str(),
-                    Some(r_rule_span)
-                )
+                    Some(r_rule_span),
+                ),
             );
 
-            eprintln!(
-                "{}",
-                self.underline_span_with_text(s_tok_span, "Shift".to_string(), '^')
-            );
-            eprintln!(
-                "{}",
-                self.underline_span_with_text(r_rule_span, "Reduced rule".to_string(), '+')
-            );
+            out.pushln(self.underline_span_with_text(s_tok_span, "Shift".to_string(), '^'));
+            out.pushln(self.underline_span_with_text(r_rule_span, "Reduced rule".to_string(), '+'));
 
             if r_prod_spans.is_empty() {
                 r_prod_spans.push(fallback_span);
@@ -338,17 +340,15 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                 // but we lack an `Ord` impl to easily ensure it.
                 //
                 // We could convert to tuples, then back to spans or add the impl
-                eprintln!(
-                    "{}",
-                    self.underline_spans_on_line_with_text(
-                        spans_on_line.iter().copied(),
-                        msg.to_string(),
-                        '-'
-                    )
-                );
+                out.pushln(self.underline_spans_on_line_with_text(
+                    spans_on_line.iter().copied(),
+                    msg.to_string(),
+                    '-',
+                ));
             }
-            eprintln!()
+            out.push('\n');
         }
+        out
     }
 }
 
