@@ -566,7 +566,7 @@ where
                 yacc_diag.file_location_msg(" parsing the `%grmtools` section", None)
             ));
             for e in errs {
-                out.push_str(&indent(&yacc_diag.format_error(e).to_string(), "     "));
+                out.push_str(&indent("     ", &yacc_diag.format_error(e).to_string()));
             }
             return Err(ErrorString(out))?;
         }
@@ -606,7 +606,7 @@ where
                 for e in warnings {
                     out.push_str(&format!(
                         "{}\n",
-                        indent(&yacc_diag.format_warning(e).to_string(), "    ")
+                        indent("     ", &yacc_diag.format_warning(e).to_string())
                     ));
                 }
                 return Err(ErrorString(out))?;
@@ -615,7 +615,7 @@ where
                 if !warnings.is_empty() {
                     for w in warnings {
                         let ws_loc = yacc_diag.file_location_msg("", None);
-                        let ws = indent(&yacc_diag.format_warning(w).to_string(), "    ");
+                        let ws = indent("     ", &yacc_diag.format_warning(w).to_string());
                         // Assume if this variable is set we are running under cargo.
                         if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
                             println!("cargo:warning={}", ws_loc);
@@ -635,7 +635,7 @@ where
                     yacc_diag.file_location_msg("", None)
                 ));
                 for e in errs {
-                    out.push_str(&indent(&yacc_diag.format_error(e).to_string(), "     "));
+                    out.push_str(&indent("     ", &yacc_diag.format_error(e).to_string()));
                     out.push('\n');
                 }
 
@@ -1544,7 +1544,7 @@ where
 ///
 /// It is plausible that we should a step 4, but currently do not:
 /// 4. Replace all `\n{indent}\n` with `\n\n`
-fn indent(s: &str, indent: &str) -> String {
+fn indent(indent: &str, s: &str) -> String {
     format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }
 
