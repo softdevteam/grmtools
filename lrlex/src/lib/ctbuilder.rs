@@ -476,7 +476,7 @@ where
                     lex_diag.file_location_msg(" parsing the `%grmtools` section", None)
                 ));
                 for e in es {
-                    out.push_str(&indent(&lex_diag.format_error(e).to_string(), "     "));
+                    out.push_str(&indent("     ", &lex_diag.format_error(e).to_string()));
                     out.push('\n');
                 }
                 ErrorString(out)
@@ -511,7 +511,7 @@ where
                             lex_diag.file_location_msg("", None)
                         ));
                         for e in errs {
-                            out.push_str(&indent(&lex_diag.format_error(e).to_string(), "     "));
+                            out.push_str(&indent("     ", &lex_diag.format_error(e).to_string()));
                             out.push('\n');
                         }
                         ErrorString(out)
@@ -1168,7 +1168,7 @@ pub fn ct_token_map<StorageT: Display>(
 ///
 /// It is plausible that we should a step 4, but currently do not:
 /// 4. Replace all `\n{indent}\n` with `\n\n`
-fn indent(s: &str, indent: &str) -> String {
+fn indent(indent: &str, s: &str) -> String {
     format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }
 

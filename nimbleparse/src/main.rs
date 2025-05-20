@@ -63,7 +63,7 @@ fn read_file<P: AsRef<Path>>(path: P) -> String {
 ///
 /// It is plausible that we should a step 4, but currently do not:
 /// 4. Replace all `\n{indent}\n` with `\n\n`
-fn indent(s: &str, indent: &str) -> String {
+fn indent(indent: &str, s: &str) -> String {
     format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }
 
@@ -180,7 +180,7 @@ fn main() {
         Err(errs) => {
             eprintln!("{ERROR}{}", lex_diag.file_location_msg("", None));
             for e in errs {
-                eprintln!("{}", indent(&lex_diag.format_error(e).to_string(), "    "));
+                eprintln!("{}", indent("    ", &lex_diag.format_error(e).to_string()));
             }
             process::exit(1);
         }
@@ -204,7 +204,7 @@ fn main() {
                     yacc_diag.file_location_msg(" parsing the `%grmtools` section:", None)
                 );
                 for e in errs {
-                    eprintln!("{}", indent(&yacc_diag.format_error(e).to_string(), "    "));
+                    eprintln!("{}", indent("    ", &yacc_diag.format_error(e).to_string()));
                 }
                 std::process::exit(1);
             }
@@ -238,7 +238,7 @@ fn main() {
                 };
                 eprintln!(
                     "{}",
-                    indent(&yacc_diag.format_error(spanned_e).to_string(), "    ")
+                    indent("    ", &yacc_diag.format_error(spanned_e).to_string())
                 );
                 process::exit(1)
             }
@@ -255,7 +255,7 @@ fn main() {
             if !warnings.is_empty() {
                 eprintln!("{WARNING}{}", yacc_diag.file_location_msg("", None));
                 for w in warnings {
-                    eprintln!("{}", indent(&yacc_diag.format_warning(w), "    "));
+                    eprintln!("{}", indent("    ", &yacc_diag.format_warning(w)));
                 }
             }
             x
@@ -263,11 +263,11 @@ fn main() {
         Err(errs) => {
             eprintln!("{ERROR}{}", yacc_diag.file_location_msg("", None));
             for e in errs {
-                eprintln!("{}", indent(&yacc_diag.format_error(e).to_string(), "    "));
+                eprintln!("{}", indent("    ", &yacc_diag.format_error(e).to_string()));
             }
             eprintln!("{WARNING}{}", yacc_diag.file_location_msg("", None));
             for w in warnings {
-                eprintln!("{}", indent(&yacc_diag.format_warning(w), "    "));
+                eprintln!("{}", indent("    ", &yacc_diag.format_warning(w)));
             }
             process::exit(1);
         }
