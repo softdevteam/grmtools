@@ -18,7 +18,7 @@ fn main() {
         .unwrap();
     ct_token_map::<u8>(
         "token_map",
-        ctp.token_map().as_ref(),
+        ctp.token_map(),
         Some(&TOKENS_MAP.iter().cloned().collect()),
     )
     .unwrap();

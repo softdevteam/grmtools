@@ -2,6 +2,7 @@
 
 use std::{
     any::type_name,
+    borrow::Borrow,
     collections::{HashMap, HashSet},
     env::{current_dir, var},
     error::Error,
@@ -446,7 +447,7 @@ where
     ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
     ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
     ///      `_l`).
-    pub fn build(mut self) -> Result<CTLexer, Box<dyn Error>> {
+    pub fn build(self) -> Result<CTLexer, Box<dyn Error>> {
         let lexerp = self
             .lexer_path
             .as_ref()
@@ -555,7 +556,6 @@ where
             ));
             ctp = lrcfg(ctp);
             let ct_parser = ctp.build()?;
-            self.rule_ids_map = Some(*ct_parser.token_map());
             Some(ct_parser)
         } else {
             None
@@ -570,33 +570,32 @@ where
         }
 
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
-            Some(ref rim) => {
-                let (x, y) = lexerdef.set_rule_ids_spanned_iter(
-                    rim.iter().map(|(name, tidx)| (name.as_str(), *tidx)),
-                );
-                (
-                    x.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
-                    y.map(|a| {
-                        a.iter()
-                            .map(|(b, span)| (b.to_string(), *span))
-                            .collect::<HashSet<_>>()
+            Some(ref rim) => lexerdef
+                .set_rule_ids_spanned_iter(rim.iter().map(|(name, tidx)| (name.as_str(), *tidx))),
+            None => match &ct_parser {
+                Some(ct_parser) => lexerdef.set_rule_ids_spanned_iter(
+                    ct_parser.yacc_grammar().iter_tidxs().filter_map(|tidx| {
+                        ct_parser
+                            .yacc_grammar()
+                            .token_name(tidx)
+                            .map(|n| (n, tidx.as_storaget()))
                     }),
-                )
-            }
-            None => (None, None),
+                ),
+                None => (None, None),
+            },
         };
         let mut has_unallowed_missing = false;
         let err_indent = " ".repeat(ERROR.len());
         if !self.allow_missing_terms_in_lexer {
             if let Some(ref mfl) = missing_from_lexer {
-                if let Some(ct_parser) = ct_parser {
+                if let Some(ct_parser) = &ct_parser {
                     let grm = ct_parser.yacc_grammar();
                     let token_spans = mfl
                         .iter()
                         .map(|name| {
                             ct_parser
                                 .yacc_grammar()
-                                .token_span(*grm.tokens_map().get(name.as_str()).unwrap())
+                                .token_span(*grm.tokens_map().get(name).unwrap())
                                 .expect("Given token should have a span")
                         })
                         .collect::<Vec<_>>();
@@ -799,94 +798,14 @@ where
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the
         // binary etc).
-        let missing_from_parser =
-            missing_from_parser.map(|mut set| set.drain().map(|(n, _)| n).collect::<HashSet<_>>());
         if let Ok(curs) = read_to_string(outp) {
             if curs == outs {
-                return Ok(CTLexer {
-                    missing_from_lexer,
-                    missing_from_parser,
-                });
+                return Ok(CTLexer);
             }
         }
         let mut f = File::create(outp)?;
         f.write_all(outs.as_bytes())?;
-        Ok(CTLexer {
-            missing_from_lexer,
-            missing_from_parser,
-        })
-    }
-
-    /// Given the filename `a/b.l` as input, statically compile the file `src/a/b.l` into a Rust
-    /// module which can then be imported using `lrlex_mod!("a/b.l")`. This is a convenience
-    /// function around [`process_file`](struct.CTLexerBuilder.html#method.process_file) which makes
-    /// it easier to compile `.l` files stored in a project's `src/` directory: please see
-    /// [`process_file`](#method.process_file) for additional constraints and information about the
-    /// generated files.
-    #[deprecated(
-        since = "0.11.0",
-        note = "Please use lexer_in_src_dir() and build() instead"
-    )]
-    #[allow(deprecated)]
-    pub fn process_file_in_src(
-        self,
-        srcp: &str,
-    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>> {
-        let mut inp = current_dir()?;
-        inp.push("src");
-        inp.push(srcp);
-        let mut outp = PathBuf::new();
-        outp.push(var("OUT_DIR").unwrap());
-        outp.push(Path::new(srcp).parent().unwrap().to_str().unwrap());
-        create_dir_all(&outp)?;
-        let mut leaf = Path::new(srcp)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
-        write!(leaf, ".{}", RUST_FILE_EXT).ok();
-        outp.push(leaf);
-        self.process_file(inp, outp)
-    }
-
-    /// Statically compile the `.l` file `inp` into Rust, placing the output into the file `outp`.
-    /// The latter defines a module as follows:
-    ///
-    /// ```text
-    ///    mod modname {
-    ///      pub fn lexerdef() -> LexerDef<LexerTypesT::StorageT> { ... }
-    ///
-    ///      ...
-    ///    }
-    /// ```
-    ///
-    /// where:
-    ///  * `modname` is either:
-    ///    * the module name specified [`mod_name`](#method.mod_name)
-    ///    * or, if no module name was explicitly specified, then for the file `/a/b/c.l` the
-    ///      module name is `c_l` (i.e. the file's leaf name, minus its extension, with a prefix of
-    ///      `_l`).
-    #[deprecated(
-        since = "0.11.0",
-        note = "Please use lexer_in_src_dir() and build() instead"
-    )]
-    pub fn process_file<P, Q>(
-        mut self,
-        inp: P,
-        outp: Q,
-    ) -> Result<(Option<HashSet<String>>, Option<HashSet<String>>), Box<dyn Error>>
-    where
-        P: AsRef<Path>,
-        Q: AsRef<Path>,
-    {
-        self.lexer_path = Some(inp.as_ref().to_owned());
-        self.output_path = Some(outp.as_ref().to_owned());
-        let cl = self.build()?;
-        Ok((
-            cl.missing_from_lexer().map(|x| x.to_owned()),
-            cl.missing_from_parser().map(|x| x.to_owned()),
-        ))
+        Ok(CTLexer)
     }
 
     /// If passed false, tokens used in the grammar but not defined in the lexer will cause a
@@ -1119,20 +1038,7 @@ where
 }
 
 /// An interface to the result of [CTLexerBuilder::build()].
-pub struct CTLexer {
-    missing_from_lexer: Option<HashSet<String>>,
-    missing_from_parser: Option<HashSet<String>>,
-}
-
-impl CTLexer {
-    fn missing_from_lexer(&self) -> Option<&HashSet<String>> {
-        self.missing_from_lexer.as_ref()
-    }
-
-    fn missing_from_parser(&self) -> Option<&HashSet<String>> {
-        self.missing_from_parser.as_ref()
-    }
-}
+pub struct CTLexer;
 
 /// Create a Rust module named `mod_name` that can be imported with
 /// [`lrlex_mod!(mod_name)`](crate::lrlex_mod). The module contains one `const` `StorageT` per
@@ -1160,7 +1066,7 @@ impl CTLexer {
 /// ```
 pub fn ct_token_map<StorageT: Display>(
     mod_name: &str,
-    token_map: &HashMap<String, StorageT>,
+    token_map: impl Borrow<HashMap<String, StorageT>>,
     rename_map: Option<&HashMap<&str, &str>>,
 ) -> Result<(), Box<dyn Error>> {
     // Record the time that this version of lrlex was built. If the source code changes and rustc
@@ -1177,6 +1083,7 @@ pub fn ct_token_map<StorageT: Display>(
     .ok();
     outs.push_str(
         &token_map
+            .borrow()
             .iter()
             .map(|(k, v)| {
                 let k = match rename_map {
