@@ -374,10 +374,19 @@ where
         rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<&'a str>>);
 
+    /// Like `set_rule_ids` but also returns a `Span` for missing lex rules.
     fn set_rule_ids_spanned<'a>(
         &'a mut self,
         rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<(&'a str, Span)>>);
+
+    /// Like `set_rule_ids_spanned` but takes
+    fn set_rule_ids_spanned_iter<'a, I>(
+        &'a mut self,
+        rule_ids_map: I,
+    ) -> (Option<HashSet<&'a str>>, Option<HashSet<(&'a str, Span)>>)
+    where
+        I: IntoIterator<Item = (&'a str, LexerTypesT::StorageT)>;
 
     /// Returns an iterator over all rules in this AST.
     fn iter_rules(&self) -> Iter<Rule<LexerTypesT::StorageT>>;
@@ -462,6 +471,71 @@ where
         &'a mut self,
         rule_ids_map: &HashMap<&'a str, LexerTypesT::StorageT>,
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<(&'a str, Span)>>) {
+        // Because we have to iter_mut over self.rules, we can't easily store a reference to the
+        // rule's name at the same time. Instead, we store the index of each such rule and
+        // recover the names later. This has the unfortunate consequence of extended the mutable
+        // borrow for the rest of the 'a lifetime. To avoid that we could return idx's here.
+        // But the original `set_rule_ids` invalidates indexes.  In the spirit of keeping that
+        // behavior consistent, this also returns the span.
+        let mut missing_from_parser_idxs = Vec::new();
+        let mut rules_with_names = 0;
+        for (i, r) in self.rules.iter_mut().enumerate() {
+            if let Some(n) = r.name() {
+                match rule_ids_map.get(n) {
+                    Some(tok_id) => r.tok_id = Some(*tok_id),
+                    None => {
+                        r.tok_id = None;
+                        missing_from_parser_idxs.push(i);
+                    }
+                }
+                rules_with_names += 1;
+            }
+        }
+
+        let missing_from_parser = if missing_from_parser_idxs.is_empty() {
+            None
+        } else {
+            let mut mfp = HashSet::with_capacity(missing_from_parser_idxs.len());
+            for i in &missing_from_parser_idxs {
+                mfp.insert((self.rules[*i].name().unwrap(), self.rules[*i].name_span()));
+            }
+            Some(mfp)
+        };
+
+        let missing_from_lexer =
+            if rules_with_names - missing_from_parser_idxs.len() == rule_ids_map.len() {
+                None
+            } else {
+                Some(
+                    rule_ids_map
+                        .keys()
+                        .cloned()
+                        .collect::<HashSet<&str>>()
+                        .difference(
+                            &self
+                                .rules
+                                .iter()
+                                .filter_map(|x| x.name())
+                                .collect::<HashSet<&str>>(),
+                        )
+                        .cloned()
+                        .collect::<HashSet<&str>>(),
+                )
+            };
+
+        (missing_from_lexer, missing_from_parser)
+    }
+
+    /// Like `set_rule_ids_spanned` but takes an iterator.
+    fn set_rule_ids_spanned_iter<'a, I>(
+        &'a mut self,
+        rule_ids_iter: I,
+    ) -> (Option<HashSet<&'a str>>, Option<HashSet<(&'a str, Span)>>)
+    where
+        I: IntoIterator<Item = (&'a str, LexerTypesT::StorageT)>,
+    {
+        let rule_ids_map: HashMap<&str, LexerTypesT::StorageT> =
+            HashMap::from_iter(rule_ids_iter.into_iter());
         // Because we have to iter_mut over self.rules, we can't easily store a reference to the
         // rule's name at the same time. Instead, we store the index of each such rule and
         // recover the names later. This has the unfortunate consequence of extended the mutable

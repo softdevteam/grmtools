@@ -691,7 +691,6 @@ where
                         if outc.contains(&cache.to_string()) {
                             return Ok(CTParser {
                                 regenerated: false,
-                                rule_ids,
                                 yacc_grammar: grm,
                                 grammar_src: inc,
                                 grammar_path: self.grammar_path.unwrap(),
@@ -788,7 +787,6 @@ where
         };
         Ok(CTParser {
             regenerated: true,
-            rule_ids,
             yacc_grammar: grm,
             grammar_src: inc,
             grammar_path: self.grammar_path.unwrap(),
@@ -896,7 +894,7 @@ where
             inspect_callback: None,
             phantom: PhantomData,
         };
-        Ok(cl.build()?.rule_ids)
+        Ok(*cl.build()?.token_map())
     }
 
     fn output_file<P: AsRef<Path>>(
@@ -1494,7 +1492,6 @@ where
     StorageT: Eq + Hash,
 {
     regenerated: bool,
-    rule_ids: HashMap<String, StorageT>,
     yacc_grammar: YaccGrammar<StorageT>,
     grammar_src: String,
     grammar_path: PathBuf,
@@ -1513,8 +1510,14 @@ where
 
     /// Returns a [HashMap] from lexeme string types to numeric types (e.g. `INT: 2`), suitable for
     /// handing to a lexer to coordinate the IDs of lexer and parser.
-    pub fn token_map(&self) -> &HashMap<String, StorageT> {
-        &self.rule_ids
+    pub fn token_map(&self) -> Box<HashMap<String, StorageT>> {
+        Box::new(
+            self.yacc_grammar
+                .tokens_map()
+                .iter()
+                .map(|(name, tidx)| (name.to_string(), tidx.as_storaget()))
+                .collect::<HashMap<_, _>>(),
+        )
     }
 
     /// If there are any conflicts in the grammar, return a tuple which allows users to inspect and

@@ -644,6 +644,16 @@ where
         m
     }
 
+    pub fn tokens_map_iter(&self) -> impl Iterator<Item = (&str, TIdx<StorageT>)> {
+        self.iter_tidxs().filter_map(|tidx| {
+            if let Some((_, name)) = self.token_names[usize::from(tidx)].as_ref() {
+                Some((name.as_str(), tidx))
+            } else {
+                None
+            }
+        })
+    }
+
     /// Return the index of the token named `n` or `None` if it doesn't exist.
     pub fn token_idx(&self, n: &str) -> Option<TIdx<StorageT>> {
         self.token_names
