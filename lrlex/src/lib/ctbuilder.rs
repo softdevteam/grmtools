@@ -20,7 +20,8 @@ use cfgrammar::{
         Setting, Value,
     },
     markmap::MergeBehavior,
-    span::Location,
+    span::{Location, Span},
+    yacc::YaccGrammar,
 };
 use glob::glob;
 use lazy_static::lazy_static;
@@ -497,7 +498,7 @@ where
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
             inspect_lexerkind_cb(lexerkind)?
         }
-        let (lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) =
+        let (mut lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) =
             match lexerkind {
                 LexerKind::LRNonStreamingLexer => {
                     let lex_flags = LexFlags::try_from(&mut header)?;
@@ -521,15 +522,16 @@ where
                 }
             };
 
+        let mut has_unallowed_missing = false;
         if let Some(ref lrcfg) = self.lrpar_config {
-            let mut lexerdef = lexerdef.clone();
+            let mut closure_lexerdef = lexerdef.clone();
             let mut ctp = CTParserBuilder::<LexerTypesT>::new().inspect_rt(Box::new(
                 move |yacc_header, rtpb, rule_ids_map, grm_path| {
                     let owned_map = rule_ids_map
                         .iter()
                         .map(|(x, y)| (&**x, *y))
                         .collect::<HashMap<_, _>>();
-                    lexerdef.set_rule_ids(&owned_map);
+                    closure_lexerdef.set_rule_ids(&owned_map);
                     yacc_header.mark_used(&"test_files".to_string());
                     let test_glob = yacc_header.get("test_files");
                     match test_glob {
@@ -540,7 +542,8 @@ where
                             {
                                 let path = path?;
                                 let input = fs::read_to_string(&path)?;
-                                let l: LRNonStreamingLexer<LexerTypesT> = lexerdef.lexer(&input);
+                                let l: LRNonStreamingLexer<LexerTypesT> =
+                                    closure_lexerdef.lexer(&input);
                                 for e in rtpb.parse_noaction(&l) {
                                     Err(format!("parsing {}: {}", path.display(), e))?
                                 }
@@ -553,8 +556,58 @@ where
                 },
             ));
             ctp = lrcfg(ctp);
-            let map = ctp.build()?;
-            self.rule_ids_map = Some(map.token_map().to_owned());
+            let ct_parser = ctp.build()?;
+            self.rule_ids_map = Some(ct_parser.token_map().to_owned());
+            let (missing_from_lexer, missing_from_parser) =
+                set_rule_ids(&mut lexerdef, ct_parser.yacc_grammar());
+            let yacc_diag =
+                SpannedDiagnosticFormatter::new(ct_parser.grammar_src(), ct_parser.grammar_path());
+            let err_indent = " ".repeat(ERROR.len());
+            if !self.allow_missing_terms_in_lexer {
+                if let Some(token_spans) = missing_from_lexer {
+                    eprintln!(
+                    "{ERROR} these tokens are not referenced in the lexer but defined as follows"
+                );
+                    eprintln!(
+                        "{err_indent} {}",
+                        yacc_diag.file_location_msg("in the grammar", None)
+                    );
+                    for span in token_spans {
+                        eprintln!(
+                            "{}",
+                            yacc_diag.underline_span_with_text(
+                                span,
+                                "Missing from lexer".to_string(),
+                                '^'
+                            )
+                        );
+                    }
+                    eprintln!();
+                    has_unallowed_missing = true;
+                }
+            }
+            if !self.allow_missing_tokens_in_parser {
+                if let Some(token_spans) = missing_from_parser {
+                    eprintln!(
+                        "{ERROR} these tokens are not referenced in the grammar but defined as follows"
+                    );
+                    eprintln!(
+                        "{err_indent} {}",
+                        lex_diag.file_location_msg("in the lexer", None)
+                    );
+                    for span in token_spans {
+                        eprintln!(
+                            "{}",
+                            lex_diag.underline_span_with_text(
+                                span,
+                                "Missing from parser".to_string(),
+                                '^'
+                            )
+                        );
+                    }
+                    has_unallowed_missing = true;
+                }
+            }
         }
 
         let mut lexerdef = Box::new(lexerdef);
@@ -563,6 +616,11 @@ where
             return Err(
                 format!("Unused header values: {}", unused_header_values.join(", ")).into(),
             );
+        }
+
+        if has_unallowed_missing {
+            fs::remove_file(outp).ok();
+            panic!();
         }
 
         let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
@@ -580,8 +638,6 @@ where
             }
             None => (None, None),
         };
-
-        let mut has_unallowed_missing = false;
         if !self.allow_missing_terms_in_lexer {
             if let Some(ref mfl) = missing_from_lexer {
                 eprintln!("Error: the following tokens are used in the grammar but are not defined in the lexer:");
@@ -1170,6 +1226,35 @@ pub fn ct_token_map<StorageT: Display>(
 /// 4. Replace all `\n{indent}\n` with `\n\n`
 fn indent(indent: &str, s: &str) -> String {
     format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
+}
+
+fn set_rule_ids<ST, LexerTypesT: LexerTypes<StorageT = ST>, LT: LexerDef<LexerTypesT>>(
+    lexerdef: &mut LT,
+    grm: &YaccGrammar<ST>,
+) -> (Option<Vec<Span>>, Option<Vec<Span>>)
+where
+    ST: 'static + Copy + PrimInt + Unsigned,
+    usize: num_traits::AsPrimitive<ST>,
+{
+    let rule_ids = grm
+        .tokens_map()
+        .iter()
+        .map(|(&n, &i)| (n, i.0))
+        .collect::<std::collections::HashMap<&str, ST>>();
+    let (missing_from_lexer, missing_from_parser) = lexerdef.set_rule_ids_spanned(&rule_ids);
+    let missing_from_lexer = missing_from_lexer.map(|tokens| {
+        tokens
+            .iter()
+            .map(|name| {
+                grm.token_span(*grm.tokens_map().get(name).unwrap())
+                    .expect("Given token should have a span")
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let missing_from_parser =
+        missing_from_parser.map(|tokens| tokens.iter().map(|(_, span)| *span).collect::<Vec<_>>());
+    (missing_from_lexer, missing_from_parser)
 }
 
 #[cfg(test)]
