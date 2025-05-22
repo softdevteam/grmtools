@@ -1162,7 +1162,7 @@ impl CTLexer {
 ///   pub const T_ID: u8 = 1;
 /// }
 /// ```
-pub fn ct_token_map<StorageT: Display>(
+pub fn ct_token_map<StorageT: Display + ToTokens>(
     mod_name: &str,
     token_map: impl Borrow<HashMap<String, StorageT>>,
     rename_map: Option<&HashMap<&str, &str>>,
@@ -1172,34 +1172,37 @@ pub fn ct_token_map<StorageT: Display>(
     // build of lrlex to be recompiled too.
     let mut outs = String::new();
     let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
-    write!(
-        outs,
-        "// lrlex build time: {}\n\nmod {} {{\n",
-        quote!(#timestamp),
-        mod_name
-    )
-    .ok();
-    outs.push_str(
-        &token_map
-            .borrow()
-            .iter()
-            .map(|(k, v)| {
-                let k = match rename_map {
-                    Some(rmap) => *rmap.get(k.as_str()).unwrap_or(&k.as_str()),
-                    _ => k,
-                };
-                format!(
-                    "    #[allow(dead_code)] pub const T_{}: {} = {};",
-                    k,
-                    type_name::<StorageT>(),
-                    v
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-    );
-    outs.push_str("\n}");
-
+    let mod_ident = format_ident!("{}", mod_name);
+    write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
+    let tokens = &token_map
+        .borrow()
+        .iter()
+        .map(|(k, id)| {
+            let name = match rename_map {
+                Some(rmap) => *rmap.get(k.as_str()).unwrap_or(&k.as_str()),
+                _ => k,
+            };
+            let tok_ident = format_ident!("T_{}", name.to_ascii_uppercase());
+            let storaget = str::parse::<TokenStream>(type_name::<StorageT>()).unwrap();
+            // Code gen for the constant token values.
+            quote! {
+                pub const #tok_ident: #storaget = #id;
+            }
+        })
+        .collect::<Vec<_>>();
+    // Since the formatter doesn't preserve comments and we don't want to lose build time,
+    // just format the module contents.
+    let unformatted = quote! {
+        mod #mod_ident {
+            #![allow(dead_code)]
+            #(#tokens)*
+        }
+    }
+    .to_string();
+    let out_mod = syn::parse_str(&unformatted)
+        .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
+        .unwrap_or(unformatted);
+    outs.push_str(&out_mod);
     let mut outp = PathBuf::from(var("OUT_DIR")?);
     outp.push(mod_name);
     outp.set_extension("rs");
