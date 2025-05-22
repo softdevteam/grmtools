@@ -782,7 +782,9 @@ where
 
         let mut token_consts = TokenStream::new();
         if let Some(rim) = self.rule_ids_map {
-            for (name, id) in rim {
+            let mut rim_sorted = Vec::from_iter(rim.iter());
+            rim_sorted.sort_by_key(|(k, _)| *k);
+            for (name, id) in rim_sorted {
                 if RE_TOKEN_ID.is_match(&name) {
                     let tok_ident = format_ident!("N_{}", name.to_ascii_uppercase());
                     let storaget =
@@ -815,9 +817,17 @@ where
         };
         // Try and run a code formatter on the generated code.
         let unformatted = out_tokens.to_string();
-        let outs = syn::parse_str(&unformatted)
-            .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
-            .unwrap_or(unformatted);
+        let mut outs = String::new();
+        // Record the time that this version of lrlex was built. If the source code changes and rustc
+        // forces a recompile, this will change this value, causing anything which depends on this
+        // build of lrlex to be recompiled too.
+        let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
+        write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
+        outs.push_str(
+            &syn::parse_str(&unformatted)
+                .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
+                .unwrap_or(unformatted),
+        );
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the
         // binary etc).
@@ -1205,9 +1215,12 @@ pub fn ct_token_map<StorageT: Display + ToTokens>(
     let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
     let mod_ident = format_ident!("{}", mod_name);
     write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
-    let tokens = &token_map
-        .borrow()
-        .iter()
+    // Sort the tokens so that they're always in the same order.
+    // This will prevent unneeded rebuilds.
+    let mut token_map_sorted = Vec::from_iter(token_map.borrow().iter());
+    token_map_sorted.sort_by_key(|(k, _)| *k);
+    let tokens = &token_map_sorted
+        .into_iter()
         .map(|(k, id)| {
             let name = match rename_map {
                 Some(rmap) => *rmap.get(k.as_str()).unwrap_or(&k.as_str()),
