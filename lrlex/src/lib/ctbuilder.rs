@@ -39,6 +39,7 @@ use crate::{DefaultLexerTypes, LRNonStreamingLexer, LRNonStreamingLexerDef, LexF
 const RUST_FILE_EXT: &str = "rs";
 
 const ERROR: &str = "[Error]";
+const WARNING: &str = "[Warning]";
 
 lazy_static! {
     static ref RE_TOKEN_ID: Regex = Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap();
@@ -235,6 +236,8 @@ where
     rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
     allow_missing_terms_in_lexer: bool,
     allow_missing_tokens_in_parser: bool,
+    warnings_are_errors: bool,
+    show_warnings: bool,
     header: Header<Location>,
     #[cfg(test)]
     inspect_lexerkind_cb: Option<Box<dyn Fn(LexerKind) -> Result<(), Box<dyn Error>>>>,
@@ -283,7 +286,9 @@ where
             rust_edition: RustEdition::Rust2021,
             rule_ids_map: None,
             allow_missing_terms_in_lexer: false,
-            allow_missing_tokens_in_parser: true,
+            allow_missing_tokens_in_parser: false,
+            warnings_are_errors: false,
+            show_warnings: true,
             header,
             #[cfg(test)]
             inspect_lexerkind_cb: None,
@@ -636,26 +641,38 @@ where
                 has_unallowed_missing = true;
             }
         }
-        if !self.allow_missing_tokens_in_parser {
+        if !self.allow_missing_tokens_in_parser && self.show_warnings {
             if let Some(ref mfp) = missing_from_parser {
-                eprintln!(
-                    "{ERROR} these tokens are not referenced in the grammar but defined as follows"
-                );
-                eprintln!(
+                let error_prefix = if self.warnings_are_errors {
+                    ERROR
+                } else {
+                    WARNING
+                };
+                let err_indent = " ".repeat(error_prefix.len());
+                let mut outs = Vec::new();
+                outs.push(format!("{error_prefix} these tokens are not referenced in the grammar but defined as follows"));
+                outs.push(format!(
                     "{err_indent} {}",
                     lex_diag.file_location_msg("in the lexer", None)
-                );
+                ));
                 for (_, span) in mfp {
-                    eprintln!(
-                        "{}",
-                        lex_diag.underline_span_with_text(
-                            *span,
-                            "Missing from parser".to_string(),
-                            '^'
-                        )
+                    let error_contents = lex_diag.underline_span_with_text(
+                        *span,
+                        "Missing from parser".to_string(),
+                        '^',
                     );
+                    outs.extend(error_contents.lines().map(|s| s.to_string()));
                 }
-                has_unallowed_missing = true;
+
+                for s in outs {
+                    if !self.warnings_are_errors && std::env::var("OUT_DIR").is_ok() {
+                        println!("cargo:warning={}", s)
+                    } else {
+                        eprintln!("{}", s);
+                    }
+                }
+
+                has_unallowed_missing |= self.warnings_are_errors;
             }
         }
         if has_unallowed_missing {
@@ -901,10 +918,24 @@ where
     }
 
     /// If passed false, tokens defined in the lexer but not used in the grammar will cause a
-    /// panic at lexer generation time. Defaults to true (since lexers sometimes define tokens such
+    /// warning at lexer generation time. Defaults to false (since lexers sometimes define tokens such
     /// as reserved words, which are intentionally not in the grammar).
     pub fn allow_missing_tokens_in_parser(mut self, allow: bool) -> Self {
         self.allow_missing_tokens_in_parser = allow;
+        self
+    }
+
+    /// If set to true, [CTLexerBuilder::build] will return an error if the given lexer contains
+    /// any warnings. Defaults to `true`.
+    pub fn warnings_are_errors(mut self, flag: bool) -> Self {
+        self.warnings_are_errors = flag;
+        self
+    }
+
+    /// If set to true, [CTParserBuilder::build] will print warnings to stderr, or via cargo when
+    /// running under cargo. Defaults to `true`.
+    pub fn show_warnings(mut self, flag: bool) -> Self {
+        self.show_warnings = flag;
         self
     }
 
