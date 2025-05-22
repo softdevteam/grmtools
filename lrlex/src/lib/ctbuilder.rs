@@ -2,6 +2,7 @@
 
 use std::{
     any::type_name,
+    borrow::Borrow,
     collections::{HashMap, HashSet},
     env::{current_dir, var},
     error::Error,
@@ -1105,7 +1106,7 @@ impl CTLexer {
 /// ```
 pub fn ct_token_map<StorageT: Display>(
     mod_name: &str,
-    token_map: &HashMap<String, StorageT>,
+    token_map: impl Borrow<HashMap<String, StorageT>>,
     rename_map: Option<&HashMap<&str, &str>>,
 ) -> Result<(), Box<dyn Error>> {
     // Record the time that this version of lrlex was built. If the source code changes and rustc
@@ -1122,6 +1123,7 @@ pub fn ct_token_map<StorageT: Display>(
     .ok();
     outs.push_str(
         &token_map
+            .borrow()
             .iter()
             .map(|(k, v)| {
                 let k = match rename_map {
