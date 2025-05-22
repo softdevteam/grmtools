@@ -618,8 +618,9 @@ where
                         let ws = indent("     ", &yacc_diag.format_warning(w).to_string());
                         // Assume if this variable is set we are running under cargo.
                         if std::env::var("OUT_DIR").is_ok() && self.show_warnings {
-                            println!("cargo:warning={}", ws_loc);
-                            println!("cargo:warning={}", ws);
+                            for line in ws_loc.lines().chain(ws.lines()) {
+                                println!("cargo:warning={}", line);
+                            }
                         } else if self.show_warnings {
                             eprintln!("{}", ws_loc);
                             eprintln!("{WARNING} {}", ws);
