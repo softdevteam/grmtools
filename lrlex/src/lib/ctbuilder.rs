@@ -21,7 +21,7 @@ use cfgrammar::{
         Setting, Value,
     },
     markmap::MergeBehavior,
-    span::Location,
+    span::{Location, Span},
 };
 use glob::glob;
 use lazy_static::lazy_static;
@@ -522,15 +522,15 @@ where
                 }
             };
 
-        if let Some(ref lrcfg) = self.lrpar_config {
-            let mut lexerdef = lexerdef.clone();
+        let ct_parser = if let Some(ref lrcfg) = self.lrpar_config {
+            let mut closure_lexerdef = lexerdef.clone();
             let mut ctp = CTParserBuilder::<LexerTypesT>::new().inspect_rt(Box::new(
                 move |yacc_header, rtpb, rule_ids_map, grm_path| {
                     let owned_map = rule_ids_map
                         .iter()
                         .map(|(x, y)| (&**x, *y))
                         .collect::<HashMap<_, _>>();
-                    lexerdef.set_rule_ids(&owned_map);
+                    closure_lexerdef.set_rule_ids(&owned_map);
                     yacc_header.mark_used(&"test_files".to_string());
                     let test_glob = yacc_header.get("test_files");
                     match test_glob {
@@ -541,7 +541,8 @@ where
                             {
                                 let path = path?;
                                 let input = fs::read_to_string(&path)?;
-                                let l: LRNonStreamingLexer<LexerTypesT> = lexerdef.lexer(&input);
+                                let l: LRNonStreamingLexer<LexerTypesT> =
+                                    closure_lexerdef.lexer(&input);
                                 for e in rtpb.parse_noaction(&l) {
                                     Err(format!("parsing {}: {}", path.display(), e))?
                                 }
@@ -554,9 +555,12 @@ where
                 },
             ));
             ctp = lrcfg(ctp);
-            let map = ctp.build()?;
-            self.rule_ids_map = Some(map.token_map().to_owned());
-        }
+            let ct_parser = ctp.build()?;
+            self.rule_ids_map = Some(ct_parser.token_map().to_owned());
+            Some(ct_parser)
+        } else {
+            None
+        };
 
         let mut lexerdef = Box::new(lexerdef);
         let unused_header_values = header.unused();
@@ -573,30 +577,83 @@ where
                     .iter()
                     .map(|(x, y)| (&**x, *y))
                     .collect::<HashMap<_, _>>();
-                let (x, y) = lexerdef.set_rule_ids(&owned_map);
+                let (x, y) = lexerdef.set_rule_ids_spanned(&owned_map);
                 (
                     x.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
-                    y.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
+                    y.map(|a| {
+                        a.iter()
+                            .map(|(b, span)| (b.to_string(), *span))
+                            .collect::<HashSet<_>>()
+                    }),
                 )
             }
             None => (None, None),
         };
 
         let mut has_unallowed_missing = false;
+        let err_indent = " ".repeat(ERROR.len());
         if !self.allow_missing_terms_in_lexer {
             if let Some(ref mfl) = missing_from_lexer {
-                eprintln!("Error: the following tokens are used in the grammar but are not defined in the lexer:");
-                for n in mfl {
-                    eprintln!("    {}", n);
+                if let Some(ct_parser) = &ct_parser {
+                    let grm = ct_parser.yacc_grammar();
+                    let token_spans = mfl
+                        .iter()
+                        .map(|name| {
+                            ct_parser
+                                .yacc_grammar()
+                                .token_span(*grm.tokens_map().get(name.as_str()).unwrap())
+                                .expect("Given token should have a span")
+                        })
+                        .collect::<Vec<_>>();
+
+                    let yacc_diag = SpannedDiagnosticFormatter::new(
+                        ct_parser.grammar_src(),
+                        ct_parser.grammar_path(),
+                    );
+
+                    eprintln!("{ERROR} these tokens are not referenced in the lexer but defined as follows");
+                    eprintln!(
+                        "{err_indent} {}",
+                        yacc_diag.file_location_msg("in the grammar", None)
+                    );
+                    for span in token_spans {
+                        eprintln!(
+                            "{}",
+                            yacc_diag.underline_span_with_text(
+                                span,
+                                "Missing from lexer".to_string(),
+                                '^'
+                            )
+                        );
+                    }
+                    eprintln!();
+                } else {
+                    eprintln!("{ERROR} the following tokens are used in the grammar but are not defined in the lexer:");
+                    for n in mfl {
+                        eprintln!("    {}", n);
+                    }
                 }
                 has_unallowed_missing = true;
             }
         }
         if !self.allow_missing_tokens_in_parser {
             if let Some(ref mfp) = missing_from_parser {
-                eprintln!("Error: the following tokens are defined in the lexer but not used in the grammar:");
-                for n in mfp {
-                    eprintln!("    {}", n);
+                eprintln!(
+                    "{ERROR} these tokens are not referenced in the grammar but defined as follows"
+                );
+                eprintln!(
+                    "{err_indent} {}",
+                    lex_diag.file_location_msg("in the lexer", None)
+                );
+                for (_, span) in mfp {
+                    eprintln!(
+                        "{}",
+                        lex_diag.underline_span_with_text(
+                            *span,
+                            "Missing from parser".to_string(),
+                            '^'
+                        )
+                    );
                 }
                 has_unallowed_missing = true;
             }
@@ -831,7 +888,8 @@ where
         let cl = self.build()?;
         Ok((
             cl.missing_from_lexer().map(|x| x.to_owned()),
-            cl.missing_from_parser().map(|x| x.to_owned()),
+            cl.missing_from_parser()
+                .map(|x| x.iter().map(|(n, _)| n.to_owned()).collect::<HashSet<_>>()),
         ))
     }
 
@@ -1067,7 +1125,7 @@ where
 /// An interface to the result of [CTLexerBuilder::build()].
 pub struct CTLexer {
     missing_from_lexer: Option<HashSet<String>>,
-    missing_from_parser: Option<HashSet<String>>,
+    missing_from_parser: Option<HashSet<(String, Span)>>,
 }
 
 impl CTLexer {
@@ -1075,7 +1133,7 @@ impl CTLexer {
         self.missing_from_lexer.as_ref()
     }
 
-    fn missing_from_parser(&self) -> Option<&HashSet<String>> {
+    fn missing_from_parser(&self) -> Option<&HashSet<(String, Span)>> {
         self.missing_from_parser.as_ref()
     }
 }

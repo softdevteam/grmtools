@@ -692,6 +692,9 @@ where
                             return Ok(CTParser {
                                 regenerated: false,
                                 rule_ids,
+                                yacc_grammar: grm,
+                                grammar_src: inc,
+                                grammar_path: self.grammar_path.unwrap(),
                                 conflicts: None,
                             });
                         } else {
@@ -779,13 +782,16 @@ where
             &format!("/* CACHE INFORMATION {} */\n", cache),
         )?;
         let conflicts = if stable.conflicts().is_some() {
-            Some((grm, sgraph, stable))
+            Some((sgraph, stable))
         } else {
             None
         };
         Ok(CTParser {
             regenerated: true,
             rule_ids,
+            yacc_grammar: grm,
+            grammar_src: inc,
+            grammar_path: self.grammar_path.unwrap(),
             conflicts,
         })
     }
@@ -1489,11 +1495,10 @@ where
 {
     regenerated: bool,
     rule_ids: HashMap<String, StorageT>,
-    conflicts: Option<(
-        YaccGrammar<StorageT>,
-        StateGraph<StorageT>,
-        StateTable<StorageT>,
-    )>,
+    yacc_grammar: YaccGrammar<StorageT>,
+    grammar_src: String,
+    grammar_path: PathBuf,
+    conflicts: Option<(StateGraph<StorageT>, StateTable<StorageT>)>,
 }
 
 impl<StorageT> CTParser<StorageT>
@@ -1527,10 +1532,28 @@ where
         &StateTable<StorageT>,
         &Conflicts<StorageT>,
     )> {
-        if let Some((grm, sgraph, stable)) = &self.conflicts {
-            return Some((grm, sgraph, stable, stable.conflicts().unwrap()));
+        if let Some((sgraph, stable)) = &self.conflicts {
+            return Some((
+                &self.yacc_grammar,
+                sgraph,
+                stable,
+                stable.conflicts().unwrap(),
+            ));
         }
         None
+    }
+
+    #[doc(hidden)]
+    pub fn yacc_grammar(&self) -> &YaccGrammar<StorageT> {
+        &self.yacc_grammar
+    }
+    #[doc(hidden)]
+    pub fn grammar_src(&self) -> &str {
+        &self.grammar_src
+    }
+    #[doc(hidden)]
+    pub fn grammar_path(&self) -> &Path {
+        self.grammar_path.as_path()
     }
 }
 
