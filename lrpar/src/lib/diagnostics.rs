@@ -185,7 +185,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                     }
                     _ => "Unrecognized spanskind".to_string(),
                 };
-                out.push_str(&self.prefixed_underline_span_with_text(dots, *span, s, '-'));
+                out.push_str(&self.prefixed_underline_span_with_text(dots, *span, s, '^'));
             }
         }
         out
@@ -293,9 +293,9 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
                 ),
             );
             out.pushln(self.underline_span_with_text(r1_span, "First reduce".to_string(), '^'));
-            out.pushln(self.underline_span_with_text(r2_span, "Second reduce".to_string(), '-'));
+            out.pushln(self.underline_span_with_text(r2_span, "Second reduce".to_string(), '^'));
             if let Some(t_span) = t_span {
-                out.pushln(self.underline_span_with_text(t_span, "Lookahead".to_string(), '+'));
+                out.pushln(self.underline_span_with_text(t_span, "Lookahead".to_string(), '^'));
             }
             out.push('\n');
         }
@@ -319,7 +319,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             );
 
             out.pushln(self.underline_span_with_text(s_tok_span, "Shift".to_string(), '^'));
-            out.pushln(self.underline_span_with_text(r_rule_span, "Reduced rule".to_string(), '+'));
+            out.pushln(self.underline_span_with_text(r_rule_span, "Reduced rule".to_string(), '^'));
 
             if r_prod_spans.is_empty() {
                 r_prod_spans.push(fallback_span);
