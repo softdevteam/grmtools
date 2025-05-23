@@ -267,7 +267,14 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             let (_r1_prod_names, _r1_prod_spans) = pidx_prods_data(ast, *r1_prod_idx);
             let (_r2_prod_names, _r2_prod_spans) = pidx_prods_data(ast, *r2_prod_idx);
 
-            let t_name = grm.token_name(*t_idx).unwrap_or("$");
+            let (t_name, t_span) = if let Some(name) = grm.token_name(*t_idx) {
+                (name, grm.token_span(*t_idx))
+            } else {
+                (
+                    "$",
+                    grm.token_idx("$").and_then(|t_idx| grm.token_span(t_idx)),
+                )
+            };
             let r1_rule_idx = grm.prod_to_rule(*r1_prod_idx);
             let r2_rule_idx = grm.prod_to_rule(*r2_prod_idx);
             let r1_span = grm.rule_name_span(r1_rule_idx);
@@ -287,6 +294,9 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             );
             out.pushln(self.underline_span_with_text(r1_span, "First reduce".to_string(), '^'));
             out.pushln(self.underline_span_with_text(r2_span, "Second reduce".to_string(), '-'));
+            if let Some(t_span) = t_span {
+                out.pushln(self.underline_span_with_text(t_span, "Lookahead".to_string(), '+'));
+            }
             out.push('\n');
         }
         for (s_tok_idx, r_prod_idx, _st_idx) in c.sr_conflicts() {
