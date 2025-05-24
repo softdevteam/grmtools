@@ -4,7 +4,7 @@ use std::{
     hash::{BuildHasherDefault, Hash},
 };
 
-use cfgrammar::{yacc::YaccGrammar, PIdx, SIdx, Symbol};
+use cfgrammar::{PIdx, SIdx, Symbol, yacc::YaccGrammar};
 use fnv::FnvHasher;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 #[cfg(feature = "serde")]
@@ -159,8 +159,8 @@ where
 #[cfg(test)]
 mod test {
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         SIdx, Symbol,
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
     };
     use vob::Vob;
 

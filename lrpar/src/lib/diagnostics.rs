@@ -2,13 +2,13 @@ use std::{cell::OnceCell, error::Error, fmt::Display, path::Path};
 
 use crate::LexerTypes;
 use cfgrammar::{
+    PIdx, Span, Spanned,
     newlinecache::NewlineCache,
     yacc::{
+        YaccGrammar,
         ast::{GrammarAST, Symbol},
         parser::SpansKind,
-        YaccGrammar,
     },
-    PIdx, Span, Spanned,
 };
 use lrtable::statetable::Conflicts;
 use unicode_width::UnicodeWidthStr;

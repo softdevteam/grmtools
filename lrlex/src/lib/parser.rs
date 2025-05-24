@@ -7,8 +7,8 @@ use quote::quote;
 use regex::Regex;
 
 use crate::{
+    DEFAULT_LEX_FLAGS, LexBuildError, LexBuildResult, LexErrorKind,
     lexer::{LexFlags, Rule},
-    LexBuildError, LexBuildResult, LexErrorKind, DEFAULT_LEX_FLAGS,
 };
 use std::borrow::{Borrow as _, Cow};
 use std::ops::Not;
@@ -225,11 +225,7 @@ where
                     }
                 };
                 if k == self.src.len() {
-                    if errs.is_empty() {
-                        Ok(i)
-                    } else {
-                        Err(errs)
-                    }
+                    if errs.is_empty() { Ok(i) } else { Err(errs) }
                 } else {
                     errs.push(self.mk_error(LexErrorKind::RoutinesNotSupported, i));
                     Err(errs)
@@ -237,11 +233,7 @@ where
             }
             None => {
                 assert_eq!(i, self.src.len());
-                if errs.is_empty() {
-                    Ok(i)
-                } else {
-                    Err(errs)
-                }
+                if errs.is_empty() { Ok(i) } else { Err(errs) }
             }
         }
     }
@@ -692,8 +684,8 @@ where
 mod test {
     use super::*;
     use crate::{
-        lexer::{LRNonStreamingLexerDef, LexerDef},
         DefaultLexerTypes,
+        lexer::{LRNonStreamingLexerDef, LexerDef},
     };
     use cfgrammar::Spanned as _;
     use std::collections::HashMap;
@@ -1204,12 +1196,14 @@ mod test {
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         // Expect two start states - INITIAL + test
         assert_eq!(2, ast.iter_start_states().count());
-        assert!(ast
-            .iter_start_states()
-            .any(|ss| !ss.exclusive && ss.name == INITIAL_START_STATE_NAME));
-        assert!(ast
-            .iter_start_states()
-            .any(|ss| !ss.exclusive && ss.name == "test"));
+        assert!(
+            ast.iter_start_states()
+                .any(|ss| !ss.exclusive && ss.name == INITIAL_START_STATE_NAME)
+        );
+        assert!(
+            ast.iter_start_states()
+                .any(|ss| !ss.exclusive && ss.name == "test")
+        );
     }
 
     #[test]
@@ -1221,12 +1215,14 @@ mod test {
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         // Expect two start states - INITIAL + test
         assert_eq!(2, ast.iter_start_states().count());
-        assert!(ast
-            .iter_start_states()
-            .any(|ss| !ss.exclusive && ss.name == INITIAL_START_STATE_NAME));
-        assert!(ast
-            .iter_start_states()
-            .any(|ss| !ss.exclusive && ss.name == "test"));
+        assert!(
+            ast.iter_start_states()
+                .any(|ss| !ss.exclusive && ss.name == INITIAL_START_STATE_NAME)
+        );
+        assert!(
+            ast.iter_start_states()
+                .any(|ss| !ss.exclusive && ss.name == "test")
+        );
     }
 
     #[test]
@@ -1238,12 +1234,14 @@ mod test {
         let ast = LRNonStreamingLexerDef::<DefaultLexerTypes<u8>>::from_str(&src).unwrap();
         // Expect two start states - INITIAL + test
         assert_eq!(2, ast.iter_start_states().count());
-        assert!(ast
-            .iter_start_states()
-            .any(|ss| !ss.exclusive && ss.name == INITIAL_START_STATE_NAME));
-        assert!(ast
-            .iter_start_states()
-            .any(|ss| ss.exclusive && ss.name == "test"));
+        assert!(
+            ast.iter_start_states()
+                .any(|ss| !ss.exclusive && ss.name == INITIAL_START_STATE_NAME)
+        );
+        assert!(
+            ast.iter_start_states()
+                .any(|ss| ss.exclusive && ss.name == "test")
+        );
     }
 
     #[test]

@@ -1,7 +1,7 @@
 #[cfg(feature = "bincode")]
 use bincode::{Decode, Encode};
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 

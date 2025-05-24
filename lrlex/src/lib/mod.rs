@@ -21,10 +21,10 @@ mod lexer;
 mod parser;
 
 pub use crate::{
-    ctbuilder::{ct_token_map, CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility},
+    ctbuilder::{CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility, ct_token_map},
     defaults::{DefaultLexeme, DefaultLexerTypes},
     lexer::{
-        LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef, Rule, DEFAULT_LEX_FLAGS,
+        DEFAULT_LEX_FLAGS, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef, Rule,
         UNSPECIFIED_LEX_FLAGS,
     },
     parser::StartState,

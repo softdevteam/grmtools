@@ -1,13 +1,13 @@
 use std::{
-    collections::{hash_map::HashMap, HashSet},
+    collections::{HashSet, hash_map::HashMap},
     hash::Hash,
 };
 
-use cfgrammar::{yacc::YaccGrammar, SIdx, Symbol};
+use cfgrammar::{SIdx, Symbol, yacc::YaccGrammar};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use vob::Vob;
 
-use crate::{itemset::Itemset, stategraph::StateGraph, StIdx};
+use crate::{StIdx, itemset::Itemset, stategraph::StateGraph};
 
 // This file creates stategraphs from grammars. Unfortunately there is no perfect guide to how to
 // do this that I know of -- certainly not one that talks about sensible ways to arrange data and
@@ -398,10 +398,10 @@ where
 mod test {
     use vob::Vob;
 
-    use crate::{pager::pager_stategraph, stategraph::state_exists, StIdx};
+    use crate::{StIdx, pager::pager_stategraph, stategraph::state_exists};
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         SIdx, Symbol,
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
     };
 
     use super::vob_intersect;

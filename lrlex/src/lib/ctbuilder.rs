@@ -7,7 +7,7 @@ use std::{
     env::{current_dir, var},
     error::Error,
     fmt::{self, Debug, Display, Write as _},
-    fs::{self, create_dir_all, read_to_string, File},
+    fs::{self, File, create_dir_all, read_to_string},
     hash::Hash,
     io::Write,
     path::{Path, PathBuf},
@@ -26,12 +26,12 @@ use cfgrammar::{
 use glob::glob;
 use lazy_static::lazy_static;
 use lrpar::{
-    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
     CTParserBuilder, LexerTypes,
+    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use regex::Regex;
 
 use crate::{DefaultLexerTypes, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef};
@@ -616,7 +616,9 @@ where
                         ct_parser.grammar_path(),
                     );
 
-                    eprintln!("{ERROR} these tokens are not referenced in the lexer but defined as follows");
+                    eprintln!(
+                        "{ERROR} these tokens are not referenced in the lexer but defined as follows"
+                    );
                     eprintln!(
                         "{err_indent} {}",
                         yacc_diag.file_location_msg("in the grammar", None)
@@ -633,7 +635,9 @@ where
                     }
                     eprintln!();
                 } else {
-                    eprintln!("{ERROR} the following tokens are used in the grammar but are not defined in the lexer:");
+                    eprintln!(
+                        "{ERROR} the following tokens are used in the grammar but are not defined in the lexer:"
+                    );
                     for n in mfl {
                         eprintln!("    {}", n);
                     }

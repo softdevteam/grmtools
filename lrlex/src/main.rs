@@ -4,7 +4,7 @@ use std::{
     error::Error,
     fmt,
     fs::File,
-    io::{stderr, stdin, Read, Write},
+    io::{Read, Write, stderr, stdin},
     path::Path,
     process,
 };
@@ -12,8 +12,8 @@ use std::{
 use cfgrammar::header::{GrmtoolsSectionParser, HeaderValue};
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexFlags, LexerDef, LexerKind};
 use lrpar::{
-    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
     Lexeme, Lexer,
+    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
 };
 
 const ERROR: &str = "[Error]";

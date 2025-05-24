@@ -1,17 +1,17 @@
 use cfgrammar::{
+    Location, Span,
     header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Value},
     markmap::Entry,
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
-    Location, Span,
+    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
 };
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRLexError, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{
+    LexerTypes,
     diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
     parser::{RTParserBuilder, RecoveryKind},
-    LexerTypes,
 };
-use lrtable::{from_yacc, Minimiser, StateTable};
+use lrtable::{Minimiser, StateTable, from_yacc};
 use num_traits::AsPrimitive;
 use num_traits::ToPrimitive as _;
 use std::{
@@ -36,7 +36,10 @@ fn usage(prog: &str, msg: &str) -> ! {
     if !msg.is_empty() {
         eprintln!("{}", msg);
     }
-    eprintln!("Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dq] <lexer.l> <parser.y> <input files> ...", leaf);
+    eprintln!(
+        "Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dq] <lexer.l> <parser.y> <input files> ...",
+        leaf
+    );
     process::exit(1);
 }
 
@@ -212,7 +215,9 @@ fn main() {
     }
     let yk_val = header.get("yacckind");
     if yk_val.is_none() {
-        eprintln!("yacckind not specified in the %grmtools section of the grammar or via the '-y' parameter");
+        eprintln!(
+            "yacckind not specified in the %grmtools section of the grammar or via the '-y' parameter"
+        );
         std::process::exit(1);
     }
     let HeaderValue(_, yk_val) = yk_val.unwrap();

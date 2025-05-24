@@ -8,22 +8,22 @@ use regex::Regex;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     error::Error,
     fmt,
     str::FromStr,
 };
 
 use crate::{
-    header::{GrmtoolsSectionParser, HeaderErrorKind},
     Span, Spanned,
+    header::{GrmtoolsSectionParser, HeaderErrorKind},
 };
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
 
 use super::{
-    ast::{GrammarAST, Symbol},
     AssocKind, Precedence, YaccKind,
+    ast::{GrammarAST, Symbol},
 };
 
 /// The various different possible Yacc parser errors.
@@ -129,27 +129,27 @@ impl fmt::Display for YaccGrammarErrorKind {
             YaccGrammarErrorKind::NoStartRule => return write!(f, "No start rule specified"),
             YaccGrammarErrorKind::UnknownSymbol => "Unknown symbol, expected a rule or token",
             YaccGrammarErrorKind::InvalidStartRule(name) => {
-                return write!(f, "Start rule '{}' does not appear in grammar", name)
+                return write!(f, "Start rule '{}' does not appear in grammar", name);
             }
             YaccGrammarErrorKind::UnknownRuleRef(name) => {
-                return write!(f, "Unknown reference to rule '{}'", name)
+                return write!(f, "Unknown reference to rule '{}'", name);
             }
             YaccGrammarErrorKind::UnknownToken(name) => {
-                return write!(f, "Unknown token '{}'", name)
+                return write!(f, "Unknown token '{}'", name);
             }
             YaccGrammarErrorKind::NoPrecForToken(name) => {
                 return write!(
                     f,
                     "Token '{}' used in %prec has no precedence attached",
                     name
-                )
+                );
             }
             YaccGrammarErrorKind::UnknownEPP(name) => {
                 return write!(
                     f,
                     "Token '{}' in %epp declaration is not referenced in the grammar",
                     name
-                )
+                );
             }
             YaccGrammarErrorKind::InvalidYaccKind => "Invalid yacc kind",
             YaccGrammarErrorKind::Header(hk, _) => &format!("Error in '%grmtools' {}", hk),
@@ -482,7 +482,7 @@ impl YaccParser<'_> {
                                 j
                             }
                             Err(_) => {
-                                return Err(self.mk_error(YaccGrammarErrorKind::UnknownSymbol, i))
+                                return Err(self.mk_error(YaccGrammarErrorKind::UnknownSymbol, i));
                             }
                         },
                     };
@@ -1053,8 +1053,8 @@ impl YaccParser<'_> {
 mod test {
     use super::{
         super::{
-            ast::{GrammarAST, Production, Symbol},
             AssocKind, Precedence, YaccKind, YaccOriginalActionKind,
+            ast::{GrammarAST, Production, Symbol},
         },
         Span, Spanned, YaccGrammarError, YaccGrammarErrorKind, YaccParser,
     };
@@ -2549,15 +2549,18 @@ B";
         A: ;
         "#;
         let grm = parse(YaccKind::Original(YaccOriginalActionKind::NoAction), src).unwrap();
-        assert!(grm
-            .expect_unused
-            .contains(&Symbol::Rule("A".to_string(), Span::new(24, 25))));
-        assert!(grm
-            .expect_unused
-            .contains(&Symbol::Token("b".to_string(), Span::new(27, 28))));
-        assert!(grm
-            .expect_unused
-            .contains(&Symbol::Token("c".to_string(), Span::new(31, 32))));
+        assert!(
+            grm.expect_unused
+                .contains(&Symbol::Rule("A".to_string(), Span::new(24, 25)))
+        );
+        assert!(
+            grm.expect_unused
+                .contains(&Symbol::Token("b".to_string(), Span::new(27, 28)))
+        );
+        assert!(
+            grm.expect_unused
+                .contains(&Symbol::Token("c".to_string(), Span::new(31, 32)))
+        );
     }
 
     #[test]

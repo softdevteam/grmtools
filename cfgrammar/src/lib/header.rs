@@ -1,9 +1,9 @@
 use crate::{
+    Location, Span, Spanned,
     markmap::{Entry, MarkMap},
     yacc::{
-        parser::SpansKind, YaccGrammarError, YaccGrammarErrorKind, YaccKind, YaccOriginalActionKind,
+        YaccGrammarError, YaccGrammarErrorKind, YaccKind, YaccOriginalActionKind, parser::SpansKind,
     },
-    Location, Span, Spanned,
 };
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};

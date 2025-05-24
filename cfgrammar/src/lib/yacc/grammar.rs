@@ -9,11 +9,10 @@ use serde::{Deserialize, Serialize};
 use vob::Vob;
 
 use super::{
-    ast,
+    YaccKind, ast,
     firsts::YaccFirsts,
     follows::YaccFollows,
     parser::{YaccGrammarError, YaccGrammarResult},
-    YaccKind,
 };
 use crate::{PIdx, RIdx, SIdx, Span, Symbol, TIdx};
 
@@ -234,7 +233,9 @@ where
         }
         for p in &ast.prods {
             if p.symbols.len() > num_traits::cast(StorageT::max_value()).unwrap() {
-                panic!("StorageT is not big enough to store the symbols of at least one of this grammar's productions.");
+                panic!(
+                    "StorageT is not big enough to store the symbols of at least one of this grammar's productions."
+                );
             }
         }
 
@@ -811,11 +812,7 @@ where
             .rule_max_costs
             .borrow_mut()
             .get_or_insert_with(|| rule_max_costs(self.grm, &self.token_costs))[usize::from(ridx)];
-        if v == u16::MAX {
-            None
-        } else {
-            Some(v)
-        }
+        if v == u16::MAX { None } else { Some(v) }
     }
 
     /// Non-deterministically return a minimal sentence from the set of minimal sentences for the
@@ -1134,7 +1131,7 @@ where
 mod test {
     use super::{
         super::{AssocKind, Precedence, YaccGrammar, YaccKind, YaccOriginalActionKind},
-        rule_max_costs, rule_min_costs, IMPLICIT_RULE, IMPLICIT_START_RULE,
+        IMPLICIT_RULE, IMPLICIT_START_RULE, rule_max_costs, rule_min_costs,
     };
     use crate::{PIdx, RIdx, Span, Symbol, TIdx};
     use std::collections::HashMap;

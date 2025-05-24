@@ -1,4 +1,4 @@
-use lrlex::{ct_token_map, DefaultLexerTypes};
+use lrlex::{DefaultLexerTypes, ct_token_map};
 use lrpar::CTParserBuilder;
 
 // Some of the token names in the parser do not lead to valid Rust identifiers, so we map them to
