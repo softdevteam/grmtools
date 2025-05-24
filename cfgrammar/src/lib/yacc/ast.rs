@@ -7,13 +7,13 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 
 use super::{
-    parser::YaccParser, Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning,
-    YaccGrammarWarningKind, YaccKind,
+    Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
+    YaccKind, parser::YaccParser,
 };
 
 use crate::{
-    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, HeaderValue},
     Span,
+    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, HeaderValue},
 };
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
@@ -96,11 +96,13 @@ impl FromStr for ASTWithValidityInfo {
                 yacc_kind,
             })
         } else {
-            Err(vec![HeaderError {
-                kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                locations: vec![Span::new(0, 0)],
-            }
-            .into()])
+            Err(vec![
+                HeaderError {
+                    kind: HeaderErrorKind::InvalidEntry("yacckind"),
+                    locations: vec![Span::new(0, 0)],
+                }
+                .into(),
+            ])
         }
     }
 }
@@ -704,9 +706,11 @@ mod test {
             start: "a" a;
             a: "c";"#,
         );
-        assert!(ast_validity.ast().prods[0]
-            .symbols
-            .contains(&Symbol::Rule("a".to_string(), Span::new(64, 65))));
+        assert!(
+            ast_validity.ast().prods[0]
+                .symbols
+                .contains(&Symbol::Rule("a".to_string(), Span::new(64, 65)))
+        );
         let ast_validity = ASTWithValidityInfo::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             r#"
@@ -715,9 +719,11 @@ mod test {
             start: "a" x;
             x: "c";"#,
         );
-        assert!(ast_validity.ast().prods[0]
-            .symbols
-            .contains(&Symbol::Rule("x".to_string(), Span::new(64, 65))));
+        assert!(
+            ast_validity.ast().prods[0]
+                .symbols
+                .contains(&Symbol::Rule("x".to_string(), Span::new(64, 65)))
+        );
         let ast_validity = ASTWithValidityInfo::new(
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
             r#"
@@ -752,13 +758,17 @@ mod test {
                 start: "a" a "b";
                 "#,
         );
-        assert!(ast_validity
-            .ast()
-            .token_directives
-            .contains(&ast_validity.ast().tokens.get_index_of("a").unwrap()));
-        assert!(!ast_validity
-            .ast()
-            .token_directives
-            .contains(&ast_validity.ast().tokens.get_index_of("b").unwrap()));
+        assert!(
+            ast_validity
+                .ast()
+                .token_directives
+                .contains(&ast_validity.ast().tokens.get_index_of("a").unwrap())
+        );
+        assert!(
+            !ast_validity
+                .ast()
+                .token_directives
+                .contains(&ast_validity.ast().tokens.get_index_of("b").unwrap())
+        );
     }
 }

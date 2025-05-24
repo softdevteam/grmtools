@@ -1,8 +1,8 @@
 use std::io::{self, BufRead, Write};
 
 use cfgrammar::RIdx;
-use lrlex::{lrlex_mod, DefaultLexeme};
-use lrpar::{lrpar_mod, Lexeme, Node};
+use lrlex::{DefaultLexeme, lrlex_mod};
+use lrpar::{Lexeme, Node, lrpar_mod};
 
 // Using `lrlex_mod!` brings the lexer for `comment.l` into scope. By default the module name will be
 // `comment_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).

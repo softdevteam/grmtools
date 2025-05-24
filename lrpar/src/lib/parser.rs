@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use web_time::{Duration, Instant};
 
 use cactus::Cactus;
-use cfgrammar::{header::Value, span::Location, yacc::YaccGrammar, RIdx, Span, TIdx};
+use cfgrammar::{RIdx, Span, TIdx, header::Value, span::Location, yacc::YaccGrammar};
 use lrtable::{Action, StIdx, StateTable};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
@@ -22,7 +22,7 @@ use quote::quote;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{cpctplus, LexError, Lexeme, LexerTypes, NonStreamingLexer};
+use crate::{LexError, Lexeme, LexerTypes, NonStreamingLexer, cpctplus};
 
 #[cfg(test)]
 const RECOVERY_TIME_BUDGET: u64 = 60_000; // milliseconds
@@ -112,12 +112,12 @@ pub(super) struct Parser<
 }
 
 impl<
-        'a,
-        'b: 'a,
-        'input: 'b,
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > Parser<'a, 'b, 'input, StorageT, LexerTypesT, Node<LexerTypesT::LexemeT, StorageT>, ()>
+    'a,
+    'b: 'a,
+    'input: 'b,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> Parser<'a, 'b, 'input, StorageT, LexerTypesT, Node<LexerTypesT::LexemeT, StorageT>, ()>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -191,12 +191,12 @@ where
 }
 
 impl<
-        'a,
-        'b: 'a,
-        'input: 'b,
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > Parser<'a, 'b, 'input, StorageT, LexerTypesT, (), ()>
+    'a,
+    'b: 'a,
+    'input: 'b,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> Parser<'a, 'b, 'input, StorageT, LexerTypesT, (), ()>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -242,14 +242,14 @@ where
 }
 
 impl<
-        'a,
-        'b: 'a,
-        'input: 'b,
-        StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-        ActionT: 'a,
-        ParamT: Clone,
-    > Parser<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>
+    'a,
+    'b: 'a,
+    'input: 'b,
+    StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+    ActionT: 'a,
+    ParamT: Clone,
+> Parser<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -468,7 +468,7 @@ where
                 }
                 Action::Shift(state_id) => {
                     if let Some(ref mut astack_uw) = *astack {
-                        if let Some(ref mut spans_uw) = spans {
+                        if let Some(spans_uw) = spans {
                             let la_lexeme = if let Some(l) = lexeme_prefix {
                                 l
                             } else {
@@ -633,8 +633,8 @@ impl TryFrom<RecoveryKind> for Value<Location> {
     type Error = cfgrammar::header::HeaderError<Location>;
     fn try_from(rk: RecoveryKind) -> Result<Value<Location>, Self::Error> {
         use cfgrammar::{
-            header::{Namespaced, Setting},
             Location,
+            header::{Namespaced, Setting},
         };
         let from_loc = Location::Other("From<RecoveryKind>".to_string());
         Ok(match rk {
@@ -689,7 +689,7 @@ impl TryFrom<&Value<Location>> for RecoveryKind {
                                 "Unknown namespace",
                             ),
                             locations: vec![loc.clone()],
-                        })
+                        });
                     }
                     _ => {}
                 }
@@ -835,9 +835,9 @@ where
 }
 
 impl<
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > fmt::Display for LexParseError<StorageT, LexerTypesT>
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> fmt::Display for LexParseError<StorageT, LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -850,19 +850,19 @@ where
 }
 
 impl<
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > Error for LexParseError<StorageT, LexerTypesT>
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> Error for LexParseError<StorageT, LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
 {
 }
 
 impl<
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT, LexErrorT = T>,
-        T: LexError,
-    > From<T> for LexParseError<StorageT, LexerTypesT>
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT, LexErrorT = T>,
+    T: LexError,
+> From<T> for LexParseError<StorageT, LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -872,9 +872,9 @@ where
 }
 
 impl<
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > From<ParseError<LexerTypesT::LexemeT, StorageT>> for LexParseError<StorageT, LexerTypesT>
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> From<ParseError<LexerTypesT::LexemeT, StorageT>> for LexParseError<StorageT, LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -901,10 +901,10 @@ pub struct RTParserBuilder<
 }
 
 impl<
-        'a,
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > RTParserBuilder<'a, StorageT, LexerTypesT>
+    'a,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> RTParserBuilder<'a, StorageT, LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -1062,17 +1062,17 @@ pub(crate) mod test {
     use std::collections::HashMap;
 
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Span,
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
     };
-    use lrtable::{from_yacc, Minimiser};
+    use lrtable::{Minimiser, from_yacc};
     use num_traits::ToPrimitive;
     use regex::Regex;
 
     use super::*;
     use crate::{
-        test_utils::{TestLexError, TestLexeme, TestLexerTypes},
         Lexeme, Lexer,
+        test_utils::{TestLexError, TestLexeme, TestLexerTypes},
     };
 
     pub(crate) fn do_parse<'input>(

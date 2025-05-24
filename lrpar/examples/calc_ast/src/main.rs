@@ -3,8 +3,8 @@
 use std::io::{self, BufRead, Write};
 
 use cfgrammar::Span;
-use lrlex::{lrlex_mod, DefaultLexerTypes};
-use lrpar::{lrpar_mod, NonStreamingLexer};
+use lrlex::{DefaultLexerTypes, lrlex_mod};
+use lrpar::{NonStreamingLexer, lrpar_mod};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
 // `calc_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).

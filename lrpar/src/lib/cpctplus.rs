@@ -17,9 +17,9 @@ use lrtable::{Action, StIdx};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
 use super::{
+    Lexeme, LexerTypes,
     dijkstra::dijkstra,
     parser::{AStackType, ParseRepair, Parser, Recoverer},
-    Lexeme, LexerTypes,
 };
 
 const PARSE_AT_LEAST: usize = 3; // N in Corchuelo et al.
@@ -134,14 +134,14 @@ where
 }
 
 impl<
-        'a,
-        'b: 'a,
-        'input: 'b,
-        StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-        ActionT: 'a,
-        ParamT: Clone,
-    > Recoverer<StorageT, LexerTypesT, ActionT, ParamT>
+    'a,
+    'b: 'a,
+    'input: 'b,
+    StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+    ActionT: 'a,
+    ParamT: Clone,
+> Recoverer<StorageT, LexerTypesT, ActionT, ParamT>
     for CPCTPlus<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
@@ -271,14 +271,14 @@ where
 }
 
 impl<
-        'a,
-        'b: 'a,
-        'input: 'b,
-        StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-        ActionT: 'a,
-        ParamT: Clone,
-    > CPCTPlus<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>
+    'a,
+    'b: 'a,
+    'input: 'b,
+    StorageT: 'static + Debug + Eq + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+    ActionT: 'a,
+    ParamT: Clone,
+> CPCTPlus<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -640,12 +640,12 @@ mod test {
     use num_traits::ToPrimitive;
 
     use crate::{
+        LexParseError, Lexeme, NonStreamingLexer,
         parser::{
-            test::{do_parse, SmallLexer},
             ParseRepair, RecoveryKind,
+            test::{SmallLexer, do_parse},
         },
         test_utils::{TestLexeme, TestLexerTypes},
-        LexParseError, Lexeme, NonStreamingLexer,
     };
 
     fn pp_repairs(

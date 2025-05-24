@@ -8,9 +8,9 @@ use std::{
 };
 
 use cfgrammar::{
+    NewlineCache, Span,
     header::{GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
     span::Location,
-    NewlineCache, Span,
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::{Regex, RegexBuilder};
@@ -18,8 +18,8 @@ use regex::{Regex, RegexBuilder};
 use lrpar::{Lexeme, Lexer, LexerTypes, NonStreamingLexer};
 
 use crate::{
-    parser::{LexParser, StartState, StartStateOperation},
     LRLexError, LexBuildError, LexBuildResult, StartStateId,
+    parser::{LexParser, StartState, StartStateOperation},
 };
 
 #[doc(hidden)]
@@ -527,9 +527,9 @@ where
 }
 
 impl<
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > LRNonStreamingLexerDef<LexerTypesT>
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> LRNonStreamingLexerDef<LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
     LexerTypesT::StorageT: TryFrom<usize>,
@@ -692,11 +692,11 @@ where
 }
 
 impl<
-        'lexer,
-        'input: 'lexer,
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > LRNonStreamingLexer<'lexer, 'input, LexerTypesT>
+    'lexer,
+    'input: 'lexer,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> LRNonStreamingLexer<'lexer, 'input, LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
 {
@@ -720,11 +720,11 @@ where
 }
 
 impl<
-        'lexer,
-        'input: 'lexer,
-        StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT, LexErrorT = LRLexError>,
-    > Lexer<LexerTypesT> for LRNonStreamingLexer<'lexer, 'input, LexerTypesT>
+    'lexer,
+    'input: 'lexer,
+    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT, LexErrorT = LRLexError>,
+> Lexer<LexerTypesT> for LRNonStreamingLexer<'lexer, 'input, LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
 {

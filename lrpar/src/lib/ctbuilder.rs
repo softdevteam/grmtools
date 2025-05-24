@@ -6,7 +6,7 @@ use std::{
     env::{current_dir, var},
     error::Error,
     fmt::{self, Debug, Write as fmtWrite},
-    fs::{self, create_dir_all, read_to_string, File},
+    fs::{self, File, create_dir_all, read_to_string},
     hash::Hash,
     io::Write,
     marker::PhantomData,
@@ -15,22 +15,22 @@ use std::{
 };
 
 use crate::{
-    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
     LexerTypes, RTParserBuilder, RecoveryKind,
+    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
 };
-use bincode::{decode_from_slice, encode_to_vec, Decode, Encode};
+use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
 use cfgrammar::{
+    Location, RIdx, Symbol,
     header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
     markmap::{Entry, MergeBehavior},
-    yacc::{ast::ASTWithValidityInfo, YaccGrammar, YaccKind, YaccOriginalActionKind},
-    Location, RIdx, Symbol,
+    yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
 };
 use filetime::FileTime;
 use lazy_static::lazy_static;
-use lrtable::{from_yacc, statetable::Conflicts, Minimiser, StateGraph, StateTable};
+use lrtable::{Minimiser, StateGraph, StateTable, from_yacc, statetable::Conflicts};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::{Literal, TokenStream};
-use quote::{format_ident, quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use regex::Regex;
 
 const ACTION_PREFIX: &str = "__gt_";
@@ -255,10 +255,10 @@ where
 }
 
 impl<
-        'a,
-        StorageT: 'static + Debug + Hash + PrimInt + Encode + Unsigned,
-        LexerTypesT: LexerTypes<StorageT = StorageT>,
-    > CTParserBuilder<'a, LexerTypesT>
+    'a,
+    StorageT: 'static + Debug + Hash + PrimInt + Encode + Unsigned,
+    LexerTypesT: LexerTypes<StorageT = StorageT>,
+> CTParserBuilder<'a, LexerTypesT>
 where
     usize: AsPrimitive<StorageT>,
 {

@@ -2,13 +2,13 @@ use std::{cell::OnceCell, error::Error, fmt::Display, path::Path};
 
 use crate::LexerTypes;
 use cfgrammar::{
+    PIdx, Span, Spanned,
     newlinecache::NewlineCache,
     yacc::{
+        YaccGrammar,
         ast::{GrammarAST, Symbol},
         parser::SpansKind,
-        YaccGrammar,
     },
-    PIdx, Span, Spanned,
 };
 use lrtable::statetable::Conflicts;
 use unicode_width::UnicodeWidthStr;
@@ -668,7 +668,7 @@ mod test {
     fn underline_zero_length() {
         let s = r#"Error is between the quotes "" there"#;
         let test_path = PathBuf::from("test");
-        let formatter = SpannedDiagnosticFormatter::new(&s, &test_path);
+        let formatter = SpannedDiagnosticFormatter::new(s, &test_path);
         let mut out = String::from("\n");
         let pos = s.find("\"").unwrap() + 1;
         out.push_str(&formatter.prefixed_underline_span_with_text(

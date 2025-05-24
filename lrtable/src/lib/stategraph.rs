@@ -1,9 +1,9 @@
 use std::{collections::hash_map::HashMap, fmt::Write, hash::Hash};
 
-use cfgrammar::{yacc::YaccGrammar, Symbol, TIdx};
+use cfgrammar::{Symbol, TIdx, yacc::YaccGrammar};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 
-use crate::{itemset::Itemset, StIdx};
+use crate::{StIdx, itemset::Itemset};
 
 #[derive(Debug)]
 pub struct StateGraph<StorageT: Eq + Hash> {
@@ -227,8 +227,13 @@ pub(crate) fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
             };
             if off == tidx {
                 if !bit {
-                    panic!("bit for token {}, dot {} is not set in production {} of {} when it should be",
-                           t, usize::from(dot), prod_off, nt);
+                    panic!(
+                        "bit for token {}, dot {} is not set in production {} of {} when it should be",
+                        t,
+                        usize::from(dot),
+                        prod_off,
+                        nt
+                    );
                 }
                 found = true;
                 break;
@@ -248,10 +253,10 @@ pub(crate) fn state_exists<StorageT: 'static + Hash + PrimInt + Unsigned>(
 
 #[cfg(test)]
 mod test {
-    use crate::{pager::pager_stategraph, StIdx};
+    use crate::{StIdx, pager::pager_stategraph};
     use cfgrammar::{
-        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
         Symbol,
+        yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind},
     };
 
     #[test]

@@ -3,7 +3,7 @@ use glob::glob;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_macro_input, Ident, LitStr};
+use syn::{Ident, LitStr, parse_macro_input};
 #[proc_macro]
 pub fn generate_codegen_fail_tests(item: TokenStream) -> TokenStream {
     let mut out = Vec::new();

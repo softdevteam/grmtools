@@ -4,7 +4,7 @@ use std::{
     error::Error,
     fmt,
     fs::File,
-    io::{stderr, stdin, Read, Write},
+    io::{Read, Write, stderr, stdin},
     path::Path,
     process,
 };
@@ -12,8 +12,8 @@ use std::{
 use cfgrammar::header::{GrmtoolsSectionParser, HeaderValue};
 use lrlex::{DefaultLexerTypes, LRNonStreamingLexerDef, LexFlags, LexerDef, LexerKind};
 use lrpar::{
-    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
     Lexeme, Lexer,
+    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
 };
 
 const ERROR: &str = "[Error]";
@@ -108,7 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let lexerdef = match lexerkind {
         LexerKind::LRNonStreamingLexer => {
             let lex_flags = LexFlags::try_from(&mut header)?;
-            let lexerdef = match LRNonStreamingLexerDef::<DefaultLexerTypes<u32>>::new_with_options(
+            match LRNonStreamingLexerDef::<DefaultLexerTypes<u32>>::new_with_options(
                 &lex_src, lex_flags,
             ) {
                 Ok(x) => x,
@@ -122,8 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     process::exit(1);
                 }
-            };
-            lexerdef
+            }
         }
         _ => {
             return Err(ErrorString("Unrecognized lexer kind".to_string()))?;
@@ -132,10 +131,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     {
         let unused_header_values = header.unused();
         if !unused_header_values.is_empty() {
-            return Err(ErrorString(format!(
+            Err(ErrorString(format!(
                 "Unused header values: {}",
                 unused_header_values.join(", ")
-            )))?;
+            )))?
         }
     }
     let input = &read_file(&matches.free[1]);

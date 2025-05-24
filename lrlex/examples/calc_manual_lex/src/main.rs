@@ -3,8 +3,8 @@
 use std::io::{self, BufRead, Write};
 
 use cfgrammar::{NewlineCache, Span};
-use lrlex::{lrlex_mod, DefaultLexeme, DefaultLexerTypes, LRNonStreamingLexer};
-use lrpar::{lrpar_mod, Lexeme, NonStreamingLexer};
+use lrlex::{DefaultLexeme, DefaultLexerTypes, LRNonStreamingLexer, lrlex_mod};
+use lrpar::{Lexeme, NonStreamingLexer, lrpar_mod};
 
 lrlex_mod!("token_map");
 // Using `lrpar_mod!` brings the parser for `calc.y` into scope. By default the module name will be
