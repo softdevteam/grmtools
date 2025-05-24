@@ -468,7 +468,7 @@ where
                 }
                 Action::Shift(state_id) => {
                     if let Some(ref mut astack_uw) = *astack {
-                        if let Some(ref mut spans_uw) = spans {
+                        if let Some(spans_uw) = spans {
                             let la_lexeme = if let Some(l) = lexeme_prefix {
                                 l
                             } else {
