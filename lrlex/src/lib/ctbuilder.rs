@@ -1185,14 +1185,17 @@ impl CTLexer {
 
 /// Create a Rust module named `mod_name` that can be imported with
 /// [`lrlex_mod!(mod_name)`](crate::lrlex_mod). The module contains one `const` `StorageT` per
-/// token in `token_map`, with the token prefixed by `T_`. For example with `StorageT` `u8`,
-/// `mod_name` `x`, and `token_map` `HashMap{"ID": 0, "INT": 1}` the generated module will look
-/// roughly as follows:
+/// token in `token_map`, with the token prefixed by `T_`. In addition, it will
+/// contain an array of all token IDs `TOK_IDS`.
+///
+/// For example with `StorageT` `u8`, `mod_name` `x`, and `token_map`
+/// `HashMap{"ID": 0, "INT": 1}` the generated module will look roughly as follows:
 ///
 /// ```rust,ignore
 /// mod x {
 ///   pub const T_ID: u8 = 0;
 ///   pub const T_INT: u8 = 1;
+///   pub const TOK_IDS: &[u8] = &[T_ID, T_INT];
 /// }
 /// ```
 ///
@@ -1205,6 +1208,7 @@ impl CTLexer {
 /// mod x {
 ///   pub const T_PLUS: u8 = 0;
 ///   pub const T_ID: u8 = 1;
+///   pub const TOK_IDS: &[u8] = &[T_PLUS, T_ID];
 /// }
 /// ```
 pub fn ct_token_map<StorageT: Display + ToTokens>(
@@ -1219,31 +1223,36 @@ pub fn ct_token_map<StorageT: Display + ToTokens>(
     let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
     let mod_ident = format_ident!("{}", mod_name);
     write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
+    let storaget = str::parse::<TokenStream>(type_name::<StorageT>()).unwrap();
     // Sort the tokens so that they're always in the same order.
     // This will prevent unneeded rebuilds.
     let mut token_map_sorted = Vec::from_iter(token_map.borrow().iter());
     token_map_sorted.sort_by_key(|(k, _)| *k);
-    let tokens = &token_map_sorted
-        .into_iter()
+    let (token_array, tokens): (TokenStream, TokenStream) = token_map_sorted
+        .iter()
         .map(|(k, id)| {
             let name = match rename_map {
                 Some(rmap) => *rmap.get(k.as_str()).unwrap_or(&k.as_str()),
-                _ => k,
+                _ => &k,
             };
             let tok_ident = format_ident!("T_{}", name.to_ascii_uppercase());
-            let storaget = str::parse::<TokenStream>(type_name::<StorageT>()).unwrap();
-            // Code gen for the constant token values.
-            quote! {
-                pub const #tok_ident: #storaget = #id;
-            }
+            (
+                quote! {
+                    #tok_ident,
+                },
+                quote! {
+                    pub const #tok_ident: #storaget = #id;
+                },
+            )
         })
-        .collect::<Vec<_>>();
+        .unzip();
     // Since the formatter doesn't preserve comments and we don't want to lose build time,
     // just format the module contents.
     let unformatted = quote! {
         mod #mod_ident {
             #![allow(dead_code)]
-            #(#tokens)*
+            #tokens
+            pub const TOK_IDS: &[#storaget] = &[#token_array];
         }
     }
     .to_string();
