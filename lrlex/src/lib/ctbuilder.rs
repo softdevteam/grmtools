@@ -789,7 +789,7 @@ where
             let mut rim_sorted = Vec::from_iter(rim.iter());
             rim_sorted.sort_by_key(|(k, _)| *k);
             for (name, id) in rim_sorted {
-                if RE_TOKEN_ID.is_match(&name) {
+                if RE_TOKEN_ID.is_match(name) {
                     let tok_ident = format_ident!("N_{}", name.to_ascii_uppercase());
                     let storaget =
                         str::parse::<TokenStream>(type_name::<LexerTypesT::StorageT>()).unwrap();
