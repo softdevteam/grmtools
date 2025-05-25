@@ -108,13 +108,13 @@ fn main() {
         .optopt(
             "r",
             "recoverer",
-            "Recoverer to be used (default: cpctplus)",
+            "Recoverer to be used (default: cpctplus unless specified in grammar)",
             "cpctplus|none",
         )
         .optopt(
             "y",
             "yaccvariant",
-            "Yacc variant to be parsed (default: original)",
+            "Yacc variant to be parsed (default: None unless specified in grammar)",
             "eco|original|grmtools",
         )
         .parse(&args[1..])
