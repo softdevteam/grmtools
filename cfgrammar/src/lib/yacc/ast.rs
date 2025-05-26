@@ -111,6 +111,7 @@ impl FromStr for ASTWithValidityInfo {
 /// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
 /// point, any further mutations made to the struct lead to undefined behaviour.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct GrammarAST {
     pub start: Option<(String, Span)>,
     // map from a rule name to indexes into `prods`
