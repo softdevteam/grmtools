@@ -232,7 +232,7 @@ impl fmt::Display for Symbol {
 }
 
 impl GrammarAST {
-    pub fn new() -> GrammarAST {
+    pub(crate) fn new() -> GrammarAST {
         GrammarAST {
             start: None,
             rules: IndexMap::new(), // Using an IndexMap means that we retain the order
