@@ -23,27 +23,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         wasm32_unknown: { all(target_arch = "wasm32", target_os="unknown", target_vendor="unknown") },
     }
 
-    // Because we're modifying the `StorageT` this isn't something `run_test_path` can do,
-    // Since it modifies the type of the builder.
-    CTLexerBuilder::<DefaultLexerTypes<u8>>::new_with_lexemet()
-        .rust_edition(lrlex::RustEdition::Rust2021)
-        .output_path(format!(
-            "{}/storaget.l.rs",
-            std::env::var("OUT_DIR").unwrap()
-        ))
-        .lrpar_config(|ctp| {
-            ctp.rust_edition(lrpar::RustEdition::Rust2021)
-                .output_path(format!(
-                    "{}/storaget.y.rs",
-                    std::env::var("OUT_DIR").unwrap()
-                ))
-                .grammar_in_src_dir("storaget.y")
-                .unwrap()
-        })
-        .lexer_in_src_dir("storaget.l")
-        .unwrap()
-        .build()
-        .unwrap();
+    {
+        // Because we're modifying the `StorageT` this isn't something `run_test_path` can do,
+        // Since it modifies the type of the builder.
+        CTLexerBuilder::<DefaultLexerTypes<u8>>::new_with_lexemet()
+            .rust_edition(lrlex::RustEdition::Rust2021)
+            .output_path(format!(
+                "{}/storaget.l.rs",
+                std::env::var("OUT_DIR").unwrap()
+            ))
+            .lrpar_config(|ctp| {
+                ctp.rust_edition(lrpar::RustEdition::Rust2021)
+                    .output_path(format!(
+                        "{}/storaget.y.rs",
+                        std::env::var("OUT_DIR").unwrap()
+                    ))
+                    .grammar_in_src_dir("storaget.y")
+                    .unwrap()
+            })
+            .lexer_in_src_dir("storaget.l")
+            .unwrap()
+            .build()
+            .unwrap();
+    }
     println!("cargo::rerun-if-changed=src/storaget.l");
     println!(
         "cargo::rerun-if-changed={}/storaget.l.rs",

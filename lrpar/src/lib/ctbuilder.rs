@@ -18,6 +18,10 @@ use crate::{
     LexerTypes, RTParserBuilder, RecoveryKind,
     diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
 };
+
+#[cfg(feature = "_unstable_api")]
+use crate::unstable_api::UnstableApi;
+
 use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
 use cfgrammar::{
     Location, RIdx, Symbol,
@@ -230,6 +234,10 @@ where
     // certainly needs to be included as part of the rebuild_cache function below so that, if it's
     // changed, the grammar is rebuilt.
     grammar_path: Option<PathBuf>,
+    // If specified rather than reading source from `grammar_path`, use this string directly
+    grammar_src: Option<String>,
+    // If specified along with `grammar_src`, use this rather than building an ast from `grammar_src`.
+    from_ast: Option<ASTWithValidityInfo>,
     output_path: Option<PathBuf>,
     mod_name: Option<&'a str>,
     recoverer: Option<RecoveryKind>,
@@ -287,6 +295,8 @@ where
     pub fn new() -> Self {
         CTParserBuilder {
             grammar_path: None,
+            grammar_src: None,
+            from_ast: None,
             output_path: None,
             mod_name: None,
             recoverer: None,
@@ -352,6 +362,14 @@ where
         Ok(self.output_path(outp))
     }
 
+    /// If set, specifies that this grammar should be built from a pre-validated AST
+    /// instead of a `.y`` file. When this is specified, `grammar_path` will not be read.
+    #[cfg(feature = "_unstable_api")]
+    pub fn grammar_ast(mut self, valid_ast: ASTWithValidityInfo, _api_key: UnstableApi) -> Self {
+        self.from_ast = Some(valid_ast);
+        self
+    }
+
     /// Set the input grammar path to `inp`. If specified, you must also call
     /// [CTParserBuilder::output_path]. In general it is easier to use
     /// [CTParserBuilder::grammar_in_src_dir].
@@ -360,6 +378,12 @@ where
         P: AsRef<Path>,
     {
         self.grammar_path = Some(inp.as_ref().to_owned());
+        self
+    }
+
+    #[cfg(feature = "_unstable_api")]
+    pub fn with_grammar_src(mut self, src: String, _api_key: UnstableApi) -> Self {
+        self.grammar_src = Some(src);
         self
     }
 
@@ -556,8 +580,12 @@ where
             lk.insert(outp.clone());
         }
 
-        let inc =
-            read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?;
+        let inc = if let Some(grammar_src) = &self.grammar_src {
+            grammar_src.clone()
+        } else {
+            read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?
+        };
+
         let yacc_diag = SpannedDiagnosticFormatter::new(&inc, grmp);
         let parsed_header = GrmtoolsSectionParser::new(&inc, false).parse();
         if let Err(errs) = parsed_header {
@@ -579,7 +607,9 @@ where
             .map(YaccKind::try_from)
             .transpose()?;
         header.mark_used(&"yacckind".to_string());
-        let ast_validation = if let Some(yk) = self.yacckind {
+        let ast_validation = if let Some(ast) = &self.from_ast {
+            ast.clone()
+        } else if let Some(yk) = self.yacckind {
             ASTWithValidityInfo::new(yk, &inc)
         } else {
             Err("Missing 'yacckind'".to_string())?
@@ -884,6 +914,8 @@ where
         self.output_path = Some(outp.as_ref().to_owned());
         let cl: CTParserBuilder<LexerTypesT> = CTParserBuilder {
             grammar_path: self.grammar_path.clone(),
+            grammar_src: None,
+            from_ast: None,
             output_path: self.output_path.clone(),
             mod_name: self.mod_name,
             recoverer: self.recoverer,
@@ -975,6 +1007,10 @@ where
             // All variables except for `output_path`, `inspect_callback` and `phantom` should
             // be written into the cache.
             grammar_path,
+            // I struggle to imagine the correct thing for `grammar_src`.
+            grammar_src: _,
+            // I struggle to imagine the correct thing for `from_ast`.
+            from_ast: _,
             mod_name,
             recoverer,
             yacckind,

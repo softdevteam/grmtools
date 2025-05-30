@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    error::Error,
     fmt,
     str::FromStr,
 };
@@ -15,8 +16,25 @@ use crate::{
     Span,
     header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, HeaderValue},
 };
+
+/// Any error from the Yacc parser returns an instance of this struct.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ASTModificationError {
+    kind: YaccGrammarErrorKind,
+}
+
+impl Error for ASTModificationError {}
+
+impl fmt::Display for ASTModificationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
 /// Contains a `GrammarAST` structure produced from a grammar source file.
 /// As well as any errors which occurred during the construction of the AST.
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct ASTWithValidityInfo {
     yacc_kind: YaccKind,
     ast: GrammarAST,
@@ -70,6 +88,23 @@ impl ASTWithValidityInfo {
     pub fn errors(&self) -> &[YaccGrammarError] {
         self.errs.as_slice()
     }
+
+    pub fn clone_and_change_start_rule(&self, rule: Rule) -> Result<Self, ASTModificationError> {
+        if self.ast.get_rule(&rule.name.0).is_some() {
+            let mut ret = self.clone();
+            // The `Span`of the `start` field and the `name` field typically differ
+            // in that `start` is the parameter of a `%start` declaration, while
+            // `name` refers to the definition site of the rule itself.
+            //
+            // Lacking a better `Span` we use the definition site, for the `%start` rule here.
+            ret.ast.start = Some(rule.name);
+            Ok(ret)
+        } else {
+            Err(ASTModificationError {
+                kind: YaccGrammarErrorKind::InvalidStartRule(rule.name.0),
+            })
+        }
+    }
 }
 
 impl FromStr for ASTWithValidityInfo {
@@ -110,7 +145,8 @@ impl FromStr for ASTWithValidityInfo {
 /// An AST representing a grammar. This is built up gradually: when it is finished, the
 /// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
 /// point, any further mutations made to the struct lead to undefined behaviour.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 #[non_exhaustive]
 pub struct GrammarAST {
     pub start: Option<(String, Span)>,
@@ -140,14 +176,15 @@ pub struct GrammarAST {
     pub expect_unused: Vec<Symbol>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Rule {
     pub name: (String, Span),
     pub pidxs: Vec<usize>, // index into GrammarAST.prod
     pub actiont: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Production {
     pub symbols: Vec<Symbol>,
@@ -770,6 +807,32 @@ mod test {
                 .ast()
                 .token_directives
                 .contains(&ast_validity.ast().tokens.get_index_of("b").unwrap())
+        );
+    }
+
+    #[test]
+    fn clone_ast_changing_start_rule() {
+        use super::*;
+        use crate::yacc::*;
+        let y_src = r#"
+        %start AStart
+        %token A B C
+        %%
+        AStart: A ':' BStart ';';
+        BStart: B ',' C | C ',' B;
+        "#;
+
+        let astart_ast_validity =
+            ASTWithValidityInfo::new(YaccKind::Original(YaccOriginalActionKind::NoAction), &y_src);
+        let bstart_rule = astart_ast_validity.ast().get_rule("BStart").unwrap();
+        let bstart_ast_validity = astart_ast_validity
+            .clone_and_change_start_rule(bstart_rule.clone())
+            .unwrap();
+        assert!(astart_ast_validity.is_valid());
+        assert!(bstart_ast_validity.is_valid());
+        assert_eq!(
+            bstart_ast_validity.ast().start.as_ref(),
+            Some(&bstart_rule.name)
         );
     }
 }
