@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 [build-dependencies]
 cfgrammar = { path = "../../cfgrammar" }
 lrlex = { path = "../../lrlex" }
-lrpar = { path = "../" }
+lrpar = { path = "../", features = ["_unstable_api"] }
 glob.workspace = true
 yaml-rust2.workspace = true
 cfg_aliases = "0.2.1"

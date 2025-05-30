@@ -17,7 +17,7 @@ use quote::quote;
 use serde::{Deserialize, Serialize};
 
 /// The particular Yacc variant this grammar makes use of.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub enum YaccKind {
@@ -43,7 +43,7 @@ impl quote::ToTokens for YaccKind {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum YaccOriginalActionKind {
     /// Execute user-specified actions attached to each production; also requires a %actiontype
