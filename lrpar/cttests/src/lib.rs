@@ -62,6 +62,12 @@ lrpar_mod!("storaget.y");
 lrlex_mod!("grmtools_section.l");
 lrpar_mod!("grmtools_section.y");
 
+lrlex_mod!("ast_unmodified.l");
+lrpar_mod!("ast_unmodified.y");
+
+lrlex_mod!("ast_modified.l");
+lrpar_mod!("ast_modified.y");
+
 #[test]
 fn multitypes() {
     let lexerdef = multitypes_l::lexerdef();
@@ -420,6 +426,26 @@ fn test_lex_flags() {
     match lex_flags_y::parse(&lexer) {
         ref errs if errs.is_empty() => (),
         e => panic!("{:?}", e),
+    }
+}
+
+#[test]
+fn ast_unmodified() {
+    let lexerdef = ast_unmodified_l::lexerdef();
+    let lexer = lexerdef.lexer("A: BBBB, CCCCC;");
+    match &ast_unmodified_y::parse(&lexer) {
+        (_, errs) if errs.is_empty() => (),
+        (_, e) => panic!("{:?}", e),
+    }
+}
+
+#[test]
+fn ast_modified() {
+    let lexerdef = ast_modified_l::lexerdef();
+    let lexer = lexerdef.lexer("CCCCC, BBBB");
+    match &ast_modified_y::parse(&lexer) {
+        (_, errs) if errs.is_empty() => (),
+        (_, e) => panic!("{:?}", e),
     }
 }
 

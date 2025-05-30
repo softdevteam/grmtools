@@ -1,3 +1,4 @@
+use cfgrammar::yacc::ast::ASTWithValidityInfo;
 use glob::glob;
 #[path = "src/cgen_helper.rs"]
 mod cgen_helper;
@@ -43,6 +44,68 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .lexer_in_src_dir("storaget.l")
             .unwrap()
+            .build()
+            .unwrap();
+    }
+
+    {
+        use lrpar::unstable_api::UnstableApi;
+        // In this case we'll be building multiple grammars
+        //
+        // 1. Parse multi_start_rule.y into an AST
+        // 2. Clone the original and change the start rule.
+        // 3. Build a grammar for `multi_start_rule.y` unchanged.
+        // 4. Build the modified grammar.
+        let grammar_path = &std::env::current_dir().unwrap().join("src/multi_start.y");
+        let grammar_src = std::fs::read_to_string(grammar_path).unwrap();
+        let grammar_src_clone = grammar_src.clone();
+        let valid_ast = ASTWithValidityInfo::new(cfgrammar::yacc::YaccKind::Grmtools, &grammar_src);
+        eprintln!("rules {:?}", valid_ast.ast().rules);
+        let bstart_rule = valid_ast.ast().get_rule("BStart").unwrap().clone();
+        let modified_ast = valid_ast.clone_and_change_start_rule(bstart_rule).unwrap();
+        CTLexerBuilder::new()
+            .lrpar_config(move |ctp| {
+                ctp.grammar_ast(valid_ast.clone(), UnstableApi)
+                    .with_grammar_src(grammar_src.clone(), UnstableApi)
+                    .grammar_in_src_dir("multi_start.y")
+                    .unwrap()
+                    .mod_name("ast_unmodified_y")
+                    .output_path(format!(
+                        "{}/ast_unmodified.y.rs",
+                        std::env::var("OUT_DIR").unwrap()
+                    ))
+            })
+            .lexer_in_src_dir("multi_start.l")
+            .unwrap()
+            .output_path(format!(
+                "{}/ast_unmodified.l.rs",
+                std::env::var("OUT_DIR").unwrap()
+            ))
+            .mod_name("ast_unmodified_l")
+            .build()
+            .unwrap();
+        CTLexerBuilder::new()
+            .lrpar_config(move |ctp| {
+                ctp.grammar_ast(modified_ast.clone(), UnstableApi)
+                    .with_grammar_src(grammar_src_clone.clone(), UnstableApi)
+                    .grammar_in_src_dir("multi_start.y")
+                    .unwrap()
+                    .mod_name("ast_modified_y")
+                    .output_path(format!(
+                        "{}/ast_modified.y.rs",
+                        std::env::var("OUT_DIR").unwrap()
+                    ))
+                    // We still need to disable these because they are checked after ast validation.
+                    .warnings_are_errors(false)
+                    .show_warnings(false)
+            })
+            .lexer_in_src_dir("multi_start.l")
+            .unwrap()
+            .mod_name("ast_modified_l")
+            .output_path(format!(
+                "{}/ast_modified.l.rs",
+                std::env::var("OUT_DIR").unwrap()
+            ))
             .build()
             .unwrap();
     }
