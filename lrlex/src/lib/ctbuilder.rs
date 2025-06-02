@@ -11,7 +11,7 @@ use std::{
     hash::Hash,
     io::Write,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{LazyLock, Mutex},
 };
 
 use bincode::Encode;
@@ -24,7 +24,6 @@ use cfgrammar::{
     span::{Location, Span},
 };
 use glob::glob;
-use lazy_static::lazy_static;
 use lrpar::{
     CTParserBuilder, LexerTypes,
     diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
@@ -41,10 +40,11 @@ const RUST_FILE_EXT: &str = "rs";
 const ERROR: &str = "[Error]";
 const WARNING: &str = "[Warning]";
 
-lazy_static! {
-    static ref RE_TOKEN_ID: Regex = Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap();
-    static ref GENERATED_PATHS: Mutex<HashSet<PathBuf>> = Mutex::new(HashSet::new());
-}
+static RE_TOKEN_ID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap());
+
+static GENERATED_PATHS: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 #[non_exhaustive]
 pub enum LexerKind {

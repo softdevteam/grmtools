@@ -5,9 +5,8 @@ use crate::{
         YaccGrammarError, YaccGrammarErrorKind, YaccKind, YaccOriginalActionKind, parser::SpansKind,
     },
 };
-use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, sync::LazyLock};
 
 /// An error regarding the `%grmtools` header section.
 ///
@@ -247,15 +246,16 @@ impl<T> Value<T> {
     }
 }
 
-lazy_static! {
-    static ref RE_LEADING_WS: Regex = Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap();
-    static ref RE_NAME: Regex = RegexBuilder::new(r"^[A-Z][A-Z_]*")
+static RE_LEADING_WS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap());
+static RE_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    RegexBuilder::new(r"^[A-Z][A-Z_]*")
         .case_insensitive(true)
         .build()
-        .unwrap();
-    static ref RE_DIGITS: Regex = Regex::new(r"^[0-9]+").unwrap();
-    static ref RE_STRING: Regex = Regex::new(r#"^\"(\\.|[^"\\])*\""#).unwrap();
-}
+        .unwrap()
+});
+static RE_DIGITS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-9]+").unwrap());
+static RE_STRING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^\"(\\.|[^"\\])*\""#).unwrap());
 
 const MAGIC: &str = "%grmtools";
 

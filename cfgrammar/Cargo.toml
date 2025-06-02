@@ -19,7 +19,6 @@ path = "src/lib/mod.rs"
 
 [dependencies]
 bincode = { workspace = true, optional = true, features = ["derive"] }
-lazy_static.workspace = true
 indexmap.workspace = true
 num-traits.workspace = true
 regex.workspace = true
