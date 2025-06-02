@@ -11,7 +11,7 @@ use std::{
     io::Write,
     marker::PhantomData,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{LazyLock, Mutex},
 };
 
 use crate::{
@@ -30,12 +30,10 @@ use cfgrammar::{
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
 };
 use filetime::FileTime;
-use lazy_static::lazy_static;
 use lrtable::{Minimiser, StateGraph, StateTable, from_yacc, statetable::Conflicts};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::{Literal, TokenStream};
 use quote::{ToTokens, TokenStreamExt, format_ident, quote};
-use regex::Regex;
 
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
@@ -48,10 +46,8 @@ const RUST_FILE_EXT: &str = "rs";
 const WARNING: &str = "[Warning]";
 const ERROR: &str = "[Error]";
 
-lazy_static! {
-    static ref RE_DOL_NUM: Regex = Regex::new(r"\$([0-9]+)").unwrap();
-    static ref GENERATED_PATHS: Mutex<HashSet<PathBuf>> = Mutex::new(HashSet::new());
-}
+static GENERATED_PATHS: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 
 struct CTConflictsError<StorageT: Eq + Hash> {
     conflicts_diagnostic: String,

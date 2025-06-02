@@ -1,5 +1,4 @@
 use cfgrammar::Span;
-use lazy_static::lazy_static;
 use lrpar::LexerTypes;
 use num_traits::AsPrimitive;
 use proc_macro2::TokenStream;
@@ -12,28 +11,34 @@ use crate::{
 };
 use std::borrow::{Borrow as _, Cow};
 use std::ops::Not;
+use std::sync::LazyLock;
 
 type LexInternalBuildResult<T> = Result<T, LexBuildError>;
 
-lazy_static! {
-    static ref RE_START_STATE_NAME: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_.]*$").unwrap();
-    static ref RE_INCLUSIVE_START_STATE_DECLARATION: Regex =
-        Regex::new(r"^%[sS][a-zA-Z0-9]*$").unwrap();
-    static ref RE_EXCLUSIVE_START_STATE_DECLARATION: Regex =
-        Regex::new(r"^%[xX][a-zA-Z0-9]*$").unwrap();
-    // Documented in `Escape sequences` in lexcompatibility.m
-    static ref RE_LEX_ESC_LITERAL: Regex =
-        Regex::new(r"^(([xuU][[:xdigit:]])|[[:digit:]]|[afnrtv\\]|[pP]|[dDsSwW]|[Az])").unwrap();
-    // Vertical line separators.
-    static ref RE_LINE_SEP: Regex = Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]").unwrap();
-    static ref RE_LEADING_LINE_SEPS: Regex = Regex::new(r"^[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]*").unwrap();
-    // Horizontal space separators
-    static ref RE_SPACE_SEP: Regex = Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zs}\t]]").unwrap();
-    static ref RE_LEADING_SPACE_SEPS: Regex = Regex::new(r"^[\p{Pattern_White_Space}&&[\p{Zs}\t]]*").unwrap();
-    static ref RE_LEADING_WS: Regex = Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap();
-    static ref RE_WS: Regex = Regex::new(r"\p{Pattern_White_Space}").unwrap();
-    static ref RE_LEADING_DIGITS: Regex = Regex::new(r"^[0-9]+").unwrap();
-}
+static RE_START_STATE_NAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-zA-Z][a-zA-Z0-9_.]*$").unwrap());
+static RE_INCLUSIVE_START_STATE_DECLARATION: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^%[sS][a-zA-Z0-9]*$").unwrap());
+static RE_EXCLUSIVE_START_STATE_DECLARATION: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^%[xX][a-zA-Z0-9]*$").unwrap());
+// Documented in `Escape sequences` in lexcompatibility.m
+static RE_LEX_ESC_LITERAL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(([xuU][[:xdigit:]])|[[:digit:]]|[afnrtv\\]|[pP]|[dDsSwW]|[Az])").unwrap()
+});
+// Vertical line separators.
+static RE_LINE_SEP: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]").unwrap());
+static RE_LEADING_LINE_SEPS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\p{Pattern_White_Space}&&[\p{Zl}\p{Zp}\n\r\v]]*").unwrap());
+// Horizontal space separators
+static RE_SPACE_SEP: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[\p{Pattern_White_Space}&&[\p{Zs}\t]]").unwrap());
+static RE_LEADING_SPACE_SEPS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\p{Pattern_White_Space}&&[\p{Zs}\t]]*").unwrap());
+static RE_LEADING_WS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap());
+static RE_WS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\p{Pattern_White_Space}").unwrap());
+
 const INITIAL_START_STATE_NAME: &str = "INITIAL";
 
 #[derive(Debug, Clone)]

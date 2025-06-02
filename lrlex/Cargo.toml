@@ -28,7 +28,6 @@ cfgrammar = { path = "../cfgrammar", version = "0.13" }
 lrpar = { path = "../lrpar", version = "0.13" }
 
 getopts.workspace = true
-lazy_static.workspace = true
 regex.workspace = true
 regex-syntax.workspace = true
 num-traits.workspace = true

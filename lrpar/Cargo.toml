@@ -30,7 +30,6 @@ bincode = { workspace = true, features = ["derive"] }
 cactus.workspace = true
 filetime.workspace = true
 indexmap.workspace = true
-lazy_static.workspace = true
 num-traits.workspace = true
 packedvec.workspace = true
 proc-macro2.workspace = true

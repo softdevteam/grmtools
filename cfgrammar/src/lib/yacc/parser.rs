@@ -2,7 +2,6 @@
 
 #[cfg(feature = "bincode")]
 use bincode::{Decode, Encode};
-use lazy_static::lazy_static;
 use num_traits::PrimInt;
 use regex::Regex;
 #[cfg(feature = "serde")]
@@ -12,6 +11,7 @@ use std::{
     error::Error,
     fmt,
     str::FromStr,
+    sync::LazyLock,
 };
 
 use crate::{
@@ -286,11 +286,10 @@ pub(crate) struct YaccParser<'a> {
     global_actiontype: Option<(String, Span)>,
 }
 
-lazy_static! {
-    static ref RE_NAME: Regex = Regex::new(r"^[a-zA-Z_.][a-zA-Z0-9_.]*").unwrap();
-    static ref RE_TOKEN: Regex =
-        Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap();
-}
+static RE_NAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-zA-Z_.][a-zA-Z0-9_.]*").unwrap());
+static RE_TOKEN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("^(?:(\".+?\")|('.+?')|([a-zA-Z_][a-zA-Z_0-9]*))").unwrap());
 
 fn add_duplicate_occurrence(
     errs: &mut Vec<YaccGrammarError>,
