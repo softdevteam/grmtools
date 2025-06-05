@@ -1,4 +1,4 @@
-use lrlex::{DefaultLexerTypes, ct_token_map};
+use lrlex::{CTTokenMapBuilder, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
 // Some of the token names in the parser do not lead to valid Rust identifiers, so we map them to
@@ -16,10 +16,8 @@ fn main() {
         .unwrap()
         .build()
         .unwrap();
-    ct_token_map::<u8>(
-        "token_map",
-        ctp.token_map(),
-        Some(&TOKENS_MAP.iter().cloned().collect()),
-    )
-    .unwrap();
+    CTTokenMapBuilder::<u8>::new("token_map", ctp.token_map())
+        .rename_map(Some(TOKENS_MAP))
+        .build()
+        .unwrap();
 }

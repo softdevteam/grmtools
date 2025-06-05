@@ -1,19 +1,5 @@
 //! Build grammars at run-time.
 
-use std::{
-    any::type_name,
-    borrow::Borrow,
-    collections::{HashMap, HashSet},
-    env::{current_dir, var},
-    error::Error,
-    fmt::{self, Debug, Display, Write as _},
-    fs::{self, File, create_dir_all, read_to_string},
-    hash::Hash,
-    io::Write,
-    path::{Path, PathBuf},
-    sync::{LazyLock, Mutex},
-};
-
 use bincode::Encode;
 use cfgrammar::{
     header::{
@@ -29,9 +15,23 @@ use lrpar::{
     diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use regex::Regex;
+use std::marker::PhantomData;
+use std::{
+    any::type_name,
+    borrow::Borrow,
+    collections::{HashMap, HashSet},
+    env::{current_dir, var},
+    error::Error,
+    fmt::{self, Debug, Display, Write as _},
+    fs::{self, File, create_dir_all, read_to_string},
+    hash::Hash,
+    io::Write,
+    path::{Path, PathBuf},
+    sync::{LazyLock, Mutex},
+};
 
 use crate::{DefaultLexerTypes, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef};
 
@@ -1183,12 +1183,15 @@ impl CTLexer {
     }
 }
 
-/// Create a Rust module named `mod_name` that can be imported with
-/// [`lrlex_mod!(mod_name)`](crate::lrlex_mod). The module contains one `const` `StorageT` per
-/// token in `token_map`, with the token prefixed by `T_`. In addition, it will
-/// contain an array of all token IDs `TOK_IDS`.
+/// Exports all token IDs used by a parser as a separate Rust module.
 ///
-/// For example with `StorageT` `u8`, `mod_name` `x`, and `token_map`
+/// This builder will create a Rust module named `mod_name`
+/// that can be imported with [`lrlex_mod!(mod_name)`](crate::lrlex_mod).
+/// The module will contain one `const` `StorageT` per token in `token_map`,
+/// with the token prefixed by `T_`. In addition, it will contain
+/// an array of all token IDs `TOK_IDS`.
+///
+/// For example, if `StorageT` is `u8`, `mod_name` is `x`, and `token_map` is
 /// `HashMap{"ID": 0, "INT": 1}` the generated module will look roughly as follows:
 ///
 /// ```rust,ignore
@@ -1199,83 +1202,182 @@ impl CTLexer {
 /// }
 /// ```
 ///
-/// You can optionally remap names (for example, because the parser's token names do not lead to
-/// valid Rust identifiers) by specifying the `rename_map` `HashMap`. For example, if `token_map`
-/// is `HashMap{"+": 0, "ID": 1}` and `rename_map` is `HashMap{"+": "PLUS"}` then the generated
-/// module will look roughly as follows:
+/// See the [custom lexer example] for more usage details.
 ///
-/// ```rust,ignore
-/// mod x {
-///   pub const T_PLUS: u8 = 0;
-///   pub const T_ID: u8 = 1;
-///   pub const TOK_IDS: &[u8] = &[T_PLUS, T_ID];
-/// }
-/// ```
+/// [custom lexer example]: https://github.com/softdevteam/grmtools/tree/master/lrlex/examples/calc_manual_lex
+#[derive(Debug, Clone)]
+pub struct CTTokenMapBuilder<StorageT: Display + ToTokens> {
+    mod_name: String,
+    token_map: Vec<(String, TokenStream)>,
+    rename_map: Option<HashMap<String, String>>,
+    allow_dead_code: bool,
+    _marker: PhantomData<StorageT>,
+}
+
+impl<StorageT: Display + ToTokens> CTTokenMapBuilder<StorageT> {
+    /// Create a new token map builder.
+    ///
+    /// See the [builder documentation] for more info.
+    ///
+    /// [builder documentation]: CTTokenMapBuilder
+    pub fn new(
+        mod_name: impl Into<String>,
+        token_map: impl Borrow<HashMap<String, StorageT>>,
+    ) -> Self {
+        Self {
+            mod_name: mod_name.into(),
+            token_map: token_map
+                .borrow()
+                .iter()
+                .map(|(tok_name, tok_value)| (tok_name.clone(), tok_value.to_token_stream()))
+                .collect(),
+            rename_map: None,
+            allow_dead_code: false,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Set a token rename map.
+    ///
+    /// Rename map is used to specify identifier names for tokens whose names
+    /// are not valid Rust identifiers. For example, if `token_map`
+    /// is `HashMap{"+": 0, "ID": 1}` and `rename_map` is `HashMap{"+": "PLUS"}`
+    /// then the generated module will look roughly as follows:
+    ///
+    /// ```rust,ignore
+    /// mod x {
+    ///   pub const T_PLUS: u8 = 0;
+    ///   pub const T_ID: u8 = 1;
+    /// }
+    /// ```
+    pub fn rename_map<M, I, K, V>(mut self, rename_map: Option<M>) -> Self
+    where
+        M: IntoIterator<Item = I>,
+        I: Borrow<(K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        self.rename_map = rename_map.map(|rename_map| {
+            rename_map
+                .into_iter()
+                .map(|it| {
+                    let (k, v) = it.borrow();
+                    let k = k.as_ref().into();
+                    let v = v.as_ref().into();
+                    (k, v)
+                })
+                .collect()
+        });
+        self
+    }
+
+    /// Control whether the builder will add `#[allow(dead_code)]`
+    /// to the generated module.
+    ///
+    /// By default, all tokens are `#[deny(dead_code)]`, meaning that you'll
+    /// get a warning if your custom lexer doesn't use any of them.
+    /// This function can be used to disable this behavior.
+    pub fn allow_dead_code(mut self, allow_dead_code: bool) -> Self {
+        self.allow_dead_code = allow_dead_code;
+        self
+    }
+
+    /// Build the token map module.
+    pub fn build(&self) -> Result<(), Box<dyn Error>> {
+        // Record the time that this version of lrlex was built. If the source code changes and rustc
+        // forces a recompile, this will change this value, causing anything which depends on this
+        // build of lrlex to be recompiled too.
+        let mut outs = String::new();
+        let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
+        let mod_ident = format_ident!("{}", self.mod_name);
+        write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
+        let storaget = str::parse::<TokenStream>(type_name::<StorageT>()).unwrap();
+        // Sort the tokens so that they're always in the same order.
+        // This will prevent unneeded rebuilds.
+        let mut token_map_sorted = self.token_map.clone();
+        token_map_sorted.sort_by(|(l, _), (r, _)| l.cmp(r));
+        let (token_array, tokens) = token_map_sorted
+            .iter()
+            .map(|(k, id)| {
+                let name = match &self.rename_map {
+                    Some(rmap) => rmap.get(k).unwrap_or(k),
+                    _ => k,
+                };
+                let tok_ident: Ident = syn::parse_str(&format!("T_{}", name.to_ascii_uppercase()))
+                    .map_err(|e| {
+                        format!(
+                            "token name {:?} is not a valid Rust identifier: {}; \
+                            consider renaming it via `CTTokenMapBuilder::rename_map`.",
+                            name, e
+                        )
+                    })?;
+                Ok((
+                    // Note: the array of all tokens can't use `tok_ident` because
+                    // it will confuse the dead code checker. For this reason,
+                    // we use `id` here.
+                    quote! {
+                        #id,
+                    },
+                    quote! {
+                        pub const #tok_ident: #storaget = #id;
+                    },
+                ))
+            })
+            .collect::<Result<(TokenStream, TokenStream), Box<dyn Error>>>()?;
+        let unused_annotation;
+        if self.allow_dead_code {
+            unused_annotation = quote! {#[allow(dead_code)]};
+        } else {
+            unused_annotation = quote! {};
+        };
+        // Since the formatter doesn't preserve comments and we don't want to lose build time,
+        // just format the module contents.
+        let unformatted = quote! {
+            #unused_annotation
+            mod #mod_ident {
+                #tokens
+                #[allow(dead_code)]
+                pub const TOK_IDS: &[#storaget] = &[#token_array];
+            }
+        }
+        .to_string();
+        let out_mod = syn::parse_str(&unformatted)
+            .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
+            .unwrap_or(unformatted);
+        outs.push_str(&out_mod);
+        let mut outp = PathBuf::from(var("OUT_DIR")?);
+        outp.push(&self.mod_name);
+        outp.set_extension("rs");
+
+        // If the file we're about to write out already exists with the same contents, then we
+        // don't overwrite it (since that will force a recompile of the file, and relinking of the
+        // binary etc).
+        if let Ok(curs) = read_to_string(&outp) {
+            if curs == outs {
+                return Ok(());
+            }
+        }
+
+        let mut f = File::create(outp)?;
+        f.write_all(outs.as_bytes())?;
+        Ok(())
+    }
+}
+
+/// Create a Rust module named `mod_name` that can be imported with
+/// [`lrlex_mod!(mod_name)`](crate::lrlex_mod).
+///
+/// This function is deprecated in favour of [`CTTokenMapBuilder`].
+#[deprecated(since = "0.14", note = "use `lrlex::CTTokenMapBuilder` instead")]
 pub fn ct_token_map<StorageT: Display + ToTokens>(
     mod_name: &str,
     token_map: impl Borrow<HashMap<String, StorageT>>,
     rename_map: Option<&HashMap<&str, &str>>,
 ) -> Result<(), Box<dyn Error>> {
-    // Record the time that this version of lrlex was built. If the source code changes and rustc
-    // forces a recompile, this will change this value, causing anything which depends on this
-    // build of lrlex to be recompiled too.
-    let mut outs = String::new();
-    let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
-    let mod_ident = format_ident!("{}", mod_name);
-    write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
-    let storaget = str::parse::<TokenStream>(type_name::<StorageT>()).unwrap();
-    // Sort the tokens so that they're always in the same order.
-    // This will prevent unneeded rebuilds.
-    let mut token_map_sorted = Vec::from_iter(token_map.borrow().iter());
-    token_map_sorted.sort_by_key(|(k, _)| *k);
-    let (token_array, tokens): (TokenStream, TokenStream) = token_map_sorted
-        .iter()
-        .map(|(k, id)| {
-            let name = match rename_map {
-                Some(rmap) => *rmap.get(k.as_str()).unwrap_or(&k.as_str()),
-                _ => &k,
-            };
-            let tok_ident = format_ident!("T_{}", name.to_ascii_uppercase());
-            (
-                quote! {
-                    #tok_ident,
-                },
-                quote! {
-                    pub const #tok_ident: #storaget = #id;
-                },
-            )
-        })
-        .unzip();
-    // Since the formatter doesn't preserve comments and we don't want to lose build time,
-    // just format the module contents.
-    let unformatted = quote! {
-        mod #mod_ident {
-            #![allow(dead_code)]
-            #tokens
-            pub const TOK_IDS: &[#storaget] = &[#token_array];
-        }
-    }
-    .to_string();
-    let out_mod = syn::parse_str(&unformatted)
-        .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
-        .unwrap_or(unformatted);
-    outs.push_str(&out_mod);
-    let mut outp = PathBuf::from(var("OUT_DIR")?);
-    outp.push(mod_name);
-    outp.set_extension("rs");
-
-    // If the file we're about to write out already exists with the same contents, then we
-    // don't overwrite it (since that will force a recompile of the file, and relinking of the
-    // binary etc).
-    if let Ok(curs) = read_to_string(&outp) {
-        if curs == outs {
-            return Ok(());
-        }
-    }
-
-    let mut f = File::create(outp)?;
-    f.write_all(outs.as_bytes())?;
-    Ok(())
+    CTTokenMapBuilder::new(mod_name, token_map)
+        .rename_map(rename_map)
+        .allow_dead_code(true)
+        .build()
 }
 
 /// Indents a multi-line string and trims any trailing newline.
