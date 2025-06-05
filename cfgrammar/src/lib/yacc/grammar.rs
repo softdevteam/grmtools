@@ -83,6 +83,8 @@ pub struct YaccGrammar<StorageT = u32> {
     actions: Box<[Option<String>]>,
     /// A `(name, type)` pair defining an extra parameter to pass to action functions.
     parse_param: Option<(String, String)>,
+    /// Generic parameters (types and lifetimes) to pass to action functions.
+    parse_generics: Option<String>,
     /// Lifetimes for `param_args`
     programs: Option<String>,
     /// The actiontypes of rules (one per rule).
@@ -130,6 +132,7 @@ where
             implicit_rule: Decode::decode(decoder)?,
             actions: Decode::decode(decoder)?,
             parse_param: Decode::decode(decoder)?,
+            parse_generics: Decode::decode(decoder)?,
             programs: Decode::decode(decoder)?,
             actiontypes: Decode::decode(decoder)?,
             avoid_insert: Decode::decode(decoder)?,
@@ -168,6 +171,7 @@ where
             implicit_rule: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             actions: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             parse_param: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            parse_generics: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             programs: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             actiontypes: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             avoid_insert: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
@@ -456,6 +460,7 @@ where
             implicit_rule: implicit_rule.map(|x| rule_map[&x]),
             actions: actions.into_boxed_slice(),
             parse_param: ast.parse_param.clone(),
+            parse_generics: ast.parse_generics.clone(),
             programs: ast.programs.clone(),
             avoid_insert,
             actiontypes: actiontypes.into_boxed_slice(),
@@ -626,6 +631,10 @@ where
 
     pub fn parse_param(&self) -> &Option<(String, String)> {
         &self.parse_param
+    }
+
+    pub fn parse_generics(&self) -> &Option<String> {
+        &self.parse_generics
     }
 
     /// Get the programs part of the grammar

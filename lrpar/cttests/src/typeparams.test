@@ -1,0 +1,14 @@
+name: Test %parse-param
+yacckind: Grmtools
+grammar: |
+    %start S
+    %parse-generics 'a, T: Into<u64> + Copy, R: From<u64>
+    %parse-param p: &'a T
+    %%
+    S -> R:
+        'INT' { From::from((*p).into() + $lexer.span_str($1.unwrap().span()).parse::<u64>().unwrap()) }
+    ;
+    %%
+lexer: |
+    %%
+    [0-9]+ 'INT'

@@ -10,6 +10,7 @@ members=[
     "lrpar/examples/calc_actions",
     "lrpar/examples/calc_ast",
     "lrpar/examples/calc_parsetree",
+    "lrpar/examples/calc_ast_arena",
     "lrpar/examples/start_states",
     "lrpar/examples/clone_param",
     "lrtable",
