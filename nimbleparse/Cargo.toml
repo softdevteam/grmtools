@@ -15,9 +15,10 @@ name = "nimbleparse"
 [dependencies]
 cfgrammar = { path="../cfgrammar", version="0.13" }
 lrlex = { path="../lrlex", version="0.13" }
-lrpar = { path="../lrpar", version="0.13" }
+lrpar = { path="../lrpar", version="0.13", features = ["serde"] }
 lrtable = { path="../lrtable", version="0.13" }
 
 getopts.workspace = true
 num-traits.workspace = true
 glob.workspace = true
+ron.workspace = true
