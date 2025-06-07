@@ -1,0 +1,21 @@
+[package]
+name = "calc_ast_arena"
+version = "0.1.0"
+authors = ["Laurence Tratt <http://tratt.net/laurie/>"]
+edition = "2024"
+license = "Apache-2.0/MIT"
+
+[[bin]]
+doc = false
+name = "calc_ast_arena"
+
+[build-dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }
+
+[dependencies]
+cfgrammar = { path="../../../cfgrammar" }
+lrlex = { path="../../../lrlex" }
+lrpar = { path="../.." }
+bumpalo = "3"

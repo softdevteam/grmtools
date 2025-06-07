@@ -69,3 +69,19 @@ R -> ...:
   'ID' { format!("{}{}", p, ...) }
   ;
 ```
+
+# Generic parse parameter
+
+If `%parse-param` needs to be generic, additional type variables and lifetimes
+can be specified in the `%parse-generics T1, T2, ...` declaration.
+
+For example, if a grammar has following declarations:
+
+```
+%parse-generics T: FromStr
+%parse-param p: T
+```
+
+then the `parse` function will take an additional parameter of type `T`.
+
+This can be used, for example, [to allocate AST nodes in a memory arena.](https://github.com/softdevteam/grmtools/tree/master/lrpar/examples/calc_ast_arena).

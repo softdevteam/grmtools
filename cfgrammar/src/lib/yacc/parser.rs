@@ -549,6 +549,13 @@ impl YaccParser<'_> {
                 i = self.parse_ws(j, true)?;
                 continue;
             }
+            if let Some(j) = self.lookahead_is("%parse-generics", i) {
+                i = self.parse_ws(j, false)?;
+                let (j, ty) = self.parse_to_eol(i)?;
+                self.ast.parse_generics = Some(ty);
+                i = self.parse_ws(j, true)?;
+                continue;
+            }
             if let YaccKind::Eco = self.yacc_kind {
                 if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
                     i = self.parse_ws(j, false)?;
@@ -2452,6 +2459,18 @@ x"
             grm.parse_param,
             Some(("a::b".to_owned(), "(u64, u64)".to_owned()))
         );
+    }
+
+    #[test]
+    fn test_parse_generics() {
+        let src = "
+          %parse-generics 'a, K, V
+          %%
+          A: 'a';
+         ";
+        let grm = parse(YaccKind::Original(YaccOriginalActionKind::UserAction), src).unwrap();
+
+        assert_eq!(grm.parse_generics, Some("'a, K, V".to_owned()));
     }
 
     #[test]
