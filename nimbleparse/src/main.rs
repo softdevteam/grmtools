@@ -9,7 +9,7 @@ use lrlex::{DefaultLexerTypes, LRLexError, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{
     LexerTypes,
     diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
-    parser::{RTParserBuilder, RecoveryKind},
+    parser::{RTParserBuilder, RecoveryKind, SerializableNode},
 };
 use lrtable::{Minimiser, StateTable, from_yacc};
 use num_traits::AsPrimitive;
@@ -37,7 +37,7 @@ fn usage(prog: &str, msg: &str) -> ! {
         eprintln!("{}", msg);
     }
     eprintln!(
-        "Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dq] <lexer.l> <parser.y> <input files> ...",
+        "Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dqt] <lexer.l> <parser.y> <input files> ...",
         leaf
     );
     process::exit(1);
@@ -105,6 +105,7 @@ fn main() {
         .optflag("h", "help", "")
         .optflag("q", "quiet", "Don't print warnings such as conflicts")
         .optflag("d", "dump-state-graph", "Print the parser state graph")
+        .optflag("t", "test-file-output", "Output a test file")
         .optopt(
             "r",
             "recoverer",
@@ -380,6 +381,7 @@ fn main() {
         recoverykind,
     };
 
+    let ron_output = matches.opt_present("t");
     if matches.free.len() == 3 {
         let input_path = PathBuf::from(&matches.free[2]);
         // If there is only one input file we want to print the generic parse tree.
@@ -391,11 +393,11 @@ fn main() {
         } else {
             read_file(&matches.free[2])
         };
-        if let Err(e) = parser_build_ctxt.parse_string(input_path, input) {
+        if let Err(e) = parser_build_ctxt.parse_string(input_path, input, ron_output) {
             eprintln!("{}", e);
             process::exit(1);
         }
-    } else if let Err(e) = parser_build_ctxt.parse_many(&matches.free[2..]) {
+    } else if let Err(e) = parser_build_ctxt.parse_many(&matches.free[2..], ron_output) {
         eprintln!("{}", e);
         process::exit(1);
     }
@@ -476,12 +478,19 @@ where
     usize: AsPrimitive<LexerTypesT::StorageT>,
     LexerTypesT::StorageT: TryFrom<usize>,
 {
-    fn parse_string(self, input_path: PathBuf, input_src: String) -> Result<(), NimbleparseError> {
+    fn parse_string(self, input_path: PathBuf, input_src: String, ron_output: bool) -> Result<(), NimbleparseError> {
         let lexer = self.lexerdef.lexer(&input_src);
         let pb = RTParserBuilder::new(&self.grm, &self.stable).recoverer(self.recoverykind);
         let (pt, errs) = pb.parse_generictree(&lexer);
         match pt {
-            Some(pt) => println!("{}", pt.pp(&self.grm, &input_src)),
+            Some(pt) => {
+                println!("{}",
+                if ron_output {
+                    ron::ser::to_string_pretty(&SerializableNode::new(&input_src, &self.grm, pt), ron::ser::PrettyConfig::default()).unwrap()
+                } else {
+                     pt.pp(&self.grm, &input_src)
+                });
+            }
             None => println!("Unable to repair input sufficiently to produce parse tree.\n"),
         }
         if !errs.is_empty() {
@@ -496,7 +505,7 @@ where
         Ok(())
     }
 
-    fn parse_many(self, input_paths: &[String]) -> Result<(), NimbleparseError> {
+    fn parse_many(self, input_paths: &[String], _ron_output: bool) -> Result<(), NimbleparseError> {
         let input_paths = if input_paths.is_empty() {
             // If given no input paths, try to find some with `test_files` in the header.
             if let Some(HeaderValue(_, val)) = self.header.get("test_files") {

@@ -20,7 +20,9 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::TokenStream;
 use quote::quote;
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer, ser::SerializeMap};
+#[cfg(feature = "serde")]
+use std::collections::VecDeque;
 
 use crate::{LexError, Lexeme, LexerTypes, NonStreamingLexer, cpctplus};
 
@@ -39,6 +41,75 @@ pub enum Node<LexemeT: Lexeme<StorageT>, StorageT> {
         ridx: RIdx<StorageT>,
         nodes: Vec<Node<LexemeT, StorageT>>,
     },
+}
+
+
+#[cfg(feature="serde")]
+pub struct SerializableNode<'b, 'a, LexemeT: Lexeme<StorageT>, StorageT> {
+    grm: &'b YaccGrammar<StorageT>,
+    src: &'a str,
+    node: Node<LexemeT, StorageT>
+}
+
+#[cfg(feature = "serde")]
+impl<'b, 'a, StorageT, LexemeT: Lexeme<StorageT>> SerializableNode<'b, 'a, LexemeT, StorageT> {
+    pub fn new(src: &'a str, grm: &'b YaccGrammar<StorageT>, node: Node<LexemeT, StorageT>) -> SerializableNode<'b, 'a, LexemeT, StorageT>{
+        SerializableNode{
+            grm, src, node
+        }
+    }
+}
+#[cfg(feature = "serde")]
+impl<'b, 'a, StorageT, LexemeT> Serialize for SerializableNode<'b, 'a, LexemeT, StorageT> 
+where LexemeT: Lexeme<StorageT>,
+    usize: AsPrimitive<StorageT>,
+    StorageT: 'static + PrimInt + Unsigned,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer {
+            #[derive(Serialize)]
+            enum NamedNode<'a> {
+                Term(&'a str, &'a str),
+                Nonterm(&'a str, VecDeque<NamedNode<'a>>)
+            }
+
+            fn insert_inner<'a>(top: &mut VecDeque<NamedNode<'a>>, node: NamedNode<'a>, limit: usize, acc:usize) {
+                match top.back_mut() {
+                    Some(NamedNode::Nonterm(_, entries)) => {
+                        if acc < limit {
+                            insert_inner(entries, node, limit, acc + 1)
+                        } else {
+                            top.push_back(node)
+                        }
+                    }
+                    _ => top.push_back(node),
+                }
+            }
+            let mut st = vec![(0, &self.node)];
+            let mut map = serializer.serialize_map(Some(2))?;
+            map.serialize_entry("src", self.src)?;
+            let mut out: VecDeque<NamedNode> = VecDeque::new();
+            while let Some((limit, e)) = st.pop() {
+                match e {
+                    Node::Term{lexeme} => {
+                        let tidx = TIdx(lexeme.tok_id());
+                        let tn = self.grm.token_name(tidx).unwrap();
+                        let lt = &self.src[lexeme.span().start()..lexeme.span().end()];
+                        insert_inner(&mut out, NamedNode::Term(tn, lt), limit, 0);
+                    }
+                    Node::Nonterm { ridx, nodes } => {
+                        let rule_name = self.grm.rule_name_str(*ridx);
+                        insert_inner(&mut out, NamedNode::Nonterm(rule_name, VecDeque::new()), limit, 0);
+                        for x in nodes.iter().rev() {
+                            st.push((limit + 1, x));
+                        }
+                    }
+                }
+            }
+            map.serialize_entry("ast", &out)?;
+            map.end()
+    }
 }
 
 impl<LexemeT: Lexeme<StorageT>, StorageT: 'static + PrimInt + Unsigned> Node<LexemeT, StorageT>
