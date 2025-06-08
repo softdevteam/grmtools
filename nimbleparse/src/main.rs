@@ -478,18 +478,29 @@ where
     usize: AsPrimitive<LexerTypesT::StorageT>,
     LexerTypesT::StorageT: TryFrom<usize>,
 {
-    fn parse_string(self, input_path: PathBuf, input_src: String, ron_output: bool) -> Result<(), NimbleparseError> {
+    fn parse_string(
+        self,
+        input_path: PathBuf,
+        input_src: String,
+        ron_output: bool,
+    ) -> Result<(), NimbleparseError> {
         let lexer = self.lexerdef.lexer(&input_src);
         let pb = RTParserBuilder::new(&self.grm, &self.stable).recoverer(self.recoverykind);
         let (pt, errs) = pb.parse_generictree(&lexer);
         match pt {
             Some(pt) => {
-                println!("{}",
-                if ron_output {
-                    ron::ser::to_string_pretty(&SerializableNode::new(&input_src, &self.grm, pt), ron::ser::PrettyConfig::default()).unwrap()
-                } else {
-                     pt.pp(&self.grm, &input_src)
-                });
+                println!(
+                    "{}",
+                    if ron_output {
+                        ron::ser::to_string_pretty(
+                            &SerializableNode::new(&input_src, &self.grm, pt),
+                            ron::ser::PrettyConfig::default(),
+                        )
+                        .unwrap()
+                    } else {
+                        pt.pp(&self.grm, &input_src)
+                    }
+                );
             }
             None => println!("Unable to repair input sufficiently to produce parse tree.\n"),
         }
