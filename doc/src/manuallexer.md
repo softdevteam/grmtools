@@ -28,17 +28,17 @@ and the boiler-plate that comes with it unwanted. Fortunately, `lrlex` provides 
      [`lrpar::Lexeme`](https://softdevteam.github.io/grmtools/master/api/lrpar/trait.Lexeme.html)
      trait.
 
-  3. `lrlex` exposes a
-     [`ct_token_map`](https://softdevteam.github.io/grmtools/master/api/lrlex/fn.ct_token_map.html)
-     function to be used from `build.rs` scripts which automatically produces a
-     Rust module with one constant per token ID. `ct_token_map` is explicitly
+  3. `lrlex` exposes
+     [`CTTokenMapBuilder`](https://softdevteam.github.io/grmtools/master/api/lrlex/struct.CTTokenMapBuilder.html)
+     to be used from `build.rs` scripts which automatically produces a
+     Rust module with one constant per token ID. It is explicitly
      designed to be easy to use with `lrpar`'s compile-time building.
 
 Putting these together is then relatively easy. First a `build.rs` file for a
 hand-written lexer will look roughly as follows:
 
 ```rust
-use lrlex::{ct_token_map, DefaultLexerTypes};
+use lrlex::{CTTokenMapBuilder, DefaultLexerTypes};
 use lrpar::CTParserBuilder;
 
 fn main() {
@@ -47,7 +47,7 @@ fn main() {
         .unwrap()
         .build()
         .unwrap();
-    ct_token_map::<u8>("token_map", ctp.token_map(), None).unwrap()
+    CTTokenMapBuilder::<u8>::new("token_map", ctp.token_map()).build().unwrap()
 }
 ```
 
@@ -65,7 +65,7 @@ Expr -> Result<u64, ()>:
 the module will contain `const T_PLUS: u8 = ...;`.
 
 Since Yacc grammars can contain token identifiers which are not valid Rust
-identifiers, `ct_token_map` allows you to provide a map from the token
+identifiers, `CTTokenMapBuilder` allows you to provide a map from the token
 identifier to a "Rust friendly" variant. For example, for the following grammar
 excerpt:
 

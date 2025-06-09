@@ -20,8 +20,12 @@ pub mod defaults;
 mod lexer;
 mod parser;
 
+#[allow(deprecated)]
 pub use crate::{
-    ctbuilder::{CTLexer, CTLexerBuilder, LexerKind, RustEdition, Visibility, ct_token_map},
+    ctbuilder::{
+        CTLexer, CTLexerBuilder, CTTokenMapBuilder, LexerKind, RustEdition, Visibility,
+        ct_token_map,
+    },
     defaults::{DefaultLexeme, DefaultLexerTypes},
     lexer::{
         DEFAULT_LEX_FLAGS, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef, Rule,
