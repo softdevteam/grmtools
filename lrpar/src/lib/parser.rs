@@ -29,18 +29,29 @@ const RECOVERY_TIME_BUDGET: u64 = 60_000; // milliseconds
 #[cfg(not(test))]
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
-/// A generic parse tree.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Node<LexemeT: Lexeme<StorageT>, StorageT> {
-    /// Terminals store a single lexeme.
-    Term { lexeme: LexemeT },
-    /// Nonterminals reference a rule and have zero or more `Node`s as children.
-    Nonterm {
-        ridx: RIdx<StorageT>,
-        nodes: Vec<Node<LexemeT, StorageT>>,
-    },
+#[deprecated(
+    since = "0.14",
+    note = "Use the version of `Node` exported from your `lrpar_mod!`"
+)]
+pub type Node<T, S> = _deprecated_moved_::Node<T, S>;
+
+#[doc(hidden)]
+pub mod _deprecated_moved_ {
+    use super::*;
+    /// A generic parse tree.
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum Node<LexemeT: Lexeme<StorageT>, StorageT> {
+        /// Terminals store a single lexeme.
+        Term { lexeme: LexemeT },
+        /// Nonterminals reference a rule and have zero or more `Node`s as children.
+        Nonterm {
+            ridx: RIdx<StorageT>,
+            nodes: Vec<Node<LexemeT, StorageT>>,
+        },
+    }
 }
 
+#[allow(deprecated)]
 impl<LexemeT: Lexeme<StorageT>, StorageT: 'static + PrimInt + Unsigned> Node<LexemeT, StorageT>
 where
     usize: AsPrimitive<StorageT>,
@@ -117,21 +128,33 @@ impl<
     'input: 'b,
     StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
-> Parser<'a, 'b, 'input, StorageT, LexerTypesT, Node<LexerTypesT::LexemeT, StorageT>, ()>
+    Node,
+>
+    Parser<
+        'a,
+        'b,
+        'input,
+        StorageT,
+        LexerTypesT,
+        Node,
+        (
+            &dyn Fn(LexerTypesT::LexemeT) -> Node,
+            &dyn Fn(RIdx<StorageT>, Vec<Node>) -> Node,
+        ),
+    >
 where
     usize: AsPrimitive<StorageT>,
 {
-    fn parse_generictree(
+    fn parse_map(
         rcvry_kind: RecoveryKind,
         grm: &YaccGrammar<StorageT>,
         token_cost: TokenCostFn<'a, StorageT>,
         stable: &StateTable<StorageT>,
         lexer: &'b dyn NonStreamingLexer<'input, LexerTypesT>,
         lexemes: Vec<LexerTypesT::LexemeT>,
-    ) -> (
-        Option<Node<LexerTypesT::LexemeT, StorageT>>,
-        Vec<LexParseError<StorageT, LexerTypesT>>,
-    ) {
+        fterm: &'a dyn Fn(LexerTypesT::LexemeT) -> Node,
+        fnonterm: &'a dyn Fn(RIdx<StorageT>, Vec<Node>) -> Node,
+    ) -> (Option<Node>, Vec<LexParseError<StorageT, LexerTypesT>>) {
         for tidx in grm.iter_tidxs() {
             assert!(token_cost(tidx) > 0);
         }
@@ -142,11 +165,14 @@ where
                 'input,
                 StorageT,
                 LexerTypesT,
-                Node<LexerTypesT::LexemeT, StorageT>,
-                (),
+                Node,
+                (
+                    &'a dyn Fn(LexerTypesT::LexemeT) -> Node,
+                    &'a dyn Fn(RIdx<StorageT>, Vec<Node>) -> Node,
+                ),
             >,
         > = Vec::new();
-        actions.resize(usize::from(grm.prods_len()), &action_generictree);
+        actions.resize(usize::from(grm.prods_len()), &action_map);
         let psr = Parser {
             rcvry_kind,
             grm,
@@ -155,7 +181,7 @@ where
             lexer,
             lexemes,
             actions: actions.as_slice(),
-            param: (),
+            param: (fterm, fnonterm),
         };
         let mut pstack = vec![stable.start_state()];
         let mut astack = Vec::new();
@@ -166,6 +192,36 @@ where
     }
 }
 
+fn action_map<StorageT, LexerTypesT: LexerTypes, Node>(
+    ridx: RIdx<StorageT>,
+    _lexer: &dyn NonStreamingLexer<LexerTypesT>,
+    _span: Span,
+    astack: vec::Drain<AStackType<LexerTypesT::LexemeT, Node>>,
+    param: (
+        &dyn Fn(LexerTypesT::LexemeT) -> Node,
+        &dyn Fn(RIdx<StorageT>, Vec<Node>) -> Node,
+    ),
+) -> Node
+where
+    usize: AsPrimitive<LexerTypesT::StorageT>,
+    LexerTypesT::LexemeT: Lexeme<StorageT>,
+{
+    let (fterm, fnonterm) = param;
+    let mut nodes = Vec::with_capacity(astack.len());
+    for a in astack {
+        nodes.push(match a {
+            AStackType::ActionType(n) => n,
+            AStackType::Lexeme(lexeme) => fterm(lexeme),
+        });
+    }
+    fnonterm(ridx, nodes)
+}
+
+#[deprecated(
+    since = "0.14",
+    note = "Deprecated with `parse_generictree` there is no direct replacement, besides a custom action"
+)]
+#[allow(deprecated)]
 /// The action which implements [`cfgrammar::yacc::YaccOriginalActionKind::GenericParseTree`].
 /// Usually you should just use the action kind directly. But you can also call this from
 /// within a custom action to return a generic parse tree with custom behavior.
@@ -188,57 +244,6 @@ where
         });
     }
     Node::Nonterm { ridx, nodes }
-}
-
-impl<
-    'a,
-    'b: 'a,
-    'input: 'b,
-    StorageT: 'static + Debug + Hash + PrimInt + Unsigned,
-    LexerTypesT: LexerTypes<StorageT = StorageT>,
-> Parser<'a, 'b, 'input, StorageT, LexerTypesT, (), ()>
-where
-    usize: AsPrimitive<StorageT>,
-{
-    fn parse_noaction(
-        rcvry_kind: RecoveryKind,
-        grm: &YaccGrammar<StorageT>,
-        token_cost: TokenCostFn<'a, StorageT>,
-        stable: &StateTable<StorageT>,
-        lexer: &'b dyn NonStreamingLexer<'input, LexerTypesT>,
-        lexemes: Vec<LexerTypesT::LexemeT>,
-    ) -> Vec<LexParseError<StorageT, LexerTypesT>> {
-        for tidx in grm.iter_tidxs() {
-            assert!(token_cost(tidx) > 0);
-        }
-        let mut actions: Vec<ActionFn<'a, 'b, 'input, StorageT, LexerTypesT, (), ()>> = Vec::new();
-        actions.resize(usize::from(grm.prods_len()), &Parser::noaction);
-        let psr = Parser {
-            rcvry_kind,
-            grm,
-            token_cost: Box::new(token_cost),
-            stable,
-            lexer,
-            lexemes,
-            actions: actions.as_slice(),
-            param: (),
-        };
-        let mut pstack = vec![stable.start_state()];
-        let mut astack = Vec::new();
-        let mut errors = Vec::new();
-        let mut spans = Vec::new();
-        psr.lr(0, &mut pstack, &mut astack, &mut errors, &mut spans);
-        errors
-    }
-
-    fn noaction(
-        _ridx: RIdx<StorageT>,
-        _lexer: &dyn NonStreamingLexer<LexerTypesT>,
-        _span: Span,
-        _astack: vec::Drain<AStackType<LexerTypesT::LexemeT, ()>>,
-        _param: (),
-    ) {
-    }
 }
 
 impl<
@@ -536,6 +541,7 @@ where
     /// Note that if `lexeme_prefix` is specified, `laidx` will still be incremented, and thus
     /// `end_laidx` *must* be set to `laidx + 1` in order that the parser doesn't skip the real
     /// lexeme at position `laidx`.
+    #[allow(deprecated)]
     pub(super) fn lr_cactus(
         &self,
         lexeme_prefix: Option<LexerTypesT::LexemeT>,
@@ -930,6 +936,11 @@ where
         self
     }
 
+    #[deprecated(
+        since = "0.14",
+        note = "Use `parse_map` to return a `Node` from your `lrpar_mod!` instead"
+    )]
+    #[allow(deprecated)]
     /// Parse input, and (if possible) return a generic parse tree. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_generictree(
@@ -939,6 +950,19 @@ where
         Option<Node<LexerTypesT::LexemeT, StorageT>>,
         Vec<LexParseError<StorageT, LexerTypesT>>,
     ) {
+        self.parse_map(lexer, &|lexeme| Node::Term { lexeme }, &|ridx, nodes| {
+            Node::Nonterm { ridx, nodes }
+        })
+    }
+
+    /// Parse input, and (if possible) return a generic parse tree. See the arguments for
+    /// [`parse_actions`](#method.parse_actions) for more details about the return value.
+    pub fn parse_map<Node>(
+        &self,
+        lexer: &dyn NonStreamingLexer<LexerTypesT>,
+        fterm: &dyn Fn(LexerTypesT::LexemeT) -> Node,
+        fnonterm: &dyn Fn(RIdx<StorageT>, Vec<Node>) -> Node,
+    ) -> (Option<Node>, Vec<LexParseError<StorageT, LexerTypesT>>) {
         let mut lexemes = vec![];
         for e in lexer.iter().collect::<Vec<_>>() {
             match e {
@@ -946,37 +970,34 @@ where
                 Err(e) => return (None, vec![e.into()]),
             }
         }
-        Parser::<StorageT, LexerTypesT, Node<LexerTypesT::LexemeT, StorageT>, ()>::parse_generictree(
+        Parser::<
+            StorageT,
+            LexerTypesT,
+            Node,
+            (
+                &dyn Fn(LexerTypesT::LexemeT) -> Node,
+                &dyn Fn(RIdx<StorageT>, Vec<Node>) -> Node,
+            ),
+        >::parse_map(
             self.recoverer,
             self.grm,
             self.term_costs,
             self.stable,
             lexer,
             lexemes,
+            fterm,
+            fnonterm,
         )
     }
 
+    #[deprecated(since = "0.14", note = "Use `parse_map` instead")]
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_noaction(
         &self,
         lexer: &dyn NonStreamingLexer<LexerTypesT>,
     ) -> Vec<LexParseError<StorageT, LexerTypesT>> {
-        let mut lexemes = vec![];
-        for e in lexer.iter().collect::<Vec<_>>() {
-            match e {
-                Ok(l) => lexemes.push(l),
-                Err(e) => return vec![e.into()],
-            }
-        }
-        Parser::<StorageT, LexerTypesT, (), ()>::parse_noaction(
-            self.recoverer,
-            self.grm,
-            self.term_costs,
-            self.stable,
-            lexer,
-            lexemes,
-        )
+        self.parse_map(lexer, &|_| (), &|_, _| ()).1
     }
 
     /// Parse input, execute actions, and return the associated value (if possible) and/or any
@@ -1075,6 +1096,7 @@ pub(crate) mod test {
         test_utils::{TestLexError, TestLexeme, TestLexerTypes},
     };
 
+    #[allow(deprecated)]
     pub(crate) fn do_parse<'input>(
         rcvry_kind: RecoveryKind,
         lexs: &str,
@@ -1094,6 +1116,7 @@ pub(crate) mod test {
         do_parse_with_costs(rcvry_kind, lexs, grms, input, &HashMap::new())
     }
 
+    #[allow(deprecated)]
     fn do_parse_with_costs<'input>(
         rcvry_kind: RecoveryKind,
         lexs: &str,
@@ -1360,5 +1383,98 @@ Call: 'ID' '(' ')';";
             }
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn test_parse_map() {
+        #[derive(PartialEq, Debug)]
+        enum TestParseMap<'a> {
+            Term(&'a str, &'a str),
+            NonTerm(&'a str, Vec<TestParseMap<'a>>),
+        }
+        let lex_src = r#"[0-9]+ 'INT'
+\+ '+'
+\* '*'
+"#;
+        let grammar_src = "
+%grmtools{YaccKind: Original(NoAction)}
+%start Expr
+%%
+Expr : Expr '+' Term | Term;
+Term : Term '*' Factor | Factor;
+Factor : 'INT';";
+        let input_src = "2*3+4";
+        let grm = str::parse::<YaccGrammar<u16>>(grammar_src).unwrap();
+        let (_, stable) = lrtable::from_yacc(&grm, lrtable::Minimiser::Pager).unwrap();
+        let rt_parser = RTParserBuilder::new(&grm, &stable);
+        let rule_ids = grm
+            .tokens_map()
+            .iter()
+            .map(|(&n, &i)| (n.to_owned(), u32::from(i).to_u16().unwrap()))
+            .collect();
+        let lexer_rules = small_lexer(lex_src, rule_ids);
+        let lexemes = small_lex(lexer_rules, input_src);
+        let lexer = SmallLexer {
+            lexemes,
+            s: input_src,
+        };
+
+        let (parse_map, errs) = rt_parser.parse_map(
+            &lexer,
+            &|lexeme: TestLexeme| {
+                let tidx = TIdx(lexeme.tok_id());
+                let tn = &grm.token_name(tidx).unwrap();
+                let lt = &input_src[lexeme.span().start()..lexeme.span().end()];
+                TestParseMap::Term(tn, lt)
+            },
+            &|ridx, nodes| {
+                let rule_name = &grm.rule_name_str(ridx);
+                TestParseMap::NonTerm(rule_name, nodes)
+            },
+        );
+        assert!(parse_map.is_some() && errs.is_empty());
+        // Sanity check the `parse_generictree` output.
+        check_parse_output(
+            lex_src,
+            grammar_src,
+            input_src,
+            "Expr
+ Expr
+  Term
+   Term
+    Factor
+     INT 2
+   * *
+   Factor
+    INT 3
+ + +
+ Term
+  Factor
+   INT 4
+",
+        );
+
+        let expected_parse_map = {
+            use TestParseMap::*;
+            NonTerm(
+                "Expr",
+                vec![
+                    NonTerm(
+                        "Expr",
+                        vec![NonTerm(
+                            "Term",
+                            vec![
+                                NonTerm("Term", vec![NonTerm("Factor", vec![Term("INT", "2")])]),
+                                Term("*", "*"),
+                                NonTerm("Factor", vec![Term("INT", "3")]),
+                            ],
+                        )],
+                    ),
+                    Term("+", "+"),
+                    NonTerm("Term", vec![NonTerm("Factor", vec![Term("INT", "4")])]),
+                ],
+            )
+        };
+        assert_eq!(parse_map, Some(expected_parse_map));
     }
 }

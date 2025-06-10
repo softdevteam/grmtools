@@ -2,7 +2,7 @@ use std::io::{self, BufRead, Write};
 
 use cfgrammar::RIdx;
 use lrlex::{DefaultLexeme, lrlex_mod};
-use lrpar::{Lexeme, Node, lrpar_mod};
+use lrpar::{Lexeme, lrpar_mod};
 
 // Using `lrlex_mod!` brings the lexer for `comment.l` into scope. By default the module name will be
 // `comment_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).
@@ -10,6 +10,8 @@ lrlex_mod!("comment.l");
 // Using `lrpar_mod!` brings the parser for `comment.y` into scope. By default the module name will be
 // `comment_y` (i.e. the file name, minus any extensions, with a suffix of `_y`).
 lrpar_mod!("comment.y");
+
+use comment_y::Node;
 
 fn main() {
     // Get the `LexerDef` for the `comment` language.
