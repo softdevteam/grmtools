@@ -1,0 +1,8 @@
+[package]
+name = "grammar_testing"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+ron.workspace = true
+serde =  { workspace = true, features = ["derive"] }
