@@ -2,7 +2,7 @@ use std::io::{self, BufRead, Write};
 
 use cfgrammar::RIdx;
 use lrlex::{DefaultLexeme, lrlex_mod};
-use lrpar::{Lexeme, Node, lrpar_mod};
+use lrpar::{Lexeme, lrpar_mod};
 
 // Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name will be
 // `calc_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).
@@ -10,6 +10,8 @@ lrlex_mod!("calc.l");
 // Using `lrpar_mod!` brings the parser for `calc.y` into scope. By default the module name will be
 // `calc_y` (i.e. the file name, minus any extensions, with a suffix of `_y`).
 lrpar_mod!("calc.y");
+
+use calc_y::Node;
 
 fn main() {
     // Get the `LexerDef` for the `calc` language.

@@ -208,10 +208,15 @@ pub mod test_utils;
 pub use crate::{
     ctbuilder::{CTParser, CTParserBuilder, RustEdition, Visibility},
     lex_api::{LexError, Lexeme, Lexer, LexerTypes, NonStreamingLexer},
-    parser::{LexParseError, Node, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
+    parser::{LexParseError, ParseError, ParseRepair, RTParserBuilder, RecoveryKind},
 };
 
+#[allow(deprecated)]
 pub use crate::parser::action_generictree;
+
+#[allow(deprecated)]
+pub use parser::Node;
+
 /// A convenience macro for including statically compiled `.y` files. A file `src/a/b/c.y`
 /// processed by [CTParserBuilder::grammar_in_src_dir] can then be used in a crate with
 /// `lrpar_mod!("a/b/c.y")`.

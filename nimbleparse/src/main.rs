@@ -1,5 +1,5 @@
 use cfgrammar::{
-    Location, Span,
+    Location, RIdx, Span, TIdx,
     header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Value},
     markmap::Entry,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
@@ -7,22 +7,66 @@ use cfgrammar::{
 use getopts::Options;
 use lrlex::{DefaultLexerTypes, LRLexError, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{
-    LexerTypes,
+    Lexeme, LexerTypes,
     diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
     parser::{RTParserBuilder, RecoveryKind},
 };
 use lrtable::{Minimiser, StateTable, from_yacc};
-use num_traits::AsPrimitive;
 use num_traits::ToPrimitive as _;
+use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use std::{
     env,
     error::Error,
     fmt,
+    fmt::Write,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
     process,
 };
+
+/// A generic parse tree.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Node<LexemeT: Lexeme<StorageT>, StorageT> {
+    /// Terminals store a single lexeme.
+    Term { lexeme: LexemeT },
+    /// Nonterminals reference a rule and have zero or more `Node`s as children.
+    Nonterm {
+        ridx: RIdx<StorageT>,
+        nodes: Vec<Node<LexemeT, StorageT>>,
+    },
+}
+
+impl<LexemeT: Lexeme<StorageT>, StorageT: 'static + PrimInt + Unsigned> Node<LexemeT, StorageT>
+where
+    usize: AsPrimitive<StorageT>,
+{
+    /// Return a pretty-printed version of this node.
+    pub fn pp(&self, grm: &YaccGrammar<StorageT>, input: &str) -> String {
+        let mut st = vec![(0, self)]; // Stack of (indent level, node) pairs
+        let mut s = String::new();
+        while let Some((indent, e)) = st.pop() {
+            for _ in 0..indent {
+                s.push(' ');
+            }
+            match *e {
+                Node::Term { lexeme } => {
+                    let tidx = TIdx(lexeme.tok_id());
+                    let tn = grm.token_name(tidx).unwrap();
+                    let lt = &input[lexeme.span().start()..lexeme.span().end()];
+                    writeln!(s, "{} {}", tn, lt).ok();
+                }
+                Node::Nonterm { ridx, ref nodes } => {
+                    writeln!(s, "{}", grm.rule_name_str(ridx)).ok();
+                    for x in nodes.iter().rev() {
+                        st.push((indent + 1, x));
+                    }
+                }
+            }
+        }
+        s
+    }
+}
 
 const WARNING: &str = "[Warning]";
 const ERROR: &str = "[Error]";
@@ -479,7 +523,9 @@ where
     fn parse_string(self, input_path: PathBuf, input_src: String) -> Result<(), NimbleparseError> {
         let lexer = self.lexerdef.lexer(&input_src);
         let pb = RTParserBuilder::new(&self.grm, &self.stable).recoverer(self.recoverykind);
-        let (pt, errs) = pb.parse_generictree(&lexer);
+        let (pt, errs) = pb.parse_map(&lexer, &|lexeme| Node::Term { lexeme }, &|ridx, nodes| {
+            Node::Nonterm { ridx, nodes }
+        });
         match pt {
             Some(pt) => println!("{}", pt.pp(&self.grm, &input_src)),
             None => println!("Unable to repair input sufficiently to produce parse tree.\n"),
@@ -559,7 +605,10 @@ where
         for input_path in input_paths {
             let input = read_file(&input_path);
             let lexer = self.lexerdef.lexer(&input);
-            let (pt, errs) = pb.parse_generictree(&lexer);
+            let (pt, errs) =
+                pb.parse_map(&lexer, &|lexeme| Node::Term { lexeme }, &|ridx, nodes| {
+                    Node::Nonterm { ridx, nodes }
+                });
             if errs.is_empty() && pt.is_some() {
                 // Since we're parsing many files, don't output all of their parse trees, just print the file name.
                 println!("parsed: {}", input_path.display())

@@ -548,7 +548,7 @@ where
                                 let input = fs::read_to_string(&path)?;
                                 let l: LRNonStreamingLexer<LexerTypesT> =
                                     closure_lexerdef.lexer(&input);
-                                for e in rtpb.parse_noaction(&l) {
+                                for e in rtpb.parse_map(&l, &|_| (), &|_, _| ()).1 {
                                     Err(format!("parsing {}: {}", path.display(), e))?
                                 }
                             }

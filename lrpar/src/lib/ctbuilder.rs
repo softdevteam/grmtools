@@ -522,7 +522,7 @@ where
     ///      the return type of the `%start` rule;
     ///    * or, if the `yacckind` was set to
     ///      `YaccKind::Original(YaccOriginalActionKind::GenericParseTree)`, it
-    ///      is [`crate::Node<StorageT>`].
+    ///      is `Node<StorageT>` where the `Node` type is defined within your `lrpar_mod!`.
     ///
     /// # Panics
     ///
@@ -897,7 +897,6 @@ where
         since = "0.11.0",
         note = "Please use grammar_path(), output_path(), build(), and token_map() instead"
     )]
-    #[allow(deprecated)]
     pub fn process_file<P, Q>(
         &mut self,
         inp: P,
@@ -958,6 +957,21 @@ where
             | YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => None,
             _ => unreachable!(),
         };
+
+        let additional_decls =
+            if let Some(YaccKind::Original(YaccOriginalActionKind::GenericParseTree)) =
+                self.yacckind
+            {
+                // `lrpar::Node`` is deprecated within the lrpar crate, but not from within this module,
+                // Once it is removed from `lrpar`, we should move the declaration here entirely.
+                Some(quote! {
+                            #[allow(unused_imports)]
+                            pub use ::lrpar::parser::_deprecated_moved_::Node;
+                })
+            } else {
+                None
+            };
+
         let mod_name = format_ident!("{}", mod_name);
         let out_tokens = quote! {
             #visibility mod #mod_name {
@@ -969,6 +983,7 @@ where
                     #![deny(unsafe_code)]
                     #[allow(unused_imports)]
                     use super::*;
+                    #additional_decls
                     #parse_function
                     #rule_consts
                     #token_epp
@@ -1069,14 +1084,18 @@ where
                 quote! {
                     ::lrpar::RTParserBuilder::new(&grm, &stable)
                         .recoverer(#recoverer)
-                        .parse_generictree(lexer)
+                        .parse_map(
+                            lexer,
+                            &|lexeme| Node::Term{lexeme},
+                            &|ridx, nodes| Node::Nonterm{ridx, nodes}
+                        )
                 }
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 quote! {
                     ::lrpar::RTParserBuilder::new(&grm, &stable)
                         .recoverer(#recoverer)
-                        .parse_noaction(lexer)
+                        .parse_map(lexer, &|_| (), &|_, _| ()).1
                 }
             }
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools => {
@@ -1160,7 +1179,7 @@ where
                 }
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => quote! {
-                (::std::option::Option<::lrpar::Node<<#lexertypest as ::lrpar::LexerTypes>::LexemeT, #storaget>>,
+                (::std::option::Option<crate::Node<<#lexertypest as ::lrpar::LexerTypes>::LexemeT, #storaget>>,
                     ::std::vec::Vec<::lrpar::LexParseError<#storaget, #lexertypest>>)
             },
             YaccKind::Original(YaccOriginalActionKind::NoAction) => quote! {
