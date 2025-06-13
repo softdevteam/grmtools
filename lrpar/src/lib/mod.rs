@@ -202,6 +202,7 @@ mod dijkstra;
 pub mod lex_api;
 #[doc(hidden)]
 pub mod parser;
+// Support module for the lrpar crate `#[test]` utilities.
 #[cfg(test)]
 pub mod test_utils;
 

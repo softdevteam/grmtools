@@ -5,6 +5,7 @@ use cfgrammar::{
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
 };
 use getopts::Options;
+use grammar_testing::ASTRepr;
 use lrlex::{DefaultLexerTypes, LRLexError, LRNonStreamingLexerDef, LexerDef};
 use lrpar::{
     Lexeme, LexerTypes,
@@ -24,6 +25,7 @@ use std::{
     path::{Path, PathBuf},
     process,
 };
+use ron;
 
 /// A generic parse tree.
 #[derive(Debug, Clone, PartialEq)]
@@ -81,7 +83,7 @@ fn usage(prog: &str, msg: &str) -> ! {
         eprintln!("{}", msg);
     }
     eprintln!(
-        "Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dq] <lexer.l> <parser.y> <input files> ...",
+        "Usage: {} [-r <cpctplus|none>] [-y <eco|grmtools|original>] [-dqs] <lexer.l> <parser.y> <input files> ...",
         leaf
     );
     process::exit(1);
@@ -149,6 +151,11 @@ fn main() {
         .optflag("h", "help", "")
         .optflag("q", "quiet", "Don't print warnings such as conflicts")
         .optflag("d", "dump-state-graph", "Print the parser state graph")
+        .optflag(
+            "s",
+            "serialized-test-output",
+            "Output in lrpartest serialized format",
+        )
         .optopt(
             "r",
             "recoverer",
@@ -424,6 +431,7 @@ fn main() {
         recoverykind,
     };
 
+    let ron_output = matches.opt_present("s");
     if matches.free.len() == 3 {
         let input_path = PathBuf::from(&matches.free[2]);
         // If there is only one input file we want to print the generic parse tree.
@@ -435,7 +443,7 @@ fn main() {
         } else {
             read_file(&matches.free[2])
         };
-        if let Err(e) = parser_build_ctxt.parse_string(input_path, input) {
+        if let Err(e) = parser_build_ctxt.parse_string(input_path, input, ron_output) {
             eprintln!("{}", e);
             process::exit(1);
         }
@@ -469,6 +477,7 @@ enum NimbleparseError {
     Glob(glob::GlobError),
     Pattern(glob::PatternError),
     Other(Box<dyn Error>),
+    Serialization(ron::Error),
 }
 
 impl From<glob::GlobError> for NimbleparseError {
@@ -489,6 +498,11 @@ impl From<glob::PatternError> for NimbleparseError {
     }
 }
 
+impl From<ron::Error> for NimbleparseError {
+    fn from(it: ron::Error) -> Self {
+        NimbleparseError::Serialization(it)
+    }
+}
 impl Error for NimbleparseError {}
 
 impl fmt::Display for NimbleparseError {
@@ -510,6 +524,9 @@ impl fmt::Display for NimbleparseError {
             Self::Other(e) => {
                 write!(f, "{}", e)
             }
+            Self::Serialization(e) => {
+                write!(f, "{}", e)
+            }
         }
     }
 }
@@ -520,16 +537,44 @@ where
     usize: AsPrimitive<LexerTypesT::StorageT>,
     LexerTypesT::StorageT: TryFrom<usize>,
 {
-    fn parse_string(self, input_path: PathBuf, input_src: String) -> Result<(), NimbleparseError> {
+    fn parse_string(
+        self,
+        input_path: PathBuf,
+        input_src: String,
+        ron_output: bool,
+    ) -> Result<(), NimbleparseError> {
         let lexer = self.lexerdef.lexer(&input_src);
         let pb = RTParserBuilder::new(&self.grm, &self.stable).recoverer(self.recoverykind);
-        let (pt, errs) = pb.parse_map(&lexer, &|lexeme| Node::Term { lexeme }, &|ridx, nodes| {
-            Node::Nonterm { ridx, nodes }
-        });
-        match pt {
-            Some(pt) => println!("{}", pt.pp(&self.grm, &input_src)),
-            None => println!("Unable to repair input sufficiently to produce parse tree.\n"),
-        }
+        let errs = if ron_output {
+            let (parse_map, errs) = pb.parse_map(
+                &lexer,
+                &|lexeme: LexerTypesT::LexemeT| {
+                    let tidx = TIdx(lexeme.tok_id());
+                    let tn = self.grm.token_name(tidx).unwrap().to_string();
+                    let lt = input_src[lexeme.span().start()..lexeme.span().end()].to_string();
+                    ASTRepr::Term(tn, lt)
+                },
+                &|ridx, nodes| {
+                    let rule_name = &self.grm.rule_name_str(ridx);
+                    ASTRepr::Nonterm(rule_name.to_string(), nodes)
+                },
+            );
+            if let Some(parse_map) = parse_map {
+                let s = parse_map.to_ron_string()?;
+                println!("{s}");
+            }
+            errs
+        } else {
+            let (pt, errs) =
+                pb.parse_map(&lexer, &|lexeme| Node::Term { lexeme }, &|ridx, nodes| {
+                    Node::Nonterm { ridx, nodes }
+                });
+            match pt {
+                Some(pt) => println!("{}", pt.pp(&self.grm, &input_src)),
+                None => println!("Unable to repair input sufficiently to produce parse tree.\n"),
+            }
+            errs
+        };
         if !errs.is_empty() {
             return Err(NimbleparseError::Source {
                 src_path: input_path,
