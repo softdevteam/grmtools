@@ -30,7 +30,7 @@ const RECOVERY_TIME_BUDGET: u64 = 60_000; // milliseconds
 const RECOVERY_TIME_BUDGET: u64 = 500; // milliseconds
 
 #[deprecated(
-    since = "0.14",
+    since = "0.14.0",
     note = "Use the version of `Node` exported from your `lrpar_mod!`"
 )]
 pub type Node<T, S> = _deprecated_moved_::Node<T, S>;
@@ -218,7 +218,7 @@ where
 }
 
 #[deprecated(
-    since = "0.14",
+    since = "0.14.0",
     note = "Deprecated with `parse_generictree` there is no direct replacement, besides a custom action"
 )]
 #[allow(deprecated)]
@@ -937,7 +937,7 @@ where
     }
 
     #[deprecated(
-        since = "0.14",
+        since = "0.14.0",
         note = "Use `parse_map` to return a `Node` from your `lrpar_mod!` instead"
     )]
     #[allow(deprecated)]
@@ -990,7 +990,7 @@ where
         )
     }
 
-    #[deprecated(since = "0.14", note = "Use `parse_map` instead")]
+    #[deprecated(since = "0.14.0", note = "Use `parse_map` instead")]
     /// Parse input, returning any errors found. See the arguments for
     /// [`parse_actions`](#method.parse_actions) for more details about the return value.
     pub fn parse_noaction(
