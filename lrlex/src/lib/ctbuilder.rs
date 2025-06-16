@@ -1368,7 +1368,7 @@ impl<StorageT: Display + ToTokens> CTTokenMapBuilder<StorageT> {
 /// [`lrlex_mod!(mod_name)`](crate::lrlex_mod).
 ///
 /// This function is deprecated in favour of [`CTTokenMapBuilder`].
-#[deprecated(since = "0.14", note = "use `lrlex::CTTokenMapBuilder` instead")]
+#[deprecated(since = "0.14.0", note = "use `lrlex::CTTokenMapBuilder` instead")]
 pub fn ct_token_map<StorageT: Display + ToTokens>(
     mod_name: &str,
     token_map: impl Borrow<HashMap<String, StorageT>>,
