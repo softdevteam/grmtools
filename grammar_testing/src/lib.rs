@@ -19,26 +19,25 @@ impl ASTRepr {
     }
 
     pub fn from_ron_str<S: AsRef<str>>(s: S) -> Result<Self, ron::Error> {
-        let opts = Options::default().with_default_extension(Extensions::IMPLICIT_SOME);
+        let opts = Options::default();
         Ok(opts.from_str(s.as_ref())?)
     }
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct GrammarTest {
-    input: String,
-    #[serde(default)]
-    ast: Option<ASTRepr>,
-    // Ideally we would derive this value from `errors`` being empty/none but doing that
-    // within serialization is a painful exercise, so use the accessor `should_pass`.
-    #[serde(default)]
-    pass: Option<bool>,
-    #[serde(default)]
-    errors: Option<Vec<String>>,
+pub enum Test {
+    TestError {
+        input: String,
+        errors: Option<Vec<String>>,
+    },
+    TestSuccess {
+        input: String,
+        ast: Option<ASTRepr>,
+    },
 }
 
-impl GrammarTest {
+impl Test {
     pub fn to_ron_string(&self) -> Result<String, ron::Error> {
         let pretty_config = PrettyConfig::new()
             .escape_strings(false)
@@ -47,23 +46,22 @@ impl GrammarTest {
     }
 
     pub fn from_ron_str<S: AsRef<str>>(s: S) -> Result<Self, ron::Error> {
-        let opts = Options::default().with_default_extension(Extensions::IMPLICIT_SOME);
+        let opts = Options::default();
         Ok(opts.from_str(s.as_ref())?)
     }
 
     /// Returns the value of the `pass` field when it is `Some`, otherwise
     /// returns whether the `errors` field is `None` or it's inner value is empty.
     pub fn should_pass(&self) -> bool {
-        self.pass
-            .unwrap_or(self.errors.is_none() || self.errors.as_ref().unwrap().is_empty())
+        matches!(self, Test::TestSuccess{..})
     }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 #[serde(transparent)]
-pub struct GrammarTests(Vec<GrammarTest>);
+pub struct Tests(Vec<Test>);
 
-impl GrammarTests {
+impl Tests {
     pub fn to_ron_string(&self) -> Result<String, ron::Error> {
         let pretty_config = PrettyConfig::new()
             .escape_strings(false)
@@ -72,22 +70,22 @@ impl GrammarTests {
     }
 
     pub fn from_ron_str<S: AsRef<str>>(s: S) -> Result<Self, ron::Error> {
-        let opts = Options::default().with_default_extension(Extensions::IMPLICIT_SOME);
+        let opts = Options::default();
         Ok(opts.from_str(s.as_ref())?)
     }
 }
 
-impl std::ops::Deref for GrammarTests {
-    type Target = Vec<GrammarTest>;
+impl std::ops::Deref for Tests {
+    type Target = Vec<Test>;
 
-    fn deref(&self) -> &Vec<GrammarTest> {
+    fn deref(&self) -> &Vec<Test> {
         &self.0
     }
 }
 
-impl IntoIterator for GrammarTests {
-    type Item = GrammarTest;
-    type IntoIter = std::vec::IntoIter<GrammarTest>;
+impl IntoIterator for Tests {
+    type Item = Test;
+    type IntoIter = std::vec::IntoIter<Test>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
@@ -95,35 +93,35 @@ impl IntoIterator for GrammarTests {
 
 #[cfg(test)]
 mod tests {
-    use super::{ASTRepr, GrammarTest, GrammarTests};
+    use super::{ASTRepr, Test, Tests};
 
     #[test]
     fn grmtest_input_only() {
         let input = r#"
-            (input: "a")
+            #![enable(implicit_some)]
+            TestSuccess(input: "a")
         "#;
-        let x: GrammarTest = ron::from_str(&input).unwrap();
+        let x: Test = ron::from_str(&input).unwrap();
         assert_eq!(
             x,
-            GrammarTest {
+            Test::TestSuccess {
                 input: "a".to_string(),
-                pass: None,
-                errors: None,
-                ast: None
+                ast: None,
             }
         );
     }
 
     #[test]
     fn grmtest_input_ast() {
-        let input = r#"(input: "a", ast: Some(("start", [("character", "a")])))"#;
-        let x: GrammarTest = ron::from_str(&input).unwrap();
+        let input = r#"
+        #![enable(implicit_some)]
+        TestSuccess(input: "a", ast: ("start", [("character", "a")]))
+        "#;
+        let x: Test = Test::from_ron_str(&input).unwrap();
         assert_eq!(
             x,
-            GrammarTest {
+            Test::TestSuccess {
                 input: "a".to_string(),
-                pass: None,
-                errors: None,
                 ast: Some(ASTRepr::Nonterm(
                     "start".to_string(),
                     vec![ASTRepr::Term("character".to_string(), "a".to_string())]
@@ -135,43 +133,55 @@ mod tests {
     #[test]
     fn grmtest_many() {
         let input = r#"
+        #![enable(implicit_some)]
         [
-            GrammarTest(input: "a"),
-            (input: "a"),
-            (input: "b"),
-            (input: "a", ast: ("start", [("character", "a")])),
+            // First 2 are equivalent
+            TestSuccess(input: "a"),
+            TestSuccess(input: "a", ast: None),
+
+            TestSuccess(input: "b"),
+            // The last two are equivalent
+            TestSuccess(input: "a", ast: ("start", [("character", "a")])),
+            TestSuccess(input: "a", ast: Some(("start", [("character", "a")]))),
         ]
         "#;
-        let xs = GrammarTests::from_ron_str(&input).unwrap();
+        let xs = Tests::from_ron_str(&input).unwrap();
         for x in &*xs {
+            eprintln!("{:?}", x);
             assert!(x.should_pass());
         }
-        let first = GrammarTest {
+        let first = Test::TestSuccess {
             input: "a".to_string(),
-            pass: None,
-            errors: None,
             ast: None,
         };
+        let last = Test::TestSuccess {
+            input: "a".to_string(),
+            ast: Some(ASTRepr::Nonterm(
+                "start".to_string(),
+                vec![ASTRepr::Term("character".to_string(), "a".to_string())],
+            )),
+        };
+        assert_eq!(
+            last.to_ron_string().unwrap(),
+            r#"#![enable(implicit_some)]
+TestSuccess(
+    input: "a",
+    ast: ("start", [
+        ("character", "a"),
+    ]),
+)"#
+        );
         assert_eq!(
             xs,
-            GrammarTests(vec![
+            Tests(vec![
                 first.clone(),
                 first,
-                GrammarTest {
+                Test::TestSuccess {
                     input: "b".to_string(),
-                    pass: None,
-                    errors: None,
-                    ast: None
+                    ast: None,
                 },
-                GrammarTest {
-                    input: "a".to_string(),
-                    pass: None,
-                    errors: None,
-                    ast: Some(ASTRepr::Nonterm(
-                        "start".to_string(),
-                        vec![ASTRepr::Term("character".to_string(), "a".to_string())]
-                    ))
-                },
+                last.clone(),
+                last
             ])
         );
     }
@@ -179,29 +189,26 @@ mod tests {
     #[test]
     fn grmtest_many_fails() {
         let input = r#"
+        #![enable(implicit_some)]
         [
-            (input: "abc", pass: false),
-            (input: "abc", errors: ["some error"]),
+            TestError(input: "abc"),
+            TestError(input: "abc", errors: ["some error"]),
         ]
         "#;
-        let xs = GrammarTests::from_ron_str(&input).unwrap();
+        let xs = Tests::from_ron_str(&input).unwrap();
         for x in &*xs {
             assert!(!x.should_pass())
         }
         assert_eq!(
             xs,
-            GrammarTests(vec![
-                GrammarTest {
+            Tests(vec![
+                Test::TestError {
                     input: "abc".to_string(),
-                    pass: Some(false),
                     errors: None,
-                    ast: None
                 },
-                GrammarTest {
+                Test::TestError {
                     input: "abc".to_string(),
-                    pass: None,
                     errors: Some(vec!["some error".to_string()]),
-                    ast: None
                 }
             ])
         );

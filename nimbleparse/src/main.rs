@@ -15,6 +15,7 @@ use lrpar::{
 use lrtable::{Minimiser, StateTable, from_yacc};
 use num_traits::ToPrimitive as _;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
+use ron;
 use std::{
     env,
     error::Error,
@@ -25,7 +26,6 @@ use std::{
     path::{Path, PathBuf},
     process,
 };
-use ron;
 
 /// A generic parse tree.
 #[derive(Debug, Clone, PartialEq)]
