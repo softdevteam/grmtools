@@ -545,6 +545,13 @@ where
                                 glob(&path_joined.to_string_lossy()).map_err(|e| e.to_string())?
                             {
                                 let path = path?;
+                                if let Some(ext) = path.extension() {
+                                    if let Some(ext) = ext.to_str() {
+                                        if ext.starts_with("grm") {
+                                            Err(ErrorString("test_files extensions beginning with `grm` are reserved.".into()))?
+                                        }
+                                    }
+                                }
                                 let input = fs::read_to_string(&path)?;
                                 let l: LRNonStreamingLexer<LexerTypesT> =
                                     closure_lexerdef.lexer(&input);

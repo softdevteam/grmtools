@@ -561,7 +561,18 @@ where
                         }
                         let mut input_paths = Vec::new();
                         for path in paths {
-                            input_paths.push(path?);
+                            let path = path?;
+                            if let Some(ext) = path.extension() {
+                                if let Some(ext) = ext.to_str() {
+                                    if ext.starts_with("grm") {
+                                        Err(NimbleparseError::Other(
+                                            "test_files extensions beginning with `grm` are reserved."
+                                            .into(),
+                                        ))?
+                                    }
+                                }
+                            }
+                            input_paths.push(path);
                         }
                         input_paths
                     } else {
