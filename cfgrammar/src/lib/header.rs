@@ -137,6 +137,8 @@ pub enum Setting<T> {
     },
     Num(u64, T),
     String(String, T),
+    // The two `T` values are for the spans of the open and close brackets `[`, and `]`.
+    Array(Vec<Setting<T>>, T, T),
 }
 
 /// Parser for the `%grmtools` section
@@ -157,42 +159,53 @@ pub enum Value<T> {
     Setting(Setting<T>),
 }
 
+impl From<Setting<Span>> for Setting<Location> {
+    fn from(s: Setting<Span>) -> Setting<Location> {
+        match s {
+            Setting::Unitary(Namespaced {
+                namespace,
+                member: (m, ml),
+            }) => Setting::Unitary(Namespaced {
+                namespace: namespace.map(|(n, nl)| (n, nl.into())),
+                member: (m, ml.into()),
+            }),
+            Setting::Constructor {
+                ctor:
+                    Namespaced {
+                        namespace: ctor_ns,
+                        member: (ctor_m, ctor_ml),
+                    },
+                arg:
+                    Namespaced {
+                        namespace: arg_ns,
+                        member: (arg_m, arg_ml),
+                    },
+            } => Setting::Constructor {
+                ctor: Namespaced {
+                    namespace: ctor_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
+                    member: (ctor_m, ctor_ml.into()),
+                },
+                arg: Namespaced {
+                    namespace: arg_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
+                    member: (arg_m, arg_ml.into()),
+                },
+            },
+            Setting::Num(num, num_loc) => Setting::Num(num, num_loc.into()),
+            Setting::String(s, str_loc) => Setting::String(s, str_loc.into()),
+            Setting::Array(mut xs, arr_open_loc, arr_close_loc) => Setting::Array(
+                xs.drain(..).map(|x| x.into()).collect(),
+                arr_open_loc.into(),
+                arr_close_loc.into(),
+            ),
+        }
+    }
+}
+
 impl From<Value<Span>> for Value<Location> {
     fn from(v: Value<Span>) -> Value<Location> {
         match v {
             Value::Flag(flag, u) => Value::Flag(flag, u.into()),
-            Value::Setting(s) => Value::Setting(match s {
-                Setting::Unitary(Namespaced {
-                    namespace,
-                    member: (m, ml),
-                }) => Setting::Unitary(Namespaced {
-                    namespace: namespace.map(|(n, nl)| (n, nl.into())),
-                    member: (m, ml.into()),
-                }),
-                Setting::Constructor {
-                    ctor:
-                        Namespaced {
-                            namespace: ctor_ns,
-                            member: (ctor_m, ctor_ml),
-                        },
-                    arg:
-                        Namespaced {
-                            namespace: arg_ns,
-                            member: (arg_m, arg_ml),
-                        },
-                } => Setting::Constructor {
-                    ctor: Namespaced {
-                        namespace: ctor_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
-                        member: (ctor_m, ctor_ml.into()),
-                    },
-                    arg: Namespaced {
-                        namespace: arg_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
-                        member: (arg_m, arg_ml.into()),
-                    },
-                },
-                Setting::Num(num, num_loc) => Setting::Num(num, num_loc.into()),
-                Setting::String(s, str_loc) => Setting::String(s, str_loc.into()),
-            }),
+            Value::Setting(s) => Value::Setting(s.into()),
         }
     }
 }
@@ -215,6 +228,7 @@ impl<T> Value<T> {
                     format!("'{member}'")
                 }
             }
+            Value::Setting(Setting::Array(_, _, _)) => "array".to_string(),
             Value::Setting(Setting::Constructor {
                 ctor:
                     Namespaced {
@@ -584,6 +598,13 @@ impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
                 kind: HeaderErrorKind::ConversionError(
                     "From<YaccKind>",
                     "Cannot convert number to YaccKind",
+                ),
+                locations: vec![loc.clone()],
+            }),
+            Value::Setting(Setting::Array(_, loc, _)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "From<YaccKind>",
+                    "Cannot convert array to YaccKind",
                 ),
                 locations: vec![loc.clone()],
             }),

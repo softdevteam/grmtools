@@ -90,6 +90,13 @@ impl<T: Clone> TryFrom<&Value<T>> for LexerKind {
                 ),
                 locations: vec![loc.clone()],
             }),
+            Value::Setting(Setting::Array(_, arr_loc, _)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "LexerKind",
+                    "Expected `LexerKind` found array",
+                ),
+                locations: vec![arr_loc.clone()],
+            }),
             Value::Setting(Setting::Unitary(Namespaced {
                 namespace,
                 member: (member, member_loc),
