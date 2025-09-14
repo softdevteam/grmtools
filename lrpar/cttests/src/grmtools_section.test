@@ -148,4 +148,4 @@ lexer: |
     :: '::'
     : ':'
     \"(\\.|[^"\\])*\" 'STRING'
-    [\n\t\ ] ;
+    \p{Pattern_White_Space} ;
