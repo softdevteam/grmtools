@@ -1037,6 +1037,10 @@ where
             param,
         )
     }
+
+    pub fn grammar(&self) -> &YaccGrammar<StorageT> {
+        self.grm
+    }
 }
 
 /// After a parse error is encountered, the parser attempts to find a way of recovering. Each entry

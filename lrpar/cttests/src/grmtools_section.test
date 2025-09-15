@@ -1,5 +1,9 @@
 grammar: |
-    %grmtools{yacckind: Grmtools}
+    %grmtools{
+        yacckind: Grmtools,
+        recoverer: RecoveryKind::CPCTPlus,
+        test_files: ["*.input_grmtools_section"]
+    }
     %token MAGIC IDENT NUM STRING
     %epp MAGIC "%grmtools"
     %%
@@ -164,3 +168,6 @@ lexer: |
     : ':'
     \"(\\.|[^"\\])*\" 'STRING'
     \p{Pattern_White_Space} ;
+extra_files:
+  test.input_grmtools_section: |
+    %grmtools{yacckind: Grmtools, !b, !a}
