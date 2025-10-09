@@ -1179,7 +1179,7 @@ where
                 }
             }
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => quote! {
-                (::std::option::Option<crate::Node<<#lexertypest as ::lrpar::LexerTypes>::LexemeT, #storaget>>,
+                (::std::option::Option<Node<<#lexertypest as ::lrpar::LexerTypes>::LexemeT, #storaget>>,
                     ::std::vec::Vec<::lrpar::LexParseError<#storaget, #lexertypest>>)
             },
             YaccKind::Original(YaccOriginalActionKind::NoAction) => quote! {
