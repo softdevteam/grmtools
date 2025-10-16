@@ -1,4 +1,4 @@
-name: Test basic user actions using the calculator grammar
+name: Test multiple values in %grmtools section
 grammar: |
     %grmtools {yacckind: Original(UserAction), recoverer: RecoveryKind::CPCTPlus}
     %start Expr

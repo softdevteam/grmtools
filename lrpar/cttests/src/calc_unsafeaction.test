@@ -1,4 +1,4 @@
-name: Test basic user actions using the calculator grammar
+name: Test unsafe user actions using the calculator grammar
 yacckind: Original(YaccOriginalActionKind::UserAction)
 grammar: |
     %start Expr
