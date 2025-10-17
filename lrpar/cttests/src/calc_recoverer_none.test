@@ -1,4 +1,4 @@
-vname: Test basic user actions using the calculator grammar
+vname: Test %grmtools section RecoveryKind::None
 grammar: |
     %grmtools {yacckind: Original(UserAction), recoverer: RecoveryKind::None}
     %start Expr

@@ -1,4 +1,4 @@
-name: Test basic user actions using the calculator grammar
+name: Test basic user actions using the calculator grammar (Grmtools yacckind)
 yacckind: Grmtools
 recoverer: RecoveryKind::CPCTPlus
 grammar: |
