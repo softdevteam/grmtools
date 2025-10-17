@@ -24,6 +24,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         wasm32_unknown: { all(target_arch = "wasm32", target_os="unknown", target_vendor="unknown") },
     }
 
+    // The generic `src/*.test` testing all use a `u32` StorageT
+    // In this block we test `storaget.l`, and `storaget.y` with a `u8` instead.
     {
         // Because we're modifying the `StorageT` this isn't something `run_test_path` can do,
         // Since it modifies the type of the builder.
@@ -47,7 +49,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build()
             .unwrap();
     }
+    println!("cargo::rerun-if-changed=src/storaget.l");
+    println!(
+        "cargo::rerun-if-changed={}/storaget.l.rs",
+        std::env::var("OUT_DIR").unwrap()
+    );
+    println!("cargo::rerun-if-changed=src/storaget.y");
+    println!(
+        "cargo::rerun-if-changed={}/storaget.y.rs",
+        std::env::var("OUT_DIR").unwrap()
+    );
 
+    // This block specific to `multi_start.test`
+    //
+    // We use `clone_and_change_start_rule` to generate multiple parsers with
+    // different start rules from a single grammar source.
     {
         use lrpar::unstable_api::UnstableApi;
         // In this case we'll be building multiple grammars
@@ -109,15 +125,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build()
             .unwrap();
     }
-    println!("cargo::rerun-if-changed=src/storaget.l");
-    println!(
-        "cargo::rerun-if-changed={}/storaget.l.rs",
-        std::env::var("OUT_DIR").unwrap()
-    );
-    println!("cargo::rerun-if-changed=src/storaget.y");
-    println!(
-        "cargo::rerun-if-changed={}/storaget.y.rs",
-        std::env::var("OUT_DIR").unwrap()
-    );
     Ok(())
 }
