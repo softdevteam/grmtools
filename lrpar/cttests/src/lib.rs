@@ -29,6 +29,9 @@ lrpar_mod!("calc_nodefault_yacckind.y");
 lrlex_mod!("calc_unsafeaction.l");
 lrpar_mod!("calc_unsafeaction.y");
 
+lrlex_mod!("calc_input.l");
+lrpar_mod!("calc_input.y");
+
 lrlex_mod!("expect.l");
 lrpar_mod!("expect.y");
 
@@ -98,6 +101,16 @@ fn test_basic_actions() {
     let lexerdef = calc_actiontype_l::lexerdef();
     let lexer = lexerdef.lexer("2+3");
     match calc_actiontype_y::parse(&lexer) {
+        (Some(Ok(5)), ref errs) if errs.is_empty() => (),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn test_calc_input() {
+    let lexerdef = calc_input_l::lexerdef();
+    let lexer = lexerdef.lexer("2+3");
+    match calc_input_y::parse(&lexer) {
         (Some(Ok(5)), ref errs) if errs.is_empty() => (),
         _ => unreachable!(),
     }
