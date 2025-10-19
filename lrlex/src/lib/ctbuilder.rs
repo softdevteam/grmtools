@@ -226,7 +226,8 @@ where
     LexerTypesT::StorageT: Debug + Eq + Hash + ToTokens,
     usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
 {
-    lrpar_config: Option<Box<dyn Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT>>>,
+    lrpar_config:
+        Option<Box<dyn Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT> + 'a>>,
     lexer_path: Option<PathBuf>,
     output_path: Option<PathBuf>,
     lexerkind: Option<LexerKind>,
@@ -313,9 +314,9 @@ where
     ///     .lexer_in_src_dir("calc.l")?
     ///     .build()?;
     /// ```
-    pub fn lrpar_config<F>(mut self, config_func: F) -> Self
+    pub fn lrpar_config<F: 'a>(mut self, config_func: F) -> Self
     where
-        F: 'static + Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT>,
+        F: Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT>,
     {
         self.lrpar_config = Some(Box::new(config_func));
         self
