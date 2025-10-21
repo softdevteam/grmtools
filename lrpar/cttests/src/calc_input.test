@@ -3,7 +3,7 @@ grammar: |
     %grmtools {
         yacckind: Original(YaccOriginalActionKind::UserAction),
         recoverer: RecoveryKind::None,
-        test_files: ["*.calc_input"],
+        test_files: ["*.calc_input", "*.calc_input2"],
     }
     %start Expr
     %actiontype Result<u64, ()>
@@ -46,4 +46,6 @@ extra_files:
     1 + 2 * 3
   input2.calc_input: |
     (1 + 2) * 3
+  input1.calc_input2: |
+    2 * 3
 
