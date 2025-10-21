@@ -56,23 +56,35 @@ echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 touch src/main.rs && CACHE_EXPECTED=y cargo build
 cd $root/lrpar/examples/calc_actions
 echo "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
+# Invoke `%grmtools{test_files}`
+cargo run --package nimbleparse -- src/calc.l src/calc.y
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 touch src/main.rs && CACHE_EXPECTED=y cargo build
 cd $root/lrpar/examples/calc_ast
 echo "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
+# Invoke `%grmtools{test_files}`
+cargo run --package nimbleparse -- src/calc.l src/calc.y
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 cd $root/lrpar/examples/calc_ast_arena
 echo "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
+# Invoke `%grmtools{test_files}`
+cargo run --package nimbleparse -- src/calc.l src/calc.y
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 touch src/main.rs && CACHE_EXPECTED=y cargo build
 cd $root/lrpar/examples/calc_parsetree
 echo "2 + 3 * 4" | cargo run --package nimbleparse -- src/calc.l src/calc.y -
+# Invoke `%grmtools{test_files}`
+cargo run --package nimbleparse -- src/calc.l src/calc.y
 echo "2 + 3 * 4" | cargo run | grep "Result: 14"
 touch src/main.rs && CACHE_EXPECTED=y cargo build
 cd $root/lrpar/examples/clone_param
 echo "1+++" | cargo run --package nimbleparse -- src/param.l src/param.y -
+# Invoke `%grmtools{test_files}`
+cargo run --package nimbleparse -- src/param.l src/param.y
 cd $root/lrpar/examples/start_states
 echo "/* /* commented out */ */ uncommented text /* */" | cargo run --package nimbleparse -- src/comment.l src/comment.y -
+# Invoke `%grmtools{test_files}`
+cargo run --package nimbleparse -- src/comment.l src/comment.y
 cd $root
 
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps

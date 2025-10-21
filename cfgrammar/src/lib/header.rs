@@ -210,56 +210,6 @@ impl From<Value<Span>> for Value<Location> {
     }
 }
 
-impl<T> Value<T> {
-    pub fn expect_string_with_context(&self, ctxt: &str) -> Result<&str, Box<dyn Error>> {
-        let found = match self {
-            Value::Flag(_, _) => "bool".to_string(),
-            Value::Setting(Setting::String(s, _)) => {
-                return Ok(s);
-            }
-            Value::Setting(Setting::Num(_, _)) => "numeric".to_string(),
-            Value::Setting(Setting::Unitary(Namespaced {
-                namespace,
-                member: (member, _),
-            })) => {
-                if let Some((ns, _)) = namespace {
-                    format!("'{ns}::{member}'")
-                } else {
-                    format!("'{member}'")
-                }
-            }
-            Value::Setting(Setting::Array(_, _, _)) => "array".to_string(),
-            Value::Setting(Setting::Constructor {
-                ctor:
-                    Namespaced {
-                        namespace: ctor_ns,
-                        member: (ctor_memb, _),
-                    },
-                arg:
-                    Namespaced {
-                        namespace: arg_ns,
-                        member: (arg_memb, _),
-                    },
-            }) => {
-                format!(
-                    "'{}({})'",
-                    if let Some((ns, _)) = ctor_ns {
-                        format!("{ns}::{ctor_memb}")
-                    } else {
-                        arg_memb.to_string()
-                    },
-                    if let Some((ns, _)) = arg_ns {
-                        format!("{ns}::{arg_memb}")
-                    } else {
-                        arg_memb.to_string()
-                    }
-                )
-            }
-        };
-        Err(format!("Expected 'String' value, found {}, at {ctxt}", found).into())
-    }
-}
-
 static RE_LEADING_WS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap());
 static RE_NAME: LazyLock<Regex> = LazyLock::new(|| {

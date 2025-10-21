@@ -1,6 +1,6 @@
 use cfgrammar::{
     Location, RIdx, Span, TIdx,
-    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Value},
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Setting, Value},
     markmap::Entry,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
 };
@@ -495,7 +495,7 @@ impl fmt::Display for NimbleparseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Source { src_path, errs } => {
-                writeln!(f, "While parsing: {}", src_path.display())?;
+                writeln!(f, "While parsing {}:", src_path.display())?;
                 for e in errs {
                     writeln!(f, "{}", e)?
                 }
@@ -543,77 +543,99 @@ where
     }
 
     fn parse_many(self, input_paths: &[String]) -> Result<(), NimbleparseError> {
-        let input_paths = if input_paths.is_empty() {
+        let mut paths = Vec::new();
+        if !input_paths.is_empty() {
+            paths.extend(
+                input_paths
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect::<Vec<PathBuf>>(),
+            );
+        } else {
             // If given no input paths, try to find some with `test_files` in the header.
-            if let Some(HeaderValue(_, val)) = self.header.get("test_files") {
-                let s = val.expect_string_with_context("'test_files' in %grmtools")?;
-                if let Some(yacc_y_path_dir) = self.yacc_y_path.parent() {
-                    let joined = yacc_y_path_dir.join(s);
-                    let joined = joined.as_os_str().to_str();
-                    if let Some(s) = joined {
-                        let mut paths = glob::glob(s)?.peekable();
-                        if paths.peek().is_none() {
-                            return Err(NimbleparseError::Other(
-                                format!("'test_files' glob '{}' matched no paths", s)
-                                    .to_string()
-                                    .into(),
-                            ));
-                        }
-                        let mut input_paths = Vec::new();
-                        for path in paths {
-                            let path = path?;
-                            if let Some(ext) = path.extension() {
-                                if let Some(ext) = ext.to_str() {
-                                    if ext.starts_with("grm") {
-                                        Err(NimbleparseError::Other(
-                                            "test_files extensions beginning with `grm` are reserved."
-                                            .into(),
-                                        ))?
+            match self.header.get("test_files") {
+                Some(HeaderValue(_, Value::Setting(Setting::Array(test_globs, _, _)))) => {
+                    for setting in test_globs {
+                        match setting {
+                            Setting::String(s, _) => {
+                                if let Some(yacc_y_path_dir) = self.yacc_y_path.parent() {
+                                    let joined = yacc_y_path_dir.join(s);
+                                    let joined = joined.as_os_str().to_str();
+                                    if let Some(s) = joined {
+                                        let mut glob_paths = glob::glob(s)?.peekable();
+                                        if glob_paths.peek().is_none() {
+                                            return Err(NimbleparseError::Other(
+                                                format!(
+                                                    "'test_files' glob '{}' matched no paths",
+                                                    s
+                                                )
+                                                .to_string()
+                                                .into(),
+                                            ));
+                                        }
+                                        for path in glob_paths {
+                                            let path = path?;
+                                            if let Some(ext) = path.extension() {
+                                                if let Some(ext) = ext.to_str() {
+                                                    if ext.starts_with("grm") {
+                                                        Err(NimbleparseError::Other(
+                                                        "test_files extensions beginning with `grm` are reserved."
+                                                        .into(),
+                                                    ))?
+                                                    }
+                                                }
+                                            }
+                                            paths.push(path);
+                                        }
+                                    } else {
+                                        return Err(NimbleparseError::Other(
+                                        format!(
+                                            "Unable to convert joined path to str {} with glob '{}'",
+                                            self.yacc_y_path.display(),
+                                            s
+                                        )
+                                        .into(),
+                                    ));
                                     }
+                                } else {
+                                    return Err(NimbleparseError::Other(
+                                        format!(
+                                            "Unable to find parent path for {}",
+                                            self.yacc_y_path.display()
+                                        )
+                                        .into(),
+                                    ));
                                 }
                             }
-                            input_paths.push(path);
+
+                            _ => {
+                                return Err(NimbleparseError::Other(
+                                    "Expected string values in `test_files`".into(),
+                                ));
+                            }
                         }
-                        input_paths
-                    } else {
-                        return Err(NimbleparseError::Other(
-                            format!(
-                                "Unable to convert joined path to str {} with glob '{}'",
-                                self.yacc_y_path.display(),
-                                s
-                            )
-                            .into(),
-                        ));
                     }
-                } else {
+                }
+                Some(_) => {
                     return Err(NimbleparseError::Other(
-                        format!(
-                            "Unable to find parent path for {}",
-                            self.yacc_y_path.display()
-                        )
-                        .into(),
+                        "Expected Array of string values in `test_files`".into(),
                     ));
                 }
-            } else {
-                return Err(NimbleparseError::Other(
-                    "Missing <input file> argument".into(),
-                ));
+                None => {
+                    return Err(NimbleparseError::Other(
+                        "Missing <input file> argument".into(),
+                    ));
+                }
             }
-        } else {
-            // Just convert the given arguments to paths.
-            input_paths
-                .iter()
-                .map(PathBuf::from)
-                .collect::<Vec<PathBuf>>()
         };
-        if input_paths.is_empty() {
+        if paths.is_empty() {
             return Err(NimbleparseError::Other(
                 "Missing <input file> argument".into(),
             ));
         }
         let pb = RTParserBuilder::new(&self.grm, &self.stable).recoverer(self.recoverykind);
         // Actually parse the given arguments or the `test_files` specified in the grammar.
-        for input_path in input_paths {
+        for input_path in paths {
             let input = read_file(&input_path);
             let lexer = self.lexerdef.lexer(&input);
             let (pt, errs) =
