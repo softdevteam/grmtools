@@ -433,7 +433,7 @@ where
     }
 
     /// Return an iterator over the indexes of all non-empty actions of `stidx`.
-    pub fn state_actions(&self, stidx: StIdx<StorageT>) -> StateActionsIterator<StorageT> {
+    pub fn state_actions(&self, stidx: StIdx<StorageT>) -> StateActionsIterator<'_, StorageT> {
         let start = usize::from(stidx) * usize::from(self.tokens_len);
         let end = start + usize::from(self.tokens_len);
         StateActionsIterator {
@@ -445,7 +445,7 @@ where
 
     /// Return an iterator over the indexes of all shift actions of `stidx`. By definition this
     /// is a subset of the indexes produced by [`state_actions`](#method.state_actions).
-    pub fn state_shifts(&self, stidx: StIdx<StorageT>) -> StateActionsIterator<StorageT> {
+    pub fn state_shifts(&self, stidx: StIdx<StorageT>) -> StateActionsIterator<'_, StorageT> {
         let start = usize::from(stidx) * usize::from(self.tokens_len);
         let end = start + usize::from(self.tokens_len);
         StateActionsIterator {
@@ -476,7 +476,7 @@ where
     ///   And:    [F -> c., $]
     ///
     /// since the two [E -> ...] items both have the same effects on a parse stack.
-    pub fn core_reduces(&self, stidx: StIdx<StorageT>) -> CoreReducesIterator<StorageT> {
+    pub fn core_reduces(&self, stidx: StIdx<StorageT>) -> CoreReducesIterator<'_, StorageT> {
         let start = usize::from(stidx) * usize::from(self.prods_len);
         let end = start + usize::from(self.prods_len);
         CoreReducesIterator {

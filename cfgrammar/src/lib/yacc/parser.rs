@@ -314,7 +314,7 @@ fn add_duplicate_occurrence(
 
 /// The actual parser is intended to be entirely opaque from outside users.
 impl YaccParser<'_> {
-    pub(crate) fn new(yacc_kind: YaccKind, src: &str) -> YaccParser {
+    pub(crate) fn new(yacc_kind: YaccKind, src: &str) -> YaccParser<'_> {
         YaccParser {
             yacc_kind,
             src,
