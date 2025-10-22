@@ -1,3 +1,75 @@
+# grmtools 0.14.0 (2025-10-22)
+
+This release contains a number of new features and breaking changes. Most of
+the breaking changes are in advanced/niche parts of the API, which few users
+will notice. However, four breaking changes might affect a more substantial
+subset of users: those are highlighted in the "breaking changes (major)"
+section below.
+
+
+## New features and improvements
+
+ * Lex and Yacc-like inputs can now optionally take a `%grmtools` directive
+   which allows customisation of how grmtools treats the file. This allows
+   users to keep together the necessary grmtools settings, rather than
+   having to remember what is set in, for example, a `build.rs` file. See
+   [Lex Extensions](https://softdevteam.github.io/grmtools/latest_release/book/lexextensions.html)
+   and [Yacc Extensions](https://softdevteam.github.io/grmtools/latest_release/book/yaccextensions.html
+   for more details) in the grmtools book for more details. `nimbleparse` is
+   also able to use `%grmtools` directives.
+
+   Note that setting options via the command-line / build script overrides
+   `%grmtools` directives.
+
+ * Many error messages have been improved, ranging from incorrect grammars
+   to reporting the look ahead value with reduce/reduce conflicts.
+
+ * lrpar uses bincode directly for generated tables, making the serde
+   dependency optional.
+
+ * `parse_map` been added as a more generic version of `parse_generictree`. The
+   latter is marked as deprecated.
+
+ * `CTTokenMapBuilder` has been added as a more flexible alternative to
+   `ct_token_map`. The latter is marked as deprecated.
+
+ * lrlex has a new flag `allow_wholeline_comments` which allows `// ...`
+   comments to be added to lex files. This defaults to off, because it is not
+   uncommon for Lex rules themselves to use `//`.
+
+ * Support for use under WASM has been improved.
+
+
+## Breaking changes
+
+ * `LexErrorKind is no longer `Eq`/`PartialEq`. This allows specific errors
+   with regexes to be reported, instead of the generic error previously.
+
+ * Many `struct`s and `enum`s have been marked non-exhaustive. This means that
+   external users cannot directly construct instances of such types. In general,
+   these are parts of the API that users would have expected to have received
+   from grmtools, not construct themselves.
+
+ * `allow_missing_tokens_in_parser` is now treated as a warning.
+
+ * `RegexOptions` in lrlex has been renamed `LexFlags`. This struct was, and
+   remains, mostly `doc(hidden)` but it cannot be fully hidden from users.
+
+
+## Other changes
+
+ * Code generation now uses the
+   [quote](https://crates.io/crates/quote) crate and formatted using
+   [prettyplease](https://crates.io/crates/prettyplease). This makes dealing
+   with the generated code more pleasant.
+
+ * The signature for `ct_token_map` has been generalized to use the `Borrow`
+   trait instead of a reference.
+
+ * The lifetime of the `lrpar_config` callback has been relaxed (previously it
+   was the onerous `'static`).
+
+
 # grmtools 0.13.10 (2025-02-04)
 
  * Add option for more complete POSIX lex compatible regex escapes. For
