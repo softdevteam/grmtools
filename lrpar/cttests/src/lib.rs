@@ -352,6 +352,7 @@ fn test_expect() {
 // various files from across the project workspace.
 //
 // Wasi's filesystem access is sandboxed by default.
+#[cfg(all(not(target_arch = "wasm32"), test))]
 #[test]
 fn test_grmtools_section_files() {
     use glob::glob;

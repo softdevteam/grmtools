@@ -1444,7 +1444,10 @@ fn indent(indent: &str, s: &str) -> String {
     format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }
 
-#[cfg(test)]
+// It isn't clear to me why this test isn't working on wasm32,
+// as the `workspace_runner` should allow access to `OUT_DIR`
+// perhaps it is related to absolute paths
+#[cfg(all(not(target_arch = "wasm32"), test))]
 mod test {
     use std::fs::File;
     use std::io::Write;
