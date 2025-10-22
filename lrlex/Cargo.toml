@@ -2,7 +2,7 @@
 name = "lrlex"
 description = "Simple lexer generator"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.13.10"
+version = "0.14.0"
 edition = "2024"
 readme = "README.md"
 license = "Apache-2.0/MIT"
@@ -24,8 +24,8 @@ _unsealed_unstable_traits = ["_unstable_api"]
 vergen = { version = "8", default-features = false, features = ["build"] }
 
 [dependencies]
-cfgrammar = { path = "../cfgrammar", version = "0.13" }
-lrpar = { path = "../lrpar", version = "0.13" }
+cfgrammar = { path = "../cfgrammar", version = "0.14" }
+lrpar = { path = "../lrpar", version = "0.14" }
 
 getopts.workspace = true
 regex.workspace = true

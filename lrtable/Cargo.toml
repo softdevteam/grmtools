@@ -2,7 +2,7 @@
 name = "lrtable"
 description = "LR grammar table generation"
 repository = "https://github.com/softdevteam/grmtools"
-version = "0.13.10"
+version = "0.14.0"
 edition = "2024"
 readme = "README.md"
 license = "Apache-2.0/MIT"
@@ -17,7 +17,7 @@ name = "lrtable"
 path = "src/lib/mod.rs"
 
 [dependencies]
-cfgrammar = { path="../cfgrammar", version = "0.13" }
+cfgrammar = { path="../cfgrammar", version = "0.14" }
 
 bincode = { workspace = true, features = ["derive"], optional = true }
 fnv.workspace = true
