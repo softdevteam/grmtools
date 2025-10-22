@@ -171,6 +171,7 @@ impl From<&LexFlags> for Header<Location> {
 }
 
 /// LexFlags with flags set to default values.
+#[doc(hidden)]
 pub const DEFAULT_LEX_FLAGS: LexFlags = LexFlags {
     allow_wholeline_comments: Some(false),
     dot_matches_new_line: Some(true),
@@ -186,6 +187,7 @@ pub const DEFAULT_LEX_FLAGS: LexFlags = LexFlags {
     nest_limit: None,
 };
 
+#[doc(hidden)]
 /// LexFlags with all of the values `None`.
 pub const UNSPECIFIED_LEX_FLAGS: LexFlags = LexFlags {
     allow_wholeline_comments: None,
@@ -672,7 +674,7 @@ where
 
     /// Returns the final `LexFlags` used for this lex source
     /// after all forced and default flags have been resolved.
-    pub fn lex_flags(&self) -> Option<&LexFlags> {
+    pub(crate) fn lex_flags(&self) -> Option<&LexFlags> {
         Some(&self.lex_flags)
     }
 }
