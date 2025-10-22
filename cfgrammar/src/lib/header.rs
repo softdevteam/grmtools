@@ -137,6 +137,8 @@ pub enum Setting<T> {
     },
     Num(u64, T),
     String(String, T),
+    // The two `T` values are for the spans of the open and close brackets `[`, and `]`.
+    Array(Vec<Setting<T>>, T, T),
 }
 
 /// Parser for the `%grmtools` section
@@ -157,92 +159,54 @@ pub enum Value<T> {
     Setting(Setting<T>),
 }
 
-impl From<Value<Span>> for Value<Location> {
-    fn from(v: Value<Span>) -> Value<Location> {
-        match v {
-            Value::Flag(flag, u) => Value::Flag(flag, u.into()),
-            Value::Setting(s) => Value::Setting(match s {
-                Setting::Unitary(Namespaced {
-                    namespace,
-                    member: (m, ml),
-                }) => Setting::Unitary(Namespaced {
-                    namespace: namespace.map(|(n, nl)| (n, nl.into())),
-                    member: (m, ml.into()),
-                }),
-                Setting::Constructor {
-                    ctor:
-                        Namespaced {
-                            namespace: ctor_ns,
-                            member: (ctor_m, ctor_ml),
-                        },
-                    arg:
-                        Namespaced {
-                            namespace: arg_ns,
-                            member: (arg_m, arg_ml),
-                        },
-                } => Setting::Constructor {
-                    ctor: Namespaced {
-                        namespace: ctor_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
-                        member: (ctor_m, ctor_ml.into()),
-                    },
-                    arg: Namespaced {
-                        namespace: arg_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
-                        member: (arg_m, arg_ml.into()),
-                    },
-                },
-                Setting::Num(num, num_loc) => Setting::Num(num, num_loc.into()),
-                Setting::String(s, str_loc) => Setting::String(s, str_loc.into()),
-            }),
-        }
-    }
-}
-
-impl<T> Value<T> {
-    pub fn expect_string_with_context(&self, ctxt: &str) -> Result<&str, Box<dyn Error>> {
-        let found = match self {
-            Value::Flag(_, _) => "bool".to_string(),
-            Value::Setting(Setting::String(s, _)) => {
-                return Ok(s);
-            }
-            Value::Setting(Setting::Num(_, _)) => "numeric".to_string(),
-            Value::Setting(Setting::Unitary(Namespaced {
+impl From<Setting<Span>> for Setting<Location> {
+    fn from(s: Setting<Span>) -> Setting<Location> {
+        match s {
+            Setting::Unitary(Namespaced {
                 namespace,
-                member: (member, _),
-            })) => {
-                if let Some((ns, _)) = namespace {
-                    format!("'{ns}::{member}'")
-                } else {
-                    format!("'{member}'")
-                }
-            }
-            Value::Setting(Setting::Constructor {
+                member: (m, ml),
+            }) => Setting::Unitary(Namespaced {
+                namespace: namespace.map(|(n, nl)| (n, nl.into())),
+                member: (m, ml.into()),
+            }),
+            Setting::Constructor {
                 ctor:
                     Namespaced {
                         namespace: ctor_ns,
-                        member: (ctor_memb, _),
+                        member: (ctor_m, ctor_ml),
                     },
                 arg:
                     Namespaced {
                         namespace: arg_ns,
-                        member: (arg_memb, _),
+                        member: (arg_m, arg_ml),
                     },
-            }) => {
-                format!(
-                    "'{}({})'",
-                    if let Some((ns, _)) = ctor_ns {
-                        format!("{ns}::{ctor_memb}")
-                    } else {
-                        arg_memb.to_string()
-                    },
-                    if let Some((ns, _)) = arg_ns {
-                        format!("{ns}::{arg_memb}")
-                    } else {
-                        arg_memb.to_string()
-                    }
-                )
-            }
-        };
-        Err(format!("Expected 'String' value, found {}, at {ctxt}", found).into())
+            } => Setting::Constructor {
+                ctor: Namespaced {
+                    namespace: ctor_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
+                    member: (ctor_m, ctor_ml.into()),
+                },
+                arg: Namespaced {
+                    namespace: arg_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
+                    member: (arg_m, arg_ml.into()),
+                },
+            },
+            Setting::Num(num, num_loc) => Setting::Num(num, num_loc.into()),
+            Setting::String(s, str_loc) => Setting::String(s, str_loc.into()),
+            Setting::Array(mut xs, arr_open_loc, arr_close_loc) => Setting::Array(
+                xs.drain(..).map(|x| x.into()).collect(),
+                arr_open_loc.into(),
+                arr_close_loc.into(),
+            ),
+        }
+    }
+}
+
+impl From<Value<Span>> for Value<Location> {
+    fn from(v: Value<Span>) -> Value<Location> {
+        match v {
+            Value::Flag(flag, u) => Value::Flag(flag, u.into()),
+            Value::Setting(s) => Value::Setting(s.into()),
+        }
     }
 }
 
@@ -281,7 +245,85 @@ fn add_duplicate_occurrence<T: Eq + PartialEq + Clone>(
 }
 
 impl<'input> GrmtoolsSectionParser<'input> {
-    pub fn parse_value(
+    fn parse_setting(&'_ self, mut i: usize) -> Result<(Setting<Span>, usize), HeaderError<Span>> {
+        i = self.parse_ws(i);
+        match RE_DIGITS.find(&self.src[i..]) {
+            Some(m) => {
+                let num_span = Span::new(i + m.start(), i + m.end());
+                let num_str = &self.src[num_span.start()..num_span.end()];
+                // If the above regex matches we expect this to succeed.
+                let num = str::parse::<u64>(num_str).unwrap();
+                let val = Setting::Num(num, num_span);
+                i = self.parse_ws(num_span.end());
+                Ok((val, i))
+            }
+            None => match RE_STRING.find(&self.src[i..]) {
+                Some(m) => {
+                    let end = i + m.end();
+                    // Trim the leading and trailing quotes.
+                    let str_span = Span::new(i + m.start() + 1, end - 1);
+                    let str = &self.src[str_span.start()..str_span.end()];
+                    let setting = Setting::String(str.to_string(), str_span);
+                    // After the trailing quotes.
+                    i = self.parse_ws(end);
+                    Ok((setting, i))
+                }
+                None => {
+                    if let Some(mut j) = self.lookahead_is("[", i) {
+                        let mut vals = Vec::new();
+                        let open_pos = j;
+
+                        loop {
+                            j = self.parse_ws(j);
+                            if let Some(end_pos) = self.lookahead_is("]", j) {
+                                return Ok((
+                                    Setting::Array(
+                                        vals,
+                                        Span::new(i, open_pos),
+                                        Span::new(j, end_pos),
+                                    ),
+                                    end_pos,
+                                ));
+                            }
+                            if let Ok((val, k)) = self.parse_setting(j) {
+                                vals.push(val);
+                                j = self.parse_ws(k);
+                            }
+                            if let Some(k) = self.lookahead_is(",", j) {
+                                j = k
+                            }
+                        }
+                    } else {
+                        let (path_val, j) = self.parse_namespaced(i)?;
+                        i = self.parse_ws(j);
+                        if let Some(j) = self.lookahead_is("(", i) {
+                            let (arg, j) = self.parse_namespaced(j)?;
+                            i = self.parse_ws(j);
+                            if let Some(j) = self.lookahead_is(")", i) {
+                                i = self.parse_ws(j);
+                                Ok((
+                                    Setting::Constructor {
+                                        ctor: path_val,
+                                        arg,
+                                    },
+                                    i,
+                                ))
+                            } else {
+                                Err(HeaderError {
+                                    kind: HeaderErrorKind::ExpectedToken(')'),
+                                    locations: vec![Span::new(i, i)],
+                                })
+                            }
+                        } else {
+                            Ok((Setting::Unitary(path_val), i))
+                        }
+                    }
+                }
+            },
+        }
+    }
+
+    pub fn parse_key_value(
         &'_ self,
         mut i: usize,
     ) -> Result<(String, Span, Value<Span>, usize), HeaderError<Span>> {
@@ -298,62 +340,8 @@ impl<'input> GrmtoolsSectionParser<'input> {
             let key_span = Span::new(i, j);
             i = self.parse_ws(j);
             if let Some(j) = self.lookahead_is(":", i) {
-                i = self.parse_ws(j);
-                match RE_DIGITS.find(&self.src[i..]) {
-                    Some(m) => {
-                        let num_span = Span::new(i + m.start(), i + m.end());
-                        let num_str = &self.src[num_span.start()..num_span.end()];
-                        // If the above regex matches we expect this to succeed.
-                        let num = str::parse::<u64>(num_str).unwrap();
-                        let val = Setting::Num(num, num_span);
-                        i = self.parse_ws(num_span.end());
-                        Ok((key_name, key_span, Value::Setting(val), i))
-                    }
-                    None => match RE_STRING.find(&self.src[i..]) {
-                        Some(m) => {
-                            let end = i + m.end();
-                            // Trim the leading and trailing quotes.
-                            let str_span = Span::new(i + m.start() + 1, end - 1);
-                            let str = &self.src[str_span.start()..str_span.end()];
-                            let setting = Setting::String(str.to_string(), str_span);
-                            // After the trailing quotes.
-                            i = self.parse_ws(end);
-                            Ok((key_name, key_span, Value::Setting(setting), i))
-                        }
-                        None => {
-                            let (path_val, j) = self.parse_namespaced(i)?;
-                            i = self.parse_ws(j);
-                            if let Some(j) = self.lookahead_is("(", i) {
-                                let (arg, j) = self.parse_namespaced(j)?;
-                                i = self.parse_ws(j);
-                                if let Some(j) = self.lookahead_is(")", i) {
-                                    i = self.parse_ws(j);
-                                    Ok((
-                                        key_name,
-                                        key_span,
-                                        Value::Setting(Setting::Constructor {
-                                            ctor: path_val,
-                                            arg,
-                                        }),
-                                        i,
-                                    ))
-                                } else {
-                                    Err(HeaderError {
-                                        kind: HeaderErrorKind::ExpectedToken(')'),
-                                        locations: vec![Span::new(i, i)],
-                                    })
-                                }
-                            } else {
-                                Ok((
-                                    key_name,
-                                    key_span,
-                                    Value::Setting(Setting::Unitary(path_val)),
-                                    i,
-                                ))
-                            }
-                        }
-                    },
-                }
+                let (val, j) = self.parse_setting(j)?;
+                Ok((key_name, key_span, Value::Setting(val), j))
             } else {
                 Ok((key_name, key_span, Value::Flag(true, key_span), i))
             }
@@ -414,7 +402,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             if let Some(j) = self.lookahead_is("{", i) {
                 i = self.parse_ws(j);
                 while self.lookahead_is("}", i).is_none() && i < self.src.len() {
-                    let (key, key_loc, val, j) = match self.parse_value(i) {
+                    let (key, key_loc, val, j) = match self.parse_key_value(i) {
                         Ok((key, key_loc, val, pos)) => (key, key_loc, val, pos),
                         Err(e) => {
                             errs.push(e);
@@ -439,7 +427,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                         i = self.parse_ws(j);
                         continue;
                     } else {
-                        i = j;
+                        i = self.parse_ws(j);
                         break;
                     }
                 }
@@ -584,6 +572,13 @@ impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
                 kind: HeaderErrorKind::ConversionError(
                     "From<YaccKind>",
                     "Cannot convert number to YaccKind",
+                ),
+                locations: vec![loc.clone()],
+            }),
+            Value::Setting(Setting::Array(_, loc, _)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "From<YaccKind>",
+                    "Cannot convert array to YaccKind",
                 ),
                 locations: vec![loc.clone()],
             }),

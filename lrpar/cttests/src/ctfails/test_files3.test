@@ -1,0 +1,16 @@
+name: Test empty matchless glob in array of %grmtools{test_files}
+grammar: |
+    %grmtools {
+        yacckind: Original(YaccOriginalActionKind::UserAction),
+        recoverer: RecoveryKind::None,
+        test_files: ["*.nonexistent"]
+    }
+    %start Expr
+    %actiontype ()
+    %%
+    Expr: '(' ')' { () } ;
+lexer: |
+    %%
+    \( "("
+    \) ")"
+    [\t\n ]+ ;

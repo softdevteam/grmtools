@@ -90,6 +90,13 @@ impl<T: Clone> TryFrom<&Value<T>> for LexerKind {
                 ),
                 locations: vec![loc.clone()],
             }),
+            Value::Setting(Setting::Array(_, arr_loc, _)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "LexerKind",
+                    "Expected `LexerKind` found array",
+                ),
+                locations: vec![arr_loc.clone()],
+            }),
             Value::Setting(Setting::Unitary(Namespaced {
                 namespace,
                 member: (member, member_loc),
@@ -538,29 +545,65 @@ where
                         .collect::<HashMap<_, _>>();
                     closure_lexerdef.set_rule_ids(&owned_map);
                     yacc_header.mark_used(&"test_files".to_string());
+                    let grammar = rtpb.grammar();
                     let test_glob = yacc_header.get("test_files");
+                    let mut err_str = None;
+                    let add_error_line = |err_str: &mut Option<String>, line| {
+                        if let Some(err_str) = err_str {
+                            err_str.push_str(&format!("{}\n", line));
+                        } else {
+                            let _ = err_str.insert(format!("{}\n", line));
+                        }
+                    };
                     match test_glob {
-                        Some(HeaderValue(_, Value::Setting(Setting::String(test_files, _)))) => {
-                            let path_joined = grm_path.parent().unwrap().join(test_files);
-                            for path in
-                                glob(&path_joined.to_string_lossy()).map_err(|e| e.to_string())?
-                            {
-                                let path = path?;
-                                if let Some(ext) = path.extension() {
-                                    if let Some(ext) = ext.to_str() {
-                                        if ext.starts_with("grm") {
-                                            Err(ErrorString("test_files extensions beginning with `grm` are reserved.".into()))?
+                        Some(HeaderValue(_, Value::Setting(Setting::Array(test_globs, _, _)))) => {
+                            for setting in test_globs {
+                                match setting {
+                                    Setting::String(test_files, _) => {
+                                        let path_joined = grm_path.parent().unwrap().join(test_files);
+                                        let path_str = &path_joined.to_string_lossy();
+                                        let mut glob_paths = glob(path_str).map_err(|e| e.to_string())?.peekable();
+                                        if glob_paths.peek().is_none() {
+                                            return Err(format!("'test_files' glob '{}' matched no paths", path_str)
+                                                .to_string()
+                                                .into(),
+                                            );
+                                        }
+
+                                        for path in glob_paths {
+                                            let path = path?;
+                                            if let Some(ext) = path.extension() {
+                                                if let Some(ext) = ext.to_str() {
+                                                    if ext.starts_with("grm") {
+                                                        add_error_line(&mut err_str, "test_files extensions beginning with `grm` are reserved.".into());
+                                                    }
+                                                }
+                                            }
+                                            let input = fs::read_to_string(&path)?;
+                                            let l: LRNonStreamingLexer<LexerTypesT> =
+                                                closure_lexerdef.lexer(&input);
+                                            let errs = rtpb.parse_map(&l, &|_| (), &|_, _| ()).1;
+                                            if !errs.is_empty() {
+                                                add_error_line(&mut err_str, format!("While parsing {}:", path.display()));
+                                                for e in errs {
+                                                    let e_pp = e.pp(&l, &|t| grammar.token_epp(t));
+                                                    let e_lines = e_pp.split("\n");
+                                                    for e in e_lines {
+                                                        add_error_line(&mut err_str, format!("\t{}", e));
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
-                                }
-                                let input = fs::read_to_string(&path)?;
-                                let l: LRNonStreamingLexer<LexerTypesT> =
-                                    closure_lexerdef.lexer(&input);
-                                for e in rtpb.parse_map(&l, &|_| (), &|_, _| ()).1 {
-                                    Err(format!("parsing {}: {}", path.display(), e))?
+                                    _ => return Err("Invalid value for setting 'test_files'".into()),
                                 }
                             }
-                            Ok(())
+                            if let Some(err_str) = err_str {
+                                Err(ErrorString(err_str))?
+                            } else {
+                                Ok(())
+                            }
+
                         }
                         Some(_) => Err("Invalid value for setting 'test_files'".into()),
                         None => Ok(()),

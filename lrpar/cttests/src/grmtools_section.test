@@ -1,5 +1,9 @@
 grammar: |
-    %grmtools{yacckind: Grmtools}
+    %grmtools{
+        yacckind: Grmtools,
+        recoverer: RecoveryKind::CPCTPlus,
+        test_files: ["*.input_grmtools_section"]
+    }
     %token MAGIC IDENT NUM STRING
     %epp MAGIC "%grmtools"
     %%
@@ -109,8 +113,21 @@ grammar: |
         Setting::String(s, string_span)
     }
     | namespaced '(' namespaced ')' { Setting::Constructor{ctor: $1, arg: $3} }
+    | '[' array_seq ']' { Setting::Array($2, $1.as_ref().unwrap().span(), $3.as_ref().unwrap().span()) }
     ;
 
+    array_seq -> Vec<Setting<Span>>
+    : %empty { Vec::new() }
+    | val {
+        let mut x = Vec::new();
+        x.push($1);
+        x
+    }
+    | array_seq ',' val {
+        $1.push($3);
+        $1
+    }
+    ;
     comma_opt -> ()
     : %empty { }
     | ',' { }
@@ -145,7 +162,12 @@ lexer: |
     \} '}'
     \( '('
     \) ')'
+    \[ '['
+    \] ']'
     :: '::'
     : ':'
     \"(\\.|[^"\\])*\" 'STRING'
     \p{Pattern_White_Space} ;
+extra_files:
+  test.input_grmtools_section: |
+    %grmtools{yacckind: Grmtools, !b, !a}

@@ -722,6 +722,13 @@ impl TryFrom<&Value<Location>> for RecoveryKind {
                 ),
                 locations: vec![arg_loc.clone()],
             }),
+            Value::Setting(Setting::Array(_, arr_loc, _)) => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError(
+                    "RecoveryKind",
+                    "Cannot convert array to RecoveryKind",
+                ),
+                locations: vec![arr_loc.clone()],
+            }),
         }
     }
 }
@@ -1029,6 +1036,10 @@ where
             actions,
             param,
         )
+    }
+
+    pub fn grammar(&self) -> &YaccGrammar<StorageT> {
+        self.grm
     }
 }
 

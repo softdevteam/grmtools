@@ -7,9 +7,10 @@ But a default can be set or forced by using a `YaccKindResolver`.
 |------------------|-------------------------------------------------|--------------|
 | `yacckind`       |  [YaccKind](yacccompatibility.md#yacckinds)     | &checkmark;  |
 | `recoverykind`   |  [RecoveryKind](errorrecovery.md#recoverykinds) | &cross;      |
-| `test_files`[^†] | String                                          | &cross;      |
+| `test_files`[^†] |  Array of string values                         | &cross;      |
 
-[^†]: String containing a glob relative to the yacc `.y` source file, experimental.
+[^†]: Strings containing globs are resolved relative to the yacc `.y` source file.
+      `test_files` is currently experimental.
 
 ## Example
 

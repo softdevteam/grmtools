@@ -355,16 +355,15 @@ fn test_expect() {
 #[test]
 fn test_grmtools_section_files() {
     use glob::glob;
-    use std::env;
     use std::fs::File;
     use std::io::BufReader;
     use std::io::{BufRead as _, Read as _};
 
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let examples_glob = format!("{manifest_dir}/../examples/**");
     let examples_l_glob = format!("{examples_glob}/*.l");
     let examples_y_glob = format!("{examples_glob}/*.y");
-    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = env!("OUT_DIR");
     let cttests_l_glob = format!("{out_dir}/*.l");
     let cttests_y_glob = format!("{out_dir}/*.y");
     let files = glob(&examples_l_glob)
