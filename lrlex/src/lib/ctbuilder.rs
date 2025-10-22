@@ -321,9 +321,9 @@ where
     ///     .lexer_in_src_dir("calc.l")?
     ///     .build()?;
     /// ```
-    pub fn lrpar_config<F: 'a>(mut self, config_func: F) -> Self
+    pub fn lrpar_config<F>(mut self, config_func: F) -> Self
     where
-        F: Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT>,
+        F: Fn(CTParserBuilder<LexerTypesT>) -> CTParserBuilder<LexerTypesT> + 'a,
     {
         self.lrpar_config = Some(Box::new(config_func));
         self
@@ -1375,11 +1375,10 @@ impl<StorageT: Display + ToTokens> CTTokenMapBuilder<StorageT> {
                 ))
             })
             .collect::<Result<(TokenStream, TokenStream), Box<dyn Error>>>()?;
-        let unused_annotation;
-        if self.allow_dead_code {
-            unused_annotation = quote! {#[allow(dead_code)]};
+        let unused_annotation = if self.allow_dead_code {
+            quote! {#[allow(dead_code)]}
         } else {
-            unused_annotation = quote! {};
+            quote! {}
         };
         // Since the formatter doesn't preserve comments and we don't want to lose build time,
         // just format the module contents.
