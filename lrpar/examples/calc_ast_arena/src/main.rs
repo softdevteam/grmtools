@@ -61,11 +61,11 @@ fn eval(
     e: &Expr,
 ) -> Result<u64, (Span, &'static str)> {
     match e {
-        Expr::Add { span, lhs, rhs } => eval(lexer, *lhs)?
-            .checked_add(eval(lexer, *rhs)?)
+        Expr::Add { span, lhs, rhs } => eval(lexer, lhs)?
+            .checked_add(eval(lexer, rhs)?)
             .ok_or((*span, "overflowed")),
-        Expr::Mul { span, lhs, rhs } => eval(lexer, *lhs)?
-            .checked_mul(eval(lexer, *rhs)?)
+        Expr::Mul { span, lhs, rhs } => eval(lexer, lhs)?
+            .checked_mul(eval(lexer, rhs)?)
             .ok_or((*span, "overflowed")),
         Expr::Number { span } => lexer
             .span_str(*span)

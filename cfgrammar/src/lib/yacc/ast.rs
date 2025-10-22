@@ -825,7 +825,7 @@ mod test {
         "#;
 
         let astart_ast_validity =
-            ASTWithValidityInfo::new(YaccKind::Original(YaccOriginalActionKind::NoAction), &y_src);
+            ASTWithValidityInfo::new(YaccKind::Original(YaccOriginalActionKind::NoAction), y_src);
         let bstart_rule = astart_ast_validity.ast().get_rule("BStart").unwrap();
         let bstart_ast_validity = astart_ast_validity
             .clone_and_change_start_rule(bstart_rule.clone())
