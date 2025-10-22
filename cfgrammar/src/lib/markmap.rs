@@ -375,7 +375,7 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns an `Entry` for `key`.
-    pub fn entry(&mut self, key: K) -> Entry<K, V> {
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         let pos = self.contents.binary_search_by(|(k, _, _)| k.cmp(&key));
         match pos {
             Err(pos) => Entry::Vacant(VacantEntry {

@@ -380,10 +380,10 @@ where
     ) -> (Option<HashSet<&'a str>>, Option<HashSet<(&'a str, Span)>>);
 
     /// Returns an iterator over all rules in this AST.
-    fn iter_rules(&self) -> Iter<Rule<LexerTypesT::StorageT>>;
+    fn iter_rules(&self) -> Iter<'_, Rule<LexerTypesT::StorageT>>;
 
     /// Returns an iterator over all start states in this AST.
-    fn iter_start_states(&self) -> Iter<StartState>;
+    fn iter_start_states(&self) -> Iter<'_, StartState>;
 }
 
 /// This struct represents, in essence, a .l file in memory. From it one can produce an
@@ -517,11 +517,11 @@ where
         (missing_from_lexer, missing_from_parser)
     }
 
-    fn iter_rules(&self) -> Iter<Rule<LexerTypesT::StorageT>> {
+    fn iter_rules(&self) -> Iter<'_, Rule<LexerTypesT::StorageT>> {
         self.rules.iter()
     }
 
-    fn iter_start_states(&self) -> Iter<StartState> {
+    fn iter_start_states(&self) -> Iter<'_, StartState> {
         self.start_states.iter()
     }
 }

@@ -53,6 +53,7 @@ static GENERATED_PATHS: LazyLock<Mutex<HashSet<PathBuf>>> =
 struct CTConflictsError<StorageT: Eq + Hash> {
     conflicts_diagnostic: String,
     #[cfg(test)]
+    #[cfg_attr(test, allow(dead_code))]
     stable: StateTable<StorageT>,
     phantom: PhantomData<StorageT>,
 }

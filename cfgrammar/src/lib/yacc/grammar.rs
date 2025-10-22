@@ -739,7 +739,7 @@ where
     /// based on the user-defined `token_cost` function which gives the associated cost for
     /// generating each token (where the cost must be greater than 0). Note that multiple
     /// tokens can have the same score. The simplest cost function is thus `|_| 1`.
-    pub fn sentence_generator<F>(&self, token_cost: F) -> SentenceGenerator<StorageT>
+    pub fn sentence_generator<F>(&self, token_cost: F) -> SentenceGenerator<'_, StorageT>
     where
         F: Fn(TIdx<StorageT>) -> u8,
     {

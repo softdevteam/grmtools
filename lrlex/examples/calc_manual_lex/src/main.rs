@@ -51,7 +51,7 @@ fn main() {
     }
 }
 
-fn lex(s: &str) -> LRNonStreamingLexer<DefaultLexerTypes<u8>> {
+fn lex(s: &str) -> LRNonStreamingLexer<'_, '_, DefaultLexerTypes<u8>> {
     let mut lexemes = Vec::new();
     let mut i = 0;
     while i < s.len() {
