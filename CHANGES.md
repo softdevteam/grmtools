@@ -14,8 +14,8 @@ section below.
    users to keep together the necessary grmtools settings, rather than
    having to remember what is set in, for example, a `build.rs` file. See
    [Lex Extensions](https://softdevteam.github.io/grmtools/latest_release/book/lexextensions.html)
-   and [Yacc Extensions](https://softdevteam.github.io/grmtools/latest_release/book/yaccextensions.html
-   for more details) in the grmtools book for more details. `nimbleparse` is
+   and [Yacc Extensions](https://softdevteam.github.io/grmtools/latest_release/book/yaccextensions.html)
+   in the grmtools book for more details. `nimbleparse` is
    also able to use `%grmtools` directives.
 
    Note that setting options via the command-line / build script overrides
