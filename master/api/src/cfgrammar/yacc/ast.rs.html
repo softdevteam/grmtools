@@ -1,0 +1,840 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `cfgrammar/src/lib/yacc/ast.rs`."><title>ast.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfgrammar" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-68b7e25d.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cfgrammar/yacc/</div>ast.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::{
+<a href=#2 id=2 data-nosnippet>2</a>    collections::{HashMap, HashSet},
+<a href=#3 id=3 data-nosnippet>3</a>    error::Error,
+<a href=#4 id=4 data-nosnippet>4</a>    fmt,
+<a href=#5 id=5 data-nosnippet>5</a>    str::FromStr,
+<a href=#6 id=6 data-nosnippet>6</a>};
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>indexmap::{IndexMap, IndexSet};
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use super</span>::{
+<a href=#11 id=11 data-nosnippet>11</a>    Precedence, YaccGrammarError, YaccGrammarErrorKind, YaccGrammarWarning, YaccGrammarWarningKind,
+<a href=#12 id=12 data-nosnippet>12</a>    YaccKind, parser::YaccParser,
+<a href=#13 id=13 data-nosnippet>13</a>};
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use crate</span>::{
+<a href=#16 id=16 data-nosnippet>16</a>    Span,
+<a href=#17 id=17 data-nosnippet>17</a>    header::{GrmtoolsSectionParser, HeaderError, HeaderErrorKind, HeaderValue},
+<a href=#18 id=18 data-nosnippet>18</a>};
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a><span class="doccomment">/// Any error from the Yacc parser returns an instance of this struct.
+<a href=#21 id=21 data-nosnippet>21</a></span><span class="attr">#[derive(Debug, PartialEq, Eq, Clone)]
+<a href=#22 id=22 data-nosnippet>22</a></span><span class="kw">pub struct </span>ASTModificationError {
+<a href=#23 id=23 data-nosnippet>23</a>    kind: YaccGrammarErrorKind,
+<a href=#24 id=24 data-nosnippet>24</a>}
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">impl </span>Error <span class="kw">for </span>ASTModificationError {}
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>ASTModificationError {
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#30 id=30 data-nosnippet>30</a>        <span class="macro">write!</span>(f, <span class="string">"{}"</span>, <span class="self">self</span>.kind)
+<a href=#31 id=31 data-nosnippet>31</a>    }
+<a href=#32 id=32 data-nosnippet>32</a>}
+<a href=#33 id=33 data-nosnippet>33</a>
+<a href=#34 id=34 data-nosnippet>34</a><span class="doccomment">/// Contains a `GrammarAST` structure produced from a grammar source file.
+<a href=#35 id=35 data-nosnippet>35</a>/// As well as any errors which occurred during the construction of the AST.
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="attr">#[derive(Debug, Clone)]
+<a href=#37 id=37 data-nosnippet>37</a>#[cfg_attr(test, derive(PartialEq))]
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub struct </span>ASTWithValidityInfo {
+<a href=#39 id=39 data-nosnippet>39</a>    yacc_kind: YaccKind,
+<a href=#40 id=40 data-nosnippet>40</a>    ast: GrammarAST,
+<a href=#41 id=41 data-nosnippet>41</a>    errs: Vec&lt;YaccGrammarError&gt;,
+<a href=#42 id=42 data-nosnippet>42</a>}
+<a href=#43 id=43 data-nosnippet>43</a>
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">impl </span>ASTWithValidityInfo {
+<a href=#45 id=45 data-nosnippet>45</a>    <span class="doccomment">/// Parses a source file into an AST, returning an ast and any errors that were
+<a href=#46 id=46 data-nosnippet>46</a>    /// encountered during the construction of it.  The `ASTWithValidityInfo` can be
+<a href=#47 id=47 data-nosnippet>47</a>    /// then unused to construct a `YaccGrammar`, which will either produce an
+<a href=#48 id=48 data-nosnippet>48</a>    /// `Ok(YaccGrammar)` or an `Err` which includes these errors.
+<a href=#49 id=49 data-nosnippet>49</a>    ///
+<a href=#50 id=50 data-nosnippet>50</a>    /// This function ignores the `%grmtools` section entirely, assuming that the caller has
+<a href=#51 id=51 data-nosnippet>51</a>    /// already extracted the `YaccKind` if any.
+<a href=#52 id=52 data-nosnippet>52</a>    </span><span class="kw">pub fn </span>new(yacc_kind: YaccKind, s: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
+<a href=#53 id=53 data-nosnippet>53</a>        <span class="kw">let </span><span class="kw-2">mut </span>errs = Vec::new();
+<a href=#54 id=54 data-nosnippet>54</a>        <span class="kw">let </span>ast = {
+<a href=#55 id=55 data-nosnippet>55</a>            <span class="kw">let </span><span class="kw-2">mut </span>yp = YaccParser::new(yacc_kind, s);
+<a href=#56 id=56 data-nosnippet>56</a>            yp.parse().map_err(|e| errs.extend(e)).ok();
+<a href=#57 id=57 data-nosnippet>57</a>            <span class="kw">let </span><span class="kw-2">mut </span>ast = yp.build();
+<a href=#58 id=58 data-nosnippet>58</a>            ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+<a href=#59 id=59 data-nosnippet>59</a>            ast
+<a href=#60 id=60 data-nosnippet>60</a>        };
+<a href=#61 id=61 data-nosnippet>61</a>        ASTWithValidityInfo {
+<a href=#62 id=62 data-nosnippet>62</a>            ast,
+<a href=#63 id=63 data-nosnippet>63</a>            errs,
+<a href=#64 id=64 data-nosnippet>64</a>            yacc_kind,
+<a href=#65 id=65 data-nosnippet>65</a>        }
+<a href=#66 id=66 data-nosnippet>66</a>    }
+<a href=#67 id=67 data-nosnippet>67</a>
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="doccomment">/// Returns a `GrammarAST` constructed as the result of parsing a source file.
+<a href=#69 id=69 data-nosnippet>69</a>    /// When errors have occurred and `is_valid` returns false, this AST is the
+<a href=#70 id=70 data-nosnippet>70</a>    /// subset of the source file which parsed correctly while not encountering
+<a href=#71 id=71 data-nosnippet>71</a>    /// any errors. As such even when an AST is not valid, it will return an AST.
+<a href=#72 id=72 data-nosnippet>72</a>    </span><span class="kw">pub fn </span>ast(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>GrammarAST {
+<a href=#73 id=73 data-nosnippet>73</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.ast
+<a href=#74 id=74 data-nosnippet>74</a>    }
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="doccomment">/// Returns whether any errors where encountered during the
+<a href=#77 id=77 data-nosnippet>77</a>    /// parsing and validation of the AST during it's construction.
+<a href=#78 id=78 data-nosnippet>78</a>    </span><span class="kw">pub fn </span>is_valid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="self">self</span>.errors().is_empty()
+<a href=#80 id=80 data-nosnippet>80</a>    }
+<a href=#81 id=81 data-nosnippet>81</a>
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="doccomment">/// Returns the `YaccKind` that was used to parse the `GrammarAST`.
+<a href=#83 id=83 data-nosnippet>83</a>    </span><span class="kw">pub fn </span>yacc_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; YaccKind {
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="self">self</span>.yacc_kind
+<a href=#85 id=85 data-nosnippet>85</a>    }
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="doccomment">/// Returns all errors which were encountered during AST construction.
+<a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">pub fn </span>errors(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[YaccGrammarError] {
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="self">self</span>.errs.as_slice()
+<a href=#90 id=90 data-nosnippet>90</a>    }
+<a href=#91 id=91 data-nosnippet>91</a>
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">pub fn </span>clone_and_change_start_rule(<span class="kw-2">&amp;</span><span class="self">self</span>, rule: Rule) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ASTModificationError&gt; {
+<a href=#93 id=93 data-nosnippet>93</a>        <span class="kw">if </span><span class="self">self</span>.ast.get_rule(<span class="kw-2">&amp;</span>rule.name.<span class="number">0</span>).is_some() {
+<a href=#94 id=94 data-nosnippet>94</a>            <span class="kw">let </span><span class="kw-2">mut </span>ret = <span class="self">self</span>.clone();
+<a href=#95 id=95 data-nosnippet>95</a>            <span class="comment">// The `Span`of the `start` field and the `name` field typically differ
+<a href=#96 id=96 data-nosnippet>96</a>            // in that `start` is the parameter of a `%start` declaration, while
+<a href=#97 id=97 data-nosnippet>97</a>            // `name` refers to the definition site of the rule itself.
+<a href=#98 id=98 data-nosnippet>98</a>            //
+<a href=#99 id=99 data-nosnippet>99</a>            // Lacking a better `Span` we use the definition site, for the `%start` rule here.
+<a href=#100 id=100 data-nosnippet>100</a>            </span>ret.ast.start = <span class="prelude-val">Some</span>(rule.name);
+<a href=#101 id=101 data-nosnippet>101</a>            <span class="prelude-val">Ok</span>(ret)
+<a href=#102 id=102 data-nosnippet>102</a>        } <span class="kw">else </span>{
+<a href=#103 id=103 data-nosnippet>103</a>            <span class="prelude-val">Err</span>(ASTModificationError {
+<a href=#104 id=104 data-nosnippet>104</a>                kind: YaccGrammarErrorKind::InvalidStartRule(rule.name.<span class="number">0</span>),
+<a href=#105 id=105 data-nosnippet>105</a>            })
+<a href=#106 id=106 data-nosnippet>106</a>        }
+<a href=#107 id=107 data-nosnippet>107</a>    }
+<a href=#108 id=108 data-nosnippet>108</a>}
+<a href=#109 id=109 data-nosnippet>109</a>
+<a href=#110 id=110 data-nosnippet>110</a><span class="kw">impl </span>FromStr <span class="kw">for </span>ASTWithValidityInfo {
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">type </span><span class="prelude-val">Err </span>= Vec&lt;YaccGrammarError&gt;;
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="doccomment">/// Parses the `%grmtools section` expecting it to contain a `yacckind` entry.
+<a href=#113 id=113 data-nosnippet>113</a>    </span><span class="kw">fn </span>from_str(src: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, Vec&lt;YaccGrammarError&gt;&gt; {
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span><span class="kw-2">mut </span>errs = Vec::new();
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">let </span>(header, <span class="kw">_</span>) = GrmtoolsSectionParser::new(src, <span class="bool-val">true</span>)
+<a href=#116 id=116 data-nosnippet>116</a>            .parse()
+<a href=#117 id=117 data-nosnippet>117</a>            .map_err(|<span class="kw-2">mut </span>errs| errs.drain(..).map(|e| e.into()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;())<span class="question-mark">?</span>;
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(HeaderValue(<span class="kw">_</span>, yk_val)) = header.get(<span class="string">"yacckind"</span>) {
+<a href=#119 id=119 data-nosnippet>119</a>            <span class="kw">let </span>yacc_kind = YaccKind::try_from(yk_val).map_err(|e| <span class="macro">vec!</span>[e.into()])<span class="question-mark">?</span>;
+<a href=#120 id=120 data-nosnippet>120</a>            <span class="kw">let </span>ast = {
+<a href=#121 id=121 data-nosnippet>121</a>                <span class="comment">// We don't want to strip off the header so that span's will be correct.
+<a href=#122 id=122 data-nosnippet>122</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>yp = YaccParser::new(yacc_kind, src);
+<a href=#123 id=123 data-nosnippet>123</a>                yp.parse().map_err(|e| errs.extend(e)).ok();
+<a href=#124 id=124 data-nosnippet>124</a>                <span class="kw">let </span><span class="kw-2">mut </span>ast = yp.build();
+<a href=#125 id=125 data-nosnippet>125</a>                ast.complete_and_validate().map_err(|e| errs.push(e)).ok();
+<a href=#126 id=126 data-nosnippet>126</a>                ast
+<a href=#127 id=127 data-nosnippet>127</a>            };
+<a href=#128 id=128 data-nosnippet>128</a>            <span class="prelude-val">Ok</span>(ASTWithValidityInfo {
+<a href=#129 id=129 data-nosnippet>129</a>                ast,
+<a href=#130 id=130 data-nosnippet>130</a>                errs,
+<a href=#131 id=131 data-nosnippet>131</a>                yacc_kind,
+<a href=#132 id=132 data-nosnippet>132</a>            })
+<a href=#133 id=133 data-nosnippet>133</a>        } <span class="kw">else </span>{
+<a href=#134 id=134 data-nosnippet>134</a>            <span class="prelude-val">Err</span>(<span class="macro">vec!</span>[
+<a href=#135 id=135 data-nosnippet>135</a>                HeaderError {
+<a href=#136 id=136 data-nosnippet>136</a>                    kind: HeaderErrorKind::InvalidEntry(<span class="string">"yacckind"</span>),
+<a href=#137 id=137 data-nosnippet>137</a>                    locations: <span class="macro">vec!</span>[Span::new(<span class="number">0</span>, <span class="number">0</span>)],
+<a href=#138 id=138 data-nosnippet>138</a>                }
+<a href=#139 id=139 data-nosnippet>139</a>                .into(),
+<a href=#140 id=140 data-nosnippet>140</a>            ])
+<a href=#141 id=141 data-nosnippet>141</a>        }
+<a href=#142 id=142 data-nosnippet>142</a>    }
+<a href=#143 id=143 data-nosnippet>143</a>}
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a><span class="doccomment">/// An AST representing a grammar. This is built up gradually: when it is finished, the
+<a href=#146 id=146 data-nosnippet>146</a>/// `complete_and_validate` must be called exactly once in order to finish the set-up. At that
+<a href=#147 id=147 data-nosnippet>147</a>/// point, any further mutations made to the struct lead to undefined behaviour.
+<a href=#148 id=148 data-nosnippet>148</a></span><span class="attr">#[derive(Debug, Clone)]
+<a href=#149 id=149 data-nosnippet>149</a>#[cfg_attr(test, derive(PartialEq))]
+<a href=#150 id=150 data-nosnippet>150</a>#[non_exhaustive]
+<a href=#151 id=151 data-nosnippet>151</a></span><span class="kw">pub struct </span>GrammarAST {
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">pub </span>start: <span class="prelude-ty">Option</span>&lt;(String, Span)&gt;,
+<a href=#153 id=153 data-nosnippet>153</a>    <span class="comment">// map from a rule name to indexes into `prods`
+<a href=#154 id=154 data-nosnippet>154</a>    </span><span class="kw">pub </span>rules: IndexMap&lt;String, Rule&gt;,
+<a href=#155 id=155 data-nosnippet>155</a>    <span class="kw">pub </span>prods: Vec&lt;Production&gt;,
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="comment">// A set of indexes into `tokens` for all tokens in `%token` directives.
+<a href=#157 id=157 data-nosnippet>157</a>    // e.g. given a `%token a` and a token "b" not specified in any `%token` directive
+<a href=#158 id=158 data-nosnippet>158</a>    // we have `self.tokens.get_index_of("a") ∈ self.token_directives`. However for
+<a href=#159 id=159 data-nosnippet>159</a>    // token "b" we have `self.tokens.get_index_of("b") ∉ self.token_directives`.
+<a href=#160 id=160 data-nosnippet>160</a>    </span><span class="kw">pub </span>token_directives: HashSet&lt;usize&gt;,
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">pub </span>tokens: IndexSet&lt;String&gt;,
+<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">pub </span>spans: Vec&lt;Span&gt;,
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">pub </span>precs: HashMap&lt;String, (Precedence, Span)&gt;,
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">pub </span>avoid_insert: <span class="prelude-ty">Option</span>&lt;HashMap&lt;String, Span&gt;&gt;,
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="kw">pub </span>implicit_tokens: <span class="prelude-ty">Option</span>&lt;HashMap&lt;String, Span&gt;&gt;,
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="comment">// Error pretty-printers,
+<a href=#167 id=167 data-nosnippet>167</a>    // The first span of the value is the span of the key,
+<a href=#168 id=168 data-nosnippet>168</a>    // The second span in the value, is the span of the values string.
+<a href=#169 id=169 data-nosnippet>169</a>    </span><span class="kw">pub </span>epp: HashMap&lt;String, (Span, (String, Span))&gt;,
+<a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">pub </span>expect: <span class="prelude-ty">Option</span>&lt;(usize, Span)&gt;,
+<a href=#171 id=171 data-nosnippet>171</a>    <span class="kw">pub </span>expectrr: <span class="prelude-ty">Option</span>&lt;(usize, Span)&gt;,
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">pub </span>parse_param: <span class="prelude-ty">Option</span>&lt;(String, String)&gt;,
+<a href=#173 id=173 data-nosnippet>173</a>    <span class="kw">pub </span>parse_generics: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">pub </span>programs: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#175 id=175 data-nosnippet>175</a>    <span class="comment">// The set of symbol names that, if unused in a
+<a href=#176 id=176 data-nosnippet>176</a>    // grammar, will not cause a warning or error.
+<a href=#177 id=177 data-nosnippet>177</a>    </span><span class="kw">pub </span>expect_unused: Vec&lt;Symbol&gt;,
+<a href=#178 id=178 data-nosnippet>178</a>}
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a><span class="attr">#[derive(Debug, Clone)]
+<a href=#181 id=181 data-nosnippet>181</a>#[cfg_attr(test, derive(Eq, PartialEq))]
+<a href=#182 id=182 data-nosnippet>182</a></span><span class="kw">pub struct </span>Rule {
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="kw">pub </span>name: (String, Span),
+<a href=#184 id=184 data-nosnippet>184</a>    <span class="kw">pub </span>pidxs: Vec&lt;usize&gt;, <span class="comment">// index into GrammarAST.prod
+<a href=#185 id=185 data-nosnippet>185</a>    </span><span class="kw">pub </span>actiont: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#186 id=186 data-nosnippet>186</a>}
+<a href=#187 id=187 data-nosnippet>187</a>
+<a href=#188 id=188 data-nosnippet>188</a><span class="attr">#[derive(Debug, Clone)]
+<a href=#189 id=189 data-nosnippet>189</a>#[cfg_attr(test, derive(Eq, PartialEq))]
+<a href=#190 id=190 data-nosnippet>190</a></span><span class="kw">pub struct </span>Production {
+<a href=#191 id=191 data-nosnippet>191</a>    <span class="kw">pub </span>symbols: Vec&lt;Symbol&gt;,
+<a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">pub </span>precedence: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#193 id=193 data-nosnippet>193</a>    <span class="kw">pub </span>action: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">pub </span>prod_span: Span,
+<a href=#195 id=195 data-nosnippet>195</a>}
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a><span class="attr">#[derive(Clone, Debug)]
+<a href=#198 id=198 data-nosnippet>198</a>#[cfg_attr(test, derive(Eq, PartialEq))]
+<a href=#199 id=199 data-nosnippet>199</a></span><span class="kw">pub enum </span>Symbol {
+<a href=#200 id=200 data-nosnippet>200</a>    Rule(String, Span),
+<a href=#201 id=201 data-nosnippet>201</a>    Token(String, Span),
+<a href=#202 id=202 data-nosnippet>202</a>}
+<a href=#203 id=203 data-nosnippet>203</a>
+<a href=#204 id=204 data-nosnippet>204</a><span class="doccomment">/// Specifies an index into a `GrammarAst.tokens` or a `GrammarAST.rules`.
+<a href=#205 id=205 data-nosnippet>205</a>/// Unlike `cfgrammar::Symbol` it is not parameterized by a `StorageT`.
+<a href=#206 id=206 data-nosnippet>206</a></span><span class="attr">#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+<a href=#207 id=207 data-nosnippet>207</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>SymbolIdx {
+<a href=#208 id=208 data-nosnippet>208</a>    Rule(usize),
+<a href=#209 id=209 data-nosnippet>209</a>    Token(usize),
+<a href=#210 id=210 data-nosnippet>210</a>}
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a><span class="kw">impl </span>SymbolIdx {
+<a href=#213 id=213 data-nosnippet>213</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>symbol(<span class="self">self</span>, ast: <span class="kw-2">&amp;</span>GrammarAST) -&gt; Symbol {
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#215 id=215 data-nosnippet>215</a>            SymbolIdx::Rule(idx) =&gt; {
+<a href=#216 id=216 data-nosnippet>216</a>                <span class="kw">let </span>(rule_name, rule_span) = <span class="kw-2">&amp;</span>ast.rules[idx].name;
+<a href=#217 id=217 data-nosnippet>217</a>                Symbol::Rule(rule_name.clone(), <span class="kw-2">*</span>rule_span)
+<a href=#218 id=218 data-nosnippet>218</a>            }
+<a href=#219 id=219 data-nosnippet>219</a>            SymbolIdx::Token(idx) =&gt; {
+<a href=#220 id=220 data-nosnippet>220</a>                <span class="kw">let </span>tok = <span class="kw-2">&amp;</span>ast.tokens[idx];
+<a href=#221 id=221 data-nosnippet>221</a>                Symbol::Token(tok.clone(), ast.spans[idx])
+<a href=#222 id=222 data-nosnippet>222</a>            }
+<a href=#223 id=223 data-nosnippet>223</a>        }
+<a href=#224 id=224 data-nosnippet>224</a>    }
+<a href=#225 id=225 data-nosnippet>225</a>}
+<a href=#226 id=226 data-nosnippet>226</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>Symbol {
+<a href=#227 id=227 data-nosnippet>227</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+<a href=#229 id=229 data-nosnippet>229</a>            Symbol::Rule(<span class="kw-2">ref </span>s, <span class="kw">_</span>) =&gt; <span class="macro">write!</span>(f, <span class="string">"{}"</span>, s),
+<a href=#230 id=230 data-nosnippet>230</a>            Symbol::Token(<span class="kw-2">ref </span>s, <span class="kw">_</span>) =&gt; <span class="macro">write!</span>(f, <span class="string">"{}"</span>, s),
+<a href=#231 id=231 data-nosnippet>231</a>        }
+<a href=#232 id=232 data-nosnippet>232</a>    }
+<a href=#233 id=233 data-nosnippet>233</a>}
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a><span class="kw">impl </span>GrammarAST {
+<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new() -&gt; GrammarAST {
+<a href=#237 id=237 data-nosnippet>237</a>        GrammarAST {
+<a href=#238 id=238 data-nosnippet>238</a>            start: <span class="prelude-val">None</span>,
+<a href=#239 id=239 data-nosnippet>239</a>            rules: IndexMap::new(), <span class="comment">// Using an IndexMap means that we retain the order
+<a href=#240 id=240 data-nosnippet>240</a>            // of rules as they're found in the input file.
+<a href=#241 id=241 data-nosnippet>241</a>            </span>prods: Vec::new(),
+<a href=#242 id=242 data-nosnippet>242</a>            spans: Vec::new(),
+<a href=#243 id=243 data-nosnippet>243</a>            tokens: IndexSet::new(),
+<a href=#244 id=244 data-nosnippet>244</a>            token_directives: HashSet::new(),
+<a href=#245 id=245 data-nosnippet>245</a>            precs: HashMap::new(),
+<a href=#246 id=246 data-nosnippet>246</a>            avoid_insert: <span class="prelude-val">None</span>,
+<a href=#247 id=247 data-nosnippet>247</a>            implicit_tokens: <span class="prelude-val">None</span>,
+<a href=#248 id=248 data-nosnippet>248</a>            epp: HashMap::new(),
+<a href=#249 id=249 data-nosnippet>249</a>            expect: <span class="prelude-val">None</span>,
+<a href=#250 id=250 data-nosnippet>250</a>            expectrr: <span class="prelude-val">None</span>,
+<a href=#251 id=251 data-nosnippet>251</a>            parse_param: <span class="prelude-val">None</span>,
+<a href=#252 id=252 data-nosnippet>252</a>            parse_generics: <span class="prelude-val">None</span>,
+<a href=#253 id=253 data-nosnippet>253</a>            programs: <span class="prelude-val">None</span>,
+<a href=#254 id=254 data-nosnippet>254</a>            expect_unused: Vec::new(),
+<a href=#255 id=255 data-nosnippet>255</a>        }
+<a href=#256 id=256 data-nosnippet>256</a>    }
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a>    <span class="kw">pub fn </span>add_rule(<span class="kw-2">&amp;mut </span><span class="self">self</span>, (name, name_span): (String, Span), actiont: <span class="prelude-ty">Option</span>&lt;String&gt;) {
+<a href=#259 id=259 data-nosnippet>259</a>        <span class="self">self</span>.rules.insert(
+<a href=#260 id=260 data-nosnippet>260</a>            name.clone(),
+<a href=#261 id=261 data-nosnippet>261</a>            Rule {
+<a href=#262 id=262 data-nosnippet>262</a>                name: (name, name_span),
+<a href=#263 id=263 data-nosnippet>263</a>                pidxs: Vec::new(),
+<a href=#264 id=264 data-nosnippet>264</a>                actiont,
+<a href=#265 id=265 data-nosnippet>265</a>            },
+<a href=#266 id=266 data-nosnippet>266</a>        );
+<a href=#267 id=267 data-nosnippet>267</a>    }
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="kw">pub fn </span>add_prod(
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#271 id=271 data-nosnippet>271</a>        rule_name: String,
+<a href=#272 id=272 data-nosnippet>272</a>        symbols: Vec&lt;Symbol&gt;,
+<a href=#273 id=273 data-nosnippet>273</a>        precedence: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#274 id=274 data-nosnippet>274</a>        action: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#275 id=275 data-nosnippet>275</a>        prod_span: Span,
+<a href=#276 id=276 data-nosnippet>276</a>    ) {
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="self">self</span>.rules[<span class="kw-2">&amp;</span>rule_name].pidxs.push(<span class="self">self</span>.prods.len());
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="self">self</span>.prods.push(Production {
+<a href=#279 id=279 data-nosnippet>279</a>            symbols,
+<a href=#280 id=280 data-nosnippet>280</a>            precedence,
+<a href=#281 id=281 data-nosnippet>281</a>            action,
+<a href=#282 id=282 data-nosnippet>282</a>            prod_span,
+<a href=#283 id=283 data-nosnippet>283</a>        });
+<a href=#284 id=284 data-nosnippet>284</a>    }
+<a href=#285 id=285 data-nosnippet>285</a>
+<a href=#286 id=286 data-nosnippet>286</a>    <span class="attr">#[deprecated(since = <span class="string">"0.10.2"</span>, note = <span class="string">"Please use set_programs instead"</span>)]
+<a href=#287 id=287 data-nosnippet>287</a>    </span><span class="kw">pub fn </span>add_programs(<span class="kw-2">&amp;mut </span><span class="self">self</span>, s: String) {
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="self">self</span>.set_programs(s);
+<a href=#289 id=289 data-nosnippet>289</a>    }
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a>    <span class="kw">pub fn </span>set_programs(<span class="kw-2">&amp;mut </span><span class="self">self</span>, s: String) {
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="self">self</span>.programs = <span class="prelude-val">Some</span>(s)
+<a href=#293 id=293 data-nosnippet>293</a>    }
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a>    <span class="kw">pub fn </span>get_rule(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Rule&gt; {
+<a href=#296 id=296 data-nosnippet>296</a>        <span class="self">self</span>.rules.get(key)
+<a href=#297 id=297 data-nosnippet>297</a>    }
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="kw">pub fn </span>has_token(<span class="kw-2">&amp;</span><span class="self">self</span>, s: <span class="kw-2">&amp;</span>str) -&gt; bool {
+<a href=#300 id=300 data-nosnippet>300</a>        <span class="self">self</span>.tokens.contains(s)
+<a href=#301 id=301 data-nosnippet>301</a>    }
+<a href=#302 id=302 data-nosnippet>302</a>
+<a href=#303 id=303 data-nosnippet>303</a>    <span class="doccomment">/// After the AST has been populated, perform any final operations, and validate the grammar
+<a href=#304 id=304 data-nosnippet>304</a>    /// checking that:
+<a href=#305 id=305 data-nosnippet>305</a>    ///   1) The start rule references a rule in the grammar
+<a href=#306 id=306 data-nosnippet>306</a>    ///   2) Every rule reference references a rule in the grammar
+<a href=#307 id=307 data-nosnippet>307</a>    ///   3) Every token reference references a declared token
+<a href=#308 id=308 data-nosnippet>308</a>    ///   4) If a production has a precedence token, then it references a declared token
+<a href=#309 id=309 data-nosnippet>309</a>    ///   5) Every token declared with %epp matches a known token
+<a href=#310 id=310 data-nosnippet>310</a>    ///
+<a href=#311 id=311 data-nosnippet>311</a>    /// If the validation succeeds, None is returned.
+<a href=#312 id=312 data-nosnippet>312</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>complete_and_validate(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), YaccGrammarError&gt; {
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">match </span><span class="self">self</span>.start {
+<a href=#314 id=314 data-nosnippet>314</a>            <span class="prelude-val">None </span>=&gt; {
+<a href=#315 id=315 data-nosnippet>315</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#316 id=316 data-nosnippet>316</a>                    kind: YaccGrammarErrorKind::NoStartRule,
+<a href=#317 id=317 data-nosnippet>317</a>                    spans: <span class="macro">vec!</span>[Span::new(<span class="number">0</span>, <span class="number">0</span>)],
+<a href=#318 id=318 data-nosnippet>318</a>                });
+<a href=#319 id=319 data-nosnippet>319</a>            }
+<a href=#320 id=320 data-nosnippet>320</a>            <span class="prelude-val">Some</span>((<span class="kw-2">ref </span>s, span)) =&gt; {
+<a href=#321 id=321 data-nosnippet>321</a>                <span class="kw">if </span>!<span class="self">self</span>.rules.contains_key(s) {
+<a href=#322 id=322 data-nosnippet>322</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#323 id=323 data-nosnippet>323</a>                        kind: YaccGrammarErrorKind::InvalidStartRule(s.clone()),
+<a href=#324 id=324 data-nosnippet>324</a>                        spans: <span class="macro">vec!</span>[span],
+<a href=#325 id=325 data-nosnippet>325</a>                    });
+<a href=#326 id=326 data-nosnippet>326</a>                }
+<a href=#327 id=327 data-nosnippet>327</a>            }
+<a href=#328 id=328 data-nosnippet>328</a>        }
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">for </span>rule <span class="kw">in </span><span class="self">self</span>.rules.values() {
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="kw">for </span><span class="kw-2">&amp;</span>pidx <span class="kw">in </span><span class="kw-2">&amp;</span>rule.pidxs {
+<a href=#331 id=331 data-nosnippet>331</a>                <span class="kw">let </span>prod = <span class="kw-2">&amp;</span><span class="self">self</span>.prods[pidx];
+<a href=#332 id=332 data-nosnippet>332</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>n) = prod.precedence {
+<a href=#333 id=333 data-nosnippet>333</a>                    <span class="kw">if </span>!<span class="self">self</span>.tokens.contains(n) {
+<a href=#334 id=334 data-nosnippet>334</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#335 id=335 data-nosnippet>335</a>                            kind: YaccGrammarErrorKind::UnknownToken(n.clone()),
+<a href=#336 id=336 data-nosnippet>336</a>                            spans: <span class="macro">vec!</span>[Span::new(<span class="number">0</span>, <span class="number">0</span>)],
+<a href=#337 id=337 data-nosnippet>337</a>                        });
+<a href=#338 id=338 data-nosnippet>338</a>                    }
+<a href=#339 id=339 data-nosnippet>339</a>                    <span class="kw">if </span>!<span class="self">self</span>.precs.contains_key(n) {
+<a href=#340 id=340 data-nosnippet>340</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#341 id=341 data-nosnippet>341</a>                            kind: YaccGrammarErrorKind::NoPrecForToken(n.clone()),
+<a href=#342 id=342 data-nosnippet>342</a>                            spans: <span class="macro">vec!</span>[Span::new(<span class="number">0</span>, <span class="number">0</span>)],
+<a href=#343 id=343 data-nosnippet>343</a>                        });
+<a href=#344 id=344 data-nosnippet>344</a>                    }
+<a href=#345 id=345 data-nosnippet>345</a>                }
+<a href=#346 id=346 data-nosnippet>346</a>                <span class="kw">for </span>sym <span class="kw">in </span><span class="kw-2">&amp;</span>prod.symbols {
+<a href=#347 id=347 data-nosnippet>347</a>                    <span class="kw">match </span><span class="kw-2">*</span>sym {
+<a href=#348 id=348 data-nosnippet>348</a>                        Symbol::Rule(<span class="kw-2">ref </span>name, span) =&gt; {
+<a href=#349 id=349 data-nosnippet>349</a>                            <span class="kw">if </span>!<span class="self">self</span>.rules.contains_key(name) {
+<a href=#350 id=350 data-nosnippet>350</a>                                <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#351 id=351 data-nosnippet>351</a>                                    kind: YaccGrammarErrorKind::UnknownRuleRef(name.clone()),
+<a href=#352 id=352 data-nosnippet>352</a>                                    spans: <span class="macro">vec!</span>[span],
+<a href=#353 id=353 data-nosnippet>353</a>                                });
+<a href=#354 id=354 data-nosnippet>354</a>                            }
+<a href=#355 id=355 data-nosnippet>355</a>                        }
+<a href=#356 id=356 data-nosnippet>356</a>                        Symbol::Token(<span class="kw-2">ref </span>name, span) =&gt; {
+<a href=#357 id=357 data-nosnippet>357</a>                            <span class="kw">if </span>!<span class="self">self</span>.tokens.contains(name) {
+<a href=#358 id=358 data-nosnippet>358</a>                                <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#359 id=359 data-nosnippet>359</a>                                    kind: YaccGrammarErrorKind::UnknownToken(name.clone()),
+<a href=#360 id=360 data-nosnippet>360</a>                                    spans: <span class="macro">vec!</span>[span],
+<a href=#361 id=361 data-nosnippet>361</a>                                });
+<a href=#362 id=362 data-nosnippet>362</a>                            }
+<a href=#363 id=363 data-nosnippet>363</a>                        }
+<a href=#364 id=364 data-nosnippet>364</a>                    }
+<a href=#365 id=365 data-nosnippet>365</a>                }
+<a href=#366 id=366 data-nosnippet>366</a>            }
+<a href=#367 id=367 data-nosnippet>367</a>        }
+<a href=#368 id=368 data-nosnippet>368</a>
+<a href=#369 id=369 data-nosnippet>369</a>        <span class="kw">for </span>(k, (sp, <span class="kw">_</span>)) <span class="kw">in </span><span class="self">self</span>.epp.iter() {
+<a href=#370 id=370 data-nosnippet>370</a>            <span class="kw">if </span><span class="self">self</span>.tokens.contains(k) {
+<a href=#371 id=371 data-nosnippet>371</a>                <span class="kw">continue</span>;
+<a href=#372 id=372 data-nosnippet>372</a>            }
+<a href=#373 id=373 data-nosnippet>373</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>it) = <span class="self">self</span>.implicit_tokens {
+<a href=#374 id=374 data-nosnippet>374</a>                <span class="kw">if </span>it.contains_key(k) {
+<a href=#375 id=375 data-nosnippet>375</a>                    <span class="kw">continue</span>;
+<a href=#376 id=376 data-nosnippet>376</a>                }
+<a href=#377 id=377 data-nosnippet>377</a>            }
+<a href=#378 id=378 data-nosnippet>378</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#379 id=379 data-nosnippet>379</a>                kind: YaccGrammarErrorKind::UnknownEPP(k.clone()),
+<a href=#380 id=380 data-nosnippet>380</a>                spans: <span class="macro">vec!</span>[<span class="kw-2">*</span>sp],
+<a href=#381 id=381 data-nosnippet>381</a>            });
+<a href=#382 id=382 data-nosnippet>382</a>        }
+<a href=#383 id=383 data-nosnippet>383</a>
+<a href=#384 id=384 data-nosnippet>384</a>        <span class="kw">for </span>sym <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.expect_unused {
+<a href=#385 id=385 data-nosnippet>385</a>            <span class="kw">match </span>sym {
+<a href=#386 id=386 data-nosnippet>386</a>                Symbol::Rule(sym_name, sym_span) =&gt; {
+<a href=#387 id=387 data-nosnippet>387</a>                    <span class="kw">if </span><span class="self">self</span>.get_rule(sym_name).is_none() {
+<a href=#388 id=388 data-nosnippet>388</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#389 id=389 data-nosnippet>389</a>                            kind: YaccGrammarErrorKind::UnknownRuleRef(sym_name.clone()),
+<a href=#390 id=390 data-nosnippet>390</a>                            spans: <span class="macro">vec!</span>[<span class="kw-2">*</span>sym_span],
+<a href=#391 id=391 data-nosnippet>391</a>                        });
+<a href=#392 id=392 data-nosnippet>392</a>                    }
+<a href=#393 id=393 data-nosnippet>393</a>                }
+<a href=#394 id=394 data-nosnippet>394</a>                Symbol::Token(sym_name, sym_span) =&gt; {
+<a href=#395 id=395 data-nosnippet>395</a>                    <span class="kw">if </span>!<span class="self">self</span>.has_token(sym_name) {
+<a href=#396 id=396 data-nosnippet>396</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#397 id=397 data-nosnippet>397</a>                            kind: YaccGrammarErrorKind::UnknownToken(sym_name.clone()),
+<a href=#398 id=398 data-nosnippet>398</a>                            spans: <span class="macro">vec!</span>[<span class="kw-2">*</span>sym_span],
+<a href=#399 id=399 data-nosnippet>399</a>                        });
+<a href=#400 id=400 data-nosnippet>400</a>                    }
+<a href=#401 id=401 data-nosnippet>401</a>                }
+<a href=#402 id=402 data-nosnippet>402</a>            }
+<a href=#403 id=403 data-nosnippet>403</a>        }
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="prelude-val">Ok</span>(())
+<a href=#405 id=405 data-nosnippet>405</a>    }
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>    <span class="kw">pub fn </span>warnings(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;YaccGrammarWarning&gt; {
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="self">self</span>.unused_symbols()
+<a href=#409 id=409 data-nosnippet>409</a>            .map(|symidx| {
+<a href=#410 id=410 data-nosnippet>410</a>                <span class="kw">let </span>(kind, span) = <span class="kw">match </span>symidx.symbol(<span class="self">self</span>) {
+<a href=#411 id=411 data-nosnippet>411</a>                    Symbol::Rule(<span class="kw">_</span>, span) =&gt; (YaccGrammarWarningKind::UnusedRule, span),
+<a href=#412 id=412 data-nosnippet>412</a>                    Symbol::Token(<span class="kw">_</span>, span) =&gt; (YaccGrammarWarningKind::UnusedToken, span),
+<a href=#413 id=413 data-nosnippet>413</a>                };
+<a href=#414 id=414 data-nosnippet>414</a>                YaccGrammarWarning {
+<a href=#415 id=415 data-nosnippet>415</a>                    kind,
+<a href=#416 id=416 data-nosnippet>416</a>                    spans: <span class="macro">vec!</span>[span],
+<a href=#417 id=417 data-nosnippet>417</a>                }
+<a href=#418 id=418 data-nosnippet>418</a>            })
+<a href=#419 id=419 data-nosnippet>419</a>            .collect()
+<a href=#420 id=420 data-nosnippet>420</a>    }
+<a href=#421 id=421 data-nosnippet>421</a>
+<a href=#422 id=422 data-nosnippet>422</a>    <span class="doccomment">/// Return the indices of unexpectedly unused rules (relative to ast.rules)
+<a href=#423 id=423 data-nosnippet>423</a>    /// and tokens (relative to ast.tokens) as `SymbolIdx`s.
+<a href=#424 id=424 data-nosnippet>424</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>unused_symbols(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = SymbolIdx&gt; + <span class="lifetime">'_ </span>{
+<a href=#425 id=425 data-nosnippet>425</a>        <span class="kw">let </span>start_rule_name = <span class="self">self</span>.start.as_ref().map(|(name, <span class="kw">_</span>)| name.clone());
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">let </span>start_rule = <span class="self">self
+<a href=#427 id=427 data-nosnippet>427</a>            </span>.rules
+<a href=#428 id=428 data-nosnippet>428</a>            .iter()
+<a href=#429 id=429 data-nosnippet>429</a>            .find(|(rule_name, <span class="kw">_</span>)| start_rule_name.as_ref() == <span class="prelude-val">Some</span>(rule_name));
+<a href=#430 id=430 data-nosnippet>430</a>        <span class="kw">let </span><span class="kw-2">mut </span>seen_rules = HashSet::new();
+<a href=#431 id=431 data-nosnippet>431</a>        <span class="kw">let </span><span class="kw-2">mut </span>seen_tokens = HashSet::new();
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="kw">let </span><span class="kw-2">mut </span>expected_unused_tokens = HashSet::new();
+<a href=#433 id=433 data-nosnippet>433</a>        <span class="kw">let </span><span class="kw-2">mut </span>expected_unused_rules = HashSet::new();
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="kw">for </span>sym <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.expect_unused {
+<a href=#435 id=435 data-nosnippet>435</a>            <span class="kw">match </span>sym {
+<a href=#436 id=436 data-nosnippet>436</a>                Symbol::Rule(sym_name, <span class="kw">_</span>) =&gt; {
+<a href=#437 id=437 data-nosnippet>437</a>                    expected_unused_rules.insert(sym_name);
+<a href=#438 id=438 data-nosnippet>438</a>                }
+<a href=#439 id=439 data-nosnippet>439</a>                Symbol::Token(sym_name, <span class="kw">_</span>) =&gt; {
+<a href=#440 id=440 data-nosnippet>440</a>                    expected_unused_tokens.insert(sym_name);
+<a href=#441 id=441 data-nosnippet>441</a>                }
+<a href=#442 id=442 data-nosnippet>442</a>            }
+<a href=#443 id=443 data-nosnippet>443</a>        }
+<a href=#444 id=444 data-nosnippet>444</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(implicit_tokens) = <span class="self">self</span>.implicit_tokens.as_ref() {
+<a href=#445 id=445 data-nosnippet>445</a>            expected_unused_tokens.extend(implicit_tokens.keys())
+<a href=#446 id=446 data-nosnippet>446</a>        }
+<a href=#447 id=447 data-nosnippet>447</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((start_name, start_rule)) = start_rule {
+<a href=#448 id=448 data-nosnippet>448</a>            <span class="kw">let </span><span class="kw-2">mut </span>todo = Vec::new();
+<a href=#449 id=449 data-nosnippet>449</a>            todo.extend(start_rule.pidxs.iter().copied());
+<a href=#450 id=450 data-nosnippet>450</a>            seen_rules.insert(start_name);
+<a href=#451 id=451 data-nosnippet>451</a>
+<a href=#452 id=452 data-nosnippet>452</a>            <span class="kw">while let </span><span class="prelude-val">Some</span>(pidx) = todo.pop() {
+<a href=#453 id=453 data-nosnippet>453</a>                <span class="kw">let </span>prod = <span class="kw-2">&amp;</span><span class="self">self</span>.prods[pidx];
+<a href=#454 id=454 data-nosnippet>454</a>                <span class="kw">for </span>sym <span class="kw">in </span><span class="kw-2">&amp;</span>prod.symbols {
+<a href=#455 id=455 data-nosnippet>455</a>                    <span class="kw">match </span>sym {
+<a href=#456 id=456 data-nosnippet>456</a>                        Symbol::Rule(name, <span class="kw">_</span>) =&gt; {
+<a href=#457 id=457 data-nosnippet>457</a>                            <span class="kw">if </span>seen_rules.insert(name) {
+<a href=#458 id=458 data-nosnippet>458</a>                                <span class="kw">if let </span><span class="prelude-val">Some</span>(rule) = <span class="self">self</span>.rules.get(name) {
+<a href=#459 id=459 data-nosnippet>459</a>                                    todo.extend(<span class="kw-2">&amp;</span>rule.pidxs);
+<a href=#460 id=460 data-nosnippet>460</a>                                }
+<a href=#461 id=461 data-nosnippet>461</a>                            }
+<a href=#462 id=462 data-nosnippet>462</a>                        }
+<a href=#463 id=463 data-nosnippet>463</a>                        Symbol::Token(name, <span class="kw">_</span>) =&gt; {
+<a href=#464 id=464 data-nosnippet>464</a>                            seen_tokens.insert(name);
+<a href=#465 id=465 data-nosnippet>465</a>                        }
+<a href=#466 id=466 data-nosnippet>466</a>                    };
+<a href=#467 id=467 data-nosnippet>467</a>                }
+<a href=#468 id=468 data-nosnippet>468</a>            }
+<a href=#469 id=469 data-nosnippet>469</a>        }
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="self">self</span>.rules
+<a href=#471 id=471 data-nosnippet>471</a>            .iter()
+<a href=#472 id=472 data-nosnippet>472</a>            .enumerate()
+<a href=#473 id=473 data-nosnippet>473</a>            .filter_map(<span class="kw">move </span>|(rule_id, (rule_name, <span class="kw">_</span>))| {
+<a href=#474 id=474 data-nosnippet>474</a>                <span class="kw">if </span>expected_unused_rules.contains(rule_name) || seen_rules.contains(rule_name) {
+<a href=#475 id=475 data-nosnippet>475</a>                    <span class="prelude-val">None
+<a href=#476 id=476 data-nosnippet>476</a>                </span>} <span class="kw">else </span>{
+<a href=#477 id=477 data-nosnippet>477</a>                    <span class="prelude-val">Some</span>(SymbolIdx::Rule(rule_id))
+<a href=#478 id=478 data-nosnippet>478</a>                }
+<a href=#479 id=479 data-nosnippet>479</a>            })
+<a href=#480 id=480 data-nosnippet>480</a>            .chain(
+<a href=#481 id=481 data-nosnippet>481</a>                <span class="self">self</span>.tokens
+<a href=#482 id=482 data-nosnippet>482</a>                    .iter()
+<a href=#483 id=483 data-nosnippet>483</a>                    .enumerate()
+<a href=#484 id=484 data-nosnippet>484</a>                    .filter_map(<span class="kw">move </span>|(tok_idx, tok)| {
+<a href=#485 id=485 data-nosnippet>485</a>                        <span class="kw">if </span>expected_unused_tokens.contains(tok) || seen_tokens.contains(tok) {
+<a href=#486 id=486 data-nosnippet>486</a>                            <span class="prelude-val">None
+<a href=#487 id=487 data-nosnippet>487</a>                        </span>} <span class="kw">else </span>{
+<a href=#488 id=488 data-nosnippet>488</a>                            <span class="prelude-val">Some</span>(SymbolIdx::Token(tok_idx))
+<a href=#489 id=489 data-nosnippet>489</a>                        }
+<a href=#490 id=490 data-nosnippet>490</a>                    }),
+<a href=#491 id=491 data-nosnippet>491</a>            )
+<a href=#492 id=492 data-nosnippet>492</a>    }
+<a href=#493 id=493 data-nosnippet>493</a>}
+<a href=#494 id=494 data-nosnippet>494</a>
+<a href=#495 id=495 data-nosnippet>495</a><span class="attr">#[cfg(test)]
+<a href=#496 id=496 data-nosnippet>496</a></span><span class="kw">mod </span>test {
+<a href=#497 id=497 data-nosnippet>497</a>    <span class="kw">use super</span>::{
+<a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">super</span>::{AssocKind, Precedence},
+<a href=#499 id=499 data-nosnippet>499</a>        GrammarAST, Span, Symbol, YaccGrammarError, YaccGrammarErrorKind,
+<a href=#500 id=500 data-nosnippet>500</a>    };
+<a href=#501 id=501 data-nosnippet>501</a>
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">fn </span>rule(n: <span class="kw-2">&amp;</span>str) -&gt; Symbol {
+<a href=#503 id=503 data-nosnippet>503</a>        Symbol::Rule(n.to_string(), Span::new(<span class="number">0</span>, <span class="number">0</span>))
+<a href=#504 id=504 data-nosnippet>504</a>    }
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a>    <span class="kw">fn </span>token(n: <span class="kw-2">&amp;</span>str) -&gt; Symbol {
+<a href=#507 id=507 data-nosnippet>507</a>        Symbol::Token(n.to_string(), Span::new(<span class="number">0</span>, <span class="number">0</span>))
+<a href=#508 id=508 data-nosnippet>508</a>    }
+<a href=#509 id=509 data-nosnippet>509</a>
+<a href=#510 id=510 data-nosnippet>510</a>    <span class="attr">#[test]
+<a href=#511 id=511 data-nosnippet>511</a>    </span><span class="kw">fn </span>test_empty_grammar() {
+<a href=#512 id=512 data-nosnippet>512</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#513 id=513 data-nosnippet>513</a>        <span class="kw">match </span>grm.complete_and_validate() {
+<a href=#514 id=514 data-nosnippet>514</a>            <span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#515 id=515 data-nosnippet>515</a>                kind: YaccGrammarErrorKind::NoStartRule,
+<a href=#516 id=516 data-nosnippet>516</a>                ..
+<a href=#517 id=517 data-nosnippet>517</a>            }) =&gt; (),
+<a href=#518 id=518 data-nosnippet>518</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Validation error"</span>),
+<a href=#519 id=519 data-nosnippet>519</a>        }
+<a href=#520 id=520 data-nosnippet>520</a>    }
+<a href=#521 id=521 data-nosnippet>521</a>
+<a href=#522 id=522 data-nosnippet>522</a>    <span class="attr">#[test]
+<a href=#523 id=523 data-nosnippet>523</a>    </span><span class="kw">fn </span>test_invalid_start_rule() {
+<a href=#524 id=524 data-nosnippet>524</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#525 id=525 data-nosnippet>525</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#526 id=526 data-nosnippet>526</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#527 id=527 data-nosnippet>527</a>        grm.add_rule((<span class="string">"B"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#528 id=528 data-nosnippet>528</a>        grm.add_prod(<span class="string">"B"</span>.to_string(), <span class="macro">vec!</span>[], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#529 id=529 data-nosnippet>529</a>        <span class="kw">match </span>grm.complete_and_validate() {
+<a href=#530 id=530 data-nosnippet>530</a>            <span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#531 id=531 data-nosnippet>531</a>                kind: YaccGrammarErrorKind::InvalidStartRule(<span class="kw">_</span>),
+<a href=#532 id=532 data-nosnippet>532</a>                ..
+<a href=#533 id=533 data-nosnippet>533</a>            }) =&gt; (),
+<a href=#534 id=534 data-nosnippet>534</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Validation error"</span>),
+<a href=#535 id=535 data-nosnippet>535</a>        }
+<a href=#536 id=536 data-nosnippet>536</a>    }
+<a href=#537 id=537 data-nosnippet>537</a>
+<a href=#538 id=538 data-nosnippet>538</a>    <span class="attr">#[test]
+<a href=#539 id=539 data-nosnippet>539</a>    </span><span class="kw">fn </span>test_valid_start_rule() {
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#541 id=541 data-nosnippet>541</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#542 id=542 data-nosnippet>542</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#543 id=543 data-nosnippet>543</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#544 id=544 data-nosnippet>544</a>        grm.add_prod(<span class="string">"A"</span>.to_string(), <span class="macro">vec!</span>[], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#545 id=545 data-nosnippet>545</a>        <span class="macro">assert!</span>(grm.complete_and_validate().is_ok());
+<a href=#546 id=546 data-nosnippet>546</a>    }
+<a href=#547 id=547 data-nosnippet>547</a>
+<a href=#548 id=548 data-nosnippet>548</a>    <span class="attr">#[test]
+<a href=#549 id=549 data-nosnippet>549</a>    </span><span class="kw">fn </span>test_valid_rule_ref() {
+<a href=#550 id=550 data-nosnippet>550</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#551 id=551 data-nosnippet>551</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#552 id=552 data-nosnippet>552</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#553 id=553 data-nosnippet>553</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#554 id=554 data-nosnippet>554</a>        grm.add_rule((<span class="string">"B"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#555 id=555 data-nosnippet>555</a>        grm.add_prod(<span class="string">"A"</span>.to_string(), <span class="macro">vec!</span>[rule(<span class="string">"B"</span>)], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#556 id=556 data-nosnippet>556</a>        grm.add_prod(<span class="string">"B"</span>.to_string(), <span class="macro">vec!</span>[], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#557 id=557 data-nosnippet>557</a>        <span class="macro">assert!</span>(grm.complete_and_validate().is_ok());
+<a href=#558 id=558 data-nosnippet>558</a>    }
+<a href=#559 id=559 data-nosnippet>559</a>
+<a href=#560 id=560 data-nosnippet>560</a>    <span class="attr">#[test]
+<a href=#561 id=561 data-nosnippet>561</a>    </span><span class="kw">fn </span>test_invalid_rule_ref() {
+<a href=#562 id=562 data-nosnippet>562</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#563 id=563 data-nosnippet>563</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#564 id=564 data-nosnippet>564</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#565 id=565 data-nosnippet>565</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#566 id=566 data-nosnippet>566</a>        grm.add_prod(<span class="string">"A"</span>.to_string(), <span class="macro">vec!</span>[rule(<span class="string">"B"</span>)], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#567 id=567 data-nosnippet>567</a>        <span class="kw">match </span>grm.complete_and_validate() {
+<a href=#568 id=568 data-nosnippet>568</a>            <span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#569 id=569 data-nosnippet>569</a>                kind: YaccGrammarErrorKind::UnknownRuleRef(<span class="kw">_</span>),
+<a href=#570 id=570 data-nosnippet>570</a>                ..
+<a href=#571 id=571 data-nosnippet>571</a>            }) =&gt; (),
+<a href=#572 id=572 data-nosnippet>572</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Validation error"</span>),
+<a href=#573 id=573 data-nosnippet>573</a>        }
+<a href=#574 id=574 data-nosnippet>574</a>    }
+<a href=#575 id=575 data-nosnippet>575</a>
+<a href=#576 id=576 data-nosnippet>576</a>    <span class="attr">#[test]
+<a href=#577 id=577 data-nosnippet>577</a>    </span><span class="kw">fn </span>test_valid_token_ref() {
+<a href=#578 id=578 data-nosnippet>578</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#579 id=579 data-nosnippet>579</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#580 id=580 data-nosnippet>580</a>        grm.tokens.insert(<span class="string">"b"</span>.to_string());
+<a href=#581 id=581 data-nosnippet>581</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#582 id=582 data-nosnippet>582</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#583 id=583 data-nosnippet>583</a>        grm.add_prod(<span class="string">"A"</span>.to_string(), <span class="macro">vec!</span>[token(<span class="string">"b"</span>)], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#584 id=584 data-nosnippet>584</a>        <span class="macro">assert!</span>(grm.complete_and_validate().is_ok());
+<a href=#585 id=585 data-nosnippet>585</a>    }
+<a href=#586 id=586 data-nosnippet>586</a>
+<a href=#587 id=587 data-nosnippet>587</a>    <span class="attr">#[test]
+<a href=#588 id=588 data-nosnippet>588</a>    </span><span class="kw">fn </span>test_redefine_rules_as_tokens() {
+<a href=#589 id=589 data-nosnippet>589</a>        <span class="comment">// for now we won't support the YACC feature that allows
+<a href=#590 id=590 data-nosnippet>590</a>        // to redefine rules as tokens by adding them to '%token'
+<a href=#591 id=591 data-nosnippet>591</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#592 id=592 data-nosnippet>592</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#593 id=593 data-nosnippet>593</a>        grm.tokens.insert(<span class="string">"b"</span>.to_string());
+<a href=#594 id=594 data-nosnippet>594</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#595 id=595 data-nosnippet>595</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#596 id=596 data-nosnippet>596</a>        grm.add_prod(<span class="string">"A"</span>.to_string(), <span class="macro">vec!</span>[rule(<span class="string">"b"</span>)], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#597 id=597 data-nosnippet>597</a>        <span class="macro">assert!</span>(grm.complete_and_validate().is_err());
+<a href=#598 id=598 data-nosnippet>598</a>    }
+<a href=#599 id=599 data-nosnippet>599</a>
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="attr">#[test]
+<a href=#601 id=601 data-nosnippet>601</a>    </span><span class="kw">fn </span>test_invalid_token_ref() {
+<a href=#602 id=602 data-nosnippet>602</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#604 id=604 data-nosnippet>604</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#605 id=605 data-nosnippet>605</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#606 id=606 data-nosnippet>606</a>        grm.add_prod(<span class="string">"A"</span>.to_string(), <span class="macro">vec!</span>[token(<span class="string">"b"</span>)], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#607 id=607 data-nosnippet>607</a>        <span class="kw">match </span>grm.complete_and_validate() {
+<a href=#608 id=608 data-nosnippet>608</a>            <span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#609 id=609 data-nosnippet>609</a>                kind: YaccGrammarErrorKind::UnknownToken(<span class="kw">_</span>),
+<a href=#610 id=610 data-nosnippet>610</a>                ..
+<a href=#611 id=611 data-nosnippet>611</a>            }) =&gt; (),
+<a href=#612 id=612 data-nosnippet>612</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Validation error"</span>),
+<a href=#613 id=613 data-nosnippet>613</a>        }
+<a href=#614 id=614 data-nosnippet>614</a>    }
+<a href=#615 id=615 data-nosnippet>615</a>
+<a href=#616 id=616 data-nosnippet>616</a>    <span class="attr">#[test]
+<a href=#617 id=617 data-nosnippet>617</a>    </span><span class="kw">fn </span>test_invalid_rule_forgotten_token() {
+<a href=#618 id=618 data-nosnippet>618</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#620 id=620 data-nosnippet>620</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#621 id=621 data-nosnippet>621</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#622 id=622 data-nosnippet>622</a>        grm.add_prod(
+<a href=#623 id=623 data-nosnippet>623</a>            <span class="string">"A"</span>.to_string(),
+<a href=#624 id=624 data-nosnippet>624</a>            <span class="macro">vec!</span>[rule(<span class="string">"b"</span>), token(<span class="string">"b"</span>)],
+<a href=#625 id=625 data-nosnippet>625</a>            <span class="prelude-val">None</span>,
+<a href=#626 id=626 data-nosnippet>626</a>            <span class="prelude-val">None</span>,
+<a href=#627 id=627 data-nosnippet>627</a>            Span::new(<span class="number">0</span>, <span class="number">2</span>),
+<a href=#628 id=628 data-nosnippet>628</a>        );
+<a href=#629 id=629 data-nosnippet>629</a>        <span class="kw">match </span>grm.complete_and_validate() {
+<a href=#630 id=630 data-nosnippet>630</a>            <span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#631 id=631 data-nosnippet>631</a>                kind: YaccGrammarErrorKind::UnknownRuleRef(<span class="kw">_</span>),
+<a href=#632 id=632 data-nosnippet>632</a>                ..
+<a href=#633 id=633 data-nosnippet>633</a>            }) =&gt; (),
+<a href=#634 id=634 data-nosnippet>634</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Validation error"</span>),
+<a href=#635 id=635 data-nosnippet>635</a>        }
+<a href=#636 id=636 data-nosnippet>636</a>    }
+<a href=#637 id=637 data-nosnippet>637</a>
+<a href=#638 id=638 data-nosnippet>638</a>    <span class="attr">#[test]
+<a href=#639 id=639 data-nosnippet>639</a>    </span><span class="kw">fn </span>test_invalid_epp() {
+<a href=#640 id=640 data-nosnippet>640</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#641 id=641 data-nosnippet>641</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">2</span>, <span class="number">3</span>);
+<a href=#642 id=642 data-nosnippet>642</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#643 id=643 data-nosnippet>643</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#644 id=644 data-nosnippet>644</a>        grm.add_prod(<span class="string">"A"</span>.to_string(), <span class="macro">vec!</span>[], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#645 id=645 data-nosnippet>645</a>        grm.epp
+<a href=#646 id=646 data-nosnippet>646</a>            .insert(<span class="string">"k"</span>.to_owned(), (empty_span, (<span class="string">"v"</span>.to_owned(), empty_span)));
+<a href=#647 id=647 data-nosnippet>647</a>        <span class="kw">match </span>grm.complete_and_validate() {
+<a href=#648 id=648 data-nosnippet>648</a>            <span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#649 id=649 data-nosnippet>649</a>                kind: YaccGrammarErrorKind::UnknownEPP(<span class="kw">_</span>),
+<a href=#650 id=650 data-nosnippet>650</a>                spans,
+<a href=#651 id=651 data-nosnippet>651</a>            }) <span class="kw">if </span>spans.len() == <span class="number">1 </span>&amp;&amp; spans[<span class="number">0</span>] == Span::new(<span class="number">2</span>, <span class="number">3</span>) =&gt; (),
+<a href=#652 id=652 data-nosnippet>652</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Validation error"</span>),
+<a href=#653 id=653 data-nosnippet>653</a>        }
+<a href=#654 id=654 data-nosnippet>654</a>    }
+<a href=#655 id=655 data-nosnippet>655</a>
+<a href=#656 id=656 data-nosnippet>656</a>    <span class="attr">#[test]
+<a href=#657 id=657 data-nosnippet>657</a>    </span><span class="kw">fn </span>test_precedence_override() {
+<a href=#658 id=658 data-nosnippet>658</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#659 id=659 data-nosnippet>659</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#660 id=660 data-nosnippet>660</a>        grm.precs.insert(
+<a href=#661 id=661 data-nosnippet>661</a>            <span class="string">"b"</span>.to_string(),
+<a href=#662 id=662 data-nosnippet>662</a>            (
+<a href=#663 id=663 data-nosnippet>663</a>                Precedence {
+<a href=#664 id=664 data-nosnippet>664</a>                    level: <span class="number">1</span>,
+<a href=#665 id=665 data-nosnippet>665</a>                    kind: AssocKind::Left,
+<a href=#666 id=666 data-nosnippet>666</a>                },
+<a href=#667 id=667 data-nosnippet>667</a>                Span::new(<span class="number">0</span>, <span class="number">0</span>),
+<a href=#668 id=668 data-nosnippet>668</a>            ),
+<a href=#669 id=669 data-nosnippet>669</a>        );
+<a href=#670 id=670 data-nosnippet>670</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#671 id=671 data-nosnippet>671</a>        grm.tokens.insert(<span class="string">"b"</span>.to_string());
+<a href=#672 id=672 data-nosnippet>672</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#673 id=673 data-nosnippet>673</a>        grm.add_prod(
+<a href=#674 id=674 data-nosnippet>674</a>            <span class="string">"A"</span>.to_string(),
+<a href=#675 id=675 data-nosnippet>675</a>            <span class="macro">vec!</span>[token(<span class="string">"b"</span>)],
+<a href=#676 id=676 data-nosnippet>676</a>            <span class="prelude-val">Some</span>(<span class="string">"b"</span>.to_string()),
+<a href=#677 id=677 data-nosnippet>677</a>            <span class="prelude-val">None</span>,
+<a href=#678 id=678 data-nosnippet>678</a>            empty_span,
+<a href=#679 id=679 data-nosnippet>679</a>        );
+<a href=#680 id=680 data-nosnippet>680</a>        <span class="macro">assert!</span>(grm.complete_and_validate().is_ok());
+<a href=#681 id=681 data-nosnippet>681</a>    }
+<a href=#682 id=682 data-nosnippet>682</a>
+<a href=#683 id=683 data-nosnippet>683</a>    <span class="attr">#[test]
+<a href=#684 id=684 data-nosnippet>684</a>    </span><span class="kw">fn </span>test_invalid_precedence_override() {
+<a href=#685 id=685 data-nosnippet>685</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#686 id=686 data-nosnippet>686</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#687 id=687 data-nosnippet>687</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#688 id=688 data-nosnippet>688</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#689 id=689 data-nosnippet>689</a>        grm.add_prod(
+<a href=#690 id=690 data-nosnippet>690</a>            <span class="string">"A"</span>.to_string(),
+<a href=#691 id=691 data-nosnippet>691</a>            <span class="macro">vec!</span>[token(<span class="string">"b"</span>)],
+<a href=#692 id=692 data-nosnippet>692</a>            <span class="prelude-val">Some</span>(<span class="string">"b"</span>.to_string()),
+<a href=#693 id=693 data-nosnippet>693</a>            <span class="prelude-val">None</span>,
+<a href=#694 id=694 data-nosnippet>694</a>            empty_span,
+<a href=#695 id=695 data-nosnippet>695</a>        );
+<a href=#696 id=696 data-nosnippet>696</a>        <span class="kw">match </span>grm.complete_and_validate() {
+<a href=#697 id=697 data-nosnippet>697</a>            <span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#698 id=698 data-nosnippet>698</a>                kind: YaccGrammarErrorKind::UnknownToken(<span class="kw">_</span>),
+<a href=#699 id=699 data-nosnippet>699</a>                ..
+<a href=#700 id=700 data-nosnippet>700</a>            }) =&gt; (),
+<a href=#701 id=701 data-nosnippet>701</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Validation error"</span>),
+<a href=#702 id=702 data-nosnippet>702</a>        }
+<a href=#703 id=703 data-nosnippet>703</a>        grm.tokens.insert(<span class="string">"b"</span>.to_string());
+<a href=#704 id=704 data-nosnippet>704</a>        <span class="kw">match </span>grm.complete_and_validate() {
+<a href=#705 id=705 data-nosnippet>705</a>            <span class="prelude-val">Err</span>(YaccGrammarError {
+<a href=#706 id=706 data-nosnippet>706</a>                kind: YaccGrammarErrorKind::NoPrecForToken(<span class="kw">_</span>),
+<a href=#707 id=707 data-nosnippet>707</a>                ..
+<a href=#708 id=708 data-nosnippet>708</a>            }) =&gt; (),
+<a href=#709 id=709 data-nosnippet>709</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Validation error"</span>),
+<a href=#710 id=710 data-nosnippet>710</a>        }
+<a href=#711 id=711 data-nosnippet>711</a>    }
+<a href=#712 id=712 data-nosnippet>712</a>
+<a href=#713 id=713 data-nosnippet>713</a>    <span class="attr">#[test]
+<a href=#714 id=714 data-nosnippet>714</a>    </span><span class="kw">fn </span>test_ast_unused_symbols() {
+<a href=#715 id=715 data-nosnippet>715</a>        <span class="kw">let </span><span class="kw-2">mut </span>grm = GrammarAST::new();
+<a href=#716 id=716 data-nosnippet>716</a>        <span class="kw">let </span>empty_span = Span::new(<span class="number">0</span>, <span class="number">0</span>);
+<a href=#717 id=717 data-nosnippet>717</a>        grm.start = <span class="prelude-val">Some</span>((<span class="string">"A"</span>.to_string(), empty_span));
+<a href=#718 id=718 data-nosnippet>718</a>        grm.add_rule((<span class="string">"A"</span>.to_string(), empty_span), <span class="prelude-val">None</span>);
+<a href=#719 id=719 data-nosnippet>719</a>        grm.add_prod(<span class="string">"A"</span>.to_string(), <span class="macro">vec!</span>[], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#720 id=720 data-nosnippet>720</a>        grm.tokens.insert(<span class="string">"b"</span>.to_string());
+<a href=#721 id=721 data-nosnippet>721</a>        grm.spans.push(Span::new(<span class="number">4</span>, <span class="number">5</span>));
+<a href=#722 id=722 data-nosnippet>722</a>        grm.add_rule((<span class="string">"B"</span>.to_string(), Span::new(<span class="number">1</span>, <span class="number">2</span>)), <span class="prelude-val">None</span>);
+<a href=#723 id=723 data-nosnippet>723</a>        grm.add_prod(<span class="string">"B"</span>.to_string(), <span class="macro">vec!</span>[token(<span class="string">"b"</span>)], <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, empty_span);
+<a href=#724 id=724 data-nosnippet>724</a>
+<a href=#725 id=725 data-nosnippet>725</a>        <span class="macro">assert_eq!</span>(
+<a href=#726 id=726 data-nosnippet>726</a>            grm.unused_symbols()
+<a href=#727 id=727 data-nosnippet>727</a>                .map(|sym_idx| sym_idx.symbol(<span class="kw-2">&amp;</span>grm))
+<a href=#728 id=728 data-nosnippet>728</a>                .collect::&lt;Vec&lt;Symbol&gt;&gt;()
+<a href=#729 id=729 data-nosnippet>729</a>                .as_slice(),
+<a href=#730 id=730 data-nosnippet>730</a>            <span class="kw-2">&amp;</span>[
+<a href=#731 id=731 data-nosnippet>731</a>                Symbol::Rule(<span class="string">"B"</span>.to_string(), Span::new(<span class="number">1</span>, <span class="number">2</span>)),
+<a href=#732 id=732 data-nosnippet>732</a>                Symbol::Token(<span class="string">"b"</span>.to_string(), Span::new(<span class="number">4</span>, <span class="number">5</span>))
+<a href=#733 id=733 data-nosnippet>733</a>            ]
+<a href=#734 id=734 data-nosnippet>734</a>        )
+<a href=#735 id=735 data-nosnippet>735</a>    }
+<a href=#736 id=736 data-nosnippet>736</a>
+<a href=#737 id=737 data-nosnippet>737</a>    <span class="attr">#[test]
+<a href=#738 id=738 data-nosnippet>738</a>    </span><span class="kw">fn </span>token_rule_confusion_issue_557() {
+<a href=#739 id=739 data-nosnippet>739</a>        <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#740 id=740 data-nosnippet>740</a>        <span class="kw">use </span><span class="kw">crate</span>::yacc::<span class="kw-2">*</span>;
+<a href=#741 id=741 data-nosnippet>741</a>        <span class="kw">let </span>ast_validity = ASTWithValidityInfo::new(
+<a href=#742 id=742 data-nosnippet>742</a>            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+<a href=#743 id=743 data-nosnippet>743</a>            <span class="string">r#"
+<a href=#744 id=744 data-nosnippet>744</a>            %start start
+<a href=#745 id=745 data-nosnippet>745</a>            %%
+<a href=#746 id=746 data-nosnippet>746</a>            start: "a" a;
+<a href=#747 id=747 data-nosnippet>747</a>            a: "c";"#</span>,
+<a href=#748 id=748 data-nosnippet>748</a>        );
+<a href=#749 id=749 data-nosnippet>749</a>        <span class="macro">assert!</span>(
+<a href=#750 id=750 data-nosnippet>750</a>            ast_validity.ast().prods[<span class="number">0</span>]
+<a href=#751 id=751 data-nosnippet>751</a>                .symbols
+<a href=#752 id=752 data-nosnippet>752</a>                .contains(<span class="kw-2">&amp;</span>Symbol::Rule(<span class="string">"a"</span>.to_string(), Span::new(<span class="number">64</span>, <span class="number">65</span>)))
+<a href=#753 id=753 data-nosnippet>753</a>        );
+<a href=#754 id=754 data-nosnippet>754</a>        <span class="kw">let </span>ast_validity = ASTWithValidityInfo::new(
+<a href=#755 id=755 data-nosnippet>755</a>            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+<a href=#756 id=756 data-nosnippet>756</a>            <span class="string">r#"
+<a href=#757 id=757 data-nosnippet>757</a>            %start start
+<a href=#758 id=758 data-nosnippet>758</a>            %%
+<a href=#759 id=759 data-nosnippet>759</a>            start: "a" x;
+<a href=#760 id=760 data-nosnippet>760</a>            x: "c";"#</span>,
+<a href=#761 id=761 data-nosnippet>761</a>        );
+<a href=#762 id=762 data-nosnippet>762</a>        <span class="macro">assert!</span>(
+<a href=#763 id=763 data-nosnippet>763</a>            ast_validity.ast().prods[<span class="number">0</span>]
+<a href=#764 id=764 data-nosnippet>764</a>                .symbols
+<a href=#765 id=765 data-nosnippet>765</a>                .contains(<span class="kw-2">&amp;</span>Symbol::Rule(<span class="string">"x"</span>.to_string(), Span::new(<span class="number">64</span>, <span class="number">65</span>)))
+<a href=#766 id=766 data-nosnippet>766</a>        );
+<a href=#767 id=767 data-nosnippet>767</a>        <span class="kw">let </span>ast_validity = ASTWithValidityInfo::new(
+<a href=#768 id=768 data-nosnippet>768</a>            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+<a href=#769 id=769 data-nosnippet>769</a>            <span class="string">r#"
+<a href=#770 id=770 data-nosnippet>770</a>        %start start
+<a href=#771 id=771 data-nosnippet>771</a>        %token a
+<a href=#772 id=772 data-nosnippet>772</a>        %%
+<a href=#773 id=773 data-nosnippet>773</a>        start: "a" a;
+<a href=#774 id=774 data-nosnippet>774</a>        "#</span>,
+<a href=#775 id=775 data-nosnippet>775</a>        );
+<a href=#776 id=776 data-nosnippet>776</a>        <span class="macro">assert_eq!</span>(
+<a href=#777 id=777 data-nosnippet>777</a>            ast_validity.ast().prods[<span class="number">0</span>].symbols,
+<a href=#778 id=778 data-nosnippet>778</a>            [
+<a href=#779 id=779 data-nosnippet>779</a>                Symbol::Token(<span class="string">"a"</span>.to_string(), Span::new(<span class="number">66</span>, <span class="number">67</span>)),
+<a href=#780 id=780 data-nosnippet>780</a>                Symbol::Token(<span class="string">"a"</span>.to_string(), Span::new(<span class="number">69</span>, <span class="number">70</span>))
+<a href=#781 id=781 data-nosnippet>781</a>            ]
+<a href=#782 id=782 data-nosnippet>782</a>        );
+<a href=#783 id=783 data-nosnippet>783</a>    }
+<a href=#784 id=784 data-nosnippet>784</a>
+<a href=#785 id=785 data-nosnippet>785</a>    <span class="attr">#[test]
+<a href=#786 id=786 data-nosnippet>786</a>    </span><span class="kw">fn </span>test_token_directives() {
+<a href=#787 id=787 data-nosnippet>787</a>        <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#788 id=788 data-nosnippet>788</a>        <span class="kw">use </span><span class="kw">crate</span>::yacc::<span class="kw-2">*</span>;
+<a href=#789 id=789 data-nosnippet>789</a>
+<a href=#790 id=790 data-nosnippet>790</a>        <span class="comment">// Testing that `%token a` after `%left "a"` still ends up in
+<a href=#791 id=791 data-nosnippet>791</a>        </span><span class="kw">let </span>ast_validity = ASTWithValidityInfo::new(
+<a href=#792 id=792 data-nosnippet>792</a>            YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+<a href=#793 id=793 data-nosnippet>793</a>            <span class="string">r#"
+<a href=#794 id=794 data-nosnippet>794</a>                %left "a"
+<a href=#795 id=795 data-nosnippet>795</a>                %token a
+<a href=#796 id=796 data-nosnippet>796</a>                %start start
+<a href=#797 id=797 data-nosnippet>797</a>                %%
+<a href=#798 id=798 data-nosnippet>798</a>                start: "a" a "b";
+<a href=#799 id=799 data-nosnippet>799</a>                "#</span>,
+<a href=#800 id=800 data-nosnippet>800</a>        );
+<a href=#801 id=801 data-nosnippet>801</a>        <span class="macro">assert!</span>(
+<a href=#802 id=802 data-nosnippet>802</a>            ast_validity
+<a href=#803 id=803 data-nosnippet>803</a>                .ast()
+<a href=#804 id=804 data-nosnippet>804</a>                .token_directives
+<a href=#805 id=805 data-nosnippet>805</a>                .contains(<span class="kw-2">&amp;</span>ast_validity.ast().tokens.get_index_of(<span class="string">"a"</span>).unwrap())
+<a href=#806 id=806 data-nosnippet>806</a>        );
+<a href=#807 id=807 data-nosnippet>807</a>        <span class="macro">assert!</span>(
+<a href=#808 id=808 data-nosnippet>808</a>            !ast_validity
+<a href=#809 id=809 data-nosnippet>809</a>                .ast()
+<a href=#810 id=810 data-nosnippet>810</a>                .token_directives
+<a href=#811 id=811 data-nosnippet>811</a>                .contains(<span class="kw-2">&amp;</span>ast_validity.ast().tokens.get_index_of(<span class="string">"b"</span>).unwrap())
+<a href=#812 id=812 data-nosnippet>812</a>        );
+<a href=#813 id=813 data-nosnippet>813</a>    }
+<a href=#814 id=814 data-nosnippet>814</a>
+<a href=#815 id=815 data-nosnippet>815</a>    <span class="attr">#[test]
+<a href=#816 id=816 data-nosnippet>816</a>    </span><span class="kw">fn </span>clone_ast_changing_start_rule() {
+<a href=#817 id=817 data-nosnippet>817</a>        <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#818 id=818 data-nosnippet>818</a>        <span class="kw">use </span><span class="kw">crate</span>::yacc::<span class="kw-2">*</span>;
+<a href=#819 id=819 data-nosnippet>819</a>        <span class="kw">let </span>y_src = <span class="string">r#"
+<a href=#820 id=820 data-nosnippet>820</a>        %start AStart
+<a href=#821 id=821 data-nosnippet>821</a>        %token A B C
+<a href=#822 id=822 data-nosnippet>822</a>        %%
+<a href=#823 id=823 data-nosnippet>823</a>        AStart: A ':' BStart ';';
+<a href=#824 id=824 data-nosnippet>824</a>        BStart: B ',' C | C ',' B;
+<a href=#825 id=825 data-nosnippet>825</a>        "#</span>;
+<a href=#826 id=826 data-nosnippet>826</a>
+<a href=#827 id=827 data-nosnippet>827</a>        <span class="kw">let </span>astart_ast_validity =
+<a href=#828 id=828 data-nosnippet>828</a>            ASTWithValidityInfo::new(YaccKind::Original(YaccOriginalActionKind::NoAction), y_src);
+<a href=#829 id=829 data-nosnippet>829</a>        <span class="kw">let </span>bstart_rule = astart_ast_validity.ast().get_rule(<span class="string">"BStart"</span>).unwrap();
+<a href=#830 id=830 data-nosnippet>830</a>        <span class="kw">let </span>bstart_ast_validity = astart_ast_validity
+<a href=#831 id=831 data-nosnippet>831</a>            .clone_and_change_start_rule(bstart_rule.clone())
+<a href=#832 id=832 data-nosnippet>832</a>            .unwrap();
+<a href=#833 id=833 data-nosnippet>833</a>        <span class="macro">assert!</span>(astart_ast_validity.is_valid());
+<a href=#834 id=834 data-nosnippet>834</a>        <span class="macro">assert!</span>(bstart_ast_validity.is_valid());
+<a href=#835 id=835 data-nosnippet>835</a>        <span class="macro">assert_eq!</span>(
+<a href=#836 id=836 data-nosnippet>836</a>            bstart_ast_validity.ast().start.as_ref(),
+<a href=#837 id=837 data-nosnippet>837</a>            <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>bstart_rule.name)
+<a href=#838 id=838 data-nosnippet>838</a>        );
+<a href=#839 id=839 data-nosnippet>839</a>    }
+<a href=#840 id=840 data-nosnippet>840</a>}</code></pre></div></section></main></body></html>

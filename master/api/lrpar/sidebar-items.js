@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LexParseError","ParseRepair","RecoveryKind","RustEdition","Visibility"],"fn":["action_generictree"],"macro":["lrpar_mod"],"mod":["unstable_api"],"struct":["CTParser","CTParserBuilder","ParseError","RTParserBuilder","Span"],"trait":["LexError","Lexeme","Lexer","LexerTypes","NonStreamingLexer"],"type":["Node"]};

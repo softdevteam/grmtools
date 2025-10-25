@@ -1,0 +1,1470 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>grmtools</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">grmtools</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="grmtools"><a class="header" href="#grmtools">grmtools</a></h1>
+<p><a href="https://github.com/softdevteam/grmtools/">grmtools</a> is a suite of Rust
+libraries and binaries for parsing text, both at compile-time, and run-time.
+Most users will probably be interested in the compile-time Yacc feature, which
+allows traditional <code>.y</code> files to be used mostly unchanged in Rust. See the
+<a href="quickstart.html">Quickstart Guide</a> for a quick introduction to this feature.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="quickstart-guide"><a class="header" href="#quickstart-guide">Quickstart Guide</a></h1>
+<p>Most users will probably be interested in the compile-time Yacc feature of
+grmtools, which allows traditional <code>.y</code> files to be used mostly unchanged in
+Rust. This page is a short guide to get you up and running with this feature as
+quickly as possible.</p>
+<p>grmtools includes both a Yacc-style LR parser (<a href="lrpar.html"><code>lrpar</code></a>) and a
+lex-style lexer (<a href="lrlex.html"><code>lrlex</code></a>). The lexer breaks input up into individual lexemes and
+the parser checks to see if the lexemes conform to a grammar. As the parser
+executes, it can either create a generic parse tree, or execute user-specified
+Rust code.</p>
+<h2 id="a-calculator-evaluator"><a class="header" href="#a-calculator-evaluator">A calculator evaluator</a></h2>
+<p>Let's assume we want to create a simple calculator which can evaluate
+expressions such as <code>2 + 3 * 4</code>. Assuming a fresh Rust project, we first create
+a <code>Cargo.toml</code> file with the following dependencies:</p>
+<pre><code class="language-toml">[package]
+name = "calc"
+version = "0.0.1"
+authors = ["&lt;authors&gt;"]
+
+[[bin]]
+doc = false
+name = "calc"
+
+[build-dependencies]
+cfgrammar = "0.7"
+lrlex = "0.7"
+lrpar = "0.7"
+
+[dependencies]
+cfgrammar = "0.7"
+lrlex = "0.7"
+lrpar = "0.7"
+</code></pre>
+<p>In this situation we want to statically compile the <code>.y</code> grammar and <code>.l</code> lexer
+into Rust code. We thus need to create a
+<a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html"><code>build.rs</code></a>
+file inside the root of our project which can process the lexer and grammar.
+Our <code>build.rs</code> file thus looks as follows:</p>
+<pre><pre class="playground"><code class="language-rust">use cfgrammar::yacc::YaccKind;
+use lrlex::LexerBuilder;
+use lrpar::{CTParserBuilder};
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let lex_rule_ids_map = CTParserBuilder::new()
+        .yacckind(YaccKind::Grmtools)
+        .process_file_in_src("calc.y")?;
+    LexerBuilder::new()
+        .rule_ids_map(lex_rule_ids_map)
+        .process_file_in_src("calc.l")?;
+    Ok(())
+}</code></pre></pre>
+<p>grmtools accepts several different Yacc variants as input. In our case, we want
+to execute Rust code as the input is parsed (rather than creating a generic
+parse tree which we traverse later), so we specified that the <code>yacckind</code> (i.e.
+what variant of Yacc file we're using) is <code>YaccKind::Grmtools</code>. The grammar file
+is stored in <code>src/calc.y</code>, but we only specify <code>calc.y</code> as the filename to
+<code>lrpar</code>, since it searches relative to <code>src/</code> automatically.</p>
+<h2 id="the-lexer"><a class="header" href="#the-lexer">The lexer</a></h2>
+<p>While Yacc-style parsing is powerful, lex-style lexing is less powerful.
+grmtools allows you to use whatever lexer you want with <code>lrpar</code>. Fortunately, in
+this case, <code>lrlex</code> is powerful enough for us. Our lex file is stored in
+<code>src/calc.l</code>. The <code>rule_ids_map</code> dance synchronises the parser and lexer (the
+details of this are unimportant to us).</p>
+<p><code>calc.l</code> is as follows:</p>
+<pre><code class="language-lex">%%
+[0-9]+ "INT"
+\+ "PLUS"
+\* "MUL"
+\( "LBRACK"
+\) "RBRACK"
+[\t ]+ ;
+</code></pre>
+<p>Roughly speaking, each line after the <code>%%</code> line is a regular expression (we use
+the <a href="https://crates.io/crates/regex"><code>regex</code></a> crate), a space character, and a
+quoted lexeme type name. For example, if the user gives us input such as <code>234</code>
+we will create a single lexeme with a value (<code>234</code>) and a type (<code>INT</code>).</p>
+<p>The one exception is the final line: if a lexeme type name is replaced with ‘<code>;</code>’
+then any matching input is discarded. In this case, whitespace (tabs and spaces)
+is lexed, but no lexemes are created from it.</p>
+<h2 id="the-grammar"><a class="header" href="#the-grammar">The grammar</a></h2>
+<p>Our initial version of calc.y looks as follows:</p>
+<pre><code class="language-yacc">%start Expr
+%%
+Expr -&gt; Result&lt;u64, ()&gt;:
+      Term 'PLUS' Expr { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+
+Term -&gt; Result&lt;u64, ()&gt;:
+      Factor 'MUL' Term { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor -&gt; Result&lt;u64, ()&gt;:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT'
+      {
+          let v = $1.map_err(|_| ())?;
+          parse_int($lexer.span_str(v.span()))
+      }
+    ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &amp;str) -&gt; Result&lt;u64, ()&gt; {
+    match s.parse::&lt;u64&gt;() {
+        Ok(val) =&gt; Ok(val),
+        Err(_) =&gt; {
+            eprintln!("{} cannot be represented as a u64", s);
+            Err(())
+        }
+    }
+}
+</code></pre>
+<p>The grammar is in 3 parts, separated by the <code>%%</code> lines.</p>
+<p>The first part specifies general settings for the grammar, at a minimum the
+start rule (<code>%start Expr</code>).</p>
+<p>The second part is the <a href="http://dinosaur.compilertools.net/yacc/index.html">Yacc
+grammar</a>. It consists of 3
+rules (<code>Expr</code>, <code>Term</code>, and <code>Factor</code>) and 6 productions (2 for each rule,
+separated by <code>|</code> characters). Because we are using the <code>Grmtools</code> Yacc variant,
+each rule has a Rust type associated with it (after <code>-&gt;</code>) which specifies the
+type that each production’s action must return. A production (sometimes called an “alternative”)
+consists of zero or more symbols. Symbols either reference rules or lexemes. If a
+production matches text, its ”action” (the Rust code between curly brackets at
+the end of the production) is executed.</p>
+<p><code>lrpar</code>'s actions are subtly different to Yacc. The <code>$x</code> variables refer to
+the respective symbol in the production, numbered from 1 (i.e. <code>$1</code> refers to the first symbol in
+the production). If the symbol references a rule <code>R</code> then an instance of
+<code>R</code>'s type will be stored in the <code>$x</code> variable; if the symbol references a lexeme then an <code>Option&lt;Lexeme&gt;</code>
+instance is returned. A special <code>$lexer</code> variable allows access to the lexer.
+The most commonly used function that <code>$lexer</code> exposes is the <code>span_str</code>
+function, which allows us to extract <code>&amp;'input str</code>s from a <code>Span</code> (e.g. to
+extract the string represented by a <code>Lexeme</code>, we would use
+<code>$lexer.span_str(lexeme.span())</code>).  As this may suggest, actions may also
+reference the special lifetime <code>'input</code> (without any <code>$</code> prefix), which allows
+strings to be returned / stored by the grammar without copying memory.</p>
+<p>The third part is arbitrary Rust code which can be called by productions’
+actions. In our case we have a simple function which converts integers as
+strings into integers as <code>u64</code>s: if the user provides an invalid number (e.g.
+one that is too big) the system <code>panic</code>s.</p>
+<p>This example uses a common grmtools idiom: making use of <code>Result</code> types. This
+allows us to deal with two different issues that prevent evaluation.
+First is the “obvious” issue of integers which are too big to represent as
+<code>u64</code>s: these cause <code>Err</code> to be percolated upwards, preventing evaluation.
+Second is the issue of error recovery telling us that the user should have
+inserted an integer: since it would be confusing for us to insert a default
+value in such cases, we <code>map_err</code> such cases to <code>Err</code>, preventing evaluation.
+See the section below <a href="quickstart.html#error-recovery">on error recovery</a> for more details
+about error recovery.</p>
+<h2 id="putting-everything-together"><a class="header" href="#putting-everything-together">Putting everything together</a></h2>
+<p>The <code>build.rs</code> file will statically compile the lexer and grammar into Rust code
+that we can then call. The <code>src/main.rs</code> file below provides a simple
+Python-esque REPL to the user into which they can write calculator expressions:</p>
+<pre><pre class="playground"><code class="language-rust">use std::io::{self, BufRead, Write};
+
+use lrlex::lrlex_mod;
+use lrpar::lrpar_mod;
+
+// Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the
+// module name will be `calc_l` (i.e. the file name, minus any extensions,
+// with a suffix of `_l`).
+lrlex_mod!("calc.l");
+// Using `lrpar_mod!` brings the parser for `calc.y` into scope. By default the
+// module name will be `calc_y` (i.e. the file name, minus any extensions,
+// with a suffix of `_y`).
+lrpar_mod!("calc.y");
+
+fn main() {
+    // Get the `LexerDef` for the `calc` language.
+    let lexerdef = calc_l::lexerdef();
+    let stdin = io::stdin();
+    loop {
+        print!("&gt;&gt;&gt; ");
+        io::stdout().flush().ok();
+        match stdin.lock().lines().next() {
+            Some(Ok(ref l)) =&gt; {
+                if l.trim().is_empty() {
+                    continue;
+                }
+                // Now we create a lexer with the `lexer` method with which
+                // we can lex an input.
+                let lexer = lexerdef.lexer(l);
+                // Pass the lexer to the parser and lex and parse the input.
+                let (res, errs) = calc_y::parse(&amp;lexer);
+                for e in errs {
+                    println!("{}", e.pp(&amp;lexer, &amp;calc_y::token_epp));
+                }
+                match res {
+                    Some(r) =&gt; println!("Result: {}", r),
+                    _ =&gt; eprintln!("Unable to evaluate expression.")
+                }
+            }
+            _ =&gt; break
+        }
+    }
+}</code></pre></pre>
+<p>We can now <code>cargo run</code> our project and evaluate simple expressions:</p>
+<pre><code>&gt;&gt;&gt; 2 + 3
+Result: 5
+&gt;&gt;&gt; 2 + 3 * 4
+Result: 14
+&gt;&gt;&gt; (2 + 3) * 4
+Result: 20
+</code></pre>
+<h1 id="error-recovery"><a class="header" href="#error-recovery">Error recovery</a></h1>
+<p>Because powerful error recovery is built into <code>lrpar</code>, we can even make minor
+errors and have the system recover automatically:</p>
+<pre><code>&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 5
+&gt;&gt;&gt; 2 + 3 3
+Parsing error at line 1 column 7. Repair sequences found:
+   1: Delete 3
+   2: Insert PLUS
+   3: Insert MUL
+Result: 5
+&gt;&gt;&gt; 2 + 3 4 5
+Parsing error at line 1 column 7. Repair sequences found:
+   1: Insert MUL, Delete 4
+   2: Insert PLUS, Delete 4
+   3: Delete 4, Delete 5
+   4: Insert MUL, Shift 4, Delete 5
+   5: Insert MUL, Shift 4, Insert PLUS
+   6: Insert MUL, Shift 4, Insert MUL
+   7: Insert PLUS, Shift 4, Delete 5
+   8: Insert PLUS, Shift 4, Insert PLUS
+   9: Insert PLUS, Shift 4, Insert MUL
+Result: 17
+</code></pre>
+<p>Note that we didn't have to do anything clever in order for error recovery to
+happen: it happens by default, and it works with whatever grammar we throw at
+it. The way to read the resulting error messages are that each numbered repair
+sequence is a way that the error recovery system found to make sense of the
+input. For example, for the input <code>2 + + 3</code>, an error is detected at the second
+<code>+</code>: we could either delete the second <code>+</code> (option 1 above) or insert an
+integer. In all cases, error recovery applies repair sequence 1, and continues
+parsing. <code>2 + + 3</code> was thus parsed as if the user had written <code>2 + 3</code>,
+hence why it evaluated to 5. Similarly, <code>2 + 3 4 5</code> was parsed as if the user
+had written <code>2 + 3 * 5</code>.</p>
+<p>Error recovery opens up a number of possibilities to customise and streamline
+the user experience. For example, the simple approach above causes a <code>panic</code> if
+the user provides a non-u64 number <em>or</em> if error recovery inserts an integer.
+For more details about the possibilities, <a href="errorrecovery.html">see the section on error
+recovery</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="lexing"><a class="header" href="#lexing">Lexing</a></h1>
+<p>Lexing is the act of taking in an input stream and splitting it into lexemes.
+Colloquially, lexing is often described as splitting input into words. In
+<code>grmtools</code>, a Lexeme has a type (e.g. "INT", "ID"), a value (e.g. "23",
+"xyz"), and knows which part of the user's input matched (e.g. "the input
+starting at index 7 to index 10"). There is also a simple mechanism to
+differentiate lexemes of zero length (e.g. <code>DEDENT</code> tokens in Python) from
+lexemes inserted by <a href="errorrecovery.html">error recovery</a>.</p>
+<p>Users can write custom lexers that conform to the <code>lrpar::lex::Lexer</code> trait.
+This API allows users to deal with streaming data since the parser asks the
+<code>Lexer</code> for one token at a time. However, note that users can later ask the
+<code>Lexer</code> to return the string from the input matching a lexeme: users need to
+buffer input to provide this information.</p>
+<p>Hand-written lexers are not particularly difficult to write and, for better or
+worse, are necessary for many real-world languages. However, a subset of
+languages can use a simpler <code>lex</code>/<code>flex</code> style approach to lexing, for which
+<a href="lrlex.html"><code>lrlex</code></a> can be used.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="lex-compatibility"><a class="header" href="#lex-compatibility">Lex compatibility</a></h1>
+<p>grmtools currently supports one common use of Lex, which is to produce a
+sequence of tokens. All Lex files require at least some porting to grmtools,
+though in many cases this is fairly trivial. Nevertheless, aspects such as
+the longest match rule are identical to Lex, and we assume familiarity with Lex
+syntax and its major features: the <a href="http://dinosaur.compilertools.net/lex/index.html">Lex
+manual</a> is recommended
+reading.</p>
+<h2 id="major-differences"><a class="header" href="#major-differences">Major differences</a></h2>
+<p>There are several major differences between Lex and grmtools:</p>
+<ul>
+<li>
+<p>Lex has its own regular expression language whereas grmtools uses the well
+known Rust <a href="https://crates.io/crates/regex">regex crate</a> for regular
+expressions. These two regular expression languages are very similar, but
+complex regular expressions might not be supported under one or the other.</p>
+</li>
+<li>
+<p>Lex files consist of a sequence of regular expressions and an action for each.
+grmtools lex files consists of a sequence of regular expressions and a token
+name. Actions are not currently supported (and, by extension, nor are
+special action expressions such as <code>ECHO</code> and <code>REJECT</code>).</p>
+</li>
+<li>
+<p>Start conditions, character sets, and changes to internal array sizes are
+not supported by grmtools.</p>
+</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="parsing"><a class="header" href="#parsing">Parsing</a></h1>
+<p>Parsing is the act of checking whether a stream of lexemes match a grammar.
+Since a simple "yes/no" answer is rarely useful, it is common to execute
+user-defined <em>actions</em> during parsing.</p>
+<p><code>grmtools</code> contains libraries (<a href="cfgrammar.html"><code>cfgrammar</code></a> and
+<a href="lrtable.html"><code>lrtable</code></a>) which allow users to build their own LR parsers in
+whatever fashion they want. However, for 99% of cases, the <a href="lrpar.html"><code>lrpar</code></a>
+library is what users want and need: a (largely) Yacc-compatible parser. Roughly
+speaking, the core parts of grammars work identically in Yacc and <code>lrpar</code>, but
+some other parts of the system have been modernised (e.g. to avoid the use of
+global variables) and given a more idiomatic Rust feel. Notably, <code>lrpar</code> is
+built from the ground-up to have a powerful, flexible approach to <a href="errorrecovery.html">error
+recovery</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="yacc-compatibility"><a class="header" href="#yacc-compatibility">Yacc compatibility</a></h1>
+<p>grmtools supports most major Yacc features, to the extent that many Yacc
+grammars can be used unchanged with grmtools. In this book we assume
+familiarity with Yacc syntax and its major features: the
+<a href="http://dinosaur.compilertools.net/yacc/index.html">Yacc manual</a> is recommended
+reading.</p>
+<h2 id="major-differences-1"><a class="header" href="#major-differences-1">Major differences</a></h2>
+<p>There are several differences between Yacc and grmtools including:</p>
+<ul>
+<li>
+<p>grmtools has no equivalent of any of the <code>yy*</code> functions (e.g. <code>yyerror</code>,
+<code>yylex</code>, <code>yylval</code>, <code>yyparse</code> and so on). This means, for example, that
+grammar actions cannot currently influence the lexer in any way.</p>
+</li>
+<li>
+<p>grmtools has an entirely different approach to <a href="errorrecovery.html">error
+recovery</a>. The token <code>error</code> and the special action
+expressions <code>yyerrok</code> and <code>yyclearin</code> are not supported. In general, users
+can simply remove alternatives that consist solely of <code>error</code>.</p>
+</li>
+<li>
+<p><code>%union</code> can be mapped to <code>%actiontype</code> in grmtools, though this is rarely
+the best way of using a Yacc grammar in Rust. See the <a href="yacccompatibility.html#grmtools">Grmtools Yacc
+variant</a> below for the most common way of making grammars do
+something useful; in a limited number of cases (e.g. if you just want to
+build a parse tree), you may find the <a href="yacccompatibility.html#original-yacc">"Original" Yacc
+variants</a> useful.</p>
+</li>
+</ul>
+<h2 id="grmtools-1"><a class="header" href="#grmtools-1">Grmtools</a></h2>
+<p><code>YaccKind::Grmtools</code> is grmtools' own variant of Yacc syntax, and the one that
+most users will want to use. The most significant difference to "normal" Yacc
+is that rules are annotated with a Rust type to which all their production's
+actions must adhere to. Note that whilst a rule's productions must all adhere
+to a single type, different rules can have different types.  Consider the
+following snippet:</p>
+<pre><code>R1 -&gt; Result&lt;i32, ()&gt;:
+     'a' { Ok(5) }
+   | 'b' { Err(()) }
+   ;
+
+R2 -&gt; u64:
+   | { 0 }
+   ;
+</code></pre>
+<p>Here the rule <code>R1</code> has a Rust return type of <code>Result&lt;X, ()&gt;</code> (between <code>-&gt;</code> and
+<code>:</code>). Both of its productions adhere to this type, the first by instantiating
+<code>Ok(5)</code> and the second <code>Err(())</code>. The rule <code>R2</code> has a return type of <code>u64</code>.</p>
+<h2 id="original-yacc"><a class="header" href="#original-yacc">“Original” Yacc</a></h2>
+<p>Although the name is not fully accurate (grmtools supports a slightly disjoint
+subset of original Yacc's input), this mode allows users to most easily test
+externally created Yacc files. Several sub-variants are allowed:</p>
+<ul>
+<li>
+<p><code>YaccKind::Original(YaccOriginalActionKind::GenericParseTree)</code> does not
+execute user actions, but instead creates a generic parse tree, where elements
+are instances of the <code>lrpar::parser::Node</code> enum. This is useful for quickly
+testing whether a parser is accepting the intended language.</p>
+</li>
+<li>
+<p><code>YaccKind::Original(YaccOriginalActionKind::NoActions)</code> parses input and
+reports errors but does not execute any user actions. This is useful if you
+are trying to test a large corpus of input for correctness.</p>
+</li>
+<li>
+<p><code>YaccKind::Original(YaccOriginalActionKind::UserAction)</code> models original Yacc
+most closely but, in a Rust setting, is probably of little use beyond simple
+calculator like languages. Instead of Yacc's <code>%union</code> directive, users can
+specify <code>%actiontype</code> which is a Rust type to which every production's actions
+in the grammar must adhere to. Unless all actions happen to naturally return
+the same type, this quickly becomes cumbersome to use. For most use cases,
+<code>YaccKind::Grmtools</code> is a superior alternative.</p>
+</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="action-code-and-return-types"><a class="header" href="#action-code-and-return-types">Action code and return types</a></h1>
+<h2 id="action-code"><a class="header" href="#action-code">Action code</a></h2>
+<p>Action code is normal Rust code with the addition of the following special variables:</p>
+<ul>
+<li>
+<p><code>$1</code> ... <code>$n</code> refer to the respective symbol in the production, numbered
+from 1 (i.e. <code>$1</code> refers to the first symbol in the production). If the
+symbol references a rule <code>R</code> then an instance of <code>R</code>'s type will be stored
+in the <code>$i</code> variable; if the symbol references a lexeme then an
+<code>Option&lt;Lexeme&gt;</code> instance is returned.</p>
+</li>
+<li>
+<p><code>$lexer</code> allows access to the lexer and its <a href="https://softdevteam.github.io/grmtools/master/api/lrpar/trait.Lexer.html">various
+functions</a>.
+The most commonly used of these is the <code>span_str</code> function, which allows us
+to extract <code>&amp;'input str</code>s from a <code>Span</code> (e.g. to extract the string
+represented by a <code>Lexeme</code>, we would use <code>$lexer.span_str(lexeme.span())</code>).
+As this may suggest, actions may also reference the special lifetime
+<code>'input</code> (without any <code>$</code> prefix), which allows strings to be returned /
+stored by the grammar without copying memory.</p>
+</li>
+<li>
+<p><code>$span</code> is a
+<a href="https://softdevteam.github.io/grmtools/master/api/lrpar/struct.Span.html"><code>lrpar::Span</code></a>
+tuple (with both elements of type <code>usize</code>) which captures how much of the
+user's input the current production matched.</p>
+</li>
+<li>
+<p><code>$$</code> is equivalent to <code>$</code> in normal Rust code.</p>
+</li>
+</ul>
+<p>Any other variables beginning with <code>$</code> are treated as errors.</p>
+<h2 id="return-types"><a class="header" href="#return-types">Return types</a></h2>
+<p>Productions' return types can be any arbitrary Rust type. You may in addition
+make use of the following:</p>
+<ul>
+<li>
+<p>The generic parameter <code>StorageT</code> references the type of lexemes and is
+typically used with the
+<a href="https://softdevteam.github.io/grmtools/master/api/lrpar/struct.Lexeme.html"><code>Lexeme</code></a>
+type i.e. <code>Lexeme&lt;StorageT&gt;</code>. This allows you to return lexemes from rules.</p>
+</li>
+<li>
+<p>The lifetime <code>'input</code> allows you to extract strings whose lifetime is tied
+to the lexer and return them from rules / store them in structs without
+copying. <code>Lexer::span_str</code> returns such strings and the typical idiom of use
+is <code>&amp;'input str</code>.</p>
+</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="grmtools-parsing-idioms"><a class="header" href="#grmtools-parsing-idioms">grmtools parsing idioms</a></h1>
+<p>grmtools is a flexible tool and can be used in many ways. However, for those
+using the <code>Grmtools</code> format, the simple idioms below can often make life easier.</p>
+<h1 id="return-spans-when-possible"><a class="header" href="#return-spans-when-possible">Return <code>Span</code>s when possible</a></h1>
+<p>When executing grammar actions one is often building up an Abstract Syntax Tree
+(AST) or equivalent. For example consider a simple language with assignments:</p>
+<pre><code class="language-ignore">Assign: "ID" "=" Expr;
+</code></pre>
+<p>Perhaps the "obvious" way to build this into an AST is to extract the string
+representing the identifier as follows:</p>
+<pre><code>Assign -&gt; ASTAssign: "ID" "=" Expr
+    {
+        let id = $lexer.span_str($1.as_ref().unwrap().span()).to_string();
+        ASTAssign::new(id, $3)
+    }
+
+%%
+
+struct ASTAssign {
+    id: String
+}
+
+impl ASTAssign {
+    fn new(name: String) -&gt; Self {
+        ASTAssign { name }
+    }
+}
+</code></pre>
+<p>This approach is easy to work with, but isn't as performant as may be desired:
+the <code>to_string</code> call allocates memory and copies part of the user's input into
+that. It also loses information about the part of the user's input that the
+string relates to.</p>
+<p>An alternative approach is not to convert the lexeme into a <code>String</code> during
+parsing, but simply to return a
+<a href="https://docs.rs/lrpar/~0/lrpar/struct.Span.html"><code>Span</code></a>. An outline of this
+is as follows:</p>
+<pre><code>Assign -&gt; ASTAssign: "ID" "=" Expr
+    {
+        ASTAssign { id: $1, expr: Box::new($3.span()) }
+    }
+
+%%
+
+type StorageT = u32;
+
+struct ASTAssign {
+    id: Span
+    expr: Box&lt;Expr&gt;
+}
+
+enum Expr { ... }
+</code></pre>
+<p>If this is not quite what you want to do, you can use largely the same trick with
+the <a href="https://docs.rs/lrpar/~0/lrpar/lex/struct.Lexeme.html"><code>Lexeme</code></a> <code>struct</code>.
+Working with <code>Lexeme</code>s has the advantage that you can tell what the type of the
+lexeme in question is, though generally this is entirely clear from AST
+context, and <code>Lexeme</code>'s type parameter makes it marginally more fiddly to work
+with than <code>Span</code>.</p>
+<p>Alternatively, if you really want to extract strings during parsing, consider
+using the <code>'input</code> to extract <code>&amp;str</code>'s during parsing, since this does not
+cause any additional memory to be allocated.</p>
+<h1 id="have-rules-return-a-result-type-and-add-a-function-to-avoid-map_err-directly"><a class="header" href="#have-rules-return-a-result-type-and-add-a-function-to-avoid-map_err-directly">Have rules return a <code>Result</code> type and add a function to avoid <code>map_err</code> directly</a></h1>
+<p>As described in the <a href="errorrecovery.html#a-rule-of-thumb-have-rules-return-a-result-type">error recovery
+section</a>, it
+is generally a good idea to give rules a <code>Result</code> return type. This allows a
+simple interaction with error recovery. However, it can lead to endless
+instances of the following <code>map_err</code> idiom:</p>
+<pre><code class="language-ignore">R -&gt; Result&lt;..., ()&gt;:
+    "ID" { $1.map_err(|_| ())? }
+    ;
+</code></pre>
+<p>It can be helpful to define a custom <code>map_err</code> function which hides some of this
+mess for you:</p>
+<pre><code class="language-ignore">R -&gt; Result&lt;Lexeme&lt;StorageT&gt;, ()&gt;:
+    "ID" { map_err($1)? }
+    ;
+
+%%
+
+fn map_err(r: Result&lt;Lexeme&lt;StorageT&gt;, Lexeme&lt;StorageT&gt;&gt;)
+        -&gt; Result&lt;Lexeme&lt;StorageT&gt;, ()&gt;
+{
+    r.map_err(|_| ())
+}
+</code></pre>
+<h1 id="define-a-flatten-function"><a class="header" href="#define-a-flatten-function">Define a <code>flatten</code> function</a></h1>
+<p>Yacc grammars make specifying sequences of things something of a bore. A common
+idiom is thus:</p>
+<pre><code>ListOfAs -&gt; Result&lt;Vec&lt;A&gt;, ()&gt;:
+      A { Ok(vec![$1?]) }
+    | ListOfAs A
+      {
+          let mut $1 = $1?;
+          $1.push($1?);
+          Ok($1)
+      }
+    ;
+
+A -&gt; Result&lt;A, ()&gt;: ... ;
+</code></pre>
+<p>Since this idiom is often present multiple times in a grammar, it's generally
+worth adding a <code>flatten</code> function to hide some of this:</p>
+<pre><code>ListOfAs -&gt; Result&lt;Vec&lt;A&gt;, ()&gt;:
+      A { Ok(vec![$1?]) }
+    | ListOfAs A { flatten($1, $2) }
+    ;
+
+A -&gt; Result&lt;A, ()&gt;: ... ;
+%%
+
+fn flatten&lt;T&gt;(lhs: Result&lt;Vec&lt;T&gt;, ()&gt;, rhs: Result&lt;T, ()&gt;)
+           -&gt; Result&lt;Vec&lt;T&gt;, ()&gt;
+{
+    let mut flt = lhs?;
+    flt.push(rhs?);
+    Ok(flt)
+}
+</code></pre>
+<p>Note that <code>flatten</code> is generic with respect to <code>T</code> so that it can be used in
+multiple places in the grammar.</p>
+<h1 id="composing-the-idioms"><a class="header" href="#composing-the-idioms">Composing the idioms</a></h1>
+<p>Happily, <code>flatten</code>, <code>map_err</code>, and <code>Lexeme</code> combine well:</p>
+<pre><code>ListOfIds -&gt; Result&lt;Vec&lt;Lexeme&lt;StorageT&gt;&gt;, ()&gt;:
+      "ID" { Ok(vec![map_err($1)?]) }
+    | ListOfIds "Id" { flatten($1, map_err($2)?) }
+    ;
+
+%%
+
+type StorageT = u32;
+
+fn map_err(r: Result&lt;Lexeme&lt;StorageT&gt;, Lexeme&lt;StorageT&gt;&gt;)
+        -&gt; Result&lt;Lexeme&lt;StorageT&gt;, ()&gt;
+{
+    r.map_err(|_| ())
+}
+
+fn flatten&lt;T&gt;(lhs: Result&lt;Vec&lt;T&gt;, ()&gt;, rhs: Result&lt;T, ()&gt;)
+           -&gt; Result&lt;Vec&lt;T&gt;, ()&gt;
+{
+    let mut flt = lhs?;
+    flt.push(rhs?);
+    Ok(flt)
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="error-recovery-1"><a class="header" href="#error-recovery-1">Error recovery</a></h1>
+<p>One of <code>lrpar</code>'s most powerful features is its approach to error recovery, which
+can be used with any grammar. This section outlines the background to error
+recovery, the choices that users can make, and how to best make use of this
+feature.</p>
+<h2 id="error-recovery-background"><a class="header" href="#error-recovery-background">Error recovery background</a></h2>
+<p>Programmers frequently make mistakes when entering input, either because of
+simple typos, or an outright failure to use the correct syntax. Happily, LR
+parsing guarantees to report syntax errors at the first point that an error can
+be definitively proven to have occurred (though note that this might not be the
+same point that a user would consider the error to have been made). It has long
+been a goal of parsing technologies to <em>recover</em> from such errors, and allow
+parsing to continue. This allows users to fix all their syntax errors in one go
+and, optionally, post-parsing phases to operate as if no syntax errors had been
+made at all. For example, a compiler author might decide to run the compiler's
+static type checker even in the presence of syntax errors (since many static
+type errors are unaffected by syntax errors), but not generate code (which might
+incorrectly give users the illusion that their code is safe to run).</p>
+<p>However, most mainstream parsers do a bad job of error recovery. The most common
+generic error recovery algorithm is "panic mode" (in reality, a family of
+algorithms). Unfortunately such simple error recovery algorithms do a poor job
+of recovering from syntax errors, causing a cascade of spurious further syntax
+errors to be reported. Programmers quickly learn that only the first reported
+syntax error can be trusted on to be correct.</p>
+<p><code>lrpar</code> implements the <code>CPCT+</code> error recovery algorithm from <a href="https://arxiv.org/abs/1804.07133">Reducing
+Cascading Parsing Errors Through Fast Error
+Recovery</a>, which, in our biased opinion, does
+a better job than previous approaches. It is fast, grammar neutral, and reports
+multiple <em>repair sequences</em> to users, allowing them to consider which best
+matches their intentions.</p>
+<p>No matter how clever we think <code>CPCT+</code> is, it is important to understand that it has
+a fundamental limitation: it only knows about a language's syntax; it has no
+concept of the language's semantics beyond that implied by the structure of the
+grammar; and it cannot control what the user does with the result of error
+recovery. Thus, grammar writers can significantly influence how useful error
+recovery is for users. Most of the rest of this section explains how best to
+make use of error recovery.</p>
+<h2 id="error-recovery-basics"><a class="header" href="#error-recovery-basics">Error recovery basics</a></h2>
+<p>A simple calculator grammar looks as follows:</p>
+<pre><code class="language-yacc">%start Expr
+%%
+Expr -&gt; u64:
+      Term 'PLUS' Expr { $1 + $3 }
+    | Term { $1 }
+    ;
+
+Term -&gt; u64:
+      Factor 'MUL' Term { $1 * $3 }
+    | Factor { $1 }
+    ;
+
+Factor -&gt; u64:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT' { parse_int($lexer.span_str($1.unwrap().unwrap())) }
+    ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &amp;str) -&gt; u64 {
+    match s.parse::&lt;u64&gt;() {
+        Ok(val) =&gt; val,
+        Err(_) =&gt; panic!("{} cannot be represented as a u64", s)
+    }
+}
+</code></pre>
+<p>For many examples, this simple grammar and its actions work well leading
+to output such as the following:</p>
+<pre><code>&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 5
+</code></pre>
+<p><code>Insert x</code> means “error recovery inserted a lexeme of type <em>x</em>”; <code>Delete x</code>
+means “error recovery deleted the next lexeme in the stream”; and <code>Shift x</code>
+means “error recovery kept the user’s lexeme <em>x</em> as-is”.</p>
+<p>Repair sequences are minimal ways of adjusting the user’s input such that it
+becomes correct relative to the underlying grammar. Intuitively, in this
+example, the two repair sequences would adjust the input to be equivalent to
+<code>2 + 3</code> (repair sequence 1) or <code>2 + &lt;some int&gt; + 3</code> (repair sequence 2). When
+more than one repair sequence is presented to the user, the first is used by the
+algorithm to continue parsing: in this case, the input was parsed as if it was
+equivalent to <code>2 + 3</code>, hence the evaluation of the input to <code>5</code>.</p>
+<p>Repair sequences can, as their name suggests, be of arbitrary length:</p>
+<pre><code>&gt;&gt;&gt; 2 + 3 4 5
+Parsing error at line 1 column 7. Repair sequences found:
+   1: Insert MUL, Delete 4
+   2: Insert PLUS, Delete 4
+   3: Delete 4, Delete 5
+   4: Insert MUL, Shift 4, Delete 5
+   5: Insert MUL, Shift 4, Insert PLUS
+   6: Insert MUL, Shift 4, Insert MUL
+   7: Insert PLUS, Shift 4, Delete 5
+   8: Insert PLUS, Shift 4, Insert PLUS
+   9: Insert PLUS, Shift 4, Insert MUL
+Result: 17
+</code></pre>
+<p>In this case, the first repair sequence caused the input to be parsed as if it
+was equivalent to <code>2 + 3 * 5</code>, hence the evaluation of the input to <code>17</code>.</p>
+<h2 id="syntax-errors-and-language-semantics"><a class="header" href="#syntax-errors-and-language-semantics">Syntax errors and language semantics</a></h2>
+<p>Our example inputs so far have deliberately exploited cases where the first
+repair sequence at worst inserted “unimportant” lexemes such as <code>+</code> and <code>*</code>.
+Since the grammar’s actions never read the values of such lexemes, only their
+type is important. However, what should happen if error recovery inserts an
+integer, whose value is later read by one of the grammar’s actions? An example
+shows the unhappy result:</p>
+<pre><code>&gt;&gt;&gt; 2+
+thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: Lexeme { start: 2, len: 4294967295, tok_id: 4 }', libcore/result.rs:1009:5
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+&gt;&gt;&gt; 
+</code></pre>
+<p>In this case, the first repair sequence was <code>Insert INT</code>. The fundamental
+problem is that while error recovery can adjust the user’s input to insert a
+lexeme of type <code>INT</code>, neither it nor the parser have any idea what value might
+have made sense for that lexeme. Thus the expression above caused the expression
+<code>$lexer.span_str($1.unwrap().span())</code> to panic, since <code>$1</code> was <code>Err(&lt;lexeme&gt;)</code>.</p>
+<p>It is thus up to the user to decide what to do in the face of the inevitable
+semantic issues that error recovery highlights. Fortunately, this is generally
+simpler than it sounds with only a slight rethink in the way that we tend to
+write a grammar's actions.</p>
+<h2 id="a-rule-of-thumb-have-rules-return-a-result-type"><a class="header" href="#a-rule-of-thumb-have-rules-return-a-result-type">A rule of thumb: have rules return a <code>Result</code> type</a></h2>
+<p>Although rules can have any Rust type you can imagine, using a <code>Result</code> type
+allows a (deliberately) simple interaction with the effects of error recovery.
+The basic idea is simple: in actions, we ignore lexemes whose value we don't
+care about (e.g. brackets); for lexemes whose value we care about, we either
+introduce a default value, or percolate an <code>Err</code> upwards. Default values make
+sense in certain situations. For example, if you're writing a compiler, and want
+to run a static type checker even after syntax errors, it might make sense to
+assume that <code>Insert 0</code> is a good substitute for <code>Insert INT</code>. However, in the
+case of the calculator, default values are likely to lead to confusing results.
+We thus change the grammar so that inserted integers prevent evaluation from
+occurring:</p>
+<pre><code class="language-yacc">%start Expr
+%%
+Expr -&gt; Result&lt;u64, ()&gt;:
+      Term 'PLUS' Expr { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+
+Term -&gt; Result&lt;u64, ()&gt;:
+      Factor 'MUL' Term { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor -&gt; Result&lt;u64, ()&gt;:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT' { parse_int($lexer.span_str($1.map_err(|_| ())?.span())) }
+    ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &amp;str) -&gt; u64 {
+    match s.parse::&lt;u64&gt;() {
+        Ok(val) =&gt; val,
+        Err(_) =&gt; panic!("{} cannot be represented as a u64", s)
+    }
+}
+</code></pre>
+<p>The basic idea here is that every action returns an instance of <code>Result&lt;u64, ()&gt;</code>: if we receive <code>Ok(u64)</code> we successfully evaluated the expression, but if
+we received <code>Err(())</code> we were not able to evaluate the expression. If we
+encounter an integer lexeme which is the result of error recovery, then the
+<code>INT</code> lexeme in the second <code>Factor</code> action will be <code>Err(&lt;lexeme&gt;)</code>. By writing
+<code>$1.map_err(|_| ())?</code> we’re saying “if the integer lexeme was created by error
+recovery, percolate <code>Err(())</code> upwards”. We then have to tweak a couple of other
+actions to percolate errors upwards, but this is a trivial change.</p>
+<p>We then need to make a small tweak to our <code>main.rs</code> changing:</p>
+<pre><code class="language-rust ignore">match res {
+    Some(r) =&gt; println!("Result: {}", r),
+    _ =&gt; eprintln!("Unable to evaluate expression.")
+}</code></pre>
+<p>to:</p>
+<pre><code class="language-rust ignore">match res {
+    Some(Ok(r)) =&gt; println!("Result: {}", r),
+    _ =&gt; eprintln!("Unable to evaluate expression.")
+}</code></pre>
+<p>Now the input which previously caused a panic simply tells the user that it
+could not evaluate the expression:</p>
+<pre><code class="language-ignore">&gt;&gt;&gt; 2+
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Insert INT
+Unable to evaluate expression.
+</code></pre>
+<p>Usefully, our inability (or unwillingness) to evaluate the expression does not
+prevent further syntax errors from being discovered and repaired:</p>
+<pre><code class="language-ignore">&gt;&gt;&gt; (2+)+3+4+
+Parsing error at line 1 column 4. Repair sequences found:
+   1: Insert Int
+Parsing error at line 1 column 10. Repair sequences found:
+   1: Insert Int
+Unable to evaluate expression.
+</code></pre>
+<p>Using a <code>Result</code> type allows the user arbitrary control over the classes of
+syntax errors they are prepared to deal with or not. For example, we could
+remove the <code>panic</code> from <code>parse_int</code> by making the rules have a type <code>Result&lt;u64, String&gt;</code>
+where the <code>Err</code> case would report a string such as “18446744073709551616 cannot
+be represented as a u64” for the first unrepresentable <code>u64</code> in the user's
+input. If we wanted to report <em>all</em> unrepresentable <code>u64</code>s, we could have
+the rules have a type <code>Result&lt;u64, Vec&lt;String&gt;&gt;</code>, though merging together the errors found
+on the left and right hand sides of the <code>+</code> and <code>*</code> operators requires adding a
+few lines of code.</p>
+<h2 id="making-use-of-epp-for-easier-to-read-repair-sequences"><a class="header" href="#making-use-of-epp-for-easier-to-read-repair-sequences">Making use of <code>%epp</code> for easier to read repair sequences</a></h2>
+<p>By default, pretty-printing lexeme types prints out their identifier in the
+grammar. These rarely match what the user would expect:</p>
+<pre><code class="language-ignore">&gt;&gt;&gt; 2 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Delete 3
+   2: Insert PLUS
+   3: Insert MUL
+Result: 2
+</code></pre>
+<p>What are <code>PLUS</code> and <code>MUL</code>? These might be semi-obvious, but many lexeme types
+are far from obvious. <code>grmtools</code> allows users to provide human friendly versions
+of these for error recovery using the <code>%epp</code> declaration in grammars. For
+example, we can extend the <code>calc</code> grammar as follows:</p>
+<pre><code class="language-ignore">%epp PLUS "+"
+%epp MUL "*"
+%epp LBRACK "("
+%epp RBRACK ")"
+%epp INT "Int"
+</code></pre>
+<p>leading to the following output:</p>
+<pre><code class="language-ignore">&gt;&gt;&gt; 2 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Delete 3
+   2: Insert +
+   3: Insert *
+Result: 2
+</code></pre>
+<h2 id="biasing-repair-sequences"><a class="header" href="#biasing-repair-sequences">Biasing repair sequences</a></h2>
+<p>Depending on your language, some repair sequences are better than others. For
+example, sometimes <code>Insert</code> repairs are less welcome than <code>Delete</code> repairs:</p>
+<pre><code class="language-ignore">&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Insert INT
+   2: Delete +
+Unable to evaluate expression.
+&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 5
+</code></pre>
+<p>Why does the same input sometimes produce a result and sometimes fail to produce
+a result? The problem is that <code>2 + + 3</code> has two repair sequences <code>Delete +</code> and
+<code>Insert Int</code>. As things stand, both are equally good, and so one is chosen
+non-deterministically. If <code>Insert Int</code> is chosen, we hit the <code>Err</code> case from
+earlier, and fail to produce a result; if the <code>Delete</code> case is chosen, we can
+produce a result.</p>
+<p>To lessen this problem, the <code>%avoid_insert L</code> directive causes grmtools to
+prefer repair sequences that don't include <code>Insert L</code> over those that do.
+Intuitively, we want to annotate lexemes whose value we care about in this
+way (e.g. <code>INT</code>), but we don't need to worry about lexemes whose value we never
+expect (e.g. <code>(</code>, <code>+</code> etc.). In the case of the calculator grammar a good
+use of this directive is as follows:</p>
+<pre><code class="language-ignore">%avoid_insert "INT"
+</code></pre>
+<p>With this, the <code>Delete +</code> repair sequence is consistently favoured over <code>Insert INT</code>.</p>
+<h2 id="turning-lexing-errors-into-parsing-errors"><a class="header" href="#turning-lexing-errors-into-parsing-errors">Turning lexing errors into parsing errors</a></h2>
+<p>Most lexers do not have lexical rules for all possible inputs. For example, our
+running calculator example has no lexical rule for the character <code>@</code>. Typically
+this causes the lexer to generate an error and stop lexing further. For example
+with <code>lrlex</code> we would encounter the following:</p>
+<pre><code>&gt;&gt;&gt; 2@3
+Lexing error at line 1 column 2.
+</code></pre>
+<p>This error message is correct, but not as helpful as we might like (<em>what</em> is
+the error specifically?). Furthermore, any further errors in the input will not
+be found until the lexing error is fixed.</p>
+<p>Fortunately we can fix this easily for nearly all grammars by adding a line
+similar to this to the end of your <code>.l</code> file:</p>
+<pre><code>. "UNMATCHED"
+</code></pre>
+<p>Any single character which is not matched by any other lex rule will now lead
+to a token of type <code>UNMATCHED</code>. Note that it is vital that this is the last rule
+in your <code>.l</code> file, and that only a single character is matched, otherwise you
+will incorrectly lex correct input as <code>UNMATCHED</code>!</p>
+<p>We then need to add a dummy rule to your <code>.y</code> file, simply so that <code>lrpar</code>
+knows about <code>UNMATCHED</code> tokens. This dummy rule won't be referenced by other
+rules, so its return type and action are irrelevant. The simplest example is
+thus:</p>
+<pre><code>Unmatched -&gt; ():
+  "UNMATCHED" { } 
+  ;
+</code></pre>
+<p>With this done, all possible input will be lexed, and what were previously
+lexing errors are now parsing errors. This means that <a href="errorrecovery.html">error recovery
+section</a> kicks in, giving us more detailed and informative
+errors, and ensuring that multiple "lexing" errors are reported at once:</p>
+<pre><code>&gt;&gt;&gt; 2@3+4+5+6@7
+Parsing error at line 1 column 2. Repair sequences found:
+   1: Delete @, Delete 3
+   2: Insert +, Delete @
+   3: Insert *, Delete @
+Parsing error at line 1 column 10. Repair sequences found:
+   1: Insert +, Delete @
+   2: Delete @, Delete 7
+   3: Insert *, Delete @
+Result: 24
+</code></pre>
+<h2 id="under-the-bonnet"><a class="header" href="#under-the-bonnet">Under the bonnet</a></h2>
+<p>For any given syntax error there are, potentially, a finite but vast number of
+possible valid repair sequences: far too many to exhaustively search. Error
+recovery algorithms such as <code>CPCT+</code> use various heuristics to cut the search space
+down to something that is (generally) manageable. Although surprisingly few in
+practise, this inevitably leads to occasional situations where the repair
+sequences found (or, more accurately, those not found) surprise humans.</p>
+<h3 id="timeout"><a class="header" href="#timeout">Timeout</a></h3>
+<p>The first surprising condition is that even with the small <code>calc</code> grammar, some
+user inputs lead to such a massive search space that no repair sequences can be
+found. The easiest way to trigger this in most grammars is bracket expressions:</p>
+<pre><code class="language-ignore">&gt;&gt;&gt; 1+(
+Parsing error at line 1 column 4. Repair sequences found:
+   1: Insert Int, Insert )
+Unable to evaluate expression.
+&gt;&gt;&gt; 1+((
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Insert Int, Insert ), Insert )
+Unable to evaluate expression.
+&gt;&gt;&gt; 1+(((((((((((
+Parsing error at line 1 column 14. No repair sequences found.
+Unable to evaluate expression.
+</code></pre>
+<p>At a certain number of open brackets (which will partly depend on the speed of
+your machine), <code>CPCT+</code> simply cannot find suitable repair sequences within its
+internal timeout, hence the “No repair sequences found” message. In practise
+this happens in less than 2% of real-world inputs, so it is not a significant
+worry.</p>
+<h3 id="some-obvious-repair-sequences-arent-reported-at-the-end-of-a-file"><a class="header" href="#some-obvious-repair-sequences-arent-reported-at-the-end-of-a-file">Some “obvious” repair sequences aren't reported at the end of a file</a></h3>
+<p>The second surprising condition is more subtle. Before we can show the issue, we
+need to introduce the concept of repair sequence ranking: <code>CPCT+</code> only presents the
+lowest cost repair sequences to users (where <code>Insert</code>s and <code>Delete</code>s cost 1, and
+<code>Shift</code>s cost 0). Higher cost repair sequences are discarded.</p>
+<p>In an ideal world, <code>CPCT+</code> would find repair sequences that allow a file to parse
+completely successfully. In practice, this is only feasible if a syntax error
+occurs near the very end of the input. In most cases, <code>CPCT+</code> is happy with a
+weaker condition, which is that a repair sequence ends with 3 <code>Shift</code> repairs,
+showing that parsing has got back on track, at least for a little bit. This
+condition explains the following:</p>
+<pre><code class="language-ignore">&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Delete +
+   2: Insert Int
+Result: 5
+&gt;&gt;&gt; 2 + + 3 +
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Insert Int
+Parsing error at line 1 column 10. Repair sequences found:
+   1: Insert Int
+Unable to evaluate expression.
+</code></pre>
+<p>For <code>2 + + 3</code> we match the human intuition that the input could have been <code>2 + 3</code> or <code>2 + &lt;some int&gt; + 3</code>. However, for the input <code>2 + + 3 +</code> we do not report
+a <code>Delete +</code> repair sequence for the first error in the input. Why?</p>
+<p>The first thing we need to know is that repair sequences are always reported
+with trailing <code>Shift</code> repairs pruned: for the rest of this subsection it aids
+understanding to leave them unpruned. Thus, for <code>2 + + 3</code>, the two repair
+sequences found are <code>Delete +, Shift 3</code> and <code>Insert Int, Shift +, Shift 3</code>, both
+of which cause the entire input to parse successfully, and both of which have
+the same cost.</p>
+<p>For <code>2 + + 3 +</code>, however, the first error leads to 3 repair sequences, <code>Insert Int, Shift +, Shift 3, Shift +</code>, <code>Delete +, Shift 3, Delete</code> or <code>Delete +, Shift 3, Shift +, Insert Int</code>: the latter two are not even completed since they're
+provably higher than the <code>Insert Int</code> repair sequence and thus aren’t reported
+to the user.</p>
+<p>In practise, this situation is rarer than the timeout problem, to the point that
+it’s arguably not worth worrying about or explaining to end users. Even when it
+happens, the repair sequences that <code>CPCT+</code> reports are always correct and at least
+one repair sequence will be reported (assuming that error recovery doesn't time
+out!).</p>
+<h2 id="error-recovery-on-real-world-grammars"><a class="header" href="#error-recovery-on-real-world-grammars">Error recovery on real-world grammars</a></h2>
+<p>Continuing the example from the <a href="nimbleparse.html"><code>nimbleparse</code></a> section, we
+can see that error recovery works well on arbitrary grammars. Consider the
+following syntactically incorrect Lua 5.3 program:</p>
+<pre><code>$ cat test.lua
+x = 0
+if x &gt; 0
+   print("greater than")
+else
+   print("less than"}
+</code></pre>
+<p>When run through <a href="nimbleparse.html"><code>nimbleparse</code></a>, the following output is
+generated:</p>
+<pre><code>$ caro run --release --bin nimbleparse lua5_3.l lua5_3.y test.lua
+...
+Error at line 3 col 4. Repair sequences found:
+   1: Insert then
+Error at line 5 col 21. Repair sequences found:
+   1: Insert ), Insert end, Delete }
+   2: Insert ), Insert {, Shift }, Insert end
+</code></pre>
+<h2 id="turning-off-error-recovery"><a class="header" href="#turning-off-error-recovery">Turning off error recovery</a></h2>
+<p>By default, <code>lrpar</code> uses the <code>CPCT+</code> error recovery algorithm. You can use the
+<code>None</code> error recovery algorithm, which causes parsing to stop as soon as it hits
+the first parsing error, with the <code>recoverer</code> method in <code>CTParserBuilder</code> or
+<code>RTParserBuilder</code>. For example, we can change <code>calc</code>'s <code>build.rs</code> file to:</p>
+<pre><code class="language-rust ignore">    let lex_rule_ids_map = CTParserBuilder::new()
+        .yacckind(YaccKind::Grmtools)
+        .recoverer(lrpar::RecoveryKind::None)
+        .process_file_in_src("calc.y")?;</code></pre>
+<p>and then no matter how many syntax errors we make, only one is reported:</p>
+<pre><code>&gt;&gt;&gt; 2++3++
+Parsing error at line 1 column 3. No repair sequences found.
+Unable to evaluate expression.
+</code></pre>
+<p>Unless you have a good reason to do so (e.g. quickly hacking together a grammar
+where you would prefer not to think about error recovery at all), we do not
+recommend turning off error recovery.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="an-ast-evaluator"><a class="header" href="#an-ast-evaluator">An AST evaluator</a></h1>
+<p>We now know enough to put together a more sophisticated version of our simple
+calculator example that builds an Abstract Syntax Tree (AST) while parsing,
+which is then evaluated separately. This models a common way of building real
+compilers. The full example code can be found at
+<a href="https://github.com/softdevteam/grmtools/tree/master/lrpar/examples/calc_ast">https://github.com/softdevteam/grmtools/tree/master/lrpar/examples/calc_ast</a>.</p>
+<p>The <code>calc.l</code> file remains unchanged from that in the <a href="quickstart.html">Quickstart
+guide</a>. However the <code>calc.y</code> file is change as follows:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>%start Expr
+%avoid_insert "INT"
+%%
+Expr -&gt; Result&lt;Expr, ()&gt;:
+      Term '+' Expr { Ok(Expr::Add{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
+    | Term { $1 }
+    ;
+
+Term -&gt; Result&lt;Expr, ()&gt;:
+      Factor '*' Term { Ok(Expr::Mul{ span: $span, lhs: Box::new($1?), rhs: Box::new($3?) }) }
+    | Factor { $1 }
+    ;
+
+Factor -&gt; Result&lt;Expr, ()&gt;:
+      '(' Expr ')' { $2 }
+    | 'INT' { Ok(Expr::Number{ span: $span }) }
+    ;
+%%
+
+use lrpar::Span;
+
+#[derive(Debug)]
+pub enum Expr {
+    Add {
+        span: Span,
+        lhs: Box&lt;Expr&gt;,
+        rhs: Box&lt;Expr&gt;,
+    },
+    Mul {
+        span: Span,
+        lhs: Box&lt;Expr&gt;,
+        rhs: Box&lt;Expr&gt;,
+    },
+    Number {
+        span: Span
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The most obvious difference here is that we have defined a simple <code>enum</code> <code>Expr</code>,
+with three variants, for our AST. Each AST variant also records a <code>Span</code> which
+records how much input the AST element covers. By using the
+<a href="actioncode.html"><code>$span</code></a> variable we can ensure that AST elements record their
+relationship to portions of the user's input that span multiple tokens (e.g.
+for the expressions <code>1 + 2</code> the resulting <code>Expr::Add</code> will have a <code>Span</code>
+starting at byte index 0 and ending at byte index 5 -- in other words covering
+the complete input string in this case).</p>
+<p>After parsing, we thus end up with a <code>Result&lt;Expr, ()&gt;</code>. In the case of a
+successful parse, this will give us an arbitrarily deeply nested <code>Expr</code>.</p>
+<p>Our <code>main.rs</code> file then looks as follows:</p>
+<pre><pre class="playground"><code class="language-rust">use std::io::{self, BufRead, Write};
+
+use lrlex::lrlex_mod;
+use lrpar::{lrpar_mod, NonStreamingLexer, Span};
+
+lrlex_mod!("calc.l");
+lrpar_mod!("calc.y");
+
+use calc_y::Expr;
+
+fn main() {
+    let lexerdef = calc_l::lexerdef();
+    let stdin = io::stdin();
+    loop {
+        print!("&gt;&gt;&gt; ");
+        io::stdout().flush().ok();
+        match stdin.lock().lines().next() {
+            Some(Ok(ref l)) =&gt; {
+                if l.trim().is_empty() {
+                    continue;
+                }
+                let lexer = lexerdef.lexer(l);
+                let (res, errs) = calc_y::parse(&amp;lexer);
+                for e in errs {
+                    println!("{}", e.pp(&amp;lexer, &amp;calc_y::token_epp));
+                }
+                if let Some(Ok(r)) = res {
+                    // We have a successful parse.
+                    match eval(&amp;lexer, r) {
+                        Ok(i) =&gt; println!("Result: {}", i),
+                        Err((span, msg)) =&gt; {
+                            let ((line, col), _) = lexer.line_col(span);
+                            eprintln!(
+                                "Evaluation error at line {} column {}, '{}' {}.",
+                                line,
+                                col,
+                                lexer.span_str(span),
+                                msg
+                            )
+                        }
+                    }
+                }
+            }
+            _ =&gt; break
+        }
+    }
+}
+
+fn eval(lexer: &amp;dyn NonStreamingLexer&lt;u32&gt;, e: Expr) -&gt; Result&lt;u64, (Span, &amp;'static str)&gt; {
+    match e {
+        Expr::Add { span, lhs, rhs } =&gt; eval(lexer, *lhs)?
+            .checked_add(eval(lexer, *rhs)?)
+            .ok_or((span, "overflowed")),
+        Expr::Mul { span, lhs, rhs } =&gt; eval(lexer, *lhs)?
+            .checked_mul(eval(lexer, *rhs)?)
+            .ok_or((span, "overflowed")),
+        Expr::Number { span } =&gt; lexer
+            .span_str(span)
+            .parse::&lt;u64&gt;()
+            .map_err(|_| (span, "cannot be represented as a u64"))
+    }
+}</code></pre></pre>
+<p>Let's start by running this and seeing what happens:</p>
+<pre><code>&gt;&gt;&gt; 2+3*4
+Result: 14
+&gt;&gt;&gt; 2++3*4
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 14
+&gt;&gt;&gt; 999999*888888 + 777777*666666
+Result: 1407404592594
+&gt;&gt;&gt; 9999999999*8888888888 + 7777777777*6666666666
+Evaluation error at line 1 column 6, '9999999999*8888888888' overflowed.
+</code></pre>
+<p>The first three expressions evaluate just as before. However, the fourth is
+interesting: we have explicitly captured the fact that the result of
+<code>9999999999*8888888888</code> is too big to fit into a <code>u64</code>; and not only have we
+told the user which character the input starts out, but we've printed out the
+precise sub-part of the input which caused that error. This works even when
+it's in the middle of the input:</p>
+<pre><code>&gt;&gt;&gt; 10 + 9999999999*8888888888 + 20
+Evaluation error at line 1 column 6, '9999999999*8888888888' overflowed.
+</code></pre>
+<p>The key to this is that each AST element knows the <code>$span</code> of the production it
+is related to; and the resulting <code>Span</code> can extract the user's input with
+<code>lexer.span_str(span)</code>.</p>
+<p>Happily, this facility composes nicely with error recovery:</p>
+<pre><code>&gt;&gt;&gt; 10 ++ 9999999999*8888888888 + 20
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Evaluation error at line 1 column 7, '9999999999*8888888888' overflowed.
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="the-individual-libraries-and-tools"><a class="header" href="#the-individual-libraries-and-tools">The individual libraries and tools</a></h1>
+<p><a href="https://github.com/softdevteam/grmtools/">grmtools</a> consists of several
+libraries and command-line tools. The following sections describe each.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="lrpar"><a class="header" href="#lrpar"><code>lrpar</code></a></h1>
+<p><code>lrpar</code> (<a href="https://crates.io/crates/lrpar">crate</a>;
+<a href="https://github.com/softdevteam/grmtools/tree/master/lrpar">source</a>) is the LR
+parser library aspect of grmtools. It takes in streams of lexemes and parses
+them, determining if they successfully match a grammar or not; if not, it can
+optionally recover from errors.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="lrlex"><a class="header" href="#lrlex"><code>lrlex</code></a></h1>
+<p><code>lrlex</code> (<a href="https://crates.io/crates/lrlex">crate</a>;
+<a href="https://github.com/softdevteam/grmtools/tree/master/lrlex">source</a>) is a
+partial replacement for <a href="http://dinosaur.compilertools.net/lex/index.html"><code>lex</code></a> /
+<a href="https://westes.github.io/flex/manual/"><code>flex</code></a>. It takes an input string and
+splits it into <em>lexemes</em> based on a <code>.l</code> file. Unfortunately, many real-world
+languages have corner cases which exceed the power that <code>lrlex</code> can provide.
+However, when it is suitable, it is a very convenient way of expressing lexing.</p>
+<p><code>lrlex</code> also has a simple command-line interface, allowing you to check whether
+your lexing rules are working as expected:</p>
+<pre><code class="language-ignore">$ cat C.java
+class C {
+    int x = 0;
+}
+$ cargo run --lrlex java.l /tmp/C.java
+    Finished dev [unoptimized + debuginfo] target(s) in 0.18s
+     Running `target/debug/lrlex ../grammars/java7/java.l /tmp/C.java`
+CLASS class
+IDENTIFIER C
+LBRACE {
+INT int
+IDENTIFIER x
+EQ =
+INTEGER_LITERAL 0
+SEMICOLON ;
+RBRACE }
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="nimbleparse"><a class="header" href="#nimbleparse">nimbleparse</a></h1>
+<p>If you have a <a href="lrlex.html"><code>lrlex</code></a> compatible <code>.l</code> file and an
+<a href="lrpar.html"><code>lrpar</code></a> compatible <code>.y</code> file, you can use <code>nimbleparse</code> as a quick
+way of testing inputs and exploring the resulting parse tree:</p>
+<pre><code>$ cargo build --release
+$ target/release/nimbleparse -h
+Usage: nimbleparse [-r &lt;cpctplus|mf|panic|none&gt;] [-y &lt;eco|original&gt;] &lt;lexer.l&gt; &lt;parser.y&gt; &lt;input file&gt;
+</code></pre>
+<p>For example, let's assume you are using the Lua 5.3 <code>.l</code> and <code>.y</code> files from the
+<a href="https://github.com/softdevteam/grammars/">grammars repository</a> you might run
+<code>nimbleparse</code> as follows:</p>
+<pre><code>$ cat test.lua
+print("Hello world")
+$ target/release/nimbleparse lua5_3.l lua5_3.y test.lua
+block
+ statlistopt
+  statlist
+   stat
+    functioncall
+     prefixexp
+      var
+       NAME print
+     args
+      LBRACKET (
+      explistopt
+       explist
+        exp
+         exp1
+          exp2
+           exp3
+            exp4
+             exp5
+              exp6
+               exp7
+                exp8
+                 exp9
+                  exp10
+                   exp11
+                    exp12
+                     literalstring
+                      SHORT_STR "Hello world"
+      RBRACKET )
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="cfgrammar"><a class="header" href="#cfgrammar"><code>cfgrammar</code></a></h1>
+<p><code>cfgrammar</code> (<a href="https://crates.io/crates/cfgrammar">crate</a>;
+<a href="https://github.com/softdevteam/grmtools/tree/master/cfgrammar">source</a>) reads
+in grammar files, processes them, and provides a convenient API for operating
+with them. Most users only need to think about <code>cfgrammar</code> to the
+extent that they are required to use it to specify what Yacc variant they wish
+to use.</p>
+<p><code>cfgrammar</code> may also be of interest to those manipulating grammars directly, or
+who wish to use custom types of parsers. Note that <code>cfgrammar</code>'s API should be
+considered semi-stable at best. As the needs of other parts of grmtools change,
+<code>cfgrammar</code> tends to have to change too. Since it is unlikely to have few direct
+users, the consequences of changing the API are relatively slight.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="lrtable"><a class="header" href="#lrtable"><code>lrtable</code></a></h1>
+<p><code>lrtable</code> (<a href="https://crates.io/crates/lrtable">crate</a>;
+<a href="https://github.com/softdevteam/grmtools/tree/master/lrtable">source</a>) takes in
+grammars from <a href="cfgrammar.html"><code>cfgrammar</code></a> and creates LR state tables from
+them. Few users will be interested in its functionality directly, except those
+doing advanced forms of grammar analysis.</p>
+<p>One, admittedly fairly advanced, aspect worth noting is that
+<code>lrtable</code> uses <a href="https://link.springer.com/article/10.1007/BF00290336">Pager's
+algorithm</a> to compress the
+resulting LR state tables. In rare cases this can provide surprising results:
+see <a href="https://www.sciencedirect.com/science/article/pii/S0167642309001191">Denny and Malloy's
+paper</a> for
+more.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="other-tools"><a class="header" href="#other-tools">Other tools</a></h1>
+<p>When parsing text in Rust, you should also evaluate the following tools to see
+if they are more suitable for your purposes:</p>
+<ul>
+<li><a href="http://lalrpop.github.io/lalrpop/">LALRPOP</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>

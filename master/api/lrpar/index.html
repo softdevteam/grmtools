@@ -1,0 +1,163 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`lrpar` provides a Yacc-compatible parser (where grammars can be generated at compile-time or run-time). It can take in traditional `.y` files and convert them into an idiomatic Rust parser."><title>lrpar - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="lrpar" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../static.files/storage-68b7e25d.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../lrpar/index.html">lrpar</a><span class="version">0.14.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>lrpar</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/lrpar/mod.rs.html#1-304">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>lrpar</code> provides a Yacc-compatible parser (where grammars can be generated at compile-time or
+run-time). It can take in traditional <code>.y</code> files and convert them into an idiomatic Rust
+parser.</p>
+<p>If you’re new to <code>lrpar</code>, please read the “quick start guide”. The “grmtools book” and API
+reference have more detailed information.  You can find the appropriate documentation for the
+version of lrpar you are using here:</p>
+<div><table><thead><tr><th>Latest release</th><th>master</th></tr></thead><tbody>
+<tr><td><a href="https://softdevteam.github.io/grmtools/latest_release/book/quickstart.html">Quickstart guide</a></td><td><a href="https://softdevteam.github.io/grmtools/master/book/quickstart.html">Quickstart guide</a></td></tr>
+<tr><td><a href="https://softdevteam.github.io/grmtools/latest_release/book/">grmtools book</a></td><td><a href="https://softdevteam.github.io/grmtools/master/book">grmtools book</a></td></tr>
+<tr><td><a href="https://docs.rs/lrpar/">lrpar API</a></td><td><a href="https://softdevteam.github.io/grmtools/master/api/lrpar/">lrpar API</a></td></tr>
+</tbody></table>
+</div>
+<p><a href="https://softdevteam.github.io/grmtools/">Documentation for all past and present releases</a></p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>Let’s assume we want to statically generate a parser for a simple calculator language (and
+let’s also assume we are able to use <a href="https://crates.io/crates/lrlex"><code>lrlex</code></a> for the lexer).
+We need to add a <code>build.rs</code> file to our project which statically compiles both the lexer and
+parser. While we can perform both steps individually, it’s easiest to use <code>lrlex</code> which does
+both jobs for us in one go. Our <code>build.rs</code> file thus looks as follows:</p>
+<div class="example-wrap"><pre class="language-text"><code>use cfgrammar::yacc::YaccKind;
+use lrlex::CTLexerBuilder;
+
+fn main() {
+    CTLexerBuilder::new()
+        .lrpar_config(|ctp| {
+            ctp.yacckind(YaccKind::Grmtools)
+                .grammar_in_src_dir(&quot;calc.y&quot;)
+                .unwrap()
+        })
+        .lexer_in_src_dir(&quot;calc.l&quot;)
+        .unwrap()
+        .build()
+        .unwrap();
+}</code></pre></div>
+<p>where <code>src/calc.l</code> is as follows:</p>
+<div class="example-wrap"><pre class="language-text"><code>%%
+[0-9]+ &quot;INT&quot;
+\+ &quot;+&quot;
+\* &quot;*&quot;
+\( &quot;(&quot;
+\) &quot;)&quot;
+[\t ]+ ;</code></pre></div>
+<p>and <code>src/calc.y</code> is as follows:</p>
+<div class="example-wrap"><pre class="language-text"><code>%start Expr
+%avoid_insert &quot;INT&quot;
+%%
+Expr -&gt; Result&lt;u64, ()&gt;:
+      Expr &#39;+&#39; Term { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+
+Term -&gt; Result&lt;u64, ()&gt;:
+      Term &#39;*&#39; Factor { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor -&gt; Result&lt;u64, ()&gt;:
+      &#39;(&#39; Expr &#39;)&#39; { $2 }
+    | &#39;INT&#39;
+      {
+          let v = $1.map_err(|_| ())?;
+          parse_int($lexer.span_str(v.span()))
+      }
+    ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &amp;str) -&gt; Result&lt;u64, ()&gt; {
+    match s.parse::&lt;u64&gt;() {
+        Ok(val) =&gt; Ok(val),
+        Err(_) =&gt; {
+            eprintln!(&quot;{} cannot be represented as a u64&quot;, s);
+            Err(())
+        }
+    }
+}</code></pre></div>
+<p>Because we specified that our Yacc file is in <code>Grmtools</code> format, each rule has a
+separate Rust type to which all its functions conform (in this case, all the
+rules have the same type, but that’s not a requirement).</p>
+<p>A simple <code>src/main.rs</code> is as follows:</p>
+<div class="example-wrap"><pre class="language-text"><code>use std::io::{self, BufRead, Write};
+
+use lrlex::lrlex_mod;
+use lrpar::lrpar_mod;
+
+// Using `lrlex_mod!` brings the lexer for `calc.l` into scope. By default the module name
+// will be `calc_l` (i.e. the file name, minus any extensions, with a suffix of `_l`).
+lrlex_mod!(&quot;calc.l&quot;);
+// Using `lrpar_mod!` brings the parser for `calc.y` into scope. By default the module name
+// will be `calc_y` (i.e. the file name, minus any extensions, with a suffix of `_y`).
+lrpar_mod!(&quot;calc.y&quot;);
+
+fn main() {
+    // Get the `LexerDef` for the `calc` language.
+    let lexerdef = calc_l::lexerdef();
+    let stdin = io::stdin();
+    loop {
+        print!(&quot;&gt;&gt;&gt; &quot;);
+        io::stdout().flush().ok();
+        match stdin.lock().lines().next() {
+            Some(Ok(ref l)) =&gt; {
+                if l.trim().is_empty() {
+                    continue;
+                }
+                // Now we create a lexer with the `lexer` method with which we can lex an input.
+                let lexer = lexerdef.lexer(l);
+                // Pass the lexer to the parser and lex and parse the input.
+                let (res, errs) = calc_y::parse(&amp;lexer);
+                for e in errs {
+                    println!(&quot;{}&quot;, e.pp(&amp;lexer, &amp;calc_y::token_epp));
+                }
+                match res {
+                    Some(Ok(r)) =&gt; println!(&quot;Result: {}&quot;, r),
+                    _ =&gt; eprintln!(&quot;Unable to evaluate expression.&quot;)
+                }
+            }
+            _ =&gt; break
+        }
+    }
+}</code></pre></div>
+<p>We can now <code>cargo run</code> our project and evaluate simple expressions:</p>
+<div class="example-wrap"><pre class="language-text"><code>&gt;&gt;&gt; 2 + 3
+Result: 5
+&gt;&gt;&gt; 2 + 3 * 4
+Result: 14
+&gt;&gt;&gt; (2 + 3) * 4
+Result: 20</code></pre></div>
+<p><code>lrpar</code> also comes with advanced <a href="https://softdevteam.github.io/grmtools/master/book/errorrecovery.html">error
+recovery</a> built-in:</p>
+<div class="example-wrap"><pre class="language-text"><code>&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 5
+&gt;&gt;&gt; 2 + 3 3
+Parsing error at line 1 column 7. Repair sequences found:
+   1: Insert *
+   2: Insert +
+   3: Delete 3
+Result: 11
+&gt;&gt;&gt; 2 + 3 4 5
+Parsing error at line 1 column 7. Repair sequences found:
+   1: Insert *, Delete 4
+   2: Insert +, Delete 4
+   3: Delete 4, Delete 5
+   4: Insert +, Shift 4, Delete 5
+   5: Insert +, Shift 4, Insert +
+   6: Insert *, Shift 4, Delete 5
+   7: Insert *, Shift 4, Insert *
+   8: Insert *, Shift 4, Insert +
+   9: Insert +, Shift 4, Insert *
+Result: 17</code></pre></div></div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="unstable_api/index.html" title="mod lrpar::unstable_api">unstable_<wbr>api</a></dt><dd>A module for lifting restrictions on visibility by enabling unstable features.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.lrpar_mod.html" title="macro lrpar::lrpar_mod">lrpar_<wbr>mod</a></dt><dd>A convenience macro for including statically compiled <code>.y</code> files. A file <code>src/a/b/c.y</code>
+processed by <a href="struct.CTParserBuilder.html#method.grammar_in_src_dir" title="method lrpar::CTParserBuilder::grammar_in_src_dir">CTParserBuilder::grammar_in_src_dir</a> can then be used in a crate with
+<code>lrpar_mod!("a/b/c.y")</code>.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.CTParser.html" title="struct lrpar::CTParser">CTParser</a></dt><dd>An interface to the result of <a href="struct.CTParserBuilder.html#method.build" title="method lrpar::CTParserBuilder::build">CTParserBuilder::build()</a>.</dd><dt><a class="struct" href="struct.CTParserBuilder.html" title="struct lrpar::CTParserBuilder">CTParser<wbr>Builder</a></dt><dd>A <code>CTParserBuilder</code> allows one to specify the criteria for building a statically generated
+parser.</dd><dt><a class="struct" href="struct.ParseError.html" title="struct lrpar::ParseError">Parse<wbr>Error</a></dt><dd>Records a single parse error.</dd><dt><a class="struct" href="struct.RTParserBuilder.html" title="struct lrpar::RTParserBuilder">RTParser<wbr>Builder</a></dt><dd>A run-time parser builder.</dd><dt><a class="struct" href="struct.Span.html" title="struct lrpar::Span">Span</a></dt><dd>A <code>Span</code> records what portion of the user’s input something (e.g. a lexeme or production)
+references (i.e. the <code>Span</code> doesn’t hold a reference / copy of the actual input).</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.LexParseError.html" title="enum lrpar::LexParseError">LexParse<wbr>Error</a></dt><dd>A lexing or parsing error. Although the two are quite distinct in terms of what can be reported
+to users, both can (at least conceptually) occur at any point of the intertwined lexing/parsing
+process.</dd><dt><a class="enum" href="enum.ParseRepair.html" title="enum lrpar::ParseRepair">Parse<wbr>Repair</a></dt><dd>After a parse error is encountered, the parser attempts to find a way of recovering. Each entry
+in the sequence of repairs is represented by a <code>ParseRepair</code>.</dd><dt><a class="enum" href="enum.RecoveryKind.html" title="enum lrpar::RecoveryKind">Recovery<wbr>Kind</a></dt><dd>What recovery algorithm should be used when a syntax error is encountered?</dd><dt><a class="enum" href="enum.RustEdition.html" title="enum lrpar::RustEdition">Rust<wbr>Edition</a></dt><dd>Specifies the <a href="https://doc.rust-lang.org/edition-guide/rust-2021/index.html">Rust Edition</a> that will be emitted during code generation.</dd><dt><a class="enum" href="enum.Visibility.html" title="enum lrpar::Visibility">Visibility</a></dt><dd>Specify the visibility of the module generated by <code>CTBuilder</code>.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.LexError.html" title="trait lrpar::LexError">LexError</a></dt><dd>A lexing error.</dd><dt><a class="trait" href="trait.Lexeme.html" title="trait lrpar::Lexeme">Lexeme</a></dt><dd>A lexeme represents a segment of the user’s input that conforms to a known type: this trait
+captures the common behaviour of all lexeme structs.</dd><dt><a class="trait" href="trait.Lexer.html" title="trait lrpar::Lexer">Lexer</a></dt><dd>The base trait which all lexers which want to interact with <code>lrpar</code> must implement.</dd><dt><a class="trait" href="trait.LexerTypes.html" title="trait lrpar::LexerTypes">Lexer<wbr>Types</a></dt><dt><a class="trait" href="trait.NonStreamingLexer.html" title="trait lrpar::NonStreamingLexer">NonStreaming<wbr>Lexer</a></dt><dd>A <code>NonStreamingLexer</code> is one that takes input in one go, and is then able to hand out
+substrings to that input and calculate line and column numbers from a <a href="struct.Span.html" title="struct lrpar::Span">Span</a>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.action_generictree.html" title="fn lrpar::action_generictree">action_<wbr>generictree</a><wbr><span class="stab deprecated" title="">Deprecated</span></dt><dd>The action which implements <a href="../cfgrammar/yacc/enum.YaccOriginalActionKind.html#variant.GenericParseTree" title="variant cfgrammar::yacc::YaccOriginalActionKind::GenericParseTree"><code>cfgrammar::yacc::YaccOriginalActionKind::GenericParseTree</code></a>.
+Usually you should just use the action kind directly. But you can also call this from
+within a custom action to return a generic parse tree with custom behavior.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Node.html" title="type lrpar::Node">Node</a><wbr><span class="stab deprecated" title="">Deprecated</span></dt></dl></section></div></main></body></html>

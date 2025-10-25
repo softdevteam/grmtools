@@ -1,0 +1,326 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Hand-written lexers - grmtools</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">grmtools</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="hand-written-lexers"><a class="header" href="#hand-written-lexers">Hand-written lexers</a></h1>
+<p><code>lrpar</code> provides a generic lexing interface to which any lexer can plug into.
+Users can provide
+one or both of a custom lexeme type -- conforming to
+<a href="https://softdevteam.github.io/grmtools/master/api/lrpar/trait.Lexeme.html"><code>lrpar::Lexeme</code></a>
+-- and a custom lexing type -- conforming to
+<a href="https://softdevteam.github.io/grmtools/master/api/lrpar/trait.NonStreamingLexer.html"><code>lrpar::NonStreamingLexer</code></a>.
+If you wish to use a custom lexer, you will need to instantiate <code>lrpar</code>
+appropriately (both
+<a href="https://softdevteam.github.io/grmtools/master/api/lrpar/struct.CTParserBuilder.html"><code>CTParserBuilder</code></a>
+and
+<a href="https://softdevteam.github.io/grmtools/master/api/lrpar/struct.RTParserBuilder.html"><code>RTParserBuilder</code></a>).</p>
+<p>For many purposes, the low-level control and performance that <code>lrpar</code> gives you is unneeded,
+and the boiler-plate that comes with it unwanted. Fortunately, <code>lrlex</code> provides the following convenience mechanisms to make it easier to use a hand-written lexer with <code>lrpar</code>:</p>
+<ol>
+<li>
+<p><code>lrlex</code>'s normal <code>LRNonStreamingLexer</code> struct can be instantiated by an
+end-user with an input stream, a list of lexemes created from that
+input stream, and the newlines encountered while lexing that input
+stream. This saves having to define a custom instance of the
+<a href="https://softdevteam.github.io/grmtools/master/api/lrpar/trait.NonStreamingLexer.html"><code>lrpar::NonStreamingLexer</code></a>
+trait.</p>
+</li>
+<li>
+<p><code>lrlex</code>'s <a href="https://softdevteam.github.io/grmtools/master/api/lrlex/struct.DefaultLexeme.html"><code>DefaultLexeme</code></a>
+struct can also be instantiated by end-users, saving having to define a
+custom instance of the
+<a href="https://softdevteam.github.io/grmtools/master/api/lrpar/trait.Lexeme.html"><code>lrpar::Lexeme</code></a>
+trait.</p>
+</li>
+<li>
+<p><code>lrlex</code> exposes a
+<a href="https://softdevteam.github.io/grmtools/master/api/lrlex/fn.ct_token_map.html"><code>ct_token_map</code></a>
+function to be used from <code>build.rs</code> scripts which automatically produces a
+Rust module with one constant per token ID. <code>ct_token_map</code> is explicitly
+designed to be easy to use with <code>lrpar</code>'s compile-time building.</p>
+</li>
+</ol>
+<p>Putting these together is then relatively easy. First a <code>build.rs</code> file for a
+hand-written lexer will look roughly as follows:</p>
+<pre><pre class="playground"><code class="language-rust">use cfgrammar::yacc::YaccKind;
+use lrlex::{ct_token_map, DefaultLexerTypes};
+use lrpar::CTParserBuilder;
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let ctp = CTParserBuilder::&lt;DefaultLexerTypes&lt;u8&gt;&gt;::new()
+        .yacckind(YaccKind::Grmtools)
+        .grammar_in_src_dir("grammar.y")?
+        .build()?;
+    ct_token_map::&lt;u8&gt;("token_map", ctp.token_map(), None)
+}</code></pre></pre>
+<p>This produces a module that can be imported with <code>lrlex_mod!("token_map")</code>. The
+module will contain one constant, prefixed with <code>T_</code> per token identifiers in the
+grammar. For example, for the following grammar excerpt:</p>
+<pre><code class="language-lex">Expr -&gt; Result&lt;u64, ()&gt;:
+      Expr 'PLUS' Term { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+</code></pre>
+<p>the module will contain <code>const T_PLUS: u8 = ...;</code>.</p>
+<p>Since Yacc grammars can contain token identifiers which are not valid Rust
+identifiers, <code>ct_token_map</code> allows you to provide a map from the token
+identifier to a "Rust friendly" variant. For example, for the following grammar
+excerpt:</p>
+<pre><code class="language-lex">Expr -&gt; Result&lt;u64, ()&gt;:
+      Expr '+' Term { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+</code></pre>
+<p>we would provide a map <code>'+' =&gt; 'PLUS'</code> leading, again, to a constant <code>T_PLUS</code>
+being defined.</p>
+<p>One can then write a simple custom lexer which lexes all the input in one go
+and returns an <code>LRNonStreamingLexer</code> as follows:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use cfgrammar::NewlineCache;
+use lrlex::{lrlex_mod, DefaultLexeme, DefaultLexerTypes, LRNonStreamingLexer};
+use lrpar::{lrpar_mod, Lexeme, NonStreamingLexer, Span};
+
+lrlex_mod!("token_map");
+use token_map::*;
+
+fn lex(s: &amp;str) -&gt; LRNonStreamingLexer&lt;DefaultLexerTypes&lt;u8&gt;&gt; {
+  let mut lexemes = Vec::new();
+  let mut newlines = NewlineCache::new();
+  let mut i = 0;
+  while i &lt; s.len() {
+    if i == ... {
+      lexemes.push(DefaultLexeme::new(T_PLUS, i, ...));
+    } else {
+      ...
+    }
+  }
+  LRNonStreamingLexer::new(s, lexemes, newlines)
+}
+<span class="boring">}</span></code></pre></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="lexcompatibility.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="parsing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="lexcompatibility.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="parsing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

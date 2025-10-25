@@ -1,0 +1,46 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A library for manipulating Context Free Grammars (CFG). It is impractical to fully homogenise all the types of grammars out there, so the aim is for different grammar types to have completely separate implementations. Code that wants to be generic over more than one grammar type can then use an “adapter” to homogenise the particular grammar types of interest. Currently this is a little academic, since only Yacc-style grammars are supported (albeit several variants of Yacc grammars)."><title>cfgrammar - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="cfgrammar" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../static.files/storage-68b7e25d.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../cfgrammar/index.html">cfgrammar</a><span class="version">0.14.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>cfgrammar</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/cfgrammar/mod.rs.html#1-80">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A library for manipulating Context Free Grammars (CFG). It is impractical to fully homogenise
+all the types of grammars out there, so the aim is for different grammar types
+to have completely separate implementations. Code that wants to be generic over more than one
+grammar type can then use an “adapter” to homogenise the particular grammar types of interest.
+Currently this is a little academic, since only Yacc-style grammars are supported (albeit
+several variants of Yacc grammars).</p>
+<p>Unfortunately, CFG terminology is something of a mess. Some people use different terms for the
+same concept interchangeably; some use different terms to convey subtle differences of meaning
+(but without complete uniformity). “Token”, “terminal”, and “lexeme” are examples of this: they
+are synonyms in some tools and papers, but not in others.</p>
+<p>In order to make this library somewhat coherent, we therefore use some basic terminology
+guidelines for major concepts (acknowledging that this will cause clashes with some grammar
+types).</p>
+<ul>
+<li>A <em>grammar</em> is an ordered sequence of <em>productions</em>.</li>
+<li>A <em>production</em> is an ordered sequence of <em>symbols</em>.</li>
+<li>A <em>rule</em> maps a name to one or more productions.</li>
+<li>A <em>token</em> is the name of a syntactic element.</li>
+</ul>
+<p>For example, in the following Yacc grammar:</p>
+<p>R1: “a” “b” | R2;
+R2: “c”;</p>
+<p>the following statements are true:</p>
+<ul>
+<li>There are 3 productions. 1: [“a”, “b”] 2: [“R2”] 3: [“c”]`</li>
+<li>There are two rules: R1 and R2. The mapping to productions is {R1: {1, 2}, R2: {3}}</li>
+<li>There are three tokens: a, b, and c.</li>
+</ul>
+<p>cfgrammar makes the following guarantees about grammars:</p>
+<ul>
+<li>Productions are numbered from <code>0</code> to <code>prods_len() - 1</code> (inclusive).</li>
+<li>Rules are numbered from <code>0</code> to <code>rules_len() - 1</code> (inclusive).</li>
+<li>Tokens are numbered from <code>0</code> to <code>toks_len() - 1</code> (inclusive).</li>
+<li>The StorageT type used to store productions, rules, and token indices can be infallibly
+converted into usize (see <a href="struct.TIdx.html"><code>TIdx</code></a> and friends for more details).</li>
+</ul>
+<p>For most current uses, the main function to investigate is
+<a href="yacc/grammar/struct.YaccGrammar.html#method.new"><code>YaccGrammar::new()</code></a> and/or
+<a href="yacc/grammar/struct.YaccGrammar.html#method.new_with_storaget"><code>YaccGrammar::new_with_storaget()</code></a>
+which take as input a Yacc grammar.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.NewlineCache"><code>pub use newlinecache::<a class="struct" href="newlinecache/struct.NewlineCache.html" title="struct cfgrammar::newlinecache::NewlineCache">NewlineCache</a>;</code></dt><dt id="reexport.Location"><code>pub use span::<a class="enum" href="span/enum.Location.html" title="enum cfgrammar::span::Location">Location</a>;</code></dt><dt id="reexport.Span"><code>pub use span::<a class="struct" href="span/struct.Span.html" title="struct cfgrammar::span::Span">Span</a>;</code></dt><dt id="reexport.Spanned"><code>pub use span::<a class="trait" href="span/trait.Spanned.html" title="trait cfgrammar::span::Spanned">Spanned</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="newlinecache/index.html" title="mod cfgrammar::newlinecache">newlinecache</a></dt><dt><a class="mod" href="span/index.html" title="mod cfgrammar::span">span</a></dt><dt><a class="mod" href="yacc/index.html" title="mod cfgrammar::yacc">yacc</a></dt></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.PIdx.html" title="struct cfgrammar::PIdx">PIdx</a></dt><dd>A type specifically for rule indices.
+A type specifically for production indices (e.g. a rule <code>E::=A|B</code> would
+have two productions for the single rule <code>E</code>).</dd><dt><a class="struct" href="struct.RIdx.html" title="struct cfgrammar::RIdx">RIdx</a></dt><dd>A type specifically for rule indices.
+A type specifically for rule indices.</dd><dt><a class="struct" href="struct.SIdx.html" title="struct cfgrammar::SIdx">SIdx</a></dt><dd>A type specifically for rule indices.
+A type specifically for symbol indices (within a production).</dd><dt><a class="struct" href="struct.TIdx.html" title="struct cfgrammar::TIdx">TIdx</a></dt><dd>A type specifically for rule indices.
+A type specifically for token indices.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Symbol.html" title="enum cfgrammar::Symbol">Symbol</a></dt></dl></section></div></main></body></html>

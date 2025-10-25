@@ -1,0 +1,471 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Quickstart Guide - grmtools</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">grmtools</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="quickstart-guide"><a class="header" href="#quickstart-guide">Quickstart Guide</a></h1>
+<p>Most users will probably be interested in the compile-time Yacc feature of
+grmtools, which allows traditional <code>.y</code> files to be used mostly unchanged in
+Rust. This page is a short guide to get you up and running with this feature as
+quickly as possible.</p>
+<p>grmtools includes both a Yacc-style LR parser (<a href="lrpar.html"><code>lrpar</code></a>) and a
+lex-style lexer (<a href="lrlex.html"><code>lrlex</code></a>). The lexer breaks input up into individual lexemes and
+the parser checks to see if the lexemes conform to a grammar. As the parser
+executes, it can either create a generic parse tree, or execute user-specified
+Rust code.</p>
+<h2 id="a-calculator-evaluator"><a class="header" href="#a-calculator-evaluator">A calculator evaluator</a></h2>
+<p>Let's assume we want to create a simple calculator which can evaluate
+expressions such as <code>2 + 3 * 4</code>. Assuming a fresh Rust project, we first create
+a <code>Cargo.toml</code> file with the following dependencies:</p>
+<pre><code class="language-toml">[package]
+name = "calc"
+version = "0.0.1"
+authors = ["&lt;authors&gt;"]
+
+[[bin]]
+doc = false
+name = "calc"
+
+[build-dependencies]
+cfgrammar = "0.5"
+lrlex = "0.5"
+lrpar = "0.5"
+
+[dependencies]
+cfgrammar = "0.5"
+lrlex = "0.5"
+lrpar = "0.5"
+</code></pre>
+<p>In this situation we want to statically compile the <code>.y</code> grammar and <code>.l</code> lexer
+into Rust code. We thus need to create a
+<a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html"><code>build.rs</code></a>
+file inside the root of our project which can process the lexer and grammar.
+Our <code>build.rs</code> file thus looks as follows:</p>
+<pre><pre class="playground"><code class="language-rust">use cfgrammar::yacc::YaccKind;
+use lrlex::LexerBuilder;
+use lrpar::{CTParserBuilder};
+
+fn main() -&gt; Result&lt;(), Box&lt;std::error::Error&gt;&gt; {
+    let lex_rule_ids_map = CTParserBuilder::new()
+        .yacckind(YaccKind::Grmtools)
+        .process_file_in_src("calc.y")?;
+    LexerBuilder::new()
+        .rule_ids_map(lex_rule_ids_map)
+        .process_file_in_src("calc.l")?;
+    Ok(())
+}</code></pre></pre>
+<p>grmtools accepts several different Yacc variants as input. In our case, we want
+to execute Rust code as the input is parsed (rather than creating a generic
+parse tree which we traverse later), so we specified that the <code>yacckind</code> (i.e.
+what variant of Yacc file we're using) is <code>YaccKind::Grmtools</code>. The grammar file
+is stored in <code>src/calc.y</code>, but we only specify <code>calc.y</code> as the filename to
+<code>lrpar</code>, since it searches relative to <code>src/</code> automatically.</p>
+<h2 id="the-lexer"><a class="header" href="#the-lexer">The lexer</a></h2>
+<p>While Yacc-style parsing is powerful, lex-style lexing is less powerful.
+grmtools allows you to use whatever lexer you want with <code>lrpar</code>. Fortunately, in
+this case, <code>lrlex</code> is powerful enough for us. Our lex file is stored in
+<code>src/calc.l</code>. The <code>rule_ids_map</code> dance synchronises the parser and lexer (the
+details of this are unimportant to us).</p>
+<p><code>calc.l</code> is as follows:</p>
+<pre><code class="language-lex">%%
+[0-9]+ "INT"
+\+ "PLUS"
+\* "MUL"
+\( "LBRACK"
+\) "RBRACK"
+[\t ]+ ;
+</code></pre>
+<p>Roughly speaking, each line after the <code>%%</code> line is a regular expression (we use
+the <a href="https://crates.io/crates/regex"><code>regex</code></a> crate), a space character, and a
+quoted lexeme type name. For example, if the user gives us input such as <code>234</code>
+we will create a single lexeme with a value (<code>234</code>) and a type (<code>INT</code>).</p>
+<p>The one exception is the final line: if a lexeme type name is replaced with ‘<code>;</code>’
+then any matching input is discarded. In this case, whitespace (tabs and spaces)
+is lexed, but no lexemes are created from it.</p>
+<h2 id="the-grammar"><a class="header" href="#the-grammar">The grammar</a></h2>
+<p>Our initial version of calc.y looks as follows:</p>
+<pre><code class="language-yacc">%start Expr
+%%
+Expr -&gt; Result&lt;u64, ()&gt;:
+      Term 'PLUS' Expr { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+
+Term -&gt; Result&lt;u64, ()&gt;:
+      Factor 'MUL' Term { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor -&gt; Result&lt;u64, ()&gt;:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT'
+      {
+          let v = $1.map_err(|_| ())?;
+          parse_int($lexer.lexeme_str(&amp;v))
+      }
+    ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &amp;str) -&gt; Result&lt;u64, ()&gt; {
+    match s.parse::&lt;u64&gt;() {
+        Ok(val) =&gt; Ok(val),
+        Err(_) =&gt; {
+            eprintln!("{} cannot be represented as a u64", s);
+            Err(())
+        }
+    }
+}
+</code></pre>
+<p>The grammar is in 3 parts, separated by the <code>%%</code> lines.</p>
+<p>The first part specifies general settings for the grammar, at a minimum the
+start rule (<code>%start Expr</code>).</p>
+<p>The second part is the <a href="http://dinosaur.compilertools.net/yacc/index.html">Yacc
+grammar</a>. It consists of 3
+rules (<code>Expr</code>, <code>Term</code>, and <code>Factor</code>) and 6 productions (2 for each rule,
+separated by <code>|</code> characters). Because we are using the <code>Grmtools</code> Yacc variant,
+each rule has a Rust type associated with it (after <code>-&gt;</code>) which specifies the
+type that each production’s action must return. A production (sometimes called an “alternative”)
+consists of zero or more symbols. Symbols either reference rules or lexemes. If a
+production matches text, its ”action” (the Rust code between curly brackets at
+the end of the production) is executed.</p>
+<p><code>lrpar</code>'s actions are subtly different to Yacc. The <code>$x</code> variables refer to
+the respective symbol in the production, numbered from 1 (i.e. <code>$1</code> refers to the first symbol in
+the production). If the symbol references a rule <code>R</code> then an instance of
+<code>R</code>'s type will be stored in the <code>$x</code> variable; if the symbol references a lexeme then an <code>Option&lt;Lexeme&gt;</code>
+instance is returned. A special <code>$lexer</code> variable allows access to the lexer.
+This allows us to turn <code>Lexeme</code>s into strings with the <code>lexeme_str</code> function,
+which given a <code>Lexeme</code> returns a <code>&amp;'input str</code> representing the corresponding portion of
+the user's input. As this may suggest, actions may also reference the
+special lifetime <code>'input</code> which allows strings to be returned / stored
+by the grammar without copying memory.</p>
+<p>The third part is arbitrary Rust code which can be called by productions’
+actions. In our case we have a simple function which converts integers as
+strings into integers as <code>u64</code>s: if the user provides an invalid number (e.g.
+one that is too big) the system <code>panic</code>s.</p>
+<p>This example uses a common grmtools idiom: making use of <code>Result</code> types. This
+allows us to deal with two different issues that prevent evaluation.
+First is the “obvious” issue of integers which are too big to represent as
+<code>u64</code>s: these cause <code>Err</code> to be percolated upwards, preventing evaluation.
+Second is the issue of error recovery telling us that the user should have
+inserted an integer: since it would be confusing for us to insert a default
+value in such cases, we <code>map_err</code> such cases to <code>Err</code>, preventing evaluation.
+See the section below <a href="#error-recovery">on error recovery</a> for more details
+about error recovery.</p>
+<h2 id="putting-everything-together"><a class="header" href="#putting-everything-together">Putting everything together</a></h2>
+<p>The <code>build.rs</code> file will statically compile the lexer and grammar into Rust code
+that we can then call. The <code>src/main.rs</code> file below provides a simple
+Python-esque REPL to the user into which they can write calculator expressions:</p>
+<pre><pre class="playground"><code class="language-rust">use std::io::{self, BufRead, Write};
+
+use lrlex::lrlex_mod;
+use lrpar::lrpar_mod;
+
+// Using `lrlex_mod!` brings the lexer for `calc.l` into scope.
+lrlex_mod!("calc.l");
+// Using `lrpar_mod!` brings the parser for `calc.y` into scope.
+lrpar_mod!("calc.y");
+
+fn main() {
+    // We need to get a `LexerDef` for the `calc` language in order that we can lex input.
+    let lexerdef = calc_l::lexerdef();
+    let stdin = io::stdin();
+    loop {
+        print!("&gt;&gt;&gt; ");
+        io::stdout().flush().ok();
+        match stdin.lock().lines().next() {
+            Some(Ok(ref l)) =&gt; {
+                if l.trim().is_empty() {
+                    continue;
+                }
+                // Now we create a lexer with the `lexer` method with which we can lex an input.
+                let mut lexer = lexerdef.lexer(l);
+                // Pass the lexer to the parser and lex and parse the input.
+                let (res, errs) = calc_y::parse(&amp;mut lexer);
+                for e in errs {
+                    println!("{}", e.pp(&amp;lexer, &amp;calc_y::token_epp));
+                }
+                match res {
+                    Some(r) =&gt; println!("Result: {}", r),
+                    _ =&gt; eprintln!("Unable to evaluate expression.")
+                }
+            }
+            _ =&gt; break
+        }
+    }
+}</code></pre></pre>
+<p>We can now <code>cargo run</code> our project and evaluate simple expressions:</p>
+<pre><code>&gt;&gt;&gt; 2 + 3
+Result: 5
+&gt;&gt;&gt; 2 + 3 * 4
+Result: 14
+&gt;&gt;&gt; (2 + 3) * 4
+Result: 20
+</code></pre>
+<h1 id="error-recovery"><a class="header" href="#error-recovery">Error recovery</a></h1>
+<p>Because powerful error recovery is built into <code>lrpar</code>, we can even make minor
+errors and have the system recover automatically:</p>
+<pre><code>&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 5
+&gt;&gt;&gt; 2 + 3 3
+Parsing error at line 1 column 7. Repair sequences found:
+   1: Delete 3
+   2: Insert PLUS
+   3: Insert MUL
+Result: 5
+&gt;&gt;&gt; 2 + 3 4 5
+Parsing error at line 1 column 7. Repair sequences found:
+   1: Insert MUL, Delete 4
+   2: Insert PLUS, Delete 4
+   3: Delete 4, Delete 5
+   4: Insert MUL, Shift 4, Delete 5
+   5: Insert MUL, Shift 4, Insert PLUS
+   6: Insert MUL, Shift 4, Insert MUL
+   7: Insert PLUS, Shift 4, Delete 5
+   8: Insert PLUS, Shift 4, Insert PLUS
+   9: Insert PLUS, Shift 4, Insert MUL
+Result: 17
+</code></pre>
+<p>Note that we didn't have to do anything clever in order for error recovery to
+happen: it happens by default, and it works with whatever grammar we throw at
+it. The way to read the resulting error messages are that each numbered repair
+sequence is a way that the error recovery system found to make sense of the
+input. For example, for the input <code>2 + + 3</code>, an error is detected at the second
+<code>+</code>: we could either delete the second <code>+</code> (option 1 above) or insert an
+integer. In all cases, error recovery applies repair sequence 1, and continues
+parsing. <code>2 + + 3</code> was thus parsed as if the user had written <code>2 + 3</code>,
+hence why it evaluated to 5. Similarly, <code>2 + 3 4 5</code> was parsed as if the user
+had written <code>2 + 3 * 5</code>.</p>
+<p>Error recovery opens up a number of possibilities to customise and streamline
+the user experience. For example, the simple approach above causes a <code>panic</code> if
+the user provides a non-u64 number <em>or</em> if error recovery inserts an integer.
+For more details about the possibilities, <a href="errorrecovery.html">see the section on error
+recovery</a>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="lexing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="lexing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

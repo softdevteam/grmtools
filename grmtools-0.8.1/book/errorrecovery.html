@@ -1,0 +1,632 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Error recovery - grmtools</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">grmtools</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="error-recovery"><a class="header" href="#error-recovery">Error recovery</a></h1>
+<p>One of <code>lrpar</code>'s most powerful features is its approach to error recovery, which
+can be used with any grammar. This section outlines the background to error
+recovery, the choices that users can make, and how to best make use of this
+feature.</p>
+<h2 id="error-recovery-background"><a class="header" href="#error-recovery-background">Error recovery background</a></h2>
+<p>Programmers frequently make mistakes when entering input, either because of
+simple typos, or an outright failure to use the correct syntax. Happily, LR
+parsing guarantees to report syntax errors at the first point that an error can
+be definitively proven to have occurred (though note that this might not be the
+same point that a user would consider the error to have been made). It has long
+been a goal of parsing technologies to <em>recover</em> from such errors, and allow
+parsing to continue. This allows users to fix all their syntax errors in one go
+and, optionally, post-parsing phases to operate as if no syntax errors had been
+made at all. For example, a compiler author might decide to run the compiler's
+static type checker even in the presence of syntax errors (since many static
+type errors are unaffected by syntax errors), but not generate code (which might
+incorrectly give users the illusion that their code is safe to run).</p>
+<p>However, most mainstream parsers do a bad job of error recovery. The most common
+generic error recovery algorithm is "panic mode" (in reality, a family of
+algorithms). Unfortunately such simple error recovery algorithms do a poor job
+of recovering from syntax errors, causing a cascade of spurious further syntax
+errors to be reported. Programmers quickly learn that only the first reported
+syntax error can be trusted on to be correct.</p>
+<p><code>lrpar</code> implements the <code>CPCT+</code> error recovery algorithm from <a href="https://arxiv.org/abs/1804.07133">Reducing
+Cascading Parsing Errors Through Fast Error
+Recovery</a>, which, in our biased opinion, does
+a better job than previous approaches. It is fast, grammar neutral, and reports
+multiple <em>repair sequences</em> to users, allowing them to consider which best
+matches their intentions.</p>
+<p>No matter how clever we think <code>CPCT+</code> is, it is important to understand that it has
+a fundamental limitation: it only knows about a language's syntax; it has no
+concept of the language's semantics beyond that implied by the structure of the
+grammar; and it cannot control what the user does with the result of error
+recovery. Thus, grammar writers can significantly influence how useful error
+recovery is for users. Most of the rest of this section explains how best to
+make use of error recovery.</p>
+<h2 id="error-recovery-basics"><a class="header" href="#error-recovery-basics">Error recovery basics</a></h2>
+<p>A simple calculator grammar looks as follows:</p>
+<pre><code class="language-rust noplaypen">%start Expr
+%%
+Expr -&gt; u64:
+      Term 'PLUS' Expr { $1 + $3 }
+    | Term { $1 }
+    ;
+
+Term -&gt; u64:
+      Factor 'MUL' Term { $1 * $3 }
+    | Factor { $1 }
+    ;
+
+Factor -&gt; u64:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT' { parse_int($lexer.span_str($1.unwrap().unwrap())) }
+    ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &amp;str) -&gt; u64 {
+    match s.parse::&lt;u64&gt;() {
+        Ok(val) =&gt; val,
+        Err(_) =&gt; panic!("{} cannot be represented as a u64", s)
+    }
+}</code></pre>
+<p>For many examples, this simple grammar and its actions work well leading
+to output such as the following:</p>
+<pre><code>&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 5
+</code></pre>
+<p><code>Insert x</code> means “error recovery inserted a lexeme of type <em>x</em>”; <code>Delete x</code>
+means “error recovery deleted the next lexeme in the stream”; and <code>Shift x</code>
+means “error recovery kept the user’s lexeme <em>x</em> as-is”.</p>
+<p>Repair sequences are minimal ways of adjusting the user’s input such that it
+becomes correct relative to the underlying grammar. Intuitively, in this
+example, the two repair sequences would adjust the input to be equivalent to
+<code>2 + 3</code> (repair sequence 1) or <code>2 + &lt;some int&gt; + 3</code> (repair sequence 2). When
+more than one repair sequence is presented to the user, the first is used by the
+algorithm to continue parsing: in this case, the input was parsed as if it was
+equivalent to <code>2 + 3</code>, hence the evaluation of the input to <code>5</code>.</p>
+<p>Repair sequences can, as their name suggests, be of arbitrary length:</p>
+<pre><code>&gt;&gt;&gt; 2 + 3 4 5
+Parsing error at line 1 column 7. Repair sequences found:
+   1: Insert MUL, Delete 4
+   2: Insert PLUS, Delete 4
+   3: Delete 4, Delete 5
+   4: Insert MUL, Shift 4, Delete 5
+   5: Insert MUL, Shift 4, Insert PLUS
+   6: Insert MUL, Shift 4, Insert MUL
+   7: Insert PLUS, Shift 4, Delete 5
+   8: Insert PLUS, Shift 4, Insert PLUS
+   9: Insert PLUS, Shift 4, Insert MUL
+Result: 17
+</code></pre>
+<p>In this case, the first repair sequence caused the input to be parsed as if it
+was equivalent to <code>2 + 3 * 5</code>, hence the evaluation of the input to <code>17</code>.</p>
+<h2 id="syntax-errors-and-language-semantics"><a class="header" href="#syntax-errors-and-language-semantics">Syntax errors and language semantics</a></h2>
+<p>Our example inputs so far have deliberately exploited cases where the first
+repair sequence at worst inserted “unimportant” lexemes such as <code>+</code> and <code>*</code>.
+Since the grammar’s actions never read the values of such lexemes, only their
+type is important. However, what should happen if error recovery inserts an
+integer, whose value is later read by one of the grammar’s actions? An example
+shows the unhappy result:</p>
+<pre><code>&gt;&gt;&gt; 2+
+thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: Lexeme { start: 2, len: 4294967295, tok_id: 4 }', libcore/result.rs:1009:5
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+&gt;&gt;&gt; 
+</code></pre>
+<p>In this case, the first repair sequence was <code>Insert INT</code>. The fundamental
+problem is that while error recovery can adjust the user’s input to insert a
+lexeme of type <code>INT</code>, neither it nor the parser have any idea what value might
+have made sense for that lexeme. Thus the expression above caused the expression
+<code>$lexer.span_str($1.unwrap().span())</code> to panic, since <code>$1</code> was <code>Err(&lt;lexeme&gt;)</code>.</p>
+<p>It is thus up to the user to decide what to do in the face of the inevitable
+semantic issues that error recovery highlights. Fortunately, this is generally
+simpler than it sounds with only a slight rethink in the way that we tend to
+write a grammar's actions.</p>
+<h2 id="a-rule-of-thumb-have-rules-return-a-result-type"><a class="header" href="#a-rule-of-thumb-have-rules-return-a-result-type">A rule of thumb: have rules return a <code>Result</code> type</a></h2>
+<p>Although rules can have any Rust type you can imagine, using a <code>Result</code> type
+allows a (deliberately) simple interaction with the effects of error recovery.
+The basic idea is simple: in actions, we ignore lexemes whose value we don't
+care about (e.g. brackets); for lexemes whose value we care about, we either
+introduce a default value, or percolate an <code>Err</code> upwards. Default values make
+sense in certain situations. For example, if you're writing a compiler, and want
+to run a static type checker even after syntax errors, it might make sense to
+assume that <code>Insert 0</code> is a good substitute for <code>Insert INT</code>. However, in the
+case of the calculator, default values are likely to lead to confusing results.
+We thus change the grammar so that inserted integers prevent evaluation from
+occurring:</p>
+<pre><code class="language-rust noplaypen">%start Expr
+%%
+Expr -&gt; Result&lt;u64, ()&gt;:
+      Term 'PLUS' Expr { Ok($1? + $3?) }
+    | Term { $1 }
+    ;
+
+Term -&gt; Result&lt;u64, ()&gt;:
+      Factor 'MUL' Term { Ok($1? * $3?) }
+    | Factor { $1 }
+    ;
+
+Factor -&gt; Result&lt;u64, ()&gt;:
+      'LBRACK' Expr 'RBRACK' { $2 }
+    | 'INT' { parse_int($lexer.span_str($1.map_err(|_| ())?.span())) }
+    ;
+%%
+// Any functions here are in scope for all the grammar actions above.
+
+fn parse_int(s: &amp;str) -&gt; u64 {
+    match s.parse::&lt;u64&gt;() {
+        Ok(val) =&gt; val,
+        Err(_) =&gt; panic!("{} cannot be represented as a u64", s)
+    }
+}</code></pre>
+<p>The basic idea here is that every action returns an instance of <code>Result&lt;u64, ()&gt;</code>: if we receive <code>Ok(u64)</code> we successfully evaluated the expression, but if
+we received <code>Err(())</code> we were not able to evaluate the expression. If we
+encounter an integer lexeme which is the result of error recovery, then the
+<code>INT</code> lexeme in the second <code>Factor</code> action will be <code>Err(&lt;lexeme&gt;)</code>. By writing
+<code>$1.map_err(|_| ())?</code> we’re saying “if the integer lexeme was created by error
+recovery, percolate <code>Err(())</code> upwards”. We then have to tweak a couple of other
+actions to percolate errors upwards, but this is a trivial change.</p>
+<p>We then need to make a small tweak to our <code>main.rs</code> changing:</p>
+<pre><code class="language-rust noplaypen">match res {
+    Some(r) =&gt; println!("Result: {}", r),
+    _ =&gt; eprintln!("Unable to evaluate expression.")
+}</code></pre>
+<p>to:</p>
+<pre><code class="language-rust noplaypen">match res {
+    Some(Ok(r)) =&gt; println!("Result: {}", r),
+    _ =&gt; eprintln!("Unable to evaluate expression.")
+}</code></pre>
+<p>Now the input which previously caused a panic simply tells the user that it
+could not evaluate the expression:</p>
+<pre><code>&gt;&gt;&gt; 2+
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Insert INT
+Unable to evaluate expression.
+</code></pre>
+<p>Usefully, our inability (or unwillingness) to evaluate the expression does not
+prevent further syntax errors from being discovered and repaired:</p>
+<pre><code>&gt;&gt;&gt; (2+)+3+4+
+Parsing error at line 1 column 4. Repair sequences found:
+   1: Insert Int
+Parsing error at line 1 column 10. Repair sequences found:
+   1: Insert Int
+Unable to evaluate expression.
+</code></pre>
+<p>Using a <code>Result</code> type allows the user arbitrary control over the classes of
+syntax errors they are prepared to deal with or not. For example, we could
+remove the <code>panic</code> from <code>parse_int</code> by making the rules have a type <code>Result&lt;u64, String&gt;</code>
+where the <code>Err</code> case would report a string such as “18446744073709551616 cannot
+be represented as a u64” for the first unrepresentable <code>u64</code> in the user's
+input. If we wanted to report <em>all</em> unrepresentable <code>u64</code>s, we could have
+the rules have a type <code>Result&lt;u64, Vec&lt;String&gt;&gt;</code>, though merging together the errors found
+on the left and right hand sides of the <code>+</code> and <code>*</code> operators requires adding a
+few lines of code.</p>
+<h2 id="making-use-of-epp-for-easier-to-read-repair-sequences"><a class="header" href="#making-use-of-epp-for-easier-to-read-repair-sequences">Making use of <code>%epp</code> for easier to read repair sequences</a></h2>
+<p>By default, pretty-printing lexeme types prints out their identifier in the
+grammar. These rarely match what the user would expect:</p>
+<pre><code>&gt;&gt;&gt; 2 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Delete 3
+   2: Insert PLUS
+   3: Insert MUL
+Result: 2
+</code></pre>
+<p>What are <code>PLUS</code> and <code>MUL</code>? These might be semi-obvious, but many lexeme types
+are far from obvious. <code>grmtools</code> allows users to provide human friendly versions
+of these for error recovery using the <code>%epp</code> declaration in grammars. For
+example, we can extend the <code>calc</code> grammar as follows:</p>
+<pre><code>%epp PLUS "+"
+%epp MUL "*"
+%epp LBRACK "("
+%epp RBRACK ")"
+%epp INT "Int"
+</code></pre>
+<p>leading to the following output:</p>
+<pre><code>&gt;&gt;&gt; 2 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Delete 3
+   2: Insert +
+   3: Insert *
+Result: 2
+</code></pre>
+<h2 id="biasing-repair-sequences"><a class="header" href="#biasing-repair-sequences">Biasing repair sequences</a></h2>
+<p>Depending on your language, some repair sequences are better than others. For
+example, sometimes <code>Insert</code> repairs are less welcome than <code>Delete</code> repairs:</p>
+<pre><code>&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Insert INT
+   2: Delete +
+Unable to evaluate expression.
+&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 3. Repair sequences found:
+   1: Delete +
+   2: Insert INT
+Result: 5
+</code></pre>
+<p>Why does the same input sometimes produce a result and sometimes fail to produce
+a result? The problem is that <code>2 + + 3</code> has two repair sequences <code>Delete +</code> and
+<code>Insert Int</code>. As things stand, both are equally good, and so one is chosen
+non-deterministically. If <code>Insert Int</code> is chosen, we hit the <code>Err</code> case from
+earlier, and fail to produce a result; if the <code>Delete</code> case is chosen, we can
+produce a result.</p>
+<p>To lessen this problem, the <code>%avoid_insert L</code> directive causes grmtools to
+prefer repair sequences that don't include <code>Insert L</code> over those that do.
+Intuitively, we want to annotate lexemes whose value we care about in this
+way (e.g. <code>INT</code>), but we don't need to worry about lexemes whose value we never
+expect (e.g. <code>(</code>, <code>+</code> etc.). In the case of the calculator grammar a good
+use of this directive is as follows:</p>
+<pre><code>%avoid_insert "INT"
+</code></pre>
+<p>With this, the <code>Delete +</code> repair sequence is consistently favoured over <code>Insert INT</code>.</p>
+<h2 id="turning-lexing-errors-into-parsing-errors"><a class="header" href="#turning-lexing-errors-into-parsing-errors">Turning lexing errors into parsing errors</a></h2>
+<p>Most lexers do not have lexical rules for all possible inputs. For example, our
+running calculator example has no lexical rule for the character <code>@</code>. Typically
+this causes the lexer to generate an error and stop lexing further. For example
+with <code>lrlex</code> we would encounter the following:</p>
+<pre><code>&gt;&gt;&gt; 2@3
+Lexing error at line 1 column 2.
+</code></pre>
+<p>This error message is correct, but not as helpful as we might like (<em>what</em> is
+the error specifically?). Furthermore, any further errors in the input will not
+be found until the lexing error is fixed.</p>
+<p>Fortunately we can fix this easily for nearly all grammars by adding a line
+similar to this to the end of your <code>.l</code> file:</p>
+<pre><code>. "UNMATCHED"
+</code></pre>
+<p>Any single character which is not matched by any other lex rule will now lead
+to a token of type <code>UNMATCHED</code>. Note that it is vital that this is the last rule
+in your <code>.l</code> file, and that only a single character is matched, otherwise you
+will incorrectly lex correct input as <code>UNMATCHED</code>!</p>
+<p>We then need to add a dummy rule to your <code>.y</code> file, simply so that <code>lrpar</code>
+knows about <code>UNMATCHED</code> tokens. This dummy rule won't be referenced by other
+rules, so its return type and action are irrelevant. The simplest example is
+thus:</p>
+<pre><code>Unmatched -&gt; ():
+  "UNMATCHED" { } 
+  ;
+</code></pre>
+<p>With this done, all possible input will be lexed, and what were previously
+lexing errors are now parsing errors. This means that <a href="errorrecovery.html">error recovery
+section</a> kicks in, giving us more detailed and informative
+errors, and ensuring that multiple "lexing" errors are reported at once:</p>
+<pre><code>&gt;&gt;&gt; 2@3+4+5+6@7
+Parsing error at line 1 column 2. Repair sequences found:
+   1: Delete @, Delete 3
+   2: Insert +, Delete @
+   3: Insert *, Delete @
+Parsing error at line 1 column 10. Repair sequences found:
+   1: Insert +, Delete @
+   2: Delete @, Delete 7
+   3: Insert *, Delete @
+Result: 24
+</code></pre>
+<h2 id="under-the-bonnet"><a class="header" href="#under-the-bonnet">Under the bonnet</a></h2>
+<p>For any given syntax error there are, potentially, a finite but vast number of
+possible valid repair sequences: far too many to exhaustively search. Error
+recovery algorithms such as <code>CPCT+</code> use various heuristics to cut the search space
+down to something that is (generally) manageable. Although surprisingly few in
+practise, this inevitably leads to occasional situations where the repair
+sequences found (or, more accurately, those not found) surprise humans.</p>
+<h3 id="timeout"><a class="header" href="#timeout">Timeout</a></h3>
+<p>The first surprising condition is that even with the small <code>calc</code> grammar, some
+user inputs lead to such a massive search space that no repair sequences can be
+found. The easiest way to trigger this in most grammars is bracket expressions:</p>
+<pre><code>&gt;&gt;&gt; 1+(
+Parsing error at line 1 column 4. Repair sequences found:
+   1: Insert Int, Insert )
+Unable to evaluate expression.
+&gt;&gt;&gt; 1+((
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Insert Int, Insert ), Insert )
+Unable to evaluate expression.
+&gt;&gt;&gt; 1+(((((((((((
+Parsing error at line 1 column 14. No repair sequences found.
+Unable to evaluate expression.
+</code></pre>
+<p>At a certain number of open brackets (which will partly depend on the speed of
+your machine), <code>CPCT+</code> simply cannot find suitable repair sequences within its
+internal timeout, hence the “No repair sequences found” message. In practise
+this happens in less than 2% of real-world inputs, so it is not a significant
+worry.</p>
+<h3 id="some-obvious-repair-sequences-arent-reported-at-the-end-of-a-file"><a class="header" href="#some-obvious-repair-sequences-arent-reported-at-the-end-of-a-file">Some “obvious” repair sequences aren't reported at the end of a file</a></h3>
+<p>The second surprising condition is more subtle. Before we can show the issue, we
+need to introduce the concept of repair sequence ranking: <code>CPCT+</code> only presents the
+lowest cost repair sequences to users (where <code>Insert</code>s and <code>Delete</code>s cost 1, and
+<code>Shift</code>s cost 0). Higher cost repair sequences are discarded.</p>
+<p>In an ideal world, <code>CPCT+</code> would find repair sequences that allow a file to parse
+completely successfully. In practice, this is only feasible if a syntax error
+occurs near the very end of the input. In most cases, <code>CPCT+</code> is happy with a
+weaker condition, which is that a repair sequence ends with 3 <code>Shift</code> repairs,
+showing that parsing has got back on track, at least for a little bit. This
+condition explains the following:</p>
+<pre><code>&gt;&gt;&gt; 2 + + 3
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Delete +
+   2: Insert Int
+Result: 5
+&gt;&gt;&gt; 2 + + 3 +
+Parsing error at line 1 column 5. Repair sequences found:
+   1: Insert Int
+Parsing error at line 1 column 10. Repair sequences found:
+   1: Insert Int
+Unable to evaluate expression.
+</code></pre>
+<p>For <code>2 + + 3</code> we match the human intuition that the input could have been <code>2 + 3</code> or <code>2 + &lt;some int&gt; + 3</code>. However, for the input <code>2 + + 3 +</code> we do not report
+a <code>Delete +</code> repair sequence for the first error in the input. Why?</p>
+<p>The first thing we need to know is that repair sequences are always reported
+with trailing <code>Shift</code> repairs pruned: for the rest of this subsection it aids
+understanding to leave them unpruned. Thus, for <code>2 + + 3</code>, the two repair
+sequences found are <code>Delete +, Shift 3</code> and <code>Insert Int, Shift +, Shift 3</code>, both
+of which cause the entire input to parse successfully, and both of which have
+the same cost.</p>
+<p>For <code>2 + + 3 +</code>, however, the first error leads to 3 repair sequences, <code>Insert Int, Shift +, Shift 3, Shift +</code>, <code>Delete +, Shift 3, Delete</code> or <code>Delete +, Shift 3, Shift +, Insert Int</code>: the latter two are not even completed since they're
+provably higher than the <code>Insert Int</code> repair sequence and thus aren’t reported
+to the user.</p>
+<p>In practise, this situation is rarer than the timeout problem, to the point that
+it’s arguably not worth worrying about or explaining to end users. Even when it
+happens, the repair sequences that <code>CPCT+</code> reports are always correct and at least
+one repair sequence will be reported (assuming that error recovery doesn't time
+out!).</p>
+<h2 id="error-recovery-on-real-world-grammars"><a class="header" href="#error-recovery-on-real-world-grammars">Error recovery on real-world grammars</a></h2>
+<p>Continuing the example from the <a href="nimbleparse.html"><code>nimbleparse</code></a> section, we
+can see that error recovery works well on arbitrary grammars. Consider the
+following syntactically incorrect Lua 5.3 program:</p>
+<pre><code>$ cat test.lua
+x = 0
+if x &gt; 0
+   print("greater than")
+else
+   print("less than"}
+</code></pre>
+<p>When run through <a href="nimbleparse.html"><code>nimbleparse</code></a>, the following output is
+generated:</p>
+<pre><code>$ caro run --release --bin nimbleparse lua5_3.l lua5_3.y test.lua
+...
+Error at line 3 col 4. Repair sequences found:
+   1: Insert then
+Error at line 5 col 21. Repair sequences found:
+   1: Insert ), Insert end, Delete }
+   2: Insert ), Insert {, Shift }, Insert end
+</code></pre>
+<h2 id="turning-off-error-recovery"><a class="header" href="#turning-off-error-recovery">Turning off error recovery</a></h2>
+<p>By default, <code>lrpar</code> uses the <code>CPCT+</code> error recovery algorithm. You can use the
+<code>None</code> error recovery algorithm, which causes parsing to stop as soon as it hits
+the first parsing error, with the <code>recoverer</code> method in <code>CTParserBuilder</code> or
+<code>RTParserBuilder</code>. For example, we can change <code>calc</code>'s <code>build.rs</code> file to:</p>
+<pre><code class="language-rust noplaypen">    let lex_rule_ids_map = CTParserBuilder::new()
+        .yacckind(YaccKind::Grmtools)
+        .recoverer(lrpar::RecoveryKind::None)
+        .process_file_in_src("calc.y")?;</code></pre>
+<p>and then no matter how many syntax errors we make, only one is reported:</p>
+<pre><code>&gt;&gt;&gt; 2++3++
+Parsing error at line 1 column 3. No repair sequences found.
+Unable to evaluate expression.
+</code></pre>
+<p>Unless you have a good reason to do so (e.g. quickly hacking together a grammar
+where you would prefer not to think about error recovery at all), we do not
+recommend turning off error recovery.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="parsing_idioms.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="ast_example.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="parsing_idioms.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="ast_example.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
