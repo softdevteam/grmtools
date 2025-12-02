@@ -1,4 +1,3 @@
 [book]
-authors = ["Lukas Diekmann", "Laurence Tratt"]
 src = "src"
 title = "grmtools"
