@@ -35,6 +35,15 @@ cargo fmt --all -- --check
 rustup toolchain install stable
 rustup default stable
 
+# Later on we are going to need to install cargo-deny and mdbook. We kick the
+# install jobs off now so that at least some work (e.g. downloading crates) can
+# happen in parallel, speeding up the overall process.
+
+cargo_deny_mdbook_tmp=$(mktemp)
+( cargo install --locked cargo-deny ; cargo install --locked mdbook ) \
+  >"${cargo_deny_mdbook_tmp}" 2>&1 &
+cargo_deny_mdbook_pid=$!
+
 cargo test
 cargo test --release
 
@@ -89,7 +98,12 @@ cd $root
 
 RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps
 
-which cargo-deny | cargo install cargo-deny || true
-if [ "X`which cargo-deny`" != "X" ]; then
-    cargo-deny check license
-fi
+# Check licenses.
+wait "${cargo_deny_mdbook_pid}" || ( cat "${cargo_deny_mdbook_tmp}" && exit 1 )
+cargo-deny check license
+
+# Build the docs
+cd $root/doc
+mdbook build
+test -d book
+cd ..
