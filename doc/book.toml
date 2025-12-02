@@ -1,5 +1,4 @@
 [book]
 authors = ["Lukas Diekmann", "Laurence Tratt"]
-multilingual = false
 src = "src"
 title = "grmtools"
