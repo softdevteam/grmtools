@@ -26,7 +26,6 @@ fn main() {
         .unwrap()
         .build()
         .unwrap();
-    Ok(())
 }
 ```
 
