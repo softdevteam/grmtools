@@ -47,6 +47,7 @@ static GENERATED_PATHS: LazyLock<Mutex<HashSet<PathBuf>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
 #[non_exhaustive]
+#[derive(Clone, Copy)]
 pub enum LexerKind {
     LRNonStreamingLexer,
 }
