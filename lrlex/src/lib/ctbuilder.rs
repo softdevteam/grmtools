@@ -248,7 +248,7 @@ where
     show_warnings: bool,
     header: Header<Location>,
     #[cfg(test)]
-    inspect_lexerkind_cb: Option<Box<dyn Fn(LexerKind) -> Result<(), Box<dyn Error>>>>,
+    inspect_lexerkind_cb: Option<Box<dyn Fn(&LexerKind) -> Result<(), Box<dyn Error>>>>,
 }
 
 impl CTLexerBuilder<'_, DefaultLexerTypes<u32>> {
@@ -509,7 +509,7 @@ where
         };
         #[cfg(test)]
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
-            inspect_lexerkind_cb(lexerkind)?
+            inspect_lexerkind_cb(&lexerkind)?
         }
         let (lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) =
             match lexerkind {
@@ -1211,7 +1211,7 @@ where
     #[cfg(test)]
     pub fn inspect_lexerkind(
         mut self,
-        cb: Box<dyn Fn(LexerKind) -> Result<(), Box<dyn Error>>>,
+        cb: Box<dyn Fn(&LexerKind) -> Result<(), Box<dyn Error>>>,
     ) -> Self {
         self.inspect_lexerkind_cb = Some(cb);
         self
@@ -1481,7 +1481,7 @@ mod test {
                 .output_path(format!("{}.rs", lex_path.clone()))
                 .lexer_path(lex_path.clone())
                 .inspect_lexerkind(Box::new(move |lexerkind| {
-                    assert!(matches!(lexerkind, LexerKind::LRNonStreamingLexer));
+                    assert!(matches!(lexerkind, &LexerKind::LRNonStreamingLexer));
                     Ok(())
                 }))
                 .build()
