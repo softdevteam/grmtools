@@ -1,3 +1,10 @@
+# grmtools 0.14.1 (2026-01-20)
+
+ * Unbreak building of the grmtools book with the latest `mdbook`.
+
+ * Change test-only code that is incompatible with an upcoming rustc change.
+
+
 # grmtools 0.14.0 (2025-10-22)
 
 This release contains a number of new features and breaking changes. Most of
