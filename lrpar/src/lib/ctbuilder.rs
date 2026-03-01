@@ -973,7 +973,15 @@ where
                 None
             };
 
-        let mod_name = format_ident!("{}", mod_name);
+        let mod_name =
+            match syn::parse_str::<proc_macro2::Ident>(mod_name) {
+                Ok(s) => s,
+                Err(e) => return Err(format!(
+                    "CTParserBuilder::mod_name(\"{}\") is not a valid rust identifier due to '{}'",
+                    mod_name, e
+                )
+                .into()),
+            };
         let out_tokens = quote! {
             #visibility mod #mod_name {
                 // At the top so that `user_actions` may contain #![inner_attribute]
@@ -1797,6 +1805,37 @@ C : 'a';"
                 let cs = e.downcast_ref::<CTConflictsError<u16>>();
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().rr_len(), 1);
                 assert_eq!(cs.unwrap().stable.conflicts().unwrap().sr_len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    /// Tests a yacc .y filename containing a dash character leading to an invalid rust identifier
+    /// when that dash is subsequently used as the default `CTParserBuilder::mod_name`.
+    fn test_invalid_identifier_in_derived_mod_name() {
+        let temp = TempDir::new().unwrap();
+        let mut file_path = PathBuf::from(temp.as_ref());
+        file_path.push("contains-a-dash.y");
+        let mut f = File::create(&file_path).unwrap();
+        let _ = f.write_all(
+            "%start A
+%%
+A : 'a';"
+                .as_bytes(),
+        );
+        match CTParserBuilder::<TestLexerTypes>::new()
+            .yacckind(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
+            .grammar_path(file_path.to_str().unwrap())
+            .output_path(file_path.with_extension("ignored"))
+            .build()
+        {
+            Ok(_) => panic!("Expected error"),
+            Err(e) => {
+                let err_string = e.to_string();
+                assert_eq!(
+                    err_string,
+                    "CTParserBuilder::mod_name(\"contains-a-dash_y\") is not a valid rust identifier due to 'unexpected token'"
+                );
             }
         }
     }
