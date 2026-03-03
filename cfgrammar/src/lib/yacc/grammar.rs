@@ -81,6 +81,8 @@ pub struct YaccGrammar<StorageT = u32> {
     implicit_rule: Option<RIdx<StorageT>>,
     /// User defined Rust programs which can be called within actions
     actions: Box<[Option<String>]>,
+    /// Spans for each action.
+    action_spans: Box<[Option<Span>]>,
     /// A `(name, type)` pair defining an extra parameter to pass to action functions.
     parse_param: Option<(String, String)>,
     /// Generic parameters (types and lifetimes) to pass to action functions.
@@ -131,6 +133,7 @@ where
             prod_precs: Decode::decode(decoder)?,
             implicit_rule: Decode::decode(decoder)?,
             actions: Decode::decode(decoder)?,
+            action_spans: Decode::decode(decoder)?,
             parse_param: Decode::decode(decoder)?,
             parse_generics: Decode::decode(decoder)?,
             programs: Decode::decode(decoder)?,
@@ -170,6 +173,7 @@ where
             prod_precs: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             implicit_rule: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             actions: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            action_spans: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             parse_param: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             parse_generics: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             programs: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
@@ -328,6 +332,7 @@ where
         let mut prod_precs: Vec<Option<Option<Precedence>>> = vec![None; ast.prods.len()];
         let mut prods_rules = vec![None; ast.prods.len()];
         let mut actions = vec![None; ast.prods.len()];
+        let mut action_spans = vec![None; ast.prods.len()];
         let mut actiontypes = vec![None; rule_names.len()];
         let (start_name, _) = ast.start.as_ref().unwrap();
         for (astrulename, _) in &rule_names {
@@ -419,8 +424,9 @@ where
                 prods[pidx] = Some(prod);
                 prod_precs[pidx] = Some(prec.map(|(prec, _)| prec));
                 prods_rules[pidx] = Some(ridx);
-                if let Some(ref s) = astprod.action {
+                if let Some((s, span)) = &astprod.action {
                     actions[pidx] = Some(s.clone());
+                    action_spans[pidx] = Some(*span);
                 }
             }
         }
@@ -459,6 +465,7 @@ where
             prod_precs: prod_precs.into_iter().map(Option::unwrap).collect(),
             implicit_rule: implicit_rule.map(|x| rule_map[&x]),
             actions: actions.into_boxed_slice(),
+            action_spans: action_spans.into_boxed_slice(),
             parse_param: ast.parse_param.clone(),
             parse_generics: ast.parse_generics.clone(),
             programs: ast.programs.clone(),
@@ -623,6 +630,10 @@ where
     /// Get the action for production `pidx`. Panics if `pidx` doesn't exist.
     pub fn action(&self, pidx: PIdx<StorageT>) -> &Option<String> {
         &self.actions[usize::from(pidx)]
+    }
+
+    pub fn action_span(&self, pidx: PIdx<StorageT>) -> Option<Span> {
+        self.action_spans[usize::from(pidx)]
     }
 
     pub fn actiontype(&self, ridx: RIdx<StorageT>) -> &Option<String> {

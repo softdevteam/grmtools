@@ -734,10 +734,13 @@ impl YaccParser<'_> {
                 pos_prod_end = Some(k);
                 i = k;
             } else if self.lookahead_is("{", i).is_some() {
+                let pos_action_start = i + 1;
                 pos_prod_end = Some(i);
+                // With j the location of the right brace, i the location of the left brace.
                 let (j, a) = self.parse_action(i)?;
                 i = self.parse_ws(j, true)?;
-                action = Some(a);
+                let action_span = Span::new(pos_action_start, pos_action_start + a.len());
+                action = Some((a, action_span));
 
                 if !(self.lookahead_is("|", i).is_some() || self.lookahead_is(";", i).is_some()) {
                     return Err(self.mk_error(YaccGrammarErrorKind::ProductionNotTerminated, i));
@@ -2284,13 +2287,15 @@ x"
           ",
         )
         .unwrap();
+        let action_str = "println!(\"test\");".to_string();
         assert_eq!(
             grm.prods[grm.rules["A"].pidxs[0]].action,
-            Some("println!(\"test\");".to_string())
+            Some((action_str.clone(), Span::new(34, 34 + action_str.len())))
         );
+        let action_str = "add($1, $2);".to_string();
         assert_eq!(
             grm.prods[grm.rules["B"].pidxs[0]].action,
-            Some("add($1, $2);".to_string())
+            Some((action_str.clone(), Span::new(90, 90 + action_str.len())))
         );
         assert_eq!(grm.prods[grm.rules["B"].pidxs[1]].action, None);
     }
@@ -2302,9 +2307,10 @@ x"
             "%%A: '_' {(); // 🦀};",
         )
         .unwrap();
+        let action_str = "(); // 🦀".to_string();
         assert_eq!(
             grm.prods[grm.rules["A"].pidxs[0]].action,
-            Some("(); // 🦀".to_string())
+            Some((action_str.clone(), Span::new(10, 10 + action_str.len())))
         );
     }
 

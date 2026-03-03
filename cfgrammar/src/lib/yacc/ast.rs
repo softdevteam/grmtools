@@ -190,7 +190,7 @@ pub struct Rule {
 pub struct Production {
     pub symbols: Vec<Symbol>,
     pub precedence: Option<String>,
-    pub action: Option<String>,
+    pub action: Option<(String, Span)>,
     pub prod_span: Span,
 }
 
@@ -271,7 +271,7 @@ impl GrammarAST {
         rule_name: String,
         symbols: Vec<Symbol>,
         precedence: Option<String>,
-        action: Option<String>,
+        action: Option<(String, Span)>,
         prod_span: Span,
     ) {
         self.rules[&rule_name].pidxs.push(self.prods.len());

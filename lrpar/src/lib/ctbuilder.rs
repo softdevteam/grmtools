@@ -24,7 +24,7 @@ use crate::unstable_api::UnstableApi;
 
 use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
 use cfgrammar::{
-    Location, RIdx, Symbol,
+    Location, RIdx, Span, Symbol,
     header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
     markmap::{Entry, MergeBehavior},
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
@@ -810,6 +810,7 @@ where
             &derived_mod_name,
             outp,
             &format!("/* CACHE INFORMATION {} */\n", cache),
+            &yacc_diag,
         )?;
         let conflicts = if stable.conflicts().is_some() {
             Some((sgraph, stable))
@@ -937,13 +938,14 @@ where
         mod_name: &str,
         outp_rs: P,
         cache: &str,
+        diag: &SpannedDiagnosticFormatter,
     ) -> Result<(), Box<dyn Error>> {
         let visibility = self.visibility.clone();
         let user_actions = if let Some(
             YaccKind::Original(YaccOriginalActionKind::UserAction) | YaccKind::Grmtools,
         ) = self.yacckind
         {
-            Some(self.gen_user_actions(grm)?)
+            Some(self.gen_user_actions(grm, diag)?)
         } else {
             None
         };
@@ -1419,7 +1421,11 @@ where
     }
 
     /// Generate the user action functions (if any).
-    fn gen_user_actions(&self, grm: &YaccGrammar<StorageT>) -> Result<TokenStream, Box<dyn Error>> {
+    fn gen_user_actions(
+        &self,
+        grm: &YaccGrammar<StorageT>,
+        diag: &SpannedDiagnosticFormatter,
+    ) -> Result<TokenStream, Box<dyn Error>> {
         let programs = grm
             .programs()
             .as_ref()
@@ -1520,10 +1526,16 @@ where
                             write!(outs, "{prefix}arg_", prefix = ACTION_PREFIX).ok();
                             last = last + off + "$".len();
                         } else {
-                            panic!(
-                                "Unknown text following '$' operator: {}",
-                                &pre_action[last + off..]
-                            );
+                            let span = grm.action_span(pidx).unwrap();
+                            let inner_span =
+                                Span::new(span.start() + last + off + "$".len(), span.end());
+                            let mut s = String::from("\n");
+                            s.push_str(&diag.underline_span_with_text(
+                                inner_span,
+                                "Unknown text following '$'".to_string(),
+                                '^',
+                            ));
+                            return Err(ErrorString(s).into());
                         }
                     }
                     None => {
