@@ -76,6 +76,10 @@ pub struct YaccGrammar<StorageT = u32> {
     prods_rules: Box<[RIdx<StorageT>]>,
     /// The precedence of each production.
     prod_precs: Box<[Option<Precedence>]>,
+    /// The span for each production.
+    ///
+    /// In the case of an empty span this may be a zero length span.
+    prod_spans: Box<[Span]>,
     /// The index of the rule added for implicit tokens, if they were specified; otherwise
     /// `None`.
     implicit_rule: Option<RIdx<StorageT>>,
@@ -131,6 +135,7 @@ where
             rules_prods: Decode::decode(decoder)?,
             prods_rules: Decode::decode(decoder)?,
             prod_precs: Decode::decode(decoder)?,
+            prod_spans: Decode::decode(decoder)?,
             implicit_rule: Decode::decode(decoder)?,
             actions: Decode::decode(decoder)?,
             action_spans: Decode::decode(decoder)?,
@@ -171,6 +176,7 @@ where
             rules_prods: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             prods_rules: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             prod_precs: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
+            prod_spans: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             implicit_rule: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             actions: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
             action_spans: ::bincode::BorrowDecode::<'_, __Context>::borrow_decode(decoder)?,
@@ -463,6 +469,7 @@ where
                 .map(|x| x.unwrap().into_boxed_slice())
                 .collect(),
             prod_precs: prod_precs.into_iter().map(Option::unwrap).collect(),
+            prod_spans: ast.prods.iter().map(|prod| prod.prod_span).collect(),
             implicit_rule: implicit_rule.map(|x| rule_map[&x]),
             actions: actions.into_boxed_slice(),
             action_spans: action_spans.into_boxed_slice(),
@@ -511,6 +518,13 @@ where
     /// Panics if `pidx` doesn't exist.
     pub fn prod_precedence(&self, pidx: PIdx<StorageT>) -> Option<Precedence> {
         self.prod_precs[usize::from(pidx)]
+    }
+
+    /// Return the span for a production `pidx`
+    ///
+    /// May return a zero length span such as when there is an empty production.
+    pub fn prod_span(&self, pidx: PIdx<StorageT>) -> Span {
+        self.prod_spans[usize::from(pidx)]
     }
 
     /// Return the production index of the start rule's sole production (for Yacc grammars the
