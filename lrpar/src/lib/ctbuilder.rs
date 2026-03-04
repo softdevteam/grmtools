@@ -1511,10 +1511,16 @@ where
             // Iterate over all $-arguments and replace them with their respective
             // element from the argument vector (e.g. $1 is replaced by args[0]).
             let pre_action = grm.action(pidx).as_ref().ok_or_else(|| {
-                format!(
-                    "Rule {} has a production which is missing action code",
-                    grm.rule_name_str(grm.prod_to_rule(pidx))
-                )
+                let mut s = String::from("\n");
+                let span = grm.prod_span(pidx);
+                s.push_str(&diag.file_location_msg("Error", Some(span)));
+                s.push_str("\n");
+                s.push_str(&diag.underline_span_with_text(
+                    span,
+                    "Production is missing action code".to_string(),
+                    '^',
+                ));
+                ErrorString(s)
             })?;
             let mut last = 0;
             let mut outs = String::new();
