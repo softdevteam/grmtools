@@ -1459,7 +1459,20 @@ where
             for i in 0..grm.prod(pidx).len() {
                 let argt = match grm.prod(pidx)[i] {
                     Symbol::Rule(ref_ridx) => {
-                        str::parse::<TokenStream>(grm.actiontype(ref_ridx).as_ref().unwrap())?
+                        if let Some(action_type) = grm.actiontype(ref_ridx).as_ref() {
+                            str::parse::<TokenStream>(action_type)?
+                        } else {
+                            let mut s = String::from("\n");
+                            let rule_span = grm.rule_name_span(ref_ridx);
+                            s.push_str(&diag.file_location_msg("Error", Some(rule_span)));
+                            s.push_str("\n");
+                            s.push_str(&diag.underline_span_with_text(
+                                rule_span,
+                                "Rule missing action type".to_string(),
+                                '^',
+                            ));
+                            return Err(ErrorString(s).into());
+                        }
                     }
                     Symbol::Token(_) => {
                         let lexemet =
@@ -1530,6 +1543,8 @@ where
                             let inner_span =
                                 Span::new(span.start() + last + off + "$".len(), span.end());
                             let mut s = String::from("\n");
+                            s.push_str(&diag.file_location_msg("Error", Some(inner_span)));
+                            s.push_str("\n");
                             s.push_str(&diag.underline_span_with_text(
                                 inner_span,
                                 "Unknown text following '$'".to_string(),
