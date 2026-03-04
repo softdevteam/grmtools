@@ -1359,8 +1359,8 @@ where
             } else if pidx == grm.start_prod() {
                 wrapper_fn_body.extend(quote!(unreachable!()));
             } else {
-                panic!(
-                    "Production in rule '{}' must have an action body.",
+                unreachable!(
+                    "Production in rule '{}' must have an action body, which should have been handled by gen_user_actions.",
                     grm.rule_name_str(grm.prod_to_rule(pidx))
                 );
             };
