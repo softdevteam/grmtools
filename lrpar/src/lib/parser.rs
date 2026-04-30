@@ -112,7 +112,7 @@ pub(super) struct Parser<
 {
     rcvry_kind: RecoveryKind,
     pub(super) grm: &'a YaccGrammar<StorageT>,
-    pub(super) token_cost: Box<TokenCostFn<'a, StorageT>>,
+    pub(super) token_cost: TokenCostFn<'a, StorageT>,
     pub(super) stable: &'a StateTable<StorageT>,
     lexer: &'b dyn NonStreamingLexer<'input, LexerTypesT>,
     // In the long term, we should remove the `lexemes` field entirely, as the `NonStreamingLexer` API is
@@ -176,7 +176,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: Box::new(token_cost),
+            token_cost,
             stable,
             lexer,
             lexemes,
@@ -274,7 +274,7 @@ where
         let psr = Parser {
             rcvry_kind,
             grm,
-            token_cost: Box::new(token_cost),
+            token_cost,
             stable,
             lexer,
             lexemes,
@@ -970,13 +970,10 @@ where
         fterm: &dyn Fn(LexerTypesT::LexemeT) -> Node,
         fnonterm: &dyn Fn(RIdx<StorageT>, Vec<Node>) -> Node,
     ) -> (Option<Node>, Vec<LexParseError<StorageT, LexerTypesT>>) {
-        let mut lexemes = vec![];
-        for e in lexer.iter().collect::<Vec<_>>() {
-            match e {
-                Ok(l) => lexemes.push(l),
-                Err(e) => return (None, vec![e.into()]),
-            }
-        }
+        let lexemes = match lexer.iter().collect() {
+            Ok(lexemes) => lexemes,
+            Err(e) => return (None, vec![e.into()]),
+        };
         Parser::<
             StorageT,
             LexerTypesT,
@@ -1019,13 +1016,10 @@ where
         actions: &'a [ActionFn<'a, 'b, 'input, StorageT, LexerTypesT, ActionT, ParamT>],
         param: ParamT,
     ) -> (Option<ActionT>, Vec<LexParseError<StorageT, LexerTypesT>>) {
-        let mut lexemes = vec![];
-        for e in lexer.iter().collect::<Vec<_>>() {
-            match e {
-                Ok(l) => lexemes.push(l),
-                Err(e) => return (None, vec![e.into()]),
-            }
-        }
+        let lexemes = match lexer.iter().collect() {
+            Ok(lexemes) => lexemes,
+            Err(e) => return (None, vec![e.into()]),
+        };
         Parser::parse_actions(
             self.recoverer,
             self.grm,
