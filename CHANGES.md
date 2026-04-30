@@ -1,3 +1,12 @@
+# grmtools 0.14.2 (2026-04-30)
+
+* Only initialise internal parser state once at run-time. For programs that
+  create many new parser instances, this can be a substantial win.
+
+* Improve a number of error messages: several of these were previously
+  inscrutable.
+
+
 # grmtools 0.14.1 (2026-01-20)
 
  * Unbreak building of the grmtools book with the latest `mdbook`.
