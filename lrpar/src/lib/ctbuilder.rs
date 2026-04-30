@@ -1093,7 +1093,7 @@ where
         let run_parser = match self.yacckind.unwrap() {
             YaccKind::Original(YaccOriginalActionKind::GenericParseTree) => {
                 quote! {
-                    ::lrpar::RTParserBuilder::new(&grm, &stable)
+                    ::lrpar::RTParserBuilder::new(grm, stable)
                         .recoverer(#recoverer)
                         .parse_map(
                             lexer,
@@ -1104,7 +1104,7 @@ where
             }
             YaccKind::Original(YaccOriginalActionKind::NoAction) => {
                 quote! {
-                    ::lrpar::RTParserBuilder::new(&grm, &stable)
+                    ::lrpar::RTParserBuilder::new(grm, stable)
                         .recoverer(#recoverer)
                         .parse_map(lexer, &|_| (), &|_, _| ()).1
                 }
@@ -1145,7 +1145,7 @@ where
                                     #action_fn_parse_param_ty
                             ) -> #actionskind #type_generics
                         > = ::std::vec![#(&#wrappers,)*];
-                    match ::lrpar::RTParserBuilder::new(&grm, &stable)
+                    match ::lrpar::RTParserBuilder::new(grm, stable)
                         .recoverer(#recoverer)
                         .parse_actions(lexer, &actions, #action_fn_parse_param) {
                             (Some(#actionskind::#action_ident(x)), y) => (Some(x), y),
@@ -1205,6 +1205,14 @@ where
             const __GRM_DATA: &[u8] = &[#(#grm_data,)*];
             const __STABLE_DATA: &[u8] = &[#(#stable_data,)*];
 
+            fn __lrpar_parser_data() -> &'static ::lrpar::ParserData<#storaget> {
+                static DATA: ::std::sync::OnceLock<::lrpar::ParserData<#storaget>>
+                    = ::std::sync::OnceLock::new();
+                DATA.get_or_init(
+                    || ::lrpar::ctbuilder::_reconstitute(__GRM_DATA, __STABLE_DATA)
+                )
+            }
+
             #[allow(dead_code)]
             pub fn parse #generics (
                  lexer: &'lexer dyn ::lrpar::NonStreamingLexer<'input, #lexertypest>,
@@ -1212,7 +1220,9 @@ where
             ) -> #parse_fn_return_ty
             #where_clause
             {
-                let (grm, stable) = ::lrpar::ctbuilder::_reconstitute(__GRM_DATA, __STABLE_DATA);
+                let __data = __lrpar_parser_data();
+                let grm = __data.grm();
+                let stable = __data.stable();
                 #run_parser
             }
         })
@@ -1601,16 +1611,34 @@ where
     }
 }
 
+/// Bundles `YaccGrammar` + `StateTable` so that generated parsers can hold
+/// them in a `OnceLock` without naming `lrtable` directly.
+#[doc(hidden)]
+pub struct ParserData<StorageT: Eq + Hash> {
+    grm: YaccGrammar<StorageT>,
+    stable: StateTable<StorageT>,
+}
+
+impl<StorageT: Eq + Hash> ParserData<StorageT> {
+    pub fn grm(&self) -> &YaccGrammar<StorageT> {
+        &self.grm
+    }
+
+    pub fn stable(&self) -> &StateTable<StorageT> {
+        &self.stable
+    }
+}
+
 /// This function is called by generated files; it exists so that generated files don't require a
 /// direct dependency on bincode.
 #[doc(hidden)]
-pub fn _reconstitute<StorageT: Decode<()> + Hash + PrimInt + Unsigned + 'static>(
+pub fn _reconstitute<StorageT: Decode<()> + Eq + Hash + PrimInt + Unsigned + 'static>(
     grm_buf: &[u8],
     stable_buf: &[u8],
-) -> (YaccGrammar<StorageT>, StateTable<StorageT>) {
+) -> ParserData<StorageT> {
     let (grm, _) = decode_from_slice(grm_buf, bincode::config::standard()).unwrap();
     let (stable, _) = decode_from_slice(stable_buf, bincode::config::standard()).unwrap();
-    (grm, stable)
+    ParserData { grm, stable }
 }
 
 /// An interface to the result of [CTParserBuilder::build()].
