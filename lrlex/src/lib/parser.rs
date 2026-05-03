@@ -490,7 +490,7 @@ where
 
         if !dupe {
             let (start_states, re_str) =
-                self.parse_start_states(i, line[..rspace].trim_end_matches(matches_whitespace))?;
+                self.parse_start_states(i, trim_end_unescaped(&line[..rspace]))?;
             let rules_len = self.rules.len();
             let tok_id = LexerTypesT::StorageT::try_from(rules_len)
                            .unwrap_or_else(|_| panic!("StorageT::try_from \
@@ -682,6 +682,20 @@ where
         } else {
             None
         }
+    }
+}
+
+fn trim_end_unescaped(s: &str) -> &str {
+    let trimmed = s.trim_end_matches(matches_whitespace);
+    if trimmed.len() == s.len() {
+        return s;
+    }
+    // If the number of backslashes is odd then the first space in the trimmed portion is escaped so re-add it.
+    if trimmed.chars().rev().take_while(|&c| c == '\\').count() % 2 == 1 {
+        // Panic safety: the trimmed portion is at least one char long.
+        &s[..trimmed.len() + s[trimmed.len()..].chars().next().unwrap().len_utf8()]
+    } else {
+        trimmed
     }
 }
 
@@ -1825,5 +1839,38 @@ b "A"
             3,
             18,
         );
+    }
+
+    #[test]
+    fn unescaped_trim() {
+        let escapes = [
+            (r#"\ "#, r#"\ "#),
+            (r#"\  "#, r#"\ "#),
+            (r#"\\ "#, r#"\\"#),
+            (r#"\\  "#, r#"\\"#),
+            (r#"\\\ "#, r#"\\\ "#),
+            (r#"\\\  "#, r#"\\\ "#),
+            (r#"\\\\ "#, r#"\\\\"#),
+            (r#"\\\\  "#, r#"\\\\"#),
+            (r#"x"#, r#"x"#),
+            (r#"x\ "#, r#"x\ "#),
+            (r#"x\  "#, r#"x\ "#),
+            (r#"x\\ "#, r#"x\\"#),
+            (r#"x\\  "#, r#"x\\"#),
+            (r#"x\\\ "#, r#"x\\\ "#),
+            (r#"x\\\  "#, r#"x\\\ "#),
+            (r#"x\\\\ "#, r#"x\\\\"#),
+            (r#"x\\\\  "#, r#"x\\\\"#),
+            (r#"x\ y "#, r#"x\ y"#),
+            (r#"x\ y\ "#, r#"x\ y\ "#),
+            (r#"x\ y\\ "#, r#"x\ y\\"#),
+            (r#"x\ y  "#, r#"x\ y"#),
+            (r#"x\ y\  "#, r#"x\ y\ "#),
+            (r#"x\ y\\  "#, r#"x\ y\\"#),
+        ];
+        for (escaped, expected) in escapes {
+            let trimmed = trim_end_unescaped(escaped);
+            assert_eq!(expected, trimmed)
+        }
     }
 }
