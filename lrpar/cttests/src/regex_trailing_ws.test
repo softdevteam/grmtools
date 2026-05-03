@@ -1,0 +1,19 @@
+name: Test with regex containing trailing ws
+grammar: |
+    %grmtools {
+        yacckind: Original(YaccOriginalActionKind::NoAction),
+        recoverer: RecoveryKind::None,
+        test_files: ["*.input_trailing_ws"],
+    }
+    %start Expr
+    %%
+    Expr: "trailing";
+
+lexer: |
+    %%
+    [a-zA-Z]\  "trailing"
+    [\n\t] ;
+
+extra_files:
+  input1.input_trailing_ws: |
+    a 
