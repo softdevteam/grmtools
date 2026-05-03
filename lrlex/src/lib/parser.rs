@@ -172,7 +172,7 @@ where
         *posix_escapes = posix_escapes.or(DEFAULT_LEX_FLAGS.posix_escapes);
         *allow_wholeline_comments =
             allow_wholeline_comments.or(DEFAULT_LEX_FLAGS.allow_wholeline_comments);
-        *case_insensitive = case_insensitive.or(DEFAULT_LEX_FLAGS.allow_wholeline_comments);
+        *case_insensitive = case_insensitive.or(DEFAULT_LEX_FLAGS.case_insensitive);
         *ignore_whitespace = ignore_whitespace.or(DEFAULT_LEX_FLAGS.ignore_whitespace);
         *swap_greed = swap_greed.or(DEFAULT_LEX_FLAGS.swap_greed);
         *unicode = unicode.or(DEFAULT_LEX_FLAGS.unicode);
