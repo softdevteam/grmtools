@@ -7,6 +7,7 @@
     - [Extensions](lexextensions.md)
   - [Hand-written lexers](manuallexer.md)
   - [Start States](start_states.md)
+  - [Syntax](lexsyntax.md)
 - [Parsing](parsing.md)
   - [Yacc compatibility](yacccompatibility.md)
     - [Extensions](yaccextensions.md)
