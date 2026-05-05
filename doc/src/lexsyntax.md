@@ -18,7 +18,7 @@ documented in [extensions](./lexextensions.md)
 
 Each rule is given by the following elements in sequence:
 
-1. Optional Start State, a name given between angle brackets for example `<Start_State>` documented in [Start States](./start_states.md)
+1. Optional Start State, one or more names comma separated between angle brackets. For example `<Start_State>` documented in [Start States](./start_states.md).
 2. Regex, syntax defined by the rust [regex](https://docs.rs/regex) crate with optional escaping for any character.
 3. Separator space, any horizontal space character in the unicode `Pattern_White_Space` character set
 4. Optional State operator, given between angle brackets documented in [Start States](./start_states.md)
