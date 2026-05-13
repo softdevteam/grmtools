@@ -823,7 +823,7 @@ where
                     // We cannot `impl ToToken for Rule` because `Rule` never stores `lex_flags`,
                     // Thus we reference the local lex_flags variable bound earlier.
                     quote! {
-                        Rule::new(::lrlex::unstable_api::InternalPublicApi, #tok_id, #n, #n_span, #regex.to_string(),
+                        Rule::new(::lrlex::unstable_api::InternalPublicApi, #tok_id, #n, #n_span, #regex,
                                 vec![#(#start_states),*], #target_state, &lex_flags).unwrap()
                     }
                 });
