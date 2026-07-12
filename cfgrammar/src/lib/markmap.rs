@@ -420,28 +420,42 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
                     let ours_mark = Mark::MergeBehavior(MergeBehavior::Ours).repr();
                     let exclusive_mark =
                         Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr();
+                    // Their marks with their merge behavior stripped.
+                    let mut just_their_marks = their_mark;
+                    let merge_reprs = Mark::MergeBehavior(MergeBehavior::MutuallyExclusive).repr()
+                        | Mark::MergeBehavior(MergeBehavior::Ours).repr()
+                        | Mark::MergeBehavior(MergeBehavior::Theirs).repr();
+                    // Zap just the MergeBehavior bits.
+                    just_their_marks ^= just_their_marks & merge_reprs;
                     let mut merge_behavior = (*my_mark & exclusive_mark)
                         | (*my_mark & ours_mark)
                         | (*my_mark & theirs_mark);
                     if merge_behavior == 0 {
                         merge_behavior = Mark::MergeBehavior(self.default_merge_behavior).repr();
                     }
-                    if merge_behavior == exclusive_mark {
-                        // If only clippy could convince me and the borrow checker this is actually unnecessary.
-                        #[allow(clippy::unnecessary_unwrap)]
-                        if my_val.is_some() && their_val.is_some() {
-                            return Err(MergeError::Exclusivity(
-                                their_key,
-                                Box::new(their_val.unwrap().into()),
-                            ));
-                        } else if my_val.is_none() {
+                    match their_val {
+                        Some(their_val) if merge_behavior == exclusive_mark => {
+                            if my_val.is_some() {
+                                return Err(MergeError::Exclusivity(
+                                    their_key,
+                                    Box::new(their_val.into()),
+                                ));
+                            } else {
+                                *my_mark |= just_their_marks;
+                                *my_val = Some(their_val.into());
+                            }
+                        }
+
+                        their_val if merge_behavior == theirs_mark => {
+                            *my_mark |= just_their_marks;
                             *my_val = their_val.map(|u| u.into());
                         }
-                    } else if merge_behavior == theirs_mark && their_val.is_some()
-                        || merge_behavior == ours_mark && my_val.is_none()
-                    {
-                        *my_mark = their_mark;
-                        *my_val = their_val.map(|u| u.into());
+
+                        their_val if my_val.is_none() && merge_behavior == ours_mark => {
+                            *my_mark |= just_their_marks;
+                            *my_val = their_val.map(|u| u.into());
+                        }
+                        _ => {}
                     }
                 }
                 Err(pos) => {
@@ -795,34 +809,43 @@ mod test {
             let mut theirs: MarkMap<&str, &str> = MarkMap::new();
             ours.insert("a", "ours");
             theirs.set_merge_behavior(&"a", MergeBehavior::MutuallyExclusive);
+            theirs.mark_required(&"b");
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"ours"));
+            assert!(ours.is_required(&"b"));
         }
         {
             // Default behavior should match MutuallyExclusive
             let mut ours: MarkMap<&str, &str> = MarkMap::new();
-            let theirs: MarkMap<&str, &str> = MarkMap::new();
+            let mut theirs: MarkMap<&str, &str> = MarkMap::new();
+            theirs.mark_required(&"b");
             ours.insert("a", "ours");
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"ours"));
+            assert!(ours.is_required(&"b"));
         }
 
         {
             let mut ours: MarkMap<&str, &str> = MarkMap::new();
-            let theirs: MarkMap<&str, &str> = MarkMap::new();
+            let mut theirs: MarkMap<&str, &str> = MarkMap::new();
+            theirs.mark_required(&"b");
             ours.insert("a", "ours");
             ours.set_merge_behavior(&"a", MergeBehavior::MutuallyExclusive);
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"ours"));
+            assert!(ours.is_required(&"b"));
         }
         {
             let mut ours = MarkMap::new();
             let mut theirs = MarkMap::new();
+            theirs.mark_required(&"b");
             ours.insert("a", "ours");
             ours.set_merge_behavior(&"a", MergeBehavior::Ours);
+
             theirs.insert("a", "theirs");
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"ours"));
+            assert!(ours.is_required(&"b"));
         }
     }
 
@@ -831,28 +854,34 @@ mod test {
         {
             let mut ours: MarkMap<&str, &str> = MarkMap::new();
             let mut theirs: MarkMap<&str, &str> = MarkMap::new();
+            theirs.mark_required(&"b");
             ours.set_merge_behavior(&"a", MergeBehavior::MutuallyExclusive);
             theirs.insert("a", "theirs");
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"theirs"));
+            assert!(ours.is_required(&"b"));
         }
 
         {
             // Should match default behavior.
             let mut ours: MarkMap<&str, &str> = MarkMap::new();
             let mut theirs: MarkMap<&str, &str> = MarkMap::new();
+            theirs.mark_required(&"b");
             theirs.insert("a", "theirs");
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"theirs"));
+            assert!(ours.is_required(&"b"));
         }
         {
             let mut ours = MarkMap::new();
             let mut theirs = MarkMap::new();
+            theirs.mark_required(&"b");
             ours.insert("a", "ours");
             ours.set_merge_behavior(&"a", MergeBehavior::Theirs);
             theirs.insert("a", "theirs");
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"theirs"));
+            assert!(ours.is_required(&"b"));
         }
     }
 
@@ -861,6 +890,7 @@ mod test {
         {
             let mut ours = MarkMap::new();
             let mut theirs = MarkMap::new();
+            theirs.mark_required(&"b");
             ours.insert("a", "ours");
             ours.set_merge_behavior(&"a", MergeBehavior::MutuallyExclusive);
             theirs.insert("b", "theirs");
@@ -868,6 +898,7 @@ mod test {
             assert!(ours.merge_from(theirs).is_ok());
             assert_eq!(ours.get(&"a"), Some(&"ours"));
             assert_eq!(ours.get(&"b"), Some(&"theirs"));
+            assert!(ours.is_required(&"b"));
         }
     }
 
