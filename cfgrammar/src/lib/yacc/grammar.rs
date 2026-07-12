@@ -993,7 +993,6 @@ where
 
 /// Return the cost of a minimal string for each rule in this grammar. The cost of a
 /// token is specified by the user-defined `token_cost` function.
-#[allow(clippy::unnecessary_unwrap)]
 fn rule_min_costs<StorageT: 'static + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
     token_costs: &[u8],
@@ -1060,9 +1059,11 @@ where
                     ls_noncmplt = Some(c);
                 }
             }
-            if ls_cmplt.is_some() && (ls_noncmplt.is_none() || ls_cmplt < ls_noncmplt) {
-                debug_assert!(ls_cmplt.unwrap() >= costs[i]);
-                costs[i] = ls_cmplt.unwrap();
+            if let Some(low_cmplt) = ls_cmplt
+                && (ls_noncmplt.is_none() || ls_cmplt < ls_noncmplt)
+            {
+                debug_assert!(low_cmplt >= costs[i]);
+                costs[i] = low_cmplt;
                 done[i] = true;
             } else if let Some(ls_noncmplt) = ls_noncmplt {
                 debug_assert!(ls_noncmplt >= costs[i]);
@@ -1080,7 +1081,6 @@ where
 /// Return the cost of the maximal string for each rule in this grammar (u32::max_val()
 /// representing "this rule can generate strings of infinite length"). The cost of a
 /// token is specified by the user-defined `token_cost` function.
-#[allow(clippy::unnecessary_unwrap)]
 fn rule_max_costs<StorageT: 'static + PrimInt + Unsigned>(
     grm: &YaccGrammar<StorageT>,
     token_costs: &[u8],
@@ -1144,9 +1144,11 @@ where
                     hs_noncmplt = Some(c);
                 }
             }
-            if hs_cmplt.is_some() && (hs_noncmplt.is_none() || hs_cmplt > hs_noncmplt) {
-                debug_assert!(hs_cmplt.unwrap() >= costs[i]);
-                costs[i] = hs_cmplt.unwrap();
+            if let Some(high_cmplt) = hs_cmplt
+                && (hs_noncmplt.is_none() || hs_cmplt > hs_noncmplt)
+            {
+                debug_assert!(high_cmplt >= costs[i]);
+                costs[i] = high_cmplt;
                 done[i] = true;
             } else if let Some(hs_noncmplt) = hs_noncmplt {
                 debug_assert!(hs_noncmplt >= costs[i]);
