@@ -130,7 +130,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
             // Add indentation from the start of the underlined span
             out.push_str(&format!(
                 "{prefix}{}",
-                &" ".repeat(
+                " ".repeat(
                     UnicodeWidthStr::width(&self.src[line_start_byte..underline_span.start()])
                         + (line_num_digits + "| ".len() - prefix.len())
                 )
@@ -145,7 +145,7 @@ impl<'a> SpannedDiagnosticFormatter<'a> {
 
             if source_lines.peek().is_none() {
                 // If we're at the end print the message.
-                out.push_str(&format!(" {}", &s));
+                out.push_str(&format!(" {}", s));
             } else {
                 // Otherwise set next span to start at the beginning of the next line.
                 out.push('\n');

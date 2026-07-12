@@ -90,10 +90,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 lex_diag.file_location_msg(" parsing the `%grmtools` section", None)
             );
             for e in es {
-                eprintln!(
-                    "{}",
-                    &indent("     ", &lex_diag.format_error(e).to_string())
-                );
+                eprintln!("{}", indent("     ", &lex_diag.format_error(e).to_string()));
             }
             process::exit(1);
         }
@@ -115,10 +112,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Err(errs) => {
                     eprintln!("\n{ERROR}{}", lex_diag.file_location_msg("", None));
                     for e in errs {
-                        eprintln!(
-                            "{}",
-                            &indent("     ", &lex_diag.format_error(e).to_string())
-                        );
+                        eprintln!("{}", indent("     ", &lex_diag.format_error(e).to_string()));
                     }
                     process::exit(1);
                 }

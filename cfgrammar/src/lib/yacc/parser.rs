@@ -388,24 +388,24 @@ impl YaccParser<'_> {
                 }
                 continue;
             }
-            if let YaccKind::Original(_) = self.yacc_kind {
-                if let Some(j) = self.lookahead_is("%actiontype", i) {
-                    i = self.parse_ws(j, false)?;
-                    let (j, n) = self.parse_to_eol(i)?;
-                    let span = Span::new(i, j);
-                    if let Some((_, orig_span)) = self.global_actiontype {
-                        add_duplicate_occurrence(
-                            errs,
-                            YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
-                            orig_span,
-                            span,
-                        );
-                    } else {
-                        self.global_actiontype = Some((n, span));
-                    }
-                    i = self.parse_ws(j, true)?;
-                    continue;
+            if let YaccKind::Original(_) = self.yacc_kind
+                && let Some(j) = self.lookahead_is("%actiontype", i)
+            {
+                i = self.parse_ws(j, false)?;
+                let (j, n) = self.parse_to_eol(i)?;
+                let span = Span::new(i, j);
+                if let Some((_, orig_span)) = self.global_actiontype {
+                    add_duplicate_occurrence(
+                        errs,
+                        YaccGrammarErrorKind::DuplicateActiontypeDeclaration,
+                        orig_span,
+                        span,
+                    );
+                } else {
+                    self.global_actiontype = Some((n, span));
                 }
+                i = self.parse_ws(j, true)?;
+                continue;
             }
             if let Some(j) = self.lookahead_is("%start", i) {
                 i = self.parse_ws(j, false)?;
@@ -556,36 +556,36 @@ impl YaccParser<'_> {
                 i = self.parse_ws(j, true)?;
                 continue;
             }
-            if let YaccKind::Eco = self.yacc_kind {
-                if let Some(j) = self.lookahead_is("%implicit_tokens", i) {
-                    i = self.parse_ws(j, false)?;
-                    let num_newlines = self.num_newlines;
-                    if self.ast.implicit_tokens.is_none() {
-                        self.ast.implicit_tokens = Some(HashMap::new());
-                    }
-                    while j < self.src.len() && self.num_newlines == num_newlines {
-                        let (j, n, span, _) = self.parse_token(i)?;
-                        if self.ast.tokens.insert(n.clone()) {
-                            self.ast.spans.push(span);
-                        }
-                        match self.ast.implicit_tokens.as_mut().unwrap().entry(n) {
-                            Entry::Occupied(entry) => {
-                                let orig_span = *entry.get();
-                                add_duplicate_occurrence(
-                                    errs,
-                                    YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
-                                    orig_span,
-                                    span,
-                                );
-                            }
-                            Entry::Vacant(entry) => {
-                                entry.insert(span);
-                            }
-                        }
-                        i = self.parse_ws(j, true)?;
-                    }
-                    continue;
+            if let YaccKind::Eco = self.yacc_kind
+                && let Some(j) = self.lookahead_is("%implicit_tokens", i)
+            {
+                i = self.parse_ws(j, false)?;
+                let num_newlines = self.num_newlines;
+                if self.ast.implicit_tokens.is_none() {
+                    self.ast.implicit_tokens = Some(HashMap::new());
                 }
+                while j < self.src.len() && self.num_newlines == num_newlines {
+                    let (j, n, span, _) = self.parse_token(i)?;
+                    if self.ast.tokens.insert(n.clone()) {
+                        self.ast.spans.push(span);
+                    }
+                    match self.ast.implicit_tokens.as_mut().unwrap().entry(n) {
+                        Entry::Occupied(entry) => {
+                            let orig_span = *entry.get();
+                            add_duplicate_occurrence(
+                                errs,
+                                YaccGrammarErrorKind::DuplicateImplicitTokensDeclaration,
+                                orig_span,
+                                span,
+                            );
+                        }
+                        Entry::Vacant(entry) => {
+                            entry.insert(span);
+                        }
+                    }
+                    i = self.parse_ws(j, true)?;
+                }
+                continue;
             }
             {
                 let k;
@@ -1703,7 +1703,7 @@ x"
     #[test]
     fn test_dup_precs() {
         #[rustfmt::skip]
-        let srcs = vec![
+        let srcs = [
             ("
           %left 'x'
           %left 'x'
