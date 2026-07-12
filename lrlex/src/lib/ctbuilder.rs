@@ -101,16 +101,16 @@ impl<T: Clone> TryFrom<&Value<T>> for LexerKind {
                 namespace,
                 member: (member, member_loc),
             })) => {
-                if let Some((ns, loc)) = namespace {
-                    if ns.to_lowercase() != "lexerkind" {
-                        return Err(HeaderError {
-                            kind: HeaderErrorKind::ConversionError(
-                                "LexerKind",
-                                "Expected namespace `LexerKind`",
-                            ),
-                            locations: vec![loc.clone()],
-                        });
-                    }
+                if let Some((ns, loc)) = namespace
+                    && ns.to_lowercase() != "lexerkind"
+                {
+                    return Err(HeaderError {
+                        kind: HeaderErrorKind::ConversionError(
+                            "LexerKind",
+                            "Expected namespace `LexerKind`",
+                        ),
+                        locations: vec![loc.clone()],
+                    });
                 }
                 if member.to_lowercase() != "lrnonstreaminglexer" {
                     return Err(HeaderError {
@@ -473,7 +473,7 @@ where
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
             if lk.contains(outp.as_path()) {
-                return Err(format!("Generating two lexers to the same path ('{}') is not allowed: use CTLexerBuilder::output_path (and, optionally, CTLexerBuilder::mod_name) to differentiate them.", &outp.to_str().unwrap()).into());
+                return Err(format!("Generating two lexers to the same path ('{}') is not allowed: use CTLexerBuilder::output_path (and, optionally, CTLexerBuilder::mod_name) to differentiate them.", outp.to_str().unwrap()).into());
             }
             lk.insert(outp.clone());
         }
@@ -572,13 +572,11 @@ where
 
                                         for path in glob_paths {
                                             let path = path?;
-                                            if let Some(ext) = path.extension() {
-                                                if let Some(ext) = ext.to_str() {
-                                                    if ext.starts_with("grm") {
+                                            if let Some(ext) = path.extension()
+                                                && let Some(ext) = ext.to_str()
+                                                    && ext.starts_with("grm") {
                                                         add_error_line(&mut err_str, "test_files extensions beginning with `grm` are reserved.".into());
                                                     }
-                                                }
-                                            }
                                             let input = fs::read_to_string(&path)?;
                                             let l: LRNonStreamingLexer<LexerTypesT> =
                                                 closure_lexerdef.lexer(&input);
@@ -648,87 +646,88 @@ where
 
         let mut has_unallowed_missing = false;
         let err_indent = " ".repeat(ERROR.len());
-        if !self.allow_missing_terms_in_lexer {
-            if let Some(ref mfl) = missing_from_lexer {
-                if let Some(ct_parser) = &ct_parser {
-                    let grm = ct_parser.yacc_grammar();
-                    let token_spans = mfl
-                        .iter()
-                        .map(|name| {
-                            ct_parser
-                                .yacc_grammar()
-                                .token_span(*grm.tokens_map().get(name.as_str()).unwrap())
-                                .expect("Given token should have a span")
-                        })
-                        .collect::<Vec<_>>();
+        if !self.allow_missing_terms_in_lexer
+            && let Some(ref mfl) = missing_from_lexer
+        {
+            if let Some(ct_parser) = &ct_parser {
+                let grm = ct_parser.yacc_grammar();
+                let token_spans = mfl
+                    .iter()
+                    .map(|name| {
+                        ct_parser
+                            .yacc_grammar()
+                            .token_span(*grm.tokens_map().get(name.as_str()).unwrap())
+                            .expect("Given token should have a span")
+                    })
+                    .collect::<Vec<_>>();
 
-                    let yacc_diag = SpannedDiagnosticFormatter::new(
-                        ct_parser.grammar_src(),
-                        ct_parser.grammar_path(),
-                    );
+                let yacc_diag = SpannedDiagnosticFormatter::new(
+                    ct_parser.grammar_src(),
+                    ct_parser.grammar_path(),
+                );
 
-                    eprintln!(
-                        "{ERROR} these tokens are not referenced in the lexer but defined as follows"
-                    );
-                    eprintln!(
-                        "{err_indent} {}",
-                        yacc_diag.file_location_msg("in the grammar", None)
-                    );
-                    for span in token_spans {
-                        eprintln!(
-                            "{}",
-                            yacc_diag.underline_span_with_text(
-                                span,
-                                "Missing from lexer".to_string(),
-                                '^'
-                            )
-                        );
-                    }
-                    eprintln!();
-                } else {
-                    eprintln!(
-                        "{ERROR} the following tokens are used in the grammar but are not defined in the lexer:"
-                    );
-                    for n in mfl {
-                        eprintln!("    {}", n);
-                    }
-                }
-                has_unallowed_missing = true;
-            }
-        }
-        if !self.allow_missing_tokens_in_parser && self.show_warnings {
-            if let Some(ref mfp) = missing_from_parser {
-                let error_prefix = if self.warnings_are_errors {
-                    ERROR
-                } else {
-                    WARNING
-                };
-                let err_indent = " ".repeat(error_prefix.len());
-                let mut outs = Vec::new();
-                outs.push(format!("{error_prefix} these tokens are not referenced in the grammar but defined as follows"));
-                outs.push(format!(
+                eprintln!(
+                    "{ERROR} these tokens are not referenced in the lexer but defined as follows"
+                );
+                eprintln!(
                     "{err_indent} {}",
-                    lex_diag.file_location_msg("in the lexer", None)
-                ));
-                for (_, span) in mfp {
-                    let error_contents = lex_diag.underline_span_with_text(
-                        *span,
-                        "Missing from parser".to_string(),
-                        '^',
+                    yacc_diag.file_location_msg("in the grammar", None)
+                );
+                for span in token_spans {
+                    eprintln!(
+                        "{}",
+                        yacc_diag.underline_span_with_text(
+                            span,
+                            "Missing from lexer".to_string(),
+                            '^'
+                        )
                     );
-                    outs.extend(error_contents.lines().map(|s| s.to_string()));
                 }
-
-                for s in outs {
-                    if !self.warnings_are_errors && std::env::var("OUT_DIR").is_ok() {
-                        println!("cargo:warning={}", s)
-                    } else {
-                        eprintln!("{}", s);
-                    }
+                eprintln!();
+            } else {
+                eprintln!(
+                    "{ERROR} the following tokens are used in the grammar but are not defined in the lexer:"
+                );
+                for n in mfl {
+                    eprintln!("    {}", n);
                 }
-
-                has_unallowed_missing |= self.warnings_are_errors;
             }
+            has_unallowed_missing = true;
+        }
+        if !self.allow_missing_tokens_in_parser
+            && self.show_warnings
+            && let Some(ref mfp) = missing_from_parser
+        {
+            let error_prefix = if self.warnings_are_errors {
+                ERROR
+            } else {
+                WARNING
+            };
+            let err_indent = " ".repeat(error_prefix.len());
+            let mut outs = Vec::new();
+            outs.push(format!("{error_prefix} these tokens are not referenced in the grammar but defined as follows"));
+            outs.push(format!(
+                "{err_indent} {}",
+                lex_diag.file_location_msg("in the lexer", None)
+            ));
+            for (_, span) in mfp {
+                let error_contents = lex_diag.underline_span_with_text(
+                    *span,
+                    "Missing from parser".to_string(),
+                    '^',
+                );
+                outs.extend(error_contents.lines().map(|s| s.to_string()));
+            }
+
+            for s in outs {
+                if !self.warnings_are_errors && std::env::var("OUT_DIR").is_ok() {
+                    println!("cargo:warning={}", s)
+                } else {
+                    eprintln!("{}", s);
+                }
+            }
+
+            has_unallowed_missing |= self.warnings_are_errors;
         }
         if has_unallowed_missing {
             fs::remove_file(outp).ok();
@@ -894,13 +893,13 @@ where
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the
         // binary etc).
-        if let Ok(curs) = read_to_string(outp) {
-            if curs == outs {
-                return Ok(CTLexer {
-                    missing_from_lexer,
-                    missing_from_parser,
-                });
-            }
+        if let Ok(curs) = read_to_string(outp)
+            && curs == outs
+        {
+            return Ok(CTLexer {
+                missing_from_lexer,
+                missing_from_parser,
+            });
         }
         let mut f = File::create(outp)?;
         f.write_all(outs.as_bytes())?;
@@ -1410,10 +1409,10 @@ impl<StorageT: Display + ToTokens> CTTokenMapBuilder<StorageT> {
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the
         // binary etc).
-        if let Ok(curs) = read_to_string(&outp) {
-            if curs == outs {
-                return Ok(());
-            }
+        if let Ok(curs) = read_to_string(&outp)
+            && curs == outs
+        {
+            return Ok(());
         }
 
         let mut f = File::create(outp)?;

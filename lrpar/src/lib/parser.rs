@@ -472,16 +472,16 @@ where
                     pstack.push(self.stable.goto(prior, ridx).unwrap());
                 }
                 Action::Shift(state_id) => {
-                    if let Some(ref mut astack_uw) = *astack {
-                        if let Some(spans_uw) = spans {
-                            let la_lexeme = if let Some(l) = lexeme_prefix {
-                                l
-                            } else {
-                                self.next_lexeme(laidx)
-                            };
-                            astack_uw.push(AStackType::Lexeme(la_lexeme));
-                            spans_uw.push(la_lexeme.span());
-                        }
+                    if let Some(ref mut astack_uw) = *astack
+                        && let Some(spans_uw) = spans
+                    {
+                        let la_lexeme = if let Some(l) = lexeme_prefix {
+                            l
+                        } else {
+                            self.next_lexeme(laidx)
+                        };
+                        astack_uw.push(AStackType::Lexeme(la_lexeme));
+                        spans_uw.push(la_lexeme.span());
                     }
                     pstack.push(state_id);
                     laidx += 1;
@@ -811,12 +811,12 @@ where
                                     let mut j = i + 1;
                                     let mut last_end = l.span().end();
                                     while j < rs.len() {
-                                        if let ParseRepair::Delete(next_l) = rs[j] {
-                                            if next_l.span().start() == last_end {
-                                                last_end = next_l.span().end();
-                                                j += 1;
-                                                continue;
-                                            }
+                                        if let ParseRepair::Delete(next_l) = rs[j]
+                                            && next_l.span().start() == last_end
+                                        {
+                                            last_end = next_l.span().end();
+                                            j += 1;
+                                            continue;
                                         }
                                         break;
                                     }

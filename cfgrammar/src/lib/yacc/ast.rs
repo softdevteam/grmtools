@@ -370,10 +370,10 @@ impl GrammarAST {
             if self.tokens.contains(k) {
                 continue;
             }
-            if let Some(ref it) = self.implicit_tokens {
-                if it.contains_key(k) {
-                    continue;
-                }
+            if let Some(ref it) = self.implicit_tokens
+                && it.contains_key(k)
+            {
+                continue;
             }
             return Err(YaccGrammarError {
                 kind: YaccGrammarErrorKind::UnknownEPP(k.clone()),
@@ -454,10 +454,10 @@ impl GrammarAST {
                 for sym in &prod.symbols {
                     match sym {
                         Symbol::Rule(name, _) => {
-                            if seen_rules.insert(name) {
-                                if let Some(rule) = self.rules.get(name) {
-                                    todo.extend(&rule.pidxs);
-                                }
+                            if seen_rules.insert(name)
+                                && let Some(rule) = self.rules.get(name)
+                            {
+                                todo.extend(&rule.pidxs);
                             }
                         }
                         Symbol::Token(name, _) => {

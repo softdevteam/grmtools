@@ -539,10 +539,10 @@ fn simplify_repairs<
     //   2) by the number of repairs they contain
     let contains_avoid_insert = |rprs: &Vec<ParseRepair<LexerTypesT::LexemeT, StorageT>>| -> bool {
         for r in rprs.iter() {
-            if let ParseRepair::Insert(tidx) = r {
-                if parser.grm.avoid_insert(*tidx) {
-                    return true;
-                }
+            if let ParseRepair::Insert(tidx) = r
+                && parser.grm.avoid_insert(*tidx)
+            {
+                return true;
             }
         }
         false

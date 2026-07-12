@@ -755,7 +755,7 @@ mod test {
             assert_eq!(errs.len(), 1);
             let e = &errs[0];
             if !e.kind.is_same_kind(&kind) {
-                panic!("expected {:?}.is_same_kind({:?})", &e.kind, &kind);
+                panic!("expected {:?}.is_same_kind({:?})", e.kind, kind);
             }
             assert_eq!(
                 e.spans()

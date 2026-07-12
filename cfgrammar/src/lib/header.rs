@@ -594,10 +594,10 @@ impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
                 namespace,
                 member: (yk_value, yk_value_loc),
             })) => {
-                if let Some((ns, ns_loc)) = namespace {
-                    if ns != "yacckind" {
-                        err_locs.push(ns_loc.clone());
-                    }
+                if let Some((ns, ns_loc)) = namespace
+                    && ns != "yacckind"
+                {
+                    err_locs.push(ns_loc.clone());
                 }
                 let yacckinds = [
                     ("grmtools".to_string(), YaccKind::Grmtools),
@@ -635,20 +635,20 @@ impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
                         member: (ak_str, ak_loc),
                     },
             }) => {
-                if let Some((yk_ns, yk_ns_loc)) = yk_namespace {
-                    if yk_ns != "yacckind" {
-                        err_locs.push(yk_ns_loc.clone());
-                    }
+                if let Some((yk_ns, yk_ns_loc)) = yk_namespace
+                    && yk_ns != "yacckind"
+                {
+                    err_locs.push(yk_ns_loc.clone());
                 }
 
                 if yk_str != "original" {
                     err_locs.push(yk_loc.clone());
                 }
 
-                if let Some((ak_ns, ak_ns_loc)) = ak_namespace {
-                    if ak_ns != "yaccoriginalactionkind" {
-                        err_locs.push(ak_ns_loc.clone());
-                    }
+                if let Some((ak_ns, ak_ns_loc)) = ak_namespace
+                    && ak_ns != "yaccoriginalactionkind"
+                {
+                    err_locs.push(ak_ns_loc.clone());
                 }
                 let actionkinds = [
                     ("noaction", YaccOriginalActionKind::NoAction),

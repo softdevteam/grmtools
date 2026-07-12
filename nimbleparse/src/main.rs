@@ -324,7 +324,7 @@ fn main() {
     let (sgraph, stable) = match from_yacc(&grm, Minimiser::Pager) {
         Ok(x) => x,
         Err(s) => {
-            eprintln!("{}: {}", &yacc_y_path.display(), &s);
+            eprintln!("{}: {}", yacc_y_path.display(), s);
             process::exit(1);
         }
     };
@@ -333,38 +333,36 @@ fn main() {
         println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
     }
 
-    if !quiet {
-        if let Some(c) = stable.conflicts() {
-            let pp_rr = if let Some(i) = grm.expectrr() {
-                i != c.rr_len()
-            } else {
-                0 != c.rr_len()
-            };
-            let pp_sr = if let Some(i) = grm.expect() {
-                i != c.sr_len()
-            } else {
-                0 != c.sr_len()
-            };
-            if pp_rr {
-                println!("{}", c.pp_rr(&grm));
-            }
-            if pp_sr {
-                println!("{}", c.pp_sr(&grm));
-            }
-            if (pp_rr || pp_sr) && !dump_state_graph {
-                println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
-            }
-            eprintln!(
-                "{}",
-                yacc_diag.format_conflicts::<DefaultLexerTypes<u32>>(
-                    &grm,
-                    ast_validation.ast(),
-                    c,
-                    &sgraph,
-                    &stable,
-                )
-            );
+    if !quiet && let Some(c) = stable.conflicts() {
+        let pp_rr = if let Some(i) = grm.expectrr() {
+            i != c.rr_len()
+        } else {
+            0 != c.rr_len()
+        };
+        let pp_sr = if let Some(i) = grm.expect() {
+            i != c.sr_len()
+        } else {
+            0 != c.sr_len()
+        };
+        if pp_rr {
+            println!("{}", c.pp_rr(&grm));
         }
+        if pp_sr {
+            println!("{}", c.pp_sr(&grm));
+        }
+        if (pp_rr || pp_sr) && !dump_state_graph {
+            println!("Stategraph:\n{}\n", sgraph.pp_core_states(&grm));
+        }
+        eprintln!(
+            "{}",
+            yacc_diag.format_conflicts::<DefaultLexerTypes<u32>>(
+                &grm,
+                ast_validation.ast(),
+                c,
+                &sgraph,
+                &stable,
+            )
+        );
     }
 
     let (missing_from_lexer, missing_from_parser) = set_rule_ids(&mut lexerdef, &grm);
@@ -575,15 +573,14 @@ where
                                         }
                                         for path in glob_paths {
                                             let path = path?;
-                                            if let Some(ext) = path.extension() {
-                                                if let Some(ext) = ext.to_str() {
-                                                    if ext.starts_with("grm") {
-                                                        Err(NimbleparseError::Other(
+                                            if let Some(ext) = path.extension()
+                                                && let Some(ext) = ext.to_str()
+                                                && ext.starts_with("grm")
+                                            {
+                                                Err(NimbleparseError::Other(
                                                         "test_files extensions beginning with `grm` are reserved."
                                                         .into(),
                                                     ))?
-                                                    }
-                                                }
                                             }
                                             paths.push(path);
                                         }

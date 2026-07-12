@@ -32,7 +32,7 @@ fn main() {
                 for e in errs {
                     println!("{}", e.pp(&lexer, &param_y::token_epp));
                 }
-                println!("Evaluated: {:?}", &param);
+                println!("Evaluated: {:?}", param);
             }
             _ => break,
         }
