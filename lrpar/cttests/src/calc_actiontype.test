@@ -1,6 +1,6 @@
 name: Test basic user actions using the calculator grammar (Original yacckind)
 yacckind: Original(YaccOriginalActionKind::UserAction)
-recoverer: RecoveryKind::None
+recoverer: RecoveryKind::CPCTPlus
 grammar: |
     %start Expr
     %actiontype Result<u64, ()>
