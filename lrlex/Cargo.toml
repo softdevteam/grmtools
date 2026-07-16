@@ -33,7 +33,7 @@ regex-syntax.workspace = true
 num-traits.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
-bincode.workspace = true
+wincode.workspace = true
 serde = { workspace = true, optional = true }
 prettyplease.workspace = true
 syn.workspace = true

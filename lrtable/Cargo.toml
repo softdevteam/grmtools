@@ -9,7 +9,7 @@ license = "Apache-2.0/MIT"
 categories = ["parsing"]
 
 [features]
-bincode = ["dep:bincode", "sparsevec/bincode", "cfgrammar/bincode"]
+wincode = ["dep:wincode", "sparsevec/wincode", "cfgrammar/wincode"]
 serde = ["dep:serde", "sparsevec/serde", "cfgrammar/serde"]
 
 [lib]
@@ -19,7 +19,7 @@ path = "src/lib/mod.rs"
 [dependencies]
 cfgrammar = { path="../cfgrammar", version = "0.14" }
 
-bincode = { workspace = true, features = ["derive"], optional = true }
+wincode = { workspace = true, features = ["derive"], optional = true }
 fnv.workspace = true
 num-traits.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }

@@ -8,8 +8,6 @@ use std::{
     marker::PhantomData,
 };
 
-#[cfg(feature = "bincode")]
-use bincode::{Decode, Encode};
 use cfgrammar::{
     PIdx, RIdx, Symbol, TIdx,
     yacc::{AssocKind, YaccGrammar},
@@ -19,11 +17,13 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use serde::{Deserialize, Serialize};
 use sparsevec::SparseVec;
 use vob::{IterSetBits, Vob};
+#[cfg(feature = "wincode")]
+use wincode::{SchemaRead, SchemaWrite};
 
 use crate::{StIdx, stategraph::StateGraph};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[derive(Debug)]
 pub struct Conflicts<StorageT> {
     reduce_reduce: Vec<(
@@ -148,7 +148,7 @@ impl<StorageT> fmt::Display for StateTableError<StorageT> {
 /// A representation of a `StateTable` for a grammar. `actions` and `gotos` are split into two
 /// separate hashmaps, rather than a single table, due to the different types of their values.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 pub struct StateTable<StorageT> {
     actions: SparseVec<usize>,
     state_actions: Vob<u64>,

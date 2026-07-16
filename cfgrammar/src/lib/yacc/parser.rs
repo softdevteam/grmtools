@@ -1,7 +1,5 @@
 // Note: this is the parser for both YaccKind::Original(YaccOriginalActionKind::GenericParseTree) and YaccKind::Eco yacc kinds.
 
-#[cfg(feature = "bincode")]
-use bincode::{Decode, Encode};
 use num_traits::PrimInt;
 use regex::Regex;
 #[cfg(feature = "serde")]
@@ -13,6 +11,8 @@ use std::{
     str::FromStr,
     sync::LazyLock,
 };
+#[cfg(feature = "wincode")]
+use wincode::{SchemaRead, SchemaWrite};
 
 use crate::{
     Span, Spanned,
@@ -161,7 +161,7 @@ impl fmt::Display for YaccGrammarErrorKind {
 /// The various different possible Yacc parser errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[non_exhaustive]
 pub enum YaccGrammarWarningKind {
     UnusedRule,
@@ -171,7 +171,7 @@ pub enum YaccGrammarWarningKind {
 /// Any Warning from the Yacc parser returns an instance of this struct.
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 pub struct YaccGrammarWarning {
     /// The specific kind of warning.
     pub(crate) kind: YaccGrammarWarningKind,

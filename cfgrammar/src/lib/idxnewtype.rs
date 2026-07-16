@@ -3,18 +3,18 @@
 
 use std::mem::size_of;
 
-#[cfg(feature = "bincode")]
-use bincode::{Decode, Encode};
 use num_traits::{PrimInt, Unsigned};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wincode")]
+use wincode::{SchemaRead, SchemaWrite};
 
 macro_rules! IdxNewtype {
     ($(#[$attr:meta])* $n: ident) => {
         $(#[$attr])*
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
-        #[cfg_attr(feature="bincode", derive(Encode, Decode))]
+        #[cfg_attr(feature="wincode", derive(SchemaRead, SchemaWrite))]
         pub struct $n<T>(pub T);
 
         impl<T: PrimInt + Unsigned> From<$n<T>> for usize {

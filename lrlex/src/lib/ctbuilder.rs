@@ -1,6 +1,5 @@
 //! Build grammars at run-time.
 
-use bincode::Encode;
 use cfgrammar::{
     header::{
         GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, Namespaced,
@@ -32,6 +31,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{LazyLock, Mutex},
 };
+use wincode::SchemaWrite;
 
 use crate::{DefaultLexerTypes, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef};
 
@@ -257,12 +257,28 @@ impl CTLexerBuilder<'_, DefaultLexerTypes<u32>> {
         CTLexerBuilder::<DefaultLexerTypes<u32>>::new_with_lexemet()
     }
 }
+type FixIntConfig = wincode::config::Configuration;
 
+type VarIntConfig = wincode::config::Configuration<
+    true,
+    4194304,
+    wincode::len::BincodeLen,
+    wincode::int_encoding::LittleEndian,
+    wincode::int_encoding::VarInt,
+>;
 impl<'a, LexerTypesT: LexerTypes<LexErrorT = crate::LRLexError> + 'static>
     CTLexerBuilder<'a, LexerTypesT>
 where
-    LexerTypesT::StorageT:
-        'static + Debug + Eq + Hash + PrimInt + Encode + TryFrom<usize> + Unsigned + ToTokens,
+    LexerTypesT::StorageT: 'static
+        + Debug
+        + Eq
+        + Hash
+        + PrimInt
+        + SchemaWrite<FixIntConfig, Src = LexerTypesT::StorageT>
+        + SchemaWrite<VarIntConfig, Src = LexerTypesT::StorageT>
+        + TryFrom<usize>
+        + Unsigned
+        + ToTokens,
     usize: AsPrimitive<LexerTypesT::StorageT>,
 {
     /// Create a new [CTLexerBuilder].

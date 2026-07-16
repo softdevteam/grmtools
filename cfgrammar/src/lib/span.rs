@@ -1,15 +1,15 @@
-#[cfg(feature = "bincode")]
-use bincode::{Decode, Encode};
 use proc_macro2::TokenStream;
 use quote::{ToTokens, TokenStreamExt, quote};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wincode")]
+use wincode::{SchemaRead, SchemaWrite};
 
 /// A `Span` records what portion of the user's input something (e.g. a lexeme or production)
 /// references (i.e. the `Span` doesn't hold a reference / copy of the actual input).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 pub struct Span {
     start: usize,
     end: usize,

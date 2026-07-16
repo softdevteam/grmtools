@@ -22,7 +22,6 @@ use crate::{
 #[cfg(feature = "_unstable_api")]
 use crate::unstable_api::UnstableApi;
 
-use bincode::{Decode, Encode, decode_from_slice, encode_to_vec};
 use cfgrammar::{
     Location, RIdx, Span, Symbol,
     header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
@@ -35,6 +34,7 @@ use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use proc_macro2::{Literal, TokenStream};
 use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use syn::{Generics, parse_quote};
+use wincode::{SchemaRead, SchemaReadOwned, SchemaWrite};
 
 const ACTION_PREFIX: &str = "__gt_";
 const GLOBAL_PREFIX: &str = "__GT_";
@@ -221,6 +221,33 @@ impl Visibility {
     }
 }
 
+/// Sets the underlying encoding algorithm for serialising the `ParserData` into the generated source files.
+///
+/// This correlates to a specific `Configuration` of [wincode::config](https://docs.rs/wincode/latest/wincode/config/index.html).
+#[non_exhaustive]
+#[derive(SchemaRead, SchemaWrite, Debug, Clone, Copy)]
+pub enum SerialisationFormat {
+    /// See [wincode::FixedInt](https://docs.rs/wincode/latest/wincode/int_encoding/struct.FixedInt.html)
+    FixedSizeInteger,
+    /// See [wincode::VarInt](https://docs.rs/wincode/latest/wincode/int_encoding/struct.VarInt.html)
+    VariableSizedInteger,
+}
+// We export this for generated code to refer to.
+#[doc(hidden)]
+pub use wincode;
+impl ToTokens for SerialisationFormat {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            SerialisationFormat::FixedSizeInteger => {
+                quote! {::lrpar::ctbuilder::SerialisationFormat::FixedSizeInteger}
+            }
+            SerialisationFormat::VariableSizedInteger => {
+                quote! {::lrpar::ctbuilder::SerialisationFormat::VariableSizedInteger}
+            }
+        })
+    }
+}
+
 /// A `CTParserBuilder` allows one to specify the criteria for building a statically generated
 /// parser.
 pub struct CTParserBuilder<'a, LexerTypesT: LexerTypes>
@@ -255,15 +282,33 @@ where
             ) -> Result<(), Box<dyn Error>>,
         >,
     >,
+    serialisation_format: Option<SerialisationFormat>,
     // test function for inspecting private state
     #[cfg(test)]
     inspect_callback: Option<Box<dyn Fn(RecoveryKind) -> Result<(), Box<dyn Error>>>>,
     phantom: PhantomData<LexerTypesT>,
 }
 
+/// Defaults to `wincode::int_encoding::VarInt`.
+type FixIntConfig = wincode::config::Configuration;
+/// The default config with the last parameter set to `VarInt`
+type VarIntConfig = wincode::config::Configuration<
+    true,
+    4194304,
+    wincode::len::BincodeLen,
+    wincode::int_encoding::LittleEndian,
+    wincode::int_encoding::VarInt,
+>;
+
 impl<
     'a,
-    StorageT: 'static + Debug + Hash + PrimInt + Encode + Unsigned,
+    StorageT: 'static
+        + Debug
+        + Hash
+        + PrimInt
+        + SchemaWrite<FixIntConfig, Src = StorageT>
+        + SchemaWrite<VarIntConfig, Src = StorageT>
+        + Unsigned,
     LexerTypesT: LexerTypes<StorageT = StorageT>,
 > CTParserBuilder<'a, LexerTypesT>
 where
@@ -305,6 +350,7 @@ where
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
             inspect_rt: None,
+            serialisation_format: Some(SerialisationFormat::VariableSizedInteger),
             #[cfg(test)]
             inspect_callback: None,
             phantom: PhantomData,
@@ -924,6 +970,7 @@ where
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
             inspect_rt: None,
+            serialisation_format: Some(SerialisationFormat::VariableSizedInteger),
             #[cfg(test)]
             inspect_callback: None,
             phantom: PhantomData,
@@ -1043,6 +1090,7 @@ where
             show_warnings,
             visibility,
             rust_edition,
+            serialisation_format,
             inspect_rt: _,
             #[cfg(test)]
                 inspect_callback: _,
@@ -1066,6 +1114,7 @@ where
         let cache_info = quote! {
             BUILD_TIME = #build_time
             DERIVED_MOD_NAME = #derived_mod_name
+            ENCODING_CONFIG = #serialisation_format
             GRAMMAR_PATH = #grammar_path
             MOD_NAME = #mod_name
             RECOVERER = #recoverer
@@ -1076,6 +1125,7 @@ where
             RUST_EDITION = #rust_edition
             RULE_IDS_MAP = [#(#rule_map,)*]
             VISIBILITY = #visibility
+
         };
         let cache_info_str = cache_info.to_string();
         quote!(#cache_info_str)
@@ -1199,17 +1249,49 @@ where
             _ => unreachable!(),
         };
 
-        let grm_data = encode_to_vec(grm, bincode::config::standard())?;
-        let stable_data = encode_to_vec(stable, bincode::config::standard())?;
+        let serialisation_format = self
+            .serialisation_format
+            .expect("Should already have a default value");
+        // Note that the configuration types use associated consts, and thus these configurations represent distinct types.
+        let (grm_data, stable_data): (Vec<u8>, Vec<u8>) = match serialisation_format {
+            SerialisationFormat::FixedSizeInteger => {
+                let config = wincode::config::Configuration::default().with_fixint_encoding();
+                let grm = wincode::config::serialize(grm, config)?;
+                let stable = wincode::config::serialize(stable, config)?;
+                (grm, stable)
+            }
+            SerialisationFormat::VariableSizedInteger => {
+                let config = wincode::config::Configuration::default().with_varint_encoding();
+                let grm = wincode::config::serialize(grm, config)?;
+                let stable = wincode::config::serialize(stable, config)?;
+                (grm, stable)
+            }
+        };
+        let serialisation_format_str = quote!(serialisation_format).to_string();
         Ok(quote! {
             const __GRM_DATA: &[u8] = &[#(#grm_data,)*];
             const __STABLE_DATA: &[u8] = &[#(#stable_data,)*];
+            const __SERIALISATION_FORMAT: ::lrpar::ctbuilder::SerialisationFormat = #serialisation_format;
 
             fn __lrpar_parser_data() -> &'static ::lrpar::ParserData<#storaget> {
                 static DATA: ::std::sync::OnceLock<::lrpar::ParserData<#storaget>>
                     = ::std::sync::OnceLock::new();
                 DATA.get_or_init(
-                    || ::lrpar::ctbuilder::_reconstitute(__GRM_DATA, __STABLE_DATA)
+                    || {
+                        // We have to call reconstitute like this because the config parameter takes a trait
+                        // which uses const generics. Thus the two config parameters here are not actually of the same type.
+                        match __SERIALISATION_FORMAT {
+                            ::lrpar::ctbuilder::SerialisationFormat::FixedSizeInteger => {
+                                ::lrpar::ctbuilder::_reconstitute(__GRM_DATA, __STABLE_DATA, ::lrpar::ctbuilder::wincode::config::Configuration::default().with_fixint_encoding())
+                            }
+                            ::lrpar::ctbuilder::SerialisationFormat::VariableSizedInteger => {
+                                ::lrpar::ctbuilder::_reconstitute(__GRM_DATA, __STABLE_DATA, ::lrpar::ctbuilder::wincode::config::Configuration::default().with_varint_encoding())
+                            }
+                            _ => {
+                                panic!("Parser source was generated using unknown `SerialisationFormat`: {:?}", #serialisation_format_str)
+                            }
+                        }
+                    }
                 )
             }
 
@@ -1632,12 +1714,16 @@ impl<StorageT: Eq + Hash> ParserData<StorageT> {
 /// This function is called by generated files; it exists so that generated files don't require a
 /// direct dependency on bincode.
 #[doc(hidden)]
-pub fn _reconstitute<StorageT: Decode<()> + Eq + Hash + PrimInt + Unsigned + 'static>(
+pub fn _reconstitute<
+    C: wincode::config::Config + Clone + Copy,
+    StorageT: SchemaReadOwned<C, Dst = StorageT> + Eq + Hash + PrimInt + Unsigned + 'static,
+>(
     grm_buf: &[u8],
     stable_buf: &[u8],
+    config: C,
 ) -> ParserData<StorageT> {
-    let (grm, _) = decode_from_slice(grm_buf, bincode::config::standard()).unwrap();
-    let (stable, _) = decode_from_slice(stable_buf, bincode::config::standard()).unwrap();
+    let grm: YaccGrammar<StorageT> = wincode::config::deserialize_from(grm_buf, config).unwrap();
+    let stable = wincode::config::deserialize_from(stable_buf, config).unwrap();
     ParserData { grm, stable }
 }
 
