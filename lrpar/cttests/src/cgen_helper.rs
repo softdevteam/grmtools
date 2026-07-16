@@ -31,9 +31,10 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
             Some(s) => panic!("YaccKind '{}' not supported", s),
             None => None,
         };
-        let recoverer = match docs[0]["revoverer"].as_str() {
+        let recoverer = match docs[0]["recoverer"].as_str() {
             Some("RecoveryKind::CPCTPlus") => Some(RecoveryKind::CPCTPlus),
             Some("RecoveryKind::None") => Some(RecoveryKind::None),
+            Some(kind) => panic!("Unknown RecoveryKind '{kind}'"),
             _ => None,
         };
         let (negative_lex_flags, positive_lex_flags) = &docs[0]["lex_flags"]
