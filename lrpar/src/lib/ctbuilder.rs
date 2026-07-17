@@ -24,7 +24,10 @@ use crate::unstable_api::UnstableApi;
 
 use cfgrammar::{
     Location, RIdx, Span, Symbol,
-    header::{GrmtoolsSectionParser, Header, HeaderValue, Value},
+    header::{
+        GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, Namespaced,
+        Setting, Value,
+    },
     markmap::{Entry, MergeBehavior},
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
 };
@@ -232,6 +235,82 @@ pub enum SerialisationFormat {
     /// See [wincode::VarInt](https://docs.rs/wincode/latest/wincode/int_encoding/struct.VarInt.html)
     VariableSizedInteger,
 }
+
+impl TryFrom<SerialisationFormat> for Value<Location> {
+    type Error = cfgrammar::header::HeaderError<Location>;
+    fn try_from(kind: SerialisationFormat) -> Result<Value<Location>, HeaderError<Location>> {
+        let from_loc = Location::Other("From<SerialisationFormat>".to_string());
+        Ok(match kind {
+            SerialisationFormat::FixedSizeInteger => Value::Setting(Setting::Unitary(Namespaced {
+                namespace: Some(("serialisationformat".to_string(), from_loc.clone())),
+                member: ("fixedsizeinteger".to_string(), from_loc),
+            })),
+            SerialisationFormat::VariableSizedInteger => {
+                Value::Setting(Setting::Unitary(Namespaced {
+                    namespace: Some(("serialisationformat".to_string(), from_loc.clone())),
+                    member: ("variablesizedinteger".to_string(), from_loc),
+                }))
+            }
+        })
+    }
+}
+
+impl<T: Clone + Debug> TryFrom<&Value<T>> for SerialisationFormat {
+    type Error = HeaderError<T>;
+    fn try_from(value: &Value<T>) -> Result<SerialisationFormat, HeaderError<T>> {
+        let mut err_locs = Vec::new();
+        match value {
+            // Finally handle enum values.
+            Value::Setting(Setting::Unitary(Namespaced {
+                namespace,
+                member: (enc_value, enc_value_loc),
+            })) => {
+                if let Some((ns, ns_loc)) = namespace
+                    && ns != "serialisationformat"
+                {
+                    err_locs.push(ns_loc.clone());
+                }
+                let encodings = [
+                    (
+                        "fixedsizeinteger".to_string(),
+                        SerialisationFormat::FixedSizeInteger,
+                    ),
+                    (
+                        "variablesizedinteger".to_string(),
+                        SerialisationFormat::VariableSizedInteger,
+                    ),
+                ];
+                let enc_found = encodings
+                    .iter()
+                    .find_map(|(enc_str, enc)| (enc_str == enc_value).then_some(enc));
+                if let Some(enc) = enc_found {
+                    if err_locs.is_empty() {
+                        Ok(*enc)
+                    } else {
+                        Err(HeaderError {
+                            kind: HeaderErrorKind::InvalidEntry("serialisation_format"),
+                            locations: err_locs,
+                        })
+                    }
+                } else {
+                    err_locs.push(enc_value_loc.clone());
+                    Err(HeaderError {
+                        kind: HeaderErrorKind::InvalidEntry("serialisation_format"),
+                        locations: err_locs,
+                    })
+                }
+            }
+            val => {
+                err_locs.push(val.primary_location().clone());
+                Err(HeaderError {
+                    kind: HeaderErrorKind::InvalidEntry("serialisation_format"),
+                    locations: err_locs,
+                })
+            }
+        }
+    }
+}
+
 // We export this for generated code to refer to.
 #[doc(hidden)]
 pub use wincode;
@@ -350,7 +429,7 @@ where
             visibility: Visibility::Private,
             rust_edition: RustEdition::Rust2021,
             inspect_rt: None,
-            serialisation_format: Some(SerialisationFormat::VariableSizedInteger),
+            serialisation_format: None,
             #[cfg(test)]
             inspect_callback: None,
             phantom: PhantomData,
@@ -497,6 +576,11 @@ where
         self
     }
 
+    pub fn serialisation_format(mut self, serialisation_format: SerialisationFormat) -> Self {
+        self.serialisation_format = Some(serialisation_format);
+        self
+    }
+
     #[cfg(test)]
     pub fn inspect_recoverer(
         mut self,
@@ -616,6 +700,20 @@ where
             }
         }
 
+        if let Some(encoding) = self.serialisation_format {
+            match header.entry("serialisation_format".to_string()) {
+                Entry::Occupied(_) => unreachable!(),
+                Entry::Vacant(v) => {
+                    let rk_value: Value<Location> = Value::try_from(encoding)?;
+                    let mut o = v.insert_entry(HeaderValue(
+                        Location::Other("CTParserBuilder".to_string()),
+                        rk_value,
+                    ));
+                    o.set_merge_behavior(MergeBehavior::Ours);
+                }
+            }
+        }
+
         {
             let mut lk = GENERATED_PATHS.lock().unwrap();
             if lk.contains(outp.as_path()) {
@@ -669,6 +767,16 @@ where
                     // Fallback to the default recoverykind.
                     self.recoverer = Some(RecoveryKind::CPCTPlus);
                 }
+                header.mark_used(&"serialisation_format".to_string());
+                if let Some(ec_val) = header
+                    .get("serialisation_format")
+                    .map(|HeaderValue(_, ec_val)| ec_val)
+                {
+                    self.serialisation_format = Some(SerialisationFormat::try_from(ec_val)?);
+                } else {
+                    self.serialisation_format = Some(SerialisationFormat::VariableSizedInteger);
+                }
+
                 self.yacckind = Some(ast_validation.yacc_kind());
                 let warnings = ast_validation.ast().warnings();
                 let res = YaccGrammar::<StorageT>::new_from_ast_with_validity_info(&ast_validation);
@@ -970,7 +1078,7 @@ where
             visibility: self.visibility.clone(),
             rust_edition: self.rust_edition,
             inspect_rt: None,
-            serialisation_format: Some(SerialisationFormat::VariableSizedInteger),
+            serialisation_format: self.serialisation_format,
             #[cfg(test)]
             inspect_callback: None,
             phantom: PhantomData,

@@ -210,6 +210,32 @@ impl From<Value<Span>> for Value<Location> {
     }
 }
 
+impl<T> Value<T> {
+    pub fn primary_location(&self) -> &T {
+        match self {
+            Value::Flag(_, loc) => loc,
+            Value::Setting(setting) => setting.primary_location(),
+        }
+    }
+}
+
+impl<T> Setting<T> {
+    fn primary_location(&self) -> &T {
+        match self {
+            Self::Constructor { arg, .. } => arg.primary_location(),
+            Self::Unitary(ns) => ns.primary_location(),
+            Self::Array(_, start_loc, _) => start_loc,
+            Self::Num(_, loc) | Self::String(_, loc) => loc,
+        }
+    }
+}
+
+impl<T> Namespaced<T> {
+    fn primary_location(&self) -> &T {
+        &self.member.1
+    }
+}
+
 static RE_LEADING_WS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[\p{Pattern_White_Space}]*").unwrap());
 static RE_NAME: LazyLock<Regex> = LazyLock::new(|| {
@@ -561,35 +587,6 @@ impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
     fn try_from(value: &Value<T>) -> Result<YaccKind, HeaderError<T>> {
         let mut err_locs = Vec::new();
         match value {
-            Value::Flag(_, loc) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "From<YaccKind>",
-                    "Cannot convert boolean to YaccKind",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::Num(_, loc)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "From<YaccKind>",
-                    "Cannot convert number to YaccKind",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::Array(_, loc, _)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "From<YaccKind>",
-                    "Cannot convert array to YaccKind",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::String(_, loc)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "From<YaccKind>",
-                    "Cannot convert string to YaccKind",
-                ),
-                locations: vec![loc.clone()],
-            }),
-
             Value::Setting(Setting::Unitary(Namespaced {
                 namespace,
                 member: (yk_value, yk_value_loc),
@@ -676,6 +673,10 @@ impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
                     })
                 }
             }
+            val => Err(HeaderError {
+                kind: HeaderErrorKind::InvalidEntry("yacckind"),
+                locations: vec![val.primary_location().clone()],
+            }),
         }
     }
 }
