@@ -662,27 +662,6 @@ impl TryFrom<&Value<Location>> for RecoveryKind {
         use cfgrammar::header::{HeaderError, HeaderErrorKind, Namespaced, Setting};
 
         match rk {
-            Value::Flag(_, loc) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "RecoveryKind",
-                    "Cannot convert boolean to RecoveryKind",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::Num(_, loc)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "RecoveryKind",
-                    "Cannot convert number to RecoveryKind",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::String(_, loc)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "RecoveryKind",
-                    "Cannot convert string to RecoveryKind",
-                ),
-                locations: vec![loc.clone()],
-            }),
             Value::Setting(Setting::Unitary(Namespaced {
                 namespace,
                 member: (kind, kind_loc),
@@ -708,26 +687,12 @@ impl TryFrom<&Value<Location>> for RecoveryKind {
                     }),
                 }
             }
-            Value::Setting(Setting::Constructor {
-                ctor: _,
-                arg:
-                    Namespaced {
-                        namespace: _,
-                        member: (_, arg_loc),
-                    },
-            }) => Err(HeaderError {
+            value => Err(HeaderError {
                 kind: HeaderErrorKind::ConversionError(
                     "RecoveryKind",
-                    "Cannot convert constructor to RecoveryKind",
+                    "Cannot convert to RecoveryKind",
                 ),
-                locations: vec![arg_loc.clone()],
-            }),
-            Value::Setting(Setting::Array(_, arr_loc, _)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "RecoveryKind",
-                    "Cannot convert array to RecoveryKind",
-                ),
-                locations: vec![arr_loc.clone()],
+                locations: vec![value.primary_location().clone()],
             }),
         }
     }

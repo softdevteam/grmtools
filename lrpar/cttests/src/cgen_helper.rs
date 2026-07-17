@@ -1,6 +1,6 @@
 use cfgrammar::yacc::{YaccKind, YaccOriginalActionKind};
 use lrlex::CTLexerBuilder;
-use lrpar::RecoveryKind;
+use lrpar::{RecoveryKind, SerialisationFormat};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -35,6 +35,16 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
             Some("RecoveryKind::CPCTPlus") => Some(RecoveryKind::CPCTPlus),
             Some("RecoveryKind::None") => Some(RecoveryKind::None),
             Some(kind) => panic!("Unknown RecoveryKind '{kind}'"),
+            _ => None,
+        };
+        let encoding = match docs[0]["serialisation_format"].as_str() {
+            Some("SerialisationFormat::FixedSizeInteger") => {
+                Some(SerialisationFormat::FixedSizeInteger)
+            }
+            Some("SerialisationFormat::VariableSizedInteger") => {
+                Some(SerialisationFormat::VariableSizedInteger)
+            }
+            Some(encoding) => panic!("Unknown SerialisationFormat '{encoding}'"),
             _ => None,
         };
         let (negative_lex_flags, positive_lex_flags) = &docs[0]["lex_flags"]
@@ -114,6 +124,9 @@ pub(crate) fn run_test_path<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::
                 }
                 if let Some(recoverer) = recoverer {
                     cp_build = cp_build.recoverer(recoverer)
+                }
+                if let Some(encoding) = encoding {
+                    cp_build = cp_build.serialisation_format(encoding)
                 }
                 cp_build = cp_build
                     .grammar_path(pg.to_str().unwrap())

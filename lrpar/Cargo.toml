@@ -23,10 +23,10 @@ _unsealed_unstable_traits = ["_unstable_api"]
 vergen = { version = "8", default-features = false, features = ["build"] }
 
 [dependencies]
-cfgrammar = { path="../cfgrammar", version = "0.14", features = ["bincode"] }
-lrtable = { path="../lrtable", version = "0.14", features = ["bincode"] }
+cfgrammar = { path="../cfgrammar", version = "0.14", features = ["wincode"] }
+lrtable = { path="../lrtable", version = "0.14", features = ["wincode"] }
 
-bincode = { workspace = true, features = ["derive"] }
+wincode = { workspace = true, features = ["derive"] }
 cactus.workspace = true
 filetime.workspace = true
 indexmap.workspace = true

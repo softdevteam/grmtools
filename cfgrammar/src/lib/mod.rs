@@ -51,10 +51,10 @@
 //! [`YaccGrammar::new_with_storaget()`](yacc/grammar/struct.YaccGrammar.html#method.new_with_storaget)
 //! which take as input a Yacc grammar.
 
-#[cfg(feature = "bincode")]
-use bincode::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wincode")]
+use wincode::{SchemaRead, SchemaWrite};
 
 #[doc(hidden)]
 pub mod header;
@@ -73,7 +73,7 @@ pub use crate::idxnewtype::{PIdx, RIdx, SIdx, TIdx};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "bincode", derive(Encode, Decode))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 pub enum Symbol<StorageT> {
     Rule(RIdx<StorageT>),
     Token(TIdx<StorageT>),

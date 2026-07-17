@@ -1,0 +1,27 @@
+name: Test fixed serialisation format from builder.
+yacckind: Original(YaccOriginalActionKind::NoAction)
+grammar: |
+    %grmtools{serialisation_format: SerialisationFormat::VariableSizedInteger}
+    %start Expr
+    %avoid_insert 'INT'
+    %%
+    Expr: Expr '+' Term
+        | Term
+        ;
+
+    Term: Term '*' Factor
+        | Factor
+        ;
+
+    Factor: '(' Expr ')'
+          | 'INT'
+          ;
+
+lexer: |
+    %%
+    [0-9]+ "INT"
+    \+ "+"
+    \* "*"
+    \( "("
+    \) ")"
+    [\t ]+ ;
