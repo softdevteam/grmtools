@@ -168,9 +168,9 @@ cannot match any input characters.
 %%
 A "A"
 B "B"
+[\ \n\t] ;
 [^\p{any}] "START_A"
 [^\p{any}] "START_B"
-[\ \n\t] ;
 ```
 
 
