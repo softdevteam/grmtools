@@ -1,3 +1,17 @@
+# grmtools 0.15.0 (2026-07-20)
+
+## Breaking changes
+
+* Move from `bincode` to `wincode` for serialisation. This also changes the
+  feature name that grmtools exposes, hence the major version bump.
+
+## Other changes
+
+* Use the correct default for `DEFAULT_LEX_FLAGS.case_insensitive`.
+
+* Add documentation for the syntax lrlex supports.
+
+
 # grmtools 0.14.2 (2026-04-30)
 
 * Only initialise internal parser state once at run-time. For programs that
