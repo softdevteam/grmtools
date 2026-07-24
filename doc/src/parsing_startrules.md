@@ -60,7 +60,7 @@ B "B"
 ```
 
 Following this we'll need to prepend one of the start tokens to the lexical analysis phase.
-To indicate which parse rule we expect to use as the start rule:
+To indicate which parse rule we expect to use as the start rule. For that we'll need a `token_map`.
 
 ### Build.rs
 
