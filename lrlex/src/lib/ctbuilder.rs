@@ -640,7 +640,7 @@ where
             );
         }
 
-        let (missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
+        let (mut missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
                 // Convert from HashMap<String, _> to HashMap<&str, _>
                 let owned_map = rim
@@ -659,6 +659,17 @@ where
             }
             None => (None, None),
         };
+
+        if let Some(mut mfl) = missing_from_lexer.take() {
+            for tok in &lexerdef.expected_missing_tokens {
+                mfl.remove(tok.as_str());
+            }
+            if mfl.is_empty() {
+                missing_from_lexer = None;
+            } else {
+                missing_from_lexer = Some(mfl);
+            }
+        }
 
         let mut has_unallowed_missing = false;
         let err_indent = " ".repeat(ERROR.len());

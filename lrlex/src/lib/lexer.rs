@@ -398,6 +398,7 @@ where
     rules: Vec<Rule<LexerTypesT::StorageT>>,
     start_states: Vec<StartState>,
     lex_flags: LexFlags,
+    pub(crate) expected_missing_tokens: Vec<String>,
     phantom: PhantomData<LexerTypesT>,
 }
 
@@ -414,6 +415,7 @@ where
             rules,
             start_states,
             lex_flags: DEFAULT_LEX_FLAGS,
+            expected_missing_tokens: vec![],
             phantom: PhantomData,
         }
     }
@@ -430,6 +432,7 @@ where
                 rules: p.rules,
                 start_states: p.start_states,
                 lex_flags: flags,
+                expected_missing_tokens: p.expected_missing_tokens,
                 phantom: PhantomData,
             }
         })
@@ -547,6 +550,7 @@ where
                 rules: p.rules,
                 start_states: p.start_states,
                 lex_flags,
+                expected_missing_tokens: p.expected_missing_tokens,
                 phantom: PhantomData,
             },
         )

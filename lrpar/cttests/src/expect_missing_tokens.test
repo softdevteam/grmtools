@@ -1,0 +1,16 @@
+name: Test the %expect-missing lex directive
+yacckind: Original(YaccOriginalActionKind::NoAction)
+grammar: |
+    %start meta_start
+    %token START_A START_B
+    %%
+    
+    meta_start: START_A arule | START_B brule;
+    arule: 'A';
+    brule: 'B';
+    %%
+lexer: |
+    %expect-missing "START_A" "START_B"
+    %%
+    aA "A"
+    bB "B"
