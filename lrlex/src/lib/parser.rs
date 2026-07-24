@@ -295,7 +295,7 @@ where
             self.declare_start_states(false, i, declaration_len, line_len, errs)
         } else if RE_EXCLUSIVE_START_STATE_DECLARATION.is_match(declaration) {
             self.declare_start_states(true, i, declaration_len, line_len, errs)
-        } else if declaration.starts_with("%expect-missing-tokens") {
+        } else if declaration.starts_with("%expect-missing") {
             for tok in self.src[i + declaration_len..i + line_len].split_ascii_whitespace() {
                 let tok_unquoted = tok.strip_prefix("\"").and_then(|s| s.strip_suffix("\""));
                 if let Some(tok_unquoted) = tok_unquoted {
