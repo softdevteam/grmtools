@@ -15,6 +15,7 @@
   - [grmtools parsing idioms](parsing_idioms.md)
   - [Error recovery](errorrecovery.md)
   - [An AST evaluator](ast_example.md)
+  - [Multiple start rules](parsing_startrules.md)
 - [Rust Editions](editions.md)
 - [The individual libraries and tools](libsandtools.md)
   - [lrpar](lrpar.md)
