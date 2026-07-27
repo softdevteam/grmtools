@@ -1,25 +1,15 @@
 //! Build grammars at run-time.
 
 use cfgrammar::{
-    header::{
-        GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, Namespaced,
-        Setting, Value,
-    },
+    header::{Header, HeaderError, HeaderErrorKind, HeaderValue, Namespaced, Setting, Value},
     markmap::MergeBehavior,
     span::{Location, Span},
 };
 use glob::glob;
-use lrpar::{
-    CTParserBuilder, LexerTypes,
-    diagnostics::{DiagnosticFormatter, SpannedDiagnosticFormatter},
-};
+use lrpar::{CTParserBuilder, LexerTypes, diagnostics::SpannedDiagnosticFormatter};
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
-use proc_macro2::{Ident, TokenStream};
-use quote::{ToTokens, TokenStreamExt, format_ident, quote};
-use regex::Regex;
-use std::marker::PhantomData;
+use quote::ToTokens;
 use std::{
-    any::type_name,
     borrow::Borrow,
     collections::{HashMap, HashSet},
     env::{current_dir, var},
@@ -33,15 +23,12 @@ use std::{
 };
 use wincode::SchemaWrite;
 
-use crate::{DefaultLexerTypes, LRNonStreamingLexer, LRNonStreamingLexerDef, LexFlags, LexerDef};
+use crate::{DefaultLexerTypes, LRNonStreamingLexer, LexCodegen, LexerDef, TokenMapCodegen};
 
 const RUST_FILE_EXT: &str = "rs";
 
-const ERROR: &str = "[Error]";
+pub(crate) const ERROR: &str = "[Error]";
 const WARNING: &str = "[Warning]";
-
-static RE_TOKEN_ID: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap());
 
 static GENERATED_PATHS: LazyLock<Mutex<HashSet<PathBuf>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
@@ -146,22 +133,6 @@ pub enum Visibility {
     PublicIn(String),
 }
 
-impl ToTokens for Visibility {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        tokens.extend(match self {
-            Visibility::Private => quote!(),
-            Visibility::Public => quote! {pub},
-            Visibility::PublicSuper => quote! {pub(super)},
-            Visibility::PublicSelf => quote! {pub(self)},
-            Visibility::PublicCrate => quote! {pub(crate)},
-            Visibility::PublicIn(data) => {
-                let other = str::parse::<TokenStream>(data).unwrap();
-                quote! {pub(in #other)}
-            }
-        })
-    }
-}
-
 /// Specifies the [Rust Edition] that will be emitted during code generation.
 ///
 /// [Rust Edition]: https://doc.rust-lang.org/edition-guide/rust-2021/index.html
@@ -171,43 +142,6 @@ pub enum RustEdition {
     Rust2015,
     Rust2018,
     Rust2021,
-}
-
-/// The quote impl of `ToTokens` for `Option` prints an empty string for `None`
-/// and the inner value for `Some(inner_value)`.
-///
-/// This wrapper instead emits both `Some` and `None` variants.
-/// See: [quote #20](https://github.com/dtolnay/quote/issues/20)
-struct QuoteOption<T>(Option<T>);
-
-impl<T: ToTokens> ToTokens for QuoteOption<T> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        tokens.append_all(match self.0 {
-            Some(ref t) => quote! { ::std::option::Option::Some(#t) },
-            None => quote! { ::std::option::Option::None },
-        });
-    }
-}
-
-/// This wrapper adds a missing impl of `ToTokens` for tuples.
-/// For a tuple `(a, b)` emits `(a.to_tokens(), b.to_tokens())`
-struct QuoteTuple<T>(T);
-
-impl<A: ToTokens, B: ToTokens> ToTokens for QuoteTuple<(A, B)> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let (a, b) = &self.0;
-        tokens.append_all(quote!((#a, #b)));
-    }
-}
-
-/// The wrapped `&str` value will be emitted with a call to `to_string()`
-struct QuoteToString<'a>(&'a str);
-
-impl ToTokens for QuoteToString<'_> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let x = &self.0;
-        tokens.append_all(quote! { #x.to_string() });
-    }
 }
 
 /// A string which uses `Display` for it's `Debug` impl.
@@ -495,62 +429,14 @@ where
         }
         let lex_src = read_to_string(lexerp)
             .map_err(|e| format!("When reading '{}': {e}", lexerp.display()))?;
-        let lex_diag = SpannedDiagnosticFormatter::new(&lex_src, lexerp);
-        let mut header = self.header;
-        let (parsed_header, _) = GrmtoolsSectionParser::new(&lex_src, false)
-            .parse()
-            .map_err(|es| {
-                let mut out = String::new();
-                out.push_str(&format!(
-                    "\n{ERROR}{}\n",
-                    lex_diag.file_location_msg(" parsing the `%grmtools` section", None)
-                ));
-                for e in es {
-                    out.push_str(&indent("     ", &lex_diag.format_error(e).to_string()));
-                    out.push('\n');
-                }
-                ErrorString(out)
-            })?;
-        header.merge_from(parsed_header)?;
-        header.mark_used(&"lexerkind".to_string());
-        let lexerkind = match self.lexerkind {
-            Some(lexerkind) => lexerkind,
-            None => {
-                if let Some(HeaderValue(_, lk_val)) = header.get("lexerkind") {
-                    LexerKind::try_from(lk_val)?
-                } else {
-                    LexerKind::LRNonStreamingLexer
-                }
-            }
-        };
+        let mut codegen = LexCodegen::new(&lex_src, lexerp, self.header);
+        codegen.merge_headers()?;
+        let lexerkind = codegen.extract_lexerkind(self.lexerkind)?;
         #[cfg(test)]
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
             inspect_lexerkind_cb(&lexerkind)?
         }
-        let (lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) =
-            match lexerkind {
-                LexerKind::LRNonStreamingLexer => {
-                    let lex_flags = LexFlags::try_from(&mut header)?;
-                    let lexerdef = LRNonStreamingLexerDef::<LexerTypesT>::new_with_options(
-                        &lex_src, lex_flags,
-                    )
-                    .map_err(|errs| {
-                        let mut out = String::new();
-                        out.push_str(&format!(
-                            "\n{ERROR}{}\n",
-                            lex_diag.file_location_msg("", None)
-                        ));
-                        for e in errs {
-                            out.push_str(&indent("     ", &lex_diag.format_error(e).to_string()));
-                            out.push('\n');
-                        }
-                        ErrorString(out)
-                    })?;
-                    let lex_flags = lexerdef.lex_flags().cloned();
-                    (lexerdef, lex_flags.unwrap())
-                }
-            };
-
+        let (lexerdef, lex_flags) = codegen.extract_lexerdef(&lexerkind)?;
         let ct_parser = if let Some(ref lrcfg) = self.lrpar_config {
             let mut closure_lexerdef = lexerdef.clone();
             let mut ctp = CTParserBuilder::<LexerTypesT>::new().inspect_rt(Box::new(
@@ -633,12 +519,7 @@ where
         };
 
         let mut lexerdef = Box::new(lexerdef);
-        let unused_header_values = header.unused();
-        if !unused_header_values.is_empty() {
-            return Err(
-                format!("Unused header values: {}", unused_header_values.join(", ")).into(),
-            );
-        }
+        codegen.check_unused_header_values()?;
 
         let (mut missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
             Some(ref rim) => {
@@ -735,10 +616,10 @@ where
             outs.push(format!("{error_prefix} these tokens are not referenced in the grammar but defined as follows"));
             outs.push(format!(
                 "{err_indent} {}",
-                lex_diag.file_location_msg("in the lexer", None)
+                codegen.lex_diag().file_location_msg("in the lexer", None)
             ));
             for (_, span) in mfp {
-                let error_contents = lex_diag.underline_span_with_text(
+                let error_contents = codegen.lex_diag().underline_span_with_text(
                     *span,
                     "Missing from parser".to_string(),
                     '^',
@@ -760,163 +641,24 @@ where
             fs::remove_file(outp).ok();
             panic!();
         }
-
-        let mod_name = match self.mod_name {
-            Some(s) => s.to_owned(),
-            None => {
-                // The user hasn't specified a module name, so we create one automatically: what we
-                // do is strip off all the filename extensions (note that it's likely that inp ends
-                // with `l.rs`, so we potentially have to strip off more than one extension) and
-                // then add `_l` to the end.
-                let mut stem = lexerp.to_str().unwrap();
-                loop {
-                    let new_stem = Path::new(stem).file_stem().unwrap().to_str().unwrap();
-                    if stem == new_stem {
-                        break;
-                    }
-                    stem = new_stem;
-                }
-                format!("{}_l", stem)
-            }
-        };
-        let mod_name =
-            match syn::parse_str::<proc_macro2::Ident>(&mod_name) {
-                Ok(s) => s,
-                Err(e) => return Err(format!(
-                    "CTLexerBuilder::mod_name(\"{}\") is not a valid rust identifier due to '{}'",
-                    mod_name, e
-                )
-                .into()),
-            };
-        let mut lexerdef_func_impl = {
-            let LexFlags {
-                allow_wholeline_comments,
-                dot_matches_new_line,
-                multi_line,
-                octal,
-                posix_escapes,
-                case_insensitive,
-                unicode,
-                swap_greed,
-                ignore_whitespace,
-                size_limit,
-                dfa_size_limit,
-                nest_limit,
-            } = lex_flags;
-            let allow_wholeline_comments = QuoteOption(allow_wholeline_comments);
-            let dot_matches_new_line = QuoteOption(dot_matches_new_line);
-            let multi_line = QuoteOption(multi_line);
-            let octal = QuoteOption(octal);
-            let posix_escapes = QuoteOption(posix_escapes);
-            let case_insensitive = QuoteOption(case_insensitive);
-            let unicode = QuoteOption(unicode);
-            let swap_greed = QuoteOption(swap_greed);
-            let ignore_whitespace = QuoteOption(ignore_whitespace);
-            let size_limit = QuoteOption(size_limit);
-            let dfa_size_limit = QuoteOption(dfa_size_limit);
-            let nest_limit = QuoteOption(nest_limit);
-
-            // Code gen for the lexerdef() `lex_flags` variable.
-            quote! {
-                let mut lex_flags = ::lrlex::DEFAULT_LEX_FLAGS;
-                lex_flags.allow_wholeline_comments = #allow_wholeline_comments.or(::lrlex::DEFAULT_LEX_FLAGS.allow_wholeline_comments);
-                lex_flags.dot_matches_new_line = #dot_matches_new_line.or(::lrlex::DEFAULT_LEX_FLAGS.dot_matches_new_line);
-                lex_flags.multi_line = #multi_line.or(::lrlex::DEFAULT_LEX_FLAGS.multi_line);
-                lex_flags.octal = #octal.or(::lrlex::DEFAULT_LEX_FLAGS.octal);
-                lex_flags.posix_escapes = #posix_escapes.or(::lrlex::DEFAULT_LEX_FLAGS.posix_escapes);
-                lex_flags.case_insensitive = #case_insensitive.or(::lrlex::DEFAULT_LEX_FLAGS.case_insensitive);
-                lex_flags.unicode = #unicode.or(::lrlex::DEFAULT_LEX_FLAGS.unicode);
-                lex_flags.swap_greed = #swap_greed.or(::lrlex::DEFAULT_LEX_FLAGS.swap_greed);
-                lex_flags.ignore_whitespace = #ignore_whitespace.or(::lrlex::DEFAULT_LEX_FLAGS.ignore_whitespace);
-                lex_flags.size_limit = #size_limit.or(::lrlex::DEFAULT_LEX_FLAGS.size_limit);
-                lex_flags.dfa_size_limit = #dfa_size_limit.or(::lrlex::DEFAULT_LEX_FLAGS.dfa_size_limit);
-                lex_flags.nest_limit = #nest_limit.or(::lrlex::DEFAULT_LEX_FLAGS.nest_limit);
-                let lex_flags = lex_flags;
-            }
-        };
-        {
-            let start_states = lexerdef.iter_start_states();
-            let rules = lexerdef.iter_rules().map(|r| {
-                    let tok_id = QuoteOption(r.tok_id);
-                    let n = QuoteOption(r.name().map(QuoteToString));
-                    let target_state =
-                        QuoteOption(r.target_state().map(|(x, y)| QuoteTuple((x, y))));
-                    let n_span = r.name_span();
-                    let regex = QuoteToString(&r.re_str);
-                    let start_states = r.start_states();
-                    // Code gen to construct a rule.
-                    //
-                    // We cannot `impl ToToken for Rule` because `Rule` never stores `lex_flags`,
-                    // Thus we reference the local lex_flags variable bound earlier.
-                    quote! {
-                        Rule::new(::lrlex::unstable_api::InternalPublicApi, #tok_id, #n, #n_span, #regex,
-                                vec![#(#start_states),*], #target_state, &lex_flags).unwrap()
-                    }
-                });
-            // Code gen for `lexerdef()`s rules and the stack of `start_states`.
-            lexerdef_func_impl.append_all(quote! {
-                let start_states: Vec<StartState> = vec![#(#start_states),*];
-                let rules = vec![#(#rules),*];
-            });
-        }
-        let lexerdef_ty = match lexerkind {
-            LexerKind::LRNonStreamingLexer => {
-                quote!(::lrlex::LRNonStreamingLexerDef)
-            }
-        };
-        // Code gen for the lexerdef() return value referencing variables bound earlier.
-        lexerdef_func_impl.append_all(quote! {
-            #lexerdef_ty::from_rules(start_states, rules)
-        });
-
-        let mut token_consts = TokenStream::new();
-        if let Some(rim) = self.rule_ids_map {
-            let mut rim_sorted = Vec::from_iter(rim.iter());
-            rim_sorted.sort_by_key(|(k, _)| *k);
-            for (name, id) in rim_sorted {
-                if RE_TOKEN_ID.is_match(name) {
-                    let tok_ident = format_ident!("N_{}", name.to_ascii_uppercase());
-                    let storaget =
-                        str::parse::<TokenStream>(type_name::<LexerTypesT::StorageT>()).unwrap();
-                    // Code gen for the constant token values.
-                    let tok_const = quote! {
-                        #[allow(dead_code)]
-                        pub const #tok_ident: #storaget = #id;
-                    };
-                    token_consts.extend(tok_const)
-                }
-            }
-        }
-        let token_consts = token_consts.into_iter();
-        let out_tokens = {
-            let lexerdef_param = str::parse::<TokenStream>(type_name::<LexerTypesT>()).unwrap();
-            let mod_vis = self.visibility;
-            // Code gen for the generated module.
-            quote! {
-                #mod_vis mod #mod_name {
-                    use ::lrlex::{LexerDef, Rule, StartState};
-                    #[allow(dead_code)]
-                    pub fn lexerdef() -> #lexerdef_ty<#lexerdef_param> {
-                        #lexerdef_func_impl
-                    }
-
-                    #(#token_consts)*
-                }
-            }
-        };
-        // Try and run a code formatter on the generated code.
-        let unformatted = out_tokens.to_string();
-        let mut outs = String::new();
+        let mod_name = codegen.mod_name_tokens(self.mod_name)?;
+        let mut lexerdef_func_impl = { LexCodegen::codegen_lex_flags(lex_flags) };
+        LexCodegen::codegen_lexerdef(*lexerdef, &mut lexerdef_func_impl);
+        let lexerdef_ty = LexCodegen::codegen_lexerkind(lexerkind, &mut lexerdef_func_impl);
+        let out_tokens = LexCodegen::codegen_module::<LexerTypesT>(
+            self.rule_ids_map,
+            self.visibility,
+            mod_name,
+            lexerdef_func_impl,
+            lexerdef_ty,
+        );
+        let unformatted = LexCodegen::codegen_unformatted_source(out_tokens);
         // Record the time that this version of lrlex was built. If the source code changes and rustc
         // forces a recompile, this will change this value, causing anything which depends on this
         // build of lrlex to be recompiled too.
         let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
-        write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
-        outs.push_str(
-            &syn::parse_str(&unformatted)
-                .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
-                .unwrap_or(unformatted),
-        );
+        let outs = LexCodegen::codegen_formatted_source(unformatted, timestamp);
+
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the
         // binary etc).
@@ -1292,11 +1034,7 @@ impl CTLexer {
 /// [custom lexer example]: https://github.com/softdevteam/grmtools/tree/master/lrlex/examples/calc_manual_lex
 #[derive(Debug, Clone)]
 pub struct CTTokenMapBuilder<StorageT: Display + ToTokens> {
-    mod_name: String,
-    token_map: Vec<(String, TokenStream)>,
-    rename_map: Option<HashMap<String, String>>,
-    allow_dead_code: bool,
-    _marker: PhantomData<StorageT>,
+    codegen: TokenMapCodegen<StorageT>,
 }
 
 impl<StorageT: Display + ToTokens> CTTokenMapBuilder<StorageT> {
@@ -1310,15 +1048,7 @@ impl<StorageT: Display + ToTokens> CTTokenMapBuilder<StorageT> {
         token_map: impl Borrow<HashMap<String, StorageT>>,
     ) -> Self {
         Self {
-            mod_name: mod_name.into(),
-            token_map: token_map
-                .borrow()
-                .iter()
-                .map(|(tok_name, tok_value)| (tok_name.clone(), tok_value.to_token_stream()))
-                .collect(),
-            rename_map: None,
-            allow_dead_code: false,
-            _marker: PhantomData,
+            codegen: TokenMapCodegen::new(mod_name, token_map),
         }
     }
 
@@ -1342,17 +1072,7 @@ impl<StorageT: Display + ToTokens> CTTokenMapBuilder<StorageT> {
         K: AsRef<str>,
         V: AsRef<str>,
     {
-        self.rename_map = rename_map.map(|rename_map| {
-            rename_map
-                .into_iter()
-                .map(|it| {
-                    let (k, v) = it.borrow();
-                    let k = k.as_ref().into();
-                    let v = v.as_ref().into();
-                    (k, v)
-                })
-                .collect()
-        });
+        self.codegen = self.codegen.rename_map(rename_map);
         self
     }
 
@@ -1363,74 +1083,15 @@ impl<StorageT: Display + ToTokens> CTTokenMapBuilder<StorageT> {
     /// get a warning if your custom lexer doesn't use any of them.
     /// This function can be used to disable this behavior.
     pub fn allow_dead_code(mut self, allow_dead_code: bool) -> Self {
-        self.allow_dead_code = allow_dead_code;
+        self.codegen = self.codegen.allow_dead_code(allow_dead_code);
         self
     }
 
     /// Build the token map module.
     pub fn build(&self) -> Result<(), Box<dyn Error>> {
-        // Record the time that this version of lrlex was built. If the source code changes and rustc
-        // forces a recompile, this will change this value, causing anything which depends on this
-        // build of lrlex to be recompiled too.
-        let mut outs = String::new();
-        let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
-        let mod_ident = format_ident!("{}", self.mod_name);
-        write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
-        let storaget = str::parse::<TokenStream>(type_name::<StorageT>()).unwrap();
-        // Sort the tokens so that they're always in the same order.
-        // This will prevent unneeded rebuilds.
-        let mut token_map_sorted = self.token_map.clone();
-        token_map_sorted.sort_by(|(l, _), (r, _)| l.cmp(r));
-        let (token_array, tokens) = token_map_sorted
-            .iter()
-            .map(|(k, id)| {
-                let name = match &self.rename_map {
-                    Some(rmap) => rmap.get(k).unwrap_or(k),
-                    _ => k,
-                };
-                let tok_ident: Ident = syn::parse_str(&format!("T_{}", name.to_ascii_uppercase()))
-                    .map_err(|e| {
-                        format!(
-                            "token name {:?} is not a valid Rust identifier: {}; \
-                            consider renaming it via `CTTokenMapBuilder::rename_map`.",
-                            name, e
-                        )
-                    })?;
-                Ok((
-                    // Note: the array of all tokens can't use `tok_ident` because
-                    // it will confuse the dead code checker. For this reason,
-                    // we use `id` here.
-                    quote! {
-                        #id,
-                    },
-                    quote! {
-                        pub const #tok_ident: #storaget = #id;
-                    },
-                ))
-            })
-            .collect::<Result<(TokenStream, TokenStream), Box<dyn Error>>>()?;
-        let unused_annotation = if self.allow_dead_code {
-            quote! {#[allow(dead_code)]}
-        } else {
-            quote! {}
-        };
-        // Since the formatter doesn't preserve comments and we don't want to lose build time,
-        // just format the module contents.
-        let unformatted = quote! {
-            #unused_annotation
-            mod #mod_ident {
-                #tokens
-                #[allow(dead_code)]
-                pub const TOK_IDS: &[#storaget] = &[#token_array];
-            }
-        }
-        .to_string();
-        let out_mod = syn::parse_str(&unformatted)
-            .map(|syntax_tree| prettyplease::unparse(&syntax_tree))
-            .unwrap_or(unformatted);
-        outs.push_str(&out_mod);
+        let outs = self.codegen.generate()?;
         let mut outp = PathBuf::from(var("OUT_DIR")?);
-        outp.push(&self.mod_name);
+        outp.push(self.codegen.mod_name());
         outp.set_extension("rs");
 
         // If the file we're about to write out already exists with the same contents, then we
@@ -1462,20 +1123,6 @@ pub fn ct_token_map<StorageT: Display + ToTokens>(
         .rename_map(rename_map)
         .allow_dead_code(true)
         .build()
-}
-
-/// Indents a multi-line string and trims any trailing newline.
-/// This currently assumes that indentation on blank lines does not matter.
-///
-/// The algorithm used by this function is:
-/// 1. Prefix `s` with the indentation, indenting the first line.
-/// 2. Trim any trailing newlines.
-/// 3. Replace all newlines with `\n{indent}`` to indent all lines after the first.
-///
-/// It is plausible that we should a step 4, but currently do not:
-/// 4. Replace all `\n{indent}\n` with `\n\n`
-fn indent(indent: &str, s: &str) -> String {
-    format!("{indent}{}\n", s.trim_end_matches('\n')).replace('\n', &format!("\n{}", indent))
 }
 
 // It isn't clear to me why this test isn't working on wasm32,

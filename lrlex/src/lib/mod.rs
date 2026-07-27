@@ -14,6 +14,7 @@
 
 use std::{error::Error, fmt};
 
+mod codegen;
 mod ctbuilder;
 #[doc(hidden)]
 pub mod defaults;
@@ -38,6 +39,7 @@ pub use crate::{
 use cfgrammar::header::{HeaderError, HeaderErrorKind};
 use cfgrammar::yacc::parser::SpansKind;
 use cfgrammar::{Span, Spanned};
+use codegen::{LexCodegen, TokenMapCodegen};
 
 pub type LexBuildResult<T> = Result<T, Vec<LexBuildError>>;
 
