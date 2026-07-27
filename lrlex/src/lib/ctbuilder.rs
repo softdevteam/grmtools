@@ -642,7 +642,7 @@ where
             panic!();
         }
         let mod_name = codegen.mod_name_tokens(self.mod_name)?;
-        let mut lexerdef_func_impl = { LexCodegen::codegen_lex_flags(lex_flags) };
+        let mut lexerdef_func_impl = LexCodegen::codegen_lex_flags(lex_flags);
         LexCodegen::codegen_lexerdef(*lexerdef, &mut lexerdef_func_impl);
         let lexerdef_ty = LexCodegen::codegen_lexerkind(lexerkind, &mut lexerdef_func_impl);
         let out_tokens = LexCodegen::codegen_module::<LexerTypesT>(
