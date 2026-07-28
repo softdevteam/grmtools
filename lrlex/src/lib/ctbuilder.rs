@@ -517,7 +517,6 @@ where
         } else {
             None
         };
-        cgb.check_unused_header_values()?;
         let (mut missing_from_lexer, missing_from_parser) = {
             let lexerdef = Box::new(codegen.lexerdef_mut());
             match &self.rule_ids_map {

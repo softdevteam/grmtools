@@ -190,7 +190,7 @@ impl<'a> LexCodegenBuilder<'a> {
         Ok((lexerdef, lex_flags))
     }
 
-    pub(crate) fn check_unused_header_values(&self) -> Result<(), Box<dyn Error>> {
+    fn check_unused_header_values(&self) -> Result<(), Box<dyn Error>> {
         let unused_header_values = self.header.unused();
         if !unused_header_values.is_empty() {
             Err(format!("Unused header values: {}", unused_header_values.join(", ")).into())
