@@ -23,7 +23,7 @@ use std::{
 };
 use wincode::SchemaWrite;
 
-use crate::{DefaultLexerTypes, LRNonStreamingLexer, LexCodegen, LexerDef, TokenMapCodegen};
+use crate::{DefaultLexerTypes, LRNonStreamingLexer, LexCodegenBuilder, LexerDef, TokenMapCodegen};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -429,21 +429,21 @@ where
         }
         let lex_src = read_to_string(lexerp)
             .map_err(|e| format!("When reading '{}': {e}", lexerp.display()))?;
-        let mut codegen = LexCodegen::new(&lex_src, lexerp, self.header);
-        codegen.merge_headers()?;
-        let lexerkind = codegen.extract_lexerkind(self.lexerkind)?;
+        let mut cgb = LexCodegenBuilder::new(&lex_src, lexerp, self.header);
+        let mut codegen =
+            cgb.build::<LexerTypesT>(self.lexerkind, self.mod_name, self.visibility)?;
         #[cfg(test)]
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
-            inspect_lexerkind_cb(&lexerkind)?
+            inspect_lexerkind_cb(codegen.lexerkind())?
         }
-        let (lexerdef, lex_flags) = codegen.extract_lexerdef(&lexerkind)?;
+
         let ct_parser = if let Some(ref lrcfg) = self.lrpar_config {
-            let mut closure_lexerdef = lexerdef.clone();
+            let mut closure_lexerdef = codegen.lexerdef().clone();
             let mut ctp = CTParserBuilder::<LexerTypesT>::new().inspect_rt(Box::new(
                 move |yacc_header, rtpb, rule_ids_map, grm_path| {
                     let owned_map = rule_ids_map
                         .iter()
-                        .map(|(x, y)| (&**x, *y))
+                        .map(|(rule_id, tok)| (&**rule_id, *tok))
                         .collect::<HashMap<_, _>>();
                     closure_lexerdef.set_rule_ids(&owned_map);
                     yacc_header.mark_used(&"test_files".to_string());
@@ -517,30 +517,32 @@ where
         } else {
             None
         };
-
-        let mut lexerdef = Box::new(lexerdef);
-        codegen.check_unused_header_values()?;
-
-        let (mut missing_from_lexer, missing_from_parser) = match self.rule_ids_map {
-            Some(ref rim) => {
-                // Convert from HashMap<String, _> to HashMap<&str, _>
-                let owned_map = rim
-                    .iter()
-                    .map(|(x, y)| (&**x, *y))
-                    .collect::<HashMap<_, _>>();
-                let (x, y) = lexerdef.set_rule_ids_spanned(&owned_map);
-                (
-                    x.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
-                    y.map(|a| {
-                        a.iter()
-                            .map(|(b, span)| (b.to_string(), *span))
-                            .collect::<HashSet<_>>()
-                    }),
-                )
+        cgb.check_unused_header_values()?;
+        let (mut missing_from_lexer, missing_from_parser) = {
+            let lexerdef = Box::new(codegen.lexerdef_mut());
+            match &self.rule_ids_map {
+                Some(rim) => {
+                    // Convert from HashMap<String, _> to HashMap<&str, _>
+                    let owned_map = rim
+                        .iter()
+                        .map(|(rule_id, tok)| (&**rule_id, *tok))
+                        .collect::<HashMap<_, _>>();
+                    let (x, y) = lexerdef.set_rule_ids_spanned(&owned_map);
+                    (
+                        x.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
+                        y.map(|a| {
+                            a.iter()
+                                .map(|(b, span)| (b.to_string(), *span))
+                                .collect::<HashSet<_>>()
+                        }),
+                    )
+                }
+                None => (None, None),
             }
-            None => (None, None),
         };
 
+        codegen.set_rule_ids_map(self.rule_ids_map);
+        let lexerdef = codegen.lexerdef();
         if let Some(mut mfl) = missing_from_lexer.take() {
             for tok in &lexerdef.expected_missing_tokens {
                 mfl.remove(tok.as_str());
@@ -616,10 +618,10 @@ where
             outs.push(format!("{error_prefix} these tokens are not referenced in the grammar but defined as follows"));
             outs.push(format!(
                 "{err_indent} {}",
-                codegen.lex_diag().file_location_msg("in the lexer", None)
+                cgb.lex_diag().file_location_msg("in the lexer", None)
             ));
             for (_, span) in mfp {
-                let error_contents = codegen.lex_diag().underline_span_with_text(
+                let error_contents = cgb.lex_diag().underline_span_with_text(
                     *span,
                     "Missing from parser".to_string(),
                     '^',
@@ -641,23 +643,11 @@ where
             fs::remove_file(outp).ok();
             panic!();
         }
-        let mod_name = codegen.mod_name_tokens(self.mod_name)?;
-        let mut lexerdef_func_impl = LexCodegen::codegen_lex_flags(lex_flags);
-        LexCodegen::codegen_lexerdef(*lexerdef, &mut lexerdef_func_impl);
-        let lexerdef_ty = LexCodegen::codegen_lexerkind(lexerkind, &mut lexerdef_func_impl);
-        let out_tokens = LexCodegen::codegen_module::<LexerTypesT>(
-            self.rule_ids_map,
-            self.visibility,
-            mod_name,
-            lexerdef_func_impl,
-            lexerdef_ty,
-        );
-        let unformatted = LexCodegen::codegen_unformatted_source(out_tokens);
+
         // Record the time that this version of lrlex was built. If the source code changes and rustc
         // forces a recompile, this will change this value, causing anything which depends on this
         // build of lrlex to be recompiled too.
-        let timestamp = env!("VERGEN_BUILD_TIMESTAMP");
-        let outs = LexCodegen::codegen_formatted_source(unformatted, timestamp);
+        let outs = codegen.generate(env!("VERGEN_BUILD_TIMESTAMP"));
 
         // If the file we're about to write out already exists with the same contents, then we
         // don't overwrite it (since that will force a recompile of the file, and relinking of the

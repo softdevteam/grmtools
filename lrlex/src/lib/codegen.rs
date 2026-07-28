@@ -69,7 +69,7 @@ impl<A: ToTokens, B: ToTokens> ToTokens for QuoteTuple<(A, B)> {
 /// This probably needs a better name, as note that the self variable only gets used
 /// for the former parsering/validation stages, and the latter codegen phases are all
 /// implemented through associated functions.
-pub(crate) struct LexCodegen<'a> {
+pub(crate) struct LexCodegenBuilder<'a> {
     src: &'a str,
     // We store the path here so we can generate a module name from it if needed.
     // But should never use it for filesystem interaction within this module.
@@ -78,14 +78,27 @@ pub(crate) struct LexCodegen<'a> {
     header: MarkMap<String, HeaderValue<Location>>,
 }
 
-impl<'a> LexCodegen<'a> {
+pub(crate) struct LexCodegen<LexerTypesT>
+where
+    LexerTypesT: LexerTypes,
+    usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+{
+    kind: LexerKind,
+    lexerdef: LRNonStreamingLexerDef<LexerTypesT>,
+    lex_flags: LexFlags,
+    mod_name: Ident,
+    rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
+    visibility: Visibility,
+}
+
+impl<'a> LexCodegenBuilder<'a> {
     pub(crate) fn new(
         src: &'a str,
         path: &'a Path,
         header: MarkMap<String, HeaderValue<Location>>,
-    ) -> LexCodegen<'a> {
+    ) -> LexCodegenBuilder<'a> {
         let diagnostics = SpannedDiagnosticFormatter::new(src, path);
-        LexCodegen {
+        LexCodegenBuilder {
             src,
             path,
             header,
@@ -97,7 +110,7 @@ impl<'a> LexCodegen<'a> {
         &self.diagnostics
     }
 
-    pub(crate) fn merge_headers(&mut self) -> Result<(), Box<dyn Error>> {
+    fn merge_headers(&mut self) -> Result<(), Box<dyn Error>> {
         let (parsed_header, _) = self.parse_header()?;
         Ok(self.header.merge_from(parsed_header)?)
     }
@@ -123,7 +136,7 @@ impl<'a> LexCodegen<'a> {
             })
     }
 
-    pub(crate) fn extract_lexerkind(
+    fn extract_lexerkind(
         &mut self,
         lexerkind: Option<LexerKind>,
     ) -> Result<LexerKind, Box<dyn Error>> {
@@ -140,7 +153,7 @@ impl<'a> LexCodegen<'a> {
         }
     }
 
-    pub(crate) fn extract_lexerdef<LexerTypesT>(
+    fn extract_lexerdef<LexerTypesT>(
         &mut self,
         lexerkind: &LexerKind,
     ) -> Result<(LRNonStreamingLexerDef<LexerTypesT>, LexFlags), Box<dyn Error>>
@@ -186,7 +199,7 @@ impl<'a> LexCodegen<'a> {
         }
     }
 
-    pub(crate) fn mod_name_tokens(&self, mod_name: Option<&str>) -> Result<Ident, Box<dyn Error>> {
+    fn mod_name_tokens(&self, mod_name: Option<&str>) -> Result<Ident, Box<dyn Error>> {
         let mod_name = match mod_name {
             Some(s) => s.to_owned(),
             None => {
@@ -217,7 +230,59 @@ impl<'a> LexCodegen<'a> {
         Ok(mod_name)
     }
 
-    pub(crate) fn codegen_lex_flags(lex_flags: LexFlags) -> TokenStream {
+    pub(crate) fn build<LexerTypesT>(
+        &mut self,
+        lexerkind_specified: Option<LexerKind>,
+        mod_name_specified: Option<&str>,
+        visibility: Visibility,
+    ) -> Result<LexCodegen<LexerTypesT>, Box<dyn Error>>
+    where
+        LexerTypesT: LexerTypes,
+        LexerTypesT::StorageT: TryFrom<usize>,
+        usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+    {
+        self.merge_headers()?;
+        let kind = self.extract_lexerkind(lexerkind_specified)?;
+        let (lexerdef, lex_flags) = self.extract_lexerdef::<LexerTypesT>(&kind)?;
+        let mod_name = self.mod_name_tokens(mod_name_specified)?;
+        self.check_unused_header_values()?;
+        Ok(LexCodegen {
+            kind,
+            lexerdef,
+            lex_flags,
+            mod_name,
+            rule_ids_map: None,
+            visibility,
+        })
+    }
+}
+
+impl<LexerTypesT> LexCodegen<LexerTypesT>
+where
+    LexerTypesT: LexerTypes,
+    usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
+{
+    #[cfg(test)]
+    pub(crate) fn lexerkind(&self) -> &LexerKind {
+        &self.kind
+    }
+
+    pub(crate) fn lexerdef(&self) -> &LRNonStreamingLexerDef<LexerTypesT> {
+        &self.lexerdef
+    }
+
+    pub(crate) fn lexerdef_mut(&mut self) -> &mut LRNonStreamingLexerDef<LexerTypesT> {
+        &mut self.lexerdef
+    }
+
+    pub(crate) fn set_rule_ids_map(
+        &mut self,
+        rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
+    ) {
+        self.rule_ids_map = rule_ids_map;
+    }
+
+    fn gen_lex_flags(&self) -> TokenStream {
         let LexFlags {
             allow_wholeline_comments,
             dot_matches_new_line,
@@ -231,7 +296,7 @@ impl<'a> LexCodegen<'a> {
             size_limit,
             dfa_size_limit,
             nest_limit,
-        } = lex_flags;
+        } = self.lex_flags;
         let allow_wholeline_comments = QuoteOption(allow_wholeline_comments);
         let dot_matches_new_line = QuoteOption(dot_matches_new_line);
         let multi_line = QuoteOption(multi_line);
@@ -264,16 +329,14 @@ impl<'a> LexCodegen<'a> {
         }
     }
 
-    pub(crate) fn codegen_lexerdef<LexerTypesT>(
-        lexerdef: LRNonStreamingLexerDef<LexerTypesT>,
-        token_stream: &mut TokenStream,
-    ) where
+    fn gen_lexerdef(&self, token_stream: &mut TokenStream)
+    where
         LexerTypesT: LexerTypes,
         LexerTypesT::StorageT: TryFrom<usize> + ToTokens,
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
-        let start_states = lexerdef.iter_start_states();
-        let rules = lexerdef.iter_rules().map(|r| {
+        let start_states = self.lexerdef.iter_start_states();
+        let rules = self.lexerdef.iter_rules().map(|r| {
             let tok_id = QuoteOption(r.tok_id);
             let n = QuoteOption(r.name().map(QuoteToString));
             let target_state = QuoteOption(r.target_state().map(|(x, y)| QuoteTuple((x, y))));
@@ -296,11 +359,8 @@ impl<'a> LexCodegen<'a> {
         });
     }
 
-    pub(crate) fn codegen_lexerkind(
-        lexerkind: LexerKind,
-        token_stream: &mut TokenStream,
-    ) -> TokenStream {
-        let lexerdef_ty = match lexerkind {
+    fn gen_lexerkind(&self, token_stream: &mut TokenStream) -> TokenStream {
+        let lexerdef_ty = match self.kind {
             LexerKind::LRNonStreamingLexer => {
                 quote!(::lrlex::LRNonStreamingLexerDef)
             }
@@ -311,20 +371,14 @@ impl<'a> LexCodegen<'a> {
         lexerdef_ty
     }
 
-    pub(crate) fn codegen_module<LexerTypesT>(
-        rule_ids_map: Option<HashMap<String, LexerTypesT::StorageT>>,
-        visibility: Visibility,
-        mod_name: Ident,
-        lexerdef_func_impl: TokenStream,
-        lexerdef_ty: TokenStream,
-    ) -> TokenStream
+    fn gen_module(&self, lexerdef_func_impl: TokenStream, lexerdef_ty: TokenStream) -> TokenStream
     where
         LexerTypesT: LexerTypes,
         LexerTypesT::StorageT: ToTokens,
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
         let mut token_consts = TokenStream::new();
-        if let Some(rim) = rule_ids_map {
+        if let Some(rim) = &self.rule_ids_map {
             let mut rim_sorted = Vec::from_iter(rim.iter());
             rim_sorted.sort_by_key(|(k, _)| *k);
             for (name, id) in rim_sorted {
@@ -343,7 +397,8 @@ impl<'a> LexCodegen<'a> {
         }
         let token_consts = token_consts.into_iter();
         let lexerdef_param = str::parse::<TokenStream>(type_name::<LexerTypesT>()).unwrap();
-        let mod_vis = visibility;
+        let mod_vis = &self.visibility;
+        let mod_name = &self.mod_name;
         // Code gen for the generated module.
         quote! {
             #mod_vis mod #mod_name {
@@ -358,11 +413,11 @@ impl<'a> LexCodegen<'a> {
         }
     }
 
-    pub(crate) fn codegen_unformatted_source(token_stream: TokenStream) -> String {
+    fn gen_unformatted_source(&self, token_stream: TokenStream) -> String {
         token_stream.to_string()
     }
 
-    pub(crate) fn codegen_formatted_source(unformatted: String, timestamp: &str) -> String {
+    fn gen_formatted_source(&self, unformatted: String, timestamp: &str) -> String {
         let mut outs = String::new();
         write!(outs, "// lrlex build time: {}\n\n", quote!(#timestamp),).ok();
         outs.push_str(
@@ -371,6 +426,17 @@ impl<'a> LexCodegen<'a> {
                 .unwrap_or(unformatted),
         );
         outs
+    }
+
+    pub(crate) fn generate(&self, timestamp: &str) -> String
+    where
+        LexerTypesT::StorageT: ToTokens + TryFrom<usize>,
+    {
+        let mut lexerdef_func_impl = self.gen_lex_flags();
+        self.gen_lexerdef(&mut lexerdef_func_impl);
+        let lexerdef_ty = self.gen_lexerkind(&mut lexerdef_func_impl);
+        let module_impl = self.gen_module(lexerdef_func_impl, lexerdef_ty);
+        self.gen_formatted_source(self.gen_unformatted_source(module_impl), timestamp)
     }
 }
 

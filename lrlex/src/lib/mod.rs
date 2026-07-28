@@ -39,7 +39,7 @@ pub use crate::{
 use cfgrammar::header::{HeaderError, HeaderErrorKind};
 use cfgrammar::yacc::parser::SpansKind;
 use cfgrammar::{Span, Spanned};
-use codegen::{LexCodegen, TokenMapCodegen};
+use codegen::{LexCodegenBuilder, TokenMapCodegen};
 
 pub type LexBuildResult<T> = Result<T, Vec<LexBuildError>>;
 
