@@ -23,7 +23,9 @@ use std::{
 };
 use wincode::SchemaWrite;
 
-use crate::{DefaultLexerTypes, LRNonStreamingLexer, LexCodegenBuilder, LexerDef, TokenMapCodegen};
+use crate::{
+    DefaultLexerTypes, LRNonStreamingLexer, LexCodegenArgs, LexSrcEnv, LexerDef, TokenMapCodegen,
+};
 
 const RUST_FILE_EXT: &str = "rs";
 
@@ -429,9 +431,12 @@ where
         }
         let lex_src = read_to_string(lexerp)
             .map_err(|e| format!("When reading '{}': {e}", lexerp.display()))?;
-        let mut cgb = LexCodegenBuilder::new(&lex_src, lexerp, self.header);
-        let mut codegen =
-            cgb.build::<LexerTypesT>(self.lexerkind, self.mod_name, self.visibility)?;
+        let mut cgb = LexSrcEnv::new(&lex_src, lexerp, self.header);
+        let codegen_args = LexCodegenArgs::new()
+            .lexerkind(self.lexerkind)
+            .mod_name(self.mod_name)
+            .visibility(self.visibility);
+        let mut codegen = cgb.code_generator::<LexerTypesT>(codegen_args)?;
         #[cfg(test)]
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
             inspect_lexerkind_cb(codegen.lexerkind())?

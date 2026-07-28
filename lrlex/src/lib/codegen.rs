@@ -69,13 +69,19 @@ impl<A: ToTokens, B: ToTokens> ToTokens for QuoteTuple<(A, B)> {
 /// This probably needs a better name, as note that the self variable only gets used
 /// for the former parsering/validation stages, and the latter codegen phases are all
 /// implemented through associated functions.
-pub(crate) struct LexCodegenBuilder<'a> {
+pub(crate) struct LexSrcEnv<'a> {
     src: &'a str,
     // We store the path here so we can generate a module name from it if needed.
     // But should never use it for filesystem interaction within this module.
     path: &'a Path,
     diagnostics: SpannedDiagnosticFormatter<'a>,
     header: MarkMap<String, HeaderValue<Location>>,
+}
+
+pub(crate) struct LexCodegenArgs<'a> {
+    lexerkind: Option<LexerKind>,
+    mod_name: Option<&'a str>,
+    visibility: Visibility,
 }
 
 pub(crate) struct LexCodegen<LexerTypesT>
@@ -91,14 +97,37 @@ where
     visibility: Visibility,
 }
 
-impl<'a> LexCodegenBuilder<'a> {
+impl<'a> LexCodegenArgs<'a> {
+    pub(crate) fn new() -> LexCodegenArgs<'a> {
+        LexCodegenArgs {
+            lexerkind: None,
+            mod_name: None,
+            visibility: Visibility::Private,
+        }
+    }
+
+    pub(crate) fn lexerkind(mut self, lexerkind: Option<LexerKind>) -> Self {
+        self.lexerkind = lexerkind;
+        self
+    }
+    pub(crate) fn mod_name(mut self, mod_name: Option<&'a str>) -> Self {
+        self.mod_name = mod_name;
+        self
+    }
+    pub(crate) fn visibility(mut self, visibility: Visibility) -> Self {
+        self.visibility = visibility;
+        self
+    }
+}
+
+impl<'a> LexSrcEnv<'a> {
     pub(crate) fn new(
         src: &'a str,
         path: &'a Path,
         header: MarkMap<String, HeaderValue<Location>>,
-    ) -> LexCodegenBuilder<'a> {
+    ) -> LexSrcEnv<'a> {
         let diagnostics = SpannedDiagnosticFormatter::new(src, path);
-        LexCodegenBuilder {
+        LexSrcEnv {
             src,
             path,
             header,
@@ -230,11 +259,9 @@ impl<'a> LexCodegenBuilder<'a> {
         Ok(mod_name)
     }
 
-    pub(crate) fn build<LexerTypesT>(
+    pub(crate) fn code_generator<'b, LexerTypesT>(
         &mut self,
-        lexerkind_specified: Option<LexerKind>,
-        mod_name_specified: Option<&str>,
-        visibility: Visibility,
+        args: LexCodegenArgs<'b>,
     ) -> Result<LexCodegen<LexerTypesT>, Box<dyn Error>>
     where
         LexerTypesT: LexerTypes,
@@ -242,10 +269,11 @@ impl<'a> LexCodegenBuilder<'a> {
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
         self.merge_headers()?;
-        let kind = self.extract_lexerkind(lexerkind_specified)?;
+        let kind = self.extract_lexerkind(args.lexerkind)?;
         let (lexerdef, lex_flags) = self.extract_lexerdef::<LexerTypesT>(&kind)?;
-        let mod_name = self.mod_name_tokens(mod_name_specified)?;
+        let mod_name = self.mod_name_tokens(args.mod_name)?;
         self.check_unused_header_values()?;
+        let visibility = args.visibility;
         Ok(LexCodegen {
             kind,
             lexerdef,
