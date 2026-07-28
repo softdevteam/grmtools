@@ -517,27 +517,25 @@ where
         } else {
             None
         };
-        let (mut missing_from_lexer, missing_from_parser) = {
-            let lexerdef = Box::new(codegen.lexerdef_mut());
-            match &self.rule_ids_map {
-                Some(rim) => {
-                    // Convert from HashMap<String, _> to HashMap<&str, _>
-                    let owned_map = rim
-                        .iter()
-                        .map(|(rule_id, tok)| (&**rule_id, *tok))
-                        .collect::<HashMap<_, _>>();
-                    let (x, y) = lexerdef.set_rule_ids_spanned(&owned_map);
-                    (
-                        x.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
-                        y.map(|a| {
-                            a.iter()
-                                .map(|(b, span)| (b.to_string(), *span))
-                                .collect::<HashSet<_>>()
-                        }),
-                    )
-                }
-                None => (None, None),
+        let lexerdef = Box::new(codegen.lexerdef_mut());
+        let (mut missing_from_lexer, missing_from_parser) = match &self.rule_ids_map {
+            Some(rim) => {
+                // Convert from HashMap<String, _> to HashMap<&str, _>
+                let owned_map = rim
+                    .iter()
+                    .map(|(rule_id, tok)| (&**rule_id, *tok))
+                    .collect::<HashMap<_, _>>();
+                let (x, y) = lexerdef.set_rule_ids_spanned(&owned_map);
+                (
+                    x.map(|a| a.iter().map(|&b| b.to_string()).collect::<HashSet<_>>()),
+                    y.map(|a| {
+                        a.iter()
+                            .map(|(b, span)| (b.to_string(), *span))
+                            .collect::<HashSet<_>>()
+                    }),
+                )
             }
+            None => (None, None),
         };
 
         codegen.set_rule_ids_map(self.rule_ids_map);
