@@ -1,7 +1,6 @@
 use crate::{LRNonStreamingLexerDef, LexFlags, LexerDef, Visibility, ctbuilder::LexerKind};
 use cfgrammar::{
-    header::{GrmtoolsSectionParser, HeaderValue},
-    markmap::MarkMap,
+    header::{GrmtoolsSectionParser, Header, HeaderValue},
     span::{Location, Span},
 };
 use lrpar::{
@@ -75,7 +74,7 @@ pub(crate) struct LexSrcEnv<'a> {
     // But should never use it for filesystem interaction within this module.
     path: &'a Path,
     diagnostics: SpannedDiagnosticFormatter<'a>,
-    header: MarkMap<String, HeaderValue<Location>>,
+    header: Header<Location>,
 }
 
 pub(crate) struct LexCodegenArgs<'a> {
@@ -121,11 +120,7 @@ impl<'a> LexCodegenArgs<'a> {
 }
 
 impl<'a> LexSrcEnv<'a> {
-    pub(crate) fn new(
-        src: &'a str,
-        path: &'a Path,
-        header: MarkMap<String, HeaderValue<Location>>,
-    ) -> LexSrcEnv<'a> {
+    pub(crate) fn new(src: &'a str, path: &'a Path, header: Header<Location>) -> LexSrcEnv<'a> {
         let diagnostics = SpannedDiagnosticFormatter::new(src, path);
         LexSrcEnv {
             src,
@@ -144,7 +139,7 @@ impl<'a> LexSrcEnv<'a> {
         Ok(self.header.merge_from(parsed_header)?)
     }
 
-    fn parse_header(&self) -> Result<(MarkMap<String, HeaderValue<Span>>, usize), Box<dyn Error>> {
+    fn parse_header(&self) -> Result<(Header<Span>, usize), Box<dyn Error>> {
         GrmtoolsSectionParser::new(self.src, false)
             .parse()
             .map_err(|es| {
