@@ -120,7 +120,8 @@ impl<'a> LexCodegenArgs<'a> {
 }
 
 impl<'a> LexSrcEnv<'a> {
-    pub(crate) fn new(src: &'a str, path: &'a Path, header: Header<Location>) -> LexSrcEnv<'a> {
+
+    pub(crate) fn new_with_defaults(src: &'a str, path: &'a Path, header: Header<Location>) -> LexSrcEnv<'a> {
         let diagnostics = SpannedDiagnosticFormatter::new(src, path);
         LexSrcEnv {
             src,

@@ -431,7 +431,7 @@ where
         }
         let lex_src = read_to_string(lexerp)
             .map_err(|e| format!("When reading '{}': {e}", lexerp.display()))?;
-        let mut cgb = LexSrcEnv::new(&lex_src, lexerp, self.header);
+        let mut cgb = LexSrcEnv::new_with_defaults(&lex_src, lexerp, self.header);
         let codegen_args = LexCodegenArgs::new()
             .lexerkind(self.lexerkind)
             .mod_name(self.mod_name)
