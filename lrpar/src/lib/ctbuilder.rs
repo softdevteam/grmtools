@@ -48,7 +48,7 @@ const ACTIONS_KIND_HIDDEN: &str = "__GtActionsKindHidden";
 const RUST_FILE_EXT: &str = "rs";
 
 const WARNING: &str = "[Warning]";
-const ERROR: &str = "[Error]";
+pub(crate) const ERROR: &str = "[Error]";
 
 static GENERATED_PATHS: LazyLock<Mutex<HashSet<PathBuf>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));

@@ -205,6 +205,8 @@ pub mod parser;
 #[cfg(test)]
 pub mod test_utils;
 
+mod codegen;
+
 pub use crate::{
     ctbuilder::{
         CTParser, CTParserBuilder, ParserData, RustEdition, SerialisationFormat, Visibility,
