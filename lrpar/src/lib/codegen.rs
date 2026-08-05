@@ -52,10 +52,10 @@ pub(crate) struct ParserSrcEnv<'a> {
     header: Header<Location>,
 }
 
-pub(crate) struct ParserBuildEnvArgs {
+pub(crate) struct ParserBuildEnvArgs<'a> {
     /// This allows the parser to originate from from a pre-parsed AST, rather than
     /// parsing a grammar definition given as source string into an AST.
-    ast_originated: Option<ASTWithValidityInfo>,
+    ast_originated: Option<&'a ASTWithValidityInfo>,
     mod_name: Option<String>,
     rust_edition: RustEdition,
     visibility: Visibility,
@@ -64,7 +64,7 @@ pub(crate) struct ParserBuildEnvArgs {
     warnings_are_errors: bool,
 }
 
-impl ParserBuildEnvArgs {
+impl<'a> ParserBuildEnvArgs<'a> {
     pub(crate) fn new() -> Self {
         ParserBuildEnvArgs {
             ast_originated: None,
@@ -77,7 +77,7 @@ impl ParserBuildEnvArgs {
         }
     }
 
-    pub(crate) fn ast_originated(mut self, ast: Option<ASTWithValidityInfo>) -> Self {
+    pub(crate) fn ast_originated(mut self, ast: Option<&'a ASTWithValidityInfo>) -> Self {
         self.ast_originated = ast;
         self
     }
@@ -109,7 +109,7 @@ impl ParserBuildEnvArgs {
     }
 }
 
-pub(crate) struct ParserBuildEnv<LexerTypesT>
+pub(crate) struct ParserBuildEnv<'a, LexerTypesT>
 where
     LexerTypesT: LexerTypes,
     usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
@@ -118,7 +118,7 @@ where
     pub(crate) recoverer: RecoveryKind,
     serialisation_format: SerialisationFormat,
     // Preserve the args for generating the cache.
-    cache_args: ParserBuildEnvArgs,
+    cache_args: ParserBuildEnvArgs<'a>,
     phantom_storaget: PhantomData<LexerTypesT::StorageT>,
     mod_name: String,
 }
@@ -277,14 +277,14 @@ impl<'a> ParserSrcEnv<'a> {
 
     pub(crate) fn build_env<LexerTypesT>(
         &mut self,
-        args: ParserBuildEnvArgs,
-    ) -> Result<ParserBuildEnv<LexerTypesT>, Box<dyn Error>>
+        args: ParserBuildEnvArgs<'a>,
+    ) -> Result<ParserBuildEnv<'a, LexerTypesT>, Box<dyn Error>>
     where
         LexerTypesT: LexerTypes,
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
         self.merge_headers()?;
-        let ast_validation = self.extract_ast_validation(args.ast_originated.as_ref())?;
+        let ast_validation = self.extract_ast_validation(args.ast_originated)?;
         let recoverer = self.extract_recoverer()?;
         let serialisation_format = self.extract_serialisation_format()?;
         let mod_name = self.extract_mod_name(&args);
@@ -300,7 +300,7 @@ impl<'a> ParserSrcEnv<'a> {
     }
 }
 
-impl<LexerTypesT> ParserBuildEnv<LexerTypesT>
+impl<'a, LexerTypesT> ParserBuildEnv<'a, LexerTypesT>
 where
     LexerTypesT: LexerTypes,
     usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,

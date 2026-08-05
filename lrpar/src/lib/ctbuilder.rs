@@ -579,7 +579,7 @@ where
 
         let mut src_env = ParserSrcEnv::new_with_defaults(&inc, grmp, header);
         let build_args = ParserBuildEnvArgs::new()
-            .ast_originated(self.from_ast.clone())
+            .ast_originated(self.from_ast.as_ref())
             .mod_name(self.mod_name)
             .show_warnings(self.show_warnings)
             .error_on_conflicts(self.error_on_conflicts)
