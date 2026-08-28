@@ -75,66 +75,70 @@ grammar: |
     }
     ;
 
-    namespaced -> Namespaced<Span>
+    namespaced -> (String, Span)
     : IDENT {
         let ident_span = $1.as_ref().unwrap().span();
-        let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
-        Namespaced{
-            namespace: None,
-            member: (ident, ident_span)
-        }
+        let ident = $lexer.span_str(ident_span).to_string();
+        (ident, ident_span)
     }
     | IDENT '::' IDENT {
         let namespace_span = $1.as_ref().unwrap().span();
-        let namespace = $lexer.span_str(namespace_span).to_string().to_lowercase();
+        let namespace = $lexer.span_str(namespace_span).to_string();
 
         let ident_span = $3.as_ref().unwrap().span();
-        let ident = $lexer.span_str(ident_span).to_string().to_lowercase();
-        Namespaced {
-            namespace: Some((namespace, namespace_span)),
-            member: (ident, ident_span)
-        }
+        let ident = $lexer.span_str(ident_span).to_string();
+        let val = format!("{}::{}", namespace, ident);
+        let span = Span::new(namespace_span.start(), ident_span.end());
+        (val, span)
     }
     ;
 
     valbind -> ((String, Span), Value<Span>)
     : IDENT ':' val {
         let key_span = $1.as_ref().unwrap().span();
-        let key = $lexer.span_str(key_span).to_string().to_lowercase();
-        ((key, key_span), Value::Setting($3))
+        let key = $lexer.span_str(key_span).to_string();
+        ((key, key_span), $3)
     }
     | IDENT {
         let key_span = $1.as_ref().unwrap().span();
-        let key = $lexer.span_str(key_span).to_string().to_lowercase();
-        ((key, key_span), Value::Flag(true, key_span))
+        let key = $lexer.span_str(key_span).to_string();
+        ((key, key_span), Value::Bool(true, key_span))
     }
     | '!' IDENT {
         let bang_span = $1.as_ref().unwrap().span();
         let key_span = $2.as_ref().unwrap().span();
-        let key = $lexer.span_str(key_span).to_string().to_lowercase();
-        ((key, key_span), Value::Flag(false, Span::new(bang_span.start(), key_span.end())))
+        let key = $lexer.span_str(key_span).to_string();
+        ((key, key_span), Value::Bool(false, Span::new(bang_span.start(), key_span.end())))
     }
     ;
 
-    val -> Setting<Span>
-    : namespaced { Setting::Unitary($1) }
+    val -> Value<Span>
+    : namespaced { Value::Namespaced($1.0, $1.1) }
     | NUM  {
         let num_span = $1.as_ref().unwrap().span();
         let n = str::parse::<u64>($lexer.span_str(num_span));
-        Setting::Num(n.expect("convertible"), num_span)
+        Value::Num(n.expect("convertible"), num_span)
     }
     | STRING {
         let string_span = $1.as_ref().unwrap().span();
         // Trim the leading and trailing " characters.
         let string_span = Span::new(string_span.start() + 1, string_span.end() - 1);
         let s = $lexer.span_str(string_span).to_string();
-        Setting::String(s, string_span)
+        Value::String(s, string_span)
     }
-    | namespaced '(' namespaced ')' { Setting::Constructor{ctor: $1, arg: $3} }
-    | '[' array_seq ']' { Setting::Array($2, $1.as_ref().unwrap().span(), $3.as_ref().unwrap().span()) }
+    | namespaced '(' namespaced ')' {
+            let span = Span::new($1.1.start(), $4.as_ref().unwrap().span().end());
+            Value::Namespaced(format!("{}({})", $1.0, $3.0), span)
+        }
+    | '[' array_seq ']' {
+            let open_span = $1.as_ref().unwrap().span();
+            let close_span = $3.as_ref().unwrap().span();
+            let span = Span::new(open_span.start(), close_span.end());
+            Value::Array($2, span)
+        }
     ;
 
-    array_seq -> Vec<Setting<Span>>
+    array_seq -> Vec<Value<Span>>
     : %empty { Vec::new() }
     | val {
         vec![$1]
@@ -155,13 +159,11 @@ grammar: |
     use cfgrammar::{
         Span,
         header::{
-            Value,
-            Setting,
+            Header,
             HeaderError,
             HeaderErrorKind,
-            Namespaced,
-            Header,
             HeaderValue,
+            Value,
             CRATE_KEY_MAP,
             RE_CRATE_DOT,
         },

@@ -90,57 +90,6 @@ impl fmt::Display for HeaderErrorKind {
     }
 }
 
-impl<T> HeaderError<T> {
-    /// Returns the [SpansKind] associated with this error.
-    pub fn spanskind(&self) -> SpansKind {
-        match self.kind {
-            HeaderErrorKind::DuplicateEntry => SpansKind::DuplicationError,
-            _ => SpansKind::Error,
-        }
-    }
-}
-
-/// Indicates a value prefixed by an optional namespace.
-/// `Foo::Bar` with optional `Foo` specified being
-/// ```rust,ignore
-/// Namespaced{
-///     namespace: Some(("Foo", ...)),
-///     member: ("Bar", ...)
-/// }
-/// ```
-///
-/// Alternately just `Bar` alone without a namespace is represented by :
-/// ```rust,ignore
-/// Namespaced{
-///     namespace: None,
-///     member: ("Bar", ...)
-/// }
-/// ```
-#[derive(Debug, Eq, PartialEq)]
-#[doc(hidden)]
-pub struct Namespaced<T> {
-    pub namespace: Option<(String, T)>,
-    pub member: (String, T),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-#[doc(hidden)]
-pub enum Setting<T> {
-    /// A value like `YaccKind::Grmtools`
-    Unitary(Namespaced<T>),
-    /// A value like `YaccKind::Original(UserActions)`.
-    /// In that example the field ctor would be: `Namespaced { namespace: "YaccKind", member: "Original" }`.
-    /// The field would be `Namespaced{ None, UserActions }`.
-    Constructor {
-        ctor: Namespaced<T>,
-        arg: Namespaced<T>,
-    },
-    Num(u64, T),
-    String(String, T),
-    // The two `T` values are for the spans of the open and close brackets `[`, and `]`.
-    Array(Vec<Setting<T>>, T, T),
-}
-
 /// Parser for the `%grmtools` section
 #[doc(hidden)]
 pub struct GrmtoolsSectionParser<'input> {
@@ -150,89 +99,52 @@ pub struct GrmtoolsSectionParser<'input> {
 
 /// The value contained within a `Header`
 ///
-/// To be useful across diverse crates this types fields are limited to types derived from `core::` types.
-/// like booleans, numeric types, and string values.
-#[derive(Debug, Eq, PartialEq)]
-#[doc(hidden)]
+/// To be useful across diverse crates this types fields are largely limited to types derived from `core::` types.
+/// like booleans, numeric types, and string values. The exception to this is `Namespaced` which still must
+///  be able to be marshalled through a string value.
+///
+/// The generic parameter `T` indicates the source of the value, for values read from a `%grmtools` section
+/// this should be a `Span`. For other values which stem from command line arguments, or a programmatic interface
+/// this should be a `Location`.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Value<T> {
-    Flag(bool, T),
-    Setting(Setting<T>),
-}
-
-impl From<Setting<Span>> for Setting<Location> {
-    fn from(s: Setting<Span>) -> Setting<Location> {
-        match s {
-            Setting::Unitary(Namespaced {
-                namespace,
-                member: (m, ml),
-            }) => Setting::Unitary(Namespaced {
-                namespace: namespace.map(|(n, nl)| (n, nl.into())),
-                member: (m, ml.into()),
-            }),
-            Setting::Constructor {
-                ctor:
-                    Namespaced {
-                        namespace: ctor_ns,
-                        member: (ctor_m, ctor_ml),
-                    },
-                arg:
-                    Namespaced {
-                        namespace: arg_ns,
-                        member: (arg_m, arg_ml),
-                    },
-            } => Setting::Constructor {
-                ctor: Namespaced {
-                    namespace: ctor_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
-                    member: (ctor_m, ctor_ml.into()),
-                },
-                arg: Namespaced {
-                    namespace: arg_ns.map(|(ns, ns_l)| (ns, ns_l.into())),
-                    member: (arg_m, arg_ml.into()),
-                },
-            },
-            Setting::Num(num, num_loc) => Setting::Num(num, num_loc.into()),
-            Setting::String(s, str_loc) => Setting::String(s, str_loc.into()),
-            Setting::Array(mut xs, arr_open_loc, arr_close_loc) => Setting::Array(
-                xs.drain(..).map(|x| x.into()).collect(),
-                arr_open_loc.into(),
-                arr_close_loc.into(),
-            ),
-        }
-    }
+    String(String, T),
+    Num(u64, T),
+    Bool(bool, T),
+    Array(Vec<Value<T>>, T),
+    /// A Rust like value, with an optional type namespace.
+    /// For instance, you can omit the optional prefix `YaccKind::`
+    /// specifying `YaccKind::Grmtools` or `Grmtools`.
+    ///
+    /// Further examples of `Namespaced` values:
+    /// * YaccKind::Original(UserAction) or YaccKind::Original(YaccOriginalActionKind::UserAction)
+    /// * Original(UserAction) or Original(YaccOriginalActionKind::UserAction)
+    Namespaced(String, T),
 }
 
 impl From<Value<Span>> for Value<Location> {
-    fn from(v: Value<Span>) -> Value<Location> {
-        match v {
-            Value::Flag(flag, u) => Value::Flag(flag, u.into()),
-            Value::Setting(s) => Value::Setting(s.into()),
+    fn from(it: Value<Span>) -> Value<Location> {
+        use Value as GV;
+        match it {
+            GV::String(v, span) => GV::String(v, Location::Span(span)),
+            GV::Num(v, span) => GV::Num(v, Location::Span(span)),
+            GV::Bool(v, span) => GV::Bool(v, Location::Span(span)),
+            GV::Array(mut v, span) => GV::Array(
+                v.drain(..).map(|val| val.into()).collect::<Vec<_>>(),
+                Location::Span(span),
+            ),
+            GV::Namespaced(v, span) => GV::Namespaced(v, Location::Span(span)),
         }
     }
 }
 
-impl<T> Value<T> {
-    pub fn primary_location(&self) -> &T {
-        match self {
-            Value::Flag(_, loc) => loc,
-            Value::Setting(setting) => setting.primary_location(),
+impl<T> HeaderError<T> {
+    /// Returns the [SpansKind] associated with this error.
+    pub fn spanskind(&self) -> SpansKind {
+        match self.kind {
+            HeaderErrorKind::DuplicateEntry => SpansKind::DuplicationError,
+            _ => SpansKind::Error,
         }
-    }
-}
-
-impl<T> Setting<T> {
-    fn primary_location(&self) -> &T {
-        match self {
-            Self::Constructor { arg, .. } => arg.primary_location(),
-            Self::Unitary(ns) => ns.primary_location(),
-            Self::Array(_, start_loc, _) => start_loc,
-            Self::Num(_, loc) | Self::String(_, loc) => loc,
-        }
-    }
-}
-
-impl<T> Namespaced<T> {
-    fn primary_location(&self) -> &T {
-        &self.member.1
     }
 }
 
@@ -311,7 +223,7 @@ fn add_duplicate_occurrence<T: Eq + PartialEq + Clone>(
 }
 
 impl<'input> GrmtoolsSectionParser<'input> {
-    fn parse_setting(&'_ self, mut i: usize) -> Result<(Setting<Span>, usize), HeaderError<Span>> {
+    fn parse_value(&'_ self, mut i: usize) -> Result<(Value<Span>, usize), HeaderError<Span>> {
         i = self.parse_ws(i);
         match RE_DIGITS.find(&self.src[i..]) {
             Some(m) => {
@@ -319,7 +231,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                 let num_str = &self.src[num_span.start()..num_span.end()];
                 // If the above regex matches we expect this to succeed.
                 let num = str::parse::<u64>(num_str).unwrap();
-                let val = Setting::Num(num, num_span);
+                let val = Value::Num(num, num_span);
                 i = self.parse_ws(num_span.end());
                 Ok((val, i))
             }
@@ -329,7 +241,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                     // Trim the leading and trailing quotes.
                     let str_span = Span::new(i + m.start() + 1, end - 1);
                     let str = &self.src[str_span.start()..str_span.end()];
-                    let setting = Setting::String(str.to_string(), str_span);
+                    let setting = Value::String(str.to_string(), str_span);
                     // After the trailing quotes.
                     i = self.parse_ws(end);
                     Ok((setting, i))
@@ -337,21 +249,12 @@ impl<'input> GrmtoolsSectionParser<'input> {
                 None => {
                     if let Some(mut j) = self.lookahead_is("[", i) {
                         let mut vals = Vec::new();
-                        let open_pos = j;
-
                         loop {
                             j = self.parse_ws(j);
                             if let Some(end_pos) = self.lookahead_is("]", j) {
-                                return Ok((
-                                    Setting::Array(
-                                        vals,
-                                        Span::new(i, open_pos),
-                                        Span::new(j, end_pos),
-                                    ),
-                                    end_pos,
-                                ));
+                                return Ok((Value::Array(vals, Span::new(i, end_pos)), end_pos));
                             }
-                            if let Ok((val, k)) = self.parse_setting(j) {
+                            if let Ok((val, k)) = self.parse_value(j) {
                                 vals.push(val);
                                 j = self.parse_ws(k);
                             }
@@ -360,20 +263,15 @@ impl<'input> GrmtoolsSectionParser<'input> {
                             }
                         }
                     } else {
-                        let (path_val, j) = self.parse_namespaced(i)?;
+                        let ((path_val, path_span), j) = self.parse_namespaced(i)?;
                         i = self.parse_ws(j);
                         if let Some(j) = self.lookahead_is("(", i) {
-                            let (arg, j) = self.parse_namespaced(j)?;
+                            let ((arg, _), j) = self.parse_namespaced(j)?;
                             i = self.parse_ws(j);
                             if let Some(j) = self.lookahead_is(")", i) {
                                 i = self.parse_ws(j);
-                                Ok((
-                                    Setting::Constructor {
-                                        ctor: path_val,
-                                        arg,
-                                    },
-                                    i,
-                                ))
+                                let span = Span::new(path_span.start(), j);
+                                Ok(((Value::Namespaced(format!("{path_val}({arg})"), span)), i))
                             } else {
                                 Err(HeaderError {
                                     kind: HeaderErrorKind::ExpectedToken(')'),
@@ -381,7 +279,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                                 })
                             }
                         } else {
-                            Ok((Setting::Unitary(path_val), i))
+                            Ok((Value::Namespaced(path_val, path_span), i))
                         }
                     }
                 }
@@ -398,7 +296,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
             Ok((
                 flag_name,
                 Span::new(j, k),
-                Value::Flag(false, Span::new(i, k)),
+                Value::Bool(false, Span::new(i, k)),
                 self.parse_ws(k),
             ))
         } else {
@@ -406,19 +304,16 @@ impl<'input> GrmtoolsSectionParser<'input> {
             let key_span = Span::new(i, j);
             i = self.parse_ws(j);
             if let Some(j) = self.lookahead_is(":", i) {
-                let (val, j) = self.parse_setting(j)?;
-                Ok((key_name, key_span, Value::Setting(val), j))
+                let (val, j) = self.parse_value(j)?;
+                Ok((key_name, key_span, val, j))
             } else {
-                Ok((key_name, key_span, Value::Flag(true, key_span), i))
+                Ok((key_name, key_span, Value::Bool(true, key_span), i))
             }
         }
     }
 
-    fn parse_namespaced(
-        &self,
-        mut i: usize,
-    ) -> Result<(Namespaced<Span>, usize), HeaderError<Span>> {
-        // Either a name alone, or a namespace which will be followed by a member.
+    fn parse_namespaced(&self, mut i: usize) -> Result<((String, Span), usize), HeaderError<Span>> {
+        // Either a name alone, or a type::name.
         let (name, j) = self.parse_name(i)?;
         let name_span = Span::new(i, j);
         i = self.parse_ws(j);
@@ -427,21 +322,10 @@ impl<'input> GrmtoolsSectionParser<'input> {
             let (member_val, j) = self.parse_name(i)?;
             let member_val_span = Span::new(i, j);
             i = self.parse_ws(j);
-            Ok((
-                Namespaced {
-                    namespace: Some((name, name_span)),
-                    member: (member_val, member_val_span),
-                },
-                i,
-            ))
+            let span = Span::new(name_span.start(), member_val_span.end());
+            Ok(((format!("{name}::{member_val}"), span), i))
         } else {
-            Ok((
-                Namespaced {
-                    namespace: None,
-                    member: (name, name_span),
-                },
-                i,
-            ))
+            Ok(((name, name_span), i))
         }
     }
 
@@ -552,10 +436,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
         match RE_NAME.find(&self.src[i..]) {
             Some(m) => {
                 assert_eq!(m.start(), 0);
-                Ok((
-                    self.src[i..i + m.end()].to_string().to_lowercase(),
-                    i + m.end(),
-                ))
+                Ok((self.src[i..i + m.end()].to_string(), i + m.end()))
             }
             None => {
                 if self.src[i..].starts_with("*") {
@@ -600,134 +481,57 @@ impl TryFrom<YaccKind> for Value<Location> {
     type Error = HeaderError<Location>;
     fn try_from(kind: YaccKind) -> Result<Value<Location>, HeaderError<Location>> {
         let from_loc = Location::Other("From<YaccKind>".to_string());
-        Ok(match kind {
-            YaccKind::Grmtools => Value::Setting(Setting::Unitary(Namespaced {
-                namespace: Some(("yacckind".to_string(), from_loc.clone())),
-                member: ("grmtools".to_string(), from_loc),
-            })),
-            YaccKind::Eco => Value::Setting(Setting::Unitary(Namespaced {
-                namespace: Some(("yacckind".to_string(), from_loc.clone())),
-                member: ("eco".to_string(), from_loc),
-            })),
-            YaccKind::Original(action_kind) => Value::Setting(Setting::Constructor {
-                ctor: Namespaced {
-                    namespace: Some(("yacckind".to_string(), from_loc.clone())),
-                    member: ("original".to_string(), from_loc.clone()),
-                },
-                arg: match action_kind {
-                    YaccOriginalActionKind::NoAction => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), from_loc.clone())),
-                        member: ("noaction".to_string(), from_loc),
-                    },
-                    YaccOriginalActionKind::UserAction => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), from_loc.clone())),
-                        member: ("useraction".to_string(), from_loc),
-                    },
-                    YaccOriginalActionKind::GenericParseTree => Namespaced {
-                        namespace: Some(("yaccoriginalactionkind".to_string(), from_loc.clone())),
-                        member: ("genericparsetree".to_string(), from_loc),
-                    },
-                },
-            }),
-        })
+        Ok(Value::Namespaced(format!("YaccKind::{kind:?}"), from_loc))
     }
 }
 
 impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
     type Error = HeaderError<T>;
     fn try_from(value: &Value<T>) -> Result<YaccKind, HeaderError<T>> {
-        let mut err_locs = Vec::new();
         match value {
-            Value::Setting(Setting::Unitary(Namespaced {
-                namespace,
-                member: (yk_value, yk_value_loc),
-            })) => {
-                if let Some((ns, ns_loc)) = namespace
-                    && ns != "yacckind"
-                {
-                    err_locs.push(ns_loc.clone());
+            Value::Namespaced(kind, loc) => match kind.as_str() {
+                "YaccKind::Grmtools" | "Grmtools" => Ok(YaccKind::Grmtools),
+                "YaccKind::Eco" | "Eco" => Ok(YaccKind::Eco),
+                "YaccKind::Original(UserAction)"
+                | "Original(UserAction)"
+                | "Original(YaccOriginalActionKind::UserAction)"
+                | "YaccKind::Original(YaccOriginalActionKind::UserAction)" => {
+                    Ok(YaccKind::Original(YaccOriginalActionKind::UserAction))
                 }
-                let yacckinds = [
-                    ("grmtools".to_string(), YaccKind::Grmtools),
-                    ("eco".to_string(), YaccKind::Eco),
-                ];
-                let yk_found = yacckinds
-                    .iter()
-                    .find_map(|(yk_str, yk)| (yk_str == yk_value).then_some(yk));
-                if let Some(yk) = yk_found {
-                    if err_locs.is_empty() {
-                        Ok(*yk)
-                    } else {
-                        Err(HeaderError {
-                            kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                            locations: err_locs,
-                        })
-                    }
-                } else {
-                    err_locs.push(yk_value_loc.clone());
-                    Err(HeaderError {
-                        kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                        locations: err_locs,
-                    })
+                "YaccKind::Original(NoAction)"
+                | "Original(NoAction)"
+                | "Original(YaccOriginalActionKind::NoAction)"
+                | "YaccKind::Original(YaccOriginalActionKind::NoAction)" => {
+                    Ok(YaccKind::Original(YaccOriginalActionKind::NoAction))
                 }
-            }
-            Value::Setting(Setting::Constructor {
-                ctor:
-                    Namespaced {
-                        namespace: yk_namespace,
-                        member: (yk_str, yk_loc),
-                    },
-                arg:
-                    Namespaced {
-                        namespace: ak_namespace,
-                        member: (ak_str, ak_loc),
-                    },
-            }) => {
-                if let Some((yk_ns, yk_ns_loc)) = yk_namespace
-                    && yk_ns != "yacckind"
-                {
-                    err_locs.push(yk_ns_loc.clone());
+                "YaccKind::Original(GenericParseTree)"
+                | "Original(GenericParseTree)"
+                | "Original(YaccOriginalActionKind::GenericParseTree)"
+                | "YaccKind::Original(YaccOriginalActionKind::GenericParseTree)" => {
+                    Ok(YaccKind::Original(YaccOriginalActionKind::GenericParseTree))
                 }
-
-                if yk_str != "original" {
-                    err_locs.push(yk_loc.clone());
-                }
-
-                if let Some((ak_ns, ak_ns_loc)) = ak_namespace
-                    && ak_ns != "yaccoriginalactionkind"
-                {
-                    err_locs.push(ak_ns_loc.clone());
-                }
-                let actionkinds = [
-                    ("noaction", YaccOriginalActionKind::NoAction),
-                    ("useraction", YaccOriginalActionKind::UserAction),
-                    ("genericparsetree", YaccOriginalActionKind::GenericParseTree),
-                ];
-                let yk_found = actionkinds.iter().find_map(|(actionkind_str, actionkind)| {
-                    (ak_str == actionkind_str).then_some(YaccKind::Original(*actionkind))
-                });
-
-                if let Some(yk) = yk_found {
-                    if err_locs.is_empty() {
-                        Ok(yk)
-                    } else {
-                        Err(HeaderError {
-                            kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                            locations: err_locs,
-                        })
-                    }
-                } else {
-                    err_locs.push(ak_loc.clone());
-                    Err(HeaderError {
-                        kind: HeaderErrorKind::InvalidEntry("yacckind"),
-                        locations: err_locs,
-                    })
-                }
-            }
+                _ => Err(HeaderError {
+                    kind: HeaderErrorKind::InvalidEntry("cfgrammar.yacckind"),
+                    locations: vec![loc.clone()],
+                }),
+            },
             val => Err(HeaderError {
-                kind: HeaderErrorKind::InvalidEntry("yacckind"),
+                kind: HeaderErrorKind::InvalidEntry("cfgrammar.yacckind"),
                 locations: vec![val.primary_location().clone()],
             }),
+        }
+    }
+}
+
+impl<T> Value<T> {
+    #[doc(hidden)]
+    pub fn primary_location(&self) -> &T {
+        match self {
+            Self::Array(_, loc)
+            | Self::Bool(_, loc)
+            | Self::Num(_, loc)
+            | Self::Namespaced(_, loc)
+            | Self::String(_, loc) => loc,
         }
     }
 }

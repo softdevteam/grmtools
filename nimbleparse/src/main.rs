@@ -1,6 +1,6 @@
 use cfgrammar::{
     Location, RIdx, Span, TIdx,
-    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Setting, Value},
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Value},
     markmap::Entry,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
 };
@@ -552,10 +552,10 @@ where
         } else {
             // If given no input paths, try to find some with `test_files` in the header.
             match self.header.get("lrpar.test_files") {
-                Some(HeaderValue(_, Value::Setting(Setting::Array(test_globs, _, _)))) => {
+                Some(HeaderValue(_, Value::Array(test_globs, _))) => {
                     for setting in test_globs {
                         match setting {
-                            Setting::String(s, _) => {
+                            Value::String(s, _) => {
                                 if let Some(yacc_y_path_dir) = self.yacc_y_path.parent() {
                                     let joined = yacc_y_path_dir.join(s);
                                     let joined = joined.as_os_str().to_str();

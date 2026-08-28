@@ -1,7 +1,7 @@
 //! Build grammars at run-time.
 
 use cfgrammar::{
-    header::{Header, HeaderError, HeaderErrorKind, HeaderValue, Namespaced, Setting, Value},
+    header::{Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
     markmap::MergeBehavior,
     span::{Location, Span},
 };
@@ -51,75 +51,19 @@ impl<T: Clone> TryFrom<&Value<T>> for LexerKind {
     type Error = cfgrammar::header::HeaderError<T>;
     fn try_from(it: &Value<T>) -> Result<LexerKind, Self::Error> {
         match it {
-            Value::Flag(_, loc) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "LexerKind",
-                    "Expected `LexerKind` found bool",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::Num(_, loc)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "LexerKind",
-                    "Expected `LexerKind` found numeric",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::String(_, loc)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "LexerKind",
-                    "Expected `LexerKind` found string",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::Constructor {
-                ctor:
-                    Namespaced {
-                        namespace: _,
-                        member: (_, loc),
-                    },
-                arg: _,
-            }) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "LexerKind",
-                    "Expected `LexerKind` found constructor",
-                ),
-                locations: vec![loc.clone()],
-            }),
-            Value::Setting(Setting::Array(_, arr_loc, _)) => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError(
-                    "LexerKind",
-                    "Expected `LexerKind` found array",
-                ),
-                locations: vec![arr_loc.clone()],
-            }),
-            Value::Setting(Setting::Unitary(Namespaced {
-                namespace,
-                member: (member, member_loc),
-            })) => {
-                if let Some((ns, loc)) = namespace
-                    && ns.to_lowercase() != "lexerkind"
-                {
-                    return Err(HeaderError {
-                        kind: HeaderErrorKind::ConversionError(
-                            "LexerKind",
-                            "Expected namespace `LexerKind`",
-                        ),
-                        locations: vec![loc.clone()],
-                    });
+            Value::Namespaced(rs, loc) => match rs.as_str() {
+                "LexerKind::LRNonStreamingLexer" | "LRNonStreamingLexer" => {
+                    Ok(LexerKind::LRNonStreamingLexer)
                 }
-                if member.to_lowercase() != "lrnonstreaminglexer" {
-                    return Err(HeaderError {
-                        kind: HeaderErrorKind::ConversionError(
-                            "LexerKind",
-                            "Unknown `LexerKind` Variant",
-                        ),
-                        locations: vec![member_loc.clone()],
-                    });
-                }
-
-                Ok(LexerKind::LRNonStreamingLexer)
-            }
+                _ => Err(HeaderError {
+                    kind: HeaderErrorKind::ConversionError("LexerKind", "Expected `LexerKind`"),
+                    locations: vec![loc.clone()],
+                }),
+            },
+            val => Err(HeaderError {
+                kind: HeaderErrorKind::ConversionError("LexerKind", "Expected `LexerKind`"),
+                locations: vec![val.primary_location().clone()],
+            }),
         }
     }
 }
@@ -516,10 +460,10 @@ where
                         }
                     };
                     match test_glob {
-                        Some(HeaderValue(_, Value::Setting(Setting::Array(test_globs, _, _)))) => {
+                        Some(HeaderValue(_, Value::Array(test_globs, _))) => {
                             for setting in test_globs {
                                 match setting {
-                                    Setting::String(test_files, _) => {
+                                    Value::String(test_files, _) => {
                                         let path_joined = grm_path.parent().unwrap().join(test_files);
                                         let path_str = &path_joined.to_string_lossy();
                                         let mut glob_paths = glob(path_str).map_err(|e| e.to_string())?.peekable();
@@ -846,7 +790,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -862,7 +806,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -878,7 +822,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -894,7 +838,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -910,7 +854,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -926,7 +870,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -942,7 +886,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -958,7 +902,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -974,7 +918,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Flag(flag, Location::Other("CTLexerBuilder".to_string())),
+                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -990,10 +934,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Setting(Setting::Num(
-                    sz as u64,
-                    Location::Other("CTLexerBuilder".to_string()),
-                )),
+                Value::Num(sz as u64, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -1009,10 +950,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Setting(Setting::Num(
-                    sz as u64,
-                    Location::Other("CTLexerBuilder".to_string()),
-                )),
+                Value::Num(sz as u64, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -1028,10 +966,7 @@ where
             key,
             HeaderValue(
                 Location::Other("CTLexerBuilder".to_string()),
-                Value::Setting(Setting::Num(
-                    lim as u64,
-                    Location::Other("CTLexerBuilder".to_string()),
-                )),
+                Value::Num(lim as u64, Location::Other("CTLexerBuilder".to_string())),
             ),
         );
         self
@@ -1284,12 +1219,7 @@ mod test {
     use super::{CTLexerBuilder, LexerKind};
     #[test]
     fn test_grmtools_section_lexerkind() {
-        let lexerkinds = [
-            "LRNonStreamingLexer",
-            "lrnonstreaminglexer",
-            "LexerKind::lrnonstreaminglexer",
-            "lexerkind::LRNonStreamingLexer",
-        ];
+        let lexerkinds = ["LRNonStreamingLexer", "LexerKind::LRNonStreamingLexer"];
         for (i, kind) in lexerkinds.iter().enumerate() {
             let lex_src = format!(
                 "
