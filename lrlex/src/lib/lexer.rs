@@ -47,7 +47,6 @@ pub struct LexFlags {
 impl<T: Clone> TryFrom<&mut Header<T>> for LexFlags {
     type Error = HeaderError<T>;
     fn try_from(header: &mut Header<T>) -> Result<LexFlags, HeaderError<T>> {
-        use cfgrammar::header::Setting;
         let mut lex_flags = UNSPECIFIED_LEX_FLAGS;
         let LexFlags {
             dot_matches_new_line,
@@ -67,10 +66,10 @@ impl<T: Clone> TryFrom<&mut Header<T>> for LexFlags {
             ($prefix:ident, $it:ident) => {
                 header.mark_used(&stringify!($prefix.$it).to_string());
                 *$it = match header.get(stringify!($prefix.$it)) {
-                    Some(HeaderValue(_, Value::Flag(flag, _))) => Some(*flag),
-                    Some(HeaderValue(loc, _)) => Err(HeaderError {
+                    Some(HeaderValue(_, Value::Bool(flag, _))) => Some(*flag),
+                    Some(HeaderValue(_, val)) => Err(HeaderError {
                         kind: HeaderErrorKind::ConversionError("LexFlags", "Expected boolean"),
-                        locations: vec![loc.clone()],
+                        locations: vec![val.primary_location().clone()],
                     })?,
                     None => None,
                 }
@@ -89,10 +88,10 @@ impl<T: Clone> TryFrom<&mut Header<T>> for LexFlags {
             ($prefix:ident, $it:ident, $num_ty: ty) => {
                 header.mark_used(&stringify!($prefix.$it).to_string());
                 *$it = match header.get(stringify!($prefix.$it)) {
-                    Some(HeaderValue(_, Value::Setting(Setting::Num(n, _)))) => Some(*n as $num_ty),
-                    Some(HeaderValue(loc, _)) => Err(HeaderError {
+                    Some(HeaderValue(_, Value::Num(n, _))) => Some(*n as $num_ty),
+                    Some(HeaderValue(_, val)) => Err(HeaderError {
                         kind: HeaderErrorKind::ConversionError("LexFlags", "Expected numeric"),
-                        locations: vec![loc.clone()],
+                        locations: vec![val.primary_location().clone()],
                     })?,
                     None => None,
                 }
@@ -128,8 +127,8 @@ impl From<&LexFlags> for Header<Location> {
                     header.insert(
                         stringify!($it).to_string(),
                         HeaderValue(
-                            Location::Other("From<&LexFlags".to_string()),
-                            Value::Flag(x, Location::Other("From<&LexFlags>".to_string())),
+                            Location::Other("From<&LexFlags>".to_string()),
+                            Value::Bool(x, Location::Other("From<&LexFlags>".to_string())),
                         ),
                     )
                 });
@@ -148,15 +147,11 @@ impl From<&LexFlags> for Header<Location> {
         macro_rules! cvt_num {
             ($it: ident) => {
                 $it.map(|x| {
-                    use cfgrammar::header::Setting;
                     header.insert(
                         stringify!($it).to_string(),
                         HeaderValue(
-                            Location::Other("From<&LexFlags".to_string()),
-                            Value::Setting(Setting::Num(
-                                x as u64,
-                                Location::Other("From<&LexFlags>".to_string()),
-                            )),
+                            Location::Other("From<&LexFlags>".to_string()),
+                            Value::Num(x as u64, Location::Other("From<&LexFlags>".to_string())),
                         ),
                     )
                 });

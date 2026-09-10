@@ -1570,11 +1570,11 @@ mod test {
             "%grmtools{yacckind: YaccKind::Original(GenericParseTree)}
                  %%
                  Start: ;",
-            "%grmtools{yacckind: YaccKind::Original(yaccoriginalactionkind::useraction)}
+            "%grmtools{yacckind: YaccKind::Original(YaccOriginalActionKind::UserAction)}
                  %actiontype ()
                  %%
                  Start: {};",
-            "%grmtools{yacckind: Original(YACCOriginalActionKind::NoAction)}
+            "%grmtools{yacckind: Original(YaccOriginalActionKind::NoAction)}
                  %%
                  Start: ;",
             "%grmtools{yacckind: YaccKind::Grmtools}
