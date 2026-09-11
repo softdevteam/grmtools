@@ -39,6 +39,7 @@ impl fmt::Display for ASTModificationError {
 pub struct ASTWithValidityInfo {
     yacc_kind: YaccKind,
     ast: GrammarAST,
+    grmtools_section: Header<Span>,
     errs: Vec<YaccGrammarError>,
 }
 
@@ -52,18 +53,19 @@ impl ASTWithValidityInfo {
     /// already extracted the `YaccKind` if any.
     pub fn new(yacc_kind: YaccKind, s: &str) -> Self {
         let mut errs = Vec::new();
-        let ast = {
+        let (ast, grmtools_section) = {
             let mut yp = YaccParser::new(yacc_kind, s);
             yp.parse().map_err(|e| errs.extend(e)).ok();
-            let mut ast = yp.build();
+            let (mut ast, grmtools_section) = yp.build();
             ast.complete_and_validate(Some(yacc_kind))
                 .map_err(|e| errs.push(e))
                 .ok();
-            ast
+            (ast, grmtools_section)
         };
         ASTWithValidityInfo {
             ast,
             errs,
+            grmtools_section,
             yacc_kind,
         }
     }
@@ -108,6 +110,34 @@ impl ASTWithValidityInfo {
             })
         }
     }
+
+    /// Performs a lookup in the grmtools section for an entry with the key `crate_name.key_name` and returns it.
+    /// If the entry is found it marks the key as `used`, for the purposes of `unused_grmtools_section_keys_for_crate`.
+    pub fn grmtools_section_value_for_crate(
+        &mut self,
+        crate_name: &str,
+        key_name: &str,
+    ) -> Option<(Span, &Value<Span>)> {
+        let key = format!("{crate_name}.{key_name}");
+        self.grmtools_section.mark_used(&key);
+        if let Some(HeaderValue(span, value)) = self.grmtools_section.get(&key) {
+            Some((*span, value))
+        } else {
+            None
+        }
+    }
+
+    pub fn unused_grmtools_section_keys_for_crate(&self, crate_name: &str) -> Vec<String> {
+        self.grmtools_section
+            .unused()
+            .iter()
+            .filter(|key_name| {
+                let crate_prefix = format!("{crate_name}.");
+                key_name.starts_with(&crate_prefix)
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    }
 }
 
 impl FromStr for ASTWithValidityInfo {
@@ -124,7 +154,7 @@ impl FromStr for ASTWithValidityInfo {
                 // We don't want to strip off the header so that span's will be correct.
                 let mut yp = YaccParser::new(yacc_kind, src);
                 yp.parse().map_err(|e| errs.extend(e)).ok();
-                let mut ast = yp.build();
+                let (mut ast, _) = yp.build();
                 ast.complete_and_validate(Some(yacc_kind))
                     .map_err(|e| errs.push(e))
                     .ok();
@@ -133,6 +163,7 @@ impl FromStr for ASTWithValidityInfo {
             Ok(ASTWithValidityInfo {
                 ast,
                 errs,
+                grmtools_section: header,
                 yacc_kind,
             })
         } else {
@@ -178,7 +209,6 @@ pub struct GrammarAST {
     // The set of symbol names that, if unused in a
     // grammar, will not cause a warning or error.
     pub expect_unused: Vec<Symbol>,
-    pub grmtools_section: Option<Header<Span>>,
 }
 
 #[derive(Debug, Clone)]
@@ -256,7 +286,6 @@ impl GrammarAST {
             parse_generics: None,
             programs: None,
             expect_unused: Vec::new(),
-            grmtools_section: None,
         }
     }
 
@@ -544,39 +573,6 @@ impl GrammarAST {
                         }
                     }),
             )
-    }
-
-    /// Performs a lookup in the grmtools section for an entry with the key `crate_name.key_name` and returns it.
-    /// If the entry is found it marks the key as `used`, for the purposes of `unused_grmtools_section_keys_for_crate`.
-    pub fn grmtools_section_value_for_crate(
-        &mut self,
-        crate_name: &str,
-        key_name: &str,
-    ) -> Option<(Span, &Value<Span>)> {
-        let key = format!("{crate_name}.{key_name}");
-        if let Some(HeaderValue(span, value)) = self.grmtools_section.as_mut().and_then(|map| {
-            map.mark_used(&key);
-            map.get(&key)
-        }) {
-            Some((*span, value))
-        } else {
-            None
-        }
-    }
-
-    pub fn unused_grmtools_section_keys_for_crate(&self, crate_name: &str) -> Vec<String> {
-        if let Some(map) = &self.grmtools_section {
-            map.unused()
-                .iter()
-                .filter(|key_name| {
-                    let crate_prefix = format!("{crate_name}.");
-                    key_name.starts_with(&crate_prefix)
-                })
-                .cloned()
-                .collect::<Vec<_>>()
-        } else {
-            vec![]
-        }
     }
 }
 
@@ -1083,21 +1079,15 @@ start -> () : "a" { () };
                 ),
             ),
         ] {
-            let value = ast_validity
-                .ast
-                .grmtools_section_value_for_crate("test", key);
+            let value = ast_validity.grmtools_section_value_for_crate("test", key);
             assert_eq!(value, Some((expected_span, &expected_value)));
         }
         assert_eq!(
-            ast_validity
-                .ast
-                .unused_grmtools_section_keys_for_crate("test"),
+            ast_validity.unused_grmtools_section_keys_for_crate("test"),
             vec!["test.unused"]
         );
         assert_eq!(
-            ast_validity
-                .ast
-                .grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),
             Some((
                 src.find_span("yacckind"),
                 &Value::Namespaced("Grmtools".to_string(), src.find_span("Grmtools"))
@@ -1106,15 +1096,12 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .ast
                 .unused_grmtools_section_keys_for_crate("cfgrammar")
                 .is_empty()
         );
 
         assert_eq!(
-            ast_validity
-                .ast
-                .grmtools_section_value_for_crate("lrpar", "recoverer"),
+            ast_validity.grmtools_section_value_for_crate("lrpar", "recoverer"),
             Some((
                 src.find_span("lrpar.recoverer"),
                 &Value::Namespaced("CPCTPlus".to_string(), src.find_span("CPCTPlus"))
@@ -1123,7 +1110,6 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .ast
                 .unused_grmtools_section_keys_for_crate("lrpar")
                 .is_empty()
         );
@@ -1143,9 +1129,7 @@ start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
         assert_eq!(
-            ast_validity
-                .ast
-                .grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),
             Some((
                 src.find_span("yacckind"),
                 &Value::Namespaced(
@@ -1156,7 +1140,6 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .ast
                 .unused_grmtools_section_keys_for_crate("cfgrammar")
                 .is_empty()
         );
@@ -1176,9 +1159,7 @@ start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
         assert_eq!(
-            ast_validity
-                .ast
-                .grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),
             Some((
                 src.find_span("yacckind"),
                 &Value::Namespaced(
@@ -1189,7 +1170,6 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .ast
                 .unused_grmtools_section_keys_for_crate("cfgrammar")
                 .is_empty()
         );
@@ -1209,9 +1189,7 @@ start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
         assert_eq!(
-            ast_validity
-                .ast
-                .grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),
             Some((
                 src.find_span("yacckind"),
                 &Value::Namespaced(
@@ -1222,7 +1200,6 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .ast
                 .unused_grmtools_section_keys_for_crate("cfgrammar")
                 .is_empty()
         );
