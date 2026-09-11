@@ -150,20 +150,20 @@ impl FromStr for ASTWithValidityInfo {
             .map_err(|mut errs| errs.drain(..).map(|e| e.into()).collect::<Vec<_>>())?;
         if let Some(HeaderValue(_, yk_val)) = header.get("cfgrammar.yacckind") {
             let yacc_kind = YaccKind::try_from(yk_val).map_err(|e| vec![e.into()])?;
-            let ast = {
+            let (ast, grmtools_section) = {
                 // We don't want to strip off the header so that span's will be correct.
                 let mut yp = YaccParser::new(yacc_kind, src);
                 yp.parse().map_err(|e| errs.extend(e)).ok();
-                let (mut ast, _) = yp.build();
+                let (mut ast, grmtools_section) = yp.build();
                 ast.complete_and_validate(Some(yacc_kind))
                     .map_err(|e| errs.push(e))
                     .ok();
-                ast
+                (ast, grmtools_section)
             };
             Ok(ASTWithValidityInfo {
                 ast,
                 errs,
-                grmtools_section: header,
+                grmtools_section,
                 yacc_kind,
             })
         } else {
