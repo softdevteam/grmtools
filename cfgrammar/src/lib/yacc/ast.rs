@@ -1040,51 +1040,49 @@ start -> () : "a" {$;;;; };
 start -> () : "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
-        let test_flag_span = src.find_span("test.Flag");
-        let test_neg_span = src.find_span("test.Negative");
-        let test_neg_val_span = src.find_span("!test.Negative");
-        let test_string_span = src.find_span("test.string");
-        let test_string_val_span = src.find_span("Foo");
-        let test_vec_span = src.find_span("test.vec");
-        let test_vec_a_span = src.find_span("Aaaa");
-        let test_vec_b_span = src.find_span("Bbbb");
-        let test_vec_val_span = src.find_span("[\"Aaaa\", \"Bbbb\"]");
-        let test_num_span = src.find_span("test.num");
-        let test_num_val_span = src.find_span("1234");
-        let mut test_crate_expected = HashMap::new();
-        test_crate_expected.insert(
-            "Flag".to_string(),
-            (test_flag_span, Value::Bool(true, test_flag_span)),
-        );
-        test_crate_expected.insert(
-            "Negative".to_string(),
-            (test_neg_span, Value::Bool(false, test_neg_val_span)),
-        );
-        test_crate_expected.insert(
-            "string".to_string(),
+        for (key, (expected_span, expected_value)) in [
             (
-                test_string_span,
-                Value::String("Foo".to_string(), test_string_val_span),
-            ),
-        );
-        test_crate_expected.insert(
-            "vec".to_string(),
-            (
-                test_vec_span,
-                Value::Array(
-                    vec![
-                        Value::String("Aaaa".to_string(), test_vec_a_span),
-                        Value::String("Bbbb".to_string(), test_vec_b_span),
-                    ],
-                    test_vec_val_span,
+                "Flag".to_string(),
+                (
+                    src.find_span("test.Flag"),
+                    Value::Bool(true, src.find_span("test.Flag")),
                 ),
             ),
-        );
-        test_crate_expected.insert(
-            "num".to_string(),
-            (test_num_span, Value::Num(1234, test_num_val_span)),
-        );
-        for (key, (expected_span, expected_value)) in test_crate_expected {
+            (
+                "Negative".to_string(),
+                (
+                    src.find_span("test.Negative"),
+                    Value::Bool(false, src.find_span("!test.Negative")),
+                ),
+            ),
+            (
+                "string".to_string(),
+                (
+                    src.find_span("test.string"),
+                    Value::String("Foo".to_string(), src.find_span("Foo")),
+                ),
+            ),
+            (
+                "vec".to_string(),
+                (
+                    src.find_span("test.vec"),
+                    Value::Array(
+                        vec![
+                            Value::String("Aaaa".to_string(), src.find_span("Aaaa")),
+                            Value::String("Bbbb".to_string(), src.find_span("Bbbb")),
+                        ],
+                        src.find_span("[\"Aaaa\", \"Bbbb\"]"),
+                    ),
+                ),
+            ),
+            (
+                "num".to_string(),
+                (
+                    src.find_span("test.num"),
+                    Value::Num(1234, src.find_span("1234")),
+                ),
+            ),
+        ] {
             let value = ast_validity
                 .ast
                 .grmtools_section_value_for_crate("test", &key);
@@ -1096,24 +1094,16 @@ start -> () : "a" { () };
                 .unused_grmtools_section_keys_for_crate("test"),
             vec!["test.unused"]
         );
-
-        let mut cfgrammar_crate_expected = HashMap::new();
-        let yacckind_span = src.find_span("yacckind");
-        let yacckind_val_span = src.find_span("Grmtools");
-        cfgrammar_crate_expected.insert(
-            "yacckind".to_string(),
-            (
-                yacckind_span,
-                // The actual value we receive has been lower cased
-                Value::Namespaced("Grmtools".to_string(), yacckind_val_span),
-            ),
-        );
-        for (key, (expected_span, expected_value)) in cfgrammar_crate_expected {
-            let value = ast_validity
+        assert_eq!(
+            ast_validity
                 .ast
-                .grmtools_section_value_for_crate("cfgrammar", &key);
-            assert_eq!(value, Some((expected_span, &expected_value)));
-        }
+                .grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            Some((
+                src.find_span("yacckind"),
+                &Value::Namespaced("Grmtools".to_string(), src.find_span("Grmtools"))
+            ))
+        );
+
         assert!(
             ast_validity
                 .ast
@@ -1121,22 +1111,16 @@ start -> () : "a" { () };
                 .is_empty()
         );
 
-        let mut lrpar_crate_expected = HashMap::new();
-        let recoverer_span = src.find_span("lrpar.recoverer");
-        let recoverer_val_span = src.find_span("CPCTPlus");
-        lrpar_crate_expected.insert(
-            "recoverer".to_string(),
-            (
-                recoverer_span,
-                Value::Namespaced("CPCTPlus".to_string(), recoverer_val_span),
-            ),
-        );
-        for (key, (expected_span, expected_value)) in lrpar_crate_expected {
-            let value = ast_validity
+        assert_eq!(
+            ast_validity
                 .ast
-                .grmtools_section_value_for_crate("lrpar", &key);
-            assert_eq!(value, Some((expected_span, &expected_value)));
-        }
+                .grmtools_section_value_for_crate("lrpar", "recoverer"),
+            Some((
+                src.find_span("lrpar.recoverer"),
+                &Value::Namespaced("CPCTPlus".to_string(), src.find_span("CPCTPlus"))
+            ))
+        );
+
         assert!(
             ast_validity
                 .ast
@@ -1158,25 +1142,18 @@ start -> () : "a" { () };
 start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
-        let mut cfgrammar_crate_expected = HashMap::new();
-        let yacckind_span = src.find_span("yacckind");
-        let yacckind_val_span = src.find_span("Original(YaccOriginalActionKind::UserAction)");
-        cfgrammar_crate_expected.insert(
-            "yacckind".to_string(),
-            (
-                yacckind_span,
-                Value::Namespaced(
-                    "Original(YaccOriginalActionKind::UserAction)".to_string(),
-                    yacckind_val_span,
-                ),
-            ),
-        );
-        for (key, (expected_span, expected_value)) in cfgrammar_crate_expected {
-            let value = ast_validity
+        assert_eq!(
+            ast_validity
                 .ast
-                .grmtools_section_value_for_crate("cfgrammar", &key);
-            assert_eq!(value, Some((expected_span, &expected_value)));
-        }
+                .grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            Some((
+                src.find_span("yacckind"),
+                &Value::Namespaced(
+                    "Original(YaccOriginalActionKind::UserAction)".to_string(),
+                    src.find_span("Original(YaccOriginalActionKind::UserAction)"),
+                ),
+            ))
+        );
         assert!(
             ast_validity
                 .ast
@@ -1198,26 +1175,18 @@ start: "a" { () };
 start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
-        let mut cfgrammar_crate_expected = HashMap::new();
-        let yacckind_span = src.find_span("yacckind");
-        let yacckind_val_span =
-            src.find_span("YaccKind::Original(YaccOriginalActionKind::UserAction)");
-        cfgrammar_crate_expected.insert(
-            "yacckind".to_string(),
-            (
-                yacckind_span,
-                Value::Namespaced(
-                    "YaccKind::Original(YaccOriginalActionKind::UserAction)".to_string(),
-                    yacckind_val_span,
-                ),
-            ),
-        );
-        for (key, (expected_span, expected_value)) in cfgrammar_crate_expected {
-            let value = ast_validity
+        assert_eq!(
+            ast_validity
                 .ast
-                .grmtools_section_value_for_crate("cfgrammar", &key);
-            assert_eq!(value, Some((expected_span, &expected_value)));
-        }
+                .grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            Some((
+                src.find_span("yacckind"),
+                &Value::Namespaced(
+                    "YaccKind::Original(YaccOriginalActionKind::UserAction)".to_string(),
+                    src.find_span("YaccKind::Original(YaccOriginalActionKind::UserAction)"),
+                ),
+            ))
+        );
         assert!(
             ast_validity
                 .ast
@@ -1239,25 +1208,18 @@ start: "a" { () };
 start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
-        let mut cfgrammar_crate_expected = HashMap::new();
-        let yacckind_span = src.find_span("yacckind");
-        let yacckind_val_span = src.find_span("YaccKind::Original(UserAction)");
-        cfgrammar_crate_expected.insert(
-            "yacckind".to_string(),
-            (
-                yacckind_span,
-                Value::Namespaced(
-                    "YaccKind::Original(UserAction)".to_string(),
-                    yacckind_val_span,
-                ),
-            ),
-        );
-        for (key, (expected_span, expected_value)) in cfgrammar_crate_expected {
-            let value = ast_validity
+        assert_eq!(
+            ast_validity
                 .ast
-                .grmtools_section_value_for_crate("cfgrammar", &key);
-            assert_eq!(value, Some((expected_span, &expected_value)));
-        }
+                .grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            Some((
+                src.find_span("yacckind"),
+                &Value::Namespaced(
+                    "YaccKind::Original(UserAction)".to_string(),
+                    src.find_span("YaccKind::Original(UserAction)"),
+                ),
+            ))
+        );
         assert!(
             ast_validity
                 .ast
