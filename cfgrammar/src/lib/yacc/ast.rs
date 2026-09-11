@@ -1042,28 +1042,28 @@ start -> () : "a" { () };
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
         for (key, (expected_span, expected_value)) in [
             (
-                "Flag".to_string(),
+                "Flag",
                 (
                     src.find_span("test.Flag"),
                     Value::Bool(true, src.find_span("test.Flag")),
                 ),
             ),
             (
-                "Negative".to_string(),
+                "Negative",
                 (
                     src.find_span("test.Negative"),
                     Value::Bool(false, src.find_span("!test.Negative")),
                 ),
             ),
             (
-                "string".to_string(),
+                "string",
                 (
                     src.find_span("test.string"),
                     Value::String("Foo".to_string(), src.find_span("Foo")),
                 ),
             ),
             (
-                "vec".to_string(),
+                "vec",
                 (
                     src.find_span("test.vec"),
                     Value::Array(
@@ -1076,7 +1076,7 @@ start -> () : "a" { () };
                 ),
             ),
             (
-                "num".to_string(),
+                "num",
                 (
                     src.find_span("test.num"),
                     Value::Num(1234, src.find_span("1234")),
@@ -1085,7 +1085,7 @@ start -> () : "a" { () };
         ] {
             let value = ast_validity
                 .ast
-                .grmtools_section_value_for_crate("test", &key);
+                .grmtools_section_value_for_crate("test", key);
             assert_eq!(value, Some((expected_span, &expected_value)));
         }
         assert_eq!(
