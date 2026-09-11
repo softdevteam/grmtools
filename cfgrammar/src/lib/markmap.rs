@@ -21,7 +21,7 @@ use std::fmt;
 ///
 /// Merge behaviors configure how the merge operator handles cases where both `MarkMaps` being merged
 /// contain a particular key.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[doc(hidden)]
 pub struct MarkMap<K, V> {
     default_merge_behavior: MergeBehavior,
