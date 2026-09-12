@@ -13,7 +13,7 @@ use crate::{
 
 use cfgrammar::{
     Location, RIdx, Span, Symbol,
-    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue},
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, RE_CRATE_DOT},
     markmap::MergeError,
     yacc::{
         YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo,
@@ -32,6 +32,7 @@ const ACTIONS_KIND: &str = "__GtActionsKind";
 const ACTIONS_KIND_PREFIX: &str = "Ak";
 const ACTIONS_KIND_HIDDEN: &str = "__GtActionsKindHidden";
 
+#[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum ParserSrcEnvError {
     GrmtoolsSectionParseError(Vec<HeaderError<Span>>),
@@ -41,6 +42,7 @@ pub(crate) enum ParserSrcEnvError {
     MissingModName,
 }
 
+#[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum ParserBuildEnvError<LexerTypesT>
 where
@@ -53,6 +55,7 @@ where
     GrmtoolsSectionMissingRequiredKeys(Vec<String>),
 }
 
+#[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum CodegenError {
     ProcMacro2Error(proc_macro2::LexError),
@@ -456,8 +459,23 @@ where
         self.ast_with_validity_info.yacc_kind()
     }
 
-    pub(crate) fn check_unused_header_keys(&self) -> Result<(), ParserBuildEnvError<LexerTypesT>> {
-        let unused_keys = self.header.unused();
+    pub(crate) fn check_unused_header_keys_for_crate(
+        &self,
+        crate_name: Option<&str>,
+    ) -> Result<(), ParserBuildEnvError<LexerTypesT>> {
+        let unused_keys = self
+            .header
+            .unused()
+            .iter()
+            .filter(|s| {
+                if let Some(crate_name) = crate_name {
+                    s.starts_with(&format!("{crate_name}."))
+                } else {
+                    !RE_CRATE_DOT.is_match(s)
+                }
+            })
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
         if !unused_keys.is_empty() {
             return Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(unused_keys));
         }
@@ -1292,5 +1310,76 @@ pub(crate) fn make_generics(parse_generics: Option<&str>) -> Result<Generics, Co
         }
     } else {
         Ok(parse_quote!(<'lexer, 'input: 'lexer>))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::test_utils::TestLexerTypes;
+    use cfgrammar::{header::Header, span::Location};
+
+    use super::*;
+    #[test]
+    fn test_unused_crate_header_entry() {
+        let src = r#"
+        %grmtools{
+            yacckind: Grmtools,
+            test.foo: "test crate value",
+        }
+        %%
+        start -> () : "A" { () };
+        "#;
+        let empty_header = Header::<Location>::new();
+        let src_env = ParserSrcEnv::<TestLexerTypes>::new_with_header(src, None, empty_header);
+        let build_env = src_env
+            .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
+            .unwrap();
+        build_env
+            .check_unused_header_keys_for_crate(Some("cfgrammar"))
+            .unwrap();
+        build_env
+            .check_unused_header_keys_for_crate(Some("lrpar"))
+            .unwrap();
+        build_env
+            .check_unused_header_keys_for_crate(Some("lrlex"))
+            .unwrap();
+        build_env.check_unused_header_keys_for_crate(None).unwrap();
+        let codegen = build_env.code_generator("timestamp").unwrap();
+        let out = codegen.generate(&build_env).unwrap();
+        assert!(!out.is_empty());
+    }
+
+    #[test]
+    fn test_unused_header_entry() {
+        let src = r#"
+        %grmtools{
+            yacckind: Grmtools,
+            testfoo: "values which do not specify a crate origin should show up as unused",
+        }
+        %%
+        start -> () : "A" { () };
+        "#;
+        let empty_header = Header::<Location>::new();
+        let src_env = ParserSrcEnv::<TestLexerTypes>::new_with_header(src, None, empty_header);
+        let build_env = src_env
+            .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
+            .unwrap();
+        build_env
+            .check_unused_header_keys_for_crate(Some("cfgrammar"))
+            .unwrap();
+        build_env
+            .check_unused_header_keys_for_crate(Some("lrpar"))
+            .unwrap();
+        build_env
+            .check_unused_header_keys_for_crate(Some("lrlex"))
+            .unwrap();
+        match build_env.check_unused_header_keys_for_crate(None) {
+            Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys))
+                if keys == vec!["testfoo".to_string()] => {}
+            _ => panic!("Unexpected return value for unused header keys check"),
+        }
+        let codegen = build_env.code_generator("timestamp").unwrap();
+        let out = codegen.generate(&build_env).unwrap();
+        assert!(!out.is_empty());
     }
 }
