@@ -113,7 +113,7 @@ impl ASTWithValidityInfo {
 
     /// Performs a lookup in the grmtools section for an entry with the key `crate_name.key_name` and returns it.
     /// If the entry is found it marks the key as `used`, for the purposes of `unused_header_keys_for_crate`.
-    pub fn grmtools_section_value_for_crate(
+    pub fn header_value_for_crate(
         &mut self,
         crate_name: &str,
         key_name: &str,
@@ -1082,7 +1082,7 @@ start -> () : "a" { () };
                 ),
             ),
         ] {
-            let value = ast_validity.grmtools_section_value_for_crate("test", key);
+            let value = ast_validity.header_value_for_crate("test", key);
             assert_eq!(value, Some((expected_span, &expected_value)));
         }
         assert_eq!(
@@ -1090,7 +1090,7 @@ start -> () : "a" { () };
             vec![("test.unused".to_string(), src.find_span("test.unused"))]
         );
         assert_eq!(
-            ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            ast_validity.header_value_for_crate("cfgrammar", "yacckind"),
             Some((
                 src.find_span("yacckind"),
                 &Value::Namespaced("Grmtools".to_string(), src.find_span("Grmtools"))
@@ -1104,7 +1104,7 @@ start -> () : "a" { () };
         );
 
         assert_eq!(
-            ast_validity.grmtools_section_value_for_crate("lrpar", "recoverer"),
+            ast_validity.header_value_for_crate("lrpar", "recoverer"),
             Some((
                 src.find_span("lrpar.recoverer"),
                 &Value::Namespaced("CPCTPlus".to_string(), src.find_span("CPCTPlus"))
@@ -1132,7 +1132,7 @@ start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
         assert_eq!(
-            ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            ast_validity.header_value_for_crate("cfgrammar", "yacckind"),
             Some((
                 src.find_span("yacckind"),
                 &Value::Namespaced(
@@ -1162,7 +1162,7 @@ start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
         assert_eq!(
-            ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            ast_validity.header_value_for_crate("cfgrammar", "yacckind"),
             Some((
                 src.find_span("yacckind"),
                 &Value::Namespaced(
@@ -1192,7 +1192,7 @@ start: "a" { () };
 "#;
         let mut ast_validity = ASTWithValidityInfo::from_str(src).unwrap();
         assert_eq!(
-            ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),
+            ast_validity.header_value_for_crate("cfgrammar", "yacckind"),
             Some((
                 src.find_span("yacckind"),
                 &Value::Namespaced(
