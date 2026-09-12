@@ -1426,7 +1426,6 @@ mod test {
             yacckind: Grmtools,
             cfgrammar.unknown: "should be unused",
             lrpar.unknown: "should be unused",
-
         }
         %%
         start -> () : "A" { () };
