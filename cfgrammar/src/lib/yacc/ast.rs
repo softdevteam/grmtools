@@ -127,15 +127,18 @@ impl ASTWithValidityInfo {
         }
     }
 
-    pub fn unused_header_keys_for_crate(&self, crate_name: &str) -> Vec<String> {
+    pub fn unused_header_keys_for_crate(&self, crate_name: &str) -> Vec<(String, Span)> {
         self.grmtools_section
             .unused()
             .iter()
-            .filter(|key_name| {
+            .filter_map(|(key_name, HeaderValue(key_span, _))| {
                 let crate_prefix = format!("{crate_name}.");
-                key_name.starts_with(&crate_prefix)
+                if key_name.starts_with(&crate_prefix) {
+                    Some((key_name.clone(), *key_span))
+                } else {
+                    None
+                }
             })
-            .cloned()
             .collect::<Vec<_>>()
     }
 }
@@ -1084,7 +1087,7 @@ start -> () : "a" { () };
         }
         assert_eq!(
             ast_validity.unused_header_keys_for_crate("test"),
-            vec!["test.unused"]
+            vec![("test.unused".to_string(), src.find_span("test.unused"))]
         );
         assert_eq!(
             ast_validity.grmtools_section_value_for_crate("cfgrammar", "yacckind"),

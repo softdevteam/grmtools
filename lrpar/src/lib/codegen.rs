@@ -467,14 +467,14 @@ where
             .header
             .unused()
             .iter()
-            .filter(|s| {
+            .filter(|(s, _)| {
                 if let Some(crate_name) = crate_name {
                     s.starts_with(&format!("{crate_name}."))
                 } else {
                     !RE_CRATE_DOT.is_match(s)
                 }
             })
-            .map(|s| s.to_string())
+            .map(|(s, _)| s.to_string())
             .collect::<Vec<_>>();
         if !unused_keys.is_empty() {
             return Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(unused_keys));
@@ -1444,7 +1444,10 @@ mod test {
             build_env
                 .ast_with_validity_info()
                 .unused_header_keys_for_crate("cfgrammar"),
-            vec!["cfgrammar.unknown"]
+            vec![(
+                "cfgrammar.unknown".to_string(),
+                src.find_span("cfgrammar.unknown")
+            )]
         );
         assert!(
             build_env
@@ -1455,7 +1458,7 @@ mod test {
             build_env
                 .ast_with_validity_info()
                 .unused_header_keys_for_crate("lrpar"),
-            vec!["lrpar.unknown"]
+            vec![("lrpar.unknown".to_string(), src.find_span("lrpar.unknown"))]
         );
         build_env
             .check_unused_header_keys_for_crate(Some("lrlex"))
@@ -1469,5 +1472,17 @@ mod test {
         let codegen = build_env.code_generator("timestamp").unwrap();
         let out = codegen.generate(&build_env).unwrap();
         assert!(!out.is_empty());
+    }
+
+    trait FindSpan {
+        fn find_span(&self, s: &str) -> Span;
+    }
+
+    impl FindSpan for &'_ str {
+        #[track_caller]
+        fn find_span(&self, s: &str) -> Span {
+            let start_pos = self.find(s).unwrap();
+            Span::new(start_pos, start_pos + s.len())
+        }
     }
 }
