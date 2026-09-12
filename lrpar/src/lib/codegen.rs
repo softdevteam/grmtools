@@ -459,6 +459,9 @@ where
         self.ast_with_validity_info.yacc_kind()
     }
 
+    /// Returns an error if any unused keys specified in a `%grmtools` directive that begin with a
+    /// `crate_name.` prefix for `crate_name` value are found. If the `crate_name` is None returns
+    ///  an error if any unused keys with no crate prefix specified are found.
     pub(crate) fn check_unused_header_keys_for_crate(
         &self,
         crate_name: Option<&str>,
