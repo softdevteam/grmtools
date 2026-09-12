@@ -16,7 +16,7 @@ use wincode::{SchemaRead, SchemaWrite};
 
 use crate::{
     Span, Spanned,
-    header::{GrmtoolsSectionParser, Header, HeaderErrorKind},
+    header::{CRATE_KEY_MAP, GrmtoolsSectionParser, Header, HeaderErrorKind},
 };
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
@@ -375,7 +375,18 @@ impl YaccParser<'_> {
     }
 
     pub(crate) fn build(self) -> (GrammarAST, Header<Span>) {
-        (self.ast, self.header.expect("set by parse()"))
+        let mut header = self.header.expect("set by parse()");
+        // Preemptively mark the keys for lrpar and cfgrammar as used in the header.
+        // If a downstream crate checks the keys in the ast. The lrpar crate works on a
+        // local instance which merges the keys from ast with keys from the `CTBuilder`.
+        //
+        // It is difficult to do later due to shared references.
+        for (key_name, crate_name) in CRATE_KEY_MAP.iter() {
+            if ["cfgrammar", "lrpar"].contains(crate_name) {
+                header.mark_used(&format!("{crate_name}.{key_name}"));
+            }
+        }
+        (self.ast, header)
     }
 
     fn parse_declarations(
