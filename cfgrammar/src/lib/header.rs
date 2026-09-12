@@ -48,7 +48,7 @@ impl Spanned for HeaderError<Span> {
 
 // This is essentially a tuple that needs a newtype so we can implement `From` for it.
 // Thus we aren't worried about it being `pub`.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[doc(hidden)]
 pub struct HeaderValue<T>(pub T, pub Value<T>);
 

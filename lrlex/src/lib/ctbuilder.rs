@@ -520,7 +520,12 @@ where
             None
         };
 
-        let unused_header_values = build_env.header().unused();
+        let unused_header_values = build_env
+            .header()
+            .unused()
+            .iter()
+            .map(|(s, _)| s.to_string())
+            .collect::<Vec<String>>();
         if !unused_header_values.is_empty() {
             return Err(
                 format!("Unused header values: {}", unused_header_values.join(", ")).into(),

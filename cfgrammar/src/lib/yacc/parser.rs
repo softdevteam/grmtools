@@ -16,7 +16,7 @@ use wincode::{SchemaRead, SchemaWrite};
 
 use crate::{
     Span, Spanned,
-    header::{GrmtoolsSectionParser, HeaderErrorKind},
+    header::{CRATE_KEY_MAP, GrmtoolsSectionParser, Header, HeaderErrorKind},
 };
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
@@ -294,6 +294,7 @@ pub(crate) struct YaccParser<'a> {
     src: &'a str,
     num_newlines: usize,
     ast: GrammarAST,
+    header: Option<Header<Span>>,
     global_actiontype: Option<(String, Span)>,
 }
 
@@ -331,15 +332,17 @@ impl YaccParser<'_> {
             src,
             num_newlines: 0,
             ast: GrammarAST::new(),
+            header: None,
             global_actiontype: None,
         }
     }
 
     pub(crate) fn parse(&mut self) -> YaccGrammarResult<usize> {
         let mut errs = Vec::new();
-        let (_, pos) = GrmtoolsSectionParser::new(self.src, false)
+        let (header, pos) = GrmtoolsSectionParser::new(self.src, false)
             .parse()
             .map_err(|mut errs| errs.drain(..).map(|e| e.into()).collect::<Vec<_>>())?;
+        self.header = Some(header);
         // We pass around an index into the *bytes* of self.src. We guarantee that at all times
         // this points to the beginning of a UTF-8 character (since multibyte characters exist, not
         // every byte within the string is also a valid character).
@@ -371,8 +374,19 @@ impl YaccParser<'_> {
         }
     }
 
-    pub(crate) fn build(self) -> GrammarAST {
-        self.ast
+    pub(crate) fn build(self) -> (GrammarAST, Header<Span>) {
+        let mut header = self.header.expect("set by parse()");
+        // Preemptively mark the keys for lrpar and cfgrammar as used in the header.
+        // If a downstream crate checks the keys in the ast. The lrpar crate works on a
+        // local instance which merges the keys from ast with keys from the `CTBuilder`.
+        //
+        // It is difficult to do later due to shared references.
+        for (key_name, crate_name) in CRATE_KEY_MAP.iter() {
+            if ["cfgrammar", "lrpar"].contains(crate_name) {
+                header.mark_used(&format!("{crate_name}.{key_name}"));
+            }
+        }
+        (self.ast, header)
     }
 
     fn parse_declarations(
@@ -1083,7 +1097,8 @@ mod test {
     fn parse(yacc_kind: YaccKind, s: &str) -> Result<GrammarAST, Vec<YaccGrammarError>> {
         let mut yp = YaccParser::new(yacc_kind, s);
         yp.parse()?;
-        Ok(yp.build())
+        let (ast, _) = yp.build();
+        Ok(ast)
     }
 
     fn rule(n: &str) -> Symbol {

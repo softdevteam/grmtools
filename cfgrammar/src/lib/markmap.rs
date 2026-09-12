@@ -21,7 +21,7 @@ use std::fmt;
 ///
 /// Merge behaviors configure how the merge operator handles cases where both `MarkMaps` being merged
 /// contain a particular key.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[doc(hidden)]
 pub struct MarkMap<K, V> {
     default_merge_behavior: MergeBehavior,
@@ -484,12 +484,15 @@ impl<K: Ord + Clone, V> MarkMap<K, V> {
     }
 
     /// Returns a `Vec` containing all the keys that are not marked as used.
-    pub fn unused(&self) -> Vec<K> {
+    pub fn unused(&self) -> Vec<(K, V)>
+    where
+        V: Clone,
+    {
         let mut ret = Vec::new();
         for (k, mark, v) in &self.contents {
             let used_mark = Mark::Used.repr();
             if v.is_some() && mark & used_mark == 0 {
-                ret.push(k.to_owned())
+                ret.push((k.to_owned(), v.as_ref().unwrap().clone()))
             }
         }
         ret
@@ -711,7 +714,7 @@ mod test {
             assert!(mm.insert("a", "test").is_none());
             mm.mark_used(&"a");
             assert_eq!(mm.get_mark(&"a"), Some(Mark::Used.repr()));
-            let empty: &[&String] = &[];
+            let empty: &[(&str, &str)] = &[];
             assert_eq!(mm.unused().as_slice(), empty);
         }
 
@@ -722,7 +725,7 @@ mod test {
             assert!(mm.insert("b", "unused").is_none());
             assert_eq!(mm.get_mark(&"a"), Some(Mark::Used.repr()));
             assert_eq!(mm.get_mark(&"b"), Some(0));
-            assert_eq!(mm.unused().as_slice(), &["b"]);
+            assert_eq!(mm.unused().as_slice(), &[("b", "unused")]);
         }
     }
 
