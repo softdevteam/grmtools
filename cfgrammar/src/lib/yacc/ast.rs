@@ -112,7 +112,7 @@ impl ASTWithValidityInfo {
     }
 
     /// Performs a lookup in the grmtools section for an entry with the key `crate_name.key_name` and returns it.
-    /// If the entry is found it marks the key as `used`, for the purposes of `unused_grmtools_section_keys_for_crate`.
+    /// If the entry is found it marks the key as `used`, for the purposes of `unused_header_keys_for_crate`.
     pub fn grmtools_section_value_for_crate(
         &mut self,
         crate_name: &str,
@@ -127,7 +127,7 @@ impl ASTWithValidityInfo {
         }
     }
 
-    pub fn unused_grmtools_section_keys_for_crate(&self, crate_name: &str) -> Vec<String> {
+    pub fn unused_header_keys_for_crate(&self, crate_name: &str) -> Vec<String> {
         self.grmtools_section
             .unused()
             .iter()
@@ -1083,7 +1083,7 @@ start -> () : "a" { () };
             assert_eq!(value, Some((expected_span, &expected_value)));
         }
         assert_eq!(
-            ast_validity.unused_grmtools_section_keys_for_crate("test"),
+            ast_validity.unused_header_keys_for_crate("test"),
             vec!["test.unused"]
         );
         assert_eq!(
@@ -1096,7 +1096,7 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .unused_grmtools_section_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
 
@@ -1110,7 +1110,7 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .unused_grmtools_section_keys_for_crate("lrpar")
+                .unused_header_keys_for_crate("lrpar")
                 .is_empty()
         );
     }
@@ -1140,7 +1140,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_grmtools_section_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
     }
@@ -1170,7 +1170,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_grmtools_section_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
     }
@@ -1200,7 +1200,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_grmtools_section_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
     }
