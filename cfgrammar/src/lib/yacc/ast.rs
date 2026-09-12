@@ -14,7 +14,10 @@ use super::{
 
 use crate::{
     Span,
-    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
+    header::{
+        GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, RE_CRATE_DOT,
+        Value,
+    },
     yacc::YaccOriginalActionKind,
 };
 
@@ -127,16 +130,24 @@ impl ASTWithValidityInfo {
         }
     }
 
-    pub fn unused_header_keys_for_crate(&self, crate_name: &str) -> Vec<(String, Span)> {
+    pub fn unused_header_keys_for_crate(&self, crate_name: Option<&str>) -> Vec<(String, Span)> {
         self.grmtools_section
             .unused()
             .iter()
             .filter_map(|(key_name, HeaderValue(key_span, _))| {
-                let crate_prefix = format!("{crate_name}.");
-                if key_name.starts_with(&crate_prefix) {
-                    Some((key_name.clone(), *key_span))
+                if let Some(crate_name) = crate_name {
+                    let crate_prefix = format!("{crate_name}.");
+                    if key_name.starts_with(&crate_prefix) {
+                        Some((key_name.clone(), *key_span))
+                    } else {
+                        None
+                    }
                 } else {
-                    None
+                    if !RE_CRATE_DOT.is_match(key_name) {
+                        Some((key_name.clone(), *key_span))
+                    } else {
+                        None
+                    }
                 }
             })
             .collect::<Vec<_>>()
@@ -1086,7 +1097,7 @@ start -> () : "a" { () };
             assert_eq!(value, Some((expected_span, &expected_value)));
         }
         assert_eq!(
-            ast_validity.unused_header_keys_for_crate("test"),
+            ast_validity.unused_header_keys_for_crate(Some("test")),
             vec![("test.unused".to_string(), src.find_span("test.unused"))]
         );
         assert_eq!(
@@ -1099,7 +1110,7 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .unused_header_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate(Some("cfgrammar"))
                 .is_empty()
         );
 
@@ -1113,7 +1124,7 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .unused_header_keys_for_crate("lrpar")
+                .unused_header_keys_for_crate(Some("lrpar"))
                 .is_empty()
         );
     }
@@ -1143,7 +1154,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_header_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate(Some("cfgrammar"))
                 .is_empty()
         );
     }
@@ -1173,7 +1184,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_header_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate(Some("cfgrammar"))
                 .is_empty()
         );
     }
@@ -1203,7 +1214,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_header_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate(Some("cfgrammar"))
                 .is_empty()
         );
     }

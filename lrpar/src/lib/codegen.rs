@@ -1337,7 +1337,7 @@ mod test {
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate(Some("cfgrammar"))
                 .is_empty()
         );
         build_env
@@ -1349,7 +1349,7 @@ mod test {
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrpar")
+                .unused_header_keys_for_crate(Some("lrpar"))
                 .is_empty()
         );
         build_env
@@ -1358,7 +1358,7 @@ mod test {
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrpar")
+                .unused_header_keys_for_crate(Some("lrpar"))
                 .is_empty()
         );
         build_env.check_unused_header_keys_for_crate(None).unwrap();
@@ -1388,7 +1388,7 @@ mod test {
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("cfgrammar")
+                .unused_header_keys_for_crate(Some("cfgrammar"))
                 .is_empty()
         );
         build_env
@@ -1397,7 +1397,7 @@ mod test {
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrpar")
+                .unused_header_keys_for_crate(Some("lrpar"))
                 .is_empty()
         );
         build_env
@@ -1406,7 +1406,7 @@ mod test {
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrlex")
+                .unused_header_keys_for_crate(Some("lrlex"))
                 .is_empty()
         );
         match build_env.check_unused_header_keys_for_crate(None) {
@@ -1443,7 +1443,7 @@ mod test {
         assert_eq!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("cfgrammar"),
+                .unused_header_keys_for_crate(Some("cfgrammar")),
             vec![(
                 "cfgrammar.unknown".to_string(),
                 src.find_span("cfgrammar.unknown")
@@ -1457,7 +1457,7 @@ mod test {
         assert_eq!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrpar"),
+                .unused_header_keys_for_crate(Some("lrpar")),
             vec![("lrpar.unknown".to_string(), src.find_span("lrpar.unknown"))]
         );
         build_env
@@ -1466,7 +1466,7 @@ mod test {
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrlex")
+                .unused_header_keys_for_crate(Some("lrlex"))
                 .is_empty()
         );
         let codegen = build_env.code_generator("timestamp").unwrap();
