@@ -1319,7 +1319,10 @@ pub(crate) fn make_generics(parse_generics: Option<&str>) -> Result<Generics, Co
 #[cfg(test)]
 mod test {
     use crate::test_utils::{FindSpan as _, TestLexerTypes};
-    use cfgrammar::{header::Header, span::Location};
+    use cfgrammar::{
+        header::{Header, HeaderError, HeaderErrorKind},
+        span::Location,
+    };
 
     use super::*;
     #[test]
@@ -1382,44 +1385,16 @@ mod test {
         "#;
         let empty_header = Header::<Location>::new();
         let src_env = ParserSrcEnv::<TestLexerTypes>::new_with_header(src, None, empty_header);
-        let build_env = src_env
-            .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
-            .unwrap();
-        build_env
-            .check_unused_header_keys_for_crate(Some("cfgrammar"))
-            .unwrap();
-        assert!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("cfgrammar"))
-                .is_empty()
-        );
-        build_env
-            .check_unused_header_keys_for_crate(Some("lrpar"))
-            .unwrap();
-        assert!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("lrpar"))
-                .is_empty()
-        );
-        build_env
-            .check_unused_header_keys_for_crate(Some("lrlex"))
-            .unwrap();
-        assert!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("lrlex"))
-                .is_empty()
-        );
-        match build_env.check_unused_header_keys_for_crate(None) {
-            Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys))
-                if keys == vec!["testfoo".to_string()] => {}
-            _ => panic!("Unexpected return value for unused header keys check"),
+        let expected_errs = vec![HeaderError {
+            kind: HeaderErrorKind::IllegalName,
+            locations: vec![src.find_span("testfoo")],
+        }];
+        match src_env.build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module"))) {
+            Err(ParserSrcEnvError::GrmtoolsSectionParseError(errs)) => {
+                assert_eq!(errs, expected_errs)
+            }
+            _ => panic!("Unexpected err"),
         }
-        let codegen = build_env.code_generator("timestamp").unwrap();
-        let out = codegen.generate(&build_env).unwrap();
-        assert!(!out.is_empty());
     }
 
     #[test]
