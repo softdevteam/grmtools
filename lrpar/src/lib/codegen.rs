@@ -1318,7 +1318,7 @@ pub(crate) fn make_generics(parse_generics: Option<&str>) -> Result<Generics, Co
 
 #[cfg(test)]
 mod test {
-    use crate::test_utils::TestLexerTypes;
+    use crate::test_utils::{FindSpan as _, TestLexerTypes};
     use cfgrammar::{header::Header, span::Location};
 
     use super::*;
@@ -1475,17 +1475,5 @@ mod test {
         let codegen = build_env.code_generator("timestamp").unwrap();
         let out = codegen.generate(&build_env).unwrap();
         assert!(!out.is_empty());
-    }
-
-    trait FindSpan {
-        fn find_span(&self, s: &str) -> Span;
-    }
-
-    impl FindSpan for &'_ str {
-        #[track_caller]
-        fn find_span(&self, s: &str) -> Span {
-            let start_pos = self.find(s).unwrap();
-            Span::new(start_pos, start_pos + s.len())
-        }
     }
 }

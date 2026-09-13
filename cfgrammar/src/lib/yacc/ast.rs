@@ -599,6 +599,7 @@ mod test {
         super::{AssocKind, Precedence},
         GrammarAST, Span, Symbol, YaccGrammarError, YaccGrammarErrorKind,
     };
+    use crate::test_utils::FindSpan as _;
 
     fn rule(n: &str) -> Symbol {
         Symbol::Rule(n.to_string(), Span::new(0, 0))
@@ -1220,17 +1221,5 @@ start: "a" { () };
                 .unused_header_keys_for_crate(Some("cfgrammar"))
                 .is_empty()
         );
-    }
-
-    trait FindSpan {
-        fn find_span(&self, s: &str) -> Span;
-    }
-
-    impl FindSpan for &'_ str {
-        #[track_caller]
-        fn find_span(&self, s: &str) -> Span {
-            let start_pos = self.find(s).unwrap();
-            Span::new(start_pos, start_pos + s.len())
-        }
     }
 }
