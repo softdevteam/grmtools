@@ -123,8 +123,8 @@ impl ASTWithValidityInfo {
     }
 
     /// Returns all key names given in the header specified by a `%grmtools` directive with the
-    /// `crate_name.` prefix for the given crate. If the `crate_name` is None returns any unused
-    /// keys with no crate prefix specified.
+    /// `crate_prefix.` prefix for the given crate. If the `crate_prefix` is empty returns all
+    ///  unused keys regardless of crate.
     pub fn unused_header_keys_for_crate(&self, crate_prefix: &str) -> Vec<(String, Span)> {
         self.grmtools_section
             .unused()
