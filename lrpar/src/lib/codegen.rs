@@ -1367,8 +1367,10 @@ mod test {
                 .is_empty()
         );
         match build_env.check_unused_header_keys_for_crate("") {
-             Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) => assert_eq!(&keys, &["test.foo".to_string()]),
-             _ => panic!("Unexpected error result"),
+            Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) => {
+                assert_eq!(&keys, &["test.foo".to_string()])
+            }
+            _ => panic!("Unexpected error result"),
         }
         let codegen = build_env.code_generator("timestamp").unwrap();
         let out = codegen.generate(&build_env).unwrap();
