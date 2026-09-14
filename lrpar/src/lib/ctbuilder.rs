@@ -749,18 +749,18 @@ where
 
         // Catch any typos in key names for cfgrammar or lrpar
         build_env
-            .check_unused_header_keys_for_crate(Some("cfgrammar"))
+            .check_unused_header_keys_for_crate("cfgrammar")
             .map_err(|e| ErrorString(e.to_string()))?;
         build_env
-            .check_unused_header_keys_for_crate(Some("lrpar"))
+            .check_unused_header_keys_for_crate("lrpar")
             .map_err(|e| ErrorString(e.to_string()))?;
         // Catch any stray lrlex keys that accidentally make their way into the parser src.
         build_env
-            .check_unused_header_keys_for_crate(Some("lrlex"))
+            .check_unused_header_keys_for_crate("lrlex")
             .map_err(|e| ErrorString(e.to_string()))?;
         // Catch any stray keys without a crate prefix.
         build_env
-            .check_unused_header_keys_for_crate(None)
+            .check_unused_header_keys_for_crate("")
             .map_err(|e| ErrorString(e.to_string()))?;
         self.output_file(
             &code_gen,

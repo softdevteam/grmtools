@@ -14,10 +14,7 @@ use super::{
 
 use crate::{
     Span,
-    header::{
-        GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, RE_CRATE_DOT,
-        Value,
-    },
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
     yacc::YaccOriginalActionKind,
 };
 
@@ -133,24 +130,19 @@ impl ASTWithValidityInfo {
     /// Returns all key names given in the header specified by a `%grmtools` directive with the
     /// `crate_name.` prefix for the given crate. If the `crate_name` is None returns any unused
     /// keys with no crate prefix specified.
-    pub fn unused_header_keys_for_crate(&self, crate_name: Option<&str>) -> Vec<(String, Span)> {
+    pub fn unused_header_keys_for_crate(&self, crate_prefix: &str) -> Vec<(String, Span)> {
         self.grmtools_section
             .unused()
             .iter()
             .filter_map(|(key_name, HeaderValue(key_span, _))| {
-                if let Some(crate_name) = crate_name {
-                    let crate_prefix = format!("{crate_name}.");
-                    if key_name.starts_with(&crate_prefix) {
-                        Some((key_name.clone(), *key_span))
-                    } else {
-                        None
-                    }
+                if crate_prefix.is_empty()
+                    || key_name
+                        .strip_prefix(crate_prefix)
+                        .is_some_and(|rest| crate_prefix.ends_with('.') || rest.starts_with('.'))
+                {
+                    Some((key_name.clone(), *key_span))
                 } else {
-                    if !RE_CRATE_DOT.is_match(key_name) {
-                        Some((key_name.clone(), *key_span))
-                    } else {
-                        None
-                    }
+                    None
                 }
             })
             .collect::<Vec<_>>()
@@ -1101,7 +1093,7 @@ start -> () : "a" { () };
             assert_eq!(value, Some((expected_span, &expected_value)));
         }
         assert_eq!(
-            ast_validity.unused_header_keys_for_crate(Some("test")),
+            ast_validity.unused_header_keys_for_crate("test"),
             vec![("test.unused".to_string(), src.find_span("test.unused"))]
         );
         assert_eq!(
@@ -1114,7 +1106,7 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .unused_header_keys_for_crate(Some("cfgrammar"))
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
 
@@ -1128,7 +1120,7 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .unused_header_keys_for_crate(Some("lrpar"))
+                .unused_header_keys_for_crate("lrpar")
                 .is_empty()
         );
     }
@@ -1158,7 +1150,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_header_keys_for_crate(Some("cfgrammar"))
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
     }
@@ -1188,7 +1180,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_header_keys_for_crate(Some("cfgrammar"))
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
     }
@@ -1218,7 +1210,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .unused_header_keys_for_crate(Some("cfgrammar"))
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
     }

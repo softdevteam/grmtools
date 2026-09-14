@@ -13,7 +13,7 @@ use crate::{
 
 use cfgrammar::{
     Location, RIdx, Span, Symbol,
-    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, RE_CRATE_DOT},
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue},
     markmap::MergeError,
     yacc::{
         YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo,
@@ -464,18 +464,17 @@ where
     ///  an error if any unused keys with no crate prefix specified are found.
     pub(crate) fn check_unused_header_keys_for_crate(
         &self,
-        crate_name: Option<&str>,
+        crate_prefix: &str,
     ) -> Result<(), ParserBuildEnvError<LexerTypesT>> {
         let unused_keys = self
             .header
             .unused()
             .iter()
-            .filter(|(s, _)| {
-                if let Some(crate_name) = crate_name {
-                    s.starts_with(&format!("{crate_name}."))
-                } else {
-                    !RE_CRATE_DOT.is_match(s)
-                }
+            .filter(|(key_name, _)| {
+                crate_prefix.is_empty()
+                    || key_name
+                        .strip_prefix(crate_prefix)
+                        .is_some_and(|rest| crate_prefix.ends_with('.') || rest.starts_with('.'))
             })
             .map(|(s, _)| s.to_string())
             .collect::<Vec<_>>();
@@ -1343,31 +1342,34 @@ mod test {
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("cfgrammar"))
+                .unused_header_keys_for_crate("cfgrammar")
                 .is_empty()
         );
         build_env
-            .check_unused_header_keys_for_crate(Some("cfgrammar"))
+            .check_unused_header_keys_for_crate("cfgrammar")
             .unwrap();
         build_env
-            .check_unused_header_keys_for_crate(Some("lrpar"))
-            .unwrap();
-        assert!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("lrpar"))
-                .is_empty()
-        );
-        build_env
-            .check_unused_header_keys_for_crate(Some("lrlex"))
+            .check_unused_header_keys_for_crate("lrpar")
             .unwrap();
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("lrpar"))
+                .unused_header_keys_for_crate("lrpar")
                 .is_empty()
         );
-        build_env.check_unused_header_keys_for_crate(None).unwrap();
+        build_env
+            .check_unused_header_keys_for_crate("lrlex")
+            .unwrap();
+        assert!(
+            build_env
+                .ast_with_validity_info()
+                .unused_header_keys_for_crate("lrpar")
+                .is_empty()
+        );
+        match build_env.check_unused_header_keys_for_crate("") {
+             Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) => assert_eq!(&keys, &["test.foo".to_string()]),
+             _ => panic!("Unexpected error result"),
+        }
         let codegen = build_env.code_generator("timestamp").unwrap();
         let out = codegen.generate(&build_env).unwrap();
         assert!(!out.is_empty());
@@ -1415,13 +1417,13 @@ mod test {
             .unwrap();
         assert!(
             build_env
-                .check_unused_header_keys_for_crate(Some("cfgrammar"))
+                .check_unused_header_keys_for_crate("cfgrammar")
                 .is_err()
         );
         assert_eq!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("cfgrammar")),
+                .unused_header_keys_for_crate("cfgrammar"),
             vec![(
                 "cfgrammar.unknown".to_string(),
                 src.find_span("cfgrammar.unknown")
@@ -1429,22 +1431,22 @@ mod test {
         );
         assert!(
             build_env
-                .check_unused_header_keys_for_crate(Some("lrpar"))
+                .check_unused_header_keys_for_crate("lrpar")
                 .is_err()
         );
         assert_eq!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("lrpar")),
+                .unused_header_keys_for_crate("lrpar"),
             vec![("lrpar.unknown".to_string(), src.find_span("lrpar.unknown"))]
         );
         build_env
-            .check_unused_header_keys_for_crate(Some("lrlex"))
+            .check_unused_header_keys_for_crate("lrlex")
             .unwrap();
         assert!(
             build_env
                 .ast_with_validity_info()
-                .unused_header_keys_for_crate(Some("lrlex"))
+                .unused_header_keys_for_crate("lrlex")
                 .is_empty()
         );
         let codegen = build_env.code_generator("timestamp").unwrap();
