@@ -481,14 +481,6 @@ impl<'input> GrmtoolsSectionParser<'input> {
 #[doc(hidden)]
 pub type Header<T> = MarkMap<String, HeaderValue<T>>;
 
-impl TryFrom<YaccKind> for Value<Location> {
-    type Error = HeaderError<Location>;
-    fn try_from(kind: YaccKind) -> Result<Value<Location>, HeaderError<Location>> {
-        let from_loc = Location::Other("From<YaccKind>".to_string());
-        Ok(Value::Namespaced(format!("YaccKind::{kind:?}"), from_loc))
-    }
-}
-
 impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
     type Error = HeaderError<T>;
     fn try_from(value: &Value<T>) -> Result<YaccKind, HeaderError<T>> {

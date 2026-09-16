@@ -12,9 +12,8 @@ use crate::{
 };
 
 use cfgrammar::{
-    Location, RIdx, Span, Symbol,
+    RIdx, Span, Symbol,
     header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue},
-    markmap::MergeError,
     yacc::{
         YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo,
     },
@@ -36,7 +35,6 @@ const ACTIONS_KIND_HIDDEN: &str = "__GtActionsKindHidden";
 #[non_exhaustive]
 pub(crate) enum ParserSrcEnvError {
     GrmtoolsSectionParseError(Vec<HeaderError<Span>>),
-    GrmtoolsSectionMergeError(MergeError<String, Box<HeaderValue<Location>>>),
     GrmtoolsSectionLookupError(HeaderError<Span>),
     MissingYaccKind,
     MissingModName,
@@ -67,12 +65,6 @@ pub(crate) enum CodegenError {
 impl From<Vec<HeaderError<Span>>> for ParserSrcEnvError {
     fn from(it: Vec<HeaderError<Span>>) -> Self {
         ParserSrcEnvError::GrmtoolsSectionParseError(it)
-    }
-}
-
-impl From<MergeError<String, Box<HeaderValue<Location>>>> for ParserSrcEnvError {
-    fn from(it: MergeError<String, Box<HeaderValue<Location>>>) -> Self {
-        ParserSrcEnvError::GrmtoolsSectionMergeError(it)
     }
 }
 
@@ -122,7 +114,6 @@ impl fmt::Display for ParserSrcEnvError {
                 .map(|e| e.to_string())
                 .collect::<Vec<_>>()
                 .join("\n"),
-            Self::GrmtoolsSectionMergeError(e) => e.to_string(),
             Self::GrmtoolsSectionLookupError(e) => e.to_string(),
             Self::MissingYaccKind => "Code generator cannot resolve yacc kind".to_string(),
             Self::MissingModName => "Code generator requires a mod name".to_string(),
@@ -388,7 +379,10 @@ where
         LexerTypesT: LexerTypes,
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
-        let (header, _) = GrmtoolsSectionParser::new(self.src, false).parse()?;
+        let (mut header, _) = GrmtoolsSectionParser::new(self.src, false).parse()?;
+        if self.yacckind.is_none() {
+            header.mark_required(&"cfgrammar.yacckind".to_string());
+        }
         let ast_with_validity_info =
             self.resolve_ast_with_validity_info(args.ast_with_validity_info, &header)?;
         let recoverer = self.resolve_recoverer(&header)?;

@@ -17,7 +17,6 @@ use cactus::Cactus;
 use cfgrammar::{
     RIdx, Span, TIdx,
     header::{HeaderError, HeaderErrorKind, Value},
-    span::Location,
     yacc::YaccGrammar,
 };
 use lrtable::{Action, StIdx, StateTable};
@@ -638,14 +637,6 @@ pub enum RecoveryKind {
     CPCTPlus,
     /// Don't use error recovery: return as soon as the first syntax error is encountered.
     None,
-}
-
-impl TryFrom<RecoveryKind> for Value<Location> {
-    type Error = cfgrammar::header::HeaderError<Location>;
-    fn try_from(rk: RecoveryKind) -> Result<Value<Location>, Self::Error> {
-        let from_loc = Location::Other("From<RecoveryKind>".to_string());
-        Ok(Value::Namespaced(format!("RecoveryKind::{rk:?}"), from_loc))
-    }
 }
 
 impl TryFrom<&Value<Span>> for RecoveryKind {

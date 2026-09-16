@@ -26,9 +26,8 @@ use crate::{
 use crate::unstable_api::UnstableApi;
 
 use cfgrammar::{
-    Location, Span,
-    header::{Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
-    markmap::{Entry, MergeBehavior},
+    Span,
+    header::{Header, HeaderError, HeaderErrorKind, Value},
     yacc::{YaccGrammar, YaccKind, ast::ASTWithValidityInfo},
 };
 use filetime::FileTime;
@@ -135,22 +134,11 @@ pub enum SerialisationFormat {
     VariableSizedInteger,
 }
 
-impl TryFrom<SerialisationFormat> for Value<Location> {
-    type Error = cfgrammar::header::HeaderError<Location>;
-    fn try_from(kind: SerialisationFormat) -> Result<Value<Location>, HeaderError<Location>> {
-        let from_loc = Location::Other("From<SerialisationFormat>".to_string());
-        Ok(Value::Namespaced(
-            format!("SerialisationFormat::{kind:?}"),
-            from_loc,
-        ))
-    }
-}
-
-impl<T: Clone + Debug> TryFrom<&Value<T>> for SerialisationFormat {
-    type Error = HeaderError<T>;
-    fn try_from(value: &Value<T>) -> Result<SerialisationFormat, HeaderError<T>> {
+impl TryFrom<&Value<Span>> for SerialisationFormat {
+    type Error = HeaderError<Span>;
+    fn try_from(value: &Value<Span>) -> Result<SerialisationFormat, HeaderError<Span>> {
         match value {
-            Value::Namespaced(serialisation_fmt, loc) => match serialisation_fmt.as_str() {
+            Value::Namespaced(serialisation_fmt, span) => match serialisation_fmt.as_str() {
                 "SerialisationFormat::FixedSizeInteger" | "FixedSizeInteger" => {
                     Ok(SerialisationFormat::FixedSizeInteger)
                 }
@@ -159,12 +147,12 @@ impl<T: Clone + Debug> TryFrom<&Value<T>> for SerialisationFormat {
                 }
                 _ => Err(HeaderError {
                     kind: HeaderErrorKind::InvalidEntry("serialisation_format"),
-                    locations: vec![loc.clone()],
+                    locations: vec![*span],
                 }),
             },
             val => Err(HeaderError {
                 kind: HeaderErrorKind::InvalidEntry("serialisation_format"),
-                locations: vec![val.primary_location().clone()],
+                locations: vec![*val.primary_location()],
             }),
         }
     }
@@ -514,51 +502,9 @@ where
             .output_path
             .as_ref()
             .expect("output_path must be specified before processing.");
-        let mut header = Header::new();
 
-        match header.entry("cfgrammar.yacckind".to_string()) {
-            Entry::Occupied(_) => unreachable!(),
-            Entry::Vacant(mut v) => match self.yacckind {
-                Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
-                Some(yk) => {
-                    let yk_value = Value::try_from(yk)?;
-                    let mut o = v.insert_entry(HeaderValue(
-                        Location::Other("CTParserBuilder".to_string()),
-                        yk_value,
-                    ));
-                    o.set_merge_behavior(MergeBehavior::Ours);
-                }
-                None => {
-                    v.mark_required();
-                }
-            },
-        }
-        if let Some(recoverer) = self.recoverer {
-            match header.entry("lrpar.recoverer".to_string()) {
-                Entry::Occupied(_) => unreachable!(),
-                Entry::Vacant(v) => {
-                    let rk_value = Value::try_from(recoverer)?;
-                    let mut o = v.insert_entry(HeaderValue(
-                        Location::Other("CTParserBuilder".to_string()),
-                        rk_value,
-                    ));
-                    o.set_merge_behavior(MergeBehavior::Ours);
-                }
-            }
-        }
-
-        if let Some(encoding) = self.serialisation_format {
-            match header.entry("lrpar.serialisation_format".to_string()) {
-                Entry::Occupied(_) => unreachable!(),
-                Entry::Vacant(v) => {
-                    let rk_value = Value::try_from(encoding)?;
-                    let mut o = v.insert_entry(HeaderValue(
-                        Location::Other("CTParserBuilder".to_string()),
-                        rk_value,
-                    ));
-                    o.set_merge_behavior(MergeBehavior::Ours);
-                }
-            }
+        if let Some(YaccKind::Eco) = self.yacckind {
+            panic!("Eco compile-time grammar generation not supported.")
         }
 
         {
