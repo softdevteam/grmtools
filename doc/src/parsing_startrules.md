@@ -49,7 +49,7 @@ use lrlex::DefaultLexeme;
 
 ### Lexer
 
-In our lexer we'll need to add a directive to advise that the checker that we expect the missing tokens.
+In our lexer we'll need to add a directive to advise the checker that we expect the missing tokens.
 
 ```
 %expect-missing "START_A" "START_B"
@@ -93,8 +93,8 @@ fn main() {
 
 Finally we'll need to:
 
-1. Run our input text through the parser.
-2. Prepend the selected start token.
+1. Run our input text through the lexer generating a list of output tokens.
+2. Prepend the selected start token to the output tokens generated in the previous step.
 3. Run the parser with the combined tokens.
 
 ```rust
