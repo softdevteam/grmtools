@@ -26,7 +26,7 @@ use crate::{
 use crate::unstable_api::UnstableApi;
 
 use cfgrammar::{
-    Location,
+    Location, Span,
     header::{Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
     markmap::{Entry, MergeBehavior},
     yacc::{YaccGrammar, YaccKind, ast::ASTWithValidityInfo},
@@ -201,7 +201,7 @@ where
     inspect_rt: Option<
         Box<
             dyn for<'b> FnMut(
-                &'b mut Header<Location>,
+                &'b Header<Span>,
                 RTParserBuilder<LexerTypesT::StorageT, LexerTypesT>,
                 &'b HashMap<String, LexerTypesT::StorageT>,
                 &PathBuf,
@@ -442,7 +442,7 @@ where
         mut self,
         cb: Box<
             dyn for<'b, 'y> FnMut(
-                &'b mut Header<Location>,
+                &'b Header<Span>,
                 RTParserBuilder<'y, StorageT, LexerTypesT>,
                 &'b HashMap<String, StorageT>,
                 &PathBuf,
@@ -575,7 +575,9 @@ where
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?
         };
 
-        let src_env = ParserSrcEnv::new_with_header(&inc, Some(grmp), header);
+        let src_env = ParserSrcEnv::new(&inc, Some(grmp))
+            .yacckind(self.yacckind)
+            .recoverer(self.recoverer);
         let yacc_diag = SpannedDiagnosticFormatter::new(&inc, grmp);
         let build_args = ParserBuildEnvArgs::new()
             .ast_with_validity_info(self.from_ast.as_ref())
@@ -585,7 +587,7 @@ where
             .warnings_are_errors(self.warnings_are_errors)
             .visibility(self.visibility.clone())
             .rust_edition(self.rust_edition);
-        let mut build_env = src_env.build_env(build_args).map_err(|e| match e {
+        let build_env = src_env.build_env(build_args).map_err(|e| match e {
             ParserSrcEnvError::GrmtoolsSectionParseError(es) => {
                 let mut out = String::new();
                 out.push_str(&format!(
@@ -737,14 +739,19 @@ where
             }
         }
 
-        if let Some(ref mut inspector_rt) = self.inspect_rt {
+        if let Some(inspector_rt) = &mut self.inspect_rt {
             let rt: RTParserBuilder<'_, StorageT, LexerTypesT> = RTParserBuilder::new(grm, stable);
             let rt = if let Some(rk) = self.recoverer {
                 rt.recoverer(rk)
             } else {
                 rt
             };
-            inspector_rt(build_env.header_mut(), rt, &rule_ids, grmp)?
+            inspector_rt(
+                build_env.ast_with_validity_info().header(),
+                rt,
+                &rule_ids,
+                grmp,
+            )?
         }
 
         // Catch any typos in key names for cfgrammar or lrpar

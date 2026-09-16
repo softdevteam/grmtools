@@ -448,7 +448,6 @@ where
                         .map(|(x, y)| (&**x, *y))
                         .collect::<HashMap<_, _>>();
                     closure_lexerdef.set_rule_ids(&owned_map);
-                    yacc_header.mark_used(&"lrpar.test_files".to_string());
                     let grammar = rtpb.grammar();
                     let test_glob = yacc_header.get("lrpar.test_files");
                     let mut err_str = None;

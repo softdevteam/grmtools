@@ -142,6 +142,30 @@ impl ASTWithValidityInfo {
             })
             .collect::<Vec<_>>()
     }
+
+    pub fn check_missing_required_keys_for_crate(&self, crate_prefix: &str) -> Vec<String> {
+        self.grmtools_section
+            .missing()
+            .iter()
+            .cloned()
+            .filter_map(|key_name| {
+                if crate_prefix.is_empty()
+                    || key_name
+                        .strip_prefix(crate_prefix)
+                        .is_some_and(|rest| crate_prefix.ends_with('.') || rest.starts_with('.'))
+                {
+                    Some(key_name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    #[doc(hidden)]
+    pub fn header(&self) -> &Header<Span> {
+        &self.grmtools_section
+    }
 }
 
 impl FromStr for ASTWithValidityInfo {

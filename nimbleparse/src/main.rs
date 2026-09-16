@@ -1,7 +1,6 @@
 use cfgrammar::{
-    Location, RIdx, Span, TIdx,
+    RIdx, Span, TIdx,
     header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue, Value},
-    markmap::Entry,
     yacc::{YaccGrammar, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo},
 };
 use getopts::Options;
@@ -173,47 +172,17 @@ fn main() {
 
     let dump_state_graph = matches.opt_present("d");
     let quiet = matches.opt_present("q");
-    let mut header = Header::new();
-    match matches.opt_str("r") {
-        None => (),
-        Some(s) => {
-            header.set_merge_behavior(
-                &"lrpar.recoverer".to_string(),
-                cfgrammar::markmap::MergeBehavior::Ours,
-            );
-            header.insert(
-                "lrpar.recoverer".to_string(),
-                HeaderValue(
-                    Location::CommandLine,
-                    Value::try_from(match &*s.to_lowercase() {
-                        "cpctplus" => RecoveryKind::CPCTPlus,
-                        "none" => RecoveryKind::None,
-                        _ => usage(prog, &format!("Unknown recoverer '{}'.", s)),
-                    })
-                    .expect("All these RecoveryKinds should convert without error"),
-                ),
-            );
-        }
-    };
-    let entry = match header.entry("cfgrammar.yacckind".to_string()) {
-        Entry::Occupied(_) => unreachable!("Header should be empty"),
-        Entry::Vacant(v) => v,
-    };
-    match matches.opt_str("y") {
-        None => {}
-        Some(s) => {
-            entry.insert_entry(HeaderValue(
-                Location::CommandLine,
-                Value::try_from(match &*s.to_lowercase() {
-                    "eco" => YaccKind::Eco,
-                    "grmtools" => YaccKind::Grmtools,
-                    "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
-                    _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s)),
-                })
-                .expect("All these yacckinds should convert without error"),
-            ));
-        }
-    };
+    let rk_arg = matches.opt_str("r").map(|s| match &*s.to_lowercase() {
+        "cpctplus" => RecoveryKind::CPCTPlus,
+        "none" => RecoveryKind::None,
+        _ => usage(prog, &format!("Unknown recoverer '{}'.", s)),
+    });
+    let yk_arg = matches.opt_str("y").map(|s| match &*s.to_lowercase() {
+        "eco" => YaccKind::Eco,
+        "grmtools" => YaccKind::Grmtools,
+        "original" => YaccKind::Original(YaccOriginalActionKind::GenericParseTree),
+        _ => usage(prog, &format!("Unknown Yacc variant '{}'.", s)),
+    });
     let args_len = matches.free.len();
     if args_len < 2 {
         usage(prog, "Too few arguments given.");
@@ -236,39 +205,23 @@ fn main() {
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
     let yacc_diag = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path);
-    let yk_val = header.get("cfgrammar.yacckind");
-    if yk_val.is_none() {
-        let parsed_header = GrmtoolsSectionParser::new(&yacc_src, true).parse();
-        match parsed_header {
-            Ok((parsed_header, _)) => {
-                header
-                    .merge_from(parsed_header)
-                    .expect("Specified merge behavior cannot fail");
+    let parsed_header = GrmtoolsSectionParser::new(&yacc_src, true).parse();
+    let parsed_header = match parsed_header {
+        Ok((parsed_header, _)) => parsed_header,
+        Err(errs) => {
+            eprintln!(
+                "{ERROR}{}",
+                yacc_diag.file_location_msg(" parsing the `%grmtools` section:", None)
+            );
+            for e in errs {
+                eprintln!("{}", indent("    ", &yacc_diag.format_error(e).to_string()));
             }
-            Err(errs) => {
-                eprintln!(
-                    "{ERROR}{}",
-                    yacc_diag.file_location_msg(" parsing the `%grmtools` section:", None)
-                );
-                for e in errs {
-                    eprintln!("{}", indent("    ", &yacc_diag.format_error(e).to_string()));
-                }
-                std::process::exit(1);
-            }
+            std::process::exit(1);
         }
-    }
-    let yk_val = header.get("cfgrammar.yacckind");
-    if yk_val.is_none() {
-        eprintln!(
-            "yacckind not specified in the %grmtools section of the grammar or via the '-y' parameter"
-        );
-        std::process::exit(1);
-    }
-    let HeaderValue(_, yk_val) = yk_val.unwrap();
-    let yacc_kind = YaccKind::try_from(yk_val).unwrap_or(YaccKind::Grmtools);
-    let ast_validation = ASTWithValidityInfo::new(yacc_kind, &yacc_src);
-    let recoverykind = if let Some(HeaderValue(_, rk_val)) = header.get("lrpar.recoverer") {
-        match RecoveryKind::try_from(rk_val) {
+    };
+    let yk_header_val = parsed_header
+        .get("cfgrammar.yacckind")
+        .map(|HeaderValue(_, value)| match YaccKind::try_from(value) {
             Err(e) => {
                 eprintln!(
                     "{ERROR}{}",
@@ -276,27 +229,42 @@ fn main() {
                 );
                 let spanned_e: HeaderError<Span> = HeaderError {
                     kind: e.kind,
-                    locations: e
-                        .locations
-                        .iter()
-                        .map(|l| match l {
-                            Location::Span(span) => *span,
-                            _ => unreachable!("All reachable errors should contain spans"),
-                        })
-                        .collect::<Vec<_>>(),
+                    locations: e.locations.to_vec(),
                 };
                 eprintln!(
                     "{}",
                     indent("    ", &yacc_diag.format_error(spanned_e).to_string())
                 );
-                process::exit(1)
+                std::process::exit(1);
             }
-            Ok(rk) => rk,
-        }
-    } else {
-        // Fallback to the default recoverykind
-        RecoveryKind::CPCTPlus
-    };
+
+            Ok(yacc_kind) => yacc_kind,
+        });
+    let yacc_kind = yk_arg.unwrap_or(yk_header_val.unwrap_or(YaccKind::Grmtools));
+    let ast_validation = ASTWithValidityInfo::new(yacc_kind, &yacc_src);
+    let rk_header_val = parsed_header
+        .get("lrpar.recoverer")
+        .map(
+            |HeaderValue(_, value)| match RecoveryKind::try_from(value) {
+                Err(e) => {
+                    eprintln!(
+                        "{ERROR}{}",
+                        yacc_diag.file_location_msg(" parsing the `%grmtools` section:", None)
+                    );
+                    let spanned_e: HeaderError<Span> = HeaderError {
+                        kind: e.kind,
+                        locations: e.locations.to_vec(),
+                    };
+                    eprintln!(
+                        "{}",
+                        indent("    ", &yacc_diag.format_error(spanned_e).to_string())
+                    );
+                    process::exit(1)
+                }
+                Ok(rk) => rk,
+            },
+        );
+    let recoverykind = rk_arg.unwrap_or(rk_header_val.unwrap_or(RecoveryKind::CPCTPlus));
     let warnings = ast_validation.ast().warnings();
     let res = YaccGrammar::new_from_ast_with_validity_info(&ast_validation);
     let grm = match res {
@@ -414,7 +382,7 @@ fn main() {
     }
 
     let parser_build_ctxt = ParserBuildCtxt {
-        header,
+        header: parsed_header,
         lexerdef,
         grm,
         stable,
@@ -448,7 +416,7 @@ where
     LexerTypesT: LexerTypes,
     usize: AsPrimitive<LexerTypesT::StorageT>,
 {
-    header: Header<Location>,
+    header: Header<Span>,
     lexerdef: LRNonStreamingLexerDef<LexerTypesT>,
     grm: YaccGrammar<LexerTypesT::StorageT>,
     yacc_y_path: PathBuf,
