@@ -380,9 +380,6 @@ where
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
         let (mut header, _) = GrmtoolsSectionParser::new(self.src, false).parse()?;
-        if self.yacckind.is_none() {
-            header.mark_required(&"cfgrammar.yacckind".to_string());
-        }
         let ast_with_validity_info =
             self.resolve_ast_with_validity_info(args.ast_with_validity_info, &header)?;
         let recoverer = self.resolve_recoverer(&header)?;
