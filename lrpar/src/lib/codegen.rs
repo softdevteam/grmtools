@@ -196,6 +196,7 @@ where
     phantom_storaget: PhantomData<LexerTypesT::StorageT>,
     mod_name: String,
     grammar_path: Option<String>,
+    crates_to_check: Vec<String>,
 }
 
 pub(crate) struct ParserCodegen<LexerTypesT>
@@ -379,17 +380,22 @@ where
         LexerTypesT: LexerTypes,
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
-        let (mut header, _) = GrmtoolsSectionParser::new(self.src, false).parse()?;
+        let (header, _) = GrmtoolsSectionParser::new(self.src, false).parse()?;
         let ast_with_validity_info =
             self.resolve_ast_with_validity_info(args.ast_with_validity_info, &header)?;
         let recoverer = self.resolve_recoverer(&header)?;
         let serialisation_format = self.resolve_serialisation_format(&header)?;
         let mod_name = self.resolve_mod_name(&args)?;
         let grammar_path = self.grammar_path_cache_entry;
-
+        let crates_to_check = vec![
+            "cfgrammar".to_string(),
+            "lrpar".to_string(),
+            "lrlex".to_string(),
+        ];
         Ok(ParserBuildEnv {
             ast_with_validity_info,
             cache_args: args,
+            crates_to_check,
             recoverer,
             serialisation_format,
             mod_name,
@@ -448,6 +454,16 @@ where
         self.ast_with_validity_info.yacc_kind()
     }
 
+    /// Causes the `code_generator()` function to check for unused entries in the grmtools section
+    /// starting for entries starting with `crate_prefix`.
+    #[allow(unused)]
+    pub(crate) fn add_value_checks_for_crate(&mut self, crate_prefix: &str) {
+        let crate_prefix = crate_prefix.to_string();
+        if !self.crates_to_check.contains(&crate_prefix) {
+            self.crates_to_check.push(crate_prefix.to_string());
+        }
+    }
+
     /// Returns an error if any unused keys specified in a `%grmtools` directive that begin with
     /// `crate_prefix.` are found. If the `crate_prefix` is empty returns an error if any unused
     /// keys are found.
@@ -477,6 +493,18 @@ where
         &self,
         timestamp: &str,
     ) -> Result<ParserCodegen<LexerTypesT>, ParserBuildEnvError<LexerTypesT>> {
+        let mut unused_vals = Vec::new();
+        for crate_prefix in &self.crates_to_check {
+            let result = self.check_unused_header_keys_for_crate(crate_prefix);
+            if let Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) = result {
+                unused_vals.extend(keys);
+            } else if result.is_err() {
+                result?
+            }
+        }
+        if !unused_vals.is_empty() {
+            return Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(unused_vals));
+        }
         let grm = YaccGrammar::<LexerTypesT::StorageT>::new_from_ast_with_validity_info(
             &self.ast_with_validity_info,
         )?;
@@ -1300,57 +1328,31 @@ mod test {
     use super::*;
     #[test]
     fn test_unused_crate_header_entry() {
-        let src = r#"
-        %grmtools{
-            yacckind: Grmtools,
-            test.foo: "test crate value",
-        }
-        %%
-        start -> () : "A" { () };
-        "#;
-        let src_env = ParserSrcEnv::<TestLexerTypes>::new(src, None);
-        let build_env = src_env
-            .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
-            .unwrap();
-        assert!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate("cfgrammar")
-                .is_empty()
-        );
-        build_env
-            .check_unused_header_keys_for_crate("cfgrammar")
-            .unwrap();
-        build_env
-            .check_unused_header_keys_for_crate("lrpar")
-            .unwrap();
-        assert!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrpar")
-                .is_empty()
-        );
-        build_env
-            .check_unused_header_keys_for_crate("lrlex")
-            .unwrap();
-        assert!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrpar")
-                .is_empty()
-        );
-        match build_env.check_unused_header_keys_for_crate("") {
-            Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) => {
-                assert_eq!(
-                    &keys,
-                    &[("test.foo".to_string(), src.find_span("test.foo"))]
-                )
+        for crate_prefix in ["test", ""] {
+            let src = r#"
+            %grmtools{
+                yacckind: Grmtools,
+                test.foo: "test crate value",
             }
-            _ => panic!("Unexpected error result"),
+            %%
+            start -> () : "A" { () };
+            "#;
+            let src_env = ParserSrcEnv::<TestLexerTypes>::new(src, None);
+            let mut build_env = src_env
+                .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
+                .unwrap();
+            build_env.add_value_checks_for_crate(crate_prefix);
+            match build_env.code_generator("timestamp") {
+                Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) => {
+                    assert_eq!(
+                        &keys,
+                        &[("test.foo".to_string(), src.find_span("test.foo"))]
+                    )
+                }
+                Err(e) => panic!("Unexpected error result: {:?}", e),
+                _ => panic!("Unexpected Ok return value"),
+            }
         }
-        let codegen = build_env.code_generator("timestamp").unwrap();
-        let out = codegen.generate(&build_env).unwrap();
-        assert!(!out.is_empty());
     }
 
     #[test]
@@ -1391,42 +1393,20 @@ mod test {
         let build_env = src_env
             .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
             .unwrap();
-        assert!(
-            build_env
-                .check_unused_header_keys_for_crate("cfgrammar")
-                .is_err()
-        );
-        assert_eq!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate("cfgrammar"),
-            vec![(
-                "cfgrammar.unknown".to_string(),
-                src.find_span("cfgrammar.unknown")
-            )]
-        );
-        assert!(
-            build_env
-                .check_unused_header_keys_for_crate("lrpar")
-                .is_err()
-        );
-        assert_eq!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrpar"),
-            vec![("lrpar.unknown".to_string(), src.find_span("lrpar.unknown"))]
-        );
-        build_env
-            .check_unused_header_keys_for_crate("lrlex")
-            .unwrap();
-        assert!(
-            build_env
-                .ast_with_validity_info()
-                .unused_header_keys_for_crate("lrlex")
-                .is_empty()
-        );
-        let codegen = build_env.code_generator("timestamp").unwrap();
-        let out = codegen.generate(&build_env).unwrap();
-        assert!(!out.is_empty());
+        match build_env.code_generator("timestamp") {
+            Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) => {
+                assert_eq!(
+                    &keys,
+                    &[
+                        (
+                            "cfgrammar.unknown".to_string(),
+                            src.find_span("cfgrammar.unknown")
+                        ),
+                        ("lrpar.unknown".to_string(), src.find_span("lrpar.unknown"))
+                    ]
+                );
+            }
+            _ => panic!("Unexpected error result"),
+        }
     }
 }
