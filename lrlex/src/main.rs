@@ -125,7 +125,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     {
         let unused_header_values = header
             .unused()
-            .iter()
             .map(|(s, _)| s.to_string())
             .collect::<Vec<String>>();
         if !unused_header_values.is_empty() {

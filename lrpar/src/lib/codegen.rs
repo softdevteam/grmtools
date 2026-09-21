@@ -1,5 +1,6 @@
 use std::{
     any::type_name,
+    collections::HashSet,
     fmt::{self, Write},
     hash::Hash,
     marker::PhantomData,
@@ -50,7 +51,6 @@ where
     StateTableError(StateTableError<LexerTypesT::StorageT>),
     YaccGrammarErrors(Vec<YaccGrammarError>),
     GrmtoolsSectionUnusedKeys(Vec<(String, Span)>),
-    GrmtoolsSectionMissingRequiredKeys(Vec<String>),
 }
 
 #[derive(Debug)]
@@ -138,10 +138,6 @@ where
                 let keys = keys.iter().cloned().map(|(s, _)| s).collect::<Vec<_>>();
                 format!("Unused keys in %grmtools section: {}", keys.join(", "))
             }
-            Self::GrmtoolsSectionMissingRequiredKeys(keys) => format!(
-                "Required keys are missing from %grmtools section: {}",
-                keys.join(", ")
-            ),
         })
     }
 }
@@ -196,7 +192,7 @@ where
     phantom_storaget: PhantomData<LexerTypesT::StorageT>,
     mod_name: String,
     grammar_path: Option<String>,
-    crates_to_check: Vec<String>,
+    crates_to_check: HashSet<String>,
 }
 
 pub(crate) struct ParserCodegen<LexerTypesT>
@@ -395,7 +391,7 @@ where
         Ok(ParserBuildEnv {
             ast_with_validity_info,
             cache_args: args,
-            crates_to_check,
+            crates_to_check: HashSet::from_iter(crates_to_check),
             recoverer,
             serialisation_format,
             mod_name,
@@ -457,54 +453,34 @@ where
     /// Causes the `code_generator()` function to check for unused entries in the grmtools section
     /// starting for entries starting with `crate_prefix`.
     #[allow(unused)]
-    pub(crate) fn add_value_checks_for_crate(&mut self, crate_prefix: &str) {
-        let crate_prefix = crate_prefix.to_string();
-        if !self.crates_to_check.contains(&crate_prefix) {
-            self.crates_to_check.push(crate_prefix.to_string());
-        }
+    pub(crate) fn register_header_key_prefix(&mut self, crate_prefix: &str) {
+        self.crates_to_check.insert(crate_prefix.to_string());
     }
 
     /// Returns an error if any unused keys specified in a `%grmtools` directive that begin with
     /// `crate_prefix.` are found. If the `crate_prefix` is empty returns an error if any unused
     /// keys are found.
-    pub(crate) fn check_unused_header_keys_for_crate(
+    pub(crate) fn check_unused_header_keys(
         &self,
-        crate_prefix: &str,
+        crate_prefixes: HashSet<String>,
     ) -> Result<(), ParserBuildEnvError<LexerTypesT>> {
         let unused_keys = self
             .ast_with_validity_info()
-            .unused_header_keys_for_crate(crate_prefix);
+            .iter_unused_header_values(crate_prefixes)
+            .collect::<Vec<_>>();
         if !unused_keys.is_empty() {
             return Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(unused_keys));
         }
-        let missing_keys = self
-            .ast_with_validity_info()
-            .check_missing_required_keys_for_crate(crate_prefix);
-        if !missing_keys.is_empty() {
-            Err(ParserBuildEnvError::GrmtoolsSectionMissingRequiredKeys(
-                missing_keys,
-            ))
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     pub(crate) fn code_generator(
         &self,
         timestamp: &str,
     ) -> Result<ParserCodegen<LexerTypesT>, ParserBuildEnvError<LexerTypesT>> {
-        let mut unused_vals = Vec::new();
-        for crate_prefix in &self.crates_to_check {
-            let result = self.check_unused_header_keys_for_crate(crate_prefix);
-            if let Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) = result {
-                unused_vals.extend(keys);
-            } else if result.is_err() {
-                result?
-            }
-        }
-        if !unused_vals.is_empty() {
-            return Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(unused_vals));
-        }
+        let mut crate_prefixes = HashSet::new();
+        crate_prefixes.extend(self.crates_to_check.clone());
+        self.check_unused_header_keys(crate_prefixes)?;
         let grm = YaccGrammar::<LexerTypesT::StorageT>::new_from_ast_with_validity_info(
             &self.ast_with_validity_info,
         )?;
@@ -1341,7 +1317,7 @@ mod test {
             let mut build_env = src_env
                 .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
                 .unwrap();
-            build_env.add_value_checks_for_crate(crate_prefix);
+            build_env.register_header_key_prefix(crate_prefix);
             match build_env.code_generator("timestamp") {
                 Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) => {
                     assert_eq!(

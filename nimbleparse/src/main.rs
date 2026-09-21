@@ -14,6 +14,7 @@ use lrtable::{Minimiser, StateTable, from_yacc};
 use num_traits::ToPrimitive as _;
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use std::{
+    collections::HashSet,
     env,
     error::Error,
     fmt,
@@ -205,7 +206,8 @@ fn main() {
     let yacc_y_path = PathBuf::from(&matches.free[1]);
     let yacc_src = read_file(&yacc_y_path);
     let yacc_diag = SpannedDiagnosticFormatter::new(&yacc_src, &yacc_y_path);
-    let parsed_header = GrmtoolsSectionParser::new(&yacc_src, true).parse();
+    // If we were given no yk_arg on the command line, require a grmtools section.
+    let parsed_header = GrmtoolsSectionParser::new(&yacc_src, yk_arg.is_none()).parse();
     let parsed_header = match parsed_header {
         Ok((parsed_header, _)) => parsed_header,
         Err(errs) => {
@@ -242,6 +244,37 @@ fn main() {
         });
     let yacc_kind = yk_arg.unwrap_or(yk_header_val.unwrap_or(YaccKind::Grmtools));
     let ast_validation = ASTWithValidityInfo::new(yacc_kind, &yacc_src);
+    // Note we don't expect to find any used lrlex keys, we want to produce an error if unused ones are found.
+    let crate_prefixes = HashSet::from_iter([
+        "cfgrammar".to_string(),
+        "lrpar".to_string(),
+        "lrlex".to_string(),
+    ]);
+    let unused_keys = ast_validation
+        .iter_unused_header_values(crate_prefixes)
+        .collect::<Vec<_>>();
+    if !unused_keys.is_empty() {
+        eprintln!(
+            "{ERROR}{}",
+            yacc_diag.file_location_msg(" parsing the `%grmtools` section:", None)
+        );
+        for (_, span) in unused_keys {
+            eprintln!(
+                "{}",
+                indent(
+                    "    ",
+                    &yacc_diag
+                        .underline_span_with_text(
+                            span,
+                            "Unused key in grmtools section".to_string(),
+                            '^'
+                        )
+                        .to_string()
+                )
+            );
+        }
+        process::exit(1)
+    }
     let rk_header_val = parsed_header
         .get("lrpar.recoverer")
         .map(
