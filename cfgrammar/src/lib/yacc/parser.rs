@@ -376,11 +376,10 @@ impl YaccParser<'_> {
 
     pub(crate) fn build(self) -> (GrammarAST, Header<Span>) {
         let mut header = self.header.expect("set by parse()");
-        // Preemptively mark the keys for lrpar and cfgrammar as used in the header.
-        // If a downstream crate checks the keys in the ast. The lrpar crate works on a
-        // local instance which merges the keys from ast with keys from the `CTBuilder`.
-        //
-        // It is difficult to do later due to shared references.
+        // At this point we still have mutable access to the header, so it is a convenient place
+        // to mark keys used. It would be less error prone if we did this at the point where keys
+        // are used. However at some points where we do lookups, there are shared references to the
+        // header making it difficult to get mutable access.
         for (key_name, crate_name) in CRATE_KEY_MAP.iter() {
             if ["cfgrammar", "lrpar"].contains(crate_name) {
                 header.mark_used(&format!("{crate_name}.{key_name}"));
