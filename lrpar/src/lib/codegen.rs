@@ -457,9 +457,8 @@ where
         self.crates_to_check.insert(crate_prefix.to_string());
     }
 
-    /// Returns an error if any unused keys specified in a `%grmtools` directive that begin with
-    /// `crate_prefix.` are found. If the `crate_prefix` is empty returns an error if any unused
-    /// keys are found.
+    /// Checks all the keys staring with `crate_prefixes`. If any of them are `unused`, return an error.
+    /// If `crate_prefixes` contains the empty string, returns an arror if any key is unused.
     pub(crate) fn check_unused_header_keys(
         &self,
         crate_prefixes: &HashSet<String>,
