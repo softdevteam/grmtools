@@ -251,7 +251,7 @@ fn main() {
         "lrlex".to_string(),
     ]);
     let unused_keys = ast_validation
-        .iter_unused_header_values(crate_prefixes)
+        .iter_unused_header_values(&crate_prefixes)
         .collect::<Vec<_>>();
     if !unused_keys.is_empty() {
         eprintln!(

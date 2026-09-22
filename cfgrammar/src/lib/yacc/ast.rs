@@ -131,7 +131,7 @@ impl ASTWithValidityInfo {
     #[doc(hidden)]
     pub fn iter_unused_header_values(
         &self,
-        prefixes: HashSet<String>,
+        prefixes: &HashSet<String>,
     ) -> impl Iterator<Item = (String, Span)> {
         self.grmtools_section
             .unused()
@@ -1112,7 +1112,7 @@ start -> () : "a" { () };
         let crate_prefixes = HashSet::from_iter(["test".to_string()]);
         assert_eq!(
             ast_validity
-                .iter_unused_header_values(crate_prefixes)
+                .iter_unused_header_values(&crate_prefixes)
                 .collect::<Vec<_>>(),
             vec![("test.unused".to_string(), src.find_span("test.unused"))]
         );
@@ -1126,7 +1126,7 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .iter_unused_header_values(HashSet::from_iter(["cfgrammar".to_string()]))
+                .iter_unused_header_values(&HashSet::from_iter(["cfgrammar".to_string()]))
                 .next()
                 .is_none()
         );
@@ -1141,7 +1141,7 @@ start -> () : "a" { () };
 
         assert!(
             ast_validity
-                .iter_unused_header_values(HashSet::from_iter(["lrpar".to_string()]))
+                .iter_unused_header_values(&HashSet::from_iter(["lrpar".to_string()]))
                 .next()
                 .is_none()
         );
@@ -1172,7 +1172,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .iter_unused_header_values(HashSet::from_iter(["cfgrammar".to_string()]))
+                .iter_unused_header_values(&HashSet::from_iter(["cfgrammar".to_string()]))
                 .next()
                 .is_none()
         );
@@ -1203,7 +1203,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .iter_unused_header_values(HashSet::from_iter(["cfgrammar".to_string()]))
+                .iter_unused_header_values(&HashSet::from_iter(["cfgrammar".to_string()]))
                 .next()
                 .is_none()
         );
@@ -1234,7 +1234,7 @@ start: "a" { () };
         );
         assert!(
             ast_validity
-                .iter_unused_header_values(HashSet::from_iter(["cfgrammar".to_string()]))
+                .iter_unused_header_values(&HashSet::from_iter(["cfgrammar".to_string()]))
                 .next()
                 .is_none()
         );

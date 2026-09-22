@@ -462,7 +462,7 @@ where
     /// keys are found.
     pub(crate) fn check_unused_header_keys(
         &self,
-        crate_prefixes: HashSet<String>,
+        crate_prefixes: &HashSet<String>,
     ) -> Result<(), ParserBuildEnvError<LexerTypesT>> {
         let unused_keys = self
             .ast_with_validity_info()
@@ -478,9 +478,7 @@ where
         &self,
         timestamp: &str,
     ) -> Result<ParserCodegen<LexerTypesT>, ParserBuildEnvError<LexerTypesT>> {
-        let mut crate_prefixes = HashSet::new();
-        crate_prefixes.extend(self.crates_to_check.clone());
-        self.check_unused_header_keys(crate_prefixes)?;
+        self.check_unused_header_keys(&self.crates_to_check)?;
         let grm = YaccGrammar::<LexerTypesT::StorageT>::new_from_ast_with_validity_info(
             &self.ast_with_validity_info,
         )?;
