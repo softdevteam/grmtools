@@ -26,9 +26,8 @@ use crate::{
 use crate::unstable_api::UnstableApi;
 
 use cfgrammar::{
-    Location,
-    header::{Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
-    markmap::{Entry, MergeBehavior},
+    Span,
+    header::{Header, HeaderError, HeaderErrorKind, Value},
     yacc::{YaccGrammar, YaccKind, ast::ASTWithValidityInfo},
 };
 use filetime::FileTime;
@@ -135,22 +134,11 @@ pub enum SerialisationFormat {
     VariableSizedInteger,
 }
 
-impl TryFrom<SerialisationFormat> for Value<Location> {
-    type Error = cfgrammar::header::HeaderError<Location>;
-    fn try_from(kind: SerialisationFormat) -> Result<Value<Location>, HeaderError<Location>> {
-        let from_loc = Location::Other("From<SerialisationFormat>".to_string());
-        Ok(Value::Namespaced(
-            format!("SerialisationFormat::{kind:?}"),
-            from_loc,
-        ))
-    }
-}
-
-impl<T: Clone + Debug> TryFrom<&Value<T>> for SerialisationFormat {
-    type Error = HeaderError<T>;
-    fn try_from(value: &Value<T>) -> Result<SerialisationFormat, HeaderError<T>> {
+impl TryFrom<&Value<Span>> for SerialisationFormat {
+    type Error = HeaderError<Span>;
+    fn try_from(value: &Value<Span>) -> Result<SerialisationFormat, HeaderError<Span>> {
         match value {
-            Value::Namespaced(serialisation_fmt, loc) => match serialisation_fmt.as_str() {
+            Value::Namespaced(serialisation_fmt, span) => match serialisation_fmt.as_str() {
                 "SerialisationFormat::FixedSizeInteger" | "FixedSizeInteger" => {
                     Ok(SerialisationFormat::FixedSizeInteger)
                 }
@@ -159,12 +147,12 @@ impl<T: Clone + Debug> TryFrom<&Value<T>> for SerialisationFormat {
                 }
                 _ => Err(HeaderError {
                     kind: HeaderErrorKind::InvalidEntry("serialisation_format"),
-                    locations: vec![loc.clone()],
+                    locations: vec![*span],
                 }),
             },
             val => Err(HeaderError {
                 kind: HeaderErrorKind::InvalidEntry("serialisation_format"),
-                locations: vec![val.primary_location().clone()],
+                locations: vec![*val.primary_location()],
             }),
         }
     }
@@ -201,7 +189,7 @@ where
     inspect_rt: Option<
         Box<
             dyn for<'b> FnMut(
-                &'b mut Header<Location>,
+                &'b Header<Span>,
                 RTParserBuilder<LexerTypesT::StorageT, LexerTypesT>,
                 &'b HashMap<String, LexerTypesT::StorageT>,
                 &PathBuf,
@@ -442,7 +430,7 @@ where
         mut self,
         cb: Box<
             dyn for<'b, 'y> FnMut(
-                &'b mut Header<Location>,
+                &'b Header<Span>,
                 RTParserBuilder<'y, StorageT, LexerTypesT>,
                 &'b HashMap<String, StorageT>,
                 &PathBuf,
@@ -514,51 +502,9 @@ where
             .output_path
             .as_ref()
             .expect("output_path must be specified before processing.");
-        let mut header = Header::new();
 
-        match header.entry("cfgrammar.yacckind".to_string()) {
-            Entry::Occupied(_) => unreachable!(),
-            Entry::Vacant(mut v) => match self.yacckind {
-                Some(YaccKind::Eco) => panic!("Eco compile-time grammar generation not supported."),
-                Some(yk) => {
-                    let yk_value = Value::try_from(yk)?;
-                    let mut o = v.insert_entry(HeaderValue(
-                        Location::Other("CTParserBuilder".to_string()),
-                        yk_value,
-                    ));
-                    o.set_merge_behavior(MergeBehavior::Ours);
-                }
-                None => {
-                    v.mark_required();
-                }
-            },
-        }
-        if let Some(recoverer) = self.recoverer {
-            match header.entry("lrpar.recoverer".to_string()) {
-                Entry::Occupied(_) => unreachable!(),
-                Entry::Vacant(v) => {
-                    let rk_value = Value::try_from(recoverer)?;
-                    let mut o = v.insert_entry(HeaderValue(
-                        Location::Other("CTParserBuilder".to_string()),
-                        rk_value,
-                    ));
-                    o.set_merge_behavior(MergeBehavior::Ours);
-                }
-            }
-        }
-
-        if let Some(encoding) = self.serialisation_format {
-            match header.entry("lrpar.serialisation_format".to_string()) {
-                Entry::Occupied(_) => unreachable!(),
-                Entry::Vacant(v) => {
-                    let rk_value = Value::try_from(encoding)?;
-                    let mut o = v.insert_entry(HeaderValue(
-                        Location::Other("CTParserBuilder".to_string()),
-                        rk_value,
-                    ));
-                    o.set_merge_behavior(MergeBehavior::Ours);
-                }
-            }
+        if let Some(YaccKind::Eco) = self.yacckind {
+            panic!("Eco compile-time grammar generation not supported.")
         }
 
         {
@@ -575,7 +521,9 @@ where
             read_to_string(grmp).map_err(|e| format!("When reading '{}': {e}", grmp.display()))?
         };
 
-        let src_env = ParserSrcEnv::new_with_header(&inc, Some(grmp), header);
+        let src_env = ParserSrcEnv::new(&inc, Some(grmp))
+            .yacckind(self.yacckind)
+            .recoverer(self.recoverer);
         let yacc_diag = SpannedDiagnosticFormatter::new(&inc, grmp);
         let build_args = ParserBuildEnvArgs::new()
             .ast_with_validity_info(self.from_ast.as_ref())
@@ -585,7 +533,7 @@ where
             .warnings_are_errors(self.warnings_are_errors)
             .visibility(self.visibility.clone())
             .rust_edition(self.rust_edition);
-        let mut build_env = src_env.build_env(build_args).map_err(|e| match e {
+        let build_env = src_env.build_env(build_args).map_err(|e| match e {
             ParserSrcEnvError::GrmtoolsSectionParseError(es) => {
                 let mut out = String::new();
                 out.push_str(&format!(
@@ -737,19 +685,20 @@ where
             }
         }
 
-        if let Some(ref mut inspector_rt) = self.inspect_rt {
+        if let Some(inspector_rt) = &mut self.inspect_rt {
             let rt: RTParserBuilder<'_, StorageT, LexerTypesT> = RTParserBuilder::new(grm, stable);
             let rt = if let Some(rk) = self.recoverer {
                 rt.recoverer(rk)
             } else {
                 rt
             };
-            inspector_rt(build_env.header_mut(), rt, &rule_ids, grmp)?
+            inspector_rt(
+                build_env.ast_with_validity_info().header(),
+                rt,
+                &rule_ids,
+                grmp,
+            )?
         }
-
-        build_env
-            .check_unused_header_keys()
-            .map_err(|e| ErrorString(e.to_string()))?;
 
         self.output_file(
             &code_gen,

@@ -14,7 +14,7 @@ use std::{collections::HashMap, error::Error, fmt, sync::LazyLock};
 ///
 /// * An error during parsing the section.
 /// * An error resulting from a value in the section having an invalid value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[doc(hidden)]
 pub struct HeaderError<T> {
     pub kind: HeaderErrorKind,
@@ -48,7 +48,7 @@ impl Spanned for HeaderError<Span> {
 
 // This is essentially a tuple that needs a newtype so we can implement `From` for it.
 // Thus we aren't worried about it being `pub`.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[doc(hidden)]
 pub struct HeaderValue<T>(pub T, pub Value<T>);
 
@@ -358,7 +358,11 @@ impl<'input> GrmtoolsSectionParser<'input> {
                                 if let Some(crate_name) = CRATE_KEY_MAP.get(key.as_str()) {
                                     format!("{crate_name}.{key}")
                                 } else {
-                                    key
+                                    errs.push(HeaderError {
+                                        kind: HeaderErrorKind::IllegalName,
+                                        locations: vec![key_loc],
+                                    });
+                                    return Err(errs);
                                 }
                             } else {
                                 key
@@ -477,14 +481,6 @@ impl<'input> GrmtoolsSectionParser<'input> {
 #[doc(hidden)]
 pub type Header<T> = MarkMap<String, HeaderValue<T>>;
 
-impl TryFrom<YaccKind> for Value<Location> {
-    type Error = HeaderError<Location>;
-    fn try_from(kind: YaccKind) -> Result<Value<Location>, HeaderError<Location>> {
-        let from_loc = Location::Other("From<YaccKind>".to_string());
-        Ok(Value::Namespaced(format!("YaccKind::{kind:?}"), from_loc))
-    }
-}
-
 impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
     type Error = HeaderError<T>;
     fn try_from(value: &Value<T>) -> Result<YaccKind, HeaderError<T>> {
@@ -588,7 +584,7 @@ mod test {
 
     #[test]
     fn test_header_duplicates() {
-        let src = "%grmtools {dupe, !dupe, dupe: test}";
+        let src = "%grmtools {test.dupe, !test.dupe, test.dupe: test}";
         for flag in [true, false] {
             let parser = GrmtoolsSectionParser::new(src, flag);
             let res = parser.parse();

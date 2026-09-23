@@ -448,7 +448,6 @@ where
                         .map(|(x, y)| (&**x, *y))
                         .collect::<HashMap<_, _>>();
                     closure_lexerdef.set_rule_ids(&owned_map);
-                    yacc_header.mark_used(&"lrpar.test_files".to_string());
                     let grammar = rtpb.grammar();
                     let test_glob = yacc_header.get("lrpar.test_files");
                     let mut err_str = None;
@@ -520,7 +519,11 @@ where
             None
         };
 
-        let unused_header_values = build_env.header().unused();
+        let unused_header_values = build_env
+            .header()
+            .unused()
+            .map(|(s, _)| s.to_string())
+            .collect::<Vec<String>>();
         if !unused_header_values.is_empty() {
             return Err(
                 format!("Unused header values: {}", unused_header_values.join(", ")).into(),
