@@ -115,7 +115,7 @@ impl ASTWithValidityInfo {
     }
 
     /// Performs a lookup in the grmtools section for an entry with the key `crate_name.key_name` and returns it.
-    /// If the entry is found it marks the key as `used`, for the purposes of `iter_unused_header_values`.
+    /// If the entry is found it marks the key as `used`.
     pub fn header_value_get(&mut self, key: &str) -> Option<(Span, &Value<Span>)> {
         self.grmtools_section.mark_used(&key.to_string());
         if let Some(HeaderValue(span, value)) = self.grmtools_section.get(key) {
