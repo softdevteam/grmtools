@@ -358,7 +358,11 @@ impl<'input> GrmtoolsSectionParser<'input> {
                                 if let Some(crate_name) = KEY_CRATE_MAP.get(key.as_str()) {
                                     format!("{crate_name}.{key}")
                                 } else {
-                                    key
+                                    errs.push(HeaderError {
+                                        kind: HeaderErrorKind::IllegalName,
+                                        locations: vec![key_loc],
+                                    });
+                                    return Err(errs);
                                 }
                             } else {
                                 key
@@ -588,7 +592,7 @@ mod test {
 
     #[test]
     fn test_header_duplicates() {
-        let src = "%grmtools {dupe, !dupe, dupe: test}";
+        let src = "%grmtools {test.dupe, !test.dupe, test.dupe: test}";
         for flag in [true, false] {
             let parser = GrmtoolsSectionParser::new(src, flag);
             let res = parser.parse();
