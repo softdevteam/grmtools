@@ -1,5 +1,6 @@
 use std::{
     any::type_name,
+    collections::HashSet,
     fmt::{self, Write},
     hash::Hash,
     marker::PhantomData,
@@ -12,9 +13,8 @@ use crate::{
 };
 
 use cfgrammar::{
-    Location, RIdx, Span, Symbol,
-    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue},
-    markmap::MergeError,
+    RIdx, Span, Symbol,
+    header::{CFGRAMMAR_KEYS, GrmtoolsSectionParser, Header, HeaderError, HeaderValue, LRPAR_KEYS},
     yacc::{
         YaccGrammar, YaccGrammarError, YaccKind, YaccOriginalActionKind, ast::ASTWithValidityInfo,
     },
@@ -32,15 +32,16 @@ const ACTIONS_KIND: &str = "__GtActionsKind";
 const ACTIONS_KIND_PREFIX: &str = "Ak";
 const ACTIONS_KIND_HIDDEN: &str = "__GtActionsKindHidden";
 
+#[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum ParserSrcEnvError {
     GrmtoolsSectionParseError(Vec<HeaderError<Span>>),
-    GrmtoolsSectionMergeError(MergeError<String, Box<HeaderValue<Location>>>),
-    GrmtoolsSectionLookupError(HeaderError<Location>),
+    GrmtoolsSectionLookupError(HeaderError<Span>),
     MissingYaccKind,
     MissingModName,
 }
 
+#[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum ParserBuildEnvError<LexerTypesT>
 where
@@ -49,10 +50,11 @@ where
 {
     StateTableError(StateTableError<LexerTypesT::StorageT>),
     YaccGrammarErrors(Vec<YaccGrammarError>),
-    GrmtoolsSectionUnusedKeys(Vec<String>),
-    GrmtoolsSectionMissingRequiredKeys(Vec<String>),
+    GrmtoolsSectionUnusedKeys(Vec<(String, Span)>),
+    DuplicatePrefixRegistrationError(String),
 }
 
+#[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum CodegenError {
     ProcMacro2Error(proc_macro2::LexError),
@@ -67,14 +69,8 @@ impl From<Vec<HeaderError<Span>>> for ParserSrcEnvError {
     }
 }
 
-impl From<MergeError<String, Box<HeaderValue<Location>>>> for ParserSrcEnvError {
-    fn from(it: MergeError<String, Box<HeaderValue<Location>>>) -> Self {
-        ParserSrcEnvError::GrmtoolsSectionMergeError(it)
-    }
-}
-
-impl From<HeaderError<Location>> for ParserSrcEnvError {
-    fn from(it: HeaderError<Location>) -> Self {
+impl From<HeaderError<Span>> for ParserSrcEnvError {
+    fn from(it: HeaderError<Span>) -> Self {
         ParserSrcEnvError::GrmtoolsSectionLookupError(it)
     }
 }
@@ -119,7 +115,6 @@ impl fmt::Display for ParserSrcEnvError {
                 .map(|e| e.to_string())
                 .collect::<Vec<_>>()
                 .join("\n"),
-            Self::GrmtoolsSectionMergeError(e) => e.to_string(),
             Self::GrmtoolsSectionLookupError(e) => e.to_string(),
             Self::MissingYaccKind => "Code generator cannot resolve yacc kind".to_string(),
             Self::MissingModName => "Code generator requires a mod name".to_string(),
@@ -141,12 +136,12 @@ where
                 .collect::<Vec<_>>()
                 .join("\n"),
             Self::GrmtoolsSectionUnusedKeys(keys) => {
+                let keys = keys.iter().cloned().map(|(s, _)| s).collect::<Vec<_>>();
                 format!("Unused keys in %grmtools section: {}", keys.join(", "))
             }
-            Self::GrmtoolsSectionMissingRequiredKeys(keys) => format!(
-                "Required keys are missing from %grmtools section: {}",
-                keys.join(", ")
-            ),
+            Self::DuplicatePrefixRegistrationError(prefix) => {
+                format!("Registered duplicate prefix: \"{prefix}\"")
+            }
         })
     }
 }
@@ -172,7 +167,8 @@ where
     src: &'a str,
     fallback_modname: Option<String>,
     grammar_path_cache_entry: Option<String>,
-    header: Header<Location>,
+    yacckind: Option<YaccKind>,
+    recoverer: Option<RecoveryKind>,
     phantom: PhantomData<LexerTypesT::StorageT>,
 }
 
@@ -200,7 +196,7 @@ where
     phantom_storaget: PhantomData<LexerTypesT::StorageT>,
     mod_name: String,
     grammar_path: Option<String>,
-    header: Header<Location>,
+    registered_prefixes: HashSet<String>,
 }
 
 pub(crate) struct ParserCodegen<LexerTypesT>
@@ -266,11 +262,7 @@ where
     LexerTypesT: LexerTypes,
     usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
 {
-    pub(crate) fn new_with_header(
-        src: &'a str,
-        path: Option<&Path>,
-        header: Header<Location>,
-    ) -> ParserSrcEnv<'a, LexerTypesT> {
+    pub(crate) fn new(src: &'a str, path: Option<&Path>) -> ParserSrcEnv<'a, LexerTypesT> {
         let fallback_modname = if let Some(path) = path {
             // When the user hasn't specified a module name, so we create one automatically: what we
             // do is strip off all the filename extensions (note that it's likely that inp ends
@@ -293,18 +285,20 @@ where
             src,
             fallback_modname,
             grammar_path_cache_entry,
-            header,
             phantom: PhantomData,
+            recoverer: None,
+            yacckind: None,
         }
     }
 
-    fn merge_headers(&mut self) -> Result<(), ParserSrcEnvError> {
-        let (parsed_header, _) = self.parse_header()?;
-        Ok(self.header.merge_from(parsed_header)?)
+    pub(crate) fn yacckind(mut self, yacckind: Option<YaccKind>) -> Self {
+        self.yacckind = yacckind;
+        self
     }
 
-    fn parse_header(&self) -> Result<(Header<Span>, usize), Vec<HeaderError<Span>>> {
-        GrmtoolsSectionParser::new(self.src, false).parse()
+    pub(crate) fn recoverer(mut self, recoverykind: Option<RecoveryKind>) -> Self {
+        self.recoverer = recoverykind;
+        self
     }
 
     /// Looks up the `yacckind` field from the header, marks the field
@@ -312,12 +306,13 @@ where
     fn resolve_ast_with_validity_info(
         &mut self,
         from_ast: Option<&ASTWithValidityInfo>,
+        header: &Header<Span>,
     ) -> Result<ASTWithValidityInfo, ParserSrcEnvError> {
-        self.header.mark_used(&"cfgrammar.yacckind".to_string());
         if let Some(ast) = from_ast {
             Ok(ast.clone())
-        } else if let Some(yk) = self
-            .header
+        } else if let Some(yk) = self.yacckind {
+            Ok(ASTWithValidityInfo::new(yk, self.src))
+        } else if let Some(yk) = header
             .get("cfgrammar.yacckind")
             .map(|HeaderValue(_, val)| val)
             .map(YaccKind::try_from)
@@ -331,13 +326,16 @@ where
 
     /// Looks up the `recoverer` field in the header, marks the field
     /// as used, and defaulting to `CPCTPlus` if unfound.
-    fn resolve_recoverer(&mut self) -> Result<RecoveryKind, ParserSrcEnvError> {
-        self.header.mark_used(&"lrpar.recoverer".to_string());
-        let rk_val = self
-            .header
+    fn resolve_recoverer(
+        &mut self,
+        header: &Header<Span>,
+    ) -> Result<RecoveryKind, ParserSrcEnvError> {
+        let rk_val = header
             .get("lrpar.recoverer")
             .map(|HeaderValue(_, rk_val)| rk_val);
-        if let Some(rk_val) = rk_val {
+        if let Some(rk) = self.recoverer {
+            Ok(rk)
+        } else if let Some(rk_val) = rk_val {
             Ok(RecoveryKind::try_from(rk_val)?)
         } else {
             // Fallback to the default recoverykind.
@@ -347,11 +345,11 @@ where
 
     /// Looks up the `serialisation_format` field in the header, marks the field
     /// as used, and defaults to `VariableSizedInteger` if unfound.
-    fn resolve_serialisation_format(&mut self) -> Result<SerialisationFormat, ParserSrcEnvError> {
-        self.header
-            .mark_used(&"lrpar.serialisation_format".to_string());
-        if let Some(ec_val) = self
-            .header
+    fn resolve_serialisation_format(
+        &mut self,
+        header: &Header<Span>,
+    ) -> Result<SerialisationFormat, ParserSrcEnvError> {
+        if let Some(ec_val) = header
             .get("lrpar.serialisation_format")
             .map(|HeaderValue(_, ec_val)| ec_val)
         {
@@ -382,24 +380,26 @@ where
         LexerTypesT: LexerTypes,
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
     {
-        self.merge_headers()?;
+        let (header, _) = GrmtoolsSectionParser::new(self.src, false).parse()?;
         let ast_with_validity_info =
-            self.resolve_ast_with_validity_info(args.ast_with_validity_info)?;
-        let recoverer = self.resolve_recoverer()?;
-        let serialisation_format = self.resolve_serialisation_format()?;
+            self.resolve_ast_with_validity_info(args.ast_with_validity_info, &header)?;
+        let recoverer = self.resolve_recoverer(&header)?;
+        let serialisation_format = self.resolve_serialisation_format(&header)?;
         let mod_name = self.resolve_mod_name(&args)?;
-        let grammar_path = self.grammar_path_cache_entry;
 
-        Ok(ParserBuildEnv {
+        let mut build_env = ParserBuildEnv {
             ast_with_validity_info,
             cache_args: args,
+            registered_prefixes: HashSet::new(),
             recoverer,
             serialisation_format,
             mod_name,
-            grammar_path,
-            header: self.header,
+            grammar_path: self.grammar_path_cache_entry,
             phantom_storaget: PhantomData,
-        })
+        };
+        build_env.register_prefix("cfgrammar").expect("unreachable");
+        build_env.register_prefix("lrpar").expect("unreachable");
+        Ok(build_env)
     }
 }
 
@@ -410,10 +410,6 @@ where
 {
     pub(crate) fn ast_with_validity_info(&self) -> &ASTWithValidityInfo {
         &self.ast_with_validity_info
-    }
-
-    pub(crate) fn header_mut(&mut self) -> &mut Header<Location> {
-        &mut self.header
     }
 
     pub(crate) fn serialisation_format(&self) -> &SerialisationFormat {
@@ -456,30 +452,64 @@ where
         self.ast_with_validity_info.yacc_kind()
     }
 
-    pub(crate) fn check_unused_header_keys(&self) -> Result<(), ParserBuildEnvError<LexerTypesT>> {
-        let unused_keys = self.header.unused();
-        if !unused_keys.is_empty() {
-            return Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(unused_keys));
-        }
-        let missing_keys = self
-            .header
-            .missing()
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>();
-        if !missing_keys.is_empty() {
-            Err(ParserBuildEnvError::GrmtoolsSectionMissingRequiredKeys(
-                missing_keys,
+    /// Adds the `crate_prefix` to the list of registered prefixes.
+    /// The intent is that the user can check the registered keys against `ast_with_validity_info.iter_prefixes()`
+    /// So that all the values in `ast_with_validity_info.iter_prefixes()` are also in `self.registered_header_prefixes()`
+    /// for example
+    ///
+    /// ```ignore
+    /// let prefixes_set = HashSet::from_iter(build_env.ast_with_validity_info().iter_prefixes());
+    /// let registered_set = HashSet::from_iter(build_env.registered_header_prefixes());
+    /// assert!(prefixes_set.difference(registered_set).next().is_none())
+    /// ```
+    pub(crate) fn register_prefix(
+        &mut self,
+        crate_prefix: &str,
+    ) -> Result<(), ParserBuildEnvError<LexerTypesT>> {
+        if !self.registered_prefixes.insert(crate_prefix.to_string()) {
+            Err(ParserBuildEnvError::DuplicatePrefixRegistrationError(
+                crate_prefix.to_string(),
             ))
         } else {
             Ok(())
         }
     }
 
+    /// Returns the unique set of key prefixes that have been registered by calling `register_header_prefix`.
+    #[allow(unused)]
+    pub(crate) fn registered_prefixes(&self) -> impl Iterator<Item = &str> {
+        self.registered_prefixes.iter().map(|s| s.as_str())
+    }
+
+    /// Checks all the keys staring with `crate_prefixes`. If any of them are `unused`, return an error.
+    /// If `crate_prefixes` contains the empty string, returns an arror if any key is unused.
+    fn check_unused_grmtools_header_values(&self) -> Result<(), ParserBuildEnvError<LexerTypesT>> {
+        let mut unrecognized_keys = Vec::new();
+        unrecognized_keys.extend(
+            self.ast_with_validity_info()
+                .iter_prefix_keys("cfgrammar")
+                .filter(|(key, _)| !CFGRAMMAR_KEYS.contains(key))
+                .map(|(s, span)| (s.to_string(), span)),
+        );
+        unrecognized_keys.extend(
+            self.ast_with_validity_info()
+                .iter_prefix_keys("lrpar")
+                .filter(|(key, _)| !LRPAR_KEYS.contains(key))
+                .map(|(s, span)| (s.to_string(), span)),
+        );
+        if !unrecognized_keys.is_empty() {
+            return Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(
+                unrecognized_keys,
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn code_generator(
         &self,
         timestamp: &str,
     ) -> Result<ParserCodegen<LexerTypesT>, ParserBuildEnvError<LexerTypesT>> {
+        self.check_unused_grmtools_header_values()?;
         let grm = YaccGrammar::<LexerTypesT::StorageT>::new_from_ast_with_validity_info(
             &self.ast_with_validity_info,
         )?;
@@ -1292,5 +1322,95 @@ pub(crate) fn make_generics(parse_generics: Option<&str>) -> Result<Generics, Co
         }
     } else {
         Ok(parse_quote!(<'lexer, 'input: 'lexer>))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::test_utils::{FindSpan as _, TestLexerTypes};
+    use cfgrammar::header::HeaderErrorKind;
+    #[test]
+    fn test_unused_header_entry() {
+        let src = r#"
+        %grmtools{
+            yacckind: Grmtools,
+            testfoo: "non-grmtools values which do not specify a crate origin should produce errors",
+        }
+        %%
+        start -> () : "A" { () };
+        "#;
+        let src_env = ParserSrcEnv::<TestLexerTypes>::new(src, None);
+        let expected_errs = vec![HeaderError {
+            kind: HeaderErrorKind::IllegalName,
+            locations: vec![src.find_span("testfoo")],
+        }];
+        match src_env.build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module"))) {
+            Err(ParserSrcEnvError::GrmtoolsSectionParseError(errs)) => {
+                assert_eq!(errs, expected_errs)
+            }
+            _ => panic!("Unexpected err"),
+        }
+    }
+
+    #[test]
+    fn test_unused_grmtools_header_entry() {
+        let src = r#"
+        %grmtools{
+            yacckind: Grmtools,
+            cfgrammar.unknown: "should be unused",
+            lrpar.unknown: "should be unused",
+        }
+        %%
+        start -> () : "A" { () };
+        "#;
+        let src_env = ParserSrcEnv::<TestLexerTypes>::new(src, None);
+        let build_env = src_env
+            .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
+            .unwrap();
+        match build_env.code_generator("timestamp") {
+            Err(ParserBuildEnvError::GrmtoolsSectionUnusedKeys(keys)) => {
+                assert_eq!(
+                    &keys,
+                    &[
+                        (
+                            "cfgrammar.unknown".to_string(),
+                            src.find_span("cfgrammar.unknown")
+                        ),
+                        ("lrpar.unknown".to_string(), src.find_span("lrpar.unknown"))
+                    ]
+                );
+            }
+            _ => panic!("Unexpected error result"),
+        }
+    }
+
+    #[test]
+    fn test_unregistered_grmtools_prefix() {
+        let src = r#"
+        %grmtools{
+            yacckind: Grmtools,
+            unregistered.key: "unknown prefix should be unregistered",
+            registered.key: "should be registered",
+        }
+        %%
+        start -> () : "A" { () };
+        "#;
+        let src_env = ParserSrcEnv::<TestLexerTypes>::new(src, None);
+        let mut build_env = src_env
+            .build_env(ParserBuildEnvArgs::new().mod_name(Some("test_module")))
+            .unwrap();
+        build_env.register_prefix("registered").unwrap();
+        let found_prefixes = build_env
+            .ast_with_validity_info()
+            .iter_prefixes()
+            .collect::<HashSet<_>>();
+        let registered_prefixes = build_env.registered_prefixes().collect::<HashSet<_>>();
+        let expected_unregistered: HashSet<&str> = HashSet::from_iter(["unregistered"]);
+        let unregistered_prefixes: HashSet<&str> = found_prefixes
+            .difference(&registered_prefixes)
+            .copied()
+            .collect::<HashSet<_>>();
+        assert_eq!(expected_unregistered, unregistered_prefixes);
     }
 }

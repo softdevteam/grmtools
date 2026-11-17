@@ -202,10 +202,11 @@ mod dijkstra;
 pub mod lex_api;
 #[doc(hidden)]
 pub mod parser;
-#[cfg(test)]
-pub mod test_utils;
 
 mod codegen;
+
+#[cfg(test)]
+pub mod test_utils;
 
 pub use crate::{
     ctbuilder::{

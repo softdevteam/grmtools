@@ -6,7 +6,12 @@ use crate::{
     },
 };
 use regex::{Regex, RegexBuilder};
-use std::{collections::HashMap, error::Error, fmt, sync::LazyLock};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt,
+    sync::LazyLock,
+};
 
 /// An error regarding the `%grmtools` header section.
 ///
@@ -14,7 +19,7 @@ use std::{collections::HashMap, error::Error, fmt, sync::LazyLock};
 ///
 /// * An error during parsing the section.
 /// * An error resulting from a value in the section having an invalid value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[doc(hidden)]
 pub struct HeaderError<T> {
     pub kind: HeaderErrorKind,
@@ -48,7 +53,7 @@ impl Spanned for HeaderError<Span> {
 
 // This is essentially a tuple that needs a newtype so we can implement `From` for it.
 // Thus we aren't worried about it being `pub`.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[doc(hidden)]
 pub struct HeaderValue<T>(pub T, pub Value<T>);
 
@@ -197,6 +202,44 @@ pub static KEY_CRATE_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLo
         map.insert(s, "regex");
     }
     map
+});
+
+#[doc(hidden)]
+pub static CFGRAMMAR_KEYS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| HashSet::from_iter(["cfgrammar.yacckind"]));
+
+#[doc(hidden)]
+pub static LRPAR_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from_iter([
+        "lrpar.recoverer",
+        "lrpar.test_files",
+        "lrpar.serialisation_format",
+    ])
+});
+
+#[doc(hidden)]
+pub static LRLEX_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from_iter([
+        "lrlex.lexerkind",
+        "lrlex.allow_wholeline_comments",
+        "lrlex.posix_escapes",
+    ])
+});
+
+#[doc(hidden)]
+pub static REGEX_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from_iter([
+        "regex.case_insensitive",
+        "regex.dot_matches_new_line",
+        "regex.multi_line",
+        "regex.octal",
+        "regex.swap_greed",
+        "regex.ignore_whitespace",
+        "regex.unicode",
+        "regex.size_limit",
+        "regex.dfa_size_limit",
+        "regex.nest_limit",
+    ])
 });
 
 const MAGIC: &str = "%grmtools";
@@ -480,14 +523,6 @@ impl<'input> GrmtoolsSectionParser<'input> {
 /// A data structure representation of the %grmtools section.
 #[doc(hidden)]
 pub type Header<T> = MarkMap<String, HeaderValue<T>>;
-
-impl TryFrom<YaccKind> for Value<Location> {
-    type Error = HeaderError<Location>;
-    fn try_from(kind: YaccKind) -> Result<Value<Location>, HeaderError<Location>> {
-        let from_loc = Location::Other("From<YaccKind>".to_string());
-        Ok(Value::Namespaced(format!("YaccKind::{kind:?}"), from_loc))
-    }
-}
 
 impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
     type Error = HeaderError<T>;

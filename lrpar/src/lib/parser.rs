@@ -17,7 +17,6 @@ use cactus::Cactus;
 use cfgrammar::{
     RIdx, Span, TIdx,
     header::{HeaderError, HeaderErrorKind, Value},
-    span::Location,
     yacc::YaccGrammar,
 };
 use lrtable::{Action, StIdx, StateTable};
@@ -640,17 +639,9 @@ pub enum RecoveryKind {
     None,
 }
 
-impl TryFrom<RecoveryKind> for Value<Location> {
-    type Error = cfgrammar::header::HeaderError<Location>;
-    fn try_from(rk: RecoveryKind) -> Result<Value<Location>, Self::Error> {
-        let from_loc = Location::Other("From<RecoveryKind>".to_string());
-        Ok(Value::Namespaced(format!("RecoveryKind::{rk:?}"), from_loc))
-    }
-}
-
-impl TryFrom<&Value<Location>> for RecoveryKind {
-    type Error = cfgrammar::header::HeaderError<Location>;
-    fn try_from(rk: &Value<Location>) -> Result<RecoveryKind, Self::Error> {
+impl TryFrom<&Value<Span>> for RecoveryKind {
+    type Error = cfgrammar::header::HeaderError<Span>;
+    fn try_from(rk: &Value<Span>) -> Result<RecoveryKind, Self::Error> {
         match rk {
             Value::Namespaced(rs, loc) => match rs.as_str() {
                 "RecoveryKind::CPCTPlus" | "CPCTPlus" => Ok(RecoveryKind::CPCTPlus),
@@ -660,7 +651,7 @@ impl TryFrom<&Value<Location>> for RecoveryKind {
                         "RecoveryKind",
                         "Cannot convert to RecoveryKind",
                     ),
-                    locations: vec![loc.clone()],
+                    locations: vec![*loc],
                 }),
             },
             value => Err(HeaderError {
@@ -668,7 +659,7 @@ impl TryFrom<&Value<Location>> for RecoveryKind {
                     "RecoveryKind",
                     "Cannot convert to RecoveryKind",
                 ),
-                locations: vec![value.primary_location().clone()],
+                locations: vec![*value.primary_location()],
             }),
         }
     }
