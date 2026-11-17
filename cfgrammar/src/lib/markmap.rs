@@ -546,11 +546,18 @@ impl<'a, K, V> Iterator for MarkMapIterRef<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((k, _, v)) = self.map.contents.get(self.pos) {
+        loop {
+            if self.pos >= self.map.contents.len() {
+                return None;
+            }
+            let pos = self.pos;
             self.pos += 1;
-            v.as_ref().map(|v| (k, v))
-        } else {
-            None
+            if self.map.contents[pos].2.is_some() {
+                return Some((
+                    &self.map.contents[pos].0,
+                    self.map.contents[pos].2.as_ref().unwrap(),
+                ));
+            }
         }
     }
 }
