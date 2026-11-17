@@ -166,7 +166,7 @@ pub static RE_CRATE_DOT: LazyLock<Regex> = LazyLock::new(|| {
 static RE_DIGITS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-9]+").unwrap());
 static RE_STRING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^\"(\\.|[^"\\])*\""#).unwrap());
 #[doc(hidden)]
-pub static CRATE_KEY_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
+pub static KEY_CRATE_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     let mut map = HashMap::new();
     let cfgrammar = ["yacckind"];
     let lrpar = ["recoverer", "test_files", "serialisation_format"];
@@ -355,7 +355,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
                     let (key, key_loc, val, j) = match self.parse_key_value(i) {
                         Ok((key, key_loc, val, pos)) => {
                             let key = if !RE_CRATE_DOT.is_match(&key) {
-                                if let Some(crate_name) = CRATE_KEY_MAP.get(key.as_str()) {
+                                if let Some(crate_name) = KEY_CRATE_MAP.get(key.as_str()) {
                                     format!("{crate_name}.{key}")
                                 } else {
                                     key
