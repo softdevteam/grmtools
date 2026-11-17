@@ -20,7 +20,7 @@ grammar: |
     : valbind {
         let ((key, key_loc), val) = $1;
         let key = if !RE_CRATE_DOT.is_match(&key) {
-            if let Some(crate_name) = CRATE_KEY_MAP.get(key.as_str()) {
+            if let Some(crate_name) = KEY_CRATE_MAP.get(key.as_str()) {
                 format!("{crate_name}.{key}")
             } else {
                 key
@@ -48,7 +48,7 @@ grammar: |
     | val_seq ',' valbind {
         let ((key, key_loc), val) = $3;
         let key = if !RE_CRATE_DOT.is_match(&key) {
-            if let Some(crate_name) = CRATE_KEY_MAP.get(key.as_str()) {
+            if let Some(crate_name) = KEY_CRATE_MAP.get(key.as_str()) {
                 format!("{crate_name}.{key}")
             } else {
                 key
@@ -164,7 +164,7 @@ grammar: |
             HeaderErrorKind,
             HeaderValue,
             Value,
-            CRATE_KEY_MAP,
+            KEY_CRATE_MAP,
             RE_CRATE_DOT,
         },
         markmap::Entry,

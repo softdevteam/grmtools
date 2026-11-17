@@ -6,7 +6,12 @@ use crate::{
     },
 };
 use regex::{Regex, RegexBuilder};
-use std::{collections::HashMap, error::Error, fmt, sync::LazyLock};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt,
+    sync::LazyLock,
+};
 
 /// An error regarding the `%grmtools` header section.
 ///
@@ -14,7 +19,7 @@ use std::{collections::HashMap, error::Error, fmt, sync::LazyLock};
 ///
 /// * An error during parsing the section.
 /// * An error resulting from a value in the section having an invalid value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[doc(hidden)]
 pub struct HeaderError<T> {
     pub kind: HeaderErrorKind,
@@ -48,7 +53,7 @@ impl Spanned for HeaderError<Span> {
 
 // This is essentially a tuple that needs a newtype so we can implement `From` for it.
 // Thus we aren't worried about it being `pub`.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[doc(hidden)]
 pub struct HeaderValue<T>(pub T, pub Value<T>);
 
@@ -166,7 +171,7 @@ pub static RE_CRATE_DOT: LazyLock<Regex> = LazyLock::new(|| {
 static RE_DIGITS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-9]+").unwrap());
 static RE_STRING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^\"(\\.|[^"\\])*\""#).unwrap());
 #[doc(hidden)]
-pub static CRATE_KEY_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
+pub static KEY_CRATE_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     let mut map = HashMap::new();
     let cfgrammar = ["yacckind"];
     let lrpar = ["recoverer", "test_files", "serialisation_format"];
@@ -197,6 +202,44 @@ pub static CRATE_KEY_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLo
         map.insert(s, "regex");
     }
     map
+});
+
+#[doc(hidden)]
+pub static CFGRAMMAR_KEYS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| HashSet::from_iter(["cfgrammar.yacckind"]));
+
+#[doc(hidden)]
+pub static LRPAR_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from_iter([
+        "lrpar.recoverer",
+        "lrpar.test_files",
+        "lrpar.serialisation_format",
+    ])
+});
+
+#[doc(hidden)]
+pub static LRLEX_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from_iter([
+        "lrlex.lexerkind",
+        "lrlex.allow_wholeline_comments",
+        "lrlex.posix_escapes",
+    ])
+});
+
+#[doc(hidden)]
+pub static REGEX_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from_iter([
+        "regex.case_insensitive",
+        "regex.dot_matches_new_line",
+        "regex.multi_line",
+        "regex.octal",
+        "regex.swap_greed",
+        "regex.ignore_whitespace",
+        "regex.unicode",
+        "regex.size_limit",
+        "regex.dfa_size_limit",
+        "regex.nest_limit",
+    ])
 });
 
 const MAGIC: &str = "%grmtools";
@@ -355,10 +398,14 @@ impl<'input> GrmtoolsSectionParser<'input> {
                     let (key, key_loc, val, j) = match self.parse_key_value(i) {
                         Ok((key, key_loc, val, pos)) => {
                             let key = if !RE_CRATE_DOT.is_match(&key) {
-                                if let Some(crate_name) = CRATE_KEY_MAP.get(key.as_str()) {
+                                if let Some(crate_name) = KEY_CRATE_MAP.get(key.as_str()) {
                                     format!("{crate_name}.{key}")
                                 } else {
-                                    key
+                                    errs.push(HeaderError {
+                                        kind: HeaderErrorKind::IllegalName,
+                                        locations: vec![key_loc],
+                                    });
+                                    return Err(errs);
                                 }
                             } else {
                                 key
@@ -477,14 +524,6 @@ impl<'input> GrmtoolsSectionParser<'input> {
 #[doc(hidden)]
 pub type Header<T> = MarkMap<String, HeaderValue<T>>;
 
-impl TryFrom<YaccKind> for Value<Location> {
-    type Error = HeaderError<Location>;
-    fn try_from(kind: YaccKind) -> Result<Value<Location>, HeaderError<Location>> {
-        let from_loc = Location::Other("From<YaccKind>".to_string());
-        Ok(Value::Namespaced(format!("YaccKind::{kind:?}"), from_loc))
-    }
-}
-
 impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
     type Error = HeaderError<T>;
     fn try_from(value: &Value<T>) -> Result<YaccKind, HeaderError<T>> {
@@ -588,7 +627,7 @@ mod test {
 
     #[test]
     fn test_header_duplicates() {
-        let src = "%grmtools {dupe, !dupe, dupe: test}";
+        let src = "%grmtools {test.dupe, !test.dupe, test.dupe: test}";
         for flag in [true, false] {
             let parser = GrmtoolsSectionParser::new(src, flag);
             let res = parser.parse();

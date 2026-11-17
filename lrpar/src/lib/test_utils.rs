@@ -1,4 +1,3 @@
-#![allow(clippy::len_without_is_empty)]
 #![allow(unused)]
 
 use std::{error::Error, fmt, hash::Hash};
@@ -85,5 +84,17 @@ impl Error for TestLexError {}
 impl fmt::Display for TestLexError {
     fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
         unreachable!();
+    }
+}
+
+pub trait FindSpan {
+    fn find_span(&self, s: &str) -> Span;
+}
+
+impl FindSpan for &'_ str {
+    #[track_caller]
+    fn find_span(&self, s: &str) -> Span {
+        let start_pos = self.find(s).unwrap();
+        Span::new(start_pos, start_pos + s.len())
     }
 }
