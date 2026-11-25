@@ -1,12 +1,12 @@
 use crate::{
-    Location, Span, Spanned,
-    markmap::{Entry, MarkMap},
+    Span, Spanned,
     yacc::{
         YaccGrammarError, YaccGrammarErrorKind, YaccKind, YaccOriginalActionKind, parser::SpansKind,
     },
 };
 use regex::{Regex, RegexBuilder};
 use std::{
+    collections::hash_map::Entry,
     collections::{HashMap, HashSet},
     error::Error,
     fmt,
@@ -36,7 +36,7 @@ impl<T> fmt::Display for HeaderError<T> {
 impl From<HeaderError<Span>> for YaccGrammarError {
     fn from(e: HeaderError<Span>) -> YaccGrammarError {
         YaccGrammarError {
-            kind: YaccGrammarErrorKind::Header(e.kind, e.spanskind()),
+            kind: YaccGrammarErrorKind::Header(e.clone().kind, e.spanskind()),
             spans: e.locations,
         }
     }
@@ -57,13 +57,7 @@ impl Spanned for HeaderError<Span> {
 #[doc(hidden)]
 pub struct HeaderValue<T>(pub T, pub Value<T>);
 
-impl From<HeaderValue<Span>> for HeaderValue<Location> {
-    fn from(hv: HeaderValue<Span>) -> HeaderValue<Location> {
-        HeaderValue(hv.0.into(), hv.1.into())
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 #[non_exhaustive]
 #[doc(hidden)]
 pub enum HeaderErrorKind {
@@ -71,9 +65,14 @@ pub enum HeaderErrorKind {
     IllegalName,
     ExpectedToken(char),
     UnexpectedToken(char, &'static str),
+    /// An entry occurs multiple times in the header having a span for each entry.
+    /// Requires two or more spans.
     DuplicateEntry,
+    /// Very similar to DuplicateEntry except that requires two spans.
+    /// When a value is specified in the builder and a header there is only one span.
+    ConflictingEntry(&'static str),
     InvalidEntry(&'static str),
-    ConversionError(&'static str, &'static str),
+    ConversionError(&'static str, String),
 }
 
 impl fmt::Display for HeaderErrorKind {
@@ -87,6 +86,7 @@ impl fmt::Display for HeaderErrorKind {
             }
             HeaderErrorKind::InvalidEntry(s) => &format!("Invalid entry: '{}'", s),
             HeaderErrorKind::DuplicateEntry => "Duplicate Entry",
+            HeaderErrorKind::ConflictingEntry(s) => &format!("Conflicting Entry: '{}'", s),
             HeaderErrorKind::ConversionError(t, err_str) => {
                 &format!("Converting header value to type '{}': {}", t, err_str)
             }
@@ -127,21 +127,63 @@ pub enum Value<T> {
     Namespaced(String, T),
 }
 
-impl From<Value<Span>> for Value<Location> {
-    fn from(it: Value<Span>) -> Value<Location> {
-        use Value as GV;
-        match it {
-            GV::String(v, span) => GV::String(v, Location::Span(span)),
-            GV::Num(v, span) => GV::Num(v, Location::Span(span)),
-            GV::Bool(v, span) => GV::Bool(v, Location::Span(span)),
-            GV::Array(mut v, span) => GV::Array(
-                v.drain(..).map(|val| val.into()).collect::<Vec<_>>(),
-                Location::Span(span),
-            ),
-            GV::Namespaced(v, span) => GV::Namespaced(v, Location::Span(span)),
+impl TryInto<bool> for &HeaderValue<Span> {
+    type Error = HeaderError<Span>;
+    fn try_into(self) -> Result<bool, Self::Error> {
+        macro_rules! fmt_err {
+            ($found:literal,$span:ident) => {
+                Err(HeaderError {
+                    kind: HeaderErrorKind::ConversionError("bool", $found.to_string()),
+                    locations: vec![$span],
+                })
+            };
+        }
+        match self.1 {
+            Value::Bool(flag, _) => Ok(flag),
+            Value::String(_, span) => fmt_err!("Found string", span),
+            Value::Num(_, span) => fmt_err!("Found numeric", span),
+            Value::Array(_, span) => fmt_err!("Found array", span),
+            Value::Namespaced(_, span) => fmt_err!("Found namespaced value", span),
         }
     }
 }
+macro_rules! try_into_numeric {
+    ($typ:ty) => {
+        impl TryInto<$typ> for &HeaderValue<Span> {
+            type Error = HeaderError<Span>;
+            fn try_into(self) -> Result<$typ, Self::Error> {
+                macro_rules! fmt_err {
+                    ($found:literal,$span:ident) => {
+                        Err(HeaderError {
+                            kind: HeaderErrorKind::ConversionError(
+                                stringify!($typ),
+                                $found.to_string(),
+                            ),
+                            locations: vec![$span],
+                        })
+                    };
+                }
+                match self.1 {
+                    Value::Num(num, span) => <$typ>::try_from(num).map_err(|e| HeaderError {
+                        kind: HeaderErrorKind::ConversionError(stringify!($typ), e.to_string()),
+                        locations: vec![span],
+                    }),
+                    Value::Bool(_, span) => fmt_err!("Found bool", span),
+                    Value::String(_, span) => fmt_err!("Found string", span),
+
+                    Value::Array(_, span) => fmt_err!("Found array", span),
+                    Value::Namespaced(_, span) => fmt_err!("Found namespaced value", span),
+                }
+            }
+        }
+    };
+}
+
+try_into_numeric!(u64);
+try_into_numeric!(usize);
+try_into_numeric!(u32);
+try_into_numeric!(u16);
+try_into_numeric!(u8);
 
 impl<T> HeaderError<T> {
     /// Returns the [SpansKind] associated with this error.
@@ -522,7 +564,7 @@ impl<'input> GrmtoolsSectionParser<'input> {
 
 /// A data structure representation of the %grmtools section.
 #[doc(hidden)]
-pub type Header<T> = MarkMap<String, HeaderValue<T>>;
+pub type Header<T> = HashMap<String, HeaderValue<T>>;
 
 impl<T: Clone> TryFrom<&Value<T>> for YaccKind {
     type Error = HeaderError<T>;

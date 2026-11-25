@@ -59,14 +59,12 @@ use wincode::{SchemaRead, SchemaWrite};
 #[doc(hidden)]
 pub mod header;
 mod idxnewtype;
-#[doc(hidden)]
-pub mod markmap;
 pub mod newlinecache;
 pub mod span;
 pub mod yacc;
 
 pub use newlinecache::NewlineCache;
-pub use span::{Location, Span, Spanned};
+pub use span::{Span, Spanned};
 
 #[cfg(test)]
 pub mod test_utils;

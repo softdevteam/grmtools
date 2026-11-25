@@ -95,7 +95,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             process::exit(1);
         }
     };
-    header.mark_used(&"lrlex.lexerkind".to_string());
     let lexerkind = if let Some(HeaderValue(_, lk_val)) = header.get("lrlex.lexerkind") {
         LexerKind::try_from(lk_val)?
     } else {
@@ -122,18 +121,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Err(ErrorString("Unrecognized lexer kind".to_string()))?;
         }
     };
-    {
-        let unused_header_values = header
-            .unused()
-            .map(|(s, _)| s.to_string())
-            .collect::<Vec<String>>();
-        if !unused_header_values.is_empty() {
-            Err(ErrorString(format!(
-                "Unused header values: {}",
-                unused_header_values.join(", ")
-            )))?
-        }
-    }
     let input = &read_file(&matches.free[1]);
     for r in lexerdef.lexer(input).iter() {
         match r {
