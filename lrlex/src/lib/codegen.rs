@@ -1,11 +1,13 @@
 use cfgrammar::{
-    Location, Span,
-    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderValue},
-    markmap::MergeError,
+    Span,
+    header::{GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue},
 };
 use lrpar::LexerTypes;
 
-use crate::{LRNonStreamingLexerDef, LexBuildError, LexFlags, LexerDef, LexerKind, Visibility};
+use crate::{
+    DEFAULT_LEX_FLAGS, LRNonStreamingLexerDef, LexBuildError, LexFlags, LexerDef, LexerKind,
+    Visibility,
+};
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use regex::Regex;
@@ -23,27 +25,20 @@ static RE_TOKEN_ID: LazyLock<Regex> =
 
 #[non_exhaustive]
 pub(crate) enum LexerSrcEnvError {
-    GrmtoolsSectionParseError(Vec<HeaderError<Span>>),
-    GrmtoolsSectionMergeError(MergeError<String, Box<HeaderValue<Location>>>),
-    GrmtoolsSectionLookupError(HeaderError<Location>),
+    GrmtoolsSectionError(Vec<HeaderError<Span>>),
+    GrmtoolsSectionLookupError(HeaderError<Span>),
     MissingModName,
     LexBuildErrors(Vec<LexBuildError>),
 }
 
 impl From<Vec<HeaderError<Span>>> for LexerSrcEnvError {
     fn from(it: Vec<HeaderError<Span>>) -> Self {
-        LexerSrcEnvError::GrmtoolsSectionParseError(it)
+        LexerSrcEnvError::GrmtoolsSectionError(it)
     }
 }
 
-impl From<MergeError<String, Box<HeaderValue<Location>>>> for LexerSrcEnvError {
-    fn from(it: MergeError<String, Box<HeaderValue<Location>>>) -> Self {
-        LexerSrcEnvError::GrmtoolsSectionMergeError(it)
-    }
-}
-
-impl From<HeaderError<Location>> for LexerSrcEnvError {
-    fn from(it: HeaderError<Location>) -> Self {
+impl From<HeaderError<Span>> for LexerSrcEnvError {
+    fn from(it: HeaderError<Span>) -> Self {
         LexerSrcEnvError::GrmtoolsSectionLookupError(it)
     }
 }
@@ -51,12 +46,11 @@ impl From<HeaderError<Location>> for LexerSrcEnvError {
 impl fmt::Display for LexerSrcEnvError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&match self {
-            Self::GrmtoolsSectionParseError(errs) => errs
+            Self::GrmtoolsSectionError(errs) => errs
                 .iter()
                 .map(|e| e.to_string())
                 .collect::<Vec<_>>()
                 .join("\n"),
-            Self::GrmtoolsSectionMergeError(e) => e.to_string(),
             Self::GrmtoolsSectionLookupError(e) => e.to_string(),
             Self::MissingModName => "Code generator requires a mod name".to_string(),
             Self::LexBuildErrors(_) => "Lex build error".to_string(),
@@ -71,13 +65,13 @@ where
 {
     src: &'a str,
     fallback_modname: Option<String>,
-    header: Header<Location>,
     phantom_storaget: PhantomData<LexerTypesT::StorageT>,
 }
 
 pub(crate) struct LexerBuildEnvArgs {
     mod_name: Option<String>,
     lexerkind: Option<LexerKind>,
+    lex_flags: LexFlags,
     visibility: Visibility,
 }
 
@@ -86,6 +80,7 @@ impl LexerBuildEnvArgs {
         Self {
             mod_name: None,
             lexerkind: None,
+            lex_flags: DEFAULT_LEX_FLAGS,
             visibility: Visibility::Private,
         }
     }
@@ -104,6 +99,11 @@ impl LexerBuildEnvArgs {
         self.visibility = visibility;
         self
     }
+
+    pub(crate) fn lex_flags(mut self, lex_flags: LexFlags) -> Self {
+        self.lex_flags = lex_flags;
+        self
+    }
 }
 
 pub(crate) struct LexerBuildEnv<LexerTypesT>
@@ -113,7 +113,6 @@ where
 {
     mod_name: String,
     lexerkind: LexerKind,
-    header: Header<Location>,
     lex_flags: LexFlags,
     visibility: Visibility,
     lexerdef: LRNonStreamingLexerDef<LexerTypesT>,
@@ -133,11 +132,7 @@ where
     LexerTypesT: LexerTypes,
     usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
 {
-    pub(crate) fn new_with_header(
-        src: &'a str,
-        path: Option<&Path>,
-        header: Header<Location>,
-    ) -> LexerSrcEnv<'a, LexerTypesT> {
+    pub(crate) fn new(src: &'a str, path: Option<&Path>) -> LexerSrcEnv<'a, LexerTypesT> {
         let fallback_modname = if let Some(lexerp) = path {
             // The user hasn't specified a module name, so we create one automatically: what we
             // do is strip off all the filename extensions (note that it's likely that inp ends
@@ -158,14 +153,8 @@ where
         LexerSrcEnv {
             src,
             fallback_modname,
-            header,
             phantom_storaget: PhantomData,
         }
-    }
-
-    fn merge_headers(&mut self) -> Result<(), LexerSrcEnvError> {
-        let (parsed_header, _) = self.parse_header()?;
-        Ok(self.header.merge_from(parsed_header)?)
     }
 
     /// Looks up the `mod_name` from the `args`, and defaults to
@@ -185,29 +174,102 @@ where
         GrmtoolsSectionParser::new(self.src, false).parse()
     }
 
+    fn merge_lex_flags(
+        &self,
+        lex_flags: &mut LexFlags,
+        header: &Header<Span>,
+    ) -> Result<(), LexerSrcEnvError> {
+        macro_rules! cvt_bool {
+            ($key:literal,$field:ident,$errs:ident) => {
+                if let Some(header_value) = header.get($key) {
+                    if lex_flags.$field.is_some() {
+                        $errs.push(HeaderError {
+                            kind: HeaderErrorKind::ConflictingEntry("Already specified by builder"),
+                            locations: vec![header_value.0],
+                        });
+                    } else {
+                        match header_value.try_into() {
+                            Ok(flag) => {
+                                lex_flags.$field = Some(flag);
+                            }
+                            Err(e) => {
+                                $errs.push(e);
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
+        macro_rules! cvt_num {
+            ($key:literal,$field:ident,$typ:ty,$errs:ident) => {
+                if let Some(header_value) = header.get($key) {
+                    if lex_flags.$field.is_some() {
+                        $errs.push(HeaderError {
+                            kind: HeaderErrorKind::ConflictingEntry("Already specified by builder"),
+                            locations: vec![header_value.0],
+                        });
+                    } else {
+                        let val: Result<$typ, HeaderError<Span>> = header_value.try_into();
+                        match val {
+                            Ok(num) => {
+                                lex_flags.$field = Some(num);
+                            }
+                            Err(e) => {
+                                $errs.push(e);
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
+        let mut errs = Vec::new();
+        cvt_bool!(
+            "lrlex.allow_wholeline_comments",
+            allow_wholeline_comments,
+            errs
+        );
+        cvt_bool!("lrlex.posix_escapes", posix_escapes, errs);
+        cvt_bool!("regex.dot_matches_new_line", dot_matches_new_line, errs);
+        cvt_bool!("regex.multi_line", multi_line, errs);
+        cvt_bool!("regex.swap_greed", swap_greed, errs);
+        cvt_bool!("regex.ignore_whitespace", ignore_whitespace, errs);
+        cvt_bool!("regex.unicode", unicode, errs);
+        cvt_bool!("regex.case_insensitive", case_insensitive, errs);
+        cvt_num!("regex.size_limit", size_limit, usize, errs);
+        cvt_num!("regex.dfa_size_limit", dfa_size_limit, usize, errs);
+        cvt_num!("regex.nest_limit", nest_limit, u32, errs);
+        if errs.is_empty() {
+            Ok(())
+        } else {
+            Err(LexerSrcEnvError::GrmtoolsSectionError(errs))
+        }
+    }
+
     pub(crate) fn build_env(
-        mut self,
-        args: LexerBuildEnvArgs,
+        self,
+        mut args: LexerBuildEnvArgs,
     ) -> Result<LexerBuildEnv<LexerTypesT>, LexerSrcEnvError>
     where
         LexerTypesT: LexerTypes,
         usize: num_traits::AsPrimitive<LexerTypesT::StorageT>,
         LexerTypesT::StorageT: TryFrom<usize>,
     {
-        self.merge_headers()?;
+        let (header, _) = self.parse_header()?;
+        self.merge_lex_flags(&mut args.lex_flags, &header)?;
         let mod_name = self.resolve_mod_name(&args)?;
-        self.header.mark_used(&"lrlex.lexerkind".to_string());
         let lexerkind = match args.lexerkind {
             Some(lexerkind) => lexerkind,
             None => {
-                if let Some(HeaderValue(_, lk_val)) = self.header.get("lrlex.lexerkind") {
+                if let Some(HeaderValue(_, lk_val)) = header.get("lrlex.lexerkind") {
                     LexerKind::try_from(lk_val)?
                 } else {
                     LexerKind::LRNonStreamingLexer
                 }
             }
         };
-        let lex_flags = LexFlags::try_from(&mut self.header)?;
+        let lex_flags = args.lex_flags;
         let (lexerdef, lex_flags): (LRNonStreamingLexerDef<LexerTypesT>, LexFlags) = match lexerkind
         {
             LexerKind::LRNonStreamingLexer => {
@@ -223,7 +285,6 @@ where
             mod_name,
             lexerkind,
             visibility: args.visibility,
-            header: self.header,
             lex_flags,
             lexerdef,
         })
@@ -247,10 +308,6 @@ where
 {
     pub(crate) fn lexerkind(&self) -> &LexerKind {
         &self.lexerkind
-    }
-
-    pub(crate) fn header(&self) -> &Header<Location> {
-        &self.header
     }
 
     pub(crate) fn mod_name(&self) -> &String {

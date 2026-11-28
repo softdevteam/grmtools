@@ -16,7 +16,7 @@ use wincode::{SchemaRead, SchemaWrite};
 
 use crate::{
     Span, Spanned,
-    header::{GrmtoolsSectionParser, Header, HeaderErrorKind, KEY_CRATE_MAP},
+    header::{GrmtoolsSectionParser, Header, HeaderErrorKind},
 };
 
 pub type YaccGrammarResult<T> = Result<T, Vec<YaccGrammarError>>;
@@ -375,17 +375,7 @@ impl YaccParser<'_> {
     }
 
     pub(crate) fn build(self) -> (GrammarAST, Header<Span>) {
-        let mut header = self.header.expect("set by parse()");
-        // At this point we still have mutable access to the header, so it is a convenient place
-        // to mark keys used. It would be less error prone if we did this at the point where keys
-        // are used. However at some points where we do lookups, there are shared references to the
-        // header making it difficult to get mutable access.
-        for (key_name, crate_name) in KEY_CRATE_MAP.iter() {
-            if ["cfgrammar", "lrpar"].contains(crate_name) {
-                header.mark_used(&format!("{crate_name}.{key_name}"));
-            }
-        }
-        (self.ast, header)
+        (self.ast, self.header.expect("set by parse()"))
     }
 
     fn parse_declarations(

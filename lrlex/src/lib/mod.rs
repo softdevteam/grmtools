@@ -140,7 +140,7 @@ impl fmt::Display for LexBuildError {
 impl From<HeaderError<Span>> for LexBuildError {
     fn from(e: HeaderError<Span>) -> LexBuildError {
         LexBuildError {
-            kind: LexErrorKind::Header(e.kind, e.spanskind()),
+            kind: LexErrorKind::Header(e.clone().kind, e.spanskind()),
             spans: e.locations,
         }
     }

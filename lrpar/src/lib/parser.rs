@@ -649,7 +649,7 @@ impl TryFrom<&Value<Span>> for RecoveryKind {
                 _ => Err(HeaderError {
                     kind: HeaderErrorKind::ConversionError(
                         "RecoveryKind",
-                        "Cannot convert to RecoveryKind",
+                        "Cannot convert to RecoveryKind".to_string(),
                     ),
                     locations: vec![*loc],
                 }),
@@ -657,7 +657,7 @@ impl TryFrom<&Value<Span>> for RecoveryKind {
             value => Err(HeaderError {
                 kind: HeaderErrorKind::ConversionError(
                     "RecoveryKind",
-                    "Cannot convert to RecoveryKind",
+                    "Cannot convert to RecoveryKind".to_string(),
                 ),
                 locations: vec![*value.primary_location()],
             }),

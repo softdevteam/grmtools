@@ -1,9 +1,8 @@
 //! Build grammars at run-time.
 
 use cfgrammar::{
-    header::{Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
-    markmap::MergeBehavior,
-    span::{Location, Span},
+    header::{HeaderError, HeaderErrorKind, HeaderValue, Value},
+    span::Span,
 };
 use glob::glob;
 use lrpar::{
@@ -30,7 +29,7 @@ use std::{
 use wincode::SchemaWrite;
 
 use crate::{
-    DefaultLexerTypes, LRNonStreamingLexer, LexerDef,
+    DefaultLexerTypes, LRNonStreamingLexer, LexFlags, LexerDef, UNSPECIFIED_LEX_FLAGS,
     codegen::{LexerBuildEnvArgs, LexerSrcEnv, LexerSrcEnvError},
 };
 
@@ -56,12 +55,18 @@ impl<T: Clone> TryFrom<&Value<T>> for LexerKind {
                     Ok(LexerKind::LRNonStreamingLexer)
                 }
                 _ => Err(HeaderError {
-                    kind: HeaderErrorKind::ConversionError("LexerKind", "Expected `LexerKind`"),
+                    kind: HeaderErrorKind::ConversionError(
+                        "LexerKind",
+                        "Expected `LexerKind`".to_string(),
+                    ),
                     locations: vec![loc.clone()],
                 }),
             },
             val => Err(HeaderError {
-                kind: HeaderErrorKind::ConversionError("LexerKind", "Expected `LexerKind`"),
+                kind: HeaderErrorKind::ConversionError(
+                    "LexerKind",
+                    "Expected `LexerKind`".to_string(),
+                ),
                 locations: vec![val.primary_location().clone()],
             }),
         }
@@ -149,7 +154,7 @@ where
     allow_missing_tokens_in_parser: bool,
     warnings_are_errors: bool,
     show_warnings: bool,
-    header: Header<Location>,
+    lex_flags: LexFlags,
     #[cfg(test)]
     inspect_lexerkind_cb: Option<Box<dyn Fn(&LexerKind) -> Result<(), Box<dyn Error>>>>,
 }
@@ -201,8 +206,6 @@ where
     ///     .build()?;
     /// ```
     pub fn new_with_lexemet() -> Self {
-        let mut header = Header::new();
-        header.set_default_merge_behavior(MergeBehavior::Ours);
         CTLexerBuilder {
             lrpar_config: None,
             lexer_path: None,
@@ -216,7 +219,7 @@ where
             allow_missing_tokens_in_parser: false,
             warnings_are_errors: false,
             show_warnings: true,
-            header,
+            lex_flags: UNSPECIFIED_LEX_FLAGS,
             #[cfg(test)]
             inspect_lexerkind_cb: None,
         }
@@ -402,37 +405,37 @@ where
         let args = LexerBuildEnvArgs::new()
             .mod_name(self.mod_name.map(|s| s.to_string()))
             .lexerkind(self.lexerkind)
-            .visibility(self.visibility);
-        let mut build_env =
-            LexerSrcEnv::<LexerTypesT>::new_with_header(&lex_src, Some(lexerp), self.header)
-                .build_env(args)
-                .map_err(|e| match e {
-                    LexerSrcEnvError::GrmtoolsSectionParseError(es) => {
-                        let mut out = String::new();
-                        out.push_str(&format!(
-                            "\n{ERROR}{}\n",
-                            lex_diag.file_location_msg(" parsing the `%grmtools` section", None)
-                        ));
-                        for e in es {
-                            out.push_str(&indent("     ", &lex_diag.format_error(e).to_string()));
-                            out.push('\n');
-                        }
-                        ErrorString(out)
+            .visibility(self.visibility)
+            .lex_flags(self.lex_flags);
+        let mut build_env = LexerSrcEnv::<LexerTypesT>::new(&lex_src, Some(lexerp))
+            .build_env(args)
+            .map_err(|e| match e {
+                LexerSrcEnvError::GrmtoolsSectionError(es) => {
+                    let mut out = String::new();
+                    out.push_str(&format!(
+                        "\n{ERROR}{}\n",
+                        lex_diag.file_location_msg(" parsing the `%grmtools` section", None)
+                    ));
+                    for e in es {
+                        out.push_str(&indent("     ", &lex_diag.format_error(e).to_string()));
+                        out.push('\n');
                     }
-                    LexerSrcEnvError::LexBuildErrors(errs) => {
-                        let mut out = String::new();
-                        out.push_str(&format!(
-                            "\n{ERROR}{}\n",
-                            lex_diag.file_location_msg(" building the lexer", None)
-                        ));
-                        for e in errs {
-                            out.push_str(&indent("     ", &lex_diag.format_error(e).to_string()));
-                            out.push('\n');
-                        }
-                        ErrorString(out)
+                    ErrorString(out)
+                }
+                LexerSrcEnvError::LexBuildErrors(errs) => {
+                    let mut out = String::new();
+                    out.push_str(&format!(
+                        "\n{ERROR}{}\n",
+                        lex_diag.file_location_msg(" building the lexer", None)
+                    ));
+                    for e in errs {
+                        out.push_str(&indent("     ", &lex_diag.format_error(e).to_string()));
+                        out.push('\n');
                     }
-                    e => ErrorString(e.to_string()),
-                })?;
+                    ErrorString(out)
+                }
+                e => ErrorString(e.to_string()),
+            })?;
 
         #[cfg(test)]
         if let Some(inspect_lexerkind_cb) = self.inspect_lexerkind_cb {
@@ -518,17 +521,6 @@ where
         } else {
             None
         };
-
-        let unused_header_values = build_env
-            .header()
-            .unused()
-            .map(|(s, _)| s.to_string())
-            .collect::<Vec<String>>();
-        if !unused_header_values.is_empty() {
-            return Err(
-                format!("Unused header values: {}", unused_header_values.join(", ")).into(),
-            );
-        }
 
         let code_gen = build_env
             .code_generator(self.rule_ids_map, env!("VERGEN_BUILD_TIMESTAMP"))
@@ -788,14 +780,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn allow_wholeline_comments(mut self, flag: bool) -> Self {
-        let key = "lrlex.allow_wholeline_comments".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.allow_wholeline_comments = Some(flag);
         self
     }
 
@@ -804,14 +789,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn dot_matches_new_line(mut self, flag: bool) -> Self {
-        let key = "regex.dot_matches_new_line".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.dot_matches_new_line = Some(flag);
         self
     }
 
@@ -820,14 +798,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn multi_line(mut self, flag: bool) -> Self {
-        let key = "regex.multi_line".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.multi_line = Some(flag);
         self
     }
 
@@ -836,14 +807,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn posix_escapes(mut self, flag: bool) -> Self {
-        let key = "lrlex.posix_escapes".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.posix_escapes = Some(flag);
         self
     }
 
@@ -852,14 +816,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn octal(mut self, flag: bool) -> Self {
-        let key = "regex.octal".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.octal = Some(flag);
         self
     }
 
@@ -868,14 +825,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn swap_greed(mut self, flag: bool) -> Self {
-        let key = "regex.swap_greed".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.swap_greed = Some(flag);
         self
     }
 
@@ -884,14 +834,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn ignore_whitespace(mut self, flag: bool) -> Self {
-        let key = "regex.ignore_whitespace".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.ignore_whitespace = Some(flag);
         self
     }
 
@@ -900,14 +843,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn unicode(mut self, flag: bool) -> Self {
-        let key = "regex.unicode".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.unicode = Some(flag);
         self
     }
 
@@ -916,14 +852,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn case_insensitive(mut self, flag: bool) -> Self {
-        let key = "regex.case_insensitive".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Bool(flag, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.case_insensitive = Some(flag);
         self
     }
 
@@ -932,14 +861,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn size_limit(mut self, sz: usize) -> Self {
-        let key = "regex.size_limit".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Num(sz as u64, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.size_limit = Some(sz);
         self
     }
 
@@ -948,14 +870,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn dfa_size_limit(mut self, sz: usize) -> Self {
-        let key = "regex.dfa_size_limit".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Num(sz as u64, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.dfa_size_limit = Some(sz);
         self
     }
 
@@ -964,14 +879,7 @@ where
     ///
     /// Setting this flag will override the same flag within a `%grmtools` section.
     pub fn nest_limit(mut self, lim: u32) -> Self {
-        let key = "regex.nest_limit".to_string();
-        self.header.insert(
-            key,
-            HeaderValue(
-                Location::Other("CTLexerBuilder".to_string()),
-                Value::Num(lim as u64, Location::Other("CTLexerBuilder".to_string())),
-            ),
-        );
+        self.lex_flags.nest_limit = Some(lim);
         self
     }
 

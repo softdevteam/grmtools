@@ -10,7 +10,6 @@ use std::{
 use cfgrammar::{
     NewlineCache, Span,
     header::{GrmtoolsSectionParser, Header, HeaderError, HeaderErrorKind, HeaderValue, Value},
-    span::Location,
 };
 use num_traits::{AsPrimitive, PrimInt, Unsigned};
 use regex::{Regex, RegexBuilder};
@@ -64,11 +63,13 @@ impl<T: Clone> TryFrom<&mut Header<T>> for LexFlags {
         } = &mut lex_flags;
         macro_rules! cvt_flag {
             ($prefix:ident, $it:ident) => {
-                header.mark_used(&stringify!($prefix.$it).to_string());
                 *$it = match header.get(stringify!($prefix.$it)) {
                     Some(HeaderValue(_, Value::Bool(flag, _))) => Some(*flag),
                     Some(HeaderValue(_, val)) => Err(HeaderError {
-                        kind: HeaderErrorKind::ConversionError("LexFlags", "Expected boolean"),
+                        kind: HeaderErrorKind::ConversionError(
+                            "LexFlags",
+                            "Expected boolean".to_string(),
+                        ),
                         locations: vec![val.primary_location().clone()],
                     })?,
                     None => None,
@@ -86,11 +87,13 @@ impl<T: Clone> TryFrom<&mut Header<T>> for LexFlags {
         cvt_flag!(regex, unicode);
         macro_rules! cvt_num {
             ($prefix:ident, $it:ident, $num_ty: ty) => {
-                header.mark_used(&stringify!($prefix.$it).to_string());
                 *$it = match header.get(stringify!($prefix.$it)) {
                     Some(HeaderValue(_, Value::Num(n, _))) => Some(*n as $num_ty),
                     Some(HeaderValue(_, val)) => Err(HeaderError {
-                        kind: HeaderErrorKind::ConversionError("LexFlags", "Expected numeric"),
+                        kind: HeaderErrorKind::ConversionError(
+                            "LexFlags",
+                            "Expected numeric".to_string(),
+                        ),
                         locations: vec![val.primary_location().clone()],
                     })?,
                     None => None,
@@ -101,67 +104,6 @@ impl<T: Clone> TryFrom<&mut Header<T>> for LexFlags {
         cvt_num!(regex, dfa_size_limit, usize);
         cvt_num!(regex, nest_limit, u32);
         Ok(lex_flags)
-    }
-}
-
-impl From<&LexFlags> for Header<Location> {
-    fn from(flags: &LexFlags) -> Header<Location> {
-        let mut header = Header::new();
-        let LexFlags {
-            dot_matches_new_line,
-            multi_line,
-            octal,
-            posix_escapes,
-            allow_wholeline_comments,
-            case_insensitive,
-            swap_greed,
-            ignore_whitespace,
-            unicode,
-            size_limit,
-            dfa_size_limit,
-            nest_limit,
-        } = flags;
-        macro_rules! cvt_flag {
-            ($it: ident) => {
-                $it.map(|x| {
-                    header.insert(
-                        stringify!($it).to_string(),
-                        HeaderValue(
-                            Location::Other("From<&LexFlags>".to_string()),
-                            Value::Bool(x, Location::Other("From<&LexFlags>".to_string())),
-                        ),
-                    )
-                });
-            };
-        }
-        cvt_flag!(dot_matches_new_line);
-        cvt_flag!(multi_line);
-        cvt_flag!(octal);
-        cvt_flag!(posix_escapes);
-        cvt_flag!(allow_wholeline_comments);
-        cvt_flag!(case_insensitive);
-        cvt_flag!(swap_greed);
-        cvt_flag!(ignore_whitespace);
-        cvt_flag!(unicode);
-
-        macro_rules! cvt_num {
-            ($it: ident) => {
-                $it.map(|x| {
-                    header.insert(
-                        stringify!($it).to_string(),
-                        HeaderValue(
-                            Location::Other("From<&LexFlags>".to_string()),
-                            Value::Num(x as u64, Location::Other("From<&LexFlags>".to_string())),
-                        ),
-                    )
-                });
-            };
-        }
-        cvt_num!(size_limit);
-        cvt_num!(dfa_size_limit);
-        cvt_num!(nest_limit);
-
-        header
     }
 }
 

@@ -167,11 +167,11 @@ grammar: |
             KEY_CRATE_MAP,
             RE_CRATE_DOT,
         },
-        markmap::Entry,
     };
 
     use std::{
         collections::HashMap,
+        collections::hash_map::Entry,
         sync::LazyLock
     };
 
